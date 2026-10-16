@@ -16,6 +16,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
+use Platform\FoodAlchemist\Support\Planung\KaskadenAnsicht;
+use Platform\FoodAlchemist\Support\Planung\LaufCockpit;
+use Platform\FoodAlchemist\Support\Planung\ReglerParams;
 use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\BriefingLeitplankenService;
@@ -1424,67 +1427,11 @@ class Index extends Component
         $this->rehydriereReglerAusParams($session);
     }
 
-    /**
-     * L5: generation_params → Regler zurückspiegeln (Umkehrung von {@see reglerParams}). Fail-soft; nur
-     * gesetzte Achsen überschreiben den Default. Auf ALLE Scopes angewandt (die Session hält nur EINEN
-     * Satz — den des Start-Tabs; ohne Tab-Herkunft ist der beste Reload derselbe Satz je Tab). Bewusst
-     * NICHT rückformatiert: ziel_vk + menue_preis_* (Euro/Komma) — die tippt der Nutzer bei Bedarf neu.
-     */
     private function rehydriereReglerAusParams(FoodAlchemistPlanningSession $session): void
     {
-        $p = is_array($session->generation_params) ? $session->generation_params : [];
-        if ($p === []) {
-            return;
-        }
-        try {
-            // Frische: rohe condition-Werte → UI-Slugs (Umkehrung FRISCHE_CONDITION).
-            $condToSlug = array_flip(self::FRISCHE_CONDITION);
-            $frischeSlugs = array_values(array_filter(array_map(
-                static fn ($raw) => $condToSlug[$raw] ?? null,
-                (array) ($p['frische_erlaubt'] ?? []),
-            )));
-            $bioPraef = match ($p['bio_pref'] ?? null) {
-                'bio' => 'bio', 'neutral' => 'egal', 'conventional' => 'konventionell', default => null,
-            };
-            foreach (self::SCOPES as $scope) {
-                if (! isset($this->regler[$scope])) {
-                    continue;
-                }
-                foreach (['level', 'sektor', 'aroma', 'aroma_kueche', 'occasion', 'serviceform',
-                    'kompositions_stil', 'menue_balance', 'menue_typ'] as $k) {
-                    if (($p[$k] ?? '') !== '') {
-                        $this->regler[$scope][$k] = $p[$k];
-                    }
-                }
-                foreach (['diaet_hart', 'allergen_nogo'] as $k) {
-                    if (! empty($p[$k]) && is_array($p[$k])) {
-                        $this->regler[$scope][$k] = array_values($p[$k]);
-                    }
-                }
-                if ($frischeSlugs !== []) {
-                    $this->regler[$scope]['frische'] = $frischeSlugs;
-                }
-                if ($bioPraef !== null) {
-                    $this->regler[$scope]['bio_praeferenz'] = $bioPraef;
-                }
-                if (array_key_exists('use_favorites_list', $p)) {
-                    $this->regler[$scope]['favoriten'] = (bool) $p['use_favorites_list'];
-                    $this->regler[$scope]['favoriten_conv_only'] = (bool) ($p['favorites_convenience_only'] ?? false);
-                }
-                if (array_key_exists('ki_bilder', $p)) {
-                    $this->regler[$scope]['ki_bilder'] = (bool) $p['ki_bilder'];
-                }
-                // Menü-Gänge/Quoten als Zahl-String zurückschreiben (der Parser liest sie wieder als Zahl).
-                foreach (['menue_gaenge' => 'menue_gaenge', 'menue_quote_vegan_pct' => 'menue_quote_vegan',
-                    'menue_quote_vegetarisch_pct' => 'menue_quote_vegetarisch'] as $pk => $uiKey) {
-                    if (($p[$pk] ?? null) !== null && $p[$pk] !== '') {
-                        $this->regler[$scope][$uiKey] = (string) $p[$pk];
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('[Planung] Regler-Rehydrierung übersprungen', ['error' => $e->getMessage()]);
-        }
+        $h = $this->reglerHelfer();
+        $h->rehydriereReglerAusParams($session);
+        $this->regler = $h->regler;   // Spec 84 C1-1: Logik in ReglerParams, der neue Stand kommt zurück
     }
 
     /**
@@ -2014,307 +1961,35 @@ class Index extends Component
         $this->{$ziel} = $wert;
     }
 
-    /**
-     * Regler → Richtungs-Param-Bündel — spiegelt EXAKT die Param-Logik der abgelösten
-     * Rich-Modals: bio-Bool aus bio_praeferenz, Leer-Hints strippen (diaet_hart-Array +
-     * Bools bleiben), Favoriten opt-in, VK-Achsen + Ziel-VK nur bei $vk. Wird am Go an
-     * die Kaskade UND (für den Fan-out) an generation_params gereicht.
-     *
-     * @return array<string,mixed>
-     */
+    /** Spec 84 C1-1: Leitplanken-Logik liegt in {@see ReglerParams}; hier nur der Zugang mit dem aktuellen Stand. */
+    private function reglerHelfer(): ReglerParams
+    {
+        return new ReglerParams($this->regler, $this->eingabe);
+    }
+
     private function reglerParams(string $scope): array
     {
-        $r = $this->regler[$scope] ?? self::REGLER_DEFAULT;
-        $vk = $scope !== 'rezept';                              // Basisrezept: keine VK-Achsen
-        $menue = $scope === 'concept';                          // Menü-Leitplanken nur am Concept-Tab
-        // Extra-Steuerwerte gesondert (sie werden übersetzt, nicht 1:1 durchgereicht).
-        $favoriten = (bool) ($r['favoriten'] ?? false);
-        $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
-        $kiBilder = (bool) ($r['ki_bilder'] ?? false);
-        $vollAnreichern = (bool) ($r['voll_anreichern'] ?? true);
-        $p = $r;
-        // Bio dreiwertig weiterreichen (bio|conventional|neutral) — der Generator/Matcher kennt einen
-        // NEUTRALEN Arm (Adjustment 0). Ohne ihn fiel „egal" auf das Bool false → 'conventional' → Bio-GPs
-        // wurden aktiv mit −2 bestraft (Bug). Der Bool `bio` bleibt für den MCP-Pfad rückwärtskompatibel.
-        $p['bio_pref'] = match ($r['bio_praeferenz'] ?? '') {
-            'bio' => 'bio',
-            'egal' => 'neutral',
-            default => 'conventional',
-        };
-        $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
-        // Kreativität bestimmt die IDEE, nicht ob bestehende Basisrezepte ignoriert werden. Auch ein
-        // voll kreatives Gericht erdet seine Komponenten deshalb bestand-first; nur echte Lücken werden
-        // neu angelegt. Basisrezepte haben keine Kreativmodus-Achse und nutzen denselben Resolver.
-        // Basisrezept: kein Kreativ-Modus → der Regler-Wert (aus Leitplanken/Briefing) gilt. Vorher stand
-        // hier hart 'hybrid' und ein »nur Bestand« aus dem Briefing ging still verloren (demo Session #138).
-        $p['bestand'] = $scope === 'rezept'
-            ? (in_array($r['bestand'] ?? null, FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES['bestand'], true) ? $r['bestand'] : 'hybrid')
-            : match ((string) ($this->eingabe[$scope]['creative_mode'] ?? 'hybrid')) {
-                'datenbank' => 'nur_bestand',
-                default => 'hybrid',
-            };
-        // Frische (L1.5): Multi-Select Erlaubnis-Liste → harte gps.condition-Erlaubnis + primärer Pref
-        // (Tiebreak). [] = egal (Key entfällt, kein Filter). Sonst: erlaubte Roh-Zustände + 'frisch'-Vorzug.
-        $frischeSlugs = array_values(array_filter(
-            (array) ($r['frische'] ?? []),
-            static fn ($s) => isset(self::FRISCHE_CONDITION[$s]),
-        ));
-        unset($p['frische']);   // Roh-Array wird übersetzt, nicht 1:1 durchgereicht
-        if ($frischeSlugs !== []) {
-            $p['frische_erlaubt'] = array_map(static fn ($s) => self::FRISCHE_CONDITION[$s], $frischeSlugs);
-            // Primärer Pref für den Match-Tiebreak (Generator mappt frisch|tk|konserve→VariantPref;
-            // 'trocken' fällt auf fresh_first, egal — der harte Filter erledigt die Zustands-Auswahl).
-            $p['frische'] = in_array('frisch', $frischeSlugs, true) ? 'frisch' : $frischeSlugs[0];
-        }
-        // L6 »Menge & Ziel«: Zahl-Achsen mit Band-Guard (ungültig/leer → Key entfällt = keine Vorgabe),
-        // Saison als Enum-Durchreichung. Reine KI-Vorgaben (Prompt); deterministische Erzwingung Follow-up.
-        unset($p['pax'], $p['ziel_portion_g'], $p['ziel_we_pct']);   // Roh-Felder → geparst durchreichen
-        if (($pax = $this->intRegler($r['pax'] ?? '', 1, 100000)) !== null) {
-            $p['pax'] = $pax;
-        }
-        // Ziel-Portion (g) ist eine per-Portion-Vorgabe (Gericht/Basisrezept). Für ein Concept (ganzes
-        // Menü aus vielen Gängen mit je eigener Portion) ist eine einzelne Gramm-Zahl scope-fremd und
-        // im Prompt nur Rauschen (Leitplanken-Hygiene 2026-08-18) → nur außerhalb des Concept-Scopes.
-        if ($scope !== 'concept' && ($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
-            $p['ziel_portion_g'] = $portion;
-        }
-        if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
-            $p['ziel_we_pct'] = $wePct;
-        }
-        // Basisrezept-Ziel (scope=rezept): Menge (Dezimal erlaubt) + Einheit statt Pax/Portion — nur
-        // zusammen und mit gültiger Einheit durchreichen (reiner KI-Hint, whitelist gegen MENGE_EINHEITEN).
-        unset($p['ziel_menge'], $p['ziel_einheit']);
-        $mengeRaw = str_replace(',', '.', trim((string) ($r['ziel_menge'] ?? '')));
-        if ($mengeRaw !== '' && is_numeric($mengeRaw) && (float) $mengeRaw > 0
-            && ($r['ziel_einheit'] ?? '') !== '' && isset(self::MENGE_EINHEITEN[$r['ziel_einheit']])) {
-            $p['ziel_menge'] = (float) $mengeRaw;
-            $p['ziel_einheit'] = (string) $r['ziel_einheit'];
-        }
-        // Basisrezept: Pax/Portion haben in diesem Tab kein Eingabefeld. Kamen sie trotzdem in die Regler
-        // (Assistent, Altsitzung), liefen sie unsichtbar neben dem Ansatz in den Lauf — demo Lauf #79:
-        // 100 Pax × 80 g (8 kg) UND ziel_menge 2 kg. Ohne Ansatz → daraus ableiten; danach entfernen.
-        if ($scope === 'rezept') {
-            if (! isset($p['ziel_menge']) && isset($p['pax'], $p['ziel_portion_g'])) {
-                $gramm = $p['pax'] * $p['ziel_portion_g'];
-                $p['ziel_menge'] = $gramm >= 1000 ? round($gramm / 1000, 3) : (float) $gramm;
-                $p['ziel_einheit'] = $gramm >= 1000 ? 'kg' : 'g';
-            }
-            unset($p['pax'], $p['ziel_portion_g']);
-        }
-        if (! isset(self::SAISON_OPTIONEN[$p['saison'] ?? '']) || ($p['saison'] ?? '') === '') {
-            unset($p['saison']);   // leer/unbekannt = keine Saison-Vorgabe
-        }
-        if (! $vk) {
-            unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
-        }
-        // Roh-Felder raus, die übersetzt (nicht 1:1) durchgereicht werden — inkl. der Menü-Roh-Eingaben
-        // (sie werden unten als kanonische _pp-Keys geparst und nur für den Concept-Scope gesetzt).
-        unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern'],
-            $p['menue_typ'], $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max'],
-            $p['menue_quote_vegan'], $p['menue_quote_vegetarisch'], $p['menue_balance']);
-        $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
-        $p['use_favorites_list'] = $favoriten;
-        $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
-        $p['ki_bilder'] = $kiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
-        // Der Freigabe-Job liest `complete_coverage`. Fehlte der Key, fiel er historisch auf TRUE
-        // zurück und ignorierte den ausgeschalteten UI-Schalter. Jetzt reist die Entscheidung explizit.
-        $p['complete_coverage'] = $vollAnreichern;
-        // Ziel-VK (Netto je Portion) ist die Gericht-Preisachse. Für ein Concept ist der Menü-Preis-
-        // Korridor p. P. (unten) die EINZIGE Preisquelle (Entscheid 2026-08-18) — kein konkurrierender
-        // Portions-VK im Concept-Prompt. rezept trägt ohnehin keinen VK ($vk deckt das mit ab).
-        if ($scope === 'gericht' && ($ziel = $this->zielVkEur($scope)) !== null) {
-            $p['ziel_vk_eur'] = $ziel;
-        }
-        if ($menue) {
-            // Concept-Typ (#35): nur 'buffet' fließt als Signal ein — Menü/leer lässt den Key weg
-            // (byte-identisch zum bisherigen Verhalten). Steuert Slot-Typ (station) + Gänge-Cap.
-            if (($typ = $this->menueTyp($scope)) !== null) {
-                $p['menue_typ'] = $typ;
-            }
-            // Menü-Leitplanken (Zusammenstellung): Anzahl Gänge + Zielpreis-Korridor je Person.
-            // Nur gültige Werte fließen ein (ungültige/leer = keine Vorgabe → kein Key, Prompt unverändert).
-            if (($g = $this->menueGaenge($scope)) !== null) {
-                $p['menue_gaenge'] = $g;
-            }
-            if (($mn = $this->menuePreisEur($scope, 'menue_preis_min')) !== null) {
-                $p['menue_preis_min_pp'] = $mn;
-            }
-            if (($mz = $this->menuePreisEur($scope, 'menue_preis_ziel')) !== null) {
-                $p['menue_preis_ziel_pp'] = $mz;
-            }
-            if (($mx = $this->menuePreisEur($scope, 'menue_preis_max')) !== null) {
-                $p['menue_preis_max_pp'] = $mx;
-            }
-            // Diät-Quoten (Portfolio-Anteil, weich): mind. X % der Positionen vegan/vegetarisch.
-            if (($qv = $this->menueQuote($scope, 'menue_quote_vegan')) !== null) {
-                $p['menue_quote_vegan_pct'] = $qv;
-            }
-            if (($qg = $this->menueQuote($scope, 'menue_quote_vegetarisch')) !== null) {
-                $p['menue_quote_vegetarisch_pct'] = $qg;
-            }
-            // Portfolio-Balance (Menü-Vielfalt, weich): nur ein erlaubter Enum-Wert fliesst ein.
-            if (($bal = $this->menueBalance($scope)) !== null) {
-                $p['menue_balance'] = $bal;
-            }
-        }
-
-        return $p;
+        return $this->reglerHelfer()->reglerParams($scope);
     }
 
-    /**
-     * Menü-Leitplanken (nur Concept) auf ihre kanonischen menue_*-Keys reduziert — dieselbe Teilmenge,
-     * die {@see PlanningCascadeService::dispatchConceptStep} an die Konzept-Erzeugung reicht. Damit
-     * bekommen BEIDE Concept-Wege (Schnell-Go über den Job UND KI-Kopf inline) exakt denselben
-     * Leitplanken-Satz. Leer für nicht-Concept-Scopes (keine Menü-Achsen).
-     *
-     * @return array<string,mixed>
-     */
     private function menueAchsenFuer(string $scope): array
     {
-        if ($scope !== 'concept') {
-            return [];
-        }
-
-        return array_filter(
-            $this->reglerParams($scope),
-            static fn ($k) => str_starts_with((string) $k, 'menue_'),
-            ARRAY_FILTER_USE_KEY,
-        );
+        return $this->reglerHelfer()->menueAchsenFuer($scope);
     }
 
-    /**
-     * Prüft die Concept-Menü-Leitplanken auf mistgetippte Zahlen und liefert eine Klartext-Fehlermeldung
-     * (oder null, wenn alles gültig/leer ist). Ein Mensch, der 45,x statt 45 meinte, wird GESAGT statt
-     * still verworfen — derselbe Grundsatz wie bei Ziel-VK. Geteilt von {@see goKaskade} und {@see kiKopf},
-     * damit der KI-Kopf-Pfad nicht mit einer stillschweigend verworfenen Vorgabe generiert.
-     */
     private function menueLeitplankenFehler(string $scope): ?string
     {
-        if ($scope !== 'concept') {
-            return null;
-        }
-        foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
-            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
-                return "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
-            }
-        }
-        if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
-            return 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
-        }
-        foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
-            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
-                return "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
-            }
-        }
-
-        return null;
+        return $this->reglerHelfer()->menueLeitplankenFehler($scope);
     }
 
-    /** L6: ganze Zahl im Band [min,max] aus einem Roh-Regler, sonst null (leer/ungültig = keine Vorgabe). */
-    private function intRegler(mixed $roh, int $min, int $max): ?int
-    {
-        $s = trim((string) $roh);
-        if ($s === '' || ! ctype_digit($s)) {
-            return null;
-        }
-        $n = (int) $s;
-
-        return ($n >= $min && $n <= $max) ? $n : null;
-    }
-
-    /** Menü-Gänge/Positionen: ganze Zahl 1–20, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
-    private function menueGaenge(string $scope): ?int
-    {
-        $roh = trim((string) ($this->regler[$scope]['menue_gaenge'] ?? ''));
-        if ($roh === '' || ! ctype_digit($roh)) {
-            return null;
-        }
-        $n = (int) $roh;
-
-        return $n >= 1 && $n <= 20 ? $n : null;
-    }
-
-    /** Diät-Quote (Portfolio-Anteil): ganze Prozentzahl 0–100, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
-    private function menueQuote(string $scope, string $feld): ?int
-    {
-        $roh = str_replace(['%', ' '], '', trim((string) ($this->regler[$scope][$feld] ?? '')));
-        if ($roh === '' || ! ctype_digit($roh)) {
-            return null;
-        }
-        $n = (int) $roh;
-
-        return $n >= 0 && $n <= 100 ? $n : null;
-    }
-
-    /** Portfolio-Balance (Menü-Vielfalt): erlaubter {@see MENUE_BALANCE}-Enum-Wert, sonst null (leer/unbekannt = keine Vorgabe). Concept-Scope. */
-    private function menueBalance(string $scope): ?string
-    {
-        $roh = trim((string) ($this->regler[$scope]['menue_balance'] ?? ''));
-
-        return isset(self::MENUE_BALANCE[$roh]) ? $roh : null;
-    }
-
-    /**
-     * Concept-Typ (#35): NUR 'buffet' ist ein Signal (station-Slots + eigene Positionen-Logik). Menü/leer
-     * → null (kein Key → byte-identisch: gang-Slots wie bisher). Bewusst asymmetrisch, damit bestehende
-     * Menü-Flows unverändert bleiben. Concept-Scope. {@see MENUE_TYPEN}
-     */
-    private function menueTyp(string $scope): ?string
-    {
-        $roh = trim((string) ($this->regler[$scope]['menue_typ'] ?? ''));
-
-        return $roh === 'buffet' ? 'buffet' : null;
-    }
-
-    /** Menü-Preis je Person (min/ziel/max): „45,00 €" → 45.0; außerhalb 0,50–2.000,00 € → null. Analog {@see zielVkEur}. */
-    private function menuePreisEur(string $scope, string $feld): ?float
-    {
-        $roh = str_replace([' ', '€'], '', trim((string) ($this->regler[$scope][$feld] ?? '')));
-        if ($roh === '') {
-            return null;
-        }
-        $roh = str_replace(',', '.', $roh);
-        if (! is_numeric($roh)) {
-            return null;
-        }
-        $eur = round((float) $roh, 2);
-
-        return $eur >= 0.5 && $eur <= 2000.0 ? $eur : null;
-    }
-
-    /** „8,50 €" → 8.5; außerhalb 0,50–500,00 € → null (Aufrufer meldet). Spiegel VkGeneratorModal. Per Scope. */
     private function zielVkEur(string $scope): ?float
     {
-        $roh = str_replace([' ', '€'], '', trim((string) ($this->regler[$scope]['ziel_vk'] ?? '')));
-        if ($roh === '') {
-            return null;
-        }
-        $roh = str_replace(',', '.', $roh);
-        if (! is_numeric($roh)) {
-            return null;
-        }
-        $eur = round((float) $roh, 2);
-
-        return $eur >= 0.5 && $eur <= 500.0 ? $eur : null;
+        return $this->reglerHelfer()->zielVkEur($scope);
     }
 
-    /**
-     * Effektiver Brief für die Kaskade: Basisrezept/Gericht = „Titel — Beschreibung" (Titel = form.title,
-     * Beschreibung = form.brief), Concept = das Briefing (form.brief). Platzhalter-Titel der Schnell-
-     * Erstellung zählen nicht als Titel. Leer → starteKaskade fällt auf briefAusSession zurück.
-     */
     private function effektiverBrief(string $scope): string
     {
-        $titel = trim((string) ($this->eingabe[$scope]['titel'] ?? ''));
-        $besch = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
-        if ($scope === 'concept') {
-            return $besch;   // das Briefing ist die ganze Concept-Eingabe
-        }
-        if ($titel !== '' && $besch !== '') {
-            return $titel . ' — ' . $besch;
-        }
-
-        return $besch !== '' ? $besch : $titel;
+        return $this->reglerHelfer()->effektiverBrief($scope);
     }
 
     /**
@@ -3187,168 +2862,15 @@ class Index extends Component
         $this->refreshLaeuft($cascade);
     }
 
-    /**
-     * Stufen-Ableitung fürs Cockpit: je Ebene (concept · gericht · rezept) Zähler + Zustand. Nur
-     * erreichte Stufen (mind. 1 Step) — so enthüllt sich die Kaskade fortschreitend. Rein für die Anzeige.
-     *
-     * Die Basisrezepte-Stufe ist erreicht, sobald das Gericht als Entwurf steht: ihre Zeilen sind
-     * dann `geplant` (Sub-Rezept benannt, erzeugt wird es bei der Freigabe der Stufe darüber) bzw.
-     * `skipped` (Bestands-Rezept übernommen). Zustand `geplant` heisst also: sichtbar, aber noch
-     * nicht erzeugt — kein Freigabe-Knopf (der käme erst bei `prüfen`).
-     *
-     * @param  \Illuminate\Support\Collection<int,\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep>  $steps
-     * @return list<array<string,mixed>>
-     */
+    /** Spec 84 C1-1: Aufbereitung liegt in {@see KaskadenAnsicht}; Blade (fortschritt) und Tests rufen sie weiter hier auf. */
     public function stufenAusSteps($steps): array
     {
-        $defs = [['kind' => 'concept', 'label' => 'Concept'], ['kind' => 'gericht', 'label' => 'Gerichte'], ['kind' => 'rezept', 'label' => 'Basisrezepte']];
-        $out = [];
-        foreach ($defs as $d) {
-            $grp = $steps->where('kind', $d['kind']);
-            $total = $grp->count();
-            if ($total === 0) {
-                continue;
-            }
-            $running = $grp->whereIn('status', ['queued', 'running'])->count();
-            $done = $grp->where('status', 'done')->count();
-            $freigegeben = $grp->where('status', 'freigegeben')->count();
-            $verworfen = $grp->where('status', 'verworfen')->count();
-            $failed = $grp->where('status', 'failed')->count();
-            // `geplant` = benanntes Sub-Rezept, das auf die Freigabe der Stufe darüber wartet;
-            // `skipped` = übernommenes Bestands-Rezept (Reuse) — nichts zu erzeugen, also fertig.
-            $geplant = $grp->where('status', 'geplant')->count();
-            $uebernommen = $grp->where('status', 'skipped')->count();
-            // …ABER nur, wenn die Übernahme wirklich fertig ist. 2026-09-07: Lauf 65 zählte
-            // Step 460 („Basisrezept: Gemüsebrühe", draft, 0 Schritte, unbepreist) als fertig
-            // und der Lauf meldete „abgeschlossen". Eine unreife Übernahme ist eine offene
-            // Aufgabe, kein Abschluss — sie erscheint als eigene Zahl und nicht in `fertig`.
-            $unreif = $grp->where('status', 'skipped')->filter(function ($st) {
-                $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
-
-                return $reuse !== null && ! ($reuse['reif'] ?? false);
-            })->count();
-            // Spec 80 C7: eine Stufe nur aus gescheiterten Schritten ist nicht „erledigt" (demo Lauf #79
-            // zeigte „Erledigt" neben „0 von 1 fertig").
-            $zustand = $running > 0 ? 'läuft'
-                : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : ($unreif > 0 ? 'prüfen'
-                    : ($failed > 0 && $freigegeben + $uebernommen === 0 ? 'fehlgeschlagen' : 'erledigt'))));
-            $out[] = [
-                'kind' => $d['kind'], 'label' => $d['label'], 'total' => $total,
-                'running' => $running, 'done' => $done, 'freigegeben' => $freigegeben,
-                'verworfen' => $verworfen, 'failed' => $failed, 'geplant' => $geplant,
-                'uebernommen' => $uebernommen, 'uebernommen_unreif' => $unreif,
-                'fertig' => $done + $freigegeben + max(0, $uebernommen - $unreif),
-                'zustand' => $zustand,
-            ];
-        }
-
-        return $out;
+        return app(KaskadenAnsicht::class)->stufenAusSteps($steps);
     }
 
-    /**
-     * Landing-Kaskaden-Status je Session (finale Etappe — Hauptseite): der JÜNGSTE Lauf einer Session
-     * bestimmt ihr Status-Badge und ihren Stufen-Fortschritt. Zwei Query-Pässe (Läufe + deren Steps),
-     * in PHP gruppiert — KEIN N+1 über die Session-Liste. Sessions ohne Lauf tauchen nicht auf → die
-     * Blade zeigt sie als „Entwurf" (verwaister Entwurf, sichtbar). Rein für die Anzeige.
-     *
-     * Status-Ableitung = jüngster Lauf-Status (running→läuft · review→prüfen · done→fertig ·
-     * failed→fehlgeschlagen), Spiegel von {@see PlanningCascadeService::recomputeRunStatus}.
-     *
-     * @param  list<int>  $sessionIds
-     * @return array<int,array<string,mixed>>  sessionId → {status, running, run_id, scope, stufen}
-     */
     public function landingKaskadenMap(?Team $team, array $sessionIds): array
     {
-        if ($team === null || $sessionIds === []) {
-            return [];
-        }
-        // Jüngster Lauf je Session (orderByDesc id → erster Treffer je Session gewinnt = Retry gewinnt).
-        $laeufe = FoodAlchemistCascadeRun::visibleToTeam($team)
-            ->whereIn('planning_session_id', $sessionIds)
-            ->orderByDesc('id')
-            ->get(['id', 'planning_session_id', 'scope', 'status', 'source_owner_type', 'source_owner_id']);
-        $latest = [];
-        foreach ($laeufe as $r) {
-            $sid = (int) $r->planning_session_id;
-            if (! isset($latest[$sid])) {
-                $latest[$sid] = $r;
-            }
-        }
-        if ($latest === []) {
-            return [];
-        }
-        // Steps aller jüngsten Läufe in EINEM Pass holen → je Lauf gruppieren (kein N+1).
-        $runIds = array_map(fn ($r) => (int) $r->id, array_values($latest));
-        $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
-            // `deferred` mitholen: stufenAusSteps liest daraus den Reifegrad der Übernahmen.
-            // Ohne die Spalte zählte eine unreife Übernahme auf der Hauptseite still als fertig.
-            // `phase`/`phase_at` (Spec 53 / Paket C): Poll-Gate + Board-Anzeige der laufenden Phase.
-            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred', 'phase', 'phase_at'])
-            ->groupBy('cascade_run_id');
-
-        // Spec 42 / Board: Ausgabe-Ziel (Owner) je Lauf — Namen batch-auflösen (ein Query je Owner-Typ,
-        // kein N+1). foodbook=label, speisekarte/speiseplan=name, offer=Angebots-Referenz (id-only).
-        $ownerIds = [];
-        foreach ($latest as $r) {
-            if ($r->source_owner_type !== null && $r->source_owner_id !== null) {
-                $ownerIds[(string) $r->source_owner_type][] = (int) $r->source_owner_id;
-            }
-        }
-        $ownerNamen = ['foodbook' => [], 'speisekarte' => [], 'speiseplan' => []];
-        if (! empty($ownerIds['foodbook'])) {
-            $ownerNamen['foodbook'] = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::whereIn('id', array_unique($ownerIds['foodbook']))->pluck('label', 'id')->all();
-        }
-        if (! empty($ownerIds['speisekarte'])) {
-            $ownerNamen['speisekarte'] = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::whereIn('id', array_unique($ownerIds['speisekarte']))->pluck('name', 'id')->all();
-        }
-        if (! empty($ownerIds['speiseplan'])) {
-            $ownerNamen['speiseplan'] = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::whereIn('id', array_unique($ownerIds['speiseplan']))->pluck('name', 'id')->all();
-        }
-
-        $badge = ['running' => 'läuft', 'review' => 'prüfen', 'done' => 'fertig', 'failed' => 'fehlgeschlagen'];
-        $out = [];
-        foreach ($latest as $sid => $r) {
-            $steps = $stepsByRun->get((int) $r->id) ?? collect();
-            $ot = $r->source_owner_type !== null ? (string) $r->source_owner_type : null;
-            $oid = $r->source_owner_id !== null ? (int) $r->source_owner_id : null;
-            // Spec 53 / Paket C: ein Step kann noch eine Phase melden (Anreicherung/Konformität), auch
-            // wenn der Run selbst schon nicht mehr `running` ist — Board-Poll-Gate ($irgendeinLaeuft)
-            // und Anzeige sollen das sehen. Jüngste Phase (nach phase_at) für die Board-Zeile.
-            $phaseStep = $steps->whereNotNull('phase')->sortByDesc('phase_at')->first();
-            $out[$sid] = [
-                'status' => $badge[$r->status] ?? (string) $r->status,
-                'running' => $r->status === 'running' || $phaseStep !== null,
-                'phase' => $phaseStep?->phase,
-                'run_id' => (int) $r->id,
-                'scope' => (string) $r->scope,
-                'stufen' => $this->stufenAusSteps($steps),
-                // Auto-Titel-Baustein: Name des erzeugten Artefakts (Concept/Gericht/Rezept) dieses Laufs.
-                'titel' => $this->artefaktTitel($steps, (string) $r->scope),
-                // Board: Ausgabe-Ziel (Owner-Typ + Name, falls auflösbar).
-                'owner_type' => $ot,
-                'owner_name' => ($ot !== null && $oid !== null) ? ($ownerNamen[$ot][$oid] ?? null) : null,
-            ];
-        }
-
-        return $out;
-    }
-
-    /**
-     * Auto-Titel: Name des erzeugten Artefakts eines Laufs — bevorzugt die Run-Ebene
-     * (concept > gericht > rezept), sonst irgendein benanntes Step-Artefakt. Der Step-`label`
-     * trägt nach markStepDone den echten Rezept-/Concept-Namen.
-     */
-    private function artefaktTitel($steps, string $scope): ?string
-    {
-        foreach (array_values(array_unique([$scope, 'concept', 'gericht', 'rezept'])) as $kind) {
-            $s = $steps->first(fn ($x) => $x->kind === $kind && $x->ref_id !== null && trim((string) $x->label) !== '');
-            if ($s !== null) {
-                return trim((string) $s->label);
-            }
-        }
-        $any = $steps->first(fn ($x) => $x->ref_id !== null && trim((string) $x->label) !== '');
-
-        return $any !== null ? trim((string) $any->label) : null;
+        return app(KaskadenAnsicht::class)->landingKaskadenMap($team, $sessionIds);
     }
 
     /** Test-/Direkteinstieg: Stufen des aktiven Laufs (lädt den Run selbst). */
@@ -3926,140 +3448,10 @@ class Index extends Component
             || $lauf->steps->contains(fn ($s) => $s->phase !== null)
         ));
 
-        // Etappe 6: EK/VK/Marge je Stufe im Cockpit sichtbar — schon am Draft, nicht erst nach dem
-        // Speichern/Öffnen im VK-Editor. Für jeden Rezept-/Gericht-Step mit erzeugtem Artefakt
-        // (ref_type=recipe) die ABGELEITETE Kalkulation über den EINEN Bündler ziehen
-        // (SalesRecipeService::cockpit → MargeService; GL-02 I9: VK/Marge sind abgeleitet, nicht
-        // persistiert). Rezepte gebündelt per whereIn laden (kein N+1 über die Blade-Step-Schleife).
-        // Concept-Steps tragen keine Rezept-Marge (Menü ≠ Rezept) → hier bewusst nicht gerechnet.
-        // Map: ref_id → kompakte Kachel-Werte (EK gesamt · VK netto · Marge % · Wareneinsatz % + Ampel).
-        $kalkulation = [];
-        // Etappe 7: Kosten-Transparenz je Call — Map recipe_id → {n, model} der KI-Bild-Calls.
-        $bildCalls = [];
-        // Etappe 7 — Bild-Status im Cockpit (Teil 1): wurden KI-Fotos beim Go angefordert
-        // (run-level `ki_bilder`) + Map recipe_id → Zahl real existierender Fotos. Ehrlicher
-        // Status-Badge (erzeugt / angefordert-aber-leer), analog zum Anreicherungs-Badge.
-        $bilderAngefordert = $lauf !== null && (bool) (is_array($lauf->params ?? null) ? ($lauf->params['ki_bilder'] ?? false) : false);
-        $fotoCounts = [];
-        // Schicht 3: offene Konformitäts-Hinweise je Rezept-/Gericht-Draft ins Cockpit heben
-        // (Map recipe_id → Hinweise, hart vor weich) — gefüllt unten aus denselben ref-ids.
-        $konformitaet = [];
-        // Slice 4c: GP-Konformität je Rezept-Step — die Zutaten-GPs (v.a. die im Lauf frisch
-        // geminteten tentativen) tragen ihre eigenen §-Hinweise; Map recipe_id → [gp+Hinweis].
-        $gpKonformitaet = [];
-        if ($lauf !== null && $team !== null) {
-            $rezeptRefIds = $lauf->steps
-                ->whereIn('kind', ['rezept', 'gericht'])
-                ->where('ref_type', 'recipe')
-                ->whereIn('status', ['done', 'freigegeben', 'skipped'])
-                ->pluck('ref_id')
-                ->filter()
-                ->map(fn ($v) => (int) $v)
-                ->unique()
-                ->values()
-                ->all();
-            // Schicht 3: die offenen Hinweise für alle Draft-Rezepte in EINER Abfrage.
-            $conformance = app(\Platform\FoodAlchemist\Services\ConformanceService::class);
-            $konformitaet = $conformance->offeneFuerViele($team, 'recipe', $rezeptRefIds);
+        // Spec 84 C1-1: Cockpit-Daten des Laufs (Kalkulation, Bild-Calls, Fotos, Konformität) in {@see LaufCockpit}
+        ['kalkulation' => $kalkulation, 'bildCalls' => $bildCalls, 'bilderAngefordert' => $bilderAngefordert, 'fotoCounts' => $fotoCounts,
+            'konformitaet' => $konformitaet, 'gpKonformitaet' => $gpKonformitaet] = app(LaufCockpit::class)->fuer($team, $lauf);
 
-            // Slice 4c: GP-Konformität — Zutaten-GPs der Lauf-Rezepte laden, ihre offenen
-            // Hinweise ziehen (ein Query) und je Rezept dedupliziert zuordnen.
-            $ingrRows = DB::table('foodalchemist_recipe_ingredients')
-                ->whereIn('recipe_id', $rezeptRefIds)
-                ->whereNotNull('gp_id')
-                ->whereNull('deleted_at')
-                ->get(['recipe_id', 'gp_id']);
-            $gpIds = $ingrRows->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
-            if ($gpIds !== []) {
-                $gpFind = $conformance->offeneFuerViele($team, 'gp', $gpIds);
-                $gpNamen = DB::table('foodalchemist_gps')->whereIn('id', $gpIds)->pluck('name', 'id');
-                $recipeGps = [];
-                foreach ($ingrRows as $z) {
-                    $recipeGps[(int) $z->recipe_id][(int) $z->gp_id] = true;   // Set → GP je Rezept nur einmal
-                }
-                foreach ($recipeGps as $rid => $gset) {
-                    foreach (array_keys($gset) as $gid) {
-                        foreach ($gpFind[$gid] ?? [] as $f) {
-                            $gpKonformitaet[$rid][] = ['gp' => $gpNamen[$gid] ?? ('GP #' . $gid)] + $f;
-                        }
-                    }
-                }
-            }
-            if ($rezeptRefIds !== []) {
-                $sales = app(SalesRecipeService::class);
-                $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $rezeptRefIds)->get();
-                foreach ($rezepte as $rz) {
-                    $c = $sales->cockpit($rz, $team);
-                    $marge = is_array($c['marge'] ?? null) ? $c['marge'] : [];
-                    // Etappe 6: unvollständige Bepreisung ehrlich markieren. »teil-unbepreist« =
-                    // ein EK IST da, aber nicht alle costed Zutaten tragen einen Preis — die
-                    // gezeigte EK/Marge ist damit ZU GÜNSTIG gerechnet (die Lücken tragen 0 €).
-                    // 1:1 die kanonische Wahrheit aus DataQualityService (SignalTyp::EkKetteUnvollstaendig
-                    // `vk_ek_teil`/`br_ek_teil`): ek_total_eur != null && priced < total — KEINE zweite,
-                    // qs-schlaue Definition (das wäre ein Widerspruch zum Signal-Cockpit).
-                    $nTotal = $rz->ek_n_ingredients_total !== null ? (int) $rz->ek_n_ingredients_total : null;
-                    $nPriced = $rz->ek_n_ingredients_priced !== null ? (int) $rz->ek_n_ingredients_priced : null;
-                    $kalkulation[(int) $rz->id] = [
-                        'ek_total' => $rz->ek_total_eur !== null ? (float) $rz->ek_total_eur : null,
-                        'vk_netto' => $c['vk']['sales_net'] ?? null,
-                        'marge_pct' => $marge['marge_pct'] ?? null,
-                        'we_pct' => $marge['wareneinsatz_pct'] ?? null,
-                        'ampel' => (string) ($c['ampel'] ?? 'unbekannt'),
-                        'formel_fehlt' => (bool) ($c['formel_fehlt'] ?? false),
-                        'ek_n_priced' => $nPriced,
-                        'ek_n_total' => $nTotal,
-                        'ek_teil_unbepreist' => $rz->ek_total_eur !== null
-                            && $nTotal !== null && $nPriced !== null && $nPriced < $nTotal,
-                    ];
-                }
-            }
-
-            // Etappe 7 — Kosten-Transparenz je Call: die bei der Anreicherung erzeugten KI-Fotos
-            // werden je Call in foodalchemist_ai_call_log protokolliert (RecipeImageService). Hier
-            // die Zahl der kostenpflichtigen Bild-Calls je Rezept-/Gericht-Draft ins Cockpit heben,
-            // damit die KI-Foto-Kosten dort sichtbar sind, wo der Mensch den Go setzt. BEWUSST KEIN
-            // EUR-Betrag (keine Preisquelle im Code → wäre Erfindung): gezeigt werden Call-Anzahl +
-            // genutztes Modell. Calls → Rezept über die erzeugten Fotos (target_id = photo.id,
-            // target_table = photos). Team-eigener Log (die Kosten dieses Teams). Map: recipe_id → {n, model}.
-            if ($rezeptRefIds !== []) {
-                $bildRows = DB::table('foodalchemist_ai_call_log as l')
-                    ->join('foodalchemist_recipe_step_photos as p', function ($j) {
-                        $j->on('p.id', '=', 'l.target_id')->whereNull('p.deleted_at');
-                    })
-                    ->where('l.team_id', $team->id)
-                    ->where('l.target_table', 'foodalchemist_recipe_step_photos')
-                    ->whereIn('l.feature', RecipeImageService::BILD_FEATURES)
-                    ->whereIn('p.recipe_id', $rezeptRefIds)
-                    ->groupBy('p.recipe_id')
-                    ->selectRaw('p.recipe_id as rid, COUNT(*) as n, MAX(l.model) as model')
-                    ->get();
-                foreach ($bildRows as $row) {
-                    $bildCalls[(int) $row->rid] = ['n' => (int) $row->n, 'model' => (string) ($row->model ?? '')];
-                }
-            }
-
-            // Etappe 7 — Bild-Status (Teil 1): Zahl der real existierenden Fotos je Draft
-            // (team-eigen, nicht gelöscht). NUR wenn KI-Fotos angefordert waren — sonst gibt es
-            // keinen Status zu zeigen (Bestandsverhalten). Ehrlich ableitbar OHNE neue Persistenz:
-            // Die KI-Fotos laufen im EnrichRecipeJob NACH der Anreicherung → am freigegebenen Step
-            // mit deferred.enrich=done heisst »0 Fotos trotz angefordert« = nichts erzeugt (die
-            // Bild-Erzeugung ist still fail-soft, ein expliziter »fehlgeschlagen«-Zustand wird
-            // heute NICHT protokolliert → kein erfundenes Fehler-Badge). Explizite Fehler-
-            // Persistenz + „neu erzeugen" = Folge-Chunk. Actual-Fotos statt bildCalls, weil ein
-            // manueller Upload keinen Kosten-Call trägt, für »erzeugt« aber zählt.
-            if ($bilderAngefordert && $rezeptRefIds !== []) {
-                $fotoRows = DB::table('foodalchemist_recipe_step_photos')
-                    ->whereNull('deleted_at')
-                    ->where('team_id', $team->id)
-                    ->whereIn('recipe_id', $rezeptRefIds)
-                    ->groupBy('recipe_id')
-                    ->selectRaw('recipe_id as rid, COUNT(*) as n')
-                    ->get();
-                foreach ($fotoRows as $row) {
-                    $fotoCounts[(int) $row->rid] = (int) $row->n;
-                }
-            }
-        }
 
         // Composer-Tab: Ad-hoc-Netz + „Passt das zusammen?" (Kombinationslogik) + browsebarer Picker.
         $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];
