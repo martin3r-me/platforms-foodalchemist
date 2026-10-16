@@ -218,7 +218,7 @@
                                 <x-fa::input id="la-preis-neu" wire:model="preisNeu.price" inputmode="decimal" placeholder="z. B. 47,50" numeric />
                             </x-fa::field>
                             <x-fa::choice name="preisNeu.status" id-prefix="la-preis" label="Art" :live="false"
-                                :options="['0' => 'Standard-EK', '2' => 'Aktion']" />
+                                :options="['0' => 'Standard-EK', '2' => 'Läuft aus']" />
                             <div class="flex flex-col gap-1">
                                 <x-fa::button wire:click="preisAnlegen" icon="heroicon-m-plus">Preis anlegen</x-fa::button>
                             </div>

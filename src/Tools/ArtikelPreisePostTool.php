@@ -29,7 +29,7 @@ class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, T
             'properties' => [
                 'id' => ['type' => 'integer', 'description' => 'Artikel-Id (für das Team sichtbar).'],
                 'preis' => ['type' => 'number', 'description' => 'Preis netto (≥ 0).'],
-                'status' => ['type' => 'string', 'description' => 'Preisstatus (optional).'],
+                'status' => ['type' => 'string', 'enum' => ['0', '2'], 'description' => "Preisstatus (optional): '0' = Standard-EK (Standard), '2' = läuft aus (letzter Preis gilt weiter). Eine Aktion ist kein Preisstatus."],
             ],
             'required' => ['id', 'preis'],
         ];
