@@ -50,6 +50,7 @@ class ItemModal extends Component
         if ($this->itemId !== null) {
             $this->preisEditId = null;
             $this->preisNeu = ['price' => '', 'status' => '0'];
+            $this->aktionNeu = ['price' => '', 'ab' => '', 'bis' => ''];
             $this->gpSuche = '';
             $this->gpVorschlaege = [];
             $this->oeffnen($this->itemId);
@@ -68,6 +69,9 @@ class ItemModal extends Component
     public array $haltbarkeit = [];
 
     public array $preisNeu = ['price' => '', 'status' => '0'];
+
+    /** Aktion von Hand (16.10.2026): reine Information, Kalkulation bleibt beim Einkaufspreis. */
+    public array $aktionNeu = ['price' => '', 'ab' => '', 'bis' => ''];
 
     /** M2-10: 14 EU-Allergene (tri-state-Binding, GL-01) */
     public array $allergene = [];
@@ -240,6 +244,31 @@ class ItemModal extends Component
             $this->preisNeu = ['price' => '', 'status' => '0'];
             $this->fehler = null;
             $this->dispatch('preise-geaendert', itemId: (int) $this->itemId);   // Liste, frühere Preise und Verlauf neu laden
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function aktionAnlegen(): void
+    {
+        try {
+            $roh = str_replace(',', '.', trim((string) $this->aktionNeu['price']));
+            if ($roh === '' || ! is_numeric($roh) || (float) $roh <= 0) {
+                $this->fehler = 'Aktionspreis braucht eine Zahl größer 0.';
+
+                return;
+            }
+            if (trim((string) $this->aktionNeu['bis']) === '') {
+                $this->fehler = 'Aktion braucht ein Enddatum („bis“).';
+
+                return;
+            }
+            $ab = trim((string) $this->aktionNeu['ab']) !== '' ? (string) $this->aktionNeu['ab'] : now('Europe/Berlin')->toDateString();
+            app(\Platform\FoodAlchemist\Services\AktionspreisService::class)->anlegen($this->team(), $this->item($this->itemId), (float) $roh,
+                $ab, (string) $this->aktionNeu['bis'], 'manuell', null, [], Auth::id());
+            $this->aktionNeu = ['price' => '', 'ab' => '', 'bis' => ''];
+            $this->fehler = null;
+            $this->dispatch('preise-geaendert', itemId: (int) $this->itemId);
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -430,6 +459,7 @@ class ItemModal extends Component
             'haltbarkeitAusPass' => $item !== null ? $this->haltbarkeitAusPass($item) : [],
             'allergenQuelle' => $item?->allergens?->source,
             'aktiverPreis' => $aktiv,
+            'aktion' => $item !== null ? app(\Platform\FoodAlchemist\Services\AktionspreisService::class)->aktivFuer($team, $item) : null,
             'vergleichspreis' => $item !== null && $aktiv !== null
                 ? $preise->vergleichspreis($item, (float) $aktiv->price)
                 : null,

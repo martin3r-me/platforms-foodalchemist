@@ -220,6 +220,12 @@
                         @elseif($aktivPreis !== null)
                             <x-fa::signal tone="warn" title="Ohne Inhalt und Kalkulationseinheit kein Preis je kg, l oder Stück">Menge fehlt für den Preis je kg</x-fa::signal>
                         @endif
+                        {{-- Aktion = reine Information (Entscheid 16.10.2026): Kalkulation bleibt beim Einkaufspreis oben --}}
+                        @if($aktion !== null)
+                            <x-fa::badge tone="warn" title="Aktionspreis, zählt nicht in Kalkulation und Preis-Linie" data-aktion-hinweis>
+                                Aktion <x-fa::money :value="(float) $aktion->price" /> bis {{ \Illuminate\Support\Carbon::parse($aktion->valid_to)->subSecond()->setTimezone('Europe/Berlin')->format('d.m.Y') }}
+                            </x-fa::badge>
+                        @endif
                     </div>
 
                     @if($darfEdit)
@@ -233,6 +239,21 @@
                                 <x-fa::button wire:click="preisAnlegen" icon="heroicon-m-plus">Preis anlegen</x-fa::button>
                             </div>
                             <p class="basis-full {{ $leise }}">Der bisher gültige Preis endet mit dem neuen Eintrag.</p>
+                        </div>
+                        <div x-show="neuOffen" x-cloak class="flex flex-wrap items-end gap-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3" data-aktion-neu>
+                            <x-fa::field label="Aktionspreis (€, netto)" for="la-aktion-preis" class="w-40">
+                                <x-fa::input id="la-aktion-preis" wire:model="aktionNeu.price" inputmode="decimal" placeholder="z. B. 39,90" numeric />
+                            </x-fa::field>
+                            <x-fa::field label="ab" for="la-aktion-ab" class="w-40">
+                                <x-fa::input id="la-aktion-ab" type="date" wire:model="aktionNeu.ab" />
+                            </x-fa::field>
+                            <x-fa::field label="bis" for="la-aktion-bis" class="w-40">
+                                <x-fa::input id="la-aktion-bis" type="date" wire:model="aktionNeu.bis" />
+                            </x-fa::field>
+                            <div class="flex flex-col gap-1">
+                                <x-fa::button wire:click="aktionAnlegen" icon="heroicon-m-plus" data-aktion-anlegen>Aktion anlegen</x-fa::button>
+                            </div>
+                            <p class="basis-full {{ $leise }}">Eine Aktion ist ein Hinweis; die Kalkulation rechnet weiter mit dem Einkaufspreis. Entfernen über „Frühere Preise“ (ausblenden).</p>
                         </div>
                     @endif
 

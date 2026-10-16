@@ -96,6 +96,7 @@ class SupplierItemService
             ->addSelect([
                 '*',
                 'aktiver_preis' => app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team), // Spec 82 3a
+                'aktion_bis' => app(AktionspreisService::class)->aktivBisSubquery('foodalchemist_supplier_items.id', $team),   // Hinweis „Aktion bis …“
             ]);
     }
 

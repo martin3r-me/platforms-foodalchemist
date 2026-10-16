@@ -301,6 +301,7 @@
                                         @elseif($item->lieferstatusInfo() && $item->lieferstatus === 'eingestellt')<x-fa::badge title="Necta: {{ $item->lieferstatusInfo()['text'] }} — kein Preis mehr, nicht bestellbar" data-lieferstatus="eingestellt">{{ $item->lieferstatusInfo()['kurz'] }}</x-fa::badge>
                                         @elseif($item->lieferstatusInfo())<x-fa::badge tone="warn" title="Necta: {{ $item->lieferstatusInfo()['text'] }} — der letzte Preis gilt noch" data-lieferstatus="auslaufend">{{ $item->lieferstatusInfo()['kurz'] }}</x-fa::badge>
                                         @else<x-fa::badge tone="ok">Lieferbar</x-fa::badge>@endif
+                                        @if($item->aktion_bis ?? null)<x-fa::badge tone="warn" title="Aktionspreis, zählt nicht in die Kalkulation" data-aktion-liste>Aktion bis {{ \Illuminate\Support\Carbon::parse($item->aktion_bis)->subSecond()->setTimezone('Europe/Berlin')->format('d.m.') }}</x-fa::badge>@endif
                                         @if($item->nonfood?->ist_nonfood)<x-fa::badge tone="info" title="Kein Lebensmittel{{ $item->nonfood->subkategorie ? ': '.$item->nonfood->subkategorie : '' }}" data-nonfood-pill>Non-Food</x-fa::badge>
                                         @elseif($item->nonfood?->pruefung_offen)<x-fa::badge tone="warn" title="Food oder Non-Food? Bitte im Artikel entscheiden" data-nonfood-pruefen-pill>Prüfen</x-fa::badge>@endif
                                         @if($item->is_preorder)
