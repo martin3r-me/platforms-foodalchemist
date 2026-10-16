@@ -137,7 +137,8 @@ class DarreichungService
         'serving_vehicle_vocab_id',
         'work_time_surcharge_min', 'offer_text_override', 'note',
         'anrichten_wert', 'anrichten_pauschal_min',   // Spec 83 B3i/B3l: Anrichte-Zeit je Darreichung (Einheit aus der Form)
-        'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
+        'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag) — ersetzt durch vessel_gp_id, fällt mit PR D
+        'vessel_gp_id',      // Gefäß der Form: Non-Food-GP (WG 16); der Servier-Typ kommt daraus
     ];
 
     private const DEZIMAL_FELDER = [
@@ -176,6 +177,29 @@ class DarreichungService
             $update['price_mode'] = $legacyManual ? 'fixed' : $update['price_mode'];
             if (! in_array($update['price_mode'], ['auto', 'fixed'], true)) {
                 throw new \RuntimeException('Unbekannter Preismodus.');
+            }
+        }
+        // Gefäß: nur ein sichtbares Non-Food-GP (WG 16)
+        if (array_key_exists('vessel_gp_id', $update) && $update['vessel_gp_id'] !== null) {
+            $gefaess = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find((int) $update['vessel_gp_id']);
+            if ($gefaess === null) {
+                throw new \RuntimeException('Gefäß (Grundprodukt) nicht sichtbar oder nicht vorhanden.');
+            }
+            if (! $gefaess->istNonFood()) {
+                throw new \RuntimeException('Als Gefäß nimmt die Darreichung nur Non-Food-Grundprodukte (Warengruppe 16).');
+            }
+            $update['vessel_gp_id'] = (int) $gefaess->id;
+        }
+        // Eine Übersteuerung des Servier-Typs gibt es nur, wenn sie vom Typ des Gefäßes ABWEICHT: ein leerer oder gleicher Wert wird geleert,
+        // sonst übersteuerte ein Bestandswert still für immer den Typ des Gefäßes (Etikett lügt).
+        if (array_key_exists('vessel_gp_id', $update) || array_key_exists('serving_vehicle_vocab_id', $update)) {
+            $gefaessId = array_key_exists('vessel_gp_id', $update) ? $update['vessel_gp_id'] : $darreichung->vessel_gp_id;
+            if ($gefaessId !== null) {
+                $typ = array_key_exists('serving_vehicle_vocab_id', $update) ? $update['serving_vehicle_vocab_id'] : $darreichung->serving_vehicle_vocab_id;
+                $gefaessTyp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereKey($gefaessId)->value('serving_vehicle_vocab_id');
+                if ($typ !== null && $gefaessTyp !== null && (int) $typ === (int) $gefaessTyp) {
+                    $update['serving_vehicle_vocab_id'] = null;
+                }
             }
         }
         $wirdFixiert = ($update['price_mode'] ?? $darreichung->price_mode) === 'fixed';
@@ -356,6 +380,14 @@ class DarreichungService
         $vollstaendig = true;
         $zeilen = [];
         foreach ($darreichung->zubehoer()->with('gp:id,name,team_id,commodity_group_code,lead_la_supplier_item_id,piece_default_g')->get() as $z) {
+            // Doppelzählung vermeiden: dasselbe GP als Gefäß zählt dort (Gefäß gewinnt). Miete (Lieferant der Gruppe VERLEIH): nur Hinweis, nie je Portion.
+            $doppelt = $darreichung->vessel_gp_id !== null && (int) $darreichung->vessel_gp_id === (int) $z->gp_id;
+            $miete = ! $doppelt && $z->gp !== null && $this->istVerleihGp($z->gp);
+            if ($doppelt || $miete) {
+                $zeilen[] = ['gp_id' => (int) $z->gp_id, 'name' => (string) $z->gp?->name, 'menge' => (float) $z->quantity, 'preis_stk' => null, 'kosten' => null, 'note' => $z->note, 'doppelt' => $doppelt, 'miete' => $miete];
+
+                continue;
+            }
             $preis = $z->gp !== null ? $this->recompute->preisProStueckPublic($z->gp, $team) : null;
             $kosten = $preis !== null ? round($preis * (float) $z->quantity, 4) : null;
             if ($kosten === null) {
@@ -363,10 +395,109 @@ class DarreichungService
             } else {
                 $summe += $kosten;
             }
-            $zeilen[] = ['gp_id' => (int) $z->gp_id, 'name' => (string) $z->gp?->name, 'menge' => (float) $z->quantity, 'preis_stk' => $preis, 'kosten' => $kosten, 'note' => $z->note];
+            $zeilen[] = ['gp_id' => (int) $z->gp_id, 'name' => (string) $z->gp?->name, 'menge' => (float) $z->quantity, 'preis_stk' => $preis, 'kosten' => $kosten, 'note' => $z->note, 'doppelt' => false, 'miete' => false];
         }
 
         return ['summe' => round($summe, 4), 'vollstaendig' => $vollstaendig, 'zeilen' => $zeilen];
+    }
+
+    /**
+     * Wirksamer Servier-Typ der Darreichung — EINE Lese-Stelle: die ausdrückliche Übersteuerung an der Darreichung, sonst der Typ des Gefäß-GP.
+     * Kein Kopieren, kein Auseinanderlaufen: ändert sich der Typ am GP, ziehen alle Darreichungen mit.
+     */
+    public function vehikelId(FoodAlchemistRecipeDarreichung $d): ?int
+    {
+        if ($d->serving_vehicle_vocab_id !== null) {
+            return (int) $d->serving_vehicle_vocab_id;
+        }
+        $typ = $d->vessel_gp_id !== null ? ($d->relationLoaded('vessel') ? $d->vessel?->serving_vehicle_vocab_id : \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereKey($d->vessel_gp_id)->value('serving_vehicle_vocab_id')) : null;
+
+        return $typ !== null ? (int) $typ : null;
+    }
+
+    /** Hat die Darreichung einen Servier-Typ, der vom Typ ihres Gefäßes abweicht (ausdrückliche Übersteuerung)? */
+    public function uebersteuert(FoodAlchemistRecipeDarreichung $d): bool
+    {
+        if ($d->serving_vehicle_vocab_id === null || $d->vessel_gp_id === null) {
+            return false;
+        }
+        $gefaessTyp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereKey($d->vessel_gp_id)->value('serving_vehicle_vocab_id');
+
+        return $gefaessTyp !== null && (int) $gefaessTyp !== (int) $d->serving_vehicle_vocab_id;
+    }
+
+    /** Kommt der Lead-Artikel des GP von einem Lieferanten der Gruppe VERLEIH (Miete je Tag/Veranstaltung)? Dann zählt er nicht je Portion. */
+    public function istVerleihGp(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp): bool
+    {
+        if ($gp->lead_la_supplier_item_id === null || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_supplier_groups')) {
+            return false;
+        }
+
+        return DB::table('foodalchemist_supplier_items as i')
+            ->join('foodalchemist_suppliers as s', 's.id', '=', 'i.supplier_id')
+            ->join('foodalchemist_supplier_groups as g', 'g.id', '=', 's.group_id')
+            ->where('i.id', $gp->lead_la_supplier_item_id)->where('g.code', \Platform\FoodAlchemist\Support\LieferantenGruppen::VERLEIH)->exists();
+    }
+
+    /**
+     * Gefäß der Darreichung als Kostenposten: 1 Stück je Einheit zum Lead-Preis je Stück, AUSSER Miete (Lieferant der Gruppe VERLEIH):
+     * dann keine Kosten je Portion, nur der Hinweis.
+     *
+     * @return array{gp:?\Platform\FoodAlchemist\Models\FoodAlchemistGp, kosten:?float, miete:bool, preis_fehlt:bool}
+     */
+    public function gefaessKosten(FoodAlchemistRecipeDarreichung $d, ?Team $team = null): array
+    {
+        $gp = $d->vessel_gp_id !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->find($d->vessel_gp_id) : null;
+        if ($gp === null) {
+            return ['gp' => null, 'kosten' => null, 'miete' => false, 'preis_fehlt' => false];
+        }
+        if ($this->istVerleihGp($gp)) {
+            return ['gp' => $gp, 'kosten' => null, 'miete' => true, 'preis_fehlt' => false];
+        }
+        $team ??= Team::find($d->team_id);
+        $preis = $this->recompute->preisProStueckPublic($gp, $team);
+
+        return ['gp' => $gp, 'kosten' => $preis !== null ? round($preis, 4) : null, 'miete' => false, 'preis_fehlt' => $preis === null];
+    }
+
+    /**
+     * Alles, was auf den EK der Darreichung kommt, ohne die Zutaten: Zubehör & Verpackung plus Gefäß (je Einheit).
+     *
+     * @return array{summe: float, vollstaendig: bool, zubehoer: array<string,mixed>, gefaess: array<string,mixed>}
+     */
+    public function beigabenKosten(FoodAlchemistRecipeDarreichung $d, ?Team $team = null): array
+    {
+        $zub = $this->zubehoerKosten($d, $team);
+        $gef = $this->gefaessKosten($d, $team);
+
+        return ['summe' => round($zub['summe'] + ($gef['kosten'] ?? 0.0), 4), 'vollstaendig' => $zub['vollstaendig'] && ! $gef['preis_fehlt'], 'zubehoer' => $zub, 'gefaess' => $gef];
+    }
+
+    /**
+     * Anzeige-Info für Gefäß, Typ und Hinweise (VK-Modal, Concepter „Anrichten“, Paket) — berechnet, nichts gespeichert.
+     *
+     * @return array<string,mixed> `leer` = weder Gefäß noch Typ
+     */
+    public function gefaessInfo(FoodAlchemistRecipeDarreichung $d, ?Team $team = null): array
+    {
+        $typId = $this->vehikelId($d);
+        $name = fn (?int $id) => $id !== null ? (string) DB::table('foodalchemist_vocab_serving_vehicles')->where('id', $id)->value('name') : null;
+        $gef = $this->gefaessKosten($d, $team);
+        $gp = $gef['gp'];
+        $warnung = null;
+        $gramm = (float) ($d->quantity_per_unit_g ?? 0);
+        $volumen = $gp?->volume_ml !== null ? (float) $gp->volume_ml : null;
+        if ($gp !== null && $volumen !== null && $volumen > 0 && $gramm > $volumen) {
+            $warnung = 'Füllmenge '.rtrim(rtrim(number_format($gramm, 1, ',', '.'), '0'), ',').' g passt nicht in '.\Platform\FoodAlchemist\Support\NonFoodMasse::volumen($volumen).' (Volumen des Gefäßes).';
+        }
+        $gefaessTypId = $gp?->serving_vehicle_vocab_id !== null ? (int) $gp->serving_vehicle_vocab_id : null;
+
+        return [
+            'leer' => $d->vessel_gp_id === null && $typId === null,
+            'gefaess_id' => $gp?->id, 'gefaess_name' => $gp?->name, 'typ_id' => $typId, 'typ_name' => $name($typId),
+            'uebersteuert' => $this->uebersteuert($d), 'gefaess_typ_name' => $name($gefaessTypId),
+            'warnung' => $warnung, 'miete' => $gef['miete'], 'kosten' => $gef['kosten'], 'preis_fehlt' => $gef['preis_fehlt'],
+        ];
     }
 
     /** EK/VK einer Darreichung neu rechnen (Stufe 1 + Stufe-2-Deltas). */
@@ -417,8 +548,8 @@ class DarreichungService
 
         // Zubehör & Verpackung (Non-Food, je Einheit) kommt auf den EK der Darreichung — NUR dorthin. Ist der Lebensmittel-EK unbepreist,
         // bleibt ek_portion null: das Zubehör allein täuscht keinen Preis vor.
-        if ($ekPortion !== null && $darreichung->zubehoer()->exists()) {
-            $ekPortion = round($ekPortion + $this->zubehoerKosten($darreichung, $team)['summe'] * (float) ($darreichung->unit_count ?: 1), 4);
+        if ($ekPortion !== null && ($darreichung->vessel_gp_id !== null || $darreichung->zubehoer()->exists())) {
+            $ekPortion = round($ekPortion + $this->beigabenKosten($darreichung, $team)['summe'] * (float) ($darreichung->unit_count ?: 1), 4);
         }
 
         $oldCalculated = $darreichung->calculated_sales_net;
@@ -483,7 +614,8 @@ class DarreichungService
         if ($gpIds === []) {
             return 0;
         }
-        $ids = DB::table('foodalchemist_recipe_presentation_zubehoer')->whereIn('gp_id', $gpIds)->whereNull('deleted_at')->distinct()->pluck('presentation_id');
+        $ids = DB::table('foodalchemist_recipe_presentation_zubehoer')->whereIn('gp_id', $gpIds)->whereNull('deleted_at')->distinct()->pluck('presentation_id')
+            ->merge(DB::table('foodalchemist_recipe_presentations')->whereIn('vessel_gp_id', $gpIds)->whereNull('deleted_at')->pluck('id'))->unique()->values();
         if ($ids->isEmpty()) {
             return 0;
         }

@@ -365,6 +365,9 @@
                             <x-fa::field label="Höhe in cm" for="gp-m-h"><x-fa::input id="gp-m-h" numeric inputmode="decimal" wire:model="defaults.height_cm" placeholder="–" data-gp-masse-h /></x-fa::field>
                             <x-fa::field label="Volumen in ml" for="gp-m-v"><x-fa::input id="gp-m-v" numeric inputmode="decimal" wire:model="defaults.volume_ml" placeholder="–" data-gp-masse-v /></x-fa::field>
                         </div>
+                        <x-fa::field label="Servier-Typ (Gefäß)" for="gp-m-typ" hint="Worauf angerichtet wird, wenn dieses Gefäß in einer Darreichung steht; die Darreichung liest den Typ von hier." class="sm:max-w-md">
+                            <x-fa::select id="gp-m-typ" wire:model="defaults.serving_vehicle_vocab_id" placeholder="nicht gesetzt" :options="$servierTypen" data-gp-servier-typ />
+                        </x-fa::field>
                         <div><x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-up-tray" wire:click="masseInNamen" data-gp-masse-in-namen
                             title="Schreibt die Größe aus den Maßen in die Pflichtangabe und damit in den Namen">Größe in den Namen übernehmen</x-fa::button></div>
                     </div>

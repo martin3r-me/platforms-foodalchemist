@@ -43,6 +43,32 @@ class GpMasseService
         return $gp->refresh();
     }
 
+    /**
+     * Servier-Typ des Gefäßes (Vokabular Servier-Vehikel) setzen — EINMAL am GP (nur WG 16). Eingabe: Id oder Name; leer löscht.
+     * Alle Darreichungen mit diesem Gefäß lesen den Typ von hier ({@see DarreichungService::vehikelId}).
+     */
+    public function setzeServierTyp(FoodAlchemistGp $gp, int|string|null $idOderName): FoodAlchemistGp
+    {
+        if (! $gp->istNonFood()) {
+            throw new RuntimeException('Einen Servier-Typ tragen nur Non-Food-Grundprodukte (Warengruppe 16).');
+        }
+        if ($idOderName === null || trim((string) $idOderName) === '') {
+            $gp->update(['serving_vehicle_vocab_id' => null]);
+
+            return $gp->refresh();
+        }
+        $q = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false);
+        $id = is_numeric($idOderName)
+            ? $q->where('id', (int) $idOderName)->value('id')
+            : $q->whereRaw('LOWER(name) = ?', [mb_strtolower(trim((string) $idOderName))])->value('id');
+        if ($id === null) {
+            throw new RuntimeException('Servier-Typ „'.$idOderName.'“ gibt es im Vokabular nicht.');
+        }
+        $gp->update(['serving_vehicle_vocab_id' => (int) $id]);
+
+        return $gp->refresh();
+    }
+
     /** Die Größe für den Namen aus den gespeicherten Maßen (Ø → L×B×H → Volumen); null ohne Maß. */
     public function groesse(FoodAlchemistGp $gp): ?string
     {

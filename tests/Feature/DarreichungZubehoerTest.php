@@ -233,9 +233,10 @@ it('Fassung: das Zubehör geht in die Fassung mit, und eine Änderung des Zubeh�
     DB::table('foodalchemist_recipe_presentation_zubehoer')->insert(['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->master->id,
         'presentation_id' => $this->darM->id, 'gp_id' => $this->glasStamm->id, 'quantity' => 1, 'position' => 1, 'created_at' => now(), 'updated_at' => now()]);
 
+    $this->darM->update(['vessel_gp_id' => $this->glasStamm->id]);                     // Gefäß der Form (PR C) geht ebenfalls mit
     $erste = app(FassungService::class)->veroeffentlichen($this->master, $this->gerichtM->id, 'Mit Glas', $this->kurator);
     $fd = FoodAlchemistRecipeDarreichung::where('recipe_id', $erste['fassung_id'])->sole();
-    expect($fd->zubehoer()->count())->toBe(1)->and($fd->zubehoer()->first()->gp_id)->toBe($this->glasStamm->id);
+    expect($fd->vessel_gp_id)->toBe($this->glasStamm->id)->and($fd->zubehoer()->count())->toBe(1)->and($fd->zubehoer()->first()->gp_id)->toBe($this->glasStamm->id);
 
     // Gegenprobe: nichts geändert ⇒ keine neue Fassung
     expect(app(FassungService::class)->veroeffentlichen($this->master, $this->gerichtM->id, 'nochmal', $this->kurator)['neu'])->toBe([]);

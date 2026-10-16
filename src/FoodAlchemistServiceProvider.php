@@ -127,6 +127,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\NonFoodEinrichtenCommand::class,
                 \Platform\FoodAlchemist\Console\NonFoodErkennenCommand::class,
+                \Platform\FoodAlchemist\Console\GeschirrTypUebernehmenCommand::class,
                 \Platform\FoodAlchemist\Console\LieferantenGruppenEinrichtenCommand::class,
                 \Platform\FoodAlchemist\Console\LieferantenGruppenVorschlagenCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,

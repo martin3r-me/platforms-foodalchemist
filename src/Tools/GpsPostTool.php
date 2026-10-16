@@ -59,6 +59,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'width_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Breite in cm.'],
                 'height_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Höhe in cm.'],
                 'volume_ml' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Volumen in ml (Gläser, Schalen).'],
+                'serving_vehicle' => ['type' => 'string', 'description' => 'Non-Food (WG 16): Servier-Typ des Gefäßes als Name oder Id (als Text) aus dem Vokabular Servier-Vehikel (leer löscht); die Darreichung liest ihn von hier.'],
                 'force' => ['type' => 'boolean', 'description' => 'Dubletten-Hard-Stop bewusst übergehen.'],
             ],
             'required' => ['hauptzutat'],
@@ -97,6 +98,9 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             $gp = app(GpNamingService::class)->createGp($team, $in, (bool) ($arguments['force'] ?? false));
             if ($masse !== []) {
                 $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, $masse);
+            }
+            if (array_key_exists('serving_vehicle', $arguments)) {
+                $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setzeServierTyp($gp, $arguments['serving_vehicle']);
             }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');

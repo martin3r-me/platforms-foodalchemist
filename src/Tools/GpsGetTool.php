@@ -64,7 +64,7 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'tags' => $tags,
             // Non-Food (WG 16): Maße in mm/ml wie gespeichert, dazu die Größe in Betriebs-Einheiten (Ø 27 cm); sonst null
-            'masse' => $gp->istNonFood() ? array_merge(array_map(fn ($v) => $v !== null ? (float) $v : null, $gp->only(\Platform\FoodAlchemist\Support\NonFoodMasse::FELDER)), ['groesse' => $gp->masseText()]) : null,
+            'masse' => $gp->istNonFood() ? array_merge(array_map(fn ($v) => $v !== null ? (float) $v : null, $gp->only(\Platform\FoodAlchemist\Support\NonFoodMasse::FELDER)), ['groesse' => $gp->masseText(), 'serving_vehicle_vocab_id' => $gp->serving_vehicle_vocab_id !== null ? (int) $gp->serving_vehicle_vocab_id : null]) : null,
             'allergene' => app(GpAggregateService::class)->allergene($gp),
             // Freiwillige Angaben (Jod), getrennt von der Pflicht-Kennzeichnung; MAX über die Artikel des GP
             'freiwillig' => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::freiwilligFuerMcp(fn ($f) => $freiwillig[$f] ?? null),

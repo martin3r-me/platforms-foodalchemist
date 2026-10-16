@@ -373,6 +373,7 @@ class Behaelter extends Component
             'vehikel' => [
                 ['foodalchemist_recipes', ['serving_vehicle_vocab_id']],
                 ['foodalchemist_recipe_presentations', ['serving_vehicle_vocab_id']],
+                ['foodalchemist_gps', ['serving_vehicle_vocab_id']],   // Typ des Gefäßes (Non-Food-GP)
                 ['foodalchemist_tableware_items', ['vehicle_vocab_id']],
             ],
             'equipment' => [
