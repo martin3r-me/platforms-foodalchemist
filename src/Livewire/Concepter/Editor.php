@@ -1343,6 +1343,7 @@ class Editor extends Component
         $tauschbar = [];
         $varianteFehlt = [];
         $darreichungInfo = [];
+        $zubehoerInfo = [];   // Slot → Zubehör & Verpackung der gültigen Darreichung (read-only, interne Sicht)
         $darreichungOptionen = [];
         $geschirrVorschlag = [];
         $sektionSumme = [];
@@ -1418,6 +1419,10 @@ class Editor extends Component
                             $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->serving_form_id === null)
                                 ? ($dar->servingForm?->label ?? '—')
                                 : 'Standard: ' . ($dar->servingForm?->label ?? '—');
+                            $zub = app(\Platform\FoodAlchemist\Services\DarreichungService::class)->zubehoerKosten($dar, $team);
+                            if ($zub['zeilen'] !== []) {
+                                $zubehoerInfo[$slot->id] = $zub;
+                            }
                             // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
                             if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->dishwareItem !== null) {
                                 $geschirrVorschlag[$slot->id] = [
@@ -1588,6 +1593,7 @@ class Editor extends Component
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,
             'darreichungInfo' => $darreichungInfo,
+            'zubehoerInfo' => $zubehoerInfo,
             'darreichungOptionen' => $darreichungOptionen,
             'geschirrVorschlag' => $geschirrVorschlag,
             'kandidaten' => $kandidaten,

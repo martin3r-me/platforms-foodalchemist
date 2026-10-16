@@ -595,6 +595,9 @@ class AboKuendigungService
                         'recipe_ingredient_id' => $zutatMap[(int) $delta->recipe_ingredient_id]])->save();
                 }
             }
+            foreach ($d->zubehoer()->get() as $z) {
+                $z->replicate(['uuid'])->forceFill(['presentation_id' => $dk->id, 'team_id' => $mandant->id])->save();   // Zubehör & Verpackung bleibt beim Gericht
+            }
         }
     }
 

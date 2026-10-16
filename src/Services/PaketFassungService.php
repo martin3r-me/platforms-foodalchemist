@@ -216,7 +216,9 @@ class PaketFassungService
             ->map(fn ($x) => [$positionen[(int) $x->recipe_ingredient_id] ?? null, $x->quantity_override_g, (bool) $x->omitted])
             ->sortBy(fn ($x) => (string) $x[0])->values()->all();
 
-        return [$d->only(self::DARREICHUNG_FELDER), $deltas, (bool) $d->is_standard];
+        $zubehoer = $d->zubehoer()->reorder()->orderBy('gp_id')->get(['gp_id', 'quantity'])->map(fn ($z) => [(int) $z->gp_id, (float) $z->quantity])->all();
+
+        return [$d->only(self::DARREICHUNG_FELDER), $deltas, (bool) $d->is_standard, $zubehoer];
     }
 
     /**
@@ -278,6 +280,9 @@ class PaketFassungService
                 continue;
             }
             $d->replicate(['uuid', 'legacy_id'])->forceFill(['presentation_id' => $kopie->id, 'recipe_ingredient_id' => $treffer->id])->save();
+        }
+        foreach ($quelle->zubehoer()->get() as $z) {
+            $z->replicate(['uuid'])->forceFill(['presentation_id' => $kopie->id])->save();   // Zubehör & Verpackung geht mit (EK der Darreichung)
         }
 
         return $kopie;

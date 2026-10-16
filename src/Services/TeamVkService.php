@@ -56,6 +56,15 @@ class TeamVkService
         }
         $mek = round($kosten['ek_per_kg'] / 1000.0 * $gramm * (float) ($standard->unit_count ?: 1), 4);
 
+        // Zubehör & Verpackung der Form: zum Preis des Teams (dessen Lead-LA) auf den MEK — fehlt ein Preis, gibt es keinen halben Preis
+        if ($standard->zubehoer()->exists()) {
+            $zubehoer = app(DarreichungService::class)->zubehoerKosten($standard, $team);
+            if (! $zubehoer['vollstaendig']) {
+                return ['vk' => null, 'quelle' => 'keine', 'grund' => 'zubehoer_ohne_preis', 'mek' => null];
+            }
+            $mek = round($mek + $zubehoer['summe'] * (float) ($standard->unit_count ?: 1), 4);
+        }
+
         // Rechen-Kopie (nie gespeichert): MEK des Teams, keine fremde Preisklasse, Auto-Modus
         $rechnung = $standard->replicate();
         $rechnung->forceFill(['ek_portion' => $mek, 'markup_class_id' => null, 'price_mode' => 'auto', 'sales_net' => null]);

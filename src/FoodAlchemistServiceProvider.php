@@ -777,6 +777,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungStandardTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungDeltaPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungZubehoerPutTool::class,   // Zubehör & Verpackung je Darreichung
                     // D3c: Regenerations-Programme + kundenspezifische Marketing-Namen je Gericht.
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationDeleteTool::class,

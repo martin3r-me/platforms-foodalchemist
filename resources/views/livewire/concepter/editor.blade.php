@@ -550,6 +550,9 @@
                                                             @if(isset($darreichungInfo[$s->id]))
                                                                 <x-fa::badge :tone="str_starts_with($darreichungInfo[$s->id], 'Standard:') ? 'neutral' : 'accent'" icon="heroicon-m-rectangle-stack">{{ $darreichungInfo[$s->id] }}</x-fa::badge>
                                                             @endif
+                                                            @if(isset($zubehoerInfo[$s->id]))
+                                                                <x-fa::badge icon="heroicon-m-archive-box" data-zubehoer-pill title="Zubehör & Verpackung der Darreichung: kostet mit, nur interne Sicht">Zubehör: {{ collect($zubehoerInfo[$s->id]['zeilen'])->map(fn ($z) => $z['name'].' ×'.rtrim(rtrim(number_format($z['menge'], 3, ',', ''), '0'), ','))->implode(', ') }}</x-fa::badge>
+                                                            @endif
                                                             @if($g0->dishClass)<x-fa::badge>{{ $g0->dishClass->label }}</x-fa::badge>@endif
                                                             @if($g0->spec_is_vegan)<x-fa::badge tone="ok">vegan</x-fa::badge>@elseif($g0->spec_is_vegetarian)<x-fa::badge tone="ok">vegetarisch</x-fa::badge>@endif
                                                             @if(count($enthaelt))<x-fa::badge tone="warn">enthält {{ implode(', ', $enthaelt) }}</x-fa::badge>@endif
