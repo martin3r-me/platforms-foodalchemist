@@ -1,11 +1,12 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **Entwurf, Sparring mit Session „Vanessa“ läuft** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **Entwurf v0.2, Review Session „Vanessa“ Runde 3 eingearbeitet** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
 > **Einstieg für die bauende Session:**
-> 1. Zuerst die Entscheidungen in §9 mit Dominique klären (vor allem E1 demo-Master und E2 Fehler statt leer).
+> 0. **Zuerst §4.0 (Schreib-Leck, akut):** Livewire-Modale und 4 MCP-Tools schreiben ohne Eigentümer-Prüfung auf fremde, nur sichtbare Zeilen (Master, Seed, Abo-Fassungen). Das ist ein eigener kleiner Fix-PR vor allem anderen.
+> 1. Die Entscheidungen in §9 mit Dominique klären (vor allem E1 demo-Master und E2 Fehler statt leer).
 > 2. Mit **§3 Teil A** beginnen (Team-Kontext). Das ist das Geld-Thema seit #452, klein und unabhängig.
 > 3. **§4 B0** (Zwei-Mandanten-Test) parallel dazu bauen. Er berührt keinen Produktivcode und muss vor dem ersten echten Abo auf io stehen.
 > 4. **§5 Teil C** wird nicht als Großumbau gebaut. Es sind Schnittpläne für den nächsten fachlichen Eingriff in die jeweilige Datei (Pfadfinder-Regel §5.0).
@@ -66,21 +67,26 @@ Kein Sichtbarkeits-Leck, sondern ein **Zuordnungs-Leck**. Seit #452 geldrelevant
 
 ### §3.3 Zielbild
 
-**Eine Lese-Stelle, eine Schreib-Stelle je Eingang.** Grundlage ist Laravels `Context` (ab L11, hier L13): versteckte Werte werden beim Job-Versand in den Payload serialisiert, im Worker wiederhergestellt und zwischen Jobs geleert.
+**Eine Lese-Stelle mit festem Vorrang.** Laravels `Context` (ab L11, hier L13) ist nur der **Transport in den Job**: versteckte Werte werden beim Versand in den Payload serialisiert, im Worker wiederhergestellt und zwischen Jobs geleert. Ein Core-Override gewinnt immer.
 
 ```
 Lesen (überall):  FaTeam::aktuell()
-                   = Context::getHidden('fa.team_id')            ← gesetzt je Eingang
-                     ?? Auth::user()?->currentTeam               ← enthält schon den Core-MCP-Override
-                   je Request/Job nach id gemerkt (kein Query je Budget-Check)
+  1. TeamContext::hasOverride()      → Core-Team (MCP, Tool-Loop, Playground; Core setzt + räumt ab)
+  2. Context::getHidden('fa.team_id') → im Job aus dem Payload; sonst innerhalb FaTeam::imTeam()
+  3. Auth::user()?->currentTeam       → UI-Team (für FA = current_team_id, weil scope_type 'single')
+  je Request/Job nach id gemerkt (kein Query je Budget-Check)
 
-Setzen (je Eingang, VOR der Arbeit):
-  HTTP/Livewire  → FA-Middleware: Context::addHidden('fa.team_id', $user->currentTeam->id)
-  MCP            → FoodAlchemistTool-Basis vor executeInContext(): aus ToolContext->team
-  Job            → kommt automatisch aus dem Payload (beim Versand gesetzt)
-  Scheduler/CLI/Job-aus-Job über Teamgrenzen
-                 → ausdrücklich: FaTeam::imTeam($team, fn () => dispatch(...))
+Transport in Jobs (EINE Stelle, Provider):
+  Context::dehydrating(fn ($c) => $c->hasHidden('fa.team_id')
+      ?: $c->addHidden('fa.team_id', FaTeam::aktuellId()))
+  → jeder Job trägt das Team, das beim Versand galt, egal ob aus Livewire, MCP oder imTeam
+
+Ausdrücklich anderes Team (Scheduler, Artisan, Master-Recompute je Mandant, Tool-Basis):
+  FaTeam::imTeam($team, fn () => …)   ← setzt fa.team_id, stellt im finally den alten Wert wieder her
 ```
+
+- **Tool-Basis:** `FoodAlchemistTool` läuft in `FaTeam::imTeam(ToolContext->team, …)`, nicht per bloßem `addHidden`. Sonst hängt im Tool-Loop (mehrere Tools in einem Prozess, evtl. mit `team.switch` dazwischen) der Wert von Tool 1 in Tool 2 und im Rest des Requests nach.
+- **Livewire-Pfad:** Eine Middleware ist für das *Lesen* nicht nötig (Stufe 3 deckt es), für den *Transport* auch nicht (dehydrating-Hook). Belegt: Auf der Update-Route ist `request()->segment(1)` = `livewire-…`, `Module::where('key', …)` findet nichts, `currentTeam` liefert dann das Basis-Team (`platforms-core/src/Models/User.php`, Zweig `!$module`). Eine Middleware in der `web`-Gruppe (Muster `FaBereichMiddleware`, Provider Z. 358) bleibt Komfort, kein Tragpfeiler.
 
 - **`currentTeamRelation` bleibt** für Livewire-UI-Code zunächst erlaubt (dort ist das UI-Team richtig), wird aber schrittweise ersetzt, damit Teil B nur eine Quelle kennt.
 - **`KiVerursacher::imKontext` und der Nutzer-Klon** in `RecipesGenerateTool` entfallen.
@@ -91,8 +97,8 @@ Setzen (je Eingang, VOR der Arbeit):
 
 | Schritt | Inhalt | Dateien (Kern) |
 |---|---|---|
-| A-1 | `Support\FaTeam` (`aktuell()`, `aktuellId()`, `imTeam()`, Merker je Request/Job) + Eingangs-Setzer (Middleware, Tool-Basis). Noch kein Verbraucher umgestellt. | neu `Support/FaTeam.php`, `Http/Middleware/FaTeamKontext.php`, `Tools/FoodAlchemistTool.php`, Provider (Middleware-Registrierung) |
-| A-2 | `AiGatewayService` (4 Stellen) + `KnowledgeEmbeddingService` + `KiVerursacher` lesen `FaTeam`. Klon-Notbehelf in `RecipesGenerateTool` raus. | `Services/Ai/*`, `Support/KiVerursacher.php`, `Tools/RecipesGenerateTool.php` |
+| A-1 | `Support\FaTeam` (`aktuell()` mit Vorrang Override → Context → currentTeam, `aktuellId()`, `imTeam()`, Merker je Request/Job) + `Context::dehydrating`-Hook + Tool-Basis in `imTeam`. Noch kein Verbraucher umgestellt. | neu `Support/FaTeam.php`, `Tools/FoodAlchemistTool.php`, Provider |
+| A-2 | `AiGatewayService` (4 Stellen) + `KnowledgeEmbeddingService` + `KiVerursacher` + `FoodAlchemistPolicy::view` (B-e) lesen `FaTeam`. Klon-Notbehelf in `RecipesGenerateTool` raus. | `Services/Ai/*`, `Support/KiVerursacher.php`, `Tools/RecipesGenerateTool.php`, `Policies/FoodAlchemistPolicy.php` |
 | A-3 | Job-Middleware `ImTeamKontext` (Widerspruchs-Prüfung) an alle KI-Jobs; die 4 Jobs ohne Login bekommen sie ebenfalls. `Auth::login` als Team-Quelle raus. | `Jobs/*` (19 Dateien) |
 | A-4 | Versand ohne Request (Scheduler, Artisan, Master-Recompute je Mandant) auf `FaTeam::imTeam`. | Console, Scheduler-Einträge im Provider |
 | A-5 | Restliche Service-Stellen (A5) + schrittweise Livewire. | Pfadfinder |
@@ -106,16 +112,42 @@ Setzen (je Eingang, VOR der Arbeit):
 5. Artisan-Befehl verteilt an zwei Teams: Jeder Job rechnet auf sein Team.
 6. Worker-Reihenfolge: Job A, danach Job ohne Kontext im selben Prozess → kein Erbe von A (Context geleert).
 7. Widerspruch `teamId` ≠ Context → `TeamKontextWiderspruch`.
+8. Tool-Loop mit zwei Tools in zwei Teams in einem Prozess: Jedes Tool rechnet auf sein Team, danach steht der Request wieder auf dem UI-Team.
+9. Core-Override im selben Request nach UI-Team (Tool-Loop aus einem UI-Chat): `AiGatewayService` direkt aufgerufen liest das Override-Team.
+10. Livewire über die echte Update-Route (Feature-Test mit Middleware, nicht `Livewire::test`): versandter Job trägt das UI-Team.
 
 ### §3.6 Risiken Teil A
 
 | Risiko | Gegenmittel |
 |---|---|
 | `currentTeam` macht je Zugriff eine `Module`-Abfrage (`request()->segment(1)`) | `FaTeam` merkt das Ergebnis je Request/Job |
-| Ein Eingang setzt den Context nicht → Rückfall auf `Auth::user()` = null | Test je Eingang (§3.5); im MCP-Pfad zusätzlich Log, wenn `ToolContext->team` fehlt |
-| `Context` und Core-`TeamContext` laufen auseinander | MCP-Eingang setzt `fa.team_id` aus `ToolContext->team`; das ist derselbe Wert, den der Core in `TeamContext` schreibt. Test 1 deckt das |
+| Versand-Stelle füllt den Context nicht → Job ohne Team | `Context::dehydrating`-Hook an einer Stelle; Test 2, 5, 10 |
+| `Context` und Core-`TeamContext` laufen auseinander | fester Vorrang: Override gewinnt immer; Context nur Transport bzw. innerhalb `imTeam`; Test 8, 9 |
+| Wert hängt im Tool-Loop nach | Tool-Basis in `imTeam` mit `finally`; Test 8 |
 
 ## §4 · Teil B · Mandanten-Sicht „sicher per Standard“
+
+### §4.0 Akut: Schreiben ohne Eigentümer-Prüfung (Fund im Sparring, verifiziert 16.10.)
+
+**Muster:** Die Komponente lädt das Objekt mit `visibleToTeam` (sichtbar heißt nicht eigen) und schreibt dann direkt oder über einen Service, der ebenfalls nur `visibleToTeam` prüft. Sichtbar sind auch Master-Zeilen, der globale Seed bzw. Stamm (`team_id NULL`) und Abo-Fassungen. Die UI zeigt solche Objekte nur lesend (`RecipeModal.php:1394` `'fremd' => …`), der **Server** prüft es aber nicht. Livewire-Methoden und MCP-Tools sind von jedem Client direkt aufrufbar. Die Bearbeitungssperre (`MitBearbeitungssperre`, `BearbeitungssperreService::sperren`) prüft ebenfalls keinen Eigentümer.
+
+| Stelle | Schreibt | Eigentümer-Prüfung |
+|---|---|---|
+| `Recipes/RecipeModal` Z. 439, 446, 454, 469, 475, 524, 536, 544 (`accept_/clear_/manual_` Beschreibung, Zubereitung, Kategorie) | Rezept-Lineage-Felder | **keine** in der Methode |
+| `Recipes/RecipeModal` Z. 648, 652 (`ueberarbeitungUebernehmen`) | Beschreibung/Zubereitung | **keine** |
+| `Recipes/RecipeModal` Z. 1093 (`regenerationSpeichern`) | `dichteklasse` per `DB::table` (umgeht zusätzlich Observer) | **keine**; der Zweig „alles leer“ ruft gar keinen Service |
+| `SalesRecipeService::upsertRegeneration / deleteRegeneration / upsertContainer / deleteContainer` | Regeneration, Behälter | nur `visibleToTeam`, **kein `isOwnedBy`** |
+| MCP `RecipeRegenerationPutTool`, `RecipeRegenerationDeleteTool`, `RecipeContainerPutTool`, `RecipeContainerDeleteTool` | dieselben Service-Methoden | **keine** → derselbe Weg per MCP |
+| `Gps/GpModal` Z. 263, 721, 733, 748, 802, 822, 1387 (`speichereDefaults`, `accept_/clear_/manual_zustand`, `accept_/clear_tags`, `speichereTags`) | GP-Defaults, Zustand, Tags, auch auf **globalen Stamm-GPs** | **keine**; andere Methoden derselben Datei prüfen `Curate::canCurate` (Z. 310, 343, 370, 400, 632, 652) |
+| `Verkauf/VkModal` Z. 991 (`ueberarbeitungUebernehmen`) | VK-Feld | **keine** |
+
+Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zentraler Riegel davor existiert nicht: Der `\Livewire\on('call')`-Hook prüft nur die Bearbeitungssperre (Provider Z. 360).
+
+**Fix (PR 0, vor allem anderen):**
+- Ein Schreibriegel je Weg: `isOwnedBy($team)` bzw. `Curate::canCurate` im **Service** (`SalesRecipeService` Regeneration/Container), in den Modal-Methoden bis C5 erledigt ist, sonst Abweisung mit Meldung.
+- `RecipeModal` Z. 1093 über Model/Service schreiben, damit Observer laufen.
+- Tests: „Mandant ändert Master-Rezept/Abo-Fassung/Stamm-GP → abgewiesen“, je Livewire-Methode und je MCP-Tool; „Master pflegt globale Basis-Katalog-Zeile → erlaubt“ (Spec 82 §13 I).
+- Danach dieselbe Prüfung für **alle** übrigen Schreibwege als B4-Vorlauf (Zählung in B2).
 
 ### §4.1 Befunde
 
@@ -129,9 +161,12 @@ Setzen (je Eingang, VOR der Arbeit):
 
 ### §4.2 Schritte
 
-**B0 · Sicherheitsnetz (parallel zu Teil A, vor dem ersten Abo auf io)**
+**B0a · Regressionsnetz für die heutigen Handfilter (sofort, parallel zu Teil A, vor dem ersten Abo auf io)**
 - **Zwei-Mandanten-Test:** Master + Mandant A (mit Abo) + Mandant B (ohne) + Unter-Team von A mit eingeschränkter 77d-Hülle. Als B: alle lesenden MCP-Tools (GET/LIST) und die Haupt-Livewire-Seiten. Prüft: keine ID von A, keine Nicht-Abo-Zeile des Masters, keine Fassung ohne Abo; als Unter-Team nur die Hülle.
-- **Modus ausdrücklich simulieren:** Die Pest-Suite läuft in der Konsole. Der Test muss den HTTP- bzw. MCP-Eingang nachstellen (Middleware + `ToolContractAdapter`-Weg), sonst prüft er das offene Konsolen-Verhalten und ist grün und wertlos.
+- **Schreib-Hälfte:** alle schreibenden MCP-Tools als B auf A-/Master-/Abo-Zeilen → abgewiesen (schließt §4.0 dauerhaft ab).
+
+**B0b · fail-closed-Modus prüfen (gehört zu B3, PR 11)**
+- Die Pest-Suite läuft in der Konsole, wo B3 offen bleibt. Der Test muss den HTTP- bzw. MCP-Eingang nachstellen (Middleware + `ToolContractAdapter`-Weg), sonst prüft er das offene Konsolen-Verhalten und ist grün und wertlos. Erst sinnvoll, wenn es B3 gibt.
 - **Statischer Wächter** (Pest-Arch-Test): neue `Modell::find/where/query` auf Trait-Modellen in `Livewire/` und `Tools/` ohne Sicht-Aufruf → rot. Bestand auf Ausnahmeliste, die nur schrumpfen darf.
 - Bausteine vorhanden: `tests/Support/SeedsTeamHierarchy.php` (`makeUser`, `makeGp`, `makeRecipe`, …).
 
@@ -143,6 +178,7 @@ Setzen (je Eingang, VOR der Arbeit):
 **B2 · Abfragen zählen, die „unsichtbar“ mit „nicht vorhanden“ verwechseln (vor B3)**
 - 56× `firstOrCreate/updateOrCreate/firstOrNew`, 255× `->exists()`, dazu Slug-/Dubletten-Prüfungen und Abo-/Kündigungs-Kopien („gibt es die Kopie schon?“).
 - Nach B3 sehen diese Aufrufe fremde Zeilen nicht mehr → Dubletten oder Unique-Index-Absturz. Jede Stelle bekommt eine Entscheidung: bleibt mit Sicht (richtig) oder `ohneTeamSicht('eindeutigkeit')`.
+- Im selben Durchgang: **jeder Schreibweg** (Livewire, Service, Tool) bekommt die Frage „prüft er Eigentum oder nur Sicht?“ (Fortsetzung von §4.0 über die gezählten 19 Livewire-Writes hinaus).
 
 **B3 · Automatischer Filter, Modell für Modell**
 - Global Scope `TeamSicht` im Trait. Ist `FaTeam::aktuell()` gesetzt, wendet er `visibleToTeam(Kontext)` an.
@@ -153,7 +189,7 @@ Setzen (je Eingang, VOR der Arbeit):
 - **Vorbedingung:** B2 erledigt, Leistungsvergleich auf demo-Datenstand vor/nach.
 
 **B4 · Schreibschutz im Modell (zweite Linie)**
-- `saving`/`deleting`-Hook: Zeile weder eigen noch Master-pflegbar → erst **nur loggen**, nach einigen Tagen demo **werfen** (`FremdeZeileException`).
+- `saving`/`deleting`-Hook: Zeile weder eigen noch Master-pflegbar → erst **nur loggen**, und zwar **auf io** (auf demo ist kaum Verkehr; Loggen ist gefahrlos). Werfen (`FremdeZeileException`) erst, wenn die io-Logs eine Woche ohne unerklärten Treffer sind.
 - **Vorher auflisten:** berechtigte Fremdschreiber im Kontext: Abo-/Kündigungs-Kopien, Recompute/Kosten-Cache auf Master-Zeilen, Eltern-Zeitstempel über `$touches`, Pivot-Syncs, Master-Kuration.
 
 **B5 · Aufräumen**
@@ -193,11 +229,16 @@ Größte PHP-Dateien: `Livewire/Planung/Index` 4.596 · `Services/OrderService` 
 
 **Ausgangslage:** Traits `WithFileUploads`, `Concerns\FortschrittAnsicht` (339 Z.). `#[Url]` nur `sessionId`; `mount()` liest `open|tab|fb_owner|sk_owner|offer_owner` aus dem Request. Keine `#[Computed]`; die Blade ruft `planVorschau()`, `vorlagenFuer()`, `conceptSpeisen()`, `fortschrittDaten()` direkt. `#[On]`: `kaskade-gestartet` (von `KapitelRail`), `voice.komponenten-uebernahme` und `voice.diktat-transkribiert` (von `VoiceModal`). Tabs laufen rein über Alpine. Zwei Polls: Board `wire:poll.3s`, Lauf `wire:poll.1500ms="pruefeLauf"`. Uploads: `importPdf`, `fotoUploads[stepId]`, `briefAudio`. Vorhandene Kinder haben alle Keys.
 
-**Schnitt in Kind-Komponenten:**
+**Erster Schritt: Nicht-UI-Logik raus, die Komponente bleibt eine.**
+`planVorschau`, `conceptSpeisen`, die Leitplanken-Helfer (`reglerParams`, `menue*`, `intRegler`, `zielVkEur`, `effektiverBrief` → `Support\ReglerParams`), die Kalkulations-, Konformitäts- und Foto-Blöcke aus `render()` und die 29 Aufbereitungs-Methoden wandern in Services, Query-Klassen bzw. Livewire-Form-Objekte. Das schrumpft die Datei deutlich, **ohne** neues Event-Protokoll und ohne die bekannten Kind-Fallen (Kind ohne `key` = Modal springt zu, Listener-Verdrängung, mehr Roundtrips, serverseitiges Rendern trotz Alpine-Tab).
+
+**Zweiter Schritt: echte Kinder nur für wirklich unabhängige Panels:** `RezeptImport` und `Trendradar`. Alles Weitere erst, wenn die Kopplung unten gelöst ist.
+
+**Dritter Schritt (Zielbild, nur bei Bedarf), Kind-Komponenten:** Erst 1:1 verschieben (z. B. 5 `*AusBrief`-Kinder), **zusammenführen in einem eigenen PR**. Eine Zusammenführung ist keine Verschiebung (§5.0).
 
 | Kind | Inhalt (Methoden) | ≈ Zeilen | Kopplung zum Parent |
 |---|---|---|---|
-| `Planung\AusgabeBrief` (eine Klasse, 5 Instanzen je `ownerType`) | `foodbookAusBrief`, `speisekarteAusBrief`, `speiseplanAusBrief`, `angebotAusBrief`, `formatAusBrief`, 5× `updated*OwnerId`, `aktiviereOwnerSession`; die 25 Props `fb*/sk*/sp*/offer*/fmt*` werden zu `titel/brief/meldung/ownerId/panelAuf` | ≈ 250 statt 600 (Zusammenführung) | Event `planung.oeffne(id, tab)` statt `$this->oeffne()` |
+| `Planung\AusgabeBrief` (zunächst 5 Kinder 1:1; Zusammenführung zu einer Klasse mit 5 Instanzen je `ownerType` in eigenem PR) | `foodbookAusBrief`, `speisekarteAusBrief`, `speiseplanAusBrief`, `angebotAusBrief`, `formatAusBrief`, 5× `updated*OwnerId`, `aktiviereOwnerSession`; die 25 Props `fb*/sk*/sp*/offer*/fmt*` (nach Zusammenführung `titel/brief/meldung/ownerId/panelAuf`) | ≈ 600, nach Zusammenführung ≈ 250 | Event `planung.oeffne(id, tab)` statt `$this->oeffne()` |
 | `Planung\RezeptImport` | `importExtrahieren`, `importAnlegen`, `importReset`, `importZutatenRein` | ≈ 200 | `planung.lauf-geaendert`; braucht `WithFileUploads` |
 | `Planung\Composer` | `composerAdd/Remove/Focus/Vorbereiten/Uebernehmen/Generiere` + Composer-Block aus `render()` | ≈ 200 | schreibt `eingabe[scope]`, ruft `goKaskade` → Events an `Brief` |
 | `Planung\Trendradar` | `schnellTrendradar`, `trendradarUebernehmen` + Trend-Block aus `render()` | ≈ 120 | hoch: setzt `form`, `eingabe`, `sessionId` |
@@ -215,7 +256,7 @@ Größte PHP-Dateien: `Livewire/Planung/Index` 4.596 · `Services/OrderService` 
 
 **Risiken:** Render-Dispatch `voice.formularstand-aktualisiert` ändert seine Häufigkeit; Kinder müssen lazy rendern (Alpine-Tab ist nicht serverseitig); Uploads nur in Kindern mit `WithFileUploads`.
 
-**Tests:** 31 Dateien, rund 255 `Livewire::test(Index…)`, davon 149 in `PlanungLeitstelleTest`. Jeder Schnitt schreibt die betroffenen Tests auf das Kind um. Reihenfolge der Schnitte nach Testaufwand: `RezeptImport` (6) → `Trendradar` (2) → `Composer` (≈ 4) → `AusgabeBrief` (≈ 25) → `KaskadenLauf` → `Brief`.
+**Tests:** 31 Dateien, rund 255 `Livewire::test(Index…)`, davon 149 in `PlanungLeitstelleTest`. Schritt 1 lässt diese Tests unberührt (die Komponente bleibt). Bei Schritt 2/3 schreibt jeder Schnitt die betroffenen Tests auf das Kind um. **Warnung:** Eine Reihenfolge allein nach Testaufwand holt die leichten Stücke und lässt die Kopplung liegen; übrig blieben `Brief` (≈ 1.300) und `KaskadenLauf` (≈ 1.200) als zwei neue große Dateien. Deshalb Schritt 1 zuerst.
 
 **Offene Arbeit an der Datei (lokal möglich):** zuletzt angefasst in `feat/composer-modus`, `feat/spec82-p1-kaskade-begriffe`, `feat/wissen-recall-und-gp-pick` (alle gemergt).
 
@@ -225,12 +266,12 @@ Größte PHP-Dateien: `Livewire/Planung/Index` 4.596 · `Services/OrderService` 
 
 | Zyklus | OrderService → | ← zurück | Bruch |
 |---|---|---|---|
-| A Wareneingang | `updateReceiptLine`, `completeReceipt`, `fillReceiptFromOrder` (in `setStatus(Delivered)`) → `kurzweg*` | `buchen`/`stornieren`/`kurzwegMenge` → `schreibeWareneingangAbleitung`; `nachlieferung`/`abschliessen` → `setStatus(Delivered)` | WE wird Eigentümer der drei Methoden; `schreibeWareneingangAbleitung` + `guardReceiptLine` + `syncQuotaConsumption` + `journalNachziehen` in kleinen `OrderZeilenAbleitung`; Vorbelegen per Event `OrderDelivered` oder in `WE::abschliessen` |
+| A Wareneingang | `updateReceiptLine`, `completeReceipt`, `fillReceiptFromOrder` (in `setStatus(Delivered)`) → `kurzweg*` | `buchen`/`stornieren`/`kurzwegMenge` → `schreibeWareneingangAbleitung`; `nachlieferung`/`abschliessen` → `setStatus(Delivered)` | WE wird Eigentümer der drei Methoden; `schreibeWareneingangAbleitung` + `guardReceiptLine` + `syncQuotaConsumption` + `journalNachziehen` in kleinen `OrderZeilenAbleitung`; **expliziter Ablauf** `WareneingangAbschluss`, der Vorbelegen, Ableitung und Status nacheinander ruft. **Kein Event:** ein synchrones Event versteckt den Zyklus nur (die Wiedereintritts-Schleife bleibt, bloß unsichtbar), ein queued Listener ändert zusätzlich die Transaktions-Semantik |
 | B Rechnung | `updateInvoiceLine`, `completeInvoiceFromReceipt` → `kurzwegRechnung*` | `bezahlt` → `updatePayment`, `reklamieren` → `updateClaimLine`, `aufBestellungenSchreiben` → `schreibeRechnungsAbleitung`/`updateInvoiceHeader` | analog: zwei Methoden zu `LieferantenRechnungService`, Rückweg nur noch auf `OrderZeilenAbleitung` + Zahlungs-/Freigabe-Service |
-| C Mail | `setStatus` → `pruefeVersandbar`, `istServerVersand`, `planen` | `inhalt`, `stornoStandard`, `platzhalterWerte`, `pdf` → `mailtoData`/`dokument` | `OrderDokumentService` (Dokument/Mailto) ohne Mail-Abhängigkeit; Mail hängt nur daran |
-| D Produktion | statische `sourceRefFor/Prefix`, `targetsHash`; `verknuepfteOrders` | `setStatus` (Storno) → `withdrawProductionDemand`; `detail` → `productionCancellationMailtoData` | Wertobjekt `ProduktionsQuelleRef`; Event `ProductionOrderCancelled`; Mailto in den Dokument-Service |
+| C Mail | `setStatus` → `pruefeVersandbar`, `istServerVersand`, `planen` | `inhalt`, `stornoStandard`, `platzhalterWerte`, `pdf` → `mailtoData`/`dokument` | `OrderDokumentService` (Dokument/Mailto) ohne Mail-Abhängigkeit; Mail hängt nur daran; der Status-Ablauf ruft die Mail ausdrücklich |
+| D Produktion | statische `sourceRefFor/Prefix`, `targetsHash`; `verknuepfteOrders` | `setStatus` (Storno) → `withdrawProductionDemand`; `detail` → `productionCancellationMailtoData` | Wertobjekt `ProduktionsQuelleRef`; expliziter Storno-Ablauf (Produktion ruft Bedarfsrückzug ausdrücklich, ohne `OrderService` zu kennen); Mailto in den Dokument-Service |
 
-**Echte Laufzeit-Schleife (Fehlerquelle, nicht nur Struktur):** `WE::abschliessen` → `setStatus(Delivered)` → `fillReceiptFromOrder` → `WE::kurzwegMenge` → `schreibeWareneingangAbleitung`. Sie wird nur entschärft, weil `nichtErfassteAufNull` vorher alle Zeilen setzt (`WareneingangService.php:381`). Das ist der einzige Zyklus mit Vorrang: Er wird mit dem nächsten Eingriff in Wareneingang gebrochen.
+**Echte Laufzeit-Schleife (Fehlerquelle, nicht nur Struktur):** `WE::abschliessen` → `setStatus(Delivered)` → `fillReceiptFromOrder` → `WE::kurzwegMenge` → `schreibeWareneingangAbleitung`. Sie hält nur, weil `nichtErfassteAufNull` vorher alle Zeilen setzt (`WareneingangService.php:381`). Ein Fehler mit Ansage: **Ein Charakterisierungstest dafür kommt jetzt** (PR in §7), nicht erst beim Pfadfinder-Eingriff. Der Bruch selbst folgt mit dem nächsten Eingriff in Wareneingang.
 
 **Ziel-Zuschnitt (Fassade zuerst):** `OrderService` bleibt als dünne Fassade und reicht durch, bis alle Aufrufer umgezogen sind.
 
@@ -263,32 +304,35 @@ Die Summaries (Wareneingang, Rechnung, Reklamation) brauchen `orderWarnings` und
 - `foodalchemist.orders.editor` wird zusätzlich explizit registriert (Z. 1496), obwohl der Scan ihn findet.
 - Der Livewire-Scan läuft bei jedem Request über 144 Dateien.
 
-**Schnitt:**
-1. `ToolManifest`: Scan von `src/Tools` (nicht abstrakt, implementiert `ToolContract`), gecacht (Befehl `foodalchemist:tools-cache`, beim Deploy). Hülle `FaRechteToolHuelle` und der Hook `resolved`/`afterResolving` bleiben. Im catch **loggen**. Doppelte Tool-Namen beim Cache-Bau = Fehler.
-2. Livewire-Scan genauso cachen.
-3. Sub-Provider: `FaSchedulerProvider`, `FaLivewireGuardProvider`, `FaObserverProvider`, `FaQueueLifecycleProvider`, `FaToolProvider`, `FaLivewireProvider`.
+**Schnitt in zwei Stufen:**
+- **C3a (S, sofort, null Risiko):** catch **loggt** (Tool-Klasse + Fehler); Dublette `SuppliersPutTool` raus; Test „keine doppelten Tool-Namen, jede Tool-Klasse registriert“. Die 605 Einträge wandern in eine eigene Datei `config/foodalchemist_tools.php` bzw. `src/Tools/_liste.php`, **alphabetisch, eine Zeile je Tool**. Das beendet den Konfliktmagneten schon ohne Scan.
+- **C3b (M, später, nur bei Bedarf):** Manifest per Scan. Risiko mit hohem Schaden: Boot-Reihenfolge, der Core überschreibt Duplikate still, und fehlende Tools auf io merkt niemand. Der Host deployt anders als demo (`update.sh`); ein vergessener Cache-Befehl hieße MCP halb leer. Wenn Cache, dann mit Rückfall: Cache fehlt oder Hash passt nicht → live scannen.
+- Livewire-Scan cachen (gleicher Rückfall); doppelte Registrierung `foodalchemist.orders.editor` prüfen.
+- Sub-Provider (`FaSchedulerProvider`, `FaLivewireGuardProvider`, `FaObserverProvider`, `FaQueueLifecycleProvider`, `FaToolProvider`, `FaLivewireProvider`) als Pfadfinder.
 
 **Risiken:** Boot-Reihenfolge `resolved` vs. `afterResolving` (der Core baut die Registry teils vor `booted`, `CoreServiceProvider.php:700`); der Core überschreibt Tool-Namen bei Duplikat still (`ToolRegistry.php:41–58`), FA prüft vorher per `has()`, eine andere Scan-Reihenfolge ändert den Gewinner; ein veralteter Produktions-Cache lässt neue Tools fehlen; die Core-Auto-Discovery (`ToolLoader::loadFromAllModules`, nur bei leerer Registry, falsche Namespace-Ableitung) darf FA nie ohne Hülle laden. Das passiert heute nur zufällig nicht.
 
-**Wert:** hoch bei geringem Fachrisiko. Kandidat für einen frühen eigenen PR (E6).
+**Wert:** C3a hoch bei null Fachrisiko → früher eigener PR (E6). C3b nicht ohne Not.
 
 ### §5.5 C4 · Gemeinsame „Komposition“ in Angebote, Foodbooks, Speiseplan
 
 `Livewire/Angebote/Editor` (1.869 Z.) und `Livewire/Foodbooks/Index` (1.619 Z.) sind zu rund 70 % namensgleich: `kapitel*`, `block*`, `katalog*`, `branding*`, `veroeffentlichen`, `vollKaskadeStarten`. `Speiseplan/Editor` (1.446 Z.) teilt Branding/Veröffentlichen.
 
-**Schnitt:** eine Kind-Komponente „Komposition“ (Kapitelbaum, Katalog-Picker, Blöcke) und eine „Branding/Veröffentlichen“, jeweils gegen ein kleines Service-Interface (`OfferCompositionService`, `FoodbookService`, `SpeiseplanService`). Das spart doppelte Pflege und doppelte Fehler.
+**Herabgestuft auf Inventur, kein Schnittplan:** Gleiche Namen heißen nicht gleiches Verhalten. Ein gemeinsames Kind gegen ein Interface ist eine fachliche Abstraktion und damit der riskanteste Schritt in Teil C. Erst die **Unterschiede inventarisieren** (je Methode: gleich / abweichend / nur hier), dann entscheiden, ob „Komposition“ und „Branding/Veröffentlichen“ als gemeinsame Kinder taugen.
 
 Nebenfund: `Foodbooks/Index.php:830` schreibt `$k->update(['fortschritt'])` direkt → nach `FoodbookService::kapitelFortschritt` (Vorbild `OfferCompositionService.php:246`).
 
 ### §5.6 C5 · Direkte Schreibzugriffe in Rezept- und GP-Modal
 
+Die Eigentümer-Lücke an diesen Stellen ist **§4.0** (akut, Teil B). Hier geht es nur noch um den Strukturschnitt danach:
+
 | Datei | Direkte Writes | Schnitt |
 |---|---|---|
-| `Recipes/RecipeModal.php` (1.440) | 11: `->update([...])` Z. 439, 446, 454, 469, 475, 524, 536, 544, 648, 652 + `DB::table('foodalchemist_recipes')->update` Z. 1093 (**umgeht Observer**, u. a. RecipeEmbedding) | Lineage-Felder (`ai_/accept_/clear_/manual_`) als `RecipeService::setzeFeld(feld, wert, quelle, konfidenz)`; Z. 1093 über Model/Service |
-| `Gps/GpModal.php` (1.390) | 7: `$gp->update` Z. 263, 721, 733, 748, 802, 822, 1387 | in `GpService` bzw. ein Lineage-Gegenstück |
-| `Verkauf/VkModal.php` (1.558) | 1: Z. 991 | über `SalesRecipeService::updateVk` |
+| `Recipes/RecipeModal.php` (1.440) | 11 (Z. 439–652, 1093) | Lineage-Felder (`ai_/accept_/clear_/manual_`) als `RecipeService::setzeFeld(feld, wert, quelle, konfidenz)` mit eingebautem Eigentümer-Riegel |
+| `Gps/GpModal.php` (1.390) | 7 (Z. 263–1387) | in `GpService` bzw. ein Lineage-Gegenstück, Riegel `Curate::canCurate` im Service |
+| `Verkauf/VkModal.php` (1.558) | 1 (Z. 991) | über `SalesRecipeService::updateVk` |
 
-Das ist der „gleiche Schreibweg für UI und MCP“: Browser und MCP verhalten sich sonst verschieden (vgl. frühere Befunde „PUT-Vollsync verwaist Deltas“, „ENRICH überschreibt manuelle Schritte“). **Z. 1093 ist ein echter Fehlerkandidat** und gehört vor alle anderen C-Schnitte (E7).
+Das ist der „gleiche Schreibweg für UI und MCP“: Browser und MCP verhalten sich sonst verschieden (vgl. frühere Befunde „PUT-Vollsync verwaist Deltas“, „ENRICH überschreibt manuelle Schritte“).
 
 ### §5.7 C6 · Übrige große Editoren (Schnitt beim nächsten Eingriff)
 
@@ -317,7 +361,8 @@ Kein Umbau-Programm. Diese Regeln gelten für neuen und angefassten Code:
 5. **`catch` bindet `$e` und loggt** (außer ausdrücklich begründet, mit Kommentar).
 6. **Neue Service-Zyklen vermeiden:** Rückwege über Events oder einen kleinen gemeinsamen Baustein.
 7. **Mehrstufige Schreibvorgänge in einer Transaktion**, außer sie umschließt einen langen KI-Aufruf (dann Zustände so schreiben, dass ein Abbruch keine halben Daten hinterlässt).
-8. **Neue Livewire-Komponenten mit mehr als ~800 Zeilen** werden vor dem Merge in Kinder geteilt.
+8. **Prüffrage, keine Grenze:** Wächst eine Livewire-Komponente über ~800 Zeilen, fragt der Review, ob Nicht-UI-Logik in einen Service gehört (vgl. §5.2 Schritt 1).
+9. **Sichtbar ist nicht eigen:** Jeder Schreibweg prüft `isOwnedBy`/`canCurate` im Service, nicht nur `visibleToTeam` (§4.0).
 
 **D1 · Einzige echte Phase in Teil D: Fehlertypen statt Textvergleich**
 7 Stellen entscheiden den Fehlercode per `str_contains($e->getMessage(), …)`:
@@ -330,20 +375,22 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 | # | PR | Teil | Abhängig von | Größe |
 |---|---|---|---|---|
-| 1 | A-1 `FaTeam` + Eingangs-Setzer | A | – | S |
-| 2 | B0 Zwei-Mandanten-Test + Wächter | B | – (parallel zu 1) | M |
-| 3 | A-2 KI-Dienste auf `FaTeam` | A | 1 | S |
+| **0** | **§4.0 Schreib-Leck:** Eigentümer-Riegel in `SalesRecipeService` (Regeneration/Container), 4 MCP-Tools, Modal-Methoden RecipeModal/GpModal/VkModal; Z. 1093 über Model; Abweisungs-Tests | B | – | S–M |
+| 1 | A-1 `FaTeam` + dehydrating-Hook + Tool-Basis in `imTeam` | A | – | S |
+| 2 | B0a Zwei-Mandanten-Regressionsnetz (lesen + schreiben) + Wächter | B | – (parallel zu 0/1) | M |
+| 3 | A-2 KI-Dienste + Policy auf `FaTeam` | A | 1 | S |
 | 4 | A-3 Job-Middleware, 4 Jobs ohne Login | A | 1 | M |
 | 5 | D1 Fehlertypen (7 Stellen) | D | – | S |
-| 6 | C5 `RecipeModal` Z. 1093 über Model/Service | C | – | S |
-| 7 | C3 Tool-Manifest + Log im catch + Dublette raus | C | – | M |
-| 8 | A-4 Versand ohne Request | A | 4 | S |
-| 9 | B1 eine Master-Definition | B | E1 (demo-Master) | S |
-| 10 | B2 Zählung „unsichtbar ≠ nicht vorhanden“ | B | 2 | M |
-| 11 | B3 Global Scope, Stufe 1 (Abo-Typen) | B | 2, 4, 9, 10 + Leistungsmessung | L |
-| 12 | B4 Schreibschutz (erst loggen) | B | 11 | M |
-| 13 | B3 Stufen 2–4, B5 Aufräumen | B | 12 | L |
-| – | C1, C2, C4, C6 | C | Pfadfinder: beim nächsten fachlichen Eingriff | je M–L |
+| 6 | C3a Tool-Liste als eigene Datei, catch loggt, Dublette raus | C | – | S |
+| 7 | C2 Charakterisierungstest Wareneingang-Schleife (nur Test) | C | – | S |
+| 8 | A-4 Versand ohne Request (`imTeam`) | A | 4 | S |
+| 9 | Prüfauftrag §5.8: 10 Komponenten ohne `sperreBeiSchliessen` (Modal? Sperre bleibt liegen?) | C | – | S |
+| 10 | B1 eine Master-Definition | B | E1 (demo-Master) | S |
+| 11 | B2 Zählung „unsichtbar ≠ nicht vorhanden“ + Eigentum je Schreibweg | B | 2 | M |
+| 12 | B3 Global Scope Stufe 1 (Abo-Typen) + B0b fail-closed-Test | B | 2, 4, 10, 11 + Leistungsmessung | L |
+| 13 | B4 Schreibschutz (loggen auf io, dann werfen) | B | 12 | M |
+| 14 | B3 Stufen 2–4, B5 Aufräumen | B | 13 | L |
+| – | C1 (Schritt 1 zuerst), C2-Bruch, C3b, C4-Inventur, C6 | C | Pfadfinder: beim nächsten fachlichen Eingriff | je M–L |
 
 ## §8 · Risiken gesamt
 
@@ -367,9 +414,8 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | E3 | Plattform-Admin weiter **ohne** Ausnahme (Spec 82 §13 G)? | ja |
 | E4 | Phase B0 vor dem ersten echten Abo auf io verbindlich? | ja |
 | E5 | Toter Skizzen-Code in Planung/Index (7 Methoden): löschen oder zurück in die UI? | löschen, falls nicht geplant |
-| E6 | C3 (Tool-Manifest) früh als eigener PR, obwohl Teil C sonst Pfadfinder ist? | ja: hoher Wert, geringes Fachrisiko, beendet den Konfliktmagneten |
-| E7 | C5 `RecipeModal` Z. 1093 (Observer umgangen) sofort? | ja, als kleiner Fix |
-| E8 | Unvergessene Branch `feat/produktion-warengruppen-deckel` (22.08., Topf-Deckel je Hauptgruppe): noch gewollt? | Dominique entscheidet; sonst Branch löschen |
+| E6 | C3a (Tool-Liste als eigene Datei, catch loggt) früh als eigener PR, obwohl Teil C sonst Pfadfinder ist? | ja: hoher Wert, null Fachrisiko, beendet den Konfliktmagneten. C3b (Scan/Cache) nicht ohne Not |
+| E7 | PR 0 (§4.0 Schreib-Leck) sofort, vor allem anderen? | **ja**: auf io offen, sobald ein Mandanten-Nutzer eine sichtbare Master-/Stamm-Zeile hat |
 
 ## §10 · Sparring-Protokoll (Session „Vanessa“, 16.10.)
 
@@ -389,7 +435,23 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | `FaTeam::aktuell()` merkt je id | übernommen |
 | Teil C/D als Overkill streichen | **teilweise**: Dominique will die PHP-Seiten in der Spec. Kompromiss: Schnittpläne + Pfadfinder-Regel, kein Großumbau; D als Leitplanken, nur D1 als Phase. Ausnahmen mit eigenem PR: C3, C5-Z.1093 (E6/E7) |
 | Planung/Index: vorher offene Branches prüfen, reine Verschiebung | übernommen: §5.0, 0 offene PRs (16.10.), Diff mit `--color-moved` prüfbar |
+| **Runde 3 (Review v0.1):** | |
+| H1 Z. 1093 falsch diagnostiziert, echtes Problem fehlende Eigentümer-Prüfung | übernommen und **erweitert**: verifiziert, alle 19 direkten Writes ohne Prüfung, `SalesRecipeService` Regeneration/Container nur `visibleToTeam`, dazu 4 MCP-Tools → §4.0, PR 0 |
+| H2 Context-Vorrang-Lücke (Core-Override im selben Request, Tool-Loop) | übernommen: Vorrang Override → Context → currentTeam; Tool-Basis in `imTeam`; Test 8, 9 |
+| H3 Transport per `Context::dehydrating` an einer Stelle | übernommen (§3.3) |
+| Livewire-Pfad, `currentTeam` auf Update-Route | geprüft: `segment(1)` = `livewire-…` → kein Modul → Basis-Team; Middleware nur Komfort; Test 10 |
+| C3 in 7a/7b teilen, Liste statt Scan | übernommen: C3a/C3b |
+| B0 in a/b teilen | übernommen: B0a sofort, B0b mit B3 |
+| B4-Logphase auf io | übernommen |
+| B-e Policy in A-2 | übernommen |
+| C1 Zusammenführung ≠ Verschiebung; Kopplung zuerst; Nicht-UI-Logik raus statt Kinder | übernommen: §5.2 Schritt 1–3 |
+| C2 Event versteckt Zyklus; Charakterisierungstest jetzt | übernommen: expliziter Ablauf; PR 7 |
+| C4 auf Inventur herabstufen | übernommen |
+| §6 Regel 8 widerspricht §5.0 | übernommen: Prüffrage statt Grenze |
+| §5.8 Prüfauftrag in §7 | übernommen: PR 9 |
+| E8 gehört nicht in diese Spec | übernommen: entfernt, an Dominique gemeldet |
 
 ## Changelog
 
+- 2026-10-16 · v0.2: Review-Runde 3 (Vanessa) eingearbeitet; neu §4.0 Schreib-Leck (verifiziert) als PR 0; Context-Modell mit festem Vorrang + dehydrating-Hook; C1/C2/C3/C4 umgeschnitten.
 - 2026-10-16 · Entwurf v0.1 (Session „test“), Sparring Vanessa eingearbeitet (Runde 1+2).
