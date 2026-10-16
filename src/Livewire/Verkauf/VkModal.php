@@ -972,8 +972,13 @@ class VkModal extends Component
         $werte = $this->ueberarbeitung['werte'];
         $konfidenz = $this->ueberarbeitung['confidence'];
         $r = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+        if ($r === null) {
+            return;
+        }
 
         try {
+            // Spec 84 §4.0: sichtbar ist nicht eigen — vor den direkten Text-Writes abweisen
+            \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($r, $team, 'das Gericht');
             if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
                 $zeilen = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
                 if ($zeilen !== []) {

@@ -41,6 +41,7 @@ class DarreichungService
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'die Darreichung');   // Spec 84 §4.0
         if (! $recipe->is_sales_recipe) {
             // Darreichung = Verkaufsform. Ein Basisrezept wird über ein Gericht verkauft, das es als Komponente trägt.
             throw new \RuntimeException('„' . $recipe->name . '" ist ein Basisrezept — Darreichungen gibt es nur an Gerichten.');
@@ -104,6 +105,8 @@ class DarreichungService
         if ($recipe->presentations()->exists()) {
             return null; // Varianten ohne Standard-Flag: nichts raten (wie syncStandardDarreichung)
         }
+        // Spec 84 §4.0: erst beim Anlegen prüfen — das Nachschlagen oben bleibt für jede sichtbare Zeile erlaubt
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'die Darreichung');
 
         $unbestimmt = $this->unbestimmtId($team);
 
@@ -814,7 +817,8 @@ class DarreichungService
     private function find(Team $team, int $darreichungId): FoodAlchemistRecipeDarreichung
     {
         $darreichung = FoodAlchemistRecipeDarreichung::with('recipe')->findOrFail($darreichungId);
-        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($darreichung->recipe_id);
+        // Spec 84 §4.0: find() bedient nur Schreibwege — sichtbar reicht nicht, das Rezept muss dem Team gehören
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($darreichung->recipe_id), $team, 'die Darreichung');
 
         return $darreichung;
     }

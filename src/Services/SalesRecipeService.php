@@ -593,6 +593,7 @@ class SalesRecipeService
     public function upsertRegeneration(Team $team, int $recipeId, array $in, ?int $id = null): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'die Regeneration');   // Spec 84 §4.0
         // B-1 (Spec 50): Provenienz kommt vom Aufrufer. Editor/MCP schreiben `manual` (Default), die
         // Anreicherung `ki` + Konfidenz/Begründung — vorher stempelte jeder Weg hart `manual`, und ein
         // KI-Programm hätte ausgesehen wie eine Entscheidung (Etikett lügt). Konfidenz/Begründung
@@ -628,7 +629,7 @@ class SalesRecipeService
 
     public function deleteRegeneration(Team $team, int $recipeId, int $id): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId), $team, 'die Regeneration');   // Spec 84 §4.0
         DB::table('foodalchemist_recipe_regenerations')->where('id', $id)->where('recipe_id', $recipeId)
             ->update(['deleted_at' => now()]);
     }
@@ -636,7 +637,7 @@ class SalesRecipeService
     /** @param list<int> $ids neue Reihenfolge */
     public function reorderRegenerations(Team $team, int $recipeId, array $ids): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId), $team, 'die Regeneration');   // Spec 84 §4.0
         DB::transaction(function () use ($recipeId, $ids) {
             foreach (array_values($ids) as $i => $id) {
                 DB::table('foodalchemist_recipe_regenerations')
@@ -674,6 +675,7 @@ class SalesRecipeService
     public function upsertContainer(Team $team, int $recipeId, string $zweck, array $in): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'den Behälter');   // Spec 84 §4.0
         if (! in_array($zweck, FoodAlchemistVocabContainer::ZWECKE, true)) {
             return;
         }
@@ -729,7 +731,7 @@ class SalesRecipeService
 
     public function deleteContainer(Team $team, int $recipeId, string $zweck): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId), $team, 'den Behälter');   // Spec 84 §4.0
         DB::table('foodalchemist_recipe_containers')
             ->where('recipe_id', $recipeId)->where('zweck', $zweck)
             ->update(['deleted_at' => now()]);
@@ -740,6 +742,7 @@ class SalesRecipeService
     public function addCustomerName(Team $team, int $recipeId, string $kunde, string $marketingName, ?string $note = null): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'den Kunden-Namen');   // Spec 84 §4.0
         DB::table('foodalchemist_recipe_customer_names')->updateOrInsert(
             ['recipe_id' => $recipe->id, 'customer_name' => trim($kunde)],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
@@ -750,7 +753,7 @@ class SalesRecipeService
 
     public function deleteCustomerName(Team $team, int $recipeId, int $id): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId), $team, 'den Kunden-Namen');   // Spec 84 §4.0
         DB::table('foodalchemist_recipe_customer_names')->where('id', $id)->where('recipe_id', $recipeId)
             ->update(['deleted_at' => now()]);
     }

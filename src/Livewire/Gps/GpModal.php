@@ -702,7 +702,7 @@ class GpModal extends Component
 
     public function accept_zustand(GpNamingService $naming): void
     {
-        $gp = $this->gp();
+        $gp = $this->eigenesGp();   // Spec 84 §4.0
         $vorschlag = $this->kiVorschlag['condition'] ?? null;
         if ($gp === null || $vorschlag === null) {
             return;
@@ -730,7 +730,7 @@ class GpModal extends Component
 
     public function clear_zustand(): void
     {
-        $this->gp()?->update([
+        $this->eigenesGp()?->update([
             'condition' => null, 'condition_source' => null,
             'condition_ai_confidence' => null, 'condition_ai_reasoning' => null,
         ]);
@@ -740,7 +740,7 @@ class GpModal extends Component
 
     public function manual_zustand(GpNamingService $naming): void
     {
-        $gp = $this->gp();
+        $gp = $this->eigenesGp();   // Spec 84 §4.0
         $wert = $naming->normalisiereZustand($this->builder['condition'] ?: null);
         if ($gp === null || $wert === null) {
             return;
@@ -776,7 +776,7 @@ class GpModal extends Component
 
     public function accept_tags(): void
     {
-        $gp = $this->gp();
+        $gp = $this->eigenesGp();   // Spec 84 §4.0
         $vorschlag = $this->kiVorschlag['tags'] ?? null;
         if ($gp === null || $vorschlag === null) {
             return;
@@ -810,7 +810,7 @@ class GpModal extends Component
 
     public function clear_tags(): void
     {
-        $gp = $this->gp();
+        $gp = $this->eigenesGp();   // Spec 84 §4.0
         if ($gp === null) {
             return;
         }
@@ -825,7 +825,7 @@ class GpModal extends Component
 
     public function manual_tags(): void
     {
-        $this->speichereTags($this->gp(), source: 'manual');
+        $this->speichereTags($this->eigenesGp(), source: 'manual');   // Spec 84 §4.0
     }
 
     // ── ✨ Kopf-Button: Naming-Builder aus Roh-Bezeichnung (NEUE GPs) ────
@@ -1322,6 +1322,25 @@ class GpModal extends Component
     private function team(): ?\Platform\Core\Models\Team
     {
         return Auth::user()?->currentTeamRelation;
+    }
+
+    /**
+     * Spec 84 §4.0 · Für Schreibwege: das GP nur, wenn das Team es pflegen darf (Curate::canCurate — inkl. Master für
+     * globale Basis-/Stamm-Zeilen). Sichtbar ist nicht eigen; die Meldung entspricht speichern().
+     */
+    private function eigenesGp(): ?FoodAlchemistGp
+    {
+        $gp = $this->gp();
+        if ($gp === null) {
+            return null;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'Geerbtes Katalog-GP — Pflege nur durchs Besitzer-Team (D1).';
+
+            return null;
+        }
+
+        return $gp;
     }
 
     private function gp(): ?FoodAlchemistGp

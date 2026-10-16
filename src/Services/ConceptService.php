@@ -152,7 +152,9 @@ class ConceptService
         if (! in_array($status, ['draft', 'active', 'archiviert'], true)) {
             throw new \RuntimeException("Unbekannter Konzept-Status „{$status}“.");
         }
-        FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id)->update(['status' => $status]);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($concept, $team, 'den Konzept-Status');   // Spec 84 §4.0
+        $concept->update(['status' => $status]);
     }
 
     // M10R-1/3: VK-Parität-Metadaten + Konsumenten-Felder + KI-Brief am Concept editierbar.

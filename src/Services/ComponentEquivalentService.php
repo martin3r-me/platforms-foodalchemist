@@ -192,6 +192,7 @@ class ComponentEquivalentService
         if (! FoodAlchemistRecipe::visibleToTeam($team)->whereKey($zutat->recipe_id)->exists()) {
             throw new \RuntimeException('Kein Zugriff auf dieses Rezept.');
         }
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen(FoodAlchemistRecipe::findOrFail($zutat->recipe_id), $team, 'die Zutat');   // Spec 84 §4.0
 
         [$kind, $id] = $zutat->gp_id !== null
             ? [Equiv::KIND_GP, (int) $zutat->gp_id]
@@ -221,7 +222,9 @@ class ComponentEquivalentService
     public function setSwapLocked(Team $team, int $recipeIngredientId, bool $locked): void
     {
         $zutat = FoodAlchemistRecipeIngredient::findOrFail($recipeIngredientId);
-        if (FoodAlchemistRecipe::visibleToTeam($team)->whereKey($zutat->recipe_id)->exists()) {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($zutat->recipe_id);
+        if ($recipe !== null) {
+            \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'die Zutat');   // Spec 84 §4.0
             $zutat->update(['swap_locked' => $locked]);
         }
     }
