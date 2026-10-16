@@ -78,11 +78,12 @@ class ClassifyLaJob implements ShouldQueue
         }
 
         $werte = $vorschlag->werte;
-        $hauptzutat = is_string($werte['hauptzutat'] ?? null) ? trim($werte['hauptzutat']) : '';
-        $condition = is_string($werte['condition'] ?? null) ? trim($werte['condition']) : null;
-        $processing = is_string($werte['processing'] ?? null) ? trim($werte['processing']) : null;
-        $form = is_string($werte['form'] ?? null) ? trim($werte['form']) : null;
-        $pflichtangabe = is_string($werte['pflichtangabe'] ?? null) ? trim($werte['pflichtangabe']) : '';
+        // „unbekannt" & Co. sind kein Wert (Regelwerk GP §6, §12): bleibt leer
+        $hauptzutat = $naming->bereinigeFeld($werte['hauptzutat'] ?? null);
+        $condition = $naming->bereinigeFeld($werte['condition'] ?? null);
+        $processing = $naming->bereinigeFeld($werte['processing'] ?? null);
+        $form = $naming->bereinigeFeld($werte['form'] ?? null);
+        $pflichtangabe = $naming->bereinigeFeld($werte['pflichtangabe'] ?? null);
 
         if ($hauptzutat === '') {
             return;   // kein verwertbares Klassifikat → lieber gar nicht schreiben

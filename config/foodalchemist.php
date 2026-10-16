@@ -1130,7 +1130,16 @@ return [
                 . 'nutze Bezeichnung, regulierten Namen und Zutatenangabe zur fachlichen Ableitung, '
                 . 'erfinde aber keine nicht belegten Eigenschaften. Artikelnummer, Lieferant, Gebinde, '
                 . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur nach §5-Tiebreaker). '
-                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1).',
+                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1). '
+                . 'UNBEKANNT BLEIBT LEER: Ist processing, form oder pflichtangabe nicht belegt, gib "" zurück, '
+                . 'niemals "unbekannt", "n/a" oder Ähnliches; solche Wörter dürfen weder im Namen noch in der Kennung stehen. '
+                . 'Nutze den vollen Artikel-Kontext: regulierter Name, Marketingname, Zutatenangabe, gebinde_hinweis (nur zur Einordnung, nie im Namen), '
+                . 'allergene, naehrwerte_je_100 und aehnliche_artikel_mit_gp (reale Vorbilder: so wurden gleichartige Artikel benannt). '
+                . 'Sorten-, Marken- und Fantasienamen (z. B. »Bella Ciao«, Eigenmarken, Linienbezeichnungen) gehören nicht in die Hauptzutat '
+                . 'und nicht in den Namen (§5/§7): bestimme stattdessen, was der Artikel fachlich IST (z. B. eine Salatmischung statt einer '
+                . 'Einzelsorte, wenn Zutatenangabe oder Vorbilder das zeigen); belege dein Urteil kurz in reasoning. '
+                . 'Gib sub_category immer an, wenn commodity_group_code gesetzt ist und eine Unterkategorie der Warengruppe fachlich passt '
+                . '(exakt aus taxonomie); nur wenn keine passt, "".',
         ],
         'component.replacement_suggest' => [
             'tier' => 'B',
