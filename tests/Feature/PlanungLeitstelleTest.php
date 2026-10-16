@@ -1271,8 +1271,10 @@ it('skizzenAuswahlLeeren: hebt die gezielte Auswahl auf', function () {
 // ── Brief-Vorlagen je Sektor/Anlass (Etappe 4 — Schnellstart statt Blank Page) ──
 
 it('briefVorlage: füllt Briefing + Sektor/Anlass/Serviceform in den Gericht-Tab (aus DB-Vorlage)', function () {
+    // Spec 84 L1-B: Vorlagen gehören dem Team — die Seed-Vorlagen erst wie in der Migration an das Hauptteam verteilen
+    (require \dirname(__DIR__, 2).'/database/migrations/2026_11_09_100000_brief_vorlagen_je_hauptteam.php')->up();
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
-    $tpl = FoodAlchemistBriefTemplate::whereNull('team_id')->where('slug', 'catering_empfang_flying')->firstOrFail();
+    $tpl = FoodAlchemistBriefTemplate::where('team_id', $this->rootTeam->id)->where('slug', 'catering_empfang_flying')->firstOrFail();
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
@@ -1286,8 +1288,10 @@ it('briefVorlage: füllt Briefing + Sektor/Anlass/Serviceform in den Gericht-Tab
 });
 
 it('briefVorlage: überschreibt einen bereits getippten Titel NICHT', function () {
+    // Spec 84 L1-B: Vorlagen gehören dem Team — die Seed-Vorlagen erst wie in der Migration an das Hauptteam verteilen
+    (require \dirname(__DIR__, 2).'/database/migrations/2026_11_09_100000_brief_vorlagen_je_hauptteam.php')->up();
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
-    $tpl = FoodAlchemistBriefTemplate::whereNull('team_id')->where('slug', 'catering_galadinner')->firstOrFail();
+    $tpl = FoodAlchemistBriefTemplate::where('team_id', $this->rootTeam->id)->where('slug', 'catering_galadinner')->firstOrFail();
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
@@ -1312,17 +1316,19 @@ it('briefVorlage: unbekannter Key oder falscher Scope → fehler, keine Änderun
         ->assertSet('eingabe.gericht.brief', '');
 });
 
-it('vorlagenFuer: Gericht hat die kuratierten Globals, Basisrezept (rezept) ohne eigene keine', function () {
+it('vorlagenFuer: Gericht hat die 6 team-eigenen Start-Vorlagen, Basisrezept (rezept) ohne eigene keine', function () {
+    // Spec 84 L1-B: Vorlagen gehören dem Team — die Seed-Vorlagen erst wie in der Migration an das Hauptteam verteilen
+    (require \dirname(__DIR__, 2).'/database/migrations/2026_11_09_100000_brief_vorlagen_je_hauptteam.php')->up();
     $comp = Livewire::test(PlanungIndex::class);
     $inst = $comp->instance();
 
     $gericht = $inst->vorlagenFuer('gericht');
-    expect($gericht)->toHaveCount(6);                    // die 6 geseedeten Globals
-    expect($inst->vorlagenFuer('rezept'))->toBe([]);     // kein Global auf Basisrezept (bis Kunde selbst anlegt)
-    // jede Vorlage ist global + nutzt nur reale Leitplanken-Enums (Sektor kommt aus dem Regler-Snapshot)
+    expect($gericht)->toHaveCount(6);                    // die 6 Start-Vorlagen, seit L1-B Kopien im eigenen Team
+    expect($inst->vorlagenFuer('rezept'))->toBe([]);     // keine auf Basisrezept (bis das Team selbst eine anlegt)
+    // jede Vorlage gehört dem Team (nicht geerbt) + nutzt nur reale Leitplanken-Enums (Sektor aus dem Regler-Snapshot)
     $sektoren = ['betriebsgastronomie', 'catering', 'restaurant', 'care', 'schule_kita'];
     foreach ($gericht as $v) {
-        expect($v['is_global'])->toBeTrue()
+        expect($v['is_global'])->toBeFalse()
             ->and($sektoren)->toContain($v['regler']['sektor']);
     }
 });
