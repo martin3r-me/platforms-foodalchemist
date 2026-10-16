@@ -193,6 +193,31 @@ it('Kategorie-Regeln: Träger, Frische und Röstaroma aus Kategorie bzw. Verfahr
     expect(app(AnkerGraph::class)->beziehungen([$this->kuerbis], Kantenart::Kontrast)->pluck('zu')->all())->toBe([$reis]);
 });
 
+it('Kategorie-Frische: Zitrusgewürze nur per Positivliste, Pulver ohne Verfahren ausgeschlossen (Dominique 16.10.)', function () {
+    $mk = function (string $slug, string $name, string $sub) {
+        $id = ($this->mk)($slug, $name);
+        DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)->update(['category' => explode('/', $sub)[0], 'subcategory' => $sub]);
+
+        return $id;
+    };
+    $kardamom = $mk('cardamom', 'Kardamom', 'Gewuerze/Zitrusgewuerze');
+    $wacholder = $mk('juniper_berry', 'Wacholderbeere', 'Gewuerze/Zitrusgewuerze');
+    $ingwer = $mk('ginger', 'Ingwer', 'Gewuerze/Zitrusgewuerze');
+    $ingwerPulver = $mk('ginger_powder', 'Ingwerpulver', 'Gewuerze/Zitrusgewuerze');
+    $tulsi = $mk('tulsi_powder', 'Tulsipulver', 'Kräuter/Küchenkräuter');
+    $basilikum = $mk('basil', 'Basilikum', 'Kräuter/Küchenkräuter');
+
+    app(KategorieRegeln::class)->eigenschaften();
+    $frische = fn (int $id) => DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $id)->where('achse', 'frische')->value('stufe');
+
+    expect($frische($kardamom))->toBeNull()                       // vorher 2 aus „Zitrusgewuerze"
+        ->and($frische($wacholder))->toBeNull()
+        ->and($frische($ingwerPulver))->toBeNull()
+        ->and($frische($tulsi))->toBeNull()                       // Pulver trotz Kräuter-Kategorie
+        ->and((int) $frische($ingwer))->toBe(2)                   // Gegenprobe: Positivliste
+        ->and((int) $frische($basilikum))->toBe(3);               // Gegenprobe: frisches Kraut unverändert
+});
+
 it('Intensität: Startwert je Kategorie, längstes Präfix gewinnt, gesetzte Werte bleiben', function () {
     $kat = fn (int $id, string $c, ?string $sub) => DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)
         ->update(['category' => $c, 'subcategory' => $sub]);
