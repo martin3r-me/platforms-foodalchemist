@@ -49,6 +49,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         $this->app->scoped(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class);
         // Spec 84 §3.3: Merker des Team-Kontexts je Request/Job (scoped = Laravel leert ihn zwischen Jobs)
         $this->app->scoped(\Platform\FoodAlchemist\Support\FaTeam::class);
+        // Spec 84 §4.4 (E3): aktive Support-Freigabe je Request/Job gemerkt (FaRechte::rolle fragt die Sperre sehr oft)
+        $this->app->scoped(\Platform\FoodAlchemist\Services\SupportFreigabeService::class);
         // Spec 77c: Team-Namen der Standort-Spalte je Request merken
         $this->app->scoped(\Platform\FoodAlchemist\Services\StandortService::class);
         /**
@@ -348,6 +350,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 $returnEarly(null);
 
                 return;
+            }
+            // Spec 84 §4.4 (E3): Aktion im Support-Zugang → Protokoll (wer, wann, welche Komponente/Methode)
+            // Polls ($refresh …) und der Sperr-Herzschlag sind kein Zugriff — sonst flutet ein offenes Fenster das Protokoll
+            if ($user instanceof \Platform\Core\Models\User && ! str_starts_with((string) $method, '$') && $method !== 'sperreHerzschlag'
+                && ($sf = \Platform\FoodAlchemist\Support\InhaltsSperre::perSupportZugang($user, $user->currentTeamRelation)) !== null) {
+                app(\Platform\FoodAlchemist\Services\SupportFreigabeService::class)->protokolliereZugriff($sf, $user, $user->currentTeamRelation, 'livewire:'.$component::class.'::'.$method);
             }
             if ($bereich !== null && $user instanceof \Platform\Core\Models\User && ($team = $user->currentTeamRelation) !== null
                 && ! app(\Platform\FoodAlchemist\Services\FaRechte::class)->darfBereich($user, $team, $bereich)) {

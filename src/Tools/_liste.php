@@ -566,6 +566,9 @@ return [
     \Platform\FoodAlchemist\Tools\SuppliersSearchTool::class,
     \Platform\FoodAlchemist\Tools\SuppliersStatusTool::class,
     \Platform\FoodAlchemist\Tools\SuppliersVolumeTool::class,
+    \Platform\FoodAlchemist\Tools\SupportZugangDeleteTool::class,   // Spec 84 §4.4 (E3): Support-Zugang auf Freigabe
+    \Platform\FoodAlchemist\Tools\SupportZugangGetTool::class,   // Spec 84 §4.4 (E3): Support-Zugang auf Freigabe
+    \Platform\FoodAlchemist\Tools\SupportZugangPostTool::class,   // Spec 84 §4.4 (E3): Support-Zugang auf Freigabe
     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,
     \Platform\FoodAlchemist\Tools\TeamBereicheGetTool::class,
     \Platform\FoodAlchemist\Tools\TeamBereichePutTool::class,

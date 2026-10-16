@@ -47,6 +47,9 @@ class PlattformProtokoll
         'preis_stand_eingeblendet' => 'Preis-Stand wieder eingeblendet',
         'plan_preis_gesetzt' => 'Gebühren-Preis gesetzt',
         'plan_preis_startwerte' => 'Gebühren-Startpreise angelegt',
+        'support_zugang_erteilt' => 'Support-Zugang erteilt',          // Spec 84 §4.4 (E3)
+        'support_zugang_widerrufen' => 'Support-Zugang widerrufen',
+        'support_zugriff' => 'Zugriff im Support-Zugang',
     ];
 
     /**

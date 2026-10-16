@@ -50,6 +50,25 @@ class Zugriffsrechte extends Component
         $this->ausfuehren(fn () => $rechte->setzeUserSperre($this->team(), Auth::user(), $userId, $bereich, ! $darf), 'Gespeichert.');
     }
 
+    // ── Spec 84 §4.4 (E3): Support-Zugang auf Freigabe ────────────────
+
+    public int $supportStunden = 48;
+
+    public string $supportGrund = '';
+
+    public function supportErteilen(\Platform\FoodAlchemist\Services\SupportFreigabeService $svc): void
+    {
+        $this->ausfuehren(function () use ($svc) {
+            $svc->erteilen($this->team(), Auth::user(), $this->supportStunden, null, $this->supportGrund);
+            $this->supportGrund = '';
+        }, 'Support-Zugang erteilt. Jeder Zugriff wird protokolliert.');
+    }
+
+    public function supportWiderrufen(int $id, \Platform\FoodAlchemist\Services\SupportFreigabeService $svc): void
+    {
+        $this->ausfuehren(fn () => $svc->widerrufen($this->team(), Auth::user(), $id), 'Support-Zugang widerrufen.');
+    }
+
     private function ausfuehren(callable $tu, string $ok): void
     {
         $this->fehler = null;
@@ -79,7 +98,18 @@ class Zugriffsrechte extends Component
             'nutzung' => $rechte->kontingentNutzung($team),
             'istHauptTeam' => $rechte->hauptTeam($team)->id === $team->id,
             'userSperren' => $this->bereicheFuer !== null ? $rechte->userSperren($team, $this->bereicheFuer) : [],
+            // Spec 84 §4.4 (E3): nur Owner/Admin des Hauptteams sieht und pflegt den Support-Zugang
+            'supportFreigaben' => $this->supportListe($team),
         ]);
+    }
+
+    private function supportListe(Team $team): ?\Illuminate\Support\Collection
+    {
+        try {
+            return app(\Platform\FoodAlchemist\Services\SupportFreigabeService::class)->liste($team, Auth::user());
+        } catch (\RuntimeException) {
+            return null;   // kein Owner/Admin des Hauptteams oder Master-Team → Abschnitt ausblenden
+        }
     }
 
     private function team(): Team

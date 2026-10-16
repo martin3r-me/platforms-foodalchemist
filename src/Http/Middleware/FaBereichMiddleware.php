@@ -29,6 +29,10 @@ class FaBereichMiddleware
             && \Platform\FoodAlchemist\Support\InhaltsSperre::istGesperrt($user, $user->currentTeamRelation)) {
             abort(403, \Platform\FoodAlchemist\Support\InhaltsSperre::MELDUNG);
         }
+        // Spec 84 §4.4 (E3): Seitenaufruf im Support-Zugang → Protokoll
+        if ($user instanceof User && ($sf = \Platform\FoodAlchemist\Support\InhaltsSperre::perSupportZugang($user, $user->currentTeamRelation)) !== null) {
+            app(\Platform\FoodAlchemist\Services\SupportFreigabeService::class)->protokolliereZugriff($sf, $user, $user->currentTeamRelation, 'seite:'.($routeName ?? $request->path()));
+        }
         if ($bereich !== null && $user instanceof User && ($team = $user->currentTeamRelation) !== null
             && ! app(FaRechte::class)->darfBereich($user, $team, $bereich)) {
             abort(403, 'Der Bereich „'.(FaBereiche::KATALOG[$bereich] ?? $bereich).'“ ist für dich bzw. dein Team nicht freigeschaltet.');
