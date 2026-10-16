@@ -309,7 +309,7 @@ class FileArticleImportService
             'zeilen' => count($datei['zeilen']),
             'apply' => $apply,
             'neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'uebersprungen' => 0, 'fehler' => 0,
-            'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0],
+            'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0, 'aktion_nicht_uebernommen' => 0],
             'details' => ['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0],
             'konditionen' => ['status' => null, 'gesetzt' => [], 'unveraendert' => [], 'abgelehnt' => []],
             'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0],
@@ -595,7 +595,11 @@ class FileArticleImportService
         if (($w['preisstatus'] ?? '') !== '') {
             $status = $this->preisStatus($w['preisstatus']) ?? '';
             if ($status === '') {
-                return ['preis' => ['status' => 'fehler', 'grund' => "Preis-Status [{$w['preisstatus']}] ist weder Standard-EK noch Aktion."]];
+                return ['preis' => ['status' => 'fehler', 'grund' => "Preis-Status [{$w['preisstatus']}] ist weder Standard-EK noch „läuft aus“."]];
+            }
+            if ($status === 'aktion') {
+                return ['preis' => ['status' => 'aktion_nicht_uebernommen',
+                    'grund' => "Aktionspreis nicht übernommen ({$preis} €): Aktionen werden als Preis nicht gespeichert, der Standard-EK bleibt."]];
             }
         }
 
@@ -964,14 +968,18 @@ class FileArticleImportService
         return $b === null ? null : ($b ? 'ja' : 'nein');
     }
 
-    /** Preis-Status der Datei → GL-11-Code: `0` Standard-EK, `2` Aktion. */
+    /**
+     * Preis-Status der Datei → Code: `0` Standard-EK, `2` läuft aus, `aktion` = Aktionspreis (wird NICHT als Preiszeile
+     * geschrieben: status 2 heißt seit 16.10.2026 „läuft aus“, eine Aktion gibt es in foodalchemist_prices nicht; Entscheid offen).
+     */
     private function preisStatus(string $roh): ?string
     {
-        $s = mb_strtolower(trim(str_replace('-', '', $roh)));
+        $s = mb_strtolower(trim(str_replace(['-', ' '], '', $roh)));
 
         return match (true) {
             in_array($s, ['0', 'standard', 'standardek', 'ek', 'listenpreis', 'normal'], true) => '0',
-            in_array($s, ['2', 'aktion', 'promo', 'aktionspreis', 'sonderpreis'], true) => '2',
+            in_array($s, ['2', 'läuftaus', 'laeuftaus', 'auslaufend', 'auslauf'], true) => '2',
+            in_array($s, ['aktion', 'promo', 'aktionspreis', 'sonderpreis'], true) => 'aktion',
             default => null,
         };
     }
