@@ -155,6 +155,68 @@ it('Rang: nur ★★★ hebt, ★★ zählt wie neutral (Grund-Aroma-Passform)',
         ->and($rang[$zwei])->toBe($rang[$eins]);
 });
 
+it('Rolle des Lieferanten: Protein/Nicht-Küche rutschen bei Gemüse nach hinten; Gegenproben Rind behält Speck, Erdbeere behält Saft', function () {
+    $sub = fn (int $id, string $pfad) => DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)->update(['subcategory' => $pfad]);
+    $rind = ($this->mk)('beef', 'Rind');
+    $erdbeere = ($this->mk)('strawberry', 'Erdbeere');
+    $butter = ($this->mk)('butter', 'Butter');
+    $saft = ($this->mk)('strawberry_juice', 'Erdbeersaft');
+    $sub($this->kuerbis, 'Gemüse/Fruchtgemüse');
+    $sub($rind, 'Protein/Fleisch');
+    $sub($erdbeere, 'Obst/Beeren');
+    $sub($this->speck, 'Protein/Charcuterie');
+    $sub($butter, 'Milchprodukte/Butter');
+    $sub($saft, 'Getränke/Alkoholfreie Getränke/Säfte');
+    $sub($this->zitrone, 'Obst/Zitrusfrüchte');
+    $w = fn (string $t, array $z) => DB::table($t)->insert($z + ['status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    foreach ([$this->kuerbis, $rind] as $a) {
+        $w('foodalchemist_anchor_bedarfe', ['anchor_id' => $a, 'achse' => 'fett', 'staerke' => 'soll']);
+    }
+    foreach ([$this->kuerbis, $rind, $erdbeere] as $a) {
+        $w('foodalchemist_anchor_bedarfe', ['anchor_id' => $a, 'achse' => 'saeure', 'staerke' => 'soll']);
+    }
+    $w('foodalchemist_anchor_eigenschaften', ['anchor_id' => $this->speck, 'achse' => 'fett', 'stufe' => 3, 'quelle' => 'dossier']);
+    $w('foodalchemist_anchor_eigenschaften', ['anchor_id' => $butter, 'achse' => 'fett', 'stufe' => 2, 'quelle' => 'dossier']);
+    $w('foodalchemist_anchor_eigenschaften', ['anchor_id' => $saft, 'achse' => 'saeure', 'stufe' => 3, 'quelle' => 'dossier']);
+    $w('foodalchemist_anchor_eigenschaften', ['anchor_id' => $this->zitrone, 'achse' => 'saeure', 'stufe' => 2, 'quelle' => 'dossier']);
+
+    app(KontrastAbleitung::class)->baue();
+    $erst = fn (int $a, string $achse) => app(AnkerGraph::class)->beziehungen([$a], Kantenart::Kontrast)->where('achse', $achse)->first()->zu;
+
+    expect($erst($this->kuerbis, 'fett'))->toBe($butter)            // Speck (Protein) liefert stärker, rutscht aber hinter Butter
+        ->and($erst($this->kuerbis, 'saeure'))->toBe($this->zitrone) // Saft (Nicht-Küche) hinter Zitrone
+        ->and($erst($rind, 'fett'))->toBe($this->speck)              // (i) Gegenprobe: Protein-Träger → kein Protein-Abzug
+        ->and($erst($rind, 'saeure'))->toBe($this->zitrone)          // (ii) gilt auch bei Protein
+        ->and($erst($erdbeere, 'saeure'))->toBe($saft);              // (ii) Gegenprobe: süßer Träger behält den Saft
+});
+
+it('Gleichstand ohne GP-Zuordnungen: bekannter Anker (mehr ★★★-Partner) vorn; mit Zuordnungen entscheidet die Verbreitung', function () {
+    $exot = ($this->mk)('curuba', 'Curuba');                                        // zuerst angelegt: bei reinem Gleichstand gewänne die kleinere ID
+    $bekannt = ($this->mk)('lime', 'Limette');
+    ($this->importiere)(($this->profil)());
+    foreach ([$bekannt, $exot] as $id) {
+        DB::table('foodalchemist_anchor_eigenschaften')->insert(['anchor_id' => $id, 'achse' => 'saeure', 'stufe' => 2, 'quelle' => 'dossier',
+            'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    }
+    foreach ([$this->salbei, $this->anis, $this->speck] as $partner) {
+        app(AnkerGraph::class)->setze($bekannt, $partner, 3);                       // Limette: 3 ★★★-Partner, Curuba: keiner
+    }
+    $vorn = function () use ($bekannt, $exot) {
+        app(KontrastAbleitung::class)->baue();
+
+        return app(AnkerGraph::class)->beziehungen([$this->kuerbis], Kantenart::Kontrast)->where('achse', 'saeure')
+            ->whereIn('zu', [$bekannt, $exot])->first()->zu;
+    };
+    expect(DB::table('foodalchemist_gp_anchor_mappings')->count())->toBe(0)
+        ->and($vorn())->toBe($bekannt);
+
+    // Gegenprobe: sobald es GP-Zuordnungen gibt, zählt die Verbreitung — hier hat nur Curuba eine
+    $gp = $this->makeGp($this->rootTeam, 'Curuba: frisch');
+    DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'gp_id' => $gp->id, 'anchor_id' => $exot, 'role' => 'kern', 'created_at' => now(), 'updated_at' => now()]);
+    expect($vorn())->toBe($exot);
+});
+
 it('verworfenes Wissen trägt keine Kontrast-Kante', function () {
     ($this->importiere)(($this->profil)());
     ($this->importiere)(['anker_id' => $this->essig, 'anker_slug' => 'rice_vinegar', 'liefert' => ['geschmack' => ['saeure' => 3]]]);

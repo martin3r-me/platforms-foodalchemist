@@ -23,9 +23,11 @@ use Platform\FoodAlchemist\Enums\WissensStatus;
  *     sonst Gruppen-Klassiker („verträgt Fisch", b ist Fisch)  +    50 000
  *   ★★★ zwischen a und b (Inspire; ★★ zählt nicht, Dominique  +    10 000
  *     15.10.: „2 Sterne ist die Grund-Aroma-Passform")
+ *   Rolle: Protein bzw. Nicht-Küche als Zugabe (ROLLE_*)       −    20 000
  *   Stufe der Eigenschaft (2–3)                               ·     1 000
  *   Grundform statt Variante                                  +       500
  *   Verbreitung im Katalog (Anzahl GP-Zuordnungen)            +   bis 499 — Alltagszutat vor Exot
+ *     ohne jede GP-Zuordnung ersatzweise Bekanntheit (Anzahl ★★★-Partner, Inspire)
  * Vielfalt: je (a, Achse) höchstens ein Partner je Grundname (sonst Espresso, Filterkaffee, Kona …
  * hintereinander); danach werden nur die besten {@see MAX_JE_BEDARF} gespeichert.
  *
@@ -36,6 +38,22 @@ use Platform\FoodAlchemist\Enums\WissensStatus;
 final class KontrastAbleitung
 {
     public const MAX_JE_BEDARF = 50;
+
+    /**
+     * Rolle des Lieferanten — Fachregel Dominique 16.10.2026, ohne externe Quelle. Ein Kontrast-Lieferant soll
+     * eine ZUGABE sein, keine zweite Hauptkomponente (vorher: Wagyu/Duroc/Foie gras als Fett für Kürbis,
+     * Erdbeersaft als Säure für Kartoffel). Rang-Abzug, kein Ausschluss; Inspire-Unterkategorie, gleich oder darunter.
+     *   PROTEIN       Abzug nur, wenn der Bedarfsträger selbst KEIN Protein ist (Speck zu Rind, Sardelle zu Lamm bleiben)
+     *   NICHT_KUECHE  Abzug bei jedem herzhaften Bedarfsträger, auch Protein — nicht bei SUESS (Erdbeere darf Saft behalten)
+     */
+    public const ROLLE_PROTEIN = ['Protein/Fleisch', 'Protein/Fisch', 'Protein/Meeresfrüchte', 'Protein/Charcuterie'];
+
+    public const ROLLE_NICHT_KUECHE = ['Getränke/Alkoholfreie Getränke/Säfte', 'Backwaren/Kuchen', 'Dessert', 'Süßwaren'];
+
+    public const ROLLE_SUESS = ['Dessert', 'Süßwaren', 'Backwaren', 'Obst'];
+
+    /** Zwischen Klassiker (≥ 50 000) und ★★★ (10 000): ein Klassiker bleibt vorn, ein ★★★-Partner rutscht unter neutrale Zugaben. */
+    public const ROLLE_ABZUG = 20000;
 
     public function __construct(private readonly AnkerGraph $graph) {}
 
@@ -87,6 +105,32 @@ final class KontrastAbleitung
 
         $verbreitung = DB::table('foodalchemist_gp_anchor_mappings')->whereNull('deleted_at')
             ->selectRaw('anchor_id, COUNT(*) AS n')->groupBy('anchor_id')->pluck('n', 'anchor_id')->all();
+        // Ohne GP-Zuordnungen (frischer Server, io 16.10.) wäre die Verbreitung überall 0 und bei Gleichstand
+        // entschiede die ID → Exoten vorn (Bintje/Säure: Curuba, Davidson-Pflaume). Ersatz, nur dann:
+        // Bekanntheit = Anzahl ★★★-Partner im Inspire-Graph (gängige Zutaten haben viele). Keine neue Regel.
+        if ($verbreitung === []) {
+            $verbreitung = $this->graph->grad(DB::table('foodalchemist_vocab_pairing_anchors')->pluck('id')->all(), AnkerGraph::HARMONIERT);
+        }
+        $in = function (?string $pfad, array $liste): bool {
+            foreach ($liste as $g) {
+                if (AnkerGraph::inGruppe($pfad, $g)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $rolleAbzug = function (int $a, int $b) use ($sub, $in): int {
+            $traeger = $sub[$a] ?? null;
+            if ($in($sub[$b] ?? null, self::ROLLE_PROTEIN) && ! $in($traeger, self::ROLLE_PROTEIN)) {
+                return self::ROLLE_ABZUG;
+            }
+            if ($in($sub[$b] ?? null, self::ROLLE_NICHT_KUECHE) && ! $in($traeger, self::ROLLE_SUESS)) {
+                return self::ROLLE_ABZUG;
+            }
+
+            return 0;
+        };
         $grundform = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('verfahren')
             ->pluck('id')->flip()->all();
         $grundname = DB::table('foodalchemist_vocab_pairing_anchors')
@@ -116,7 +160,8 @@ final class KontrastAbleitung
                     + (isset($vertraegt[$a][$id]) ? 100000 : ($inGruppe($a, $id) || $inGruppe($id, $a) ? 50000 : 0))
                     + (($harmonie[$id] ?? AnkerGraph::NEUTRAL) >= AnkerGraph::HARMONIERT ? 10000 : 0)
                     + $l['stufe'] * 1000
-                    + (isset($grundform[$id]) ? 500 : 0) + min(499, (int) ($verbreitung[$id] ?? 0));
+                    + (isset($grundform[$id]) ? 500 : 0) + min(499, (int) ($verbreitung[$id] ?? 0))
+                    - $rolleAbzug($a, $id);
                 $rangliste[] = [$id, $rang, $l['geprueft'] && $b->status === WissensStatus::Geprueft->value];
             }
             usort($rangliste, fn ($x, $y) => [$y[1], $x[0]] <=> [$x[1], $y[0]]);
