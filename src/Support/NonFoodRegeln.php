@@ -96,7 +96,7 @@ final class NonFoodRegeln
     private static ?string $mehrdeutigRegex = null;
 
     /**
-     * @param  array{bezeichnung:?string, verkaufsname?:?string, branche?:?string, lieferant?:?string, hat_food_daten:bool}  $a
+     * @param  array{bezeichnung:?string, verkaufsname?:?string, branche?:?string, lieferant?:?string, gruppe?:?string, hat_food_daten:bool}  $a
      * @return array{klasse:'nonfood'|'food'|'unklar', subkategorie:?string, konfidenz:?float, grund:?string}
      */
     public static function bewerte(array $a): array
@@ -105,7 +105,7 @@ final class NonFoodRegeln
         $hatFood = (bool) $a['hat_food_daten'];
 
         $brancheSub = null;
-        $brancheTreffer = false;
+        $brancheTreffer = in_array((string) ($a['gruppe'] ?? ''), LieferantenGruppen::NONFOOD_GRUPPEN, true);   // gepflegte Lieferanten-Gruppe (Non-Food/Verleih) vor dem Muster
         foreach (self::BRANCHE as $muster => $sub) {
             if (preg_match($muster, (string) ($a['branche'] ?? '').' '.(string) ($a['lieferant'] ?? '')) === 1) {
                 $brancheTreffer = true;

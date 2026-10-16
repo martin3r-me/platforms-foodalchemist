@@ -139,6 +139,10 @@
                                 <x-fa::field label="Branche" for="sd-branche" optional>
                                     <x-fa::input id="sd-branche" wire:model="stammdaten.branch" data-sd-branch />
                                 </x-fa::field>
+                                <x-fa::field label="Gruppe" for="sd-gruppe" optional hint="Hauptgruppe des Lieferanten (z. B. Getränke, Verleih)">
+                                    <x-fa::select id="sd-gruppe" wire:model="stammdaten.group_id" placeholder="Keine Gruppe" :disabled="! $darfEdit" data-sd-gruppe
+                                        :options="$gruppen->pluck('name', 'id')->all()" />
+                                </x-fa::field>
                                 <x-fa::field label="GLN" for="sd-gln" optional hint="Globale Lokationsnummer, 13 Ziffern">
                                     <x-fa::input id="sd-gln" wire:model="stammdaten.gln" data-sd-gln />
                                 </x-fa::field>

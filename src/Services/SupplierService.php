@@ -21,7 +21,7 @@ class SupplierService
     /**
      * Lieferanten der Team-Kette mit item_count + mapped_count (eine GROUP-BY-Query je Zähler).
      */
-    public function listWithCounts(Team $team, bool $includeInactive = false, string $search = ''): Collection
+    public function listWithCounts(Team $team, bool $includeInactive = false, string $search = '', ?int $gruppeId = null): Collection
     {
         // Spec 82 §12 A3: nur Artikel zählen, die dieses Team sehen darf (Stamm-Paket ohne Opt-in nicht).
         $itemCounts = StammPaket::begrenzen(DB::table('foodalchemist_supplier_items'), 'foodalchemist_supplier_items', $team)
@@ -47,6 +47,7 @@ class SupplierService
 
         return FoodAlchemistSupplier::visibleToTeam($team)
             ->when(! $includeInactive, fn ($q) => $q->where('is_inactive', false))
+            ->when($gruppeId !== null, fn ($q) => $gruppeId === 0 ? $q->whereNull('group_id') : $q->where('group_id', $gruppeId))   // 0 = ohne Gruppe
             ->when($search !== '', fn ($q) => $q->where(function ($w) use ($search, $semIds) {
                 $w->where('name', 'like', '%' . $search . '%');
                 if ($semIds !== []) {
@@ -94,7 +95,7 @@ class SupplierService
             throw new \RuntimeException("Lieferant [{$name}] existiert bereits in der Team-Kette."); // V-06
         }
 
-        return FoodAlchemistSupplier::create([
+        return FoodAlchemistSupplier::create($this->gruppenFelder($team, $input) + [
             'team_id' => $team->id,
             'name' => $name,
             'branch' => ($input['branch'] ?? '') ?: null,
@@ -119,7 +120,12 @@ class SupplierService
             throw new \RuntimeException('Lieferanten-Name ist Pflicht.');
         }
 
-        $supplier->update([
+        // Unverändert gespeicherte Gruppe bleibt, wie sie ist (ein Speichern des Stammblatts macht aus einer Regel-Gruppe keine manuelle)
+        $gruppe = $this->gruppenFelder($team, $input, $supplier);
+        if ($gruppe !== [] && (int) ($gruppe['group_id'] ?? 0) === (int) $supplier->group_id) {
+            $gruppe = [];
+        }
+        $supplier->update($gruppe + [
             'name' => $name,
             'branch' => ($input['branch'] ?? '') ?: null,
             'gln' => ($input['gln'] ?? '') ?: null,
@@ -131,6 +137,35 @@ class SupplierService
         ]);
 
         return $supplier;
+    }
+
+    /**
+     * Gruppe aus der Eingabe: `group_id` (Id; leer = ohne Gruppe) oder `group` (Code oder Id). Fehlt beides, bleibt die Gruppe unverändert
+     * (leeres Array). Eine von Hand gesetzte Gruppe trägt `group_source = manuell` und wird von keinem Vorschlag überschrieben.
+     *
+     * @return array<string, mixed>
+     */
+    private function gruppenFelder(Team $team, array $input, ?FoodAlchemistSupplier $lieferant = null): array
+    {
+        $key = array_key_exists('group_id', $input) ? 'group_id' : (array_key_exists('group', $input) ? 'group' : null);
+        if ($key === null) {
+            return [];
+        }
+        $wert = $input[$key];
+        if ($wert === null || $wert === '') {
+            return ['group_id' => null, 'group_source' => null];
+        }
+        $gruppe = app(SupplierGroupService::class)->finde($team, is_numeric($wert) ? (int) $wert : (string) $wert);
+        if ($gruppe === null) {
+            throw new \RuntimeException('Lieferanten-Gruppe nicht gefunden: '.(is_scalar($wert) ? $wert : json_encode($wert)).'.');
+        }
+
+        // Ein GLOBALER Lieferant (Stamm) bekommt nur eine GLOBALE Gruppe: eine Team-Gruppe wäre für jedes andere Team unsichtbar („Gruppe fehlt“).
+        if ($lieferant !== null && $lieferant->team_id === null && $gruppe->team_id !== null) {
+            throw new \RuntimeException('Ein globaler Lieferant (Stamm) bekommt nur eine globale Lieferanten-Gruppe, keine Team-Gruppe.');
+        }
+
+        return ['group_id' => (int) $gruppe->id, 'group_source' => 'manuell'];
     }
 
     /** Inaktiv = soft (Liste blendet aus), nur Besitzer-Team (D1). */
@@ -227,6 +262,8 @@ class SupplierService
             'is_owned' => $supplier->isOwnedBy($team),
             'stammdaten' => [
                 'branch' => $supplier->branch,
+                'group_id' => $supplier->group_id,
+                'group_source' => $supplier->group_source,
                 'gln' => $supplier->gln,
                 'postal_code' => $supplier->postal_code,
                 'city' => $supplier->city,

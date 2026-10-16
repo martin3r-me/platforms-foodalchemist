@@ -31,6 +31,15 @@ class Index extends Component
 
     public string $supplierSuche = '';
 
+    /** Filter Lieferanten-Gruppe: '' alle · Gruppen-Id · '0' ohne Gruppe */
+    #[Url(as: 'gruppe')]
+    public string $gruppe = '';
+
+    public function updatedGruppe(): void
+    {
+        $this->gruppe = $this->gruppe === '' || is_numeric($this->gruppe) ? $this->gruppe : '';
+    }
+
     /** M2-14: Suche INNERHALB des gewählten Lieferanten */
     #[Url(as: 'aq')]
     public string $artikelSuche = '';
@@ -296,7 +305,7 @@ class Index extends Component
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
-        $liste = $suppliers->listWithCounts($team, $this->includeInactive, $this->supplierSuche);
+        $liste = $suppliers->listWithCounts($team, $this->includeInactive, $this->supplierSuche, $this->gruppe === '' ? null : (int) $this->gruppe);
         $globaleSuche = trim($this->q) !== '';
 
         if (! $globaleSuche && $this->supplierId === null) {
@@ -322,6 +331,7 @@ class Index extends Component
             'offeneMatches' => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
                 ->where('status', 'offen')->count(),
             'lieferanten' => $liste,
+            'lieferantenGruppen' => app(\Platform\FoodAlchemist\Services\SupplierGroupService::class)->liste($team),
             'artikel' => $artikel,
             'globaleSuche' => $globaleSuche,
             'aktiverLieferant' => $globaleSuche ? null : $liste->firstWhere('id', $this->supplierId),

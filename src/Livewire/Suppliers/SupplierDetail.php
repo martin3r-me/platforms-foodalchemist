@@ -30,7 +30,7 @@ class SupplierDetail extends Component
     public string $status = 'aktiv';
 
     /** Stammdaten-Pflege im Modal (D1-gated) — vorbelegt beim Öffnen, gespeichert per stammdatenSpeichern. */
-    public array $stammdaten = ['name' => '', 'branch' => '', 'gln' => '', 'postal_code' => '', 'city' => '', 'address' => '', 'email_order' => '', 'homepage' => ''];
+    public array $stammdaten = ['name' => '', 'branch' => '', 'group_id' => '', 'gln' => '', 'postal_code' => '', 'city' => '', 'address' => '', 'email_order' => '', 'homepage' => ''];
 
     /** R9.1 (E4) Konditionen — vorbelegt beim Öffnen, gespeichert per updateConditions. */
     public array $konditionen = ['rebate_pct' => '', 'payment_term_days' => '', 'min_order_value' => '', 'free_shipping_threshold' => ''];
@@ -68,6 +68,7 @@ class SupplierDetail extends Component
         $this->stammdaten = [
             'name' => $sb['name'] ?? '',
             'branch' => $sb['stammdaten']['branch'] ?? '',
+            'group_id' => (string) ($sb['stammdaten']['group_id'] ?? ''),
             'gln' => $sb['stammdaten']['gln'] ?? '',
             'postal_code' => $sb['stammdaten']['postal_code'] ?? '',
             'city' => $sb['stammdaten']['city'] ?? '',
@@ -253,6 +254,7 @@ class SupplierDetail extends Component
 
         return view('foodalchemist::livewire.suppliers.supplier-detail', [
             'stammblatt' => $stammblatt,
+            'gruppen' => $team !== null ? app(\Platform\FoodAlchemist\Services\SupplierGroupService::class)->liste($team) : collect(),
             'darfEdit' => (bool) ($stammblatt['is_owned'] ?? false),
             // R9.2 (E6): Bündelungs-Ranking über alle sichtbaren Lieferanten (Nutzungs-Proxy, ehrlich markiert).
             'buendelung' => ($this->supplierId !== null && $team !== null)
