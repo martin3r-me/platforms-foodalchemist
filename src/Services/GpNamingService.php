@@ -349,6 +349,11 @@ class GpNamingService
     public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
     {
         $in = $this->bereinigeFelder($in);
+        // Ein Non-Food-GP (WG 16) wird auch dann nach dem Non-Food-Schema geprüft, wenn die Eingabe die Warengruppe nicht mitbringt (MCP gps.PUT):
+        // sonst träfen die Lebensmittel-Namensregeln („Glas“ ist ein Verpackungswort) ein Geschirr, das Glas als Material führt.
+        if ($gp->istNonFood() && ! isset($in['warengruppe']) && ! isset($in['commodity_group_code'])) {
+            $in['commodity_group_code'] = (string) $gp->commodity_group_code;
+        }
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
         $pruefung = $this->validateGpName($name, $in);
         if ($pruefung['errors'] !== []) {

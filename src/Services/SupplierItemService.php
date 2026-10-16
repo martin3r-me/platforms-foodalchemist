@@ -275,7 +275,11 @@ class SupplierItemService
         'is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder',
         'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier',
         'shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days',
+        'deposit', 'rental_period',   // Mietgeschirr: Pfand netto je Stück (nur Beleg) und Mietdauer
     ];
+
+    /** Mietdauer, auf die sich der Mietpreis bezieht. */
+    public const MIETDAUER = ['tag', 'veranstaltung'];
 
     /**
      * Stammdaten eines bestehenden Artikels bearbeiten (MVP: vorher inline in ItemModal::speichern).
@@ -288,6 +292,16 @@ class SupplierItemService
         }
         $clean = collect(array_intersect_key($felder, array_flip(self::EDIT_FELDER)))
             ->map(fn ($v) => $v === '' ? null : $v)->all();
+        if (array_key_exists('rental_period', $clean) && $clean['rental_period'] !== null && ! in_array($clean['rental_period'], self::MIETDAUER, true)) {
+            throw new \RuntimeException('Mietdauer muss tag oder veranstaltung sein.');
+        }
+        if (array_key_exists('deposit', $clean) && $clean['deposit'] !== null) {
+            $pfand = str_replace(',', '.', (string) $clean['deposit']);
+            if (! is_numeric($pfand) || (float) $pfand < 0) {
+                throw new \RuntimeException('Pfand muss eine Zahl ab 0 sein (netto je Stück).');
+            }
+            $clean['deposit'] = round((float) $pfand, 2);
+        }
         if ($clean !== []) {
             $item->update($clean);
         }

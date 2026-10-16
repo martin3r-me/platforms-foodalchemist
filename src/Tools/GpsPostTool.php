@@ -54,6 +54,11 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'sub_category' => ['type' => 'string', 'description' => 'Sub-Kategorie.'],
                 'is_derivat' => ['type' => 'boolean', 'description' => 'Nebenprodukt-Derivat (§11.2) — requires_la wird dann 0.'],
                 'derivat_von_gp_id' => ['type' => 'integer', 'description' => 'Mutter-GP bei Derivat (team-scoped geprüft).'],
+                'diameter_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Ø in cm, z. B. 27 oder 7,5 (leer löscht).'],
+                'length_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Länge in cm.'],
+                'width_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Breite in cm.'],
+                'height_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Höhe in cm.'],
+                'volume_ml' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Volumen in ml (Gläser, Schalen).'],
                 'force' => ['type' => 'boolean', 'description' => 'Dubletten-Hard-Stop bewusst übergehen.'],
             ],
             'required' => ['hauptzutat'],
@@ -79,9 +84,20 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
         }
 
         $in = array_intersect_key($arguments, array_flip(self::IN_KEYS));
+        $masse = array_intersect_key($arguments, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE);
+        // Non-Food (WG 16): ohne eigene Größe-Angabe kommt sie aus den Maßen (Ø 27 cm, 30 x 20 x 5 cm, 212 ml) — Regelwerk §6.4
+        if ($masse !== [] && ($in['commodity_group_code'] ?? '') === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE && trim((string) ($in['pflichtangabe'] ?? '')) === '') {
+            $groesse = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->groesseAusEingabe($masse);
+            if ($groesse !== null) {
+                $in['pflichtangabe'] = $groesse;
+            }
+        }
 
         try {
             $gp = app(GpNamingService::class)->createGp($team, $in, (bool) ($arguments['force'] ?? false));
+            if ($masse !== []) {
+                $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, $masse);
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -93,6 +109,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             'status' => $gp->status instanceof \BackedEnum ? $gp->status->value : (string) $gp->status,
             'is_derivat' => (bool) $gp->is_derivat,
             'requires_la' => (bool) $gp->requires_la,
+            'groesse' => $gp->masseText(),
         ]);
     }
 

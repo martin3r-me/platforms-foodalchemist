@@ -110,6 +110,7 @@ class FoodAlchemistSupplierItem extends Model
         'is_vegetarian' => 'boolean',
         'is_alcohol' => 'boolean',
         'is_discontinued' => 'boolean',
+        'deposit' => 'decimal:2',
         // M2-16: nachgezogene Detail-Felder
         'is_halal' => 'boolean',
         'is_gmo_free' => 'boolean',
