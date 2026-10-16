@@ -124,6 +124,7 @@ class ConceptGeneratorService
             if ($concept === null) {
                 throw new RuntimeException('Ziel-Konzept nicht sichtbar/vorhanden.');
             }
+            \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($concept, $team, 'Konzept');   // Spec 84 B2: vor der Gerüst-Kopie, nicht erst in addSlot
             if ((string) $concept->status !== 'draft') {
                 throw new RuntimeException("Ziel-Konzept hat Status „{$concept->status}“ — die Übernahme schreibt nur in Entwürfe.");
             }

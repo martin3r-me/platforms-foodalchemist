@@ -396,7 +396,7 @@ class SignalFixService
     private function fixGpAnker(Team $team, int $gpId): bool
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp === null) {
+        if ($gp === null || ! $this->pairing->darfAnkerPflegen($gp, $team)) {   // Spec 84 B2: nicht über Mandantengrenzen
             return false;
         }
         $ankerId = $this->pairing->resolveByName((string) $gp->name);

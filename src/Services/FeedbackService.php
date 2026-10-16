@@ -180,6 +180,7 @@ class FeedbackService
     public function weiterentwickeln(Team $team, int $feedbackId, string $createdVia = 'fa_ui'): FoodAlchemistRecipe
     {
         $f = FoodAlchemistRecipeFeedback::visibleToTeam($team)->findOrFail($feedbackId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($f, $team, 'Feedback');   // Spec 84 B2: schreibt spawned_recipe_id ins Feedback
         $quelle = $f->recipe()->visibleToTeam($team)->firstOrFail();
 
         return DB::transaction(function () use ($team, $f, $quelle, $createdVia) {

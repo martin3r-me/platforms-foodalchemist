@@ -98,6 +98,7 @@ class RecipeOneShotService
      */
     public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
     {
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2: zentral für Job, Kaskade und MCP
         return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe,
             fn () => $this->anreichernImLauf($team, $recipe, $zielVk, $completeCoverage, $refresh, $shouldStop));
     }

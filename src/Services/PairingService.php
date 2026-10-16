@@ -1077,6 +1077,30 @@ class PairingService
      */
     public const GP_ANKER_SOURCE_MAX = 32;
 
+    /**
+     * Spec 84 B2 · Wer darf die Anker eines GP pflegen? Die Mapping-Tabelle hat keinen Team-Schlüssel — eine Änderung
+     * wirkt für ALLE, die das GP sehen.
+     *  · eigenes GP bzw. Master an globaler Stamm-Zeile (isOwnedBy): ja
+     *  · GP der eigenen Team-Kette (Unter-Team pflegt das Oberteam-GP): ja — bewusste frühere Entscheidung
+     *    „Anker-Pflege ist ein geteiltes kuratorisches Anliegen" (McpGpAnchorsTest)
+     *  · globales GP ohne Master-Recht, GP eines anderen Mandanten: nein (wirkte über Mandantengrenzen)
+     */
+    public function darfAnkerPflegen(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp, Team $team): bool
+    {
+        if ($gp->isOwnedBy($team)) {
+            return true;
+        }
+
+        return $gp->team_id !== null && in_array((int) $gp->team_id, \Platform\FoodAlchemist\Models\FoodAlchemistGp::teamAncestryIds($team), true);
+    }
+
+    private function pruefeAnkerPflege(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp, Team $team): void
+    {
+        if (! $this->darfAnkerPflegen($gp, $team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('GP-Anker');
+        }
+    }
+
     public function setGpAnker(
         Team $team, int $gpId, int $ankerId, string $role = 'kern', string $source = 'manual',
         ?float $aiConfidence = null, ?string $aiReasoning = null,
@@ -1088,6 +1112,7 @@ class PairingService
             );
         }
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $this->pruefeAnkerPflege($gp, $team);   // Spec 84 B2: Mapping hat keinen Team-Schlüssel
         $vorhanden = DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->whereNull('deleted_at')->first();
         if ($vorhanden === null
@@ -1105,7 +1130,7 @@ class PairingService
     /** Löst einen einzelnen GP-Anker (soft-delete). */
     public function removeGpAnker(Team $team, int $gpId, int $ankerId): void
     {
-        \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $this->pruefeAnkerPflege(\Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId), $team);
         DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gpId)->where('anchor_id', $ankerId)->update(['deleted_at' => now()]);
     }
@@ -1116,7 +1141,7 @@ class PairingService
      */
     public function clearGpAnker(Team $team, int $gpId): void
     {
-        \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $this->pruefeAnkerPflege(\Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId), $team);
         DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gpId)->whereNull('deleted_at')->update(['deleted_at' => now()]);
     }
@@ -1130,6 +1155,7 @@ class PairingService
     public function setGpAnkerInference(Team $team, int $gpId, int $ankerId, float $confidence, string $reasoning = 'Bulk-Anreicherung'): void
     {
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $this->pruefeAnkerPflege($gp, $team);
         $manual = DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->where('source', 'manual')->exists();
         if ($manual) {

@@ -178,6 +178,7 @@ class SpeisenKlassenService
     public function acceptRollen(Team $team, int $recipeId, array $rollen): int
     {
         $r = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($r, $team, 'Rezept');   // Spec 84 B2
 
         return DB::transaction(function () use ($r, $rollen) {
             $n = 0;
