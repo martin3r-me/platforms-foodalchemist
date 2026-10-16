@@ -41,7 +41,7 @@ class DataQualityCommand extends Command
 
         $alle = [];
         foreach ($teams as $team) {
-            $ebenen = $dq->messeAlleEbenen($team);
+            $ebenen = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $dq->messeAlleEbenen($team));   // Spec 84 A-4: Arbeit im Team des Laufs
             $alle[$team->id] = $ebenen;
 
             if (! $this->option('json')) {
@@ -60,14 +60,14 @@ class DataQualityCommand extends Command
             if ($this->option('signals')) {
                 // 22·H4a: der Lauf hat zwei Richtungen — er meldet auch, was er zugemacht hat.
                 // Ohne die zweite Zahl bliebe der Schließ-Zweig (V-011) im Betrieb unsichtbar.
-                ['emittiert' => $n, 'geschlossen' => $zu] = $dq->emittiereUndSchliesse($team);
+                ['emittiert' => $n, 'geschlossen' => $zu] = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $dq->emittiereUndSchliesse($team));
                 $this->line("  → {$n} Signal(e) geschrieben/aktualisiert, {$zu} automatisch geschlossen (Lücke gemessen 0).");
             }
 
             // Reihenfolge ist Absicht: erst Signale emittieren, dann snapshotten — sonst
             // zählt die Signal-Seite der Zeitreihe den Stand VOR diesem Lauf.
             if ($this->option('snapshot')) {
-                $rows = $trend->schreibeSnapshot($team);
+                $rows = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $trend->schreibeSnapshot($team));
                 $this->line("  → {$rows} Zeitreihen-Zeile(n) geschrieben.");
             }
         }

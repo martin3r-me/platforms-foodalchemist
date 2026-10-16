@@ -82,7 +82,7 @@ class ConformanceBackfillCommand extends Command
             $n = 0;
             (clone $q)->orderBy('id')->limit($ziel)->pluck('id')->each(function ($gpId) use ($team, $userId, &$n) {
                 try {
-                    ConformanceCheckJob::dispatch((int) $team->id, $userId, 'gp', (int) $gpId);
+                    \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => ConformanceCheckJob::dispatch((int) $team->id, $userId, 'gp', (int) $gpId));   // Spec 84 A-4
                     $n++;
                 } catch (\Throwable $e) {
                     // Dispatch-Fehler eines GPs kippt nicht den ganzen Lauf.

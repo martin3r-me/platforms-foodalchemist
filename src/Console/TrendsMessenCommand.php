@@ -30,7 +30,7 @@ class TrendsMessenCommand extends Command
             if (! $settings->trendDataForSeoAktiv($team)) {
                 continue;
             }
-            $e = $signale->wochenlauf($team);
+            $e = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $signale->wochenlauf($team));   // Spec 84 A-4: KI-Riegel und Abrechnung im Team des Laufs
             $this->line(sprintf('Team %d (%s): %d gemessen, %d übersprungen, %d Fehler.', $team->id, $team->name,
                 $e['gemessen'], $e['uebersprungen'], count($e['fehler'])));
             foreach ($e['fehler'] as $f) {

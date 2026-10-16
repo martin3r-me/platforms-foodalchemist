@@ -25,7 +25,8 @@ final class ImTeamKontext
             return $next($job);
         }
         $versand = Context::hasHidden(FaTeam::SCHLUESSEL) ? Context::getHidden(FaTeam::SCHLUESSEL) : null;
-        if ($versand !== null && (int) $versand !== $this->teamId) {
+        // afterCommit-Jobs bauen ihren Payload erst beim Commit (außerhalb jedes imTeam-Rahmens) — dort ist die Abweichung erwartet
+        if ($versand !== null && (int) $versand !== $this->teamId && ! ($job->afterCommit ?? false)) {
             Log::warning('Spec 84: Job-Team weicht vom Versand-Team ab (Versand ohne FaTeam::imTeam?)', [
                 'job' => $job::class, 'auftragsteam' => $this->teamId, 'versandteam' => (int) $versand,
             ]);
