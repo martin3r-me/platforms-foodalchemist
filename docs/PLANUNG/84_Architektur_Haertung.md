@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **v0.7, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **v0.8, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -430,20 +430,26 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 | PR | Stand |
 |---|---|
-| 0 | **gemergt #455**, live auf io (Host 0857b98) |
-| O1 | **gemergt #456**, live auf io |
-| C3a | **gemergt #454** (Vanessa) |
-| E-1 | **gemergt #457** (Vanessa) |
-| A-1 / A-2 / A-3 / A-4 | lokal fertig, gestapelt auf e0ac84ac: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`; Kern 243/243 grün, großer Lauf (383 Dateien) läuft |
-| E3 Support-Zugang | lokal fertig auf A-4: `feat/spec84-e3-support-zugang` |
-| E5 Skizzen-Code | lokal fertig: `chore/spec84-e5-skizzen-weg` (Planung/Index 4.596 → 4.249 Z.) |
-| B1 eine Master-Definition | in Arbeit: `fix/spec84-b1-master` |
-| PR 7 C2-Charakterisierungstest | **gemergt #458** (Vanessa) |
-| PR 9 §5.8 Sperre beim Schließen | **gemergt #459** (Vanessa): kein Fix nötig, Wächter-Test |
-| §5.5 Foodbook-Fortschritt über FoodbookService | **gemergt #460** (Vanessa) |
-| 2 (B0a) | **gemergt #453** (Vanessa) |
-| Teil E (§5a) | E-1 Kurator; E-3 „test“ vor B3; E-2/E-4/E-5 Vanessa |
-| alle übrigen | offen |
+| 0 Schreib-Leck + L1-B | **gemergt #455**, live io (Host 0857b98) |
+| O1 Angebote Unter-Team | **gemergt #456**, live io |
+| B0a Zwei-Mandanten-Netz | **gemergt #453** (Vanessa) |
+| C3a Tool-Liste | **gemergt #454** (Vanessa) |
+| E-1 Messung in der Anwendung | **gemergt #457** (Vanessa) |
+| C2-Test, §5.8, §5.5 | **gemergt #458, #459, #460** (Vanessa) |
+| B1 eine Master-Definition | **gemergt #461** |
+| B2 Prüfliste + Eigentum je Schreibweg | **gemergt #462** (Vanessa) |
+| Fix Planung-Vorlagen-Tests (main rot nach L1-B) | **gemergt #463** |
+| E5 Skizzen-Code | **gemergt #464** |
+| C1 Schritt 1 (ReglerParams, KaskadenAnsicht, LaufCockpit) | **gemergt #465**; Planung/Index 4.596 → 3.641 Zeilen |
+| A-1 / A-2 / A-3 / A-4 / E3 | gemeldet, rebased auf a4164fcf: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`, `feat/spec84-e3-support-zugang`. Großer Lauf 3.432 Tests (rot nur 3 main-Fälle #463 + 2 vorbestehende), Nachlauf nach Rebase 349/349 |
+| E-3 Indizes für B3 | offen („test“), braucht EXPLAIN auf io |
+| B3 Stufe 1–4 + B0b, B4, B5 | offen („test“), nach E-3 |
+| C5 Modal-Writes über Services | offen (Vanessa, nach B2) |
+| E-2, E-4, E-5 | offen (Vanessa) |
+
+**Vorbestehende rote Tests auf main (nicht aus Spec 84, gefunden im großen Lauf 17.10.):**
+- `ConceptPlanPromptTest` „concept_plan ist als Tier B Prompt registriert“: erwartet Tier `'B'`, seit #447 (KI-Klassen STARK/MITTEL/LEICHT) veraltet.
+- `Spec82BausteinFolgeTest` „Merker … Queue-Ereignis leert ihn ebenfalls“: `Undefined array key "job"`. Der Test-Job hat kein `job` im Payload; seit E-1 (#457) ruft `LangsameAbfragen` bei `JobProcessing` `resolveName()`.
 
 | # | PR | Teil | Abhängig von | Größe |
 |---|---|---|---|---|
@@ -526,6 +532,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-17 · v0.8: Stand nach Merges #461–#465; A-Kette + E3 gemeldet; zwei vorbestehende rote Tests dokumentiert.
 - 2026-10-16 · v0.7: C1-1 und C5 aktiv (Dominique); Stand A-4, E3, E5, B1; #458–#460 gemergt.
 - 2026-10-16 · v0.6: §3.3a Umsetzung A-1–A-3 inkl. Auflösung H2, PendingDispatch-Falle, Messung über FaTeam; E-1 in der Anwendung; Stand PR 0/O1/C3a/E-1 gemergt.
 - 2026-10-16 · v0.5 (Nachtrag): E3 entschieden → §4.4 Support-Zugang auf Freigabe; neuer Teil E Skalierung/Leistung (§5a).
