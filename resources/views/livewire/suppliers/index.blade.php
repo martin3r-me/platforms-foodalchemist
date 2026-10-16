@@ -53,6 +53,10 @@
                 <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]">
                     <label for="lieferant-filter" class="sr-only">Lieferanten filtern</label>
                     <x-fa::input id="lieferant-filter" type="search" size="sm" wire:model.live.debounce.300ms="supplierSuche" placeholder="Lieferant filtern" />
+                    @if($lieferantenGruppen->isNotEmpty())
+                        <x-fa::select wire:model.live="gruppe" size="sm" aria-label="Lieferanten-Gruppe" placeholder="Alle Gruppen" data-gruppen-filter
+                            :options="['0' => 'Ohne Gruppe'] + $lieferantenGruppen->pluck('name', 'id')->all()" />
+                    @endif
                     <div class="flex items-center justify-between gap-2">
                         <label class="inline-flex items-center gap-2 cursor-pointer text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                             <input type="checkbox" wire:model.live="includeInactive" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" /> Inaktive zeigen

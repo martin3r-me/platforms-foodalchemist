@@ -127,6 +127,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\NonFoodEinrichtenCommand::class,
                 \Platform\FoodAlchemist\Console\NonFoodErkennenCommand::class,
+                \Platform\FoodAlchemist\Console\LieferantenGruppenEinrichtenCommand::class,
+                \Platform\FoodAlchemist\Console\LieferantenGruppenVorschlagenCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
                 \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
                 \Platform\FoodAlchemist\Console\TerminologyImportCommand::class,
@@ -680,6 +682,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PreiseVerlaufGetTool::class,   // Preisverlauf als Stufenlinie + Trend
                     \Platform\FoodAlchemist\Tools\NonfoodPruefenTool::class,   // Non-Food-Prüfliste
                     \Platform\FoodAlchemist\Tools\NonfoodSetTool::class,   // Non-Food-Urteil von Hand
+                    \Platform\FoodAlchemist\Tools\SupplierGroupsListTool::class,   // Lieferanten-Gruppen
                     \Platform\FoodAlchemist\Tools\PreiseHistorieAusblendenTool::class,   // Preis-Stand als Erfassungsfehler aus-/einblenden (Admin)
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesListTool::class,

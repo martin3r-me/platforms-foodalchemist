@@ -35,6 +35,12 @@ class FoodAlchemistSupplier extends Model
         'order_lead_days' => 'integer',
     ];
 
+    /** Hauptgruppe (Taxonomie); `branch` bleibt der Necta-Rohwert. */
+    public function group(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistSupplierGroup::class, 'group_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(FoodAlchemistSupplierItem::class, 'supplier_id');

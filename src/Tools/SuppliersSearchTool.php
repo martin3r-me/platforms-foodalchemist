@@ -62,15 +62,15 @@ class SuppliersSearchTool extends FoodAlchemistTool implements ToolContract, Too
         // suppliers.LIST-Tool, ohne dieses Fallback wären Lieferanten ohne Stichwort nicht auflistbar.
         $suppliers = $q === ''
             ? $base()->orderBy('name')->limit($limit)
-                ->get(['id', 'name', 'branch', 'city', 'is_inactive'])
+                ->with('group:id,code')->get(['id', 'name', 'branch', 'group_id', 'city', 'is_inactive'])
                 ->map(fn ($s) => [
-                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch,
+                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch, 'group' => $s->group?->code,
                     'city' => $s->city, 'is_inactive' => (bool) $s->is_inactive, 'via' => 'list',
                 ])->all()
             : $base()->where('name', 'like', '%' . $q . '%')->orderBy('name')->limit($limit)
-                ->get(['id', 'name', 'branch', 'city', 'is_inactive'])
+                ->with('group:id,code')->get(['id', 'name', 'branch', 'group_id', 'city', 'is_inactive'])
                 ->map(fn ($s) => [
-                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch,
+                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch, 'group' => $s->group?->code,
                     'city' => $s->city, 'is_inactive' => (bool) $s->is_inactive, 'via' => 'lexical',
                 ])->all();
 
@@ -78,7 +78,7 @@ class SuppliersSearchTool extends FoodAlchemistTool implements ToolContract, Too
         $semScores = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_SUPPLIER, array_column($suppliers, 'id'), $limit);
         if ($semScores !== []) {
             $rows = $base()->whereIn('id', array_keys($semScores))
-                ->get(['id', 'name', 'branch', 'city', 'is_inactive'])->keyBy('id');
+                ->with('group:id,code')->get(['id', 'name', 'branch', 'group_id', 'city', 'is_inactive'])->keyBy('id');
             arsort($semScores);
             foreach ($semScores as $id => $score) {
                 $s = $rows->get($id);
@@ -86,7 +86,7 @@ class SuppliersSearchTool extends FoodAlchemistTool implements ToolContract, Too
                     continue;
                 }
                 $suppliers[] = [
-                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch,
+                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch, 'group' => $s->group?->code,
                     'city' => $s->city, 'is_inactive' => (bool) $s->is_inactive,
                     'via' => 'semantic', 'semantic_score' => round($score, 3),
                 ];

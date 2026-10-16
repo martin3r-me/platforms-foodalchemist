@@ -40,11 +40,14 @@ class NonFoodService
         }
         $vorhanden = $tabelle ? FoodAlchemistSupplierItemNonfood::query()->pluck('quelle', 'supplier_item_id')->all() : [];
 
+        $hatGruppen = Schema::hasTable('foodalchemist_supplier_groups') && Schema::hasColumn('foodalchemist_suppliers', 'group_id');   // vor der Migration: kein Gruppen-Signal
         $query = DB::table('foodalchemist_supplier_items as i')
             ->leftJoin('foodalchemist_suppliers as s', 's.id', '=', 'i.supplier_id')
+            ->when($hatGruppen, fn ($q) => $q->leftJoin('foodalchemist_supplier_groups as g', 'g.id', '=', 's.group_id'))
             ->whereNull('i.deleted_at')
             ->when($teamId !== null, fn ($q) => $q->where('i.team_id', $teamId))
             ->select('i.id', 'i.team_id', 'i.designation', 'i.marketing_name', 'i.is_alcohol', 'i.ingredients_supplier', 's.name as lieferant', 's.branch as branche')
+            ->when($hatGruppen, fn ($q) => $q->addSelect('g.code as gruppe'), fn ($q) => $q->selectRaw('NULL as gruppe'))
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_allergens a WHERE a.supplier_item_id = i.id) AS f_all')
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_nutritionals n WHERE n.supplier_item_id = i.id) AS f_nae')
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_declarations d WHERE d.supplier_item_id = i.id) AS f_dek')
@@ -59,7 +62,7 @@ class NonFoodService
                 $hatFood = (bool) ($z->f_all || $z->f_nae || $z->f_dek || $z->is_alcohol || trim((string) $z->ingredients_supplier) !== '');
                 $b = NonFoodRegeln::bewerte([
                     'bezeichnung' => $z->designation, 'verkaufsname' => $z->marketing_name, 'branche' => $z->branche,
-                    'lieferant' => $z->lieferant, 'hat_food_daten' => $hatFood,
+                    'lieferant' => $z->lieferant, 'gruppe' => $z->gruppe, 'hat_food_daten' => $hatFood,
                 ]);
                 $r[$b['klasse']]++;
                 if ($b['klasse'] !== 'food') {
