@@ -157,3 +157,31 @@ it('Zusatz: eine Handeingabe vor dem Vorschlag wird nie abgeschaltet', function 
     Livewire::test(GpModal::class)->call('oeffnen', null, ($this->la)()->id)->set('builder.bio', true)->set('kiRohtext', 'x')->call('kiVorschlagNaming')
         ->assertSet('builder.bio', true);
 });
+
+
+// ── Portion im Bestandsformat „660 g pro Stueck" ──
+
+it('★ Renderer: „660 g pro Stueck" (Leerzeichen, ohne „Portion"); Eingaben 660g / 660 g / 0,66 kg werden zu „660 g"', function () {
+    $n = app(GpNamingService::class);
+    $name = fn (string $portion) => $n->renderGpName(['hauptzutat' => 'Schokoladenmousse', 'condition' => 'TK', 'form' => 'Riegel', 'portion' => $portion]);
+
+    expect($name('660 g'))->toBe('Schokoladenmousse: TK, Riegel, 660 g pro Stueck')
+        ->and($name('660g'))->toBe($name('660 g'))->and($name('0,66 kg'))->toBe($name('660 g'))->and($name('0.66 kg'))->toBe($name('660 g'))
+        ->and($name('2 kg'))->toContain('2000 g pro Stueck')                              // Bestand schreibt Gramm auch ab 1000
+        ->and($name('62,5 g'))->toContain('62,5 g pro Stueck')
+        ->and($name('80 ml'))->toContain('80 ml pro Stueck')->and($name('0,08 l'))->toContain('80 ml pro Stueck')
+        ->and($name('ca. 1000 g'))->toContain('ca. 1000 g pro Stueck')
+        ->and($name('Handtellergroß'))->toContain('Handtellergroß pro Stueck');             // Nicht Lesbares unverändert
+});
+
+it('★ Rundlauf: rendern → felderAusName liefert dieselben Felder zurück (auch der Bestandsname ohne „Portion")', function () {
+    $n = app(GpNamingService::class);
+    foreach (['660 g', '25 g', '62,5 g', '80 ml', 'ca. 1000 g', '2000 g'] as $portion) {
+        $felder = ['hauptzutat' => 'Amerikaner mit Zuckerguss', 'condition' => 'TK', 'processing' => '', 'form' => 'mini', 'portion' => $portion, 'pflichtangabe' => ''];
+        $zurueck = $n->felderAusName($n->renderGpName($felder));
+
+        expect($zurueck)->toMatchArray($felder, $portion);
+    }
+    // Altform der 91 Bestandsnamen wird gelesen, nicht verändert
+    expect($n->felderAusName('Blutwurst: frisch, im Ring, Portion 800 g pro Stueck'))->toMatchArray(['form' => 'im Ring', 'portion' => '800 g', 'pflichtangabe' => '']);
+});

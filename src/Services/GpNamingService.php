@@ -111,7 +111,8 @@ class GpNamingService
         $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
         $out['hauptzutat'] = trim((string) strstr($name . ':', ':', true));
         $rest = str_contains($name, ':') ? trim((string) substr($name, strpos($name, ':') + 1)) : '';
-        $teile = array_values(array_filter(array_map('trim', explode(',', $rest)), fn ($t) => $t !== ''));
+        // Dezimalkomma („62,5 g pro Stueck", „3,5 % Fett") ist kein Trenner der Attribute
+        $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
         $pflicht = [];
         foreach ($teile as $teil) {
@@ -120,6 +121,8 @@ class GpNamingService
                 $out['condition'] = $zustand;
             } elseif (mb_strtolower($teil) === 'bio') {
                 $out['bio'] = true;
+            } elseif (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+stueck$/iu', $teil, $m) === 1) {
+                $out['portion'] = $this->normalisierePortion($m[1]);        // Bestand „660 g pro Stueck" und Altform „Portion 150 g pro Stueck"
             } elseif (preg_match('/^portion\s+(.+?)\s+pro\s+stueck$/iu', $teil, $m) === 1) {
                 $out['portion'] = $m[1];
             } elseif ($out['processing'] === '' && $out['form'] === '' && $pflicht === []) {
@@ -149,7 +152,7 @@ class GpNamingService
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: <condition>, <processing|form>[, Portion <x> pro Stueck][, <pflicht>][ / (Bio)]…`
+     * `<Hauptzutat>: <condition>, <processing|form>[, <x> g pro Stueck][, <pflicht>][ / (Bio)]…`
      */
     public function renderGpName(array $in): string
     {
@@ -172,7 +175,7 @@ class GpNamingService
             $parts[] = $mid;
         }
         if (! empty($in['portion'])) {
-            $parts[] = 'Portion ' . $in['portion'] . ' pro Stueck';
+            $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stueck';       // Bestandsformat „660 g pro Stueck" (kein „Portion", Leerzeichen vor der Einheit)
         }
         if (! empty($in['pflichtangabe'])) {
             $parts[] = $in['pflichtangabe'];
@@ -497,6 +500,31 @@ class GpNamingService
         }
 
         return $feld;
+    }
+
+    /**
+     * Portionsgrammatur im Bestandsformat: „660g", „660 g" und „0,66 kg" werden zu „660 g". Der Bestand schreibt Gramm auch ab 1000
+     * („2000 g", 19 Namen; nur 1 Name mit „3 kg") und Milliliter („80 ml"), darum kg → g und l → ml. Komma als Dezimaltrenner („62,5 g"),
+     * „ca." bleibt erhalten. Nicht Lesbares bleibt unverändert (getrimmt).
+     */
+    public function normalisierePortion(string $portion): string
+    {
+        $p = trim($portion);
+        if (! preg_match('/^(ca\.?\s*)?(\d+(?:[.,]\d+)?)\s*(kg|g|ml|l)?$/iu', $p, $m)) {
+            return $p;
+        }
+        $zahl = (float) str_replace(',', '.', $m[2]);
+        $einheit = mb_strtolower($m[3] ?? '');
+        if ($einheit === 'kg') {
+            $zahl *= 1000;
+            $einheit = 'g';
+        } elseif ($einheit === 'l') {
+            $zahl *= 1000;
+            $einheit = 'ml';
+        }
+        $text = rtrim(rtrim(number_format($zahl, 3, ',', ''), '0'), ',');
+
+        return trim(($m[1] !== '' ? 'ca. ' : '').$text.($einheit !== '' ? ' '.$einheit : ''));
     }
 
     /** Steht ein Platzhalter („unbekannt") als Attribut im Namen? Nur ganze Wörter im Attributteil nach dem Doppelpunkt. */
