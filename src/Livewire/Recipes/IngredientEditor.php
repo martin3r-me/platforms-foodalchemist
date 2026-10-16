@@ -353,7 +353,7 @@ class IngredientEditor extends Component
         $recompute = app(RecipeRecomputeService::class);
         $suche = mb_strtolower(trim($q));
 
-        $gpQuery = FoodAlchemistGp::visibleToTeam($team)
+        $gpQuery = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()   // Non-Food ist keine Zutat (Zubehör & Verpackung)
             // #4 (Dominique 2026-08-27): im Zutaten-Picker nur verwendbare GPs — abgelehnte/gemergte raus
             // (GP hat keinen Entwurf-Zustand; vorläufig + freigegeben bleiben). Wie tauschKandidaten.
             ->whereNotIn('status', ['rejected', 'merged'])

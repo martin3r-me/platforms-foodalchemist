@@ -36,6 +36,9 @@ class ConformanceService
      */
     public function pruefe(Team $team, string $typ, int $id): array
     {
+        if ($this->istNonFoodGp($typ, $id)) {
+            return ['gesamturteil' => '', 'confidence' => 1.0, 'befunde' => []];
+        }
         return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeAdapter($team, $this->adapter($typ), $id));
     }
 
@@ -48,7 +51,16 @@ class ConformanceService
      */
     public function pruefeUndHeile(Team $team, string $typ, int $id, ?int $runId = null): array
     {
+        if ($this->istNonFoodGp($typ, $id)) {
+            return ['gesamturteil' => '', 'confidence' => 1.0, 'befunde' => [], 'geheilt' => 0, 'ablage' => []];
+        }
         return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeUndHeileImLauf($team, $typ, $id, $runId));
+    }
+
+    /** Das GP-Regelwerk (Naming, Zustand, Pflichtangaben) gilt für Lebensmittel; Non-Food (Warengruppe 16) hat ein eigenes, schlankes Schema (§6.4/§8.13). */
+    private function istNonFoodGp(string $typ, int $id): bool
+    {
+        return $typ === 'gp' && \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereKey($id)->nonFood()->exists();
     }
 
     private function imWissenslauf(Team $team, string $typ, int $id, callable $action): array

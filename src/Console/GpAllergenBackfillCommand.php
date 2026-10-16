@@ -60,10 +60,10 @@ class GpAllergenBackfillCommand extends Command
             $beispiele = [];
 
             // menschlich/KI kuratierte Quellen bleiben unangetastet (Provenienz-Schutz)
-            $manuellUebersprungen = FoodAlchemistGp::visibleToTeam($team)
+            $manuellUebersprungen = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()
                 ->where('status', 'approved')->whereIn('allergens_source', ['manual', 'ki'])->count();
 
-            FoodAlchemistGp::visibleToTeam($team)
+            FoodAlchemistGp::visibleToTeam($team)->lebensmittel()
                 ->where('status', 'approved')
                 ->where(fn ($w) => $w->whereNull('allergens_source')->orWhereNotIn('allergens_source', ['manual', 'ki']))
                 ->orderBy('id')
