@@ -126,14 +126,14 @@ it('★ PREVIEW: Mandant sieht Mengen („Plattform-Wissen"), keine Master-Slugs
 it('Wissens-Browser: Mandant listet keine globalen/Master-Dossiers, der Master schon', function () {
     ($this->als)($this->childA);
     Livewire::test(Browser::class)->assertViewHas('docs', function ($docs) {
-        $slugs = collect($docs)->pluck('slug')->all();
+        $slugs = collect($docs instanceof \Illuminate\Contracts\Pagination\Paginator ? $docs->items() : $docs)->pluck('slug')->all();   // Liste ist seit 16.10. seitenweise
 
         return ! in_array('regelwerk.basisrezepte_p2', $slugs, true) && ! in_array('zutat.fachdossier_p2', $slugs, true);
     });
 
     ($this->als)($this->master);
     Livewire::test(Browser::class)->assertViewHas('docs', function ($docs) {
-        $slugs = collect($docs)->pluck('slug')->all();
+        $slugs = collect($docs instanceof \Illuminate\Contracts\Pagination\Paginator ? $docs->items() : $docs)->pluck('slug')->all();   // Liste ist seit 16.10. seitenweise
 
         return in_array('regelwerk.basisrezepte_p2', $slugs, true) && in_array('zutat.fachdossier_p2', $slugs, true);
     });

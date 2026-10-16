@@ -46,7 +46,8 @@
     $kanonModusLabel = ['pflicht' => 'immer mitgeben', 'wenn_platz' => 'wenn Platz ist'];
     $routingModusLabel = ['always' => 'fest geladen', 'discovery' => 'bei passendem Thema'];
 
-    $docZahl = $docs->count();
+    $seiten = $docs instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator;
+    $docZahl = $seiten ? $docs->total() : $docs->count();
     $untertitel = number_format($docZahl, 0, ',', '.') . ' ' . ($docZahl === 1 ? 'Dokument' : 'Dokumente')
         . (trim($search) !== '' ? ' · nach Relevanz sortiert' : '');
 
@@ -98,7 +99,7 @@
                 <x-fa::field label="Kategorie" for="wissen-kategorie">
                     <x-fa::select id="wissen-kategorie" wire:model.live="filterCategory" size="sm" data-wissen-filter-kategorie>
                         <option value="">Alle Kategorien</option>
-                        @foreach($kategorien as $kat)
+                        @foreach($filterKategorien as $kat)
                             <option value="{{ $kat->slug }}">{{ $kat->label }}</option>
                         @endforeach
                     </x-fa::select>
@@ -129,6 +130,9 @@
                         <x-fa::empty compact icon="heroicon-o-magnifying-glass" title="Keine Treffer">Suche oder Filter lockern.</x-fa::empty>
                     @endforelse
                 </div>
+                @if($seiten && $docs->hasPages())
+                    <div class="pt-2 border-t border-[var(--fa-line)]" data-wissen-seiten>{{ $docs->links('foodalchemist::components.fa.pagination') }}</div>
+                @endif
             </div>
         </x-ui-page-sidebar>
     </x-slot>
@@ -481,7 +485,9 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        {{-- Ansicht zuerst: sie ist der Normalfall, Bearbeiten die Ausnahme. --}}
+                        {{-- Ansicht zuerst: sie ist der Normalfall, Bearbeiten die Ausnahme. Bearbeiten/Speichern nur mit
+                             Schreibrecht (io 16.10.: Kunden-Team sah die Knöpfe an globalem Wissen; save() prüft serverseitig ohnehin). --}}
+                        @if($editable || $creating)
                         <div role="group" aria-label="Darstellung" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
                             <button type="button" wire:click="$set('vorschau', true)" aria-pressed="{{ $vorschau ? 'true' : 'false' }}"
                                     class="h-8 px-3 rounded-[5px] text-[length:var(--fa-text-md)] font-medium transition-colors {{ $vorschau ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}"
@@ -490,6 +496,7 @@
                                     class="h-8 px-3 rounded-[5px] text-[length:var(--fa-text-md)] font-medium transition-colors {{ ! $vorschau ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}"
                                     data-wissen-modus="bearbeiten">Bearbeiten</button>
                         </div>
+                        @endif
 
                         {{-- Aktivieren ist Kuration: eigener, sichtbarer Knopf, wirkt sofort (toggleActive prüft das Schreibrecht). --}}
                         @if($editable && ! $creating && $selected)
@@ -518,7 +525,9 @@
                         @endif
 
                         {{-- Speichern bleibt auch in der Ansicht sichtbar: der Umschalter schickt ungespeicherte Änderungen mit. --}}
-                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="save" data-wissen-save>Speichern</x-fa::button>
+                        @if($editable || $creating)
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="save" data-wissen-save>Speichern</x-fa::button>
+                        @endif
                     </div>
                 </div>
 
