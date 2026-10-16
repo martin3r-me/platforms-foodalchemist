@@ -67,7 +67,8 @@ class NonFoodKiBatchJob implements ShouldQueue
 
         // Modell kommt aus der KI-Klasse des Prompt-Keys (la.nonfood = leicht), kein eigener Schalter.
         try {
-            $v = $ki->propose('la.nonfood', ['lieferanten' => $lieferanten, 'artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()]);
+            $v = $ki->propose('la.nonfood', ['lieferanten' => $lieferanten, 'artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()],
+                ['verursacher' => 'plattform']);   // globaler Stamm-Lauf: nicht abrechenbar
         } catch (\Throwable $e) {
             return;   // roter/deaktivierter Call = No-op; die Artikel bleiben in der Prüfliste
         }

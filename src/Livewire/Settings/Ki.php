@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\AiCostCalculator;
+use Platform\FoodAlchemist\Services\Ai\KiAbrechnungService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Support\KiKlassen;
@@ -34,6 +35,9 @@ class Ki extends Component
 
     /** Nutzungs-Zeitraum: '7' | '30' | '90' | 'all' (Tage; all = gesamte Historie). */
     public string $zeitraum = '30';
+
+    /** Abrechnung je Mandant (nur Master-Team): 'monat' (laufender Kalendermonat) | 'vormonat' | '30' | '90' | 'all'. */
+    public string $abrechnungZeitraum = 'monat';
 
     /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
     public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
@@ -185,9 +189,25 @@ class Ki extends Component
         $auditOhnePrompt = collect([...RecipeImageService::BILD_FEATURES, 'voice.command']);
         $registryLuecken = $statistik->pluck('feature')->unique()->diff($registry->keys()->merge($auditOhnePrompt))->sort()->values();
 
+        // KI-Abrechnung je Mandant: nur für das Master-Team (Plattform-Betreiber), der Verbrauch fremder Mandanten bleibt sonst unsichtbar
+        $abrechnung = null;
+        $abrechnungOptionen = ['monat' => 'Dieser Monat', 'vormonat' => 'Vormonat', '30' => 'Letzte 30 Tage', '90' => 'Letzte 90 Tage', 'all' => 'Gesamte Historie'];
+        if ($stammSicht && Schema::hasColumn('foodalchemist_ai_call_log', 'verursacher')) {
+            [$von, $bis] = match ($this->abrechnungZeitraum) {
+                'vormonat' => [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()],
+                '30' => [now()->subDays(30), now()],
+                '90' => [now()->subDays(90), now()],
+                'all' => [now()->setDate(2000, 1, 1)->startOfDay(), now()],
+                default => [now()->startOfMonth(), now()],
+            };
+            $abrechnung = app(KiAbrechnungService::class)->auswertung($von, $bis) + ['von' => $von, 'bis' => $bis];
+        }
+
         return view('foodalchemist::livewire.settings.ki', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'stammSicht' => $stammSicht,
+            'abrechnung' => $abrechnung,
+            'abrechnungOptionen' => $abrechnungOptionen,
             'kosten' => $kosten,
             'kostenGesamt' => $bekannteKosten->sum(),
             'kostenUnbekannt' => $kosten->count() - $bekannteKosten->count(),

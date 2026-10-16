@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Services\BausteinFolgeService;
  */
 class BausteinFolgeJob implements ShouldQueue, ShouldBeUnique
 {
-    use Dispatchable, InteractsWithQueue, Queueable;
+    use Dispatchable, InteractsWithQueue, Queueable, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     public int $uniqueFor = 300;
 

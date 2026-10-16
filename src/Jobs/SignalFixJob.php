@@ -27,7 +27,7 @@ use Platform\FoodAlchemist\Services\SignalFixService;
  */
 class SignalFixJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     public int $timeout = 600;   // Bulk-Recompute kann dauern (async)
 

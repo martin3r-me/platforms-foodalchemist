@@ -593,7 +593,7 @@ class VoiceModal extends Component
     private function protokolliereTts(string $provider, int $elapsedMs, bool $erfolg, ?string $fehlerText = null): void
     {
         try {
-            DB::table('foodalchemist_ai_call_log')->insert([
+            DB::table('foodalchemist_ai_call_log')->insert(self::mitVerursacher([
                 'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                 'team_id' => Auth::user()?->currentTeamRelation?->id,
                 'user_id' => Auth::id(),
@@ -604,7 +604,7 @@ class VoiceModal extends Component
                 'error' => $fehlerText !== null ? mb_strimwidth($fehlerText, 0, 2000, '…') : null,
                 'elapsed_ms' => $elapsedMs,
                 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            ]));
         } catch (\Throwable) {
             // Audit darf die eigentliche Aktion nie reissen.
         }
@@ -860,6 +860,14 @@ class VoiceModal extends Component
         $this->fehler = null;
     }
 
+    /** KI-Abrechnung: Verursacher an die direkt geschriebenen Log-Zeilen (Sprachbefehl-TTS/Schreibaktion); Token und Preis gibt es hier nicht. */
+    private static function mitVerursacher(array $zeile): array
+    {
+        return \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'abrechnung_team_id')
+            ? $zeile + \Platform\FoodAlchemist\Support\KiVerursacher::aufloesen()
+            : $zeile;
+    }
+
     /**
      * Eigener, schlanker Audit-Trail für tatsächlich ausgeführte Schreibvorschläge — getrennt
      * vom `voice.command`-Log des Tool-Loops (der läuft schon, bevor der Mensch bestätigt hat).
@@ -868,7 +876,7 @@ class VoiceModal extends Component
     private function protokolliereSchreibaktion(string $tool, int $elapsedMs, bool $erfolg): void
     {
         try {
-            DB::table('foodalchemist_ai_call_log')->insert([
+            DB::table('foodalchemist_ai_call_log')->insert(self::mitVerursacher([
                 'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                 'team_id' => Auth::user()?->currentTeamRelation?->id,
                 'user_id' => Auth::id(),
@@ -878,7 +886,7 @@ class VoiceModal extends Component
                 'response_summary' => mb_strimwidth($tool . ($erfolg ? ' — ausgeführt' : ' — fehlgeschlagen'), 0, 200, '…'),
                 'elapsed_ms' => $elapsedMs,
                 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            ]));
         } catch (\Throwable) {
             // Audit darf die eigentliche Aktion nie reissen.
         }

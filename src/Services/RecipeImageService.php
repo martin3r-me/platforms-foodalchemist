@@ -509,6 +509,9 @@ PROMPT);
             if ($stilFilesUsed !== [] && Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_used')) {
                 $values['knowledge_used'] = json_encode($stilFilesUsed);
             }
+            if (Schema::hasColumn('foodalchemist_ai_call_log', 'abrechnung_team_id')) {
+                $values += \Platform\FoodAlchemist\Support\KiAbrechnung::fuerLogZeile($feature, self::MODEL, []);   // Bildpreis je Aufruf aus bildkosten_usd
+            }
             DB::table('foodalchemist_ai_call_log')->insert($values);
         } catch (\Throwable) {
             // Log ist Beiwerk — nie blockierend.
