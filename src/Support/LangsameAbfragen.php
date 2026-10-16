@@ -54,12 +54,34 @@ final class LangsameAbfragen
         \Illuminate\Support\Facades\DB::listen(fn (QueryExecuted $q) => self::abfrage($q));
 
         $events = $app['events'];
-        $events->listen(\Illuminate\Queue\Events\JobProcessing::class, fn ($e) => self::beginne('job:' . $e->job->resolveName()));
-        $events->listen([\Illuminate\Queue\Events\JobProcessed::class, \Illuminate\Queue\Events\JobFailed::class], fn () => self::abschliessen());
+        // Nie einen Job stören: aus = sofort zurück; der Job-Name ist Komfort und darf scheitern (#457-Rotfall: Test-Job
+        // ohne 'job' im Payload → resolveName() wirft „Undefined array key“).
+        $events->listen(\Illuminate\Queue\Events\JobProcessing::class, function ($e) {
+            if (self::aktiv()) {
+                self::beginne('job:' . self::jobName($e->job ?? null));
+            }
+        });
+        $events->listen([\Illuminate\Queue\Events\JobProcessed::class, \Illuminate\Queue\Events\JobFailed::class], function () {
+            if (self::aktiv()) {
+                self::abschliessen();
+            }
+        });
         $events->listen(\Illuminate\Console\Events\CommandStarting::class, function ($e) {
             self::$basisEingang = 'artisan:' . ($e->command ?? '?');
         });
         $app->terminating(fn () => self::abschliessen());
+    }
+
+    /** Name des Jobs fürs Log — fällt bei kaputtem/ungewöhnlichem Payload auf die Klasse bzw. '?' zurück, wirft nie. */
+    public static function jobName(mixed $job): string
+    {
+        try {
+            return (string) $job->resolveName();
+        } catch (\Throwable $e) {
+            unset($e);   // bewusst still: Messung darf den Job nie stören
+
+            return is_object($job) ? $job::class : '?';
+        }
     }
 
     public static function aktiv(): bool
