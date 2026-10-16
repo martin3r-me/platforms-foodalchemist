@@ -34,7 +34,7 @@ use Platform\FoodAlchemist\Services\FoodbookService;
  */
 class MaterializeIdeaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     /** < Worker-Timeout (600 s), > typischer Lauf (~25 s + Nachbearbeitung). */
     public int $timeout = 300;

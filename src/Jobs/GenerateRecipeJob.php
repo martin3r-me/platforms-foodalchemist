@@ -33,7 +33,7 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  */
 class GenerateRecipeJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     /**
      * Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. War 300 s — Lauf 71 (demo,
