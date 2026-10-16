@@ -26,6 +26,12 @@ class StammPaket extends Component
 
     public string $lieferantenSuche = '';
 
+    /** Liste auf die aktuell angehakten Lieferanten einschränken. */
+    public bool $nurGewaehlte = false;
+
+    /** Meiste Artikel zuerst (sonst A–Z). */
+    public bool $nachArtikel = false;
+
     /** @var list<int> Auswahl im offenen Panel (Checkboxen) */
     public array $auswahl = [];
 
@@ -119,6 +125,22 @@ class StammPaket extends Component
         }
     }
 
+    /** Ansicht der Liste: „nur gewählte" und Sortierung wirken auf die Anzeige, nie auf die gespeicherte Freischaltung. */
+    private function lieferantenAnsicht(array $daten): array
+    {
+        $zeilen = collect($daten['lieferanten']);
+        if ($this->nurGewaehlte) {
+            $gewaehlt = array_map('intval', $this->auswahl);
+            $zeilen = $zeilen->filter(fn ($z) => in_array($z['id'], $gewaehlt, true));
+        }
+        if ($this->nachArtikel) {
+            $zeilen = $zeilen->sortByDesc('artikel');
+        }
+        $daten['lieferanten'] = $zeilen->values()->all();
+
+        return $daten;
+    }
+
     private function istAdmin(): bool
     {
         $user = Auth::user();
@@ -145,7 +167,7 @@ class StammPaket extends Component
         return view('foodalchemist::livewire.verwaltung.stamm-paket', [
             'admin' => $admin,
             'mandanten' => $admin ? $svc->uebersicht() : [],
-            'lieferantenPanel' => ($lt = $this->lieferantenTeam()) ? ['team' => $lt, 'daten' => $svc->lieferanten($lt, $this->lieferantenSuche)] : null,
+            'lieferantenPanel' => ($lt = $this->lieferantenTeam()) ? ['team' => $lt, 'daten' => $this->lieferantenAnsicht($svc->lieferanten($lt, $this->lieferantenSuche))] : null,
             'vorschau' => $admin && $this->vorschauTeamId !== null && ($t = Team::find($this->vorschauTeamId)) ? ['team' => $t, 'daten' => $svc->vorschauAbbestellen($t)] : null,
         ]);
     }

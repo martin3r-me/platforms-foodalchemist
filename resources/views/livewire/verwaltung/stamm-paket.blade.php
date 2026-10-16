@@ -46,23 +46,42 @@
                 @if(! $ld['gebucht'])
                     <x-fa::notice tone="info">Erst das Stamm-Paket buchen, dann Lieferanten freischalten.</x-fa::notice>
                 @else
-                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch] pb-2">Nur freigeschaltete Lieferanten (und ihre Artikel, auch künftige) sehen Mandant und Unter-Teams. Neue Lieferanten erscheinen hier automatisch, unfreigeschaltet. Grundprodukte bleiben für alle sichtbar.</p>
+                    <div class="max-w-3xl" data-stamm-paket-lieferanten-wrap>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch] pb-3">Nur freigeschaltete Lieferanten (und ihre Artikel, auch künftige) sehen Mandant und Unter-Teams. Neue Lieferanten erscheinen hier automatisch, unfreigeschaltet. Grundprodukte bleiben für alle sichtbar.</p>
                     <div class="flex flex-wrap items-center gap-2 pb-2">
-                        <input type="search" wire:model.live.debounce.300ms="lieferantenSuche" placeholder="Lieferant suchen …" class="fa-input" data-stamm-paket-lieferanten-suche>
+                        <div class="relative flex-1 min-w-[12rem]">
+                            <label for="lieferanten-suche" class="sr-only">Lieferant suchen</label>
+                            @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                            <x-fa::input id="lieferanten-suche" type="search" size="sm" wire:model.live.debounce.300ms="lieferantenSuche" placeholder="Lieferant suchen" class="pl-8" data-stamm-paket-lieferanten-suche />
+                        </div>
                         <x-fa::button size="sm" variant="ghost" wire:click="alleWaehlen" data-stamm-paket-lieferanten-alle>Alle</x-fa::button>
                         <x-fa::button size="sm" variant="ghost" wire:click="keineWaehlen" data-stamm-paket-lieferanten-keine>Keine</x-fa::button>
+                        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums whitespace-nowrap" data-stamm-paket-lieferanten-zaehler>{{ count($auswahl) }} von {{ $ld['gesamt'] }} gewählt</span>
                     </div>
-                    <ul class="max-h-[24rem] overflow-y-auto divide-y divide-[var(--fa-line)]" data-stamm-paket-lieferanten-liste>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pb-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" wire:model.live="nurGewaehlte" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-stamm-paket-nur-gewaehlte> Nur gewählte
+                        </label>
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" wire:model.live="nachArtikel" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-stamm-paket-sort-artikel> Meiste Artikel zuerst
+                        </label>
+                    </div>
+                    @if($ld['lieferanten'] === [])
+                        <x-fa::empty compact icon="heroicon-o-truck" title="Keine Lieferanten in dieser Ansicht">Suche oder Filter anpassen.</x-fa::empty>
+                    @else
+                    <ul class="max-h-[24rem] overflow-y-auto grid md:grid-cols-2 gap-x-3 border border-[var(--fa-line)] rounded-[var(--fa-radius-control)] p-1" data-stamm-paket-lieferanten-liste>
                         @foreach($ld['lieferanten'] as $l)
-                            <li wire:key="spl-{{ $l['id'] }}" class="py-1.5">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" value="{{ $l['id'] }}" wire:model="auswahl" data-stamm-paket-lieferant="{{ $l['id'] }}">
-                                    <span class="flex-1">{{ $l['name'] }}</span>
-                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $l['artikel'] }} Artikel</span>
+                            <li wire:key="spl-{{ $l['id'] }}">
+                                <label class="flex items-center gap-2 px-2 py-1 rounded-[var(--fa-radius-control)] cursor-pointer text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                                    <input type="checkbox" value="{{ $l['id'] }}" wire:model.live="auswahl" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-stamm-paket-lieferant="{{ $l['id'] }}">
+                                    <span class="truncate">{{ $l['name'] }}</span>
+                                    <span class="ml-auto pl-2 text-[var(--fa-ink-3)] tabular-nums whitespace-nowrap">{{ $l['artikel'] }} Artikel</span>
                                 </label>
                             </li>
                         @endforeach
                     </ul>
+                    @endif
+                    </div>
                 @endif
                 <div class="flex gap-2 pt-3">
                     <x-fa::button variant="ghost" wire:click="lieferantenSchliessen">Schließen</x-fa::button>

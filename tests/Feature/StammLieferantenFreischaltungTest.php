@@ -152,3 +152,16 @@ it('UI: Inhaber sieht das Panel nicht', function () {
     Livewire::actingAs($this->inhaber)->withQueryParams(['lieferanten' => $this->soul->id])->test(StammPaketKomponente::class)
         ->assertDontSee('Lieferanten: Soulkitchen');
 });
+
+it('UI: Zähler, „Nur gewählte" und Sortierung nach Artikelzahl wirken auf die Anzeige, nicht auf die Freischaltung', function () {
+    ($this->svc)()->buchen($this->soul, $this->admin);
+    ($this->la)($this->hanos, 'H2');   // Hanos 2 Artikel, Kluth 1
+
+    $c = Livewire::actingAs($this->admin)->withQueryParams(['lieferanten' => $this->soul->id])->test(StammPaketKomponente::class);
+    $c->assertSee('0 von 2 gewählt')->assertSeeHtmlInOrder(['Hanos', 'Kluth']);
+
+    $c->set('auswahl', [$this->kluth->id])->assertSee('1 von 2 gewählt');
+    $c->set('nurGewaehlte', true)->assertSee('Kluth')->assertDontSee('Hanos');
+    $c->set('nurGewaehlte', false)->set('nachArtikel', true)->assertSeeHtmlInOrder(['Hanos', 'Kluth']);
+    expect(($this->sup)($this->soul))->toBe([]);   // nichts gespeichert, solange nicht „Speichern"
+});
