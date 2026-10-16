@@ -106,6 +106,9 @@ class Index extends Component
     /** Composer-Fokus: aktiv fokussierter Anker (Klick im Netz) — Netz dimmt auf ihn, Picker rankt relativ zu ihm. */
     public ?int $composerFocus = null;
 
+    /** „Passt das zusammen?" als Gericht (Teller aus Komponenten) oder als Basisrezept (eine Zubereitung) — Dominique 16.10. */
+    public string $composerModus = \Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::MODUS_GERICHT;
+
     /**
      * Foodpairing-Composer B1: Seed-Anker-Slugs für den GERADE laufenden Go. Bewusst `protected`
      * (Livewire serialisiert es NICHT → strikt transient, nur innerhalb des composerGeneriere-Requests
@@ -4416,7 +4419,7 @@ class Index extends Component
             if (count($composerIds) >= 2) {
                 // Spec 60: dieselbe Aussage wie im Gericht-Panel und im MCP (composer.KOHAESION).
                 $composerKombination = app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)
-                    ->datenAusAnkern($composerIds, null, null, (int) $team->id);
+                    ->datenAusAnkern($composerIds, null, null, (int) $team->id, $this->composerModus);
             }
             // Fokus (falls gesetzt) → Picker-Badge/Sortierung relativ zum fokussierten Anker.
             $composerBrowse = $pairing->composerAnkerBrowse(

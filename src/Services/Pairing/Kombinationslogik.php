@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Enums\Achse;
 use Platform\FoodAlchemist\Enums\AussageTyp;
 use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Grundlage;
+use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Enums\Verfahren;
 use Platform\FoodAlchemist\Enums\WissensStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -40,6 +41,13 @@ final class Kombinationslogik
 
     /** Ab diesem Anteil ★★-Masse „teilen sie Grund-Aromen" (leise, keine Empfehlung, zählt nicht). */
     public const PASST_AB = 0.10;
+
+    public const MODUS_GERICHT = 'gericht';
+
+    public const MODUS_BASISREZEPT = 'basisrezept';
+
+    /** Basisrezept-Sicht: nur die Geschmacks-Balance in einer Zubereitung (keine Textur, kein Röstaroma, kein Salz). */
+    public const GESCHMACK_BALANCE = ['saeure', 'suesse', 'fett', 'umami', 'bitter', 'schaerfe'];
 
     /** Dossier-Hinweise je Gericht (Kurator 15.10.: mehr wird Rauschen). */
     public const MAX_HINWEISE = 3;
@@ -326,7 +334,8 @@ final class Kombinationslogik
             usort($kandidaten, fn ($x, $y) => [$y['sort'], $x['recipe_id']] <=> [$x['sort'], $y['recipe_id']]);
             $out[] = [
                 'achse' => $b['achse'], 'staerke' => $b['staerke'], 'deckung' => $b['deckung'] ?? BedarfDeckung::Partner->value,
-                'formwechsel' => $this->formwechsel($teile, $b['achse']),
+                'formwechsel' => $this->formwechsel($teile, $b['achse'],
+                    ($b['deckung'] ?? null) === BedarfDeckung::Zubereitung->value ? (string) ($b['bestandteil'] ?? '') : null),
                 'basisrezepte' => array_map(function ($k) {
                     unset($k['sort']);
 
@@ -483,11 +492,116 @@ final class Kombinationslogik
      * @param  list<int>  $ankerIds
      * @return array<string, mixed>
      */
-    public function datenAusAnkern(array $ankerIds, ?string $diaet = null, ?string $richtung = null, ?int $teamId = null): array
+    public function datenAusAnkern(array $ankerIds, ?string $diaet = null, ?string $richtung = null, ?int $teamId = null, string $modus = self::MODUS_GERICHT): array
     {
+        $modus = $modus === self::MODUS_BASISREZEPT ? self::MODUS_BASISREZEPT : self::MODUS_GERICHT;
         $analyse = $this->analysiereBestandteile($this->bestandteileAusAnkern($ankerIds));
+
+        // Composer (Dominique 16.10.): Salz ist nie eine Pairing-Frage — abgeschmeckt wird beim Kochen.
+        // Basisrezept: nur die Geschmacks-Balance in sich; Zubereitung („rösten") wird zum Technik-Hinweis.
+        $technik = [];
+        $behalten = function (array $b) use ($modus, &$technik): bool {
+            if ($b['achse'] === Achse::Salz->value) {
+                return false;
+            }
+            if ($modus === self::MODUS_BASISREZEPT) {
+                if (($b['deckung'] ?? null) !== BedarfDeckung::Partner->value) {
+                    $technik[] = "{$b['label']}: ".Achse::from($b['achse'])->label().' über die Zubereitung';
+                }
+
+                return in_array($b['achse'], self::GESCHMACK_BALANCE, true) && ($b['deckung'] ?? null) !== BedarfDeckung::Zubereitung->value;
+            }
+
+            return true;
+        };
+        $analyse['offene_bedarfe'] = array_values(array_filter($analyse['offene_bedarfe'], $behalten));
+        $offen = array_flip(array_column($analyse['offene_bedarfe'], 'achse'));
+        $analyse['aussagen'] = array_values(array_filter($analyse['aussagen'], fn (Aussage $a) => match ($a->typ) {
+            AussageTyp::BedarfOffen => isset($offen[(string) $a->achse]),
+            AussageTyp::Spannung => $a->achse !== Achse::Salz->value,
+            default => true,
+        }));
+        $analyse['zusammenfassung'] = array_count_values(array_map(fn (Aussage $a) => $a->typ->value, $analyse['aussagen']));
+
         $out = $this->ausgabe($analyse, 'auswahl');
-        $out['vorschlaege'] = $this->vorschlaegeFuer($analyse, $diaet, $richtung, $teamId);
+        $out['modus'] = $modus;
+        $out['urteil'] = $this->urteil($analyse, $modus);
+        $out['technik'] = array_values(array_unique($technik));
+        $out['vorschlaege'] = $modus === self::MODUS_GERICHT
+            ? $this->vorschlaegeFuer($analyse, $diaet, $richtung, $teamId)
+            : $this->zutatenVorschlaege($analyse);
+
+        return $out;
+    }
+
+    /**
+     * Ein Satz oben (Dominique 16.10.: „würdest du als User verstehen, ob das eine gute Kombi ist?"):
+     * Kern = Zutaten mit ★★★ oder Klassiker zu einer anderen, Akzent/Außenseiter = der Rest, dazu das, was noch fehlt.
+     * Im Basisrezept ist ein Außenseiter eine Warnung (eine Zubereitung), im Gericht ein Akzent.
+     *
+     * @return array{kern: list<string>, paare: list<string>, aussen: list<string>, fehlt: list<string>, text: string, ton: ?string}
+     */
+    private function urteil(array $analyse, string $modus): array
+    {
+        $label = array_column($analyse['bestandteile'], 'label', 'schluessel');
+        $verbunden = [];
+        $paare = [];
+        foreach ($analyse['aussagen'] as $a) {
+            if (in_array($a->typ, [AussageTyp::Harmoniert, AussageTyp::Kombination], true) && count($a->bestandteile) === 2) {
+                foreach ($a->bestandteile as $s) {
+                    $verbunden[(string) $s] = true;
+                }
+                $paar = implode(' + ', array_map(fn ($s) => (string) ($label[(string) $s] ?? $s), $a->bestandteile));
+                $paare[$paar] = true;
+            }
+        }
+        $mit = array_values(array_filter($analyse['bestandteile'], fn ($t) => $t['profil'] !== null));
+        $kern = array_values(array_map(fn ($t) => $t['label'], array_filter($mit, fn ($t) => isset($verbunden[(string) $t['schluessel']]))));
+        $aussen = array_values(array_map(fn ($t) => $t['label'], array_filter($mit, fn ($t) => ! isset($verbunden[(string) $t['schluessel']]))));
+        $fehlt = array_values(array_unique(array_map(fn ($b) => Achse::from($b['achse'])->label(), $analyse['offene_bedarfe'])));
+
+        $teile = [];
+        if ($paare !== []) {
+            // die Paare selbst — „Kern: A, B, C, D" täuschte einen Block vor, wo zwei getrennte Paare stehen
+            $teile[] = 'Harmonieren: '.implode(' · ', array_slice(array_keys($paare), 0, 3)).(count($paare) > 3 ? ' …' : '');
+        }
+        if ($aussen !== []) {
+            $teile[] = ($modus === self::MODUS_BASISREZEPT ? 'passt nicht zum Rest: ' : 'Akzent ohne gemessenen Bezug: ').implode(', ', $aussen);
+        }
+        $teile[] = $fehlt === [] ? 'nichts fehlt' : 'Fehlt noch: '.implode(', ', $fehlt);
+        if ($kern === [] && count($mit) > 1) {
+            array_unshift($teile, 'Keine der Zutaten harmoniert gemessen mit einer anderen');
+        }
+        return ['kern' => $kern, 'paare' => array_keys($paare), 'aussen' => $aussen, 'fehlt' => $fehlt, 'text' => implode(' · ', $teile),
+            'ton' => $modus === self::MODUS_BASISREZEPT && $aussen !== [] ? 'warn' : null];
+    }
+
+    /**
+     * Basisrezept-Sicht: Vorschläge sind weitere ZUTATEN (Anker), keine Basisrezepte — je offener Achse
+     * die Kontrast-Lieferanten, die ★★★ zur Auswahl haben oder Klassiker sind (dieselbe Zulassung wie im Netz).
+     *
+     * @return list<array{achse: string, staerke: string, deckung: string, formwechsel: list<string>, basisrezepte: list<array>, zutaten: list<string>}>
+     */
+    private function zutatenVorschlaege(array $analyse, int $je = 4): array
+    {
+        $auswahl = array_values(array_filter(array_map(fn ($t) => (int) substr((string) $t['schluessel'], 1), $analyse['bestandteile'])));
+        $anker = app(AnkerGraph::class);
+        $out = [];
+        foreach ($analyse['offene_bedarfe'] as $b) {
+            $lieferanten = $anker->beziehungen([(int) $b['von']], Kantenart::Kontrast)->where('achse', $b['achse'])
+                ->reject(fn ($k) => in_array($k->zu, $auswahl, true))->pluck('zu')->all();
+            $passt = $lieferanten === [] ? [] : array_flip(array_merge(
+                $anker->kanten($lieferanten, $auswahl, AnkerGraph::HARMONIERT)->pluck('von')->all(),
+                $anker->beziehungen($lieferanten, Kantenart::Kombination, $auswahl)->pluck('von')->all(),
+                $anker->beziehungen($auswahl, Kantenart::Kombination, $lieferanten)->pluck('zu')->all(),
+                array_keys($anker->gruppenKlassikerZwischen($lieferanten, $auswahl)),
+            ));
+            $ids = array_slice(array_values(array_filter($lieferanten, fn ($id) => isset($passt[$id]))), 0, $je);
+            $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $ids)->pluck('display_de', 'id');
+            $out[] = ['achse' => $b['achse'], 'staerke' => $b['staerke'], 'deckung' => $b['deckung'] ?? BedarfDeckung::Partner->value,
+                'formwechsel' => [], 'basisrezepte' => [],
+                'zutaten' => array_values(array_filter(array_map(fn ($id) => $namen[$id] ?? null, $ids)))];
+        }
 
         return $out;
     }
@@ -548,12 +662,18 @@ final class Kombinationslogik
      * @param  list<array>  $teile
      * @return list<string>
      */
-    private function formwechsel(array $teile, string $achse): array
+    private function formwechsel(array $teile, string $achse, ?string $nurSchluessel = null): array
     {
         $hinweise = [];
         foreach ($teile as $t) {
             $kern = $t['profil']['anker'][0] ?? null;
             if ($kern === null || $kern['anteil'] < RezeptGraph::KERN) {
+                continue;
+            }
+            // Zubereitungs-Bedarf: nur der Bestandteil selbst kann ihn über die Zubereitung decken;
+            // wer die Achse schon liefert (gegrilltes Steak = Röstaroma), braucht keinen Formwechsel.
+            if (($nurSchluessel !== null && (string) $t['schluessel'] !== $nurSchluessel)
+                || (float) ($t['profil']['eigenschaften'][$achse]['stufe'] ?? 0) >= 2) {
                 continue;
             }
             $anker = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $kern['anchor_id'])->first(['id', 'display_de', 'grundname']);
@@ -562,6 +682,7 @@ final class Kombinationslogik
             }
             if ($achse === Achse::Roestaroma->value && $anker->grundname !== null) {
                 $variante = DB::table('foodalchemist_vocab_pairing_anchors')->where('grundname', $anker->grundname)
+                    ->where('id', '!=', $anker->id)   // nie die schon gewählte Variante selbst vorschlagen
                     ->whereIn('verfahren', array_map(fn ($v) => $v->value, self::ROESTAROMA_VERFAHREN))->orderBy('id')->value('display_de');
                 if ($variante !== null) {
                     $hinweise[] = "{$t['label']}: als „{$variante}\" zubereiten";
