@@ -36,6 +36,26 @@ class FoodAlchemistSupplierItem extends Model
             ->where(fn ($w) => $w->whereNull("{$t}.lieferstatus")->orWhere("{$t}.lieferstatus", '!=', 'eingestellt'));
     }
 
+    /**
+     * Lieferstatus aus Necta in Worten: „Eingestellt seit 14.10.2026“ bzw. „Läuft aus seit …“. `lieferstatus_seit` liegt in UTC
+     * (wie status_valid_from), angezeigt wird das Datum in Europe/Berlin. null = gelistet.
+     *
+     * @return ?array{status:string, seit_ts:?int, seit:?string, text:string, kurz:string}
+     */
+    public function lieferstatusInfo(): ?array
+    {
+        $status = (string) $this->lieferstatus;
+        if (! in_array($status, ['eingestellt', 'auslaufend'], true)) {
+            return null;
+        }
+        $ts = $this->lieferstatus_seit !== null ? \Illuminate\Support\Carbon::parse($this->lieferstatus_seit, 'UTC')->getTimestamp() : null;
+        $seit = $ts !== null ? \Illuminate\Support\Carbon::createFromTimestamp($ts, 'Europe/Berlin')->format('d.m.Y') : null;
+        $wort = $status === 'eingestellt' ? 'Eingestellt' : 'Läuft aus';
+
+        return ['status' => $status, 'seit_ts' => $ts, 'seit' => $seit, 'text' => $wort.($seit !== null ? ' seit '.$seit : ''),
+            'kurz' => $wort.($seit !== null ? ' seit '.substr($seit, 0, 6) : '')];
+    }
+
     /** Jod (15.10.2026): Ändert sich die Zutatenliste, wird `iodized_abgeleitet` neu abgeleitet (Eloquent-Pfade: UI, MCP, Datei-Import). */
     protected static function booted(): void
     {

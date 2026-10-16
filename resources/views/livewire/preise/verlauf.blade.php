@@ -64,6 +64,10 @@
                             <path d="{{ $l['luecken'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="1.25" stroke-dasharray="3 4" stroke-opacity="0.6" vector-effect="non-scaling-stroke" data-preisverlauf-luecke />
                         @endif
                         <path d="{{ $l['pfad'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="{{ $l['breite'] }}" stroke-opacity="{{ $l['gedaempft'] ? '0.65' : '1' }}" stroke-linejoin="miter" stroke-linecap="butt" vector-effect="non-scaling-stroke" />
+                        @if($l['marker'])
+                            <line x1="{{ $l['marker']['x'] }}" x2="{{ $l['marker']['x'] }}" y1="0" y2="1000" stroke="{{ $l['marker']['art'] === 'eingestellt' ? 'var(--fa-crit)' : 'var(--fa-warn)' }}"
+                                  stroke-width="1.5" stroke-dasharray="2 3" vector-effect="non-scaling-stroke" data-preisverlauf-marker="{{ $l['marker']['art'] }}" />
+                        @endif
                         @if($l['trend'])
                             <line x1="{{ $l['trend']['x1'] }}" y1="{{ $l['trend']['y1'] }}" x2="{{ $l['trend']['x2'] }}" y2="{{ $l['trend']['y2'] }}" stroke="{{ $l['farbe'] }}"
                                   stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" data-preisverlauf-trend />
@@ -77,6 +81,15 @@
                     </g>
                 @endforeach
             </svg>
+            {{-- Lieferstatus-Beschriftung (HTML, skaliert nicht mit): am Marker, rechts der Linie, am rechten Rand linksbündig nach links --}}
+            <div style="grid-column: 2; grid-row: 1; position: relative; pointer-events: none; height: {{ $diagramm['hoehe'] }}px;" data-preisverlauf-marker-labels>
+                @foreach($diagramm['linien'] as $l)
+                    @if($l['marker'])
+                        <span style="position: absolute; top: 0.15rem; {{ $l['marker']['x'] > 650 ? 'right: '.(100 - $l['marker']['x'] / 10).'%; padding-right: 0.3rem; text-align: right;' : 'left: '.($l['marker']['x'] / 10).'%; padding-left: 0.3rem;' }} white-space: nowrap; font-size: var(--fa-text-sm); font-weight: 500; color: {{ $l['marker']['art'] === 'eingestellt' ? 'var(--fa-crit)' : 'var(--fa-warn)' }};"
+                              data-preisverlauf-marker-label>{{ $l['marker']['label'] }}</span>
+                    @endif
+                @endforeach
+            </div>
             {{-- Tooltip am Diagramm-Container (relative), an der Mausposition, an den Rändern geklemmt --}}
             <div x-show="tip" x-cloak x-text="tip" role="tooltip" data-preisverlauf-tooltip
                  x-bind:style="'left: ' + Math.max(0, Math.min(mx + 14, $root.clientWidth - $el.offsetWidth)) + 'px; top: ' + Math.max(0, my - 48) + 'px'"
@@ -95,6 +108,9 @@
                     <span class="inline-block h-0.5 w-5 shrink-0 self-center rounded" style="background: {{ $l['farbe'] }}; height: {{ $l['lead'] ? 3 : 2 }}px"></span>
                     <span class="font-medium text-[var(--fa-ink)]">{{ $l['lieferant'] ?? '–' }}</span>
                     <span class="text-[var(--fa-ink-2)]">{{ $l['artikel'] }}</span>
+                    @if($l['lieferstatus'])
+                        <x-fa::badge :tone="$l['lieferstatus']['status'] === 'eingestellt' ? 'crit' : 'warn'" data-legende-lieferstatus>{{ $l['lieferstatus']['text'] }}</x-fa::badge>
+                    @endif
                     @if($l['lead'] && $modus === 'la' && $l['fokus'])
                         <span title="Preis dieses Artikels gilt als EK des Grundprodukts" data-lead-badge><x-fa::badge tone="accent">Lead von {{ $daten['gp_name'] }}</x-fa::badge></span>
                     @elseif($l['lead'] && $modus === 'la')

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Necta;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
+use Platform\FoodAlchemist\Services\DarreichungService;
 use Platform\FoodAlchemist\Services\SignalService;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\ProduktpassSchutz;
@@ -207,6 +208,9 @@ class NectaAbgleichService extends NectaLaufBasis
             }
             // Necta stellt Zeilen um (Preis → läuft aus → eingestellt): Lieferstatus neu ableiten
             $this->lieferstatusZaehlen(app(NectaLieferstatusService::class)->aktualisieren($faArtikelId, $this->teamId, $this->probe, $this->laufId));
+            if (! $this->probe) {
+                app(DarreichungService::class)->nachLaPreisAenderung($faArtikelId);   // Zubehör (Non-Food) an Darreichungen: gezielt neu rechnen (nach dem Lieferstatus)
+            }
 
             return;
         }
@@ -233,6 +237,7 @@ class NectaAbgleichService extends NectaLaufBasis
         // Lieferstatus neu ableiten; bei „eingestellt“ enden auch offene Zeilen ANDEREN Status und die Necta-Historie (Vorgänger
         // oben schließt nur gleichen Status: genau die Lücke, durch die Kluth LA 318750 trotz Eingestellt-Zeile „offen“ blieb)
         $this->lieferstatusZaehlen(app(NectaLieferstatusService::class)->aktualisieren($faArtikelId, $this->teamId, false, $this->laufId));
+        app(DarreichungService::class)->nachLaPreisAenderung($faArtikelId);   // Zubehör (Non-Food) an Darreichungen: gezielt neu rechnen (nach dem Lieferstatus)
     }
 
     /** Unser Stand einer Preiszeile vor dem Update (Kostenverlauf). Nie löschen. */
