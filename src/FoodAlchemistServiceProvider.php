@@ -123,6 +123,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // Bereitschafts-Prüfung für den Cutover (lesend) — GO/NO-GO je Pool.
                 \Platform\FoodAlchemist\Console\EmbeddingCutoverCheckCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
+                \Platform\FoodAlchemist\Console\NonFoodEinrichtenCommand::class,
+                \Platform\FoodAlchemist\Console\NonFoodErkennenCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
                 \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
                 \Platform\FoodAlchemist\Console\TerminologyImportCommand::class,

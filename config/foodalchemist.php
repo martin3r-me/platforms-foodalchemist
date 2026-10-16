@@ -1132,6 +1132,18 @@ return [
                 . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur nach §5-Tiebreaker). '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1).',
         ],
+        // Non-Food-Erkennung am Lieferantenartikel (Stufe 2 nach der Regel): Klassifikator in Stapeln, nur für „unklar“.
+        'la.nonfood' => [
+            'tier' => 'B',
+            'max_tokens' => 3000,
+            'temperature' => 0,
+            'task' => 'Entscheide je Lieferantenartikel, ob er NON-FOOD ist (kein Lebensmittel: Reinigung, Hygiene, Einweg, Verpackung, '
+                . 'Geschirr, Deko, Kleidung, Büro, Kleingeräte) oder FOOD (Lebensmittel und Getränke, auch tiefgekühlt oder in einer '
+                . 'Verpackung wie Beutel, Karton, Eimer, Dose, Schale, Glas). Verpackungswörter in der Bezeichnung sind meist nur das Gebinde '
+                . 'einer Ware (»Rinderknochen TK 5 kg/Karton« ist Food). Rate nicht: ist die Bezeichnung nicht eindeutig, gib eine niedrige '
+                . 'konfidenz an. werte = {urteile: [{id, nonfood: true|false, unterkategorie: eine aus `unterkategorien` oder null, '
+                . 'konfidenz: 0-1, grund: <ein kurzer Satz>}]}. Genau ein Urteil je übergebenem Artikel, id unverändert aus `artikel`.',
+        ],
         'component.replacement_suggest' => [
             'tier' => 'B',
             'max_tokens' => 1800,

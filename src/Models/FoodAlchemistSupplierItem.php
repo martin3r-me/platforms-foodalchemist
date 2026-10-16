@@ -67,6 +67,12 @@ class FoodAlchemistSupplierItem extends Model
         return $this->hasOne(FoodAlchemistSupplierItemStructure::class, 'supplier_item_id');
     }
 
+    /** Non-Food-Urteil (Regel, KI oder von Hand); ohne Zeile gilt der Artikel als Food. */
+    public function nonfood(): HasOne
+    {
+        return $this->hasOne(FoodAlchemistSupplierItemNonfood::class, 'supplier_item_id');
+    }
+
     public function allergens(): HasOne
     {
         return $this->hasOne(FoodAlchemistItemAllergen::class, 'supplier_item_id');

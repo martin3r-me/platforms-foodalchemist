@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
+use Platform\FoodAlchemist\Services\NonFoodService;
 use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\SupplierItemService;
 use Platform\FoodAlchemist\Support\Curate;
@@ -74,6 +75,9 @@ class ItemModal extends Component
     /** Kern-Nährwerte je 100 g (speisen die GP-Aggregation, GL-08) */
     public array $naehrwerte = [];
 
+    /** Non-Food-Urteil: ist ('' = kein Urteil/Food, '1' = Non-Food, '0' = Food) und Unterkategorie der Warengruppe 16. */
+    public array $nonfood = ['ist' => '', 'subkategorie' => ''];
+
     public ?string $fehler = null;
 
     #[On('item-modal.oeffnen')]
@@ -88,6 +92,8 @@ class ItemModal extends Component
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
         $this->naehrwerte = app(SupplierItemService::class)->getNutrition($item);
+        $nf = $item->nonfood;
+        $this->nonfood = ['ist' => $nf?->ist_nonfood === null ? '' : ($nf->ist_nonfood ? '1' : '0'), 'subkategorie' => (string) $nf?->subkategorie];
         $this->dispatch('modal.open', name: 'item-modal');
     }
 
@@ -145,6 +151,7 @@ class ItemModal extends Component
             if ($this->naehrwerte != $svc->getNutrition($item)) {
                 $svc->setNutrition($this->team(), $item, $this->naehrwerte);
             }
+            $this->nonfoodSpeichern($item);
             $this->fehler = null;
             $this->bearbeitenBeenden();   // Spec 65: Speichern beendet die Bearbeitung, der Editor bleibt im Lesemodus offen
             $this->dispatch('item-gespeichert');
@@ -152,6 +159,18 @@ class ItemModal extends Component
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /** Non-Food-Urteil von Hand: nur bei Änderung schreiben (sonst bliebe aus jedem Speichern ein „manuell“ zurück), leer = Urteil zurücknehmen. */
+    private function nonfoodSpeichern(FoodAlchemistSupplierItem $item): void
+    {
+        $nf = $item->nonfood;
+        $alt = ['ist' => $nf?->ist_nonfood === null ? '' : ($nf->ist_nonfood ? '1' : '0'), 'subkategorie' => (string) $nf?->subkategorie];
+        $neu = ['ist' => (string) ($this->nonfood['ist'] ?? ''), 'subkategorie' => (string) ($this->nonfood['subkategorie'] ?? '')];
+        if ($neu === $alt) {
+            return;
+        }
+        app(NonFoodService::class)->setzeManuell($item, $neu['ist'] === '' ? null : $neu['ist'] === '1', $neu['subkategorie'] !== '' ? $neu['subkategorie'] : null);
     }
 
     public function allergeneSpeichern(): void
@@ -385,6 +404,7 @@ class ItemModal extends Component
             'item' => $item,
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
             'historie' => $item !== null ? $preise->historyFor($item->id, $team) : collect(),
+            'nonfoodUnterkategorien' => \Platform\FoodAlchemist\Support\NonFoodRegeln::unterkategorien(),
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
             'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
@@ -406,7 +426,7 @@ class ItemModal extends Component
     private function item(?int $id): FoodAlchemistSupplierItem
     {
         return FoodAlchemistSupplierItem::visibleToTeam($this->team())
-            ->with(['supplier:id,name', 'structure.gp:id,name'])
+            ->with(['supplier:id,name', 'structure.gp:id,name', 'nonfood'])
             ->findOrFail($id);
     }
 
