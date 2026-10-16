@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeSearchService;
 use Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit;
@@ -20,6 +21,22 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class Browser extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use WithPagination;
+
+    /**
+     * Liste ohne Suche seitenweise (Befund io 16.10.: alle ~14.250 sichtbaren Dokumente als Zeile →
+     * 15,5 MB HTML, 71.560 DOM-Knoten, ~26 s bis DOM-ready). Muster wie Gps/Recipes-Browser.
+     */
+    public const JE_SEITE = 100;
+
+    /**
+     * Die Ausnahme „Agenten-Anleitungen (art=ablauf, workflow, gilt_fuer_vorgang) für jedes Team lesbar" (13.10.) gilt
+     * für den Agentenpfad `ablauf.GET`, NICHT für die Anzeige: Kunden-Teams sahen im Browser 17 Master-Anleitungen (io 16.10.).
+     */
+    private const ABLAUF_AUSNAHME = false;
+
+    /** Seitenname in der URL — „page" belegen andere Komponenten der Shell. */
+    public const SEITE = 'seite';
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -169,7 +186,7 @@ class Browser extends Component
     {
         return WissensSichtbarkeit::lesbarOderAlt(
             DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
-            'team_id', Auth::user()?->currentTeamRelation
+            'team_id', Auth::user()?->currentTeamRelation, ablaufAusnahme: self::ABLAUF_AUSNAHME
         )->where('id', $id)->first($spalten);
     }
 
@@ -195,6 +212,27 @@ class Browser extends Component
      * (rendert bei $selected) griffe auf $form['title'] eines leeren Arrays zu (500).
      * Hier laden wir das Form nach, sodass ein direkter Link das Doc korrekt öffnet.
      */
+    // Filter/Suche ändern die Menge → zurück auf Seite 1 (sonst leere Seite 37 nach dem Filtern).
+    public function updatedSearch(): void
+    {
+        $this->resetPage(self::SEITE);
+    }
+
+    public function updatedFilterCategory(): void
+    {
+        $this->resetPage(self::SEITE);
+    }
+
+    public function updatedFilterStatus(): void
+    {
+        $this->resetPage(self::SEITE);
+    }
+
+    public function updatedSemantic(): void
+    {
+        $this->resetPage(self::SEITE);
+    }
+
     public function mount(): void
     {
         if (! request()->has('sem')) {
@@ -508,6 +546,17 @@ class Browser extends Component
     {
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
             ->orderBy('sort_order')->orderBy('label')->get();
+        // Filter: Kunden-Teams sehen nur Kategorien mit für sie sichtbaren Dokumenten (io 16.10.). Beim Anlegen
+        // bleibt der ganze Katalog (Kategorien pflegt der Master); der Master sieht im Filter weiter alle.
+        $team = Auth::user()?->currentTeamRelation;
+        $filterKategorien = WissensSichtbarkeit::darfGlobalSchreiben($team) ? $kategorien : (function () use ($kategorien, $team) {
+            $mitDocs = WissensSichtbarkeit::lesbarOderAlt(
+                DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
+                'team_id', $team, ablaufAusnahme: self::ABLAUF_AUSNAHME
+            )->distinct()->pluck('category')->flip();
+
+            return $kategorien->filter(fn ($k) => isset($mitDocs[$k->slug]))->values();
+        })();
 
         $suche = trim($this->search);
         $spalten = ['id', 'slug', 'title', 'category', 'active', 'char_count'];
@@ -532,7 +581,7 @@ class Browser extends Component
         // teamübergreifend, obwohl save()/toggleActive() schon korrekt scopen.
         $basis = WissensSichtbarkeit::lesbarOderAlt(
             DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
-            'team_id', Auth::user()?->currentTeamRelation
+            'team_id', Auth::user()?->currentTeamRelation, ablaufAusnahme: self::ABLAUF_AUSNAHME
         )
             ->when($this->filterCategory !== '', fn ($q) => $q->where('category', $this->filterCategory))
             ->when($this->filterStatus === 'active', fn ($q) => $q->where('active', true))
@@ -542,7 +591,10 @@ class Browser extends Component
             $hits = app(KnowledgeSearchService::class)->search($basis, $suche, 100, $semanticAktiv, Auth::user()?->currentTeamRelation);
             $docs = collect($hits)->map(static fn ($hit) => (object) $hit);
         } else {
-            $docs = $basis->orderBy('category')->orderBy('title')->get($spalten);
+            // Seitenweise; der Zähler kommt aus total() (COUNT), nicht aus der Liste.
+            // Das Detail ($selected) lädt unabhängig von der Seite — ein Dokument außerhalb bleibt offen.
+            $docs = $basis->orderBy('category')->orderBy('title')->orderBy('id')
+                ->paginate(self::JE_SEITE, $spalten, self::SEITE)->onEachSide(1);
         }
 
         $selected = $this->selectedId !== null
@@ -630,6 +682,7 @@ class Browser extends Component
                 : null,
             'frontmatter' => $this->vorschau ? $this->frontmatter() : [],
             'kategorien' => $kategorien,
+            'filterKategorien' => $filterKategorien,
             'docs' => $docs,
             'selected' => $selected,
             'editable' => $editable,

@@ -46,7 +46,7 @@ beforeEach(function () {
 it('zeigt in der Liste keine Dokumente fremder Teams (MVP-036)', function () {
     Livewire::test(Browser::class)
         ->assertViewHas('docs', function ($docs) {
-            $slugs = collect($docs)->pluck('slug')->all();
+            $slugs = collect($docs instanceof \Illuminate\Contracts\Pagination\Paginator ? $docs->items() : $docs)->pluck('slug')->all();   // seitenweise seit 16.10.
             return in_array('kind-a', $slugs, true)          // eigen sichtbar
                 && in_array('global-vault', $slugs, true)    // global sichtbar
                 && ! in_array('kind-b', $slugs, true);       // fremd NICHT sichtbar
