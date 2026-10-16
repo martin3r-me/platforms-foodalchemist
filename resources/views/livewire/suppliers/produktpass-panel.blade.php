@@ -13,6 +13,15 @@
     $aktuellText = fn ($v) => $v === null ? '—' : (is_float($v) ? rtrim(rtrim(number_format($v, 2, ',', '.'), '0'), ',') : Str::limit((string) $v, 80));
     $allergenText = ['enthalten' => 'enthalten', 'spuren' => 'Spuren', 'nicht_enthalten' => 'nicht enthalten', 'unbekannt' => 'unbekannt'];
     $angezeigt = $stand['angezeigt'];
+    $abweichungText = function (array $a, ?string $w) use ($allergenText) {
+        if ($w === null || $w === '') { return 'keine Angabe'; }
+        if ($a['objekt'] === 'item_allergen' && $a['feld'] === 'details') {
+            return collect((array) json_decode($w, true))->map(fn ($v, $k) => $k.' ('.($allergenText[$v] ?? $v).')')->implode(', ') ?: 'keine Angabe';
+        }
+        if ($a['objekt'] === 'item_allergen') { return $allergenText[$w] ?? $w; }
+        if ($a['objekt'] === 'item_declaration') { return match ((int) $w) { 3 => 'ja', 1 => 'nein', default => 'unbekannt' }; }
+        return Str::limit($w, 160);
+    };
 @endphp
 <div class="flex flex-col gap-4" data-produktpass-panel @if($laeuft) wire:poll.4s @endif>
     @if($fehler)
@@ -76,6 +85,31 @@
             </table>
         @endif
     </x-fa::section>
+
+    @if($abweichungen !== [])
+        <x-fa::section title="Necta-Abweichungen" icon="heroicon-o-arrows-right-left" meta="{{ count($abweichungen) }} offen" data-produktpass-abweichungen
+            description="Necta meldet an diesen Feldern etwas anderes als der Produktpass. Der Produktpass-Wert gilt, bis du entscheidest. Ist der Pass veraltet, lade oben einen neueren hoch.">
+            <table class="fa-table">
+                <thead><tr><th>Feld</th><th>Produktpass (gilt)</th><th>Necta</th><th class="text-right">Entscheidung</th></tr></thead>
+                <tbody>
+                @foreach($abweichungen as $a)
+                    <tr wire:key="pp-abw-{{ $a['id'] }}" data-produktpass-abweichung="{{ $a['id'] }}">
+                        <td>{{ $a['label'] }}@if($a['kritisch']) <x-fa::badge tone="crit">Kennzeichnung</x-fa::badge>@endif</td>
+                        <td>{{ $abweichungText($a, $a['pass']) }}</td>
+                        <td class="{{ $leise }}">{{ $abweichungText($a, $a['necta']) }}</td>
+                        <td class="text-right whitespace-nowrap">
+                            @if($darfEdit)
+                                <x-fa::button size="sm" variant="ghost" wire:click="passBehalten({{ $a['id'] }})" data-produktpass-pass-behalten>Pass behalten</x-fa::button>
+                                <x-fa::button size="sm" wire:click="nectaUebernehmen({{ $a['id'] }})"
+                                    wire:confirm="Den Necta-Wert eintragen? Der Produktpass schützt dieses Feld danach nicht mehr." data-produktpass-necta-uebernehmen>Necta übernehmen</x-fa::button>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </x-fa::section>
+    @endif
 
     @if($angezeigt !== null && $angezeigt['status'] === 'gelesen')
         <x-fa::section title="Gelesene Werte" icon="heroicon-o-clipboard-document-check" meta="V{{ $angezeigt['version'] }} · {{ $quelleText[$angezeigt['quelle']] ?? $angezeigt['quelle'] }}"

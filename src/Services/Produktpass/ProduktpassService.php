@@ -37,8 +37,9 @@ use Throwable;
  *    der alte Allergenstand unangetastet.
  *  - Quelle `websuche`: schreibt NIE direkt. Übernahme nur per Klick und nur in LEERE Felder; Allergene nur mit Bestätigung
  *    und nur dort, wo der Artikel noch „unbekannt“ ist; jedes Feld hat eine URL (Normalisierer).
- *  - Übernommene Felder bekommen einen Marker ({@see ProduktpassSchutz}): der Necta-Abgleich überschreibt sie nicht, er meldet
- *    Abweichungen als Prüffall. Strengere Allergene aus Necta kommen trotzdem (Strenge-Regel, #394).
+ *  - Übernommene Felder bekommen einen Marker ({@see ProduktpassSchutz}). Kerngruppen (Allergene samt Unterarten, Zusatzstoffe,
+ *    Nährwerte, Zutatenliste, Gebinde) mit Marker aus dem Dokument: der Pass-Wert hat Vorrang vor Necta, auch vor einem strengeren — Abweichung → Prüffall + Signal
+ *    ({@see ProduktpassAbweichungService}, Entscheid Dominique 16.10.2026). Übrige Felder kommen aus Necta.
  *  - Rechte wie beim Bearbeiten: `Curate`/{@see FoodAlchemistSupplierItem::isOwnedBy()} — Master an globalen Stamm-Artikeln,
  *    Mandant an eigenen. Sehen darf jeder, dem der Artikel sichtbar ist.
  */
@@ -294,7 +295,8 @@ class ProduktpassService
                 $this->setzeMarker($item, $pass, 'item_allergen', $spalte, $e['wert'], false, $e['konfidenz'] ?? null, $quelle);
             }
             $details = (array) ($zeile->details ?? []);
-            foreach ((array) ($pass->extrakt['allergene_details'] ?? []) as $unterart => $e) {
+            $unterarten = (array) ($pass->extrakt['allergene_details'] ?? []);
+            foreach ($unterarten as $unterart => $e) {
                 if ($web && isset($details[$unterart])) {
                     continue;
                 }
@@ -304,6 +306,12 @@ class ProduktpassService
             $zeile->details = $details === [] ? null : $details;
             $zeile->source = mb_substr($quelle, 0, 16);
             $zeile->save();
+            if ($unterarten !== [] && $details !== []) {
+                // Unterarten gehören zur Kerngruppe Allergene (Kurator 16.10.): EIN Marker auf die ganze Liste — auch eine
+                // zusätzliche Unterart aus Necta ist dann eine Abweichung, nicht still übernommen
+                $konf = collect($unterarten)->pluck('konfidenz')->filter(fn ($k) => $k !== null)->min();
+                $this->setzeMarker($item, $pass, 'item_allergen', 'details', json_encode($details), false, $konf === null ? null : (float) $konf, $quelle);
+            }
             $uebernommen['allergene'] = ['alt' => $alt, 'neu' => $neu, 'details' => $details];
         }
 
@@ -326,6 +334,7 @@ class ProduktpassService
             'allergene_bestaetigt_at' => now(), 'uebernommen_at' => now(),
         ]);
         ProduktpassSchutz::zuruecksetzen();
+        app(ProduktpassAbweichungService::class)->erledigteSchliessen($item->refresh());
 
         return $pass->refresh();
     }
@@ -583,6 +592,7 @@ class ProduktpassService
             throw new \RuntimeException("Der Wert passt nicht in „{$z['label']}“ und wurde nicht übernommen.");
         }
         ProduktpassSchutz::zuruecksetzen();
+        app(ProduktpassAbweichungService::class)->erledigteSchliessen($item);
     }
 
     private function schreibeFeldTx(FoodAlchemistSupplierItem $item, string $key, array $z, mixed $wert, array $eintrag, FoodAlchemistProduktpass $pass, bool $abgeleitet, string $quelle, string $spalte, array &$uebernommen): void

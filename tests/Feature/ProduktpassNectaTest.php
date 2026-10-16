@@ -18,7 +18,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Ein Produktpass-Wert gilt wie Handpflege: der Necta-Abgleich überschreibt ihn nicht, sondern meldet eine Abweichung
  * (`produktpass_abweichung`). „FA ≠ necta_stand" allein reicht nicht — die beiden Lücken stehen hier als Fälle:
  * (a) es gibt noch keinen Stand (erster Abgleich) · (b) der Pass-Wert entspricht zufällig dem letzten Necta-Stand.
- * Die Kennzeichnung (Allergene) bleibt bei der Strenge-Regel: Necta STRENGER kommt trotzdem automatisch.
+ * Ohne Marker bleibt die Kennzeichnung bei der Strenge-Regel; MIT Marker hat der Pass Vorrang (ProduktpassVorrangTest).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -93,15 +93,14 @@ it('wird der geschützte Wert danach von Hand geändert, gilt wieder die normale
         ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'produktpass_abweichung')->count())->toBe(0);
 });
 
-it('Kennzeichnung: Necta STRENGER als der bestätigte Pass-Allergenwert kommt automatisch, LOCKERER wird Prüffall (Strenge-Regel bleibt)', function () {
-    // Pass bestätigte Milch = nicht_enthalten. Necta sagt Milch enthalten → strenger → automatisch übernommen.
+it('Kennzeichnung OHNE Pass-Marker: Necta STRENGER kommt automatisch, LOCKERER wird Prüffall (Strenge-Regel, kein Pass-Vorrang)', function () {
+    // Allergenzeile mit Quelle produktpass_ki, aber ohne Marker (z. B. vor dem Marker-Schema geschrieben) → Strenge-Regel
     ($this->necta)([], [], [['supplierItemId' => 36674788, 'milk' => 3]]);
     expect(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('allergen_milk'))->toBe('enthalten');
 
-    // Jetzt hat der Pass „enthalten" bestätigt; Necta sagt nicht_enthalten → lockerer → Prüffall, FA bleibt
-    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['allergen_milk' => 'enthalten']);
     DB::table('foodalchemist_necta_stand')->truncate();
     ($this->necta)([], [], [['supplierItemId' => 36674788, 'milk' => 1]]);
     expect(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('allergen_milk'))->toBe('enthalten')
-        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->where('legacy_id', 36674788)->exists())->toBeTrue();
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->where('legacy_id', 36674788)->exists())->toBeTrue()
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'produktpass_abweichung')->exists())->toBeFalse();
 });

@@ -147,6 +147,9 @@ enum SignalTyp: string
     case NectaLieferantNeu = 'necta_lieferant_neu';
     // Necta-Abgleich PR 2: ein nächtlicher bzw. wöchentlicher Lauf ist abgebrochen (Laufzeile mit Fehler in necta_laeufe).
     case NectaAbgleichFehler = 'necta_abgleich_fehler';
+    // Produktpass-Vorrang (Dominique 16.10.2026): Necta liefert an einem Kern-Feld (Allergene/Unterarten, Zusatzstoffe, Nährwerte, Zutatenliste)
+    // etwas anderes als der Produktpass. Der Pass-Wert bleibt; EIN Signal je Artikel, bis jede Abweichung entschieden ist.
+    case ProduktpassAbweichung = 'produktpass_abweichung';
 
     public function label(): string
     {
@@ -156,6 +159,7 @@ enum SignalTyp: string
             self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
+            self::ProduktpassAbweichung => 'Necta weicht vom Produktpass ab',
             self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
             self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
             self::VeraltetePreise => 'Veraltete Preise',
@@ -216,6 +220,7 @@ enum SignalTyp: string
             self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
             self::NectaLieferantNeu => 'heroicon-o-truck',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
+            self::ProduktpassAbweichung => 'heroicon-o-document-magnifying-glass',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',

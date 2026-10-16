@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\DarreichungService;
+use Platform\FoodAlchemist\Services\Produktpass\ProduktpassAbweichungService;
 use Platform\FoodAlchemist\Services\SignalService;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\ProduktpassSchutz;
@@ -24,8 +25,11 @@ use Symfony\Component\Uid\UuidV7;
  *  - Erster Abgleich eines Objekts (noch kein `necta_stand`): Abweichungen übernehmen — der Stamm ist frisch importiert und noch
  *    nicht von Hand gepflegt (Entscheid Dominique über den Kurator, 15.10.).
  *  - Ab dem zweiten Lauf: FA-Wert ≠ letzter Necta-Stand → von Hand gepflegt → Prüffall `manuell_gepflegt`, FA bleibt.
- *  - Produktpass (Bauauftrag 16.10.2026): Felder mit Produktpass-Marker (`foodalchemist_produktpass_felder`, {@see ProduktpassSchutz}) gelten wie
- *    Handpflege, auch ohne Stand: nie übernehmen, Abweichung → Prüffall `produktpass_abweichung`. Die Kennzeichnung bleibt bei der Strenge-Regel.
+ *  - Produktpass (Vorrang, Entscheid Dominique 16.10.2026): Felder mit Produktpass-Marker (`foodalchemist_produktpass_felder`,
+ *    {@see ProduktpassSchutz}, nur Quelle Dokument) in den Kerngruppen (Allergene samt Unterarten, Deklaration, Nährwerte, Zutatenliste,
+ *    Gebinde) behalten den
+ *    Pass-Wert, auch gegen ein strengeres Necta: Abweichung → Prüffall `produktpass_abweichung` + EIN Signal je Artikel
+ *    ({@see ProduktpassAbweichungService}). Übrige Pass-Felder kommen aus Necta; nur ein leerer Necta-Wert löscht sie nicht.
  *  - Kennzeichnung (Allergene, Deklaration/Zusatzstoffe) nach Strenge (Entscheid Dominique 15.10.2026, Lauf 6 auf io:
  *    18.491 Allergen-Abweichungen, Lieferanten haben seit dem Juni-Export nachgepflegt): Necta STRENGER als FA → automatisch
  *    übernehmen, auch bei Handpflege (Zähler `allergen_verschaerft` / `deklaration_verschaerft`); Necta LOCKERER → Prüffall,
@@ -49,6 +53,9 @@ class NectaAbgleichService extends NectaLaufBasis
 {
     /** Objekte, deren Abweichungen nie still übernommen werden (Kennzeichnung). */
     public const KENNZEICHNUNG = ['item_allergen', 'item_declaration'];
+
+    /** @var array<int,true> Artikel-IDs, an denen dieser Lauf eine neue Pass-Abweichung gefunden hat */
+    private array $passSignalArtikel = [];
 
     /**
      * Ab dieser `legacy_id` stammt ein Artikel nicht aus Necta: Das Skript `00_SYSTEM/00.04_Scripts/114_add_hanos_achenbach.py`
@@ -87,6 +94,7 @@ class NectaAbgleichService extends NectaLaufBasis
             'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0,
             'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'unterart_verschaerft' => 0, 'nicht_aus_necta' => 0,
             'allergen_abwesenheit_erklaert' => 0, 'deklaration_abwesenheit_erklaert' => 0,
+            'produktpass_abweichung_neu' => 0, 'produktpass_behalten' => 0, 'produktpass_necta_gewinnt' => 0,
             'pruefaelle_je_feld' => [], 'lockerung_je_wechsel' => []];
 
         $this->laufId = $this->laufAnlegen($voll ? 'vollabgleich' : 'abgleich', $verbindungId, $this->teamId, $opt);
@@ -106,6 +114,9 @@ class NectaAbgleichService extends NectaLaufBasis
                 }
                 $this->zaehler['lieferanten_erledigt']++;
                 $this->cursor($index + 1);
+            }
+            if (! $this->probe) {
+                $this->passSignaleSchreiben();
             }
             $this->laufBeenden('fertig');
         } catch (\Throwable $e) {
@@ -355,7 +366,24 @@ class NectaAbgleichService extends NectaLaufBasis
         foreach ($necta as $spalte => $nWert) {
             $n = self::norm($nWert);
             $f = self::norm($fa->{$spalte} ?? null);
-            if ($n === $f) {
+            if ($n === $f || ($spalte === 'details' && ProduktpassSchutz::jsonNorm($nWert) === ProduktpassSchutz::jsonNorm($fa->{$spalte} ?? null))) {
+                continue;   // details: gleiches JSON-Objekt (MySQL formatiert JSON-Spalten um)
+            }
+            if (ProduktpassSchutz::schuetzt($objekt, $fa, $spalte)) {
+                if ($n === null || ($spalte === 'details' && ProduktpassSchutz::jsonNorm($nWert) === null)
+                    || ($objekt === 'item_declaration' && $spalte !== 'details' && $n === '0')) {
+                    continue;   // leerer Necta-Wert (k. A., Deklaration 0) löscht den Pass-Wert nie und ist keine Abweichung
+                }
+                if (ProduktpassSchutz::istKern($objekt, $spalte)) {
+                    // Vorrang Produktpass (Entscheid Dominique 16.10.2026): Pass-Wert bleibt, auch wenn Necta strenger ist — keine
+                    // Strenge-Regel, kein Automatismus; jede Abweichung wird Prüffall + Signal
+                    $this->passAbweichung($objekt, $legacy, ProduktpassSchutz::itemId($objekt, $fa), $spalte, $fa->{$spalte} ?? null, $nWert);
+
+                    continue;
+                }
+                $uebernehmen[$spalte] = $nWert;   // kein Kern: Necta gewinnt, auch über den Stand hinweg (Pass-Wert ist keine Handpflege)
+                $this->zaehler['produktpass_necta_gewinnt']++;
+
                 continue;
             }
             if ($kennzeichnung && $spalte === 'details' && $objekt === 'item_allergen') {
@@ -391,12 +419,6 @@ class NectaAbgleichService extends NectaLaufBasis
                     // lockerer (oder Unterarten-JSON): nie still → Prüffall, FA bleibt
                     $this->pruefall($objekt === 'item_allergen' ? 'allergen_aenderung' : 'deklaration_aenderung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
                 }
-
-                continue;
-            }
-            if (ProduktpassSchutz::schuetzt($objekt, $fa, $spalte)) {
-                // Produktpass-Wert gilt wie Handpflege — auch ohne Stand und auch dann, wenn er zufällig dem alten Necta-Stand entspricht
-                $this->pruefall('produktpass_abweichung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
 
                 continue;
             }
@@ -510,6 +532,35 @@ class NectaAbgleichService extends NectaLaufBasis
     }
 
     /** Prüffall anlegen oder ein offenes für dasselbe (Objekt, Necta-ID, Feld, Art) aktualisieren. Probe: nur zählen. */
+    /**
+     * Abweichung an einem Pass-Feld der Kerngruppen. Hat jemand „Pass behalten“ gewählt (Prüffall verworfen) und Necta liefert
+     * weiterhin genau diesen Wert gegen genau diesen Pass-Wert, kommt sie nicht wieder; ein neuer Necta-Wert schon.
+     */
+    private function passAbweichung(string $objekt, int $legacy, int $itemId, string $feld, mixed $faWert, mixed $nectaWert): void
+    {
+        $behalten = DB::table('foodalchemist_necta_pruefaelle')->where('art', ProduktpassAbweichungService::ART)->where('objekt', $objekt)
+            ->where('legacy_id', $legacy)->where('feld', $feld)->where('status', 'verworfen')
+            ->get(['fa_wert', 'necta_wert'])
+            ->contains(fn ($p) => ProduktpassAbweichungService::gleich($feld, $p->necta_wert, $nectaWert) && ProduktpassAbweichungService::gleich($feld, $p->fa_wert, $faWert));
+        if ($behalten) {
+            $this->zaehler['produktpass_behalten']++;
+
+            return;
+        }
+        $this->zaehler['produktpass_abweichung_neu']++;
+        $this->pruefall(ProduktpassAbweichungService::ART, $objekt, $legacy, $feld, $faWert, $nectaWert);
+        $this->passSignalArtikel[$itemId] = true;
+    }
+
+    /** EIN Signal je Artikel mit offener Pass-Abweichung (Schwere = höchste offene), erst am Laufende. */
+    private function passSignaleSchreiben(): void
+    {
+        foreach (array_keys($this->passSignalArtikel) as $itemId) {
+            app(ProduktpassAbweichungService::class)->signalAktualisieren((int) $itemId);
+        }
+        $this->passSignalArtikel = [];
+    }
+
     private function pruefall(string $art, string $objekt, int $legacy, ?string $feld, mixed $faWert, mixed $nectaWert): void
     {
         $this->zaehler['pruefaelle'][$art] = ($this->zaehler['pruefaelle'][$art] ?? 0) + 1;
