@@ -322,7 +322,7 @@ class DataQualityService
             ->count();
 
         // Allergen-Metadaten nie aggregiert (allergens_confidence NULL)
-        $allergenKonfidenzFehlt = FoodAlchemistGp::visibleToTeam($team)
+        $allergenKonfidenzFehlt = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()   // Non-Food hat keine Allergene (Regelwerk §8.13)
             ->where('status', 'approved')->whereNull('allergens_confidence')->count();
 
         // genutzte approved-GPs ohne Anker (Flavor-Graph-Erdung)
@@ -1954,7 +1954,7 @@ class DataQualityService
                 return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true)
                     ->whereNotNull('lead_la_supplier_item_id')->whereNotExists($this->aktivPreisFuerLead()), 'gp'];
             case 'gp_allergen_konfidenz':
-                return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereNull('allergens_confidence'), 'gp'];
+                return [FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->where('status', 'approved')->whereNull('allergens_confidence'), 'gp'];
             case 'gp_anker_fehlt':
                 return [FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->whereExists($this->gpGenutzt())->whereNotExists($this->gpHatAnker()), 'gp'];
             case 'gp_tentative_genutzt':

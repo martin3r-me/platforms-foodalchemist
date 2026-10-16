@@ -1035,6 +1035,15 @@ class RecipeService
             throw new \RuntimeException('Geerbtes Rezept — Zutaten-Pflege nur durchs Besitzer-Team (D1).');
         }
 
+        // Non-Food (Warengruppe 16) ist keine Lebensmittel-Zutat — Zubehör und Verpackung haben ihren eigenen Block am Rezept.
+        $gpIds = array_values(array_filter(array_map(fn ($z) => ($z['gp_id'] ?? null) !== null && $z['gp_id'] !== '' ? (int) $z['gp_id'] : null, $zeilen)));
+        if ($gpIds !== []) {
+            $nonFood = FoodAlchemistGp::query()->whereIn('id', $gpIds)->nonFood()->pluck('name')->all();
+            if ($nonFood !== []) {
+                throw new \Platform\FoodAlchemist\Exceptions\NonFoodAlsZutatException($nonFood);
+            }
+        }
+
         DB::transaction(function () use ($team, $recipe, $zeilen, $preserveMissing) {
             $vorhanden = $recipe->ingredients()->get()->keyBy('id');
             $behalten = [];
@@ -1335,7 +1344,7 @@ class RecipeService
         $recompute = app(RecipeRecomputeService::class);
 
         $gps = \Platform\FoodAlchemist\Support\Suche::like(
-            FoodAlchemistGp::visibleToTeam($team), 'name', $suche)   // Multi-Wort: jedes Token muss treffen
+            FoodAlchemistGp::visibleToTeam($team)->lebensmittel(), 'name', $suche)   // Multi-Wort: jedes Token muss treffen; Non-Food ist keine Zutat
             ->orderBy('name')->limit($limit)
             ->get(['id', 'name', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id'])
             ->map(fn ($gp) => [

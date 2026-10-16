@@ -149,6 +149,10 @@ class GpAggregateService
      */
     public function backfillAllergenKonfidenz(FoodAlchemistGp $gp, bool $apply = true): array
     {
+        // Non-Food (Warengruppe 16) nimmt an der Allergen-Vererbung nicht teil: nicht anwendbar, nicht „unbekannt“ (Regelwerk §16).
+        if ($gp->istNonFood()) {
+            return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'source' => 'nicht_anwendbar', 'written' => false, 'skipped' => true];
+        }
         $skip = in_array($gp->allergens_source, ['manual', 'ki'], true);
 
         $konf = $this->allergenKonfidenz($gp);                      // löst Derivate selbst zur Mutter auf

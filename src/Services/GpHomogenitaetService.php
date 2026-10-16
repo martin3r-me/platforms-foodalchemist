@@ -48,6 +48,9 @@ class GpHomogenitaetService
         $unbekanntGesamt = $this->zaehleUnbekannte($verknuepft());
 
         $gpIds = $verknuepft()->groupBy('s.gp_id')->havingRaw('COUNT(*) > 1')->pluck('s.gp_id')->map(fn ($i) => (int) $i)->all();
+        // Non-Food (Warengruppe 16) hat keine Allergene/Zusatzstoffe: kein Homogenitäts-Vergleich
+        $nonFoodIds = $gpIds === [] ? [] : \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereIn('id', $gpIds)->nonFood()->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $gpIds = array_values(array_diff($gpIds, $nonFoodIds));
 
         $gps = [];
         $artikelInUneinheitlichen = 0;

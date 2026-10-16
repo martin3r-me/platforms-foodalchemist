@@ -450,6 +450,9 @@ class GpService
         if (in_array($nach->status, [GpStatus::Merged, GpStatus::Rejected], true)) {
             throw new \RuntimeException("Ziel-GP ist „{$nach->status->label()}\" — kein gültiges Ersetzungsziel.");
         }
+        if ($nach->istNonFood()) {
+            throw new \Platform\FoodAlchemist\Exceptions\NonFoodAlsZutatException([(string) $nach->name]);
+        }
 
         $recipeIds = FoodAlchemistRecipeIngredient::where('gp_id', $von->id)
             ->distinct()->pluck('recipe_id');

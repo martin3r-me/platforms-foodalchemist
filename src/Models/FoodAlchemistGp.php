@@ -77,6 +77,24 @@ class FoodAlchemistGp extends Model
         'favorite_rank' => 'integer',
     ];
 
+    /** Non-Food-Grundprodukt (Warengruppe 16): keine Allergene, Nährwerte, Zustände; als Zutat gesperrt, am Rezept nur als Zubehör & Verpackung. */
+    public function istNonFood(): bool
+    {
+        return (string) $this->commodity_group_code === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE;
+    }
+
+    /** Nur Lebensmittel-GPs (ohne Warengruppe 16); GPs ohne Warengruppe zählen als Lebensmittel. */
+    public function scopeLebensmittel(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where(fn ($w) => $w->whereNull('commodity_group_code')->orWhere('commodity_group_code', '!=', \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE));
+    }
+
+    /** Nur Non-Food-GPs (Warengruppe 16). */
+    public function scopeNonFood(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('commodity_group_code', \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE);
+    }
+
     /** 06·H1: kuratierte Favoriten-GPs (nach Anzeige-Rang, dann Name). */
     public function scopeFavorites(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
     {

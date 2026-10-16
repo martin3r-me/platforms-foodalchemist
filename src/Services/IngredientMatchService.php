@@ -384,7 +384,7 @@ class IngredientMatchService
         $names = [];
         $gpMissing = array_values(array_filter($gpIds, static fn ($id) => ! isset($lex["gp\0$id"])));
         if ($gpMissing !== []) {
-            foreach (FoodAlchemistGp::visibleToTeam($team)->whereIn('status', ['approved', 'tentative'])
+            foreach (FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])
                 ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name', 'condition']) as $g) {
                 if (! $this->acceptsProductForm($ingredientName, $g->name, $g->condition)) {
                     continue;
@@ -769,7 +769,7 @@ class IngredientMatchService
 
     private function gpPool(Team $team, array $queryTokens, ?string $querySlug)
     {
-        $query = FoodAlchemistGp::visibleToTeam($team)
+        $query = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()   // Non-Food ist keine Zutat
             ->whereIn('status', ['approved', 'tentative'])
             ->where('is_platzhalter', false);
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'main_ingredient_slug', 'main_ingredient_display']);

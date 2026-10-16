@@ -141,6 +141,12 @@ class GpNamingService
         return $out;
     }
 
+    /** Warengruppe 16 (Non-Food)? Die WG steht in den strukturierten Feldern als `warengruppe` oder `commodity_group_code`. */
+    private function istNonFood(array $in): bool
+    {
+        return (string) ($in['warengruppe'] ?? $in['commodity_group_code'] ?? '') === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE;
+    }
+
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
      * `<Hauptzutat>: <condition>, <processing|form>[, Portion <x> pro Stueck][, <pflicht>][ / (Bio)]…`
@@ -148,6 +154,14 @@ class GpNamingService
     public function renderGpName(array $in): string
     {
         $in = $this->bereinigeFelder($in);
+        if ($this->istNonFood($in)) {
+            // Non-Food (Warengruppe 16, Regelwerk §6.4): `Produkt: Eigenschaft, Größe` — kein Zustand, keine Portion, keine Diät-Suffixe.
+            // Eigenschaft = processing (sonst form), Größe = pflichtangabe.
+            $teile = array_values(array_filter([($in['processing'] ?? null) ?: ($in['form'] ?? null), $in['pflichtangabe'] ?? null], fn ($t) => trim((string) $t) !== ''));
+            $produkt = trim($in['hauptzutat'] ?? '');
+
+            return $teile === [] ? $produkt : $produkt.': '.implode(', ', $teile);
+        }
         $parts = [];
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
         if ($condition !== null) {
@@ -189,6 +203,15 @@ class GpNamingService
 
         if (trim($name) === '') {
             $errors[] = 'Name ist leer.';
+        }
+        if ($this->istNonFood($in)) {
+            // Non-Food: eigenes, schlankes Schema (§6.4). Die Lebensmittel-Namensregeln (Zustand, Pflichtangaben) gelten nicht;
+            // Lebensmittel-Zustandswörter im Namen sind ein Hinweis (Anti-Pattern), kein Blocker.
+            if (preg_match('/(?<![\p{L}])(frisch|TK|tiefgek(ue|ü)hlt|trocken|konserviert)(?![\p{L}])/u', $name) === 1) {
+                $warnings[] = 'Non-Food braucht keinen Zustand (frisch/TK/trocken/konserviert) — Schema: Produkt: Eigenschaft, Größe.';
+            }
+
+            return ['errors' => $errors, 'warnings' => $warnings];
         }
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
         // Spec 81: alle aktiven Regeln für den GP-Namen. blockieren/korrigieren = Hard-Error, warnen = Hinweis.

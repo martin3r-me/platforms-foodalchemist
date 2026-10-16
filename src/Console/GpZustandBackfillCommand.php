@@ -53,6 +53,7 @@ class GpZustandBackfillCommand extends Command
     {
         $q = DB::table('foodalchemist_gps')
             ->whereNull('deleted_at')
+            ->where(fn ($w) => $w->whereNull('commodity_group_code')->orWhere('commodity_group_code', '!=', \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE))   // Non-Food hat keinen Zustand
             ->where(fn ($w) => $w->whereNull('condition')->orWhere('condition', ''));
         if (($team = (int) $this->option('team')) > 0) {
             $q->where('team_id', $team);
