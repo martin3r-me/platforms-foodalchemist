@@ -743,6 +743,11 @@ return [
         // sein `model` explizit.
         'voice_model' => env('FOODALCHEMIST_AI_VOICE_MODEL'),
 
+        // Non-Food-Erkennung (Massen-Klassifikation, Auftrag 16.10.2026): EIGENES Modell nur für la.nonfood — Tier B hängt an 45 Arbeitsschritten und wird
+        // nicht umgestellt. Leer = bisheriges Verhalten (Tier B, auf io der Plattform-Default). Welches günstige Modell eingetragen wird, entscheidet Dominique;
+        // der Core reicht jeden Modellnamen an OpenAI durch (OpenAiService nutzt options['model']).
+        'nonfood_model' => env('FOODALCHEMIST_AI_MODEL_NONFOOD'),
+
         /*
          * OpenAI-Listenpreise in USD je 1 Mio Tokens (Standard-Verarbeitung,
          * kurzer Kontext; Stand 2026-08-31). Die Abrechnung folgt dem im Log
@@ -1171,14 +1176,16 @@ return [
         // Non-Food-Erkennung am Lieferantenartikel (Stufe 2 nach der Regel): Klassifikator in Stapeln, nur für „unklar“.
         'la.nonfood' => [
             'tier' => 'B',
-            'max_tokens' => 3000,
+            'max_tokens' => 6000,   // 50 Artikel je Aufruf; Reasoning-Modelle brauchen Luft über den ~25 sichtbaren Tokens je Urteil
             'temperature' => 0,
             'task' => 'Entscheide je Lieferantenartikel, ob er NON-FOOD ist (kein Lebensmittel: Reinigung, Hygiene, Einweg, Verpackung, '
                 . 'Geschirr, Deko, Kleidung, Büro, Kleingeräte) oder FOOD (Lebensmittel und Getränke, auch tiefgekühlt oder in einer '
                 . 'Verpackung wie Beutel, Karton, Eimer, Dose, Schale, Glas). Verpackungswörter in der Bezeichnung sind meist nur das Gebinde '
                 . 'einer Ware (»Rinderknochen TK 5 kg/Karton« ist Food). Rate nicht: ist die Bezeichnung nicht eindeutig, gib eine niedrige '
-                . 'konfidenz an. werte = {urteile: [{id, nonfood: true|false, unterkategorie: eine aus `unterkategorien` oder null, '
-                . 'konfidenz: 0-1, grund: <ein kurzer Satz>}]}. Genau ein Urteil je übergebenem Artikel, id unverändert aus `artikel`.',
+                . 'konfidenz an. `lieferanten` ist eine Liste; `l` am Artikel ist der Index in diese Liste. '
+                . 'werte = {urteile: [{id, nonfood: true|false, unterkategorie: eine aus `unterkategorien` oder null, konfidenz: 0-1}]}. '
+                . 'Antworte KNAPP: nur diese vier Felder je Artikel. Das Feld grund (ein kurzer Satz) schreibst du NUR bei konfidenz unter 0.8, sonst weglassen. '
+                . 'Genau ein Urteil je übergebenem Artikel, id unverändert aus `artikel`.',
         ],
         'component.replacement_suggest' => [
             'tier' => 'B',

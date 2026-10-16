@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Support\NonFoodRegeln;
 
 /**
  * Stufe 2 der Non-Food-Erkennung: die KI entscheidet NUR die Artikel, die die Regelstufe als „unklar“ markiert hat — in
- * Stapeln, auf der Anreicherungs-Schlange. Ein sicheres Urteil (Konfidenz ab {@see NonFoodService::KI_SCHWELLE}) wird
+ * Stapeln von {@see self::STAPEL}, auf der Anreicherungs-Schlange. Knappe Antwort {id, nonfood, unterkategorie, konfidenz}; `grund` nur bei Konfidenz unter der Schwelle. Ein sicheres Urteil (Konfidenz ab {@see NonFoodService::KI_SCHWELLE}) wird
  * gespeichert und nimmt den Artikel aus der Prüfliste; alles Unsichere bleibt `pruefung_offen`. Ein roter oder abgeschalteter
  * LLM-Call ist ein No-op (die Prüfliste bleibt), nie ein Absturz. Von Hand gesetzte Urteile fasst der Job nicht an.
  */
@@ -24,7 +24,8 @@ class NonFoodKiBatchJob implements ShouldQueue
 
     public int $timeout = 180;
 
-    public const STAPEL = 20;
+    /** Artikel je KI-Aufruf. 20 → 50 (16.10.2026): die feste Prompt-Hülle (Aufgabe, Unterkategorien, Kontext) wird so auf mehr Artikel verteilt. */
+    public const STAPEL = 50;
 
     /** @param  list<int>  $itemIds */
     public function __construct(public array $itemIds)
@@ -42,15 +43,33 @@ class NonFoodKiBatchJob implements ShouldQueue
             return;
         }
 
-        $artikel = $zeilen->map(fn ($z) => [
-            'id' => (int) $z->supplier_item_id,
-            'bezeichnung' => (string) $z->item?->designation,
-            'verkaufsname' => $z->item?->marketing_name,
-            'lieferant' => $z->item?->supplier?->name,
-        ])->values()->all();
+        // Kompakt: Lieferantennamen einmal je Stapel (Index `l`), Verkaufsname nur, wenn er sich von der Bezeichnung unterscheidet
+        $lieferanten = [];
+        $artikel = $zeilen->map(function ($z) use (&$lieferanten) {
+            $name = $z->item?->supplier?->name;
+            $l = null;
+            if ($name !== null && $name !== '') {
+                $l = array_search($name, $lieferanten, true);
+                if ($l === false) {
+                    $lieferanten[] = $name;
+                    $l = count($lieferanten) - 1;
+                }
+            }
+            $bez = (string) $z->item?->designation;
+            $verkauf = trim((string) $z->item?->marketing_name);
 
+            return array_filter([
+                'id' => (int) $z->supplier_item_id, 'bezeichnung' => $bez,
+                'verkaufsname' => $verkauf !== '' && mb_strtolower($verkauf) !== mb_strtolower($bez) ? $verkauf : null,
+                'l' => $l,
+            ], fn ($v) => $v !== null);
+        })->values()->all();
+
+        // Eigenes Modell NUR für diese Massen-Klassifikation (leer = bisheriges Verhalten: Tier B). Kein Tier-B-Umbau: der hängt an 45 Arbeitsschritten.
+        $modell = trim((string) config('foodalchemist.ai.nonfood_model', ''));
         try {
-            $v = $ki->propose('la.nonfood', ['artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()]);
+            $v = $ki->propose('la.nonfood', ['lieferanten' => $lieferanten, 'artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()],
+                $modell !== '' ? ['model' => $modell] : []);
         } catch (\Throwable $e) {
             return;   // roter/deaktivierter Call = No-op; die Artikel bleiben in der Prüfliste
         }
@@ -67,7 +86,9 @@ class NonFoodKiBatchJob implements ShouldQueue
             $konfidenz = max(0.0, min(1.0, (float) ($u['konfidenz'] ?? 0)));
             $sub = in_array($u['unterkategorie'] ?? null, NonFoodRegeln::unterkategorien(), true) ? $u['unterkategorie'] : null;
             $z->konfidenz = $konfidenz;
-            $z->begruendung = mb_substr('KI: '.(string) ($u['grund'] ?? ''), 0, 250);
+            // Der Grund kommt nur bei UNSICHEREN Urteilen (knappe Antwort, Auftrag 2): ohne grund steht „KI: sicher“ bzw. „KI: unsicher“
+            $grund = trim((string) ($u['grund'] ?? ''));
+            $z->begruendung = mb_substr('KI: '.($grund !== '' ? $grund : ($konfidenz >= NonFoodService::KI_SCHWELLE ? 'sicher' : 'unsicher')), 0, 250);
             if ($konfidenz >= NonFoodService::KI_SCHWELLE) {
                 $z->ist_nonfood = $u['nonfood'];
                 $z->quelle = FoodAlchemistSupplierItemNonfood::QUELLE_KI;
