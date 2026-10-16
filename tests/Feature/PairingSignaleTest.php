@@ -22,6 +22,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Spec 84 B1: Master = konfiguriert, nicht „elternlos“
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     $this->user = $this->makeUser($this->rootTeam);
     $this->actingAs($this->user);
     $this->a = [];

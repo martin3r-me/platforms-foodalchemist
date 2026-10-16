@@ -80,11 +80,13 @@ it('★ Routings und Budget: nur der Master schreibt (auch die Kategorie-Zeilen)
     expect($master->success)->toBeTrue('Master: ' . ($master->error ?? ''));
 });
 
-it('Notbremse: ohne Regel gilt wieder der alte Rückfall (elternloses Team schreibt global)', function () {
+it('Notbremse: ohne Regel schreibt ein elternloses Team trotzdem NICHT global (Spec 84 B1: eine Master-Definition)', function () {
+    // Früher stellte die Notbremse den Rückfall „elternlos = Master“ wieder her. Seit B1 gibt es den nicht mehr —
+    // ohne konfigurierten Master landet das Dokument im eigenen Team.
     config(['foodalchemist.knowledge_master_regel' => false]);
     $res = ($this->anlegen)($this->rootTeam, 'Alt Regel');
 
-    expect(DB::table('foodalchemist_knowledge_documents')->where('slug', $res->data['document']['slug'])->value('team_id'))->toBeNull();
+    expect(DB::table('foodalchemist_knowledge_documents')->where('slug', $res->data['document']['slug'])->value('team_id'))->not->toBeNull();
 });
 
 it('Wissens-Steuerung: Mandant sieht nur den Hinweis ohne Routings, der Master die Konfiguration', function () {
