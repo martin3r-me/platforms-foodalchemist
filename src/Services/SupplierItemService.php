@@ -84,7 +84,7 @@ class SupplierItemService
     private function baseQuery(Team $team, array $filters): Builder
     {
         return FoodAlchemistSupplierItem::visibleToTeam($team)
-            ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'nonfood:id,supplier_item_id,ist_nonfood,pruefung_offen,subkategorie'])
+            ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'nonfood'])
             ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_discontinued', false))
             // Spec 16·S2 — WG-Lead-Scope: nur Artikel der übergebenen Lieferanten (whereIn).
             // Leeres/fehlendes Array = kein Scope (globale Suche, Ist-Verhalten unberührt).
