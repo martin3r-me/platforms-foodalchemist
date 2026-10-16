@@ -887,6 +887,17 @@ return [
         'kind_max_komponenten' => (int) env('FOODALCHEMIST_KIND_MAX_KOMPONENTEN', 4),
     ],
 
+    /*
+     * Preisverlauf: möglicher Erfassungsfehler (Dominique 16.10.2026). Ein Stand, der um mehr als `faktor` vom Vorgänger UND vom Nachfolger
+     * abweicht (nach oben oder unten) und kürzer als `max_tage` gilt, wird in Liste und Linie markiert — nie automatisch ausgeblendet.
+     */
+    'preise' => [
+        'ausreisser' => [
+            'faktor' => (float) env('FOODALCHEMIST_PREIS_AUSREISSER_FAKTOR', 3.0),
+            'max_tage' => (int) env('FOODALCHEMIST_PREIS_AUSREISSER_MAX_TAGE', 14),
+        ],
+    ],
+
     // Spec 52/E: Kandidaten werden vor der kontextspezifischen Endauswahl fusioniert.
     'knowledge_search' => [
         'candidate_limit' => 100,

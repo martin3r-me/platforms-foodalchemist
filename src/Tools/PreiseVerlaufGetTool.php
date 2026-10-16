@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\PreisVerlaufService;
 
@@ -23,7 +24,8 @@ class PreiseVerlaufGetTool extends FoodAlchemistTool implements ToolContract, To
             .'Mit la_id: eine Linie des Lieferantenartikels; mit gp_id: eine Linie je Lieferantenartikel des Grundprodukts (Lead-LA markiert). '
             .'Preis je Basiseinheit (€/kg, €/l, €/Stk, wie PriceService.vergleichspreis), Rohpreis je Gebinde je Stufe. Artikel mit fremder Basiseinheit werden weggelassen und gezählt (weggelassen). '
             .'Zeitraum: zeitraum 3m|6m|12m|alles (Standard 12m) oder von/bis (Y-m-d). Je Linie ein Trend (lineare Regression auf der Stufenlinie, zeitgewichtet): '
-            .'steigung_pro_monat (€ je Basiseinheit und Monat) und prozent_pro_jahr; unter zwei Ständen null. Sichtbarkeit wie überall (Team, Stamm-Freischaltung).';
+            .'steigung_pro_monat (€ je Basiseinheit und Monat) und prozent_pro_jahr; unter zwei Ständen null. '
+            .'Je Punkt moeglicher_erfassungsfehler (Stand weicht stark vom Vorgänger UND Nachfolger ab und galt nur kurz; wird nicht ausgeblendet); mit la_id außerdem ausgeblendete_staende (als Fehler ausgeblendet, zählen nicht in Linie/Trend) und verdachts_staende. Ausblenden: foodalchemist.preise_historie.AUSBLENDEN. Sichtbarkeit wie überall (Team, Stamm-Freischaltung).';
     }
 
     public function getSchema(): array
@@ -70,14 +72,22 @@ class PreiseVerlaufGetTool extends FoodAlchemistTool implements ToolContract, To
             return ToolResult::error('Lieferantenartikel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
 
-        return ToolResult::success($this->ohneIntern($r) + ['la_id' => $laId]);
+        // Ausgeblendete Stände (Erfassungsfehler) zählen nicht in Linie und Trend; hier stehen sie mit Grund, damit sie auffindbar bleiben
+        $item = FoodAlchemistSupplierItem::visibleToTeam($team)->find($laId);
+        $fruehere = $item !== null ? $svc->fruehere($team, $item, 1000)['zeilen'] : [];
+        $ausgeblendet = array_values(array_map(fn ($z) => ['stand_id' => $z['id'], 'von' => $z['von'], 'bis' => $z['bis'], 'preis' => $z['preis'], 'grund' => $z['grund']],
+            array_filter($fruehere, fn ($z) => $z['ausgeblendet'])));
+
+        return ToolResult::success($this->ohneIntern($r) + ['la_id' => $laId, 'ausgeblendete_staende' => $ausgeblendet,
+            'verdachts_staende' => array_values(array_map(fn ($z) => ['stand_id' => $z['id'], 'von' => $z['von'], 'preis' => $z['preis']], array_filter($fruehere, fn ($z) => $z['verdacht'])))]);
     }
 
     /** Zeitstempel-Felder der Zeichnung gehören nicht in die Antwort (Daten genügen). */
     private function ohneIntern(array $r): array
     {
         foreach ($r['linien'] as &$l) {
-            $l['punkte'] = array_map(fn ($s) => ['von' => $s['von'], 'bis' => $s['bis'], 'preis_je_basis' => $s['wert'], 'preis_gebinde' => $s['preis_gebinde'], 'quelle' => $s['quelle']], $l['segmente']);
+            $l['punkte'] = array_map(fn ($s) => ['von' => $s['von'], 'bis' => $s['bis'], 'preis_je_basis' => $s['wert'], 'preis_gebinde' => $s['preis_gebinde'], 'quelle' => $s['quelle'],
+                'moeglicher_erfassungsfehler' => (bool) ($s['verdacht'] ?? false)], $l['segmente']);
             unset($l['segmente']);
             if ($l['trend'] !== null) {
                 $l['trend'] = ['steigung_pro_monat' => $l['trend']['steigung_pro_monat'], 'prozent_pro_jahr' => $l['trend']['prozent_pro_jahr'], 'mittelwert' => $l['trend']['mittelwert']];

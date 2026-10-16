@@ -70,7 +70,7 @@
                         @endif
                         {{-- Hover: je Stand ein unsichtbares Band über die ganze Höhe, der Browser-Tooltip nennt Datum, Preis je Basiseinheit und Rohpreis je Gebinde --}}
                         @foreach($l['punkte'] as $p)
-                            <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="var(--fa-ink)" fill-opacity="0" data-tip="{{ $p['tip'] }}" data-preisverlauf-band
+                            <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="{{ $p['verdacht'] ? 'var(--fa-warn)' : 'var(--fa-ink)' }}" fill-opacity="{{ $p['verdacht'] ? '0.18' : '0' }}" data-tip="{{ $p['tip'] }}" data-preisverlauf-band @if($p['verdacht']) data-verdacht="1" @endif
                                   x-on:mousemove="tip = $el.getAttribute('data-tip'); mx = $event.clientX - $root.getBoundingClientRect().left; my = $event.clientY - $root.getBoundingClientRect().top"
                                   x-on:mouseleave="tip = null" />
                         @endforeach
