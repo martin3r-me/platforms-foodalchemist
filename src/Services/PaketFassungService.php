@@ -43,7 +43,7 @@ class PaketFassungService
 
     /** Eingaben einer Darreichung, die ihren Inhalt bestimmen (wie FassungService). */
     private const DARREICHUNG_FELDER = ['serving_form_id', 'quantity_per_unit_g', 'unit_vocab_id', 'unit_count', 'container_warm_vocab_id',
-        'container_cold_vocab_id', 'serving_vehicle_vocab_id', 'tableware_item_id', 'vessel_gp_id'];
+        'container_cold_vocab_id', 'serving_vehicle_vocab_id', 'vessel_gp_id'];
 
     private const DARREICHUNG_NIE = ['uuid', 'legacy_id', 'recipe_id', 'ek_portion', 'markup_class_id', 'sales_net', 'calculated_sales_net',
         'sales_gross', 'price_calculation_source', 'price_calculation_version', 'price_calculated_at', 'price_override_reason',

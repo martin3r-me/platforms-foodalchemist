@@ -9,7 +9,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
-use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -630,47 +629,6 @@ class ReportExportService
                         'gp' => $item->structure?->gp?->name,
                         'is_lead' => $item->structure?->gp !== null
                             && (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id,
-                    ])->values()->all(),
-                ],
-            ],
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    public function geschirrDaten(Team $team, int $id, array $optionen): array
-    {
-        $supplier = FoodAlchemistGeschirrSupplier::visibleToTeam($team)
-            ->with(['items' => fn ($q) => $q->whereNull('deleted_at')->orderBy('label')])
-            ->findOrFail($id);
-
-        return [
-            'typ' => 'geschirr',
-            'titel' => 'Geschirr',
-            'name' => $supplier->name,
-            'optionen' => $optionen,
-            'recipe' => null,
-            'concept' => null,
-            'report' => [
-                'kind' => 'geschirr',
-                'supplier' => [
-                    'id' => (int) $supplier->id,
-                    'name' => $supplier->name,
-                    'city' => $supplier->city,
-                    'email_order' => $supplier->email_order,
-                    'homepage' => $supplier->homepage,
-                    'is_inactive' => (bool) $supplier->is_inactive,
-                    'items' => $supplier->items->map(fn ($item) => [
-                        'artikel_nr' => $item->artikel_nr,
-                        'label' => $item->label,
-                        'category' => $item->category,
-                        'material' => $item->material,
-                        'form' => $item->form,
-                        'color' => $item->color,
-                        'masse' => $item->masse_label,
-                        'rental_price' => $item->rental_price,
-                        'pfand' => $item->pfand,
-                        'unit' => $item->unit,
-                        'is_inactive' => (bool) $item->is_inactive,
                     ])->values()->all(),
                 ],
             ],

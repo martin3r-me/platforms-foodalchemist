@@ -25,7 +25,7 @@ class PaketGerichteSetTool extends FoodAlchemistTool implements ToolContract, To
     {
         return 'Setzt die Gericht-Positionen eines team-eigenen Pakets (Vollersatz der Liste). '
             . 'items: [{sales_recipe_id, quantity?, unit_vocab_id?, presentation_id?}]. Zum Hinzufügen/Entfernen die ganze Ziel-Liste übergeben. '
-            . 'Bestehende Positionen bleiben erhalten (Menge, Einheit, Darreichung, Geschirr), solange das Item das Feld nicht mitbringt. '
+            . 'Bestehende Positionen bleiben erhalten (Menge, Einheit, Darreichung), solange das Item das Feld nicht mitbringt. '
             . 'presentation_id = Darreichung des Gerichts (0 = Standard); Preis und Produktion folgen ihr.';
     }
 

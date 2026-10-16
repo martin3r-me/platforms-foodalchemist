@@ -11,7 +11,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * MCP-Steuerbarkeit · D5d: Pakete-Ressource (GET/LIST/SEARCH/POST/PUT/DELETE/DUPLICATE/RECOMPUTE)
- * + paket_gerichte (SET/MENGE/GESCHIRR/REORDER). Spiegelt Livewire\Pakete\Index (Web↔MCP-Parität).
+ * + paket_gerichte (SET/MENGE/REORDER). Spiegelt Livewire\Pakete\Index (Web↔MCP-Parität).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -27,11 +27,11 @@ beforeEach(function () {
     $this->dishB = $this->makeRecipe($this->rootTeam, 'DES: Salat', ['is_sales_recipe' => true, 'sales_net' => 4.0]);
 });
 
-it('Registry-Smoke: alle 12 D5d-Tools registriert mit type=object', function () {
+it('Registry-Smoke: alle 11 D5d-Tools registriert mit type=object', function () {
     $namen = [
         'pakete.GET', 'pakete.LIST', 'pakete.SEARCH', 'pakete.POST', 'pakete.PUT',
         'pakete.DELETE', 'pakete.DUPLICATE', 'pakete.RECOMPUTE',
-        'paket_gerichte.SET', 'paket_gerichte.MENGE', 'paket_gerichte.GESCHIRR', 'paket_gerichte.REORDER',
+        'paket_gerichte.SET', 'paket_gerichte.MENGE', 'paket_gerichte.REORDER',
     ];
     foreach ($namen as $n) {
         $tool = $this->registry->get("foodalchemist.{$n}");
@@ -69,7 +69,7 @@ it('POST / PUT / DUPLICATE / RECOMPUTE', function () {
     expect($rec->success)->toBeTrue('rec: ' . ($rec->error ?? ''))->and($rec->data['recomputed'])->toBeTrue();
 });
 
-it('paket_gerichte: SET (+FK-Re-Auth) / MENGE / REORDER / GESCHIRR(lösen)', function () {
+it('paket_gerichte: SET (+FK-Re-Auth) / MENGE / REORDER', function () {
     $set = ($this->run)('foodalchemist.paket_gerichte.SET', [
         'paket_id' => $this->paket->id,
         'items' => [['sales_recipe_id' => $this->dishA->id], ['sales_recipe_id' => $this->dishB->id]],
@@ -87,9 +87,8 @@ it('paket_gerichte: SET (+FK-Re-Auth) / MENGE / REORDER / GESCHIRR(lösen)', fun
     expect($re->success)->toBeTrue('reorder: ' . ($re->error ?? ''));
     expect(FoodAlchemistPaketGericht::find($rows[1])->position)->toBe(0);
 
-    // Geschirr lösen (item_id weglassen) — läuft ohne Geschirr-Artikel durch
-    $g = ($this->run)('foodalchemist.paket_gerichte.GESCHIRR', ['row_id' => $rows[0], 'role' => 'haupt']);
-    expect($g->success)->toBeTrue('geschirr: ' . ($g->error ?? ''));
+    // das Geschirr-Tool ist mit dem Rückbau der Geschirr-DB entfallen (das Gefäß hängt an der Darreichung)
+    expect($this->registry->get('foodalchemist.paket_gerichte.GESCHIRR'))->toBeNull();
 });
 
 it('SET: fremdes Gericht → NOT_FOUND, nichts geschrieben', function () {

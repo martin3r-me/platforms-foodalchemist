@@ -1154,9 +1154,7 @@ class PlanungsblattService
             'behaelter_warm' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_warm_vocab_id),
             'behaelter_kalt' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_cold_vocab_id),
             'vehikel' => $this->vocabName('foodalchemist_vocab_serving_vehicles', app(DarreichungService::class)->vehikelId($dar)),   // wirksamer Typ: Übersteuerung, sonst Typ des Gefäßes
-            'geschirr' => $dar->vessel_gp_id !== null
-                ? DB::table('foodalchemist_gps')->where('id', $dar->vessel_gp_id)->value('name')   // Gefäß-GP; das alte Geschirr-Label nur, solange kein Gefäß gesetzt ist (fällt mit PR D)
-                : ($dar->tableware_item_id !== null ? DB::table('foodalchemist_tableware_items')->where('id', $dar->tableware_item_id)->value('label') : null),
+            'geschirr' => $dar->vessel_gp_id !== null ? DB::table('foodalchemist_gps')->where('id', $dar->vessel_gp_id)->value('name') : null,   // Gefäß der Form
             'arbeitszeit_zuschlag_min' => $dar->work_time_surcharge_min,
         ], fn ($v) => $v !== null && $v !== '');
 

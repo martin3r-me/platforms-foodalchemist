@@ -94,16 +94,4 @@ class FoodAlchemistRecipeDarreichung extends Model
     {
         return $this->hasMany(FoodAlchemistRecipeDarreichungZubehoer::class, 'presentation_id')->orderBy('position')->orderBy('id');
     }
-
-    /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */
-    public function dishwareItem()
-    {
-        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
-    }
-
-    /** @deprecated #486 deutscher Alias → dishwareItem() */
-    public function geschirrItem()
-    {
-        return $this->dishwareItem();
-    }
 }

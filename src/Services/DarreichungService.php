@@ -137,7 +137,6 @@ class DarreichungService
         'serving_vehicle_vocab_id',
         'work_time_surcharge_min', 'offer_text_override', 'note',
         'anrichten_wert', 'anrichten_pauschal_min',   // Spec 83 B3i/B3l: Anrichte-Zeit je Darreichung (Einheit aus der Form)
-        'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag) — ersetzt durch vessel_gp_id, fällt mit PR D
         'vessel_gp_id',      // Gefäß der Form: Non-Food-GP (WG 16); der Servier-Typ kommt daraus
     ];
 

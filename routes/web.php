@@ -99,13 +99,6 @@ Route::get('/einkauf/optimierung', fn () => redirect()->route(
 ))->name('foodalchemist.einkauf.optimierung');
 
 /**
- * #388 Geschirr-Datenbank (non-food) — Leih-Lieferant → Geschirr-Artikel,
- * Master-Detail nach Lieferanten-Vorbild. Auswahl/Suche in der URL (V-17).
- */
-Route::get('/geschirr', \Platform\FoodAlchemist\Livewire\Geschirr\Index::class)
-    ->name('foodalchemist.geschirr.index');
-
-/**
  * #389 Food DNA — Team-Canvas „Markenkern Küche" (stehende KI-Referenz für alle Generatoren).
  */
 Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
@@ -335,23 +328,6 @@ Route::get('/lieferanten/{id}/dokument', function (int $id, \Platform\FoodAlchem
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.suppliers.dokument');
-
-Route::get('/geschirr/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
-    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    $data = $svc->geschirrDaten($team, $id, $svc->optionen(request()->query(), 'geschirr'));
-
-    if (request()->boolean('pdf')) {
-        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            \Illuminate\Support\Facades\Log::warning('Geschirr-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['tableware_supplier_id' => $id]);
-            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
-        }
-
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
-            ->download('Geschirr-' . $id . '.pdf');
-    }
-
-    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
-})->whereNumber('id')->name('foodalchemist.geschirr.dokument');
 
 Route::get('/favoriten/dokument', function (\Platform\FoodAlchemist\Services\ReportExportService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');

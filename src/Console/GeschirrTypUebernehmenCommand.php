@@ -4,23 +4,39 @@ namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Platform\FoodAlchemist\Support\GeschirrRueckbau;
 
 /**
  * Einmalig vor dem Rückbau der Geschirr-DB (PR D): der Servier-Typ eines alten Geschirr-Artikels (`tableware_items.vehicle_vocab_id`), der an einem Slot,
  * einem Paket-Posten oder als Standard-Geschirr an einer Darreichung hing, geht als AUSDRÜCKLICHE Übersteuerung an die Darreichung — aber nur, wo diese
  * noch keinen Typ und kein Gefäß hat. Ein Bestandswert bleibt unberührt, und der Dry-Run (Default) zählt, wie viele Darreichungen schon einen Typ OHNE Gefäß
  * tragen: die bleiben unverändert wirksam (gewollt, bis jemand ein Gefäß setzt).
+ *
+ * Mit `--apply --leeren` räumt es danach die alten Geschirr-Zuordnungen und -Tabellen bewusst ab (Voraussetzung der Rückbau-Migration; deren Riegel prüft
+ * die gelesenen Daten). Nach dem Rückbau meldet es nur noch „schon zurückgebaut“.
  */
 class GeschirrTypUebernehmenCommand extends Command
 {
     protected $signature = 'foodalchemist:geschirr-typ-uebernehmen
-        {--apply : Schreiben (sonst Dry-Run: nur zählen)}';
+        {--apply : Schreiben (sonst Dry-Run: nur zählen)}
+        {--leeren : nach der Übernahme die alten Geschirr-Zuordnungen und -Tabellen abräumen (nur mit --apply); Voraussetzung für den Rückbau der Geschirr-DB}';
 
     protected $description = 'Übernimmt den Servier-Typ alter Geschirr-Artikel als Übersteuerung an die Darreichung (vor dem Rückbau der Geschirr-DB)';
 
     public function handle(): int
     {
         $apply = (bool) $this->option('apply');
+        if ($this->option('leeren') && ! $apply) {
+            $this->error('--leeren braucht --apply.');
+
+            return self::FAILURE;
+        }
+        if (! Schema::hasTable('foodalchemist_tableware_items')) {
+            $this->info('Die Geschirr-DB ist schon zurückgebaut — nichts zu übernehmen.');
+
+            return self::SUCCESS;
+        }
         if (! $apply) {
             $this->warn('DRY-RUN — es wird nichts geschrieben. Mit --apply ausführen.');
         }
@@ -59,6 +75,18 @@ class GeschirrTypUebernehmenCommand extends Command
             ['übersprungen (haben schon Typ oder Gefäß)', $uebersprungen],
             ['mit Typ OHNE Gefäß (bleiben unverändert wirksam)', $ohneGefaess],
         ]);
+
+        // Was der Rückbau (Migration 2026_11_08_100000) noch als Daten sieht — das räumt --leeren ab, nachdem der Typ übernommen ist
+        $offen = GeschirrRueckbau::offeneDaten();
+        if ($offen !== []) {
+            $this->table(['Alte Geschirr-Daten', 'Anzahl'], array_map(fn ($l, $n) => [$l, $n], array_keys($offen), $offen));
+        }
+        if ($apply && $this->option('leeren')) {
+            GeschirrRueckbau::leeren();
+            $this->info('Alte Geschirr-Daten abgeräumt — der Rückbau (Migration) kann laufen.');
+        } elseif ($offen !== []) {
+            $this->warn('Der Rückbau der Geschirr-DB bricht ab, solange diese Daten da sind. Mit --apply --leeren abräumen (verwirft die alten Zuordnungen).');
+        }
 
         return self::SUCCESS;
     }

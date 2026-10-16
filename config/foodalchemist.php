@@ -231,11 +231,6 @@ return [
                     'icon'  => 'heroicon-o-truck',
                 ],
                 [
-                    'label' => 'Geschirr',
-                    'route' => 'foodalchemist.geschirr.index',
-                    'icon'  => 'heroicon-o-square-2-stack',
-                ],
-                [
                     // 06·H2: kuratierte Favoriten-GP-Liste (opt-in KI-Baustein)
                     'label' => 'Favoriten',
                     'route' => 'foodalchemist.favorites.index',

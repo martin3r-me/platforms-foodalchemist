@@ -464,7 +464,6 @@ abstract class FoodAlchemistTool
             'speiseplan' => ['route' => 'foodalchemist.speiseplan.index', 'label' => 'Speisepläne'],
             'angebote' => ['route' => 'foodalchemist.angebote.index', 'label' => 'Angebote'],
             'suppliers' => ['route' => 'foodalchemist.suppliers.index', 'label' => 'Lieferanten'],
-            'geschirr' => ['route' => 'foodalchemist.geschirr.index', 'label' => 'Geschirr'],
             'orders' => ['route' => 'foodalchemist.orders.index', 'label' => 'Bestellwesen'],
             'wareneingang' => ['route' => 'foodalchemist.wareneingang.index', 'label' => 'Wareneingang'],
             'bestellvorlagen' => ['route' => 'foodalchemist.bestellvorlagen.index', 'label' => 'Bestellvorlagen'],

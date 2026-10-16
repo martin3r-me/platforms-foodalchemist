@@ -18,7 +18,7 @@ final class FaBereiche
         'uebersicht' => 'Übersicht (Dashboard, Signale)',
         'planung' => 'Planung (Leitstelle)',
         'controlling' => 'Controlling',
-        'stammdaten' => 'Stammdaten (Grundprodukte, Lieferanten, Geschirr)',
+        'stammdaten' => 'Stammdaten (Grundprodukte, Lieferanten)',
         'rezepte' => 'Rezepte (Basisrezepte, Gerichte, Kalkulation)',
         'concepter' => 'Concepter & Formate',
         'foodbook' => 'Foodbook',
@@ -46,7 +46,7 @@ final class FaBereiche
         'dashboard' => 'uebersicht', 'review' => 'uebersicht', 'signale' => 'uebersicht',
         'planung' => 'planung', 'blaetter' => 'planung',
         'controlling' => 'controlling', 'einkauf' => 'controlling',   // einkauf.* = alte Auswertungs-Routen → Controlling (Spec 32)
-        'gps' => 'stammdaten', 'suppliers' => 'stammdaten', 'geschirr' => 'stammdaten', 'favorites' => 'stammdaten',
+        'gps' => 'stammdaten', 'suppliers' => 'stammdaten', 'favorites' => 'stammdaten',
         'recipes' => 'rezepte', 'rezepte' => 'rezepte', 'verkauf' => 'rezepte', 'kalkulation' => 'rezepte', 'kalkulator' => 'rezepte',
         'concepter' => 'concepter', 'concepts' => 'concepter', 'formate' => 'concepter', 'pakete' => 'concepter',
         'foodbooks' => 'foodbook', 'speisekarte' => 'speisekarte', 'speiseplan' => 'speiseplan', 'angebote' => 'angebote',
@@ -115,7 +115,7 @@ final class FaBereiche
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
         // Stammdaten
         ['gp', 'stammdaten'], ['gps', 'stammdaten'], ['preise_verlauf', 'stammdaten'], ['preise_historie', 'stammdaten'], ['nonfood', 'stammdaten'], ['artikel', 'stammdaten'], ['produktpass', 'stammdaten'], ['supplier', 'stammdaten'], ['suppliers', 'stammdaten'],
-        ['geschirr_', 'stammdaten'], ['favorites', 'stammdaten'], ['match', 'stammdaten'], ['lead_la', 'stammdaten'], ['ingest', 'stammdaten'],
+        ['favorites', 'stammdaten'], ['match', 'stammdaten'], ['lead_la', 'stammdaten'], ['ingest', 'stammdaten'],
         ['struktur_vokabular', 'stammdaten'], ['component_equivalents', 'stammdaten'],
         // Einstellungen
         ['settings', 'einstellungen'], ['team_settings', 'einstellungen'], ['team_profile', 'einstellungen'], ['vocab_', 'einstellungen'], ['outlet_settings', 'einstellungen'],
@@ -130,7 +130,7 @@ final class FaBereiche
         'Dashboard' => 'uebersicht', 'ReviewQueue' => 'uebersicht', 'Signale' => 'uebersicht',
         'Planung' => 'planung',
         'Controlling' => 'controlling',
-        'Gps' => 'stammdaten', 'Suppliers' => 'stammdaten', 'Geschirr' => 'stammdaten', 'Favorites' => 'stammdaten',
+        'Gps' => 'stammdaten', 'Suppliers' => 'stammdaten', 'Favorites' => 'stammdaten',
         'Recipes' => 'rezepte', 'Verkauf' => 'rezepte', 'Kalkulation' => 'rezepte', 'Kalkulator' => 'rezepte',
         'Concepter' => 'concepter', 'Concepts' => 'concepter', 'Formate' => 'concepter', 'Pakete' => 'concepter',
         'Foodbooks' => 'foodbook', 'Speisekarte' => 'speisekarte', 'Speiseplan' => 'speiseplan', 'Angebote' => 'angebote',
