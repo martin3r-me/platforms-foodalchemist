@@ -361,6 +361,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
 
         // Spec 79: Google Trends für den Trendradar — produktiv über DataForSEO (Integrations-Modul)
         $this->app->bind(\Platform\FoodAlchemist\Services\Trends\GoogleTrendsQuelle::class, \Platform\FoodAlchemist\Services\Trends\DataForSeoGoogleTrends::class);
+        // Web-Recherche zu Lieferantenartikeln: Transport austauschbar; Standard = klare Meldung, bis der Core Websuche mit Quellen in chat() liefert
+        $this->app->bind(\Platform\FoodAlchemist\Services\Websuche\WebSucheTransport::class, \Platform\FoodAlchemist\Services\Websuche\NichtVerfuegbarTransport::class);
 
         // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
         // STT-Treiber: 'auto' nimmt den Dienst, für den ein Zugang existiert. Der
