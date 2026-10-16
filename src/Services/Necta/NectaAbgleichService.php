@@ -205,6 +205,8 @@ class NectaAbgleichService extends NectaLaufBasis
                 $this->history($alt);
                 DB::table('foodalchemist_prices')->where('id', $alt->id)->update(array_intersect_key($neu, array_flip(self::PREIS_SPALTEN)) + ['updated_at' => now()]);
             }
+            // Necta stellt Zeilen um (Preis → läuft aus → eingestellt): Lieferstatus neu ableiten
+            $this->lieferstatusZaehlen(app(NectaLieferstatusService::class)->aktualisieren($faArtikelId, $this->teamId, $this->probe, $this->laufId));
 
             return;
         }
@@ -228,6 +230,9 @@ class NectaAbgleichService extends NectaLaufBasis
                 'valid_to' => $neu['status_valid_from'] ?? $neu['change_date'] ?? now()->toDateTimeString(), 'updated_at' => now(),
             ]);
         }
+        // Lieferstatus neu ableiten; bei „eingestellt“ enden auch offene Zeilen ANDEREN Status und die Necta-Historie (Vorgänger
+        // oben schließt nur gleichen Status: genau die Lücke, durch die Kluth LA 318750 trotz Eingestellt-Zeile „offen“ blieb)
+        $this->lieferstatusZaehlen(app(NectaLieferstatusService::class)->aktualisieren($faArtikelId, $this->teamId, false, $this->laufId));
     }
 
     /** Unser Stand einer Preiszeile vor dem Update (Kostenverlauf). Nie löschen. */

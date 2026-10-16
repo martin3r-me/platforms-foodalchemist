@@ -70,6 +70,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\NectaDeklarationNachfuellenCommand::class,  // neue Deklarations-Spalte nachfüllen (Jod, 15.10.2026)
                 \Platform\FoodAlchemist\Console\JodAbleitenCommand::class,                  // Jod aus der Zutatenliste ableiten (15.10.2026)
                 \Platform\FoodAlchemist\Console\MengeKorrigierenCommand::class,              // Menge aus der Bezeichnung (EDI, 16.10.2026)
+                \Platform\FoodAlchemist\Console\NectaLieferstatusCommand::class,             // Lieferstatus aus dem Preis-Lebenszyklus (16.10.2026)
                 \Platform\FoodAlchemist\Console\NectaPreishistorieNachholenCommand::class,  // Necta PR 2b: Preis-Historie (Stufe 1: Analyse)
                 \Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class,   // Spec 82 §13 D (täglich, Tageswerte → team_billable_usages)
                 \Platform\FoodAlchemist\Console\PlanPreiseStartwerteCommand::class,   // Spec 82 §13 D (Platzhalter-Startpreise)

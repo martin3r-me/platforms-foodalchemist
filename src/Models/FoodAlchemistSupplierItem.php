@@ -24,6 +24,18 @@ class FoodAlchemistSupplierItem extends Model
 
     protected $table = 'foodalchemist_supplier_items';
 
+    /**
+     * Lieferbar = nicht von Hand ausgelistet UND nicht von Necta eingestellt (status 2 ohne Preis, 16.10.2026). „Läuft aus“ bleibt
+     * lieferbar (letzter Preis gilt weiter).
+     */
+    public function scopeLieferbar(\Illuminate\Database\Eloquent\Builder $q): \Illuminate\Database\Eloquent\Builder
+    {
+        $t = $q->getModel()->getTable();
+
+        return $q->where("{$t}.is_discontinued", false)
+            ->where(fn ($w) => $w->whereNull("{$t}.lieferstatus")->orWhere("{$t}.lieferstatus", '!=', 'eingestellt'));
+    }
+
     /** Jod (15.10.2026): Ändert sich die Zutatenliste, wird `iodized_abgeleitet` neu abgeleitet (Eloquent-Pfade: UI, MCP, Datei-Import). */
     protected static function booted(): void
     {
