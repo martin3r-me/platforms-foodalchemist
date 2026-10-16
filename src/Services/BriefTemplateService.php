@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate;
+use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 
@@ -149,12 +150,13 @@ class BriefTemplateService
     }
 
     /**
-     * Master-Team = Root der Hierarchie (parent_team_id NULL). Kuratiert die globalen Vorlagen
-     * (team_id NULL) für ALLE — spiegelt {@see \Platform\FoodAlchemist\Livewire\Settings\Wissenskategorien}.
+     * Master-Team kuratiert die globalen Vorlagen (team_id NULL) für ALLE.
+     * Spec 84 §4.0: streng über {@see MasterTeam::istMaster} — „elternlos“ ist kein Master-Signal, auf io
+     * sind alle Mandanten elternlos (vorher durfte jeder Mandant globale Vorlagen löschen). Wie Wissenskategorien (§13 H).
      */
     public function istMaster(Team $team): bool
     {
-        return $team->parent_team_id === null;
+        return MasterTeam::istMaster($team);
     }
 
     /**

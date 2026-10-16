@@ -66,6 +66,8 @@ it('speichere: leerer Name oder leerer Brief wirft', function () {
 });
 
 it('Globals: Master-Team (root) kuratiert sie, ein Kind-Team nicht', function () {
+    // Spec 84 §4.0: Master ist das KONFIGURIERTE Team (MasterTeam::istMaster), nicht „elternlos“.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
     $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
     $svc = app(BriefTemplateService::class);
 
@@ -73,11 +75,24 @@ it('Globals: Master-Team (root) kuratiert sie, ein Kind-Team nicht', function ()
     expect(fn () => $svc->umbenennen($this->childA, (int) $global->id, 'Hack'))->toThrow(RuntimeException::class);
     expect(fn () => $svc->loeschen($this->childA, (int) $global->id))->toThrow(RuntimeException::class);
 
-    // rootTeam (parent NULL = Master) DARF global kuratieren.
+    // rootTeam (konfigurierter Master) DARF global kuratieren.
     $svc->umbenennen($this->rootTeam, (int) $global->id, 'BHG-Empfang v2');
     expect(FoodAlchemistBriefTemplate::find($global->id)->label)->toBe('BHG-Empfang v2');
     $svc->loeschen($this->rootTeam, (int) $global->id);
     expect(FoodAlchemistBriefTemplate::find($global->id))->toBeNull();
+});
+
+it('Spec 84 §4.0: ein elternloser Mandant ist kein Master und löscht keine globale Vorlage', function () {
+    // Auf io sind alle Mandanten elternlos. Vorher reichte das für Master-Rechte.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    $mandant = \Platform\Core\Models\Team::create(['name' => 'Mandant ohne Eltern', 'user_id' => 1, 'personal_team' => false]);
+    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+    $svc = app(BriefTemplateService::class);
+
+    expect($svc->istMaster($mandant))->toBeFalse();
+    expect(fn () => $svc->loeschen($mandant, (int) $global->id))->toThrow(RuntimeException::class);
+    expect(fn () => $svc->umbenennen($mandant, (int) $global->id, 'Hack'))->toThrow(RuntimeException::class);
+    expect(FoodAlchemistBriefTemplate::find($global->id))->not->toBeNull();
 });
 
 it('Tenancy: ein fremdes Team kann eine Vorlage nicht löschen (Owns-Guard)', function () {
@@ -170,7 +185,8 @@ it('MCP: ein Kind-Team kann Globals NICHT kuratieren (PUT/DELETE → error)', fu
 });
 
 it('MCP: Master-Team (root) kuratiert einen Global (PUT active=false greift)', function () {
-    $ctx = new ToolContext($this->user, $this->rootTeam);   // rootTeam = Master (parent NULL)
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Spec 84 §4.0: Master = konfiguriert, nicht „elternlos“
+    $ctx = new ToolContext($this->user, $this->rootTeam);
     $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
 
     $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $global->id, 'active' => false], $ctx);
