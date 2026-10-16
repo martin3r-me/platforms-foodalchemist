@@ -90,7 +90,7 @@ class ItemModal extends Component
         $this->itemId = $item->id;
         $this->fehler = null;
         $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text']);
-        $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering']);
+        $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering', 'deposit', 'rental_period']);
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier']);
         $this->haltbarkeit = $item->only(['shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
@@ -147,7 +147,7 @@ class ItemModal extends Component
             app(SupplierItemService::class)->update($this->team(), $item, [
                 ...collect($this->stammdaten)->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->haltbarkeit)->only(['shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days'])->map(fn ($v) => $v === '' || $v === null ? null : (int) $v)->all(),
-                ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering'])
+                ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering', 'deposit', 'rental_period'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->eigenschaften)->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder'])
                     ->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
@@ -458,7 +458,7 @@ class ItemModal extends Component
     private function item(?int $id): FoodAlchemistSupplierItem
     {
         return FoodAlchemistSupplierItem::visibleToTeam($this->team())
-            ->with(['supplier:id,name', 'structure.gp:id,name', 'nonfood'])
+            ->with(['supplier:id,name', 'structure.gp:id,name,commodity_group_code,diameter_mm,length_mm,width_mm,height_mm,volume_ml', 'nonfood'])
             ->findOrFail($id);
     }
 

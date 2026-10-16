@@ -74,6 +74,7 @@ class FoodAlchemistGp extends Model
         'tag_is_gluten_free' => 'boolean',
         // 06·H1 Convenience-Highlights (kuratierte Haus-Standard-Liste)
         'is_favorite' => 'boolean',
+        'diameter_mm' => 'decimal:1', 'length_mm' => 'decimal:1', 'width_mm' => 'decimal:1', 'height_mm' => 'decimal:1', 'volume_ml' => 'decimal:1',   // Maße, nur WG 16
         'favorite_rank' => 'integer',
     ];
 
@@ -81,6 +82,12 @@ class FoodAlchemistGp extends Model
     public function istNonFood(): bool
     {
         return (string) $this->commodity_group_code === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE;
+    }
+
+    /** Größe in Betriebs-Einheiten („Ø 27 cm“, „30 x 20 x 5 cm“, „1,5 l“) aus den Maßen — nur Non-Food; null ohne Maß. */
+    public function masseText(): ?string
+    {
+        return $this->istNonFood() ? \Platform\FoodAlchemist\Support\NonFoodMasse::groesse($this->only(\Platform\FoodAlchemist\Support\NonFoodMasse::FELDER)) : null;
     }
 
     /** Nur Lebensmittel-GPs (ohne Warengruppe 16); GPs ohne Warengruppe zählen als Lebensmittel. */

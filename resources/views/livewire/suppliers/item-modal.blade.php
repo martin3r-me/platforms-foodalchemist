@@ -438,6 +438,21 @@
                                 <x-fa::input id="la-ean-ordering" wire:model="verpackung.ean_ordering" inputmode="numeric" class="tabular-nums" :disabled="! $darfEdit" />
                             </x-fa::field>
                         </div>
+                        {{-- Mietgeschirr (Dominique 2026-10-16): Pfand und Mietdauer hängen am Lieferantenartikel; der Mietpreis ist der normale Preis. Maße erbt der Artikel vom Grundprodukt (nur Anzeige). --}}
+                        @if($item->deposit !== null || $item->rental_period !== null || $item->structure?->gp?->istNonFood())
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--fa-line)]" data-la-miete>
+                                <x-fa::field label="Pfand je Stück in €" for="la-deposit" hint="Netto. Nur zur Information, geht in keinen Einkaufspreis ein." error="verpackung.deposit">
+                                    <x-fa::input id="la-deposit" wire:model="verpackung.deposit" inputmode="decimal" numeric :disabled="! $darfEdit" data-la-pfand />
+                                </x-fa::field>
+                                <x-fa::field label="Mietdauer" for="la-rental-period" hint="Worauf sich der Preis bezieht, wenn der Artikel gemietet wird">
+                                    <x-fa::select id="la-rental-period" wire:model="verpackung.rental_period" placeholder="gekauft / keine Angabe"
+                                        :options="['tag' => 'je Tag', 'veranstaltung' => 'je Veranstaltung']" :disabled="! $darfEdit" data-la-mietdauer />
+                                </x-fa::field>
+                                @if($item->structure?->gp?->masseText())
+                                    <p class="{{ $leise }} sm:col-span-2" data-la-masse>Maße vom Grundprodukt: <span class="text-[var(--fa-ink)]">{{ $item->structure->gp->masseText() }}</span></p>
+                                @endif
+                            </div>
+                        @endif
                     </x-fa::section>
                 </div>
 

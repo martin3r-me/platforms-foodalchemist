@@ -47,6 +47,11 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert — dann hauptzutat nötig).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (nötig, wenn name leer bleibt).'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): frisch|TK|trocken|konserviert.'],
+                'diameter_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Ø in cm, z. B. 27 oder 7,5 (leer löscht).'],
+                'length_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Länge in cm.'],
+                'width_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Breite in cm.'],
+                'height_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Höhe in cm.'],
+                'volume_ml' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Volumen in ml (Gläser, Schalen).'],
                 'processing' => ['type' => 'string', 'description' => 'Verarbeitung/Zuschnitt.'],
                 'form' => ['type' => 'string', 'description' => 'Form.'],
                 'portion' => ['type' => 'string', 'description' => 'Portionsgrammatur pro Stück.'],
@@ -90,6 +95,8 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
 
         try {
             $gp = app(GpNamingService::class)->updateGp($team, $gp, $in);
+            // Maße (nur Non-Food, WG 16) in cm/ml; der Name wird dadurch NICHT umgeschrieben — Größe ggf. über pflichtangabe mitgeben
+            $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, array_intersect_key($arguments, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -102,6 +109,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'sub_category' => $gp->sub_category,
             'is_derivat' => (bool) $gp->is_derivat,
             'derivat_von_gp_id' => $gp->derivat_von_gp_id !== null ? (int) $gp->derivat_von_gp_id : null,
+            'groesse' => $gp->masseText(),
         ]);
     }
 

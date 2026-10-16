@@ -354,7 +354,23 @@
                     </x-fa::field>
                 </div>
 
-                @if(! $neu && $gp !== null)
+                {{-- Non-Food (Warengruppe 16): Maße in cm bzw. ml wie im Betrieb gesagt (gespeichert in mm); die Größe geht in den Namen (Regelwerk §6.4) --}}
+                @if(($builder['commodity_group_code'] ?? '') === '16')
+                    <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-2" data-gp-masse>
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Maße, falls das Produkt eine Größe hat. Die Größe im Namen kommt aus Ø, sonst Länge x Breite x Höhe, sonst Volumen.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            <x-fa::field label="Ø in cm" for="gp-m-d"><x-fa::input id="gp-m-d" numeric inputmode="decimal" wire:model="defaults.diameter_cm" placeholder="–" data-gp-masse-d /></x-fa::field>
+                            <x-fa::field label="Länge in cm" for="gp-m-l"><x-fa::input id="gp-m-l" numeric inputmode="decimal" wire:model="defaults.length_cm" placeholder="–" data-gp-masse-l /></x-fa::field>
+                            <x-fa::field label="Breite in cm" for="gp-m-b"><x-fa::input id="gp-m-b" numeric inputmode="decimal" wire:model="defaults.width_cm" placeholder="–" data-gp-masse-b /></x-fa::field>
+                            <x-fa::field label="Höhe in cm" for="gp-m-h"><x-fa::input id="gp-m-h" numeric inputmode="decimal" wire:model="defaults.height_cm" placeholder="–" data-gp-masse-h /></x-fa::field>
+                            <x-fa::field label="Volumen in ml" for="gp-m-v"><x-fa::input id="gp-m-v" numeric inputmode="decimal" wire:model="defaults.volume_ml" placeholder="–" data-gp-masse-v /></x-fa::field>
+                        </div>
+                        <div><x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-up-tray" wire:click="masseInNamen" data-gp-masse-in-namen
+                            title="Schreibt die Größe aus den Maßen in die Pflichtangabe und damit in den Namen">Größe in den Namen übernehmen</x-fa::button></div>
+                    </div>
+                @endif
+
+                @if(! $neu && $gp !== null && ($builder['commodity_group_code'] ?? '') !== '16')
                     <div class="pt-3 border-t border-[var(--fa-line)]">
                         <x-foodalchemist::ki-header label="Zustand" field="zustand"
                             :source="$gp->condition_source" :confidence="$gp->condition_ai_confidence !== null ? (float) $gp->condition_ai_confidence : null"

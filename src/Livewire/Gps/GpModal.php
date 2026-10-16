@@ -84,7 +84,7 @@ class GpModal extends Component
     public string $manuellerName = '';
 
     /** Kalkulations-Defaults (GL-02) — direkt persistiert, nur im Edit-Modus (Phase 2). */
-    public array $defaults = ['cooking_loss_default_pct' => '', 'trimming_loss_default_pct' => '', 'piece_default_g' => ''];
+    public array $defaults = ['cooking_loss_default_pct' => '', 'trimming_loss_default_pct' => '', 'piece_default_g' => '', 'diameter_cm' => '', 'length_cm' => '', 'width_cm' => '', 'height_cm' => '', 'volume_ml' => ''];
 
     public bool $force = false;
 
@@ -196,6 +196,12 @@ class GpModal extends Component
                 'cooking_loss_default_pct' => $gp->cooking_loss_default_pct !== null ? (string) (float) $gp->cooking_loss_default_pct : '',
                 'trimming_loss_default_pct' => $gp->trimming_loss_default_pct !== null ? (string) (float) $gp->trimming_loss_default_pct : '',
                 'piece_default_g' => $gp->piece_default_g !== null ? (string) (float) $gp->piece_default_g : '',
+                // Maße (nur Warengruppe 16): gespeichert in mm, im Formular in cm bzw. ml wie im Betrieb gesagt
+                'diameter_cm' => $gp->diameter_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->diameter_mm) : '',
+                'length_cm' => $gp->length_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->length_mm) : '',
+                'width_cm' => $gp->width_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->width_mm) : '',
+                'height_cm' => $gp->height_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->height_mm) : '',
+                'volume_ml' => $gp->volume_ml !== null ? rtrim(rtrim(number_format((float) $gp->volume_ml, 1, ',', ''), '0'), ',') : '',
             ];
         }
 
@@ -230,6 +236,23 @@ class GpModal extends Component
         }
     }
 
+    /** Größe aus den eingegebenen Maßen in den Namen übernehmen (Regelwerk §6.4: Produkt: Eigenschaft, Größe) — überschreibt die Größe-Angabe. */
+    public function masseInNamen(): void
+    {
+        $groesse = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->groesseAusEingabe($this->defaults);
+        if ($groesse !== null) {
+            $this->builder['pflichtangabe'] = $groesse;
+        }
+    }
+
+    /** Maße (nur Warengruppe 16) persistieren: Eingabe in cm/ml, gespeichert in mm. */
+    private function speichereMasse(FoodAlchemistGp $gp): void
+    {
+        if ($gp->istNonFood()) {
+            app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, array_intersect_key($this->defaults, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
+        }
+    }
+
     /** Kalkulations-Defaults direkt persistieren (Phase 2; nur Edit). Leer ⇒ NULL. */
     private function speichereDefaults(FoodAlchemistGp $gp): void
     {
@@ -250,10 +273,15 @@ class GpModal extends Component
         }
 
         try {
+            // Non-Food (Warengruppe 16): ist keine Größe angegeben, kommt sie aus den Maßen (Ø 27 cm, 30 x 20 x 5 cm, 212 ml)
+            if (($this->builder['commodity_group_code'] ?? '') === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE && trim((string) ($this->builder['pflichtangabe'] ?? '')) === '') {
+                $this->masseInNamen();
+            }
             $in = [...$this->builder, 'name' => trim($this->manuellerName)];
             if ($this->gpId === null) {
                 $gp = \Illuminate\Support\Facades\DB::transaction(function () use ($naming, $team, $in) {
                     $gp = $naming->createGp($team, $in, $this->force);
+                    $this->speichereMasse($gp);
                     if ($this->supplierItemId !== null) {
                         app(LeadLaService::class)->verknuepfen($team, $gp, $this->supplierItemId);
                     }
@@ -284,6 +312,7 @@ class GpModal extends Component
                 $gp = $naming->updateGp($team, $gp, $in);
                 $this->speichereTags($gp);
                 $this->speichereDefaults($gp);
+                $this->speichereMasse($gp);
             }
 
             if ($this->gpId === null) {

@@ -29,6 +29,9 @@ final class NonFoodRegeln
 
     public const SUB_BUERO = 'Büro & Sonstiges';
 
+    /** Gekauftes UND gemietetes Geschirr hängen am selben Non-Food-GP (Dominique 2026-10-16): Teller, Tassen, Gläser, Besteck, Platten. */
+    public const SUB_GESCHIRR = 'Geschirr & Ausstattung';
+
     /** Warengruppen-Code und Name der Non-Food-Warengruppe. */
     public const WG_CODE = '16';
 
@@ -37,7 +40,7 @@ final class NonFoodRegeln
     /** @return list<string> */
     public static function unterkategorien(): array
     {
-        return [self::SUB_REINIGUNG, self::SUB_EINWEG, self::SUB_KUECHE, self::SUB_KLEIDUNG, self::SUB_DEKO, self::SUB_BUERO];
+        return [self::SUB_REINIGUNG, self::SUB_EINWEG, self::SUB_KUECHE, self::SUB_KLEIDUNG, self::SUB_DEKO, self::SUB_GESCHIRR, self::SUB_BUERO];
     }
 
     /**
@@ -65,6 +68,10 @@ final class NonFoodRegeln
         self::SUB_DEKO => [
             'kerze(?:n)?', 'teelicht(?:er)?', 'lampion(?:s)?', 'tischdecke(?:n)?', 'tischset(?:s)?', 'tischläufer', 'serviette(?:n)?', 'luftballon(?:s)?', 'girlande(?:n)?', 'konfetti',
             'led-lampe(?:n)?', 'leuchtmittel', 'glühbirne(?:n)?',
+        ],
+        self::SUB_GESCHIRR => [
+            'speiseteller', 'suppenteller', 'dessertteller', 'frühstücksteller', 'platzteller', 'kaffeetasse(?:n)?', 'teetasse(?:n)?', 'espressotasse(?:n)?', 'cappuccinotasse(?:n)?',
+            'weinglas', 'weingläser', 'sektglas', 'sektgläser', 'wasserglas', 'wassergläser', 'biergl(?:as|äser)', 'whiskyglas', 'longdrinkglas', 'besteck(?:e|s)?', 'servierplatte(?:n)?',
         ],
         self::SUB_KUECHE => [
             'schneebesen', 'thermometer', 'messbecher', 'backblech(?:e)?', 'dosenöffner', 'korkenzieher', 'küchenmesser', 'kochlöffel', 'sparschäler', 'gn-behälter', 'gastronormbehälter',
