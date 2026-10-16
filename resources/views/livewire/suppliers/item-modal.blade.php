@@ -492,6 +492,21 @@
                         <x-fa::textarea id="la-ingredients" rows="3" wire:model="eigenschaften.ingredients_supplier" :disabled="! $darfEdit" />
                     </x-fa::field>
                 </x-fa::section>
+
+                {{-- Haltbarkeit (MHD) je Lagerart in Tagen; der Produktpass trägt sie ein, Quelle-Badge wie bei den Allergenen --}}
+                <x-fa::section title="Haltbarkeit" icon="heroicon-o-clock" data-sektion="haltbarkeit"
+                    description="Haltbarkeit (MHD) in Tagen je Lagerart. Leer heißt unbekannt.">
+                    @if($haltbarkeitAusPass !== [])
+                        <div><x-fa::badge tone="neutral" data-haltbarkeit-quelle>aus dem Produktpass (KI)</x-fa::badge></div>
+                    @endif
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        @foreach(['shelf_life_chilled_days' => 'Gekühlt', 'shelf_life_frozen_days' => 'Tiefgekühlt', 'shelf_life_dry_days' => 'Trocken'] as $feld => $lbl)
+                            <x-fa::field :label="$lbl.' (Tage)'" :for="'la-'.$feld">
+                                <x-fa::input :id="'la-'.$feld" type="number" wire:model="haltbarkeit.{{ $feld }}" numeric :disabled="! $darfEdit" data-haltbarkeit="{{ $feld }}" />
+                            </x-fa::field>
+                        @endforeach
+                    </div>
+                </x-fa::section>
             </div>{{-- /Reiter STAMMDATEN --}}
 
             {{-- ── Reiter PRODUKTPASS ──────────────────────────────────────────── --}}

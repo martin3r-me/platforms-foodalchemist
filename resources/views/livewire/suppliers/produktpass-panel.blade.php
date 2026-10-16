@@ -82,7 +82,22 @@
             description="Ab {{ rtrim(rtrim(number_format($schwelle * 100, 0), '0'), ',') }} % Sicherheit trägt die KI Nährwerte, Zutatenliste, Zusatzstoffe und Haltbarkeit direkt ein, Gebinde nur in leere Felder. Alles andere ist ein Vorschlag — übernommen wird per Klick.">
             <x-slot:actions>
                 @if($darfEdit && $angezeigt['quelle'] === 'produktpass')
-                    <x-fa::button size="sm" wire:click="versionUebernehmen" title="Die direkten Felder dieser Version nach den Regeln übernehmen" data-produktpass-version-uebernehmen>Version übernehmen</x-fa::button>
+                    <x-fa::button size="sm" variant="ghost" wire:click="versionUebernehmen"
+                        title="Wendet die automatischen Regeln dieser Version erneut an und ersetzt dabei Werte, die eine ältere Version geschrieben hat. Für einzelne Vorschläge: „Alle Vorschläge übernehmen“ bzw. der Knopf je Zeile."
+                        data-produktpass-version-uebernehmen>Als aktuelle Version übernehmen</x-fa::button>
+                @endif
+                @if($darfEdit && $vorschau && (count($vorschau['leer']) + count($vorschau['abweichend'])) > 0)
+                    @if($vorschau['abweichend'] === [])
+                        <x-fa::button size="sm" variant="primary" icon="heroicon-m-check" wire:click="alleUebernehmen(false)" data-produktpass-alle-uebernehmen>Alle Vorschläge übernehmen ({{ count($vorschau['leer']) }})</x-fa::button>
+                    @else
+                        @php
+                            $labelVon = fn (string $k) => collect($stand['felder'])->firstWhere('key', $k)['label'] ?? $k;
+                            $frage = count($vorschau['leer']).' Vorschläge gehen in leere Felder. '.count($vorschau['abweichend']).' überschreiben einen vorhandenen Wert ('
+                                .collect($vorschau['abweichend'])->map($labelVon)->implode(', ').'). Trotzdem alle übernehmen?';
+                        @endphp
+                        <x-fa::button size="sm" variant="primary" icon="heroicon-m-check" wire:click="alleUebernehmen(true)" wire:confirm="{{ $frage }}"
+                            data-produktpass-alle-uebernehmen>Alle Vorschläge übernehmen ({{ count($vorschau['leer']) + count($vorschau['abweichend']) }})</x-fa::button>
+                    @endif
                 @endif
             </x-slot:actions>
             @if($stand['felder'] === [])
@@ -97,7 +112,8 @@
                         <tr wire:key="pp-f-{{ $f['key'] }}" data-produktpass-feld="{{ $f['key'] }}">
                             <td>{{ $f['label'] }}</td>
                             <td class="max-w-sm">
-                                {{ $wertText($f['wert'], $f['einheit']) }}
+                                {{ $wertText($f['wert'], $f['einheit']) }}@if($f['abgeleitet']) <span class="{{ $leise }}">(abgeleitet)</span>@endif
+                                @if($f['im_dokument'] ?? null)<span class="block {{ $leise }}">im Dokument: {{ $f['im_dokument'] }}</span>@endif
                                 @if($f['url'])<a href="{{ $f['url'] }}" target="_blank" rel="noopener nofollow" class="block underline text-[var(--fa-accent)] {{ $leise }} truncate">{{ Str::limit($f['url'], 48) }}</a>@endif
                             </td>
                             <td><x-fa::badge :tone="$f['konfidenz'] >= $schwelle ? 'ok' : 'warn'" class="tabular-nums">{{ number_format($f['konfidenz'] * 100, 0) }} %</x-fa::badge></td>
@@ -105,6 +121,8 @@
                             <td>
                                 @if($f['status'] === 'uebernommen')
                                     <x-fa::badge tone="ok">übernommen</x-fa::badge>
+                                @elseif($f['status'] === 'gleichwertig')
+                                    <x-fa::badge tone="neutral" title="Der Artikel hat diese Menge schon (z. B. 660 g im Dokument = 0,660 kg am Artikel)." data-produktpass-gleichwertig>entspricht dem Artikel</x-fa::badge>
                                 @else
                                     <x-fa::badge tone="neutral">Vorschlag</x-fa::badge>
                                 @endif
@@ -124,39 +142,60 @@
             @endif
         </x-fa::section>
 
-        @if($stand['allergene'] !== [] || $stand['allergene_details'] !== [])
-            <x-fa::section title="Allergene aus dem Dokument" icon="heroicon-o-shield-exclamation" data-produktpass-allergene
-                description="Ein Vorschlag. Erst deine Bestätigung trägt die Allergene ein — bis dahin gilt der bisherige Stand.">
+        @if($stand['allergene'] !== [] || $stand['allergene_details'] !== [] || $stand['zusatzstoffe'] !== [])
+            <x-fa::section title="Kennzeichnung aus dem Dokument" icon="heroicon-o-shield-exclamation" data-produktpass-allergene data-produktpass-kennzeichnung
+                description="Allergene und Zusatzstoffe sind ein Vorschlag mit Zitat. Erst deine Bestätigung trägt sie zusammen ein — bis dahin gilt der bisherige Stand.">
                 @if($angezeigt['allergene_status'] === 'vorschlag')
-                    <x-fa::notice tone="warn" data-produktpass-allergene-offen>Noch nicht bestätigt. Der bisherige Allergenstand des Artikels bleibt unverändert.</x-fa::notice>
+                    <x-fa::notice tone="warn" data-produktpass-allergene-offen>Noch nicht bestätigt. Der bisherige Stand des Artikels bleibt unverändert.</x-fa::notice>
                 @elseif($angezeigt['allergene_status'] === 'bestaetigt')
                     <x-fa::notice tone="ok" data-produktpass-allergene-bestaetigt>Bestätigt und am Artikel eingetragen.</x-fa::notice>
                 @elseif($angezeigt['allergene_status'] === 'verworfen')
                     <x-fa::notice tone="info">Vorschlag verworfen, der bisherige Stand gilt.</x-fa::notice>
                 @endif
-                <table class="fa-table" data-produktpass-allergen-tabelle>
-                    <thead><tr><th>Allergen</th><th>Laut Dokument</th><th>Sicherheit</th><th>Bisher am Artikel</th></tr></thead>
-                    <tbody>
-                    @foreach($stand['allergene'] as $a)
-                        <tr wire:key="pp-a-{{ $a['key'] }}" data-produktpass-allergen="{{ $a['key'] }}">
-                            <td>{{ $a['label'] }}</td>
-                            <td><x-fa::badge :tone="$a['vorschlag'] === 'enthalten' ? 'crit' : ($a['vorschlag'] === 'spuren' ? 'warn' : 'neutral')">{{ $allergenText[$a['vorschlag']] ?? $a['vorschlag'] }}</x-fa::badge>
-                                @if($a['url'])<a href="{{ $a['url'] }}" target="_blank" rel="noopener nofollow" class="block underline text-[var(--fa-accent)] {{ $leise }} truncate">{{ Str::limit($a['url'], 48) }}</a>@endif</td>
-                            <td><x-fa::badge :tone="$a['konfidenz'] >= $schwelle ? 'ok' : 'warn'" class="tabular-nums">{{ number_format($a['konfidenz'] * 100, 0) }} %</x-fa::badge></td>
-                            <td class="{{ $leise }}">{{ $allergenText[$a['aktuell']] ?? $a['aktuell'] }}</td>
-                        </tr>
-                    @endforeach
-                    </tbody>
-                </table>
+                @if($stand['allergene'] !== [])
+                    <table class="fa-table" data-produktpass-allergen-tabelle>
+                        <thead><tr><th>Allergen</th><th>Laut Dokument</th><th>Sicherheit</th><th>Bisher am Artikel</th></tr></thead>
+                        <tbody>
+                        @foreach($stand['allergene'] as $a)
+                            <tr wire:key="pp-a-{{ $a['key'] }}" data-produktpass-allergen="{{ $a['key'] }}">
+                                <td>{{ $a['label'] }}</td>
+                                <td><x-fa::badge :tone="$a['vorschlag'] === 'enthalten' ? 'crit' : ($a['vorschlag'] === 'spuren' ? 'warn' : 'neutral')">{{ $allergenText[$a['vorschlag']] ?? $a['vorschlag'] }}</x-fa::badge>
+                                    @if($a['zitat'] ?? null)<span class="block {{ $leise }}">„{{ Str::limit($a['zitat'], 120) }}“</span>@endif
+                                    @if($a['url'])<a href="{{ $a['url'] }}" target="_blank" rel="noopener nofollow" class="block underline text-[var(--fa-accent)] {{ $leise }} truncate">{{ Str::limit($a['url'], 48) }}</a>@endif</td>
+                                <td><x-fa::badge :tone="$a['konfidenz'] >= $schwelle ? 'ok' : 'warn'" class="tabular-nums">{{ number_format($a['konfidenz'] * 100, 0) }} %</x-fa::badge></td>
+                                <td class="{{ $leise }}">{{ $allergenText[$a['aktuell']] ?? $a['aktuell'] }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                @endif
                 @if($stand['allergene_details'] !== [])
                     <p class="{{ $leise }}" data-produktpass-unterarten>Unterarten: {{ collect($stand['allergene_details'])->map(fn ($d, $k) => $k.' ('.($allergenText[$d['wert']] ?? $d['wert']).')')->implode(', ') }}</p>
                 @endif
+                @if($stand['zusatzstoffe'] !== [])
+                    <table class="fa-table" data-produktpass-zusatzstoffe>
+                        <thead><tr><th>Zusatzstoff / Kennzeichnung</th><th>Laut Dokument</th><th>Sicherheit</th><th>Bisher am Artikel</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach($stand['zusatzstoffe'] as $zs)
+                            <tr wire:key="pp-z-{{ $zs['key'] }}" data-produktpass-zusatzstoff="{{ $zs['key'] }}">
+                                <td>{{ $zs['label'] }}</td>
+                                <td>{{ $zs['vorschlag'] === 'ja' ? 'ja' : 'nein' }}
+                                    @if($zs['zitat'] ?? null)<span class="block {{ $leise }}">„{{ Str::limit($zs['zitat'], 120) }}“</span>@endif
+                                    @if($zs['url'])<a href="{{ $zs['url'] }}" target="_blank" rel="noopener nofollow" class="block underline text-[var(--fa-accent)] {{ $leise }} truncate">{{ Str::limit($zs['url'], 48) }}</a>@endif</td>
+                                <td><x-fa::badge :tone="$zs['konfidenz'] >= $schwelle ? 'ok' : 'warn'" class="tabular-nums">{{ number_format($zs['konfidenz'] * 100, 0) }} %</x-fa::badge></td>
+                                <td class="{{ $leise }}">{{ $zs['aktuell'] ?? 'unbekannt' }}</td>
+                                <td>@if($zs['status'] === 'uebernommen')<x-fa::badge tone="ok">schon übernommen</x-fa::badge>@endif</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                @endif
                 @if($darfEdit && $angezeigt['allergene_status'] === 'vorschlag')
                     <div class="flex gap-2">
-                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="allergeneBestaetigen"
-                            wire:confirm="Die Allergene aus dem Dokument am Artikel eintragen? Das ist eine Kennzeichnung — bitte vorher gegen das Dokument prüfen."
-                            data-produktpass-allergene-bestaetigen>Allergene bestätigen</x-fa::button>
-                        <x-fa::button variant="ghost" wire:click="allergeneVerwerfen" data-produktpass-allergene-verwerfen>Vorschlag verwerfen</x-fa::button>
+                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="kennzeichnungBestaetigen"
+                            wire:confirm="Allergene und Zusatzstoffe aus dem Dokument am Artikel eintragen? Das ist eine Kennzeichnung — bitte vorher gegen das Dokument prüfen."
+                            data-produktpass-kennzeichnung-bestaetigen data-produktpass-allergene-bestaetigen>Kennzeichnung bestätigen</x-fa::button>
+                        <x-fa::button variant="ghost" wire:click="kennzeichnungVerwerfen" data-produktpass-kennzeichnung-verwerfen data-produktpass-allergene-verwerfen>Vorschlag verwerfen</x-fa::button>
                     </div>
                 @endif
             </x-fa::section>

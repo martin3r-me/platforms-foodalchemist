@@ -1850,7 +1850,9 @@ return [
                 . 'allergene_details: {<unterart>: {wert: enthalten|spuren|nicht_enthalten, konfidenz}}}. '
                 . 'Erlaubte Feld-Schlüssel stehen in `schluessel` (zutatenliste, naehrwerte.*, zusatzstoffe.* mit wert '
                 . '`ja`|`nein`, gebinde.*, haltbarkeit.<chilled|frozen|dry>_days nur wenn das Dokument die Lagerart '
-                . 'nennt, sonst haltbarkeit.unklar_days, herkunft, marke); erlaubte Allergene stehen in `allergene` '
+                . 'nennt, sonst haltbarkeit.unklar_days, herkunft, marke, verpackungshinweis). Gebinde: gebinde.qty (mit `einheit`) und gebinde.unit_code genau '
+                . 'wie im Dokument (z. B. 660 und g — nicht selbst umrechnen); gebinde.packaging_unit NUR als kurzes Verpackungs-Kürzel (z. B. STK, KRT), jede ausgeschriebene '
+                . 'Verpackungsbeschreibung (z. B. „Kunststoffform mit Stülpdeckel“) gehört in verpackungshinweis. Erlaubte Allergene stehen in `allergene` '
                 . '(14 EU-Allergene), Unterarten (z. B. wheat, oats, almond) in `allergene_details`. `nicht_enthalten` nur, '
                 . 'wenn das Dokument die Abwesenheit AUSDRÜCKLICH erklärt; steht nichts da, lass das Allergen weg. '
                 . 'konfidenz = wie sicher du den Wert ABGELESEN hast (schlecht lesbar < 0.8).',

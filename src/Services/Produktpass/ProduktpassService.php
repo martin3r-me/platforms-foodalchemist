@@ -20,6 +20,7 @@ use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\ProduktpassFelder;
+use Platform\FoodAlchemist\Support\ProduktpassGebinde;
 use Platform\FoodAlchemist\Support\ProduktpassSchutz;
 use Platform\FoodAlchemist\Support\Warteschlange;
 use Throwable;
@@ -140,7 +141,7 @@ class ProduktpassService
             $extrakt = app(ProduktpassLeser::class)->liefere($item, ['produktpass' => $pass]);
             $pass->update([
                 'extrakt' => $extrakt, 'status' => 'gelesen', 'gelesen_at' => now(), 'ki_modell' => $extrakt['modell'] ?? null,
-                'allergene_status' => ($extrakt['allergene'] ?? []) !== [] || ($extrakt['allergene_details'] ?? []) !== [] ? 'vorschlag' : 'keine',
+                'allergene_status' => $this->hatKennzeichnung($extrakt) ? 'vorschlag' : 'keine',
             ]);
             $this->anwenden($pass->refresh(), false);
         } catch (Throwable $e) {
@@ -164,7 +165,7 @@ class ProduktpassService
         return FoodAlchemistProduktpass::create([
             'team_id' => $this->besitzerTeamId($team, $item), 'supplier_item_id' => $item->id, 'version' => $this->naechsteVersion($item),
             'status' => 'gelesen', 'quelle' => $quelle->name(), 'extrakt' => $extrakt, 'gelesen_at' => now(),
-            'allergene_status' => $extrakt['allergene'] !== [] || $extrakt['allergene_details'] !== [] ? 'vorschlag' : 'keine',
+            'allergene_status' => $this->hatKennzeichnung($extrakt) ? 'vorschlag' : 'keine',
             'hochgeladen_von' => $userId, 'ki_modell' => is_string($roh['modell'] ?? null) ? $roh['modell'] : null,
         ])->refresh();
     }
@@ -188,86 +189,138 @@ class ProduktpassService
     {
         $item = $pass->item()->firstOrFail();
         $this->pruefeSchreiben($team, $item, $userId, FaRolle::Kuratieren, 'Feld aus dem Produktpass übernehmen');
-        $eintrag = $pass->extrakt['felder'][$key] ?? null;
-        $z = ProduktpassFelder::ziel($key);
-        if ($eintrag === null || $z === null) {
-            throw new \RuntimeException('Dieses Feld steht nicht im Vorschlag.');
-        }
-        if ($z['spalte'] === '') {
-            throw new \RuntimeException('Die Lagerart fehlt im Dokument — bitte die Haltbarkeit von Hand der richtigen Lagerart zuordnen.');
-        }
-        $web = $pass->quelle === ProduktpassFelder::QUELLE_WEB;
-        $wert = $eintrag['wert'];
-        $abgeleitet = false;
-        if ($key === 'naehrwerte.salz') {
-            $wert = round((float) $wert * ProduktpassFelder::SALZ_ZU_NATRIUM_MG, 4);
-            $abgeleitet = true;
-        }
-        if ($web && ! $this->zielLeer($item, $z)) {
-            throw new \RuntimeException('Aus der Websuche nur in leere Felder — dieses Feld hat schon einen Wert.');
-        }
         $uebernommen = $pass->uebernommen ?? [];
-        if ($key === 'gebinde.qty') {
-            $einheit = $this->gebindeEinheit($item, $pass->extrakt['felder'] ?? [], false);
-            if ($einheit === null) {
-                throw new \RuntimeException('Die Einheit der Gebinde-Menge fehlt (kg, l oder Stk) — bitte zuerst am Artikel setzen.');
-            }
-            if (($item->unit_code === null || $item->unit_code === '')) {
-                $this->schreibeFeld($item, 'gebinde.unit_code', ['objekt' => 'supplier_item', 'spalte' => 'unit_code', 'typ' => 'text'], $einheit, $eintrag, $pass, false, $uebernommen);
-            } elseif ($item->unit_code !== $einheit) {
-                throw new \RuntimeException("Einheit passt nicht: am Artikel steht {$item->unit_code}, im Dokument {$einheit}.");
-            }
-        }
-        $this->schreibeFeld($item, $key, $z, $wert, $eintrag, $pass, $abgeleitet, $uebernommen);
+        $this->schreibeVorschlag($item, $pass, $key, $uebernommen);
         $pass->update(['uebernommen' => $uebernommen, 'uebernommen_at' => now()]);
 
         return $pass->refresh();
     }
 
     /**
-     * Allergene aus dem Vorschlag übernehmen — NUR nach ausdrücklicher Bestätigung. `$mindestens` = Admin für MCP, sonst
-     * Kuratieren (Klick im Modal). Pass: alle gelesenen Allergene (auch lockerer als bisher — die Person bestätigt);
-     * Websuche: nur Allergene, die am Artikel noch „unbekannt“ sind.
+     * Vorschau für „Alle Vorschläge übernehmen": welche sicheren (≥ Schwelle) Nicht-Kennzeichnungs-Vorschläge in LEERE Felder gehen
+     * und welche einen vorhandenen Wert überschreiben würden (braucht eine Bestätigung). Quelle Websuche: nie überschreiben.
+     *
+     * @return array{leer:list<string>,abweichend:list<string>,uebersprungen:list<string>,gleichwertig:int}
      */
-    public function allergeneBestaetigen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null, FaRolle $mindestens = FaRolle::Kuratieren): FoodAlchemistProduktpass
+    public function uebernahmeVorschau(FoodAlchemistSupplierItem $item, FoodAlchemistProduktpass $pass): array
+    {
+        $web = $pass->quelle === ProduktpassFelder::QUELLE_WEB;
+        $uebernommen = $pass->uebernommen ?? [];
+        $aus = ['leer' => [], 'abweichend' => [], 'uebersprungen' => [], 'gleichwertig' => 0];
+        foreach ($this->vorschlagsFelder($item, $pass) as $key => $e) {
+            $z = ProduktpassFelder::ziel($key);
+            if ($z === null || $z['klasse'] === 'kennzeichnung' || $z['spalte'] === '' || ($e['konfidenz'] ?? 0.0) < ProduktpassFelder::KONFIDENZ_DIREKT
+                || isset($uebernommen[$key]) || ($key === 'gebinde.menge' && isset($uebernommen['gebinde.qty']))) {
+                continue;
+            }
+            if ($e['gleichwertig'] ?? false) {
+                $aus['gleichwertig']++;
+
+                continue;
+            }
+            $leer = $key === 'gebinde.menge' ? ProduktpassGebinde::artikelLeer($item) : $this->zielLeer($item, $z);
+            if ($leer) {
+                $aus['leer'][] = $key;
+            } elseif ($web || $key === 'verpackungshinweis') {
+                $aus['uebersprungen'][] = $key;   // Websuche überschreibt nie; ein vorhandener Hinweis wird von Hand ergänzt
+            } else {
+                $aus['abweichend'][] = $key;
+            }
+        }
+
+        return $aus;
+    }
+
+    /**
+     * „Alle Vorschläge übernehmen": die sicheren Nicht-Kennzeichnungs-Vorschläge (Allergene und Zusatzstoffe nie — die gehen über die
+     * Bestätigung). Leere Felder sofort; Abweichungen von vorhandenen Werten nur mit `$mitAbweichungen` (die Oberfläche fragt vorher).
+     *
+     * @return array{uebernommen:list<string>,abweichend_offen:list<string>,fehler:array<string,string>}
+     */
+    public function alleUebernehmen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null, bool $mitAbweichungen = false): array
     {
         $item = $pass->item()->firstOrFail();
-        $this->pruefeSchreiben($team, $item, $userId, $mindestens, 'Allergene aus dem Produktpass bestätigen');
+        $this->pruefeSchreiben($team, $item, $userId, FaRolle::Kuratieren, 'Vorschläge aus dem Produktpass übernehmen');
+        $vorschau = $this->uebernahmeVorschau($item, $pass);
+        $uebernommen = $pass->uebernommen ?? [];
+        $bericht = ['uebernommen' => [], 'abweichend_offen' => $mitAbweichungen ? [] : $vorschau['abweichend'], 'fehler' => []];
+        foreach ([...$vorschau['leer'], ...($mitAbweichungen ? $vorschau['abweichend'] : [])] as $key) {
+            try {
+                $this->schreibeVorschlag($item->refresh(), $pass, $key, $uebernommen);
+                $bericht['uebernommen'][] = $key;
+            } catch (\RuntimeException $e) {
+                $bericht['fehler'][$key] = $e->getMessage();
+            }
+        }
+        $pass->update(['uebernommen' => $uebernommen, 'uebernommen_at' => $bericht['uebernommen'] === [] ? $pass->uebernommen_at : now()]);
+
+        return $bericht;
+    }
+
+    /**
+     * Kennzeichnung bestätigen (Entscheid Dominique 16.10.2026): ALLERGENE und ZUSATZSTOFFE aus dem Vorschlag zusammen eintragen — nur nach
+     * ausdrücklicher Bestätigung. `$mindestens` = Admin für MCP, sonst Kuratieren (Klick im Modal). Pass: alle gelesenen Allergene (auch lockerer als
+     * bisher — die Person bestätigt); Websuche: nur, was am Artikel noch „unbekannt“ ist. Zusatzstoffe, die früher schon direkt übernommen wurden
+     * (vor dieser Regel), bleiben stehen und werden nicht angefasst.
+     */
+    public function kennzeichnungBestaetigen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null, FaRolle $mindestens = FaRolle::Kuratieren): FoodAlchemistProduktpass
+    {
+        $item = $pass->item()->firstOrFail();
+        $this->pruefeSchreiben($team, $item, $userId, $mindestens, 'Kennzeichnung aus dem Produktpass bestätigen');
         if ($pass->allergene_status !== 'vorschlag') {
-            throw new \RuntimeException('Es gibt keinen offenen Allergen-Vorschlag.');
+            throw new \RuntimeException('Es gibt keinen offenen Kennzeichnungs-Vorschlag.');
         }
         $web = $pass->quelle === ProduktpassFelder::QUELLE_WEB;
         $quelle = $web ? ProduktpassFelder::QUELLE_WEB : FoodAlchemistProduktpassFeld::QUELLE;
-        $zeile = FoodAlchemistItemAllergen::firstOrNew(['supplier_item_id' => $item->id]);
-        if (! $zeile->exists) {
-            $zeile->team_id = $item->team_id;
-        }
-        $alt = [];
-        $neu = [];
-        foreach ((array) ($pass->extrakt['allergene'] ?? []) as $key => $e) {
-            $spalte = "allergen_{$key}";
-            $bisher = $zeile->{$spalte};
-            if ($web && $bisher !== null && $bisher !== '') {
-                continue;   // Websuche füllt nur unbekannte Allergene
-            }
-            $alt[$key] = $bisher;
-            $neu[$key] = $e['wert'];
-            $zeile->{$spalte} = $e['wert'];
-            $this->setzeMarker($item, $pass, 'item_allergen', $spalte, $e['wert'], false, $e['konfidenz'] ?? null, $quelle);
-        }
-        $details = (array) ($zeile->details ?? []);
-        foreach ((array) ($pass->extrakt['allergene_details'] ?? []) as $unterart => $e) {
-            if ($web && isset($details[$unterart])) {
-                continue;
-            }
-            $details[$unterart] = $e['wert'];
-        }
-        ksort($details);
-        $zeile->details = $details === [] ? null : $details;
-        $zeile->source = mb_substr($quelle, 0, 16);
-        $zeile->save();
         $uebernommen = $pass->uebernommen ?? [];
-        $uebernommen['allergene'] = ['alt' => $alt, 'neu' => $neu, 'details' => $details];
+        $hatAllergene = (array) ($pass->extrakt['allergene'] ?? []) !== [] || (array) ($pass->extrakt['allergene_details'] ?? []) !== [];
+
+        if ($hatAllergene) {
+            $zeile = FoodAlchemistItemAllergen::firstOrNew(['supplier_item_id' => $item->id]);
+            if (! $zeile->exists) {
+                $zeile->team_id = $item->team_id;
+            }
+            $alt = [];
+            $neu = [];
+            foreach ((array) ($pass->extrakt['allergene'] ?? []) as $key => $e) {
+                $spalte = "allergen_{$key}";
+                $bisher = $zeile->{$spalte};
+                if ($web && $bisher !== null && $bisher !== '') {
+                    continue;   // Websuche füllt nur unbekannte Allergene
+                }
+                $alt[$key] = $bisher;
+                $neu[$key] = $e['wert'];
+                $zeile->{$spalte} = $e['wert'];
+                $this->setzeMarker($item, $pass, 'item_allergen', $spalte, $e['wert'], false, $e['konfidenz'] ?? null, $quelle);
+            }
+            $details = (array) ($zeile->details ?? []);
+            foreach ((array) ($pass->extrakt['allergene_details'] ?? []) as $unterart => $e) {
+                if ($web && isset($details[$unterart])) {
+                    continue;
+                }
+                $details[$unterart] = $e['wert'];
+            }
+            ksort($details);
+            $zeile->details = $details === [] ? null : $details;
+            $zeile->source = mb_substr($quelle, 0, 16);
+            $zeile->save();
+            $uebernommen['allergene'] = ['alt' => $alt, 'neu' => $neu, 'details' => $details];
+        }
+
+        $zusatz = [];
+        foreach ((array) ($pass->extrakt['felder'] ?? []) as $key => $e) {
+            $z = ProduktpassFelder::ziel($key);
+            if ($z === null || $z['klasse'] !== 'kennzeichnung' || isset($uebernommen[$key])) {
+                continue;   // schon früher direkt übernommen: bleibt stehen
+            }
+            $bisher = (int) ($item->declarations?->{$z['spalte']} ?? 0);
+            if ($web && $bisher !== 0) {
+                continue;   // Websuche füllt nur unbekannte Zusatzstoffe
+            }
+            $this->schreibeFeld($item->refresh(), $key, $z, $e['wert'], $e, $pass, false, $uebernommen);
+            $zusatz[] = $key;
+        }
+
         $pass->update([
             'uebernommen' => $uebernommen, 'allergene_status' => 'bestaetigt', 'allergene_bestaetigt_von' => $userId,
             'allergene_bestaetigt_at' => now(), 'uebernommen_at' => now(),
@@ -277,9 +330,15 @@ class ProduktpassService
         return $pass->refresh();
     }
 
-    public function allergeneVerwerfen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null): FoodAlchemistProduktpass
+    /** Alter Name (bis 16.10.2026), gleiche Wirkung: bestätigt die gesamte Kennzeichnung. */
+    public function allergeneBestaetigen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null, FaRolle $mindestens = FaRolle::Kuratieren): FoodAlchemistProduktpass
     {
-        $this->pruefeSchreiben($team, $pass->item()->firstOrFail(), $userId, FaRolle::Kuratieren, 'Allergen-Vorschlag verwerfen');
+        return $this->kennzeichnungBestaetigen($team, $pass, $userId, $mindestens);
+    }
+
+    public function kennzeichnungVerwerfen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null): FoodAlchemistProduktpass
+    {
+        $this->pruefeSchreiben($team, $pass->item()->firstOrFail(), $userId, FaRolle::Kuratieren, 'Kennzeichnungs-Vorschlag verwerfen');
         if ($pass->allergene_status === 'vorschlag') {
             $pass->update(['allergene_status' => 'verworfen']);
         }
@@ -287,32 +346,41 @@ class ProduktpassService
         return $pass->refresh();
     }
 
+    /** Alter Name, gleiche Wirkung. */
+    public function allergeneVerwerfen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null): FoodAlchemistProduktpass
+    {
+        return $this->kennzeichnungVerwerfen($team, $pass, $userId);
+    }
+
     // ── Anzeige / MCP ───────────────────────────────────────────────────────
 
-    /**
-     * Stand eines Artikels: Versionen + der Vorschlag der jüngsten gelesenen Version (Feld | Wert | Konfidenz | übernommen?)
-     * samt aktuellem FA-Wert und Allergen-Vorschlag mit Gegenüberstellung.
-     *
-     * @return array<string,mixed>
-     */
     public function stand(FoodAlchemistSupplierItem $item, ?FoodAlchemistProduktpass $pass = null): array
     {
         $versionen = $this->versionen($item);
         $pass ??= $versionen->firstWhere('status', 'gelesen') ?? $versionen->first();
         $felder = [];
+        $zusatzstoffe = [];
         if ($pass !== null) {
             $uebernommen = $pass->uebernommen ?? [];
-            foreach ((array) ($pass->extrakt['felder'] ?? []) as $key => $e) {
+            foreach ($this->vorschlagsFelder($item, $pass) as $key => $e) {
                 $z = ProduktpassFelder::ziel($key);
                 if ($z === null) {
+                    continue;
+                }
+                $status = ($e['gleichwertig'] ?? false) ? 'gleichwertig'
+                    : (isset($uebernommen[$key]) || ($key === 'gebinde.menge' && isset($uebernommen['gebinde.qty'])) ? 'uebernommen' : 'vorschlag');
+                if ($z['klasse'] === 'kennzeichnung') {
+                    $zusatzstoffe[] = ['key' => $key, 'label' => $z['label'], 'vorschlag' => $e['wert'], 'konfidenz' => $e['konfidenz'] ?? 0.0, 'url' => $e['url'] ?? null,
+                        'zitat' => $e['zitat'] ?? null, 'aktuell' => $this->aktuellerWert($item, $z), 'status' => $status];
+
                     continue;
                 }
                 $felder[] = [
                     'key' => $key, 'label' => $z['label'], 'wert' => $e['wert'], 'einheit' => $e['einheit'] ?? null,
                     'konfidenz' => $e['konfidenz'] ?? 0.0, 'url' => $e['url'] ?? null, 'zitat' => $e['zitat'] ?? null,
-                    'status' => isset($uebernommen[$key]) ? 'uebernommen' : 'vorschlag',
-                    'aktuell' => $z['spalte'] === '' ? null : $this->aktuellerWert($item, $z),
-                    'uebernehmbar' => $z['spalte'] !== '',
+                    'status' => $status, 'abgeleitet' => (bool) ($e['abgeleitet'] ?? false), 'im_dokument' => $e['im_dokument'] ?? null,
+                    'aktuell' => $z['spalte'] === '' ? null : ($key === 'gebinde.menge' ? $this->aktuelleMenge($item) : $this->aktuellerWert($item, $z)),
+                    'uebernehmbar' => $z['spalte'] !== '' && $status !== 'gleichwertig',
                 ];
             }
         }
@@ -321,7 +389,7 @@ class ProduktpassService
             $row = $item->allergens;
             foreach ((array) ($pass->extrakt['allergene'] ?? []) as $key => $e) {
                 $allergene[] = ['key' => $key, 'label' => FoodAlchemistItemAllergen::ALLERGENE[$key] ?? $key, 'vorschlag' => $e['wert'],
-                    'konfidenz' => $e['konfidenz'] ?? 0.0, 'aktuell' => $row?->{"allergen_{$key}"} ?? 'unbekannt', 'url' => $e['url'] ?? null];
+                    'konfidenz' => $e['konfidenz'] ?? 0.0, 'aktuell' => $row?->{"allergen_{$key}"} ?? 'unbekannt', 'url' => $e['url'] ?? null, 'zitat' => $e['zitat'] ?? null];
             }
         }
 
@@ -331,8 +399,10 @@ class ProduktpassService
                 'datum' => $v->created_at?->toDateString(), 'allergene_status' => $v->allergene_status, 'fehler' => $v->fehler,
             ])->all(),
             'angezeigt' => $pass === null ? null : ['id' => $pass->id, 'version' => $pass->version, 'status' => $pass->status, 'quelle' => $pass->quelle,
-                'allergene_status' => $pass->allergene_status, 'ki_modell' => $pass->ki_modell, 'verworfen_felder' => $pass->extrakt['verworfen'] ?? []],
+                'allergene_status' => $pass->allergene_status, 'kennzeichnung_status' => $pass->allergene_status, 'ki_modell' => $pass->ki_modell,
+                'verworfen_felder' => $pass->extrakt['verworfen'] ?? []],
             'felder' => $felder,
+            'zusatzstoffe' => $zusatzstoffe,
             'allergene' => $allergene,
             'allergene_details' => $pass === null ? [] : (array) ($pass->extrakt['allergene_details'] ?? []),
             'quellen_der_felder' => FoodAlchemistProduktpassFeld::where('supplier_item_id', $item->id)
@@ -342,10 +412,6 @@ class ProduktpassService
 
     // ── intern ──────────────────────────────────────────────────────────────
 
-    /**
-     * Die Felder der Version nach den Regeln direkt übernehmen. Ohne `$explizit` läuft das nur, wenn dieser Artikel noch
-     * keinen Marker einer ANDEREN Version hat — eine neue Version ersetzt ältere Werte erst auf ausdrücklichen Befehl.
-     */
     private function anwenden(FoodAlchemistProduktpass $pass, bool $explizit): void
     {
         if ($pass->quelle !== ProduktpassFelder::QUELLE_PASS) {
@@ -356,68 +422,139 @@ class ProduktpassService
             return;
         }
         $item = $pass->item()->firstOrFail();
-        $felder = (array) ($pass->extrakt['felder'] ?? []);
         $uebernommen = $pass->uebernommen ?? [];
         $schwelle = ProduktpassFelder::KONFIDENZ_DIREKT;
 
-        $abgeleitet = [];
-        if (isset($felder['naehrwerte.salz']) && ! isset($felder['naehrwerte.sodium'])) {
-            $felder['naehrwerte.sodium'] = ['wert' => round((float) $felder['naehrwerte.salz']['wert'] * ProduktpassFelder::SALZ_ZU_NATRIUM_MG, 4)]
-                + $felder['naehrwerte.salz'];
-            $abgeleitet['naehrwerte.sodium'] = true;
-        }
-        unset($felder['naehrwerte.salz']);
-
-        foreach ($felder as $key => $e) {
+        foreach ($this->vorschlagsFelder($item, $pass) as $key => $e) {
             $z = ProduktpassFelder::ziel($key);
-            if ($z === null || $z['klasse'] === 'vorschlag' || $z['spalte'] === '' || ($e['konfidenz'] ?? 0.0) < $schwelle) {
+            // Direkt nur: Nährwerte, Zutatenliste, Haltbarkeit (mit Lagerart), Gebinde in leere Felder. Zusatzstoffe und Allergene: nur über die Bestätigung.
+            if ($z === null || in_array($z['klasse'], ['vorschlag', 'kennzeichnung'], true) || $z['spalte'] === '' || ($e['konfidenz'] ?? 0.0) < $schwelle) {
                 continue;
             }
-            if ($key === 'gebinde.unit_code') {
-                continue;   // nur zusammen mit gebinde.qty
-            }
-            if ($z['klasse'] === 'nur_leer' && ! $this->zielLeer($item, $z)) {
+            if ($e['gleichwertig'] ?? false) {
                 continue;
             }
-            if ($key === 'gebinde.qty') {
-                $einheit = $this->gebindeEinheit($item, $felder, true);
-                if ($einheit === null) {
-                    continue;   // ohne gesicherte Einheit keine Menge (Preisfalle)
+            if ($key === 'gebinde.menge') {
+                // Menge nur in einen LEEREN Artikel; hat er schon eine Einheit, muss es dieselbe Einheit sein (sonst Vorschlag mit Klick)
+                $hat = ProduktpassGebinde::einheit($item->unit_code);
+                if (! ProduktpassGebinde::artikelLeer($item) || ($item->unit_code !== null && $item->unit_code !== '' && ($hat === null || $hat[0] !== $e['einheit']))) {
+                    continue;
                 }
-                if ($item->unit_code === null || $item->unit_code === '') {
-                    $this->schreibeFeld($item, 'gebinde.unit_code', ['objekt' => 'supplier_item', 'spalte' => 'unit_code', 'typ' => 'text'], $einheit, $felder['gebinde.unit_code'], $pass, false, $uebernommen);
-                }
+            } elseif ($z['klasse'] === 'nur_leer' && ! $this->zielLeer($item, $z)) {
+                continue;
             }
-            $this->schreibeFeld($item, $key, $z, $e['wert'], $e, $pass, $abgeleitet[$key] ?? false, $uebernommen);
+            try {
+                $this->schreibeVorschlag($item->refresh(), $pass, $key, $uebernommen);
+            } catch (\RuntimeException) {
+                continue;   // bleibt ein Vorschlag, der Rest läuft weiter
+            }
         }
         $pass->update(['uebernommen' => $uebernommen, 'uebernommen_at' => $uebernommen === [] ? null : now()]);
     }
 
     /**
-     * Einheit zur Gebinde-Menge: die des Dokuments (`gebinde.unit_code`, gültig), bei vorhandener Artikel-Einheit muss sie
-     * übereinstimmen. `$streng`: das Dokument MUSS eine Einheit mit Konfidenz ≥ Schwelle nennen (automatische Übernahme).
+     * Schlüssel → Eintrag, so wie die Oberfläche und die Übernahme sie sehen (der Extrakt bleibt unverändert, auch für ältere Versionen):
+     *  - Menge + Einheit werden EIN Paar `gebinde.menge` in der Einheit der Preisrechnung (g → kg, ml → l); gleichwertig zum Artikel → `gleichwertig`.
+     *  - Verpackungs-Einheit nur als bekannter Code (`gebinde.packaging_unit`); eine Beschreibung wird `verpackungshinweis` (Vorschlag in additional_text).
+     *  - Salz wird Natrium in mg (Salz g × 400), markiert `abgeleitet`.
+     *
+     * @return array<string,array<string,mixed>>
      */
-    private function gebindeEinheit(FoodAlchemistSupplierItem $item, array $felder, bool $streng): ?string
+    private function vorschlagsFelder(FoodAlchemistSupplierItem $item, FoodAlchemistProduktpass $pass): array
     {
-        $dok = $felder['gebinde.unit_code'] ?? null;
-        $einheit = $dok !== null ? $this->einheitNorm((string) $dok['wert']) : null;
-        if ($streng && ($einheit === null || ($dok['konfidenz'] ?? 0.0) < ProduktpassFelder::KONFIDENZ_DIREKT)) {
-            return null;
-        }
-        $hat = $item->unit_code !== null && $item->unit_code !== '' ? $this->einheitNorm((string) $item->unit_code) : null;
-        if ($einheit !== null && $hat !== null && $einheit !== $hat) {
-            return null;
+        $felder = (array) ($pass->extrakt['felder'] ?? []);
+        $aus = $felder;
+
+        $menge = ProduktpassGebinde::menge($felder);
+        unset($aus['gebinde.qty'], $aus['gebinde.unit_code']);
+        if ($menge !== null) {
+            $aus['gebinde.menge'] = ['wert' => $menge['qty'], 'einheit' => $menge['unit'], 'konfidenz' => $menge['konfidenz'], 'zitat' => $felder['gebinde.qty']['zitat'] ?? null,
+                'url' => $felder['gebinde.qty']['url'] ?? null, 'im_dokument' => $menge['roh'], 'gleichwertig' => ProduktpassGebinde::gleichwertig($item, $menge)];
         }
 
-        return $einheit ?? $hat;
+        if (isset($felder['gebinde.packaging_unit'])) {
+            $wert = (string) $felder['gebinde.packaging_unit']['wert'];
+            if (ProduktpassGebinde::verpackungscode($wert) === null) {
+                unset($aus['gebinde.packaging_unit']);
+                $aus['verpackungshinweis'] ??= ['wert' => $wert] + $felder['gebinde.packaging_unit'];
+            }
+        }
+
+        if (isset($felder['naehrwerte.salz'])) {
+            unset($aus['naehrwerte.salz']);
+            if (! isset($felder['naehrwerte.sodium'])) {
+                $aus['naehrwerte.sodium'] = ['wert' => round((float) $felder['naehrwerte.salz']['wert'] * ProduktpassFelder::SALZ_ZU_NATRIUM_MG, 4), 'einheit' => 'mg', 'abgeleitet' => true]
+                    + $felder['naehrwerte.salz'];
+            }
+        }
+
+        return $aus;
     }
 
-    private function einheitNorm(string $roh): ?string
+    private function aktuelleMenge(FoodAlchemistSupplierItem $item): ?string
     {
-        return match (mb_strtolower(trim($roh))) {
-            'kg' => 'kg', 'l', 'liter' => 'l', 'stk', 'stück', 'stueck', 'st' => 'Stk',
-            default => null,
-        };
+        if (ProduktpassGebinde::artikelLeer($item)) {
+            return null;
+        }
+
+        return rtrim(rtrim(number_format((float) $item->qty, 4, ',', ''), '0'), ',').' '.($item->unit_code ?? '');
+    }
+
+    private function hatKennzeichnung(array $extrakt): bool
+    {
+        if (($extrakt['allergene'] ?? []) !== [] || ($extrakt['allergene_details'] ?? []) !== []) {
+            return true;
+        }
+        foreach (array_keys((array) ($extrakt['felder'] ?? [])) as $key) {
+            if ((ProduktpassFelder::ziel((string) $key)['klasse'] ?? null) === 'kennzeichnung') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Ein Vorschlag (aufbereitet) wird geschrieben — die EINE Stelle für Klick, „Alle übernehmen" und die automatische Übernahme.
+     * Wirft RuntimeException mit verständlicher Meldung (nie SQL).
+     */
+    private function schreibeVorschlag(FoodAlchemistSupplierItem $item, FoodAlchemistProduktpass $pass, string $key, array &$uebernommen): void
+    {
+        $felder = $this->vorschlagsFelder($item, $pass);
+        $eintrag = $felder[$key] ?? null;
+        $z = ProduktpassFelder::ziel($key);
+        if ($eintrag === null || $z === null) {
+            throw new \RuntimeException('Dieses Feld steht nicht im Vorschlag.');
+        }
+        if ($z['klasse'] === 'kennzeichnung') {
+            throw new \RuntimeException('Zusatzstoffe werden zusammen mit den Allergenen über „Kennzeichnung bestätigen“ eingetragen.');
+        }
+        if ($z['spalte'] === '') {
+            throw new \RuntimeException('Die Lagerart fehlt im Dokument — bitte die Haltbarkeit von Hand der richtigen Lagerart zuordnen.');
+        }
+        $web = $pass->quelle === ProduktpassFelder::QUELLE_WEB;
+        $abgeleitet = (bool) ($eintrag['abgeleitet'] ?? false);
+
+        if ($key === 'gebinde.menge') {
+            if ($eintrag['gleichwertig'] ?? false) {
+                throw new \RuntimeException('Der Artikel hat diese Menge schon (gleichwertig).');
+            }
+            if ($web && ! ProduktpassGebinde::artikelLeer($item)) {
+                throw new \RuntimeException('Aus der Websuche nur in leere Felder — die Menge hat schon einen Wert.');
+            }
+            // Menge und Einheit gehören zusammen: nie die Einheit allein, nie g/ml (die Preisrechnung kennt kg, l, Stk)
+            $this->schreibeFeld($item, 'gebinde.qty', ['objekt' => 'supplier_item', 'spalte' => 'qty', 'typ' => 'zahl', 'label' => 'Gebinde-Menge'], $eintrag['wert'], $eintrag, $pass, false, $uebernommen);
+            $this->schreibeFeld($item->refresh(), 'gebinde.unit_code', ['objekt' => 'supplier_item', 'spalte' => 'unit_code', 'typ' => 'text', 'label' => 'Einheit der Gebinde-Menge'], $eintrag['einheit'], $eintrag, $pass, false, $uebernommen);
+
+            return;
+        }
+        if ($key === 'verpackungshinweis' && ! $this->zielLeer($item, $z)) {
+            throw new \RuntimeException('Am Artikel steht schon ein Hinweis — bitte von Hand ergänzen.');
+        }
+        if ($web && ! $this->zielLeer($item, $z)) {
+            throw new \RuntimeException('Aus der Websuche nur in leere Felder — dieses Feld hat schon einen Wert.');
+        }
+        $this->schreibeFeld($item, $key, $z, $eintrag['wert'], $eintrag, $pass, $abgeleitet, $uebernommen);
     }
 
     private function zielLeer(FoodAlchemistSupplierItem $item, array $z): bool
@@ -435,6 +572,21 @@ class ProduktpassService
     {
         $quelle = $pass->quelle === ProduktpassFelder::QUELLE_WEB ? ProduktpassFelder::QUELLE_WEB : FoodAlchemistProduktpassFeld::QUELLE;
         $spalte = $z['spalte'];
+        $max = ProduktpassFelder::MAX_LAENGE[$spalte] ?? null;
+        if ($max !== null && is_string($wert) && mb_strlen($wert) > $max) {
+            throw new \RuntimeException("Der Wert ist zu lang für „{$z['label']}“ (höchstens {$max} Zeichen).");
+        }
+        try {
+            $this->schreibeFeldTx($item, $key, $z, $wert, $eintrag, $pass, $abgeleitet, $quelle, $spalte, $uebernommen);
+        } catch (\Illuminate\Database\QueryException) {
+            // nie SQL-Text zum Nutzer (Erstbefund io: SQLSTATE 1406 „Data too long")
+            throw new \RuntimeException("Der Wert passt nicht in „{$z['label']}“ und wurde nicht übernommen.");
+        }
+        ProduktpassSchutz::zuruecksetzen();
+    }
+
+    private function schreibeFeldTx(FoodAlchemistSupplierItem $item, string $key, array $z, mixed $wert, array $eintrag, FoodAlchemistProduktpass $pass, bool $abgeleitet, string $quelle, string $spalte, array &$uebernommen): void
+    {
         DB::transaction(function () use ($item, $key, $z, $wert, $eintrag, $pass, $abgeleitet, $quelle, $spalte, &$uebernommen): void {
             switch ($z['objekt']) {
                 case 'supplier_item':
