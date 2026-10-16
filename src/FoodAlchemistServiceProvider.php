@@ -47,6 +47,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class);
+        // Spec 84 §3.3: Merker des Team-Kontexts je Request/Job (scoped = Laravel leert ihn zwischen Jobs)
+        $this->app->scoped(\Platform\FoodAlchemist\Support\FaTeam::class);
         // Spec 77c: Team-Namen der Standort-Spalte je Request merken
         $this->app->scoped(\Platform\FoodAlchemist\Services\StandortService::class);
         /**
@@ -316,6 +318,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Spec 84 §3.3 · Team-Transport in Jobs an EINER Stelle: jeder Job trägt das Team, das beim Versand galt — egal ob aus
+        // Livewire, MCP oder FaTeam::imTeam. Läuft auf der Kopie, die in den Payload geht (der laufende Request bleibt unberührt).
+        \Illuminate\Support\Facades\Context::dehydrating(function (\Illuminate\Log\Context\Repository $context) {
+            if (! $context->hasHidden(\Platform\FoodAlchemist\Support\FaTeam::SCHLUESSEL)) {
+                $context->addHidden(\Platform\FoodAlchemist\Support\FaTeam::SCHLUESSEL, \Platform\FoodAlchemist\Support\FaTeam::aktuellId());
+            }
+        });
+
         // Spec 65 · Bearbeitungssperre: serverseitige Durchsetzung für alle Editoren mit MitBearbeitungssperre.
         // Jede Methode außerhalb von sperrFreieMethoden() läuft nur, wenn die aufrufende Person die Sperre hält
         // (Klick auf „Bearbeiten"); sonst Abweisung mit Hinweis statt stillem Schreiben.

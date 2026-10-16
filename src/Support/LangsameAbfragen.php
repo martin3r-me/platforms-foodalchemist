@@ -222,9 +222,9 @@ final class LangsameAbfragen
         if (self::$teamId !== null) {
             return self::$teamId;
         }
-        $u = Auth::hasUser() ? Auth::user() : null;   // nie selbst eine Nutzer-Abfrage auslösen
-
-        return $u !== null && isset($u->current_team_id) ? (int) $u->current_team_id : null;
+        // Spec 84 A-1: dieselbe Team-Wahrheit wie Riegel und Abrechnung (Job-/MCP-Team statt UI-Team bzw. altem Worker-Login),
+        // ohne Abfrage — dieser Code läuft im Query-Listener
+        return FaTeam::aktuellIdOhneAbfrage();
     }
 
     private static function userId(): ?int
