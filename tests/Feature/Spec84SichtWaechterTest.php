@@ -50,7 +50,8 @@ function spec84_zaehle(): array
             foreach ($modelle as $kurz => $klasse) {
                 if (preg_match('/^use\s+' . preg_quote($klasse, '/') . '(?:\s+as\s+(\w+))?\s*;/m', $code, $m)) {
                     $namen[] = $m[1] ?? $kurz;
-                } elseif (str_contains($code, '\\' . $klasse . '::')) {
+                }
+                if (str_contains($code, '\\' . $klasse . '::')) {   // voll qualifiziert, auch neben einem use
                     $namen[] = preg_quote('\\' . $klasse, '/');
                 }
             }
