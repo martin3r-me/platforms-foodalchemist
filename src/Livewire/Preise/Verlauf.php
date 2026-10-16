@@ -15,18 +15,6 @@ use Platform\FoodAlchemist\Services\PreisVerlaufService;
  */
 class Verlauf extends Component
 {
-    public const W = 640;
-
-    public const H = 240;
-
-    public const RAND_L = 56;
-
-    public const RAND_R = 12;
-
-    public const RAND_O = 12;
-
-    public const RAND_U = 26;
-
     /** Linienfarben (nur Tokens), Lead bekommt immer die erste. */
     private const FARBEN = ['var(--fa-accent)', 'var(--fa-info)', 'var(--fa-ok)', 'var(--fa-warn)', 'var(--fa-crit)', 'var(--fa-ink-2)'];
 
@@ -76,8 +64,13 @@ class Verlauf extends Component
         ]);
     }
 
+    private const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+
     /**
-     * Zeichen-Geometrie: Achsen, Stufenpfade, gestrichelte Trendlinien, Messpunkte mit Tooltip.
+     * Zeichen-Geometrie in NORMIERTEN Koordinaten (0–1000 in beide Richtungen, das SVG streckt sich auf die Fläche; Linien mit
+     * non-scaling-stroke). Die Beschriftung (Achsen, Einheit) setzt die View als HTML mit FA-Typografie an Prozent-Positionen, damit
+     * die Schrift nie mit dem Diagramm skaliert. Stufenlinie = durchgehende Treppe mit senkrechtem Strich beim Preiswechsel; echte Lücken
+     * (kein Preis) werden als gestrichelter Übergang gezeichnet.
      *
      * @param  array<string,mixed>  $daten  Ergebnis von {@see PreisVerlaufService::verlauf}
      * @return array<string,mixed>
@@ -98,28 +91,14 @@ class Verlauf extends Component
         }
         $t0 = min($ts);
         $t1 = max($ts);
-        $min = min($werte);
-        $max = max($werte);
-        $spanne = $max - $min;
-        $pad = $spanne > 0 ? $spanne * 0.08 : max(abs($max) * 0.1, 0.01);   // flache Reihe: mittig, nicht am Rand
-        $yMin = max(0.0, $min - $pad);
-        $yMax = $max + $pad;
-        $innenW = self::W - self::RAND_L - self::RAND_R;
-        $innenH = self::H - self::RAND_O - self::RAND_U;
+        [$ticksY, $yMin, $yMax] = self::runderAchsenwert(min($werte), max($werte));
 
-        $x = fn (int $t) => round(self::RAND_L + ($t1 > $t0 ? ($t - $t0) / ($t1 - $t0) : 0.5) * $innenW, 2);
-        $y = fn (float $v) => round(self::RAND_O + (1 - ($yMax > $yMin ? ($v - $yMin) / ($yMax - $yMin) : 0.5)) * $innenH, 2);
+        $x = fn (int $t) => round(($t1 > $t0 ? ($t - $t0) / ($t1 - $t0) : 0.5) * 1000, 2);
+        $y = fn (float $v) => round((1 - ($v - $yMin) / ($yMax - $yMin)) * 1000, 2);
+        $dezimal = ($ticksY[1] ?? 1) - $ticksY[0] < 0.01 ? 3 : 2;
 
-        $achseY = [];
-        foreach (range(0, 4) as $i) {
-            $v = $yMin + ($yMax - $yMin) * $i / 4;
-            $achseY[] = ['y' => $y($v), 'label' => number_format($v, 2, ',', '.')];
-        }
-        $achseX = [];
-        foreach (range(0, 3) as $i) {
-            $t = (int) round($t0 + ($t1 - $t0) * $i / 3);
-            $achseX[] = ['x' => $x($t), 'label' => Carbon::createFromTimestamp($t)->format('d.m.y'), 'anker' => $i === 0 ? 'start' : ($i === 3 ? 'end' : 'middle')];
-        }
+        $achseY = array_map(fn (float $v) => ['y' => $y($v), 'label' => number_format($v, $dezimal, ',', '.')], $ticksY);
+        $achseX = self::zeitTicks($t0, $t1, $x);
 
         $svgLinien = [];
         $weitere = 0;
@@ -127,31 +106,121 @@ class Verlauf extends Component
             // Lead immer in der ersten Farbe, alle anderen der Reihe nach (nie dieselbe wie der Lead)
             $farbe = $l['lead'] ? self::FARBEN[0] : self::FARBEN[1 + ($weitere++ % (count(self::FARBEN) - 1))];
             $pfad = '';
+            $luecken = '';
             $punkte = [];
-            $vorher = null;
+            $vorher = null;   // [bis_ts, y]
             foreach ($l['segmente'] as $s) {
                 $x0 = $x($s['von_ts']);
                 $x1 = $x($s['bis_ts']);
                 $yy = $y($s['wert']);
-                $pfad .= ($vorher !== null && $vorher === $s['von_ts'] ? 'V'.$yy.' H'.$x1.' ' : 'M'.$x0.' '.$yy.' H'.$x1.' ');
-                $vorher = $s['bis_ts'];
-                $punkte[] = ['x' => $x0, 'y' => $yy, 'tip' => sprintf('%s: %s %s je Basiseinheit · Gebinde %s € · ab %s (%s)',
-                    $l['lieferant'] ?? '–', number_format($s['wert'], 2, ',', '.'), $daten['einheit'], number_format((float) $s['preis_gebinde'], 2, ',', '.'),
-                    Carbon::createFromTimestamp($s['von_ts'])->format('d.m.Y'), $s['quelle'] === 'historie' ? 'alter Stand' : 'Preiszeile')];
+                if ($vorher !== null && $vorher[0] === $s['von_ts']) {
+                    $pfad .= 'V'.$yy.' H'.$x1.' ';                                  // senkrechter Strich beim Preiswechsel
+                } else {
+                    if ($vorher !== null) {
+                        $luecken .= 'M'.$x($vorher[0]).' '.$vorher[1].' L'.$x0.' '.$yy.' ';   // kein Preis dazwischen: gestrichelt
+                    }
+                    $pfad .= 'M'.$x0.' '.$yy.' H'.$x1.' ';
+                }
+                $vorher = [$s['bis_ts'], $yy];
+                $punkte[] = [
+                    'x' => $x0, 'breite' => max(0.5, round($x1 - $x0, 2)),
+                    'tip' => sprintf('%s · %s: %s %s je Basiseinheit · Gebinde %s € · ab %s',
+                        $l['lieferant'] ?? '–', $l['artikel'] ?? '', number_format($s['wert'], 2, ',', '.'), $daten['einheit'], number_format((float) $s['preis_gebinde'], 2, ',', '.'),
+                        Carbon::createFromTimestamp($s['von_ts'])->format('d.m.Y')).($s['quelle'] === 'historie' ? ' (alter Stand)' : ''),
+                ];
             }
             $trend = null;
             if ($l['trend'] !== null) {
-                $trend = ['x1' => $x($l['trend']['von_ts']), 'y1' => $y(max($yMin, $l['trend']['start_wert'])), 'x2' => $x($l['trend']['bis_ts']), 'y2' => $y(max($yMin, $l['trend']['ende_wert']))];
+                $trend = ['x1' => $x($l['trend']['von_ts']), 'y1' => $y(min($yMax, max($yMin, $l['trend']['start_wert']))),
+                    'x2' => $x($l['trend']['bis_ts']), 'y2' => $y(min($yMax, max($yMin, $l['trend']['ende_wert'])))];
             }
             $svgLinien[] = [
-                'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $l['lead'] ? 3 : 1.75, 'pfad' => trim($pfad), 'punkte' => $punkte, 'trend' => $trend,
+                'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $l['lead'] ? 2.5 : 1.75, 'pfad' => trim($pfad), 'luecken' => trim($luecken), 'punkte' => $punkte, 'trend' => $trend,
                 'lead' => $l['lead'], 'lieferant' => $l['lieferant'], 'artikel' => $l['artikel'],
                 'aktuell' => end($l['segmente'])['wert'], 'trend_text' => self::trendText($l['trend'], (string) $daten['einheit']),
             ];
         }
 
-        return ['w' => self::W, 'h' => self::H, 'links' => self::RAND_L, 'rechts' => self::W - self::RAND_R, 'oben' => self::RAND_O, 'unten' => self::H - self::RAND_U,
-            'achse_y' => $achseY, 'achse_x' => $achseX, 'linien' => $svgLinien, 'einheit' => $daten['einheit']];
+        return ['achse_y' => $achseY, 'achse_x' => $achseX, 'linien' => $svgLinien, 'einheit' => $daten['einheit'], 'hoehe' => self::HOEHE_PX];
+    }
+
+    /** Höhe der Zeichenfläche in Pixeln (Dominique: etwa 220–260 px im Modal). */
+    public const HOEHE_PX = 240;
+
+    /**
+     * Runde Achsenwerte: 4–5 Ticks mit „schönen“ Schritten (1 / 2 / 2,5 / 5 × 10ⁿ), die Achse reicht von Tick zu Tick.
+     *
+     * @return array{0:list<float>, 1:float, 2:float}  Ticks, Minimum, Maximum der Achse
+     */
+    public static function runderAchsenwert(float $min, float $max): array
+    {
+        if ($max - $min < 1e-9) {
+            $mitte = $max;
+            $min = $mitte * 0.9;
+            $max = $mitte * 1.1;
+            if ($mitte == 0.0) {
+                $max = 1.0;
+            }
+        }
+        $roh = ($max - $min) / 4;
+        $potenz = 10 ** floor(log10($roh));
+        $schritt = $potenz;
+        foreach ([1, 2, 2.5, 5, 10] as $f) {
+            $schritt = $f * $potenz;
+            if ($schritt >= $roh) {
+                break;
+            }
+        }
+        $von = max(0.0, floor($min / $schritt) * $schritt);
+        $bis = ceil($max / $schritt) * $schritt;
+        $ticks = [];
+        for ($v = $von; $v <= $bis + $schritt * 1e-6; $v += $schritt) {
+            $ticks[] = round($v, 6);
+        }
+
+        return [$ticks, (float) $ticks[0], (float) end($ticks)];
+    }
+
+    /**
+     * Zeit-Ticks je nach Spanne: unter ~6 Wochen wöchentlich („12.10.“), bis ~8 Monate monatlich, bis ~2 Jahre je Quartal, darüber je Jahr
+     * (Format „Jan 26“, bei Wochen „TT.MM.“). Mindestens ein Tick; sonst Anfang und Ende.
+     *
+     * @return list<array{x:float, label:string, y?:null}>
+     */
+    public static function zeitTicks(int $t0, int $t1, \Closure $x): array
+    {
+        $von = Carbon::createFromTimestamp($t0);
+        $bis = Carbon::createFromTimestamp($t1);
+        $tage = max(1, $von->diffInDays($bis));
+        $ticks = [];
+        if ($tage < 45) {
+            for ($d = $von->copy()->startOfDay(); $d->lte($bis); $d->addDays(7)) {
+                $ticks[] = ['x' => $x($d->getTimestamp()), 'label' => $d->format('d.m.')];
+            }
+        } else {
+            $schrittMonate = $tage <= 245 ? 1 : ($tage <= 740 ? 3 : 12);
+            $m = $von->copy()->startOfMonth();
+            if ($m->lt($von)) {
+                $m->addMonth();
+            }
+            if ($schrittMonate === 3) {
+                while ($m->month % 3 !== 1) {
+                    $m->addMonth();
+                }
+            } elseif ($schrittMonate === 12) {
+                while ($m->month !== 1) {
+                    $m->addMonth();
+                }
+            }
+            for (; $m->lte($bis); $m->addMonths($schrittMonate)) {
+                $ticks[] = ['x' => $x($m->getTimestamp()), 'label' => self::MONATE[$m->month - 1].' '.$m->format('y')];
+            }
+        }
+        if ($ticks === []) {
+            $ticks = [['x' => 0.0, 'label' => $von->format('d.m.y')], ['x' => 1000.0, 'label' => $bis->format('d.m.y')]];
+        }
+
+        return $ticks;
     }
 
     /** „+0,12 €/kg pro Monat · +3,1 % pro Jahr“ (Minuszeichen bei Fall); null ohne Trend. */
