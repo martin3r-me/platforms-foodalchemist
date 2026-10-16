@@ -11,24 +11,50 @@
             @svg('heroicon-m-chevron-right', 'w-4 h-4 shrink-0 transition-transform')
             Frühere Preise ({{ $daten['gesamt'] }})
         </button>
+        @if($fehler)<x-fa::notice tone="crit" class="mb-1" data-fruehere-fehler>{{ $fehler }}</x-fa::notice>@endif
         <div x-show="offen" x-cloak class="max-h-72 overflow-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" data-fruehere-liste>
             <table class="fa-table">
                 <thead>
                     <tr>
-                        <th>Gültig ab</th><th>Gültig bis</th><th>Art</th><th class="num">Preis</th><th class="num">Je Basiseinheit</th><th>Quelle</th>
+                        <th>Gültig ab</th><th>Gültig bis</th><th>Art</th><th class="num">Preis</th><th class="num">Je Basiseinheit</th><th>Quelle</th>@if($darfEdit)<th></th>@endif
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($daten['zeilen'] as $i => $z)
-                        <tr wire:key="fruehere-{{ $i }}" data-fruehere-zeile data-aktion="{{ $z['aktion'] ? '1' : '0' }}">
-                            <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $datum($z['von']) }}</td>
-                            <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $datum($z['bis']) ?? '–' }}</td>
-                            <td><x-fa::badge :tone="$z['aktion'] ? 'warn' : 'neutral'">{{ $z['aktion'] ? 'Aktion' : 'Standard-EK' }}</x-fa::badge></td>
-                            <td class="num font-medium">{{ $zahl($z['preis']) }} €</td>
-                            <td class="num text-[var(--fa-ink-2)]">
+                        <tr wire:key="fruehere-{{ $z['id'] ?? $i }}" data-fruehere-zeile data-aktion="{{ $z['aktion'] ? '1' : '0' }}" data-ausgeblendet="{{ $z['ausgeblendet'] ? '1' : '0' }}" data-verdacht="{{ $z['verdacht'] ? '1' : '0' }}">
+                            <td class="whitespace-nowrap text-[var(--fa-ink-2)] {{ $z['ausgeblendet'] ? 'line-through' : '' }}">{{ $datum($z['von']) }}</td>
+                            <td class="whitespace-nowrap text-[var(--fa-ink-2)] {{ $z['ausgeblendet'] ? 'line-through' : '' }}">{{ $datum($z['bis']) ?? '–' }}</td>
+                            <td>
+                                <x-fa::badge :tone="$z['aktion'] ? 'warn' : 'neutral'">{{ $z['aktion'] ? 'Aktion' : 'Standard-EK' }}</x-fa::badge>
+                                @if($z['verdacht'])
+                                    <x-fa::badge tone="warn" title="Weicht um mehr als das {{ config('foodalchemist.preise.ausreisser.faktor') }}-Fache vom Vorgänger und vom Nachfolger ab und galt nur kurz. Wird nicht automatisch ausgeblendet." data-verdacht-badge>möglicher Erfassungsfehler</x-fa::badge>
+                                @endif
+                                @if($z['ausgeblendet'])
+                                    <x-fa::badge tone="neutral" data-ausgeblendet-badge>ausgeblendet</x-fa::badge>
+                                @endif
+                            </td>
+                            <td class="num font-medium {{ $z['ausgeblendet'] ? 'line-through text-[var(--fa-ink-3)]' : '' }}">{{ $zahl($z['preis']) }} €</td>
+                            <td class="num text-[var(--fa-ink-2)] {{ $z['ausgeblendet'] ? 'line-through' : '' }}">
                                 @if($z['je_basis'] !== null){{ $zahl($z['je_basis']) }} {{ $z['einheit'] }}@else<span class="text-[var(--fa-ink-3)]">nicht berechenbar</span>@endif
                             </td>
-                            <td class="text-[var(--fa-ink-3)]">{{ $z['quelle'] }}</td>
+                            <td class="text-[var(--fa-ink-3)]">
+                                {{ $z['quelle'] }}
+                                @if($z['ausgeblendet'] && $z['grund'])<span class="block text-[length:var(--fa-text-sm)]" data-ausgeblendet-grund>Grund: {{ $z['grund'] }}</span>@endif
+                            </td>
+                            @if($darfEdit)
+                                <td class="whitespace-nowrap" x-data="{ frage: false }">
+                                    @if($z['ausgeblendet'])
+                                        <x-fa::button size="sm" variant="ghost" wire:click="einblenden({{ $z['id'] }})" data-fruehere-einblenden>Einblenden</x-fa::button>
+                                    @else
+                                        <x-fa::button size="sm" variant="ghost" x-show="! frage" x-on:click="frage = true" data-fruehere-ausblenden-oeffnen>als Fehler ausblenden</x-fa::button>
+                                        <span x-show="frage" x-cloak class="inline-flex items-center gap-1.5">
+                                            <x-fa::input size="sm" wire:model="gruende.{{ $z['id'] }}" placeholder="Grund (Pflicht)" aria-label="Grund zum Ausblenden" class="w-44" data-fruehere-grund />
+                                            <x-fa::button size="sm" variant="danger" wire:click="ausblenden({{ $z['id'] }})" data-fruehere-ausblenden>Ausblenden</x-fa::button>
+                                            <x-fa::button size="sm" variant="ghost" x-on:click="frage = false">Abbrechen</x-fa::button>
+                                        </span>
+                                    @endif
+                                </td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>

@@ -43,6 +43,8 @@ class PlattformProtokoll
         'projekt_lizenz_uebernommen' => 'Projekt: Lizenz erteilt, Übernahme in den Mandanten',   // Spec 82 §9
         'paket_grundeinstellungen_gebucht' => 'Paket „Grundeinstellungen“ gebucht',   // Spec 82 §13 I
         'paket_grundeinstellungen_nachgezogen' => 'Paket „Grundeinstellungen“ nachgezogen (neue Vorlagen-Zeilen kopiert)',
+        'preis_stand_ausgeblendet' => 'Preis-Stand als Fehler ausgeblendet',   // Preisverlauf: Erfassungsfehler aus Linie/Trend
+        'preis_stand_eingeblendet' => 'Preis-Stand wieder eingeblendet',
         'plan_preis_gesetzt' => 'Gebühren-Preis gesetzt',
         'plan_preis_startwerte' => 'Gebühren-Startpreise angelegt',
     ];

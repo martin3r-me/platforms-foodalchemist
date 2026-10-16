@@ -680,6 +680,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PreiseVerlaufGetTool::class,   // Preisverlauf als Stufenlinie + Trend
                     \Platform\FoodAlchemist\Tools\NonfoodPruefenTool::class,   // Non-Food-Prüfliste
                     \Platform\FoodAlchemist\Tools\NonfoodSetTool::class,   // Non-Food-Urteil von Hand
+                    \Platform\FoodAlchemist\Tools\PreiseHistorieAusblendenTool::class,   // Preis-Stand als Erfassungsfehler aus-/einblenden (Admin)
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesListTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGetTool::class,

@@ -170,7 +170,7 @@ class PreisVerlaufService
                 'segmente' => array_map(fn (array $s) => [
                     'von' => Carbon::createFromTimestamp($s['von_ts'])->toDateString(), 'bis' => Carbon::createFromTimestamp($s['bis_ts'])->toDateString(),
                     'von_ts' => $s['von_ts'], 'bis_ts' => $s['bis_ts'],
-                    'wert' => round($s['wert'], 4), 'preis_gebinde' => $s['preis'], 'quelle' => $s['quelle'],
+                    'wert' => round($s['wert'], 4), 'preis_gebinde' => $s['preis'], 'quelle' => $s['quelle'], 'verdacht' => (bool) ($s['verdacht'] ?? false),
                 ], $zugeschnitten),
                 'staende' => count($zugeschnitten),
                 'ohne_wechsel' => $this->ohneWechsel($zugeschnitten),
@@ -198,7 +198,7 @@ class PreisVerlaufService
     private function staendeJeArtikel(?Team $team, array $items): array
     {
         $ids = array_keys($items);
-        $spalten = ['id', 'supplier_item_id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at'];
+        $spalten = ['id', 'supplier_item_id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at', 'ausgeblendet_at', 'ausgeblendet_preis'];
 
         $q = DB::table('foodalchemist_prices')->whereIn('supplier_item_id', $ids)->whereNull('deleted_at');
         $this->preise->stammFilter($q, 'foodalchemist_prices', $team);
@@ -206,7 +206,7 @@ class PreisVerlaufService
 
         if (self::$hatHistorie ??= Schema::hasTable('foodalchemist_price_history')) {
             $h = DB::table('foodalchemist_price_history')->whereIn('supplier_item_id', $ids)
-                ->get(['id', 'supplier_item_id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at'])
+                ->get(['id', 'supplier_item_id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at', 'ausgeblendet_at', 'ausgeblendet_preis'])
                 ->map(fn ($r) => (object) ((array) $r + ['creation_date' => null, 'quelle' => 'historie']));
             $zeilen = $zeilen->concat($h);
         }
@@ -221,6 +221,9 @@ class PreisVerlaufService
             $linienStatus = $r->quelle === 'historie' ? ['0', ''] : ['0', '2', ''];
             if ($item === null || $r->price === null || (float) $r->price < 0 || $r->is_blocked || ! in_array((string) $r->status, $linienStatus, true)) {
                 continue;
+            }
+            if ($this->istAusgeblendet($r)) {
+                continue;   // als Erfassungsfehler ausgeblendet: nicht in Linie, Trend und Statistik
             }
             $t = $tier($r, $item);
             if ($t === null) {
@@ -250,7 +253,7 @@ class PreisVerlaufService
                 }
                 $ohneDoppel[] = $s;
             }
-            $aus[$laId] = $ohneDoppel;
+            $aus[$laId] = $this->markiereAusreisser($ohneDoppel);
         }
 
         return $aus;
@@ -295,11 +298,11 @@ class PreisVerlaufService
         }
         $tier = $this->stufenFunktion($team);
         $historie = DB::table('foodalchemist_price_history')->where('supplier_item_id', $item->id)
-            ->get(['id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at']);
+            ->get(['id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at', 'ausgeblendet_at', 'ausgeblendet_preis', 'ausgeblendet_grund']);
 
         $q = DB::table('foodalchemist_prices')->where('supplier_item_id', $item->id)->whereNull('deleted_at');
         $this->preise->stammFilter($q, 'foodalchemist_prices', $team);
-        $preiszeilen = $q->get(['team_id', 'status', 'price', 'status_valid_from', 'change_date', 'creation_date', 'created_at']);
+        $preiszeilen = $q->get(['team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'creation_date', 'created_at', 'ausgeblendet_at', 'ausgeblendet_preis']);
 
         $beste = null;
         foreach ($preiszeilen->concat($historie) as $r) {
@@ -332,10 +335,33 @@ class PreisVerlaufService
             if (isset($inListe[$key])) {
                 continue;
             }
-            $stand[$key.'|'.$r->status] = ['start' => $ts, 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null, 'preis' => (float) $r->price, 'status' => (string) $r->status];
+            $stand[$key.'|'.$r->status] = ['start' => $ts, 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null, 'preis' => (float) $r->price, 'status' => (string) $r->status,
+                'id' => (int) $r->id, 'ausgeblendet' => $this->istAusgeblendet($r), 'grund' => $r->ausgeblendet_grund, 'verdacht' => false];
         }
         $stand = array_values($stand);
         usort($stand, fn ($a, $b) => $a['start'] <=> $b['start']);
+
+        // möglicher Erfassungsfehler: auf der Kette aus Preiszeilen und sichtbaren Historie-Ständen (ohne Aktion, ohne Ausgeblendete)
+        $kette = [];
+        foreach ($preiszeilen as $r) {
+            $start = $r->status_valid_from ?? $r->change_date ?? $r->creation_date ?? $r->created_at;
+            if ($tier($r, $item) !== $beste || $r->price === null || (float) $r->price < 0 || $r->is_blocked || $start === null
+                || $this->istAusgeblendet($r) || ! in_array((string) $r->status, ['0', '2', ''], true)) {
+                continue;
+            }
+            $kette[] = ['start' => Carbon::parse($start)->getTimestamp(), 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null, 'preis' => (float) $r->price, 'idx' => null];
+        }
+        foreach ($stand as $i => $sx) {
+            if (! $sx['ausgeblendet'] && ! in_array($sx['status'], ['A', '2'], true)) {
+                $kette[] = ['start' => $sx['start'], 'ende' => $sx['ende'], 'preis' => $sx['preis'], 'idx' => $i];
+            }
+        }
+        usort($kette, fn ($a, $b) => $a['start'] <=> $b['start']);
+        foreach ($this->markiereAusreisser($kette) as $k) {
+            if ($k['idx'] !== null && $k['verdacht']) {
+                $stand[$k['idx']]['verdacht'] = true;
+            }
+        }
 
         $zeilen = [];
         foreach ($stand as $i => $s) {
@@ -352,6 +378,7 @@ class PreisVerlaufService
                 'von' => Carbon::createFromTimestamp($s['start'])->toDateString(), 'bis' => $ende !== null ? Carbon::createFromTimestamp($ende)->toDateString() : null,
                 'preis' => $s['preis'], 'je_basis' => $basis !== null ? round((float) $basis['value'], 4) : null, 'einheit' => $basis['unit'] ?? null,
                 'aktion' => in_array($s['status'], ['A', '2'], true), 'quelle' => 'Necta-Historie',
+                'id' => $s['id'], 'ausgeblendet' => $s['ausgeblendet'], 'grund' => $s['grund'], 'verdacht' => $s['verdacht'],
             ];
         }
         $zeilen = array_reverse($zeilen);   // neueste zuerst
@@ -380,7 +407,7 @@ class PreisVerlaufService
             if ($ende <= $p['start']) {
                 continue;
             }
-            $aus[] = ['von_ts' => $p['start'], 'bis_ts' => $ende, 'wert' => $p['wert'], 'preis' => $p['preis'], 'quelle' => $p['quelle']];
+            $aus[] = ['von_ts' => $p['start'], 'bis_ts' => $ende, 'wert' => $p['wert'], 'preis' => $p['preis'], 'quelle' => $p['quelle'], 'verdacht' => (bool) ($p['verdacht'] ?? false)];
         }
 
         return $aus;
@@ -516,6 +543,110 @@ class PreisVerlaufService
 
         return $this->verlauf($team, $ids, $von, $bis, $lead, $laId)
             + ['gp_id' => (int) $gp->id, 'gp_name' => $gp->name, 'lead_la_id' => $lead, 'la_gesamt' => count($alleIds)];
+    }
+
+    /**
+     * Möglicher Erfassungsfehler: ein Stand, der um mehr als `faktor` vom Vorgänger UND vom Nachfolger abweicht (nach oben oder unten) und kürzer
+     * als `max_tage` gilt. Erster und letzter Stand haben nur einen Nachbarn und werden nie markiert. Markiert nur, blendet nichts aus.
+     * Schwellen: `foodalchemist.preise.ausreisser` (config).
+     *
+     * @param  list<array<string,mixed>>  $liste  aufsteigend nach start, je Eintrag start, ende (ts|null), preis
+     * @return list<array<string,mixed>>  dieselben Einträge mit `verdacht` (bool)
+     */
+    public function markiereAusreisser(array $liste): array
+    {
+        $faktor = max(1.0, (float) config('foodalchemist.preise.ausreisser.faktor', 3.0));
+        $maxSek = max(0, (int) config('foodalchemist.preise.ausreisser.max_tage', 14)) * 86400;
+        $abweichend = fn (float $a, float $b) => $a > 0 && $b > 0 && max($a, $b) / min($a, $b) > $faktor;
+        $n = count($liste);
+        foreach ($liste as $i => &$s) {
+            $s['verdacht'] = false;
+            if ($i === 0 || $i === $n - 1) {
+                continue;
+            }
+            $naechster = $liste[$i + 1]['start'];
+            $dauer = min($s['ende'] ?? PHP_INT_MAX, $naechster) - $s['start'];
+            if ($dauer < $maxSek && $abweichend((float) $s['preis'], (float) $liste[$i - 1]['preis']) && $abweichend((float) $s['preis'], (float) $liste[$i + 1]['preis'])) {
+                $s['verdacht'] = true;
+            }
+        }
+        unset($s);
+
+        return $liste;
+    }
+
+    /** Ein Stand zählt als ausgeblendet, solange der Preis noch der ausgeblendete ist (korrigiert Necta die Preiszeile, gilt sie wieder). */
+    private function istAusgeblendet(object $r): bool
+    {
+        return ($r->ausgeblendet_at ?? null) !== null && ($r->ausgeblendet_preis ?? null) !== null && $r->price !== null
+            && abs((float) $r->ausgeblendet_preis - (float) $r->price) < 0.00005;
+    }
+
+    /**
+     * Einen Preis-Stand als Erfassungsfehler ausblenden (nicht löschen): `$quelle` historie (Necta-Historie) oder preis (abgelöste Preiszeile),
+     * Grund Pflicht. Rechte wie beim Pflegen des Artikels: Rolle + der Artikel gehört dem Team (Master: Stamm-Artikel). Protokoll am Artikel.
+     */
+    public function ausblenden(Team $team, FoodAlchemistSupplierItem $item, string $quelle, int $id, string $grund, ?int $userId, \Platform\FoodAlchemist\Enums\FaRolle $mindestens = \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren): void
+    {
+        $zeile = $this->standZeile($team, $item, $quelle, $id, $userId, $mindestens, 'Preis-Stand ausblenden');   // zuerst Rechte, dann Eingabe prüfen
+        $grund = trim($grund);
+        if (mb_strlen($grund) < 3) {
+            throw new \RuntimeException('Bitte einen Grund angeben (z. B. „Erfassungsfehler beim Lieferanten“).');
+        }
+        if ($this->istAusgeblendet($zeile)) {
+            throw new \RuntimeException('Dieser Stand ist schon ausgeblendet.');
+        }
+        DB::table($this->tabelle($quelle))->where('id', $id)->update([
+            'ausgeblendet_at' => now(), 'ausgeblendet_von' => $userId, 'ausgeblendet_grund' => mb_substr($grund, 0, 500), 'ausgeblendet_preis' => $zeile->price, 'updated_at' => now(),
+        ]);
+        $this->protokoll('preis_stand_ausgeblendet', $item, $quelle, $id, $zeile, $userId, $grund);
+    }
+
+    /** Den Stand wieder einblenden. */
+    public function einblenden(Team $team, FoodAlchemistSupplierItem $item, string $quelle, int $id, ?int $userId, \Platform\FoodAlchemist\Enums\FaRolle $mindestens = \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren): void
+    {
+        $zeile = $this->standZeile($team, $item, $quelle, $id, $userId, $mindestens, 'Preis-Stand einblenden');
+        if (($zeile->ausgeblendet_at ?? null) === null) {
+            throw new \RuntimeException('Dieser Stand ist nicht ausgeblendet.');
+        }
+        DB::table($this->tabelle($quelle))->where('id', $id)->update(['ausgeblendet_at' => null, 'ausgeblendet_von' => null, 'ausgeblendet_grund' => null, 'ausgeblendet_preis' => null, 'updated_at' => now()]);
+        $this->protokoll('preis_stand_eingeblendet', $item, $quelle, $id, $zeile, $userId, null);
+    }
+
+    private function tabelle(string $quelle): string
+    {
+        return match ($quelle) {
+            'historie' => 'foodalchemist_price_history',
+            'preis' => 'foodalchemist_prices',
+            default => throw new \RuntimeException('Quelle muss historie oder preis sein.'),
+        };
+    }
+
+    private function standZeile(Team $team, FoodAlchemistSupplierItem $item, string $quelle, int $id, ?int $userId, \Platform\FoodAlchemist\Enums\FaRolle $mindestens, string $wofuer): object
+    {
+        app(FaRechte::class)->pruefeId($userId, $team, $mindestens, $wofuer);
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Dieser Artikel kommt aus einem übergeordneten Katalog. Preis-Stände ausblenden kann nur das Team, dem er gehört.');
+        }
+        $q = DB::table($this->tabelle($quelle))->where('id', $id)->where('supplier_item_id', $item->id);
+        if ($quelle === 'preis') {
+            $q->whereNull('deleted_at');
+        }
+        $zeile = $q->first();
+        if ($zeile === null || $zeile->price === null) {
+            throw new \RuntimeException('Stand nicht gefunden.');
+        }
+
+        return $zeile;
+    }
+
+    private function protokoll(string $aktion, FoodAlchemistSupplierItem $item, string $quelle, int $id, object $zeile, ?int $userId, ?string $grund): void
+    {
+        app(PlattformProtokoll::class)->schreibe($aktion, array_filter([
+            'quelle' => $quelle, 'stand_id' => $id, 'preis' => (float) $zeile->price, 'grund' => $grund,
+            'gueltig_ab' => $zeile->status_valid_from ?? $zeile->change_date ?? null,
+        ], fn ($v) => $v !== null), $userId !== null ? \Platform\Core\Models\User::find($userId) : null, $item);
+        self::flush();
     }
 
     /** Für Tests: Zwischenspeicher der Tabellen-Prüfung zurücksetzen. */

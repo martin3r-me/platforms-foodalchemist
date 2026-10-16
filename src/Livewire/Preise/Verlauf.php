@@ -143,7 +143,8 @@ class Verlauf extends Component
                     'x' => $x0, 'breite' => max(0.5, round($x1 - $x0, 2)),
                     'tip' => sprintf('%s · %s: %s %s je Basiseinheit · Gebinde %s € · ab %s',
                         $l['lieferant'] ?? '–', $l['artikel'] ?? '', number_format($s['wert'], 2, ',', '.'), $daten['einheit'], number_format((float) $s['preis_gebinde'], 2, ',', '.'),
-                        Carbon::createFromTimestamp($s['von_ts'])->format('d.m.Y')).($s['quelle'] === 'historie' ? ' (alter Stand)' : ''),
+                        Carbon::createFromTimestamp($s['von_ts'])->format('d.m.Y')).($s['quelle'] === 'historie' ? ' (alter Stand)' : '').(($s['verdacht'] ?? false) ? ' · möglicher Erfassungsfehler' : ''),
+                    'verdacht' => (bool) ($s['verdacht'] ?? false),
                 ];
             }
             $trend = null;
