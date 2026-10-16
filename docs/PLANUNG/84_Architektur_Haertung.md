@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **v0.5, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **v0.6, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -92,6 +92,27 @@ Ausdrücklich anderes Team (Scheduler, Artisan, Master-Recompute je Mandant, Too
 - **`KiVerursacher::imKontext` und der Nutzer-Klon** in `RecipesGenerateTool` entfallen.
 - **Job-`teamId` und Context nicht als zwei Wahrheiten:** Solange Jobs `teamId` tragen, prüft eine Job-Middleware hart `Context-Team == $this->teamId`, sonst eigene Ausnahme `TeamKontextWiderspruch`. Später kann `teamId` aus den Jobs entfallen.
 - **Login in Jobs** bleibt nur, wo ein *Nutzer* gebraucht wird (Call-Log „wer“), nicht für „welches Team“.
+
+### §3.3a Umgesetzt (A-1 bis A-3) und Abweichungen vom Zielbild
+
+**Vorrang, wie gebaut:** `FaTeam::aktuell()` = (1) ausdrücklich gesetzt (`imTeam` bzw. im Job aus dem Payload) → (2) Core-Override (`TeamContext`) → (3) `Auth::user()->currentTeam`.
+
+**Abweichung von §3.3 (dort: Override zuerst) und Auflösung von Vanessas H2:**
+- H2 befürchtete: Eine HTTP-Middleware setzt `fa.team_id` = UI-Team A, danach setzt der Core im selben Request einen Override auf B, und alles außerhalb der Tool-Basis liest weiter A.
+- Diese Lage kann nicht entstehen, weil es **keine Middleware** gibt, die `fa.team_id` setzt. Der Wert entsteht nur durch `imTeam` (bewusster Rahmen) oder durch die Wiederherstellung im Worker. Ohne ausdrücklichen Rahmen gewinnt der Override wie in H2 verlangt (Test 9: `Spec84KiTeamTest` „nach team.switch …“).
+- Ausdrücklich vor Override ist nötig, damit `imTeam` auch **mitten in einem MCP-Aufruf** wirkt, etwa wenn ein Master-Lauf je Mandant Jobs verteilt (A-4). Mit Override zuerst wäre `imTeam` dort wirkungslos.
+- Tool-Loop (H2, zweiter Teil): Die Tool-Hülle läuft in `imTeam(Team des Aufrufs)`, `Context::scope` stellt im `finally` zurück; Test 8 belegt, dass nichts nachhängt.
+- **Regel daraus:** `fa.team_id` darf nie stillschweigend gesetzt werden, nur über `imTeam`. Eine künftige Middleware dafür wäre ein Fehler.
+
+**Falle, durch Test 2/5 gefunden:** `FaTeam::imTeam($t, fn () => Job::dispatch())` gibt ein `PendingDispatch` zurück. Laravel versendet erst in dessen `__destruct`, also **nach** dem Rahmen und mit falschem Team. `imTeam` löst das Ergebnis jetzt im Rahmen auf.
+
+**Sync-Queue:** `Context::hydrate()` ersetzt den laufenden Context. Beim Sync-Treiber (Tests, `dispatchSync`) bleibt der Job-Kontext danach im Request stehen, außer der Versand lag in `imTeam`. Auf io läuft die Queue über `database`, dort betrifft das nur den Worker.
+
+**Messung (E-1):** In der Tool-Hülle `imTeam` außen, `LangsameAbfragen::imEingang` innen, Team-ID aus `FaTeam`. Für HTTP und Jobs nutzt die Messung `FaTeam::aktuellIdOhneAbfrage()`: gleicher Vorrang, aber ohne Query, weil der Code im `DB::listen`-Handler läuft.
+
+**A-3, Warnung statt Ausnahme:** Weicht das Auftragsteam (`teamId`) vom Versand-Team im Payload ab, wird bis A-4 nur gewarnt (Log), und das Auftragsteam gewinnt. Ein Wurf würde laufende Massenläufe abbrechen, solange Versand-Stellen noch ohne `imTeam` arbeiten. Nach A-4 wird daraus `TeamKontextWiderspruch`.
+
+**Abrechnung (#452):** `MitKiVerursacher` liefert die Middleware `ImTeamKontext`, `KiVerursacher::imKontext` ist eine Hülle um `FaTeam::imTeam` (`KONTEXT_PLATTFORM` = ausdrücklich ohne Team = Plattform, auch mit altem Login). Damit gibt es EINEN Kontext für Kill-Switch, Budget, Call-Log, Abrechnung und Messung.
 
 ### §3.4 Bauschritte (je ein PR)
 
@@ -226,7 +247,7 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 
 | # | Schritt | Wer | Wann |
 |---|---|---|---|
-| E-1 | Messung io: eine Woche Slow-Query-Log + Top-Seiten nach Payload/Ladezeit (Vorbild: Wissen hatte 15,5 MB / 71k Knoten) | Kurator | sofort |
+| E-1 | Messung **in der Anwendung** (nicht MySQL-Slow-Log): `DB::listen`, Log-Kanal `fa-langsam` mit Eingang/Team/Aufrufer, N+1-Zusammenfassung, Auswerte-Kommando; dann eine Woche io + Top-Seiten nach Payload/Ladezeit | Vanessa (gebaut, **gemergt #457**), Auswertung Kurator | vor B2 |
 | E-2 | Listen-Audit: jede Liste/Suche auf großen Tabellen paginiert oder begrenzt (Muster Wissen #438), gezielt Lieferanten, Artikel, Preise, Historie, Signale | Vanessa | nach B2 |
 | E-3 | Indizes für den B3-Sichtfilter (`team_id`, `deleted_at`, Hülle-/Abo-Spalten) **vor B3**, mit EXPLAIN-Belegen vorher/nachher | „test“ | vor PR 12 |
 | E-4 | C3b vorgezogen: Livewire-Scan und Tool-Liste cachen, mit Rückfall (Cache fehlt oder Hash passt nicht → live scannen) | Vanessa | nach C3a |
@@ -405,8 +426,11 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 | PR | Stand |
 |---|---|
-| 0 | lokal fertig: `fix/spec84-schreib-leck` (Riegel §4.0 + dritte Master-Definition) + `fix/spec84-brief-vorlagen-team` (L1-B, Variante B, Migration `2026_11_09_100000`) |
-| O1 | lokal fertig: `fix/spec84-angebote-unterteam` (`e63fe1cf`) |
+| 0 | **gemergt #455**, live auf io (Host 0857b98) |
+| O1 | **gemergt #456**, live auf io |
+| C3a | **gemergt #454** (Vanessa) |
+| E-1 | **gemergt #457** (Vanessa) |
+| A-1 / A-2 / A-3 | lokal fertig, gestapelt auf e0ac84ac: `feat/spec84-a1-fateam`, `feat/spec84-a2-ki-fateam`, `feat/spec84-a3-job-team` |
 | 2 (B0a) | **gemergt #453** (Vanessa) |
 | E3 Support-Zugang (§4.4) | offen, nach A-2 („test“) |
 | E5 Skizzen-Code löschen | offen („test“) |
@@ -494,6 +518,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-16 · v0.6: §3.3a Umsetzung A-1–A-3 inkl. Auflösung H2, PendingDispatch-Falle, Messung über FaTeam; E-1 in der Anwendung; Stand PR 0/O1/C3a/E-1 gemergt.
 - 2026-10-16 · v0.5 (Nachtrag): E3 entschieden → §4.4 Support-Zugang auf Freigabe; neuer Teil E Skalierung/Leistung (§5a).
 - 2026-10-16 · v0.5: Entscheide E1 (demo egal), E2 (Fehler), E4, E5 (löschen), E6, E7, E8 (Lücke) eingetragen; E3 offen; L1-B Variante B umgesetzt; Stand je PR in §7.
 
