@@ -86,7 +86,8 @@ class MatchService
             })
             ->where('foodalchemist_supplier_items.supplier_id', $supplierId)
             ->whereNull('s.gp_id')
-            ->where('foodalchemist_supplier_items.is_discontinued', false)
+            // ausgelistet oder von Necta eingestellt: kein GP-Matching mehr (Entscheid Dominique 16.10.2026)
+            ->lieferbar()
             ->select('foodalchemist_supplier_items.*')
             ->orderBy('foodalchemist_supplier_items.id')
             ->get();

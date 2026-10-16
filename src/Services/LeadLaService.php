@@ -512,7 +512,8 @@ class LeadLaService
             })
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
-            ->where('foodalchemist_supplier_items.is_discontinued', false)
+            // Entscheid Dominique 16.10.2026: von Necta eingestellte Artikel (nicht mehr bestellbar) nicht vorschlagen
+            ->lieferbar()
             ->whereRaw('LOWER(foodalchemist_supplier_items.designation) LIKE ?', ['%' . $tokens[0] . '%'])
             ->limit(200)
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
@@ -549,7 +550,7 @@ class LeadLaService
             })
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
-            ->where('foodalchemist_supplier_items.is_discontinued', false);
+            ->lieferbar();   // eingestellte Artikel (Necta, nicht bestellbar) nicht zum Verknüpfen anbieten
         \Platform\FoodAlchemist\Support\Suche::likeAny($query, [
             'foodalchemist_supplier_items.designation',
             "COALESCE(foodalchemist_supplier_items.article_number, '')",
