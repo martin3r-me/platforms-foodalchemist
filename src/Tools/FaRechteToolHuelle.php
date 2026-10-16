@@ -56,6 +56,16 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
 
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
+        // Spec 84 E-1: jeder FA-Tool-Aufruf ist ein eigener Mess-Abschnitt (Eingang = Tool-Name, Team = MCP-Team)
+        return \Platform\FoodAlchemist\Support\LangsameAbfragen::imEingang(
+            'mcp:' . $this->getName(),
+            $context->team instanceof Team ? (int) $context->team->id : null,
+            fn () => $this->ausfuehren($arguments, $context),
+        );
+    }
+
+    private function ausfuehren(array $arguments, ToolContext $context): ToolResult
+    {
         $user = $context->user;
         // Spec 82 §13 C3: Vollsperre eines beendeten Mandanten — jedes FA-Tool FORBIDDEN außer Export und Plattform-Steuerung,
         // auch für Plattform-Admins (keine Inhalts-Ausnahme, §13 G)
