@@ -888,6 +888,16 @@ return [
     ],
 
     /*
+     * Spec 84 B3: automatischer Sichtfilter (Global Scope TeamSicht). `stufe` 0 = aus (Standard), 1 = Abo-Typen (Rezept, Paket,
+     * Konzept, Format). Mit Stufe ≥ 1 läuft auch der Abo-Zweig als Menge statt OR. Einschalten auf io erst mit E-1-Vorher-Werten.
+     * `ohne_kontext`: an einem FA-Eingang (Seite, MCP-Tool) ohne Team → `werfen` (TeamKontextFehltException) oder Notschalter `leer`.
+     */
+    'team_sicht' => [
+        'stufe' => (int) env('FOODALCHEMIST_TEAM_SICHT_STUFE', 0),
+        'ohne_kontext' => env('FOODALCHEMIST_TEAM_SICHT_OHNE_KONTEXT', 'werfen'),
+    ],
+
+    /*
      * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
      * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
      * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).

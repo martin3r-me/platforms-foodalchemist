@@ -42,7 +42,7 @@ class FoodAlchemistRecipeDarreichung extends Model
     public function recipe()
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function servingForm()

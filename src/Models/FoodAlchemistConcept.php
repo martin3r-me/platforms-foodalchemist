@@ -146,7 +146,7 @@ class FoodAlchemistConcept extends Model
     public function templateSource(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'template_source_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → templateSource() */
