@@ -1148,9 +1148,6 @@ return [
             'task' => 'Recherchiere im Web zu genau diesem Lieferantenartikel (Bezeichnung, EAN, Marke, Lieferant im Kontext). '
                 . 'Antworte als JSON {"felder": {key: {wert, konfidenz, url, zitat?, einheit?}}, "allergene": {key: {wert: enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}}, '
                 . '"deutung": {produkttyp, hauptzutat, warengruppe, unterkategorie, marke_fantasiename, zustand, form: {wert, url}}}. '
-                . 'Erlaubte felder-Schlüssel: zutatenliste, gebinde.qty, gebinde.einheit, herkunft, marke, hersteller, ean, haltbarkeit.chilled_days, naehrwerte.energy_kcal, '
-                . 'naehrwerte.energy_kj, naehrwerte.fat, naehrwerte.saturated_fat, naehrwerte.carbs_absorbable, naehrwerte.sugar, naehrwerte.protein, naehrwerte.sodium, '
-                . 'zusatzstoffe.with_dye, zusatzstoffe.with_preservative, zusatzstoffe.with_antioxidant, zusatzstoffe.with_sweetener. '
                 . 'Jede Angabe braucht die url der Seite, auf der du sie gefunden hast. Fehlt ein Wert, lass den Schlüssel WEG, rate nie. '
                 . '„nicht_enthalten" nur mit wörtlichem zitat der Quelle, sonst weglassen. Bestimme in deutung, was der Artikel fachlich IST '
                 . '(z. B. Nudelsalat statt Salat); Marken- und Fantasienamen gehören nicht in die Hauptzutat. Prüfe, dass die Quelle wirklich zu diesem Artikel passt (EAN, Marke, Produktname).',

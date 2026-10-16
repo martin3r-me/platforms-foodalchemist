@@ -102,3 +102,18 @@ it('Prompt artikel.web_recherche: url-Pflicht, nie raten, nicht_enthalten nur mi
     $p = config('foodalchemist.prompts')['artikel.web_recherche'];
     expect($p['task'])->toContain('url')->toContain('rate nie')->toContain('wörtlichem zitat')->and($p)->toHaveKey('tier');
 });
+
+it('★ hängt als Produktdaten-Quelle websuche im Container-Tag; erlaubte Schlüssel = Produktpass-Schlüssel', function () {
+    $quellen = collect(app()->tagged('produktdaten.quellen'));
+    expect($quellen->contains(fn ($q) => $q instanceof \Platform\FoodAlchemist\Services\Produktpass\ProduktdatenQuelle && $q->name() === 'websuche'))->toBeTrue();
+
+    ($this->mitTransport)(['felder' => [
+        'naehrwerte.energy_kcal' => ['wert' => 52, 'einheit' => 'kcal/100g', 'url' => 'https://shop.example/caprese'],
+        'haltbarkeit.chilled_days' => ['wert' => 9, 'url' => 'https://shop.example/caprese'],
+        'gebinde.einheit' => ['wert' => 'kg', 'url' => 'https://shop.example/caprese'],       // kein Produktpass-Schlüssel
+    ]], $this->quellen);
+    $r = app(\Platform\FoodAlchemist\Services\ArtikelWebRecherche::class)->liefere($this->la);
+
+    expect(array_keys($r['felder']))->toBe(['naehrwerte.energy_kcal', 'haltbarkeit.chilled_days'])
+        ->and($this->kontext[0])->toContain('naehrwerte.energy_kcal')->toContain('zutatenliste');
+});
