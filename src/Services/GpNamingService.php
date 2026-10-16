@@ -377,6 +377,115 @@ class GpNamingService
         return $gp->refresh();
     }
 
+    /**
+     * Zustand hart aus der Haltbarkeit je Lagerart: nur EINE Lagerart gesetzt und eindeutig (tiefgekühlt → TK, trocken → trocken).
+     * Gekühlt allein sagt nichts (frisch ODER konserviert), mehrere Lagerarten widersprechen sich: dann entscheidet die KI.
+     */
+    public function zustandAusHaltbarkeit(?int $gekuehlt, ?int $tiefgekuehlt, ?int $trocken): ?string
+    {
+        $gesetzt = array_filter(['kuehl' => $gekuehlt, 'tk' => $tiefgekuehlt, 'trocken' => $trocken], fn ($t) => $t !== null && $t > 0);
+        if (count($gesetzt) !== 1) {
+            return null;
+        }
+
+        return match (array_key_first($gesetzt)) {
+            'tk' => 'TK',
+            'trocken' => 'trocken',
+            default => null,
+        };
+    }
+
+    /**
+     * Halluzinations-Guard für die Hauptzutat (Regelwerk GP §6: Kernwort bzw. Gattungsbegriff, höchstens 3 Inhaltswörter): nur Wörter
+     * behalten, die in den Quelltexten (Bezeichnung, Zutatenliste, Marketing-/regulierter Name) oder im GP-Vokabular vorkommen.
+     * Verbindungswörter („mit", „in" …) bleiben nur zwischen zwei behaltenen Wörtern stehen („Schokoladenmousse mit Cashew-Creme").
+     * Formen („Riegel", „Würfel") sind kein Teil der Hauptzutat; sie stehen im Feld Form und dürfen dort ohne Beleg im Text stehen.
+     *
+     * @param  list<string>  $quelltexte
+     * @return array{wert: string, entfernt: list<string>}
+     */
+    public function bereinigeHauptzutat(string $hauptzutat, array $quelltexte): array
+    {
+        $norm = fn (string $x) => (string) preg_replace('/[^a-z0-9]+/', '', strtr(mb_strtolower($x), ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss', 'é' => 'e', 'è' => 'e']));
+        $blob = $norm(implode(' ', $quelltexte));
+        $verbinder = ['mit', 'in', 'an', 'auf', 'von', 'und', 'nach', 'aus', 'ohne', 'im', 'vom', 'zum', 'au', 'a', 'la'];
+        $woerter = preg_split('/\s+/u', trim($this->bereinigeFeld($hauptzutat)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $entfernt = [];
+        $behalten = [];     // Liste aus [wort, istVerbinder]
+        $inhalt = 0;
+        foreach ($woerter as $i => $wort) {
+            if ($i > 0 && in_array(mb_strtolower($wort), $verbinder, true)) {
+                $behalten[] = [$wort, true];
+
+                continue;
+            }
+            $n = $norm($wort);
+            $belegt = $n !== '' && ($blob === '' || str_contains($blob, $n) || (mb_strlen($n) >= 6 && str_contains($blob, mb_substr($n, 0, mb_strlen($n) - 2))))
+                || ($n !== '' && \Platform\FoodAlchemist\Models\FoodAlchemistGp::where('main_ingredient_slug', $this->slugify($wort))->exists());
+            if ($belegt && $inhalt < 3) {
+                $behalten[] = [$wort, false];
+                $inhalt++;
+            } else {
+                $entfernt[] = $wort;
+            }
+        }
+        // Verbinder ohne Inhaltswort davor oder danach fallen weg (nie „mit" am Rand)
+        while ($behalten !== [] && end($behalten)[1]) {
+            $entfernt[] = array_pop($behalten)[0];
+        }
+        while ($behalten !== [] && $behalten[0][1]) {
+            $entfernt[] = array_shift($behalten)[0];
+        }
+
+        return ['wert' => implode(' ', array_map(fn ($x) => $x[0], $behalten)), 'entfernt' => $entfernt];
+    }
+
+    /**
+     * Zusatz im Namen (Bio, Vegan, Glutenfrei, Laktosefrei) — STRENG: nur, wenn eine Quelle es AUSDRÜCKLICH sagt (LA-Merkmal, Bio-Kontrollnummer,
+     * Text in Bezeichnung/Marketing-/regulierter Name/Zutatenangabe). NIE aus fehlenden oder schwachen Allergenen ableiten („Milch Spuren" ≠ laktosefrei).
+     * Widerspruch (vegan, aber Milch/Ei/Fisch … „enthalten"; glutenfrei, aber Gluten „enthalten") → nicht setzen, Hinweis.
+     *
+     * @param  array{bezeichnung?: ?string, marketing_name?: ?string, regulierter_name?: ?string, zutaten?: ?string, is_organic?: mixed, is_vegan?: mixed, bio_kontrollnummer?: ?string, allergene?: array<string,?string>}  $q
+     * @return array{flags: array{bio: bool, vegan: bool, glutenfrei: bool, laktosefrei: bool}, widerspruch: list<string>, hinweise: list<string>}
+     */
+    public function zusatzAusQuellen(array $q): array
+    {
+        $text = mb_strtolower(implode(' | ', array_filter([$q['bezeichnung'] ?? null, $q['marketing_name'] ?? null, $q['regulierter_name'] ?? null, $q['zutaten'] ?? null])));
+        $sagt = fn (string $muster) => (bool) preg_match($muster, $text);
+        $aller = $q['allergene'] ?? [];
+        $enthalten = fn (string ...$keys) => array_values(array_filter($keys, fn ($k) => ($aller[$k] ?? null) === 'enthalten'));
+
+        $bio = ! empty($q['is_organic']) || trim((string) ($q['bio_kontrollnummer'] ?? '')) !== '' || $sagt('/(?<![a-zäöü])(bio|öko)(?![a-zäöü])|de-öko-\d+/u');
+        $vegan = (! empty($q['is_vegan']) || $sagt('/(?<!nicht )(?<!un)(?<![a-zäöü])vegan(?![a-zäöü])/u')) && ! $sagt('/nicht vegan|unvegan/u');
+        $gluten = $sagt('/glutenfrei|ohne gluten/u');
+        $laktose = $sagt('/laktosefrei|ohne laktose/u');
+
+        $hinweise = [];
+        $widerspruch = [];
+        if ($vegan && ($w = $enthalten('milk', 'eggs', 'fish', 'crustaceans', 'molluscs')) !== []) {
+            $vegan = false;
+            $widerspruch[] = 'vegan';
+            $hinweise[] = 'Quelle nennt „vegan“, aber Allergene enthalten: '.implode(', ', array_map(fn ($k) => \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$k] ?? $k, $w)).' — Zusatz „Vegan“ nicht gesetzt.';
+        }
+        if ($gluten && $enthalten('gluten') !== []) {
+            $gluten = false;
+            $widerspruch[] = 'glutenfrei';
+            $hinweise[] = 'Quelle nennt „glutenfrei“, aber Gluten ist als enthalten gemeldet — Zusatz „Glutenfrei“ nicht gesetzt.';
+        }
+
+        return ['flags' => ['bio' => $bio, 'vegan' => $vegan, 'glutenfrei' => $gluten, 'laktosefrei' => $laktose], 'widerspruch' => $widerspruch, 'hinweise' => $hinweise];
+    }
+
+    /** Form/Verarbeitung, die schon in der Hauptzutat steckt (Form „Mousse" bei „Schokoladenmousse"), ist Dublette: leer. */
+    public function dedupliziereMitHauptzutat(string $hauptzutat, string $feld): string
+    {
+        $n = fn (string $x) => (string) preg_replace('/[^a-z0-9]+/', '', strtr(mb_strtolower($x), ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss']));
+        $h = $n($hauptzutat);
+        $f = $n($feld);
+
+        return $f !== '' && $h !== '' && (str_contains($h, $f) || str_contains($f, $h)) ? '' : $feld;
+    }
+
     /** Steht ein Platzhalter („unbekannt") als Attribut im Namen? Nur ganze Wörter im Attributteil nach dem Doppelpunkt. */
     public function enthaeltPlatzhalter(string $name): bool
     {

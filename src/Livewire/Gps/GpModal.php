@@ -911,6 +911,29 @@ class GpModal extends Component
                 $this->builder[$feld] = $wert;
             }
         }
+        // Nachlauf (Praxisfall „Delice Schokoladen-Mousse mit Cashew-Crème"): Hauptzutat nur belegte Kernwörter, Zustand hart aus der
+        // Haltbarkeit, Form/Verarbeitung ohne Dublette zur Hauptzutat
+        $quellTexte = $quelle !== null
+            ? array_filter([$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null, $quelle['regulierter_name'] ?? null, $quelle['zutatenangabe'] ?? null])
+            : [trim($this->kiRohtext)];
+        if (trim((string) ($this->builder['hauptzutat'] ?? '')) !== '') {
+            $haupt = $naming->bereinigeHauptzutat((string) $this->builder['hauptzutat'], array_values($quellTexte));
+            if ($haupt['wert'] !== '') {
+                $this->builder['hauptzutat'] = $haupt['wert'];
+            }
+            if ($haupt['entfernt'] !== []) {
+                $this->hinweis = 'Hauptzutat gekürzt (nicht im Artikeltext belegt oder Zusatz): '.implode(' ', $haupt['entfernt']);
+            }
+        }
+        foreach (['form', 'processing'] as $feld) {
+            $this->builder[$feld] = $naming->dedupliziereMitHauptzutat((string) $this->builder['hauptzutat'], (string) ($this->builder[$feld] ?? ''));
+        }
+        $this->zusatzAusQuellenSetzen();
+        $h = $quelle['haltbarkeit'] ?? [];
+        $hart = $naming->zustandAusHaltbarkeit($h['gekuehlt_tage'] ?? null, $h['tiefgekuehlt_tage'] ?? null, $h['trocken_tage'] ?? null);
+        if ($hart !== null) {
+            $this->builder['condition'] = $hart;
+        }
         $code = trim((string) ($vorschlag->werte['commodity_group_code'] ?? ''));
         $wg = $warengruppen->first(fn ($x) => (string) $x->code === $code)
             ?? $warengruppen->first(fn ($x) => mb_strtolower((string) $x->name) === mb_strtolower($code));
@@ -990,6 +1013,8 @@ class GpModal extends Component
             'vegetarisch' => $la->is_vegetarian,
             'alkohol' => $la->is_alcohol,
             // Nur zur Einordnung (Form, Zustand, Sortiment), NIE Teil des GP-Namens (§7.1): Gebinde und Einheit
+            // Haltbarkeit je Lagerart (Stammdaten bzw. Produktpass): tiefgekühlt → Zustand TK
+            'haltbarkeit' => array_filter(['gekuehlt_tage' => $la->shelf_life_chilled_days, 'tiefgekuehlt_tage' => $la->shelf_life_frozen_days, 'trocken_tage' => $la->shelf_life_dry_days], fn ($t) => $t !== null),
             'gebinde_hinweis' => array_filter(['menge' => $la->qty !== null ? (float) $la->qty : null, 'einheit' => $la->unit_code, 'verpackung' => $la->packaging_unit]),
             'allergene' => $allergene,
             'naehrwerte_je_100' => $naehrwerte,
@@ -1017,6 +1042,65 @@ class GpModal extends Component
             ->limit(5)->get()
             ->map(fn ($x) => ['bezeichnung' => (string) $x->designation, 'gp' => (string) ($x->structure?->gp?->name ?? '')])
             ->filter(fn ($z) => $z['gp'] !== '')->values()->all();
+    }
+
+    /** Zusatz (Bio/Vegan/Glutenfrei/Laktosefrei) nur aus ausdrücklichen Quellaussagen setzen; Widersprüche als Hinweis, nie aus fehlenden Allergenen. */
+    private function zusatzAusQuellenSetzen(): void
+    {
+        $team = $this->team();
+        $la = $team !== null && $this->supplierItemId !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->with('allergens')->find($this->supplierItemId)
+            : null;
+        if ($la === null) {
+            return;
+        }
+        $allergene = [];
+        foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE) as $key) {
+            $allergene[$key] = $la->allergens?->{'allergen_'.$key};
+        }
+        $z = app(GpNamingService::class)->zusatzAusQuellen([
+            'bezeichnung' => $la->designation, 'marketing_name' => $la->marketing_name, 'regulierter_name' => $la->regulated_name,
+            'zutaten' => $la->ingredients_supplier, 'is_organic' => $la->is_organic, 'is_vegan' => $la->is_vegan,
+            'bio_kontrollnummer' => $la->organic_control_number, 'allergene' => $allergene,
+        ]);
+        foreach ($z['flags'] as $flag => $an) {
+            if ($an) {
+                $this->builder[$flag] = true;       // nur auf ausdrückliche Quellaussage; eine Handeingabe wird nie abgeschaltet
+            }
+        }
+        foreach ($z['widerspruch'] as $flag) {
+            $this->builder[$flag] = false;           // behauptet, aber widerlegt (z. B. vegan trotz Milch „enthalten")
+        }
+        if ($z['hinweise'] !== []) {
+            $this->hinweis = trim(($this->hinweis ?? '').' '.implode(' ', $z['hinweise']));
+        }
+    }
+
+    /** Gebindemenge des verknüpften bzw. gewählten Lieferantenartikels in Gramm (kg/g), sonst null. */
+    private function gebindeGramm(?\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp): ?float
+    {
+        $id = $this->supplierItemId ?? $gp?->lead_la_supplier_item_id;
+        $la = $id !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::find($id) : null;
+        if ($la === null || $la->qty === null) {
+            return null;
+        }
+
+        return match (mb_strtolower((string) $la->unit_code)) {
+            'kg' => (float) $la->qty * 1000,
+            'g' => (float) $la->qty,
+            default => null,
+        };
+    }
+
+    /** Wert des Felds „Gewicht oder Portion" in Gramm („180 g", „0,66 kg"), sonst null. */
+    private function portionGramm(): ?float
+    {
+        if (! preg_match('/^\s*([0-9]+(?:[.,][0-9]+)?)\s*(kg|g)?\s*$/iu', (string) ($this->builder['portion'] ?? ''), $m)) {
+            return null;
+        }
+        $zahl = (float) str_replace(',', '.', $m[1]);
+
+        return mb_strtolower($m[2] ?? 'g') === 'kg' ? $zahl * 1000 : $zahl;
     }
 
     public function supplierItemWaehlen(int $id): void
@@ -1108,6 +1192,11 @@ class GpModal extends Component
         $name = $this->vorschauName();
         $slug = $naming->slugify($this->builder['hauptzutat'] ?: ($gp->main_ingredient_slug ?? ''));
         $pruefung = $naming->validateGpName($name, [...$this->builder, 'hauptzutat' => $this->builder['hauptzutat'] ?: $name]);
+        // Verpackungsangaben gehören nie in den GP-Namen (§7.1): „Portion" gleich der Gebindemenge des verknüpften LA ist fast sicher die Packungsgröße
+        $gebinde = $this->gebindeGramm($gp);
+        if ($gebinde !== null && ($p = $this->portionGramm()) !== null && abs($p - $gebinde) < 0.5) {
+            $pruefung['warnings'][] = '§7.1: „Gewicht oder Portion“ ('.trim((string) $this->builder['portion']).') entspricht der Gebindemenge des Lieferantenartikels. Packungsgrößen gehören nie in den GP-Namen. Das Feld nur für die Portionsgrammatur pro Stück nutzen.';
+        }
         // R20: Drift (I4) ist nur aussagekräftig, wenn die strukturierten Felder gepflegt sind —
         // Bestands-GPs ohne Builder-Pflege meldeten sonst IMMER Drift (Falsch-Positiv).
         if (trim($this->builder['hauptzutat'] ?? '') === '') {
