@@ -229,7 +229,7 @@ it('Concepter-Reiter „Anrichten“: nur lesend — Darreichung, Gefäß, Typ, 
     $slot = $concepts->addSlot($this->rootTeam, $konzept->id, ['role' => 'Vorspeise']);
     $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->dar->recipe_id]);
 
-    $html = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $konzept->id, 'geschirr')->html();
+    $html = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $konzept->id, 'anrichten')->html();
 
     expect($html)->toContain('data-anrichten')->toContain('data-anrichten-gefaess')->toContain('Schraubglas: Glas, 212 ml')->toContain('data-anrichten-typ')
         ->toContain('aus dem Gefäß')->toContain('data-anrichten-zubehoer')->toContain('Deckel')->toContain('Anrichten')

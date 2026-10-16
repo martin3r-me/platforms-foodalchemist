@@ -371,39 +371,6 @@
                     </tbody>
                 </table>
             </section>
-        @elseif($kind === 'geschirr')
-            @php $supplier = $report['supplier']; @endphp
-            <section>
-                <h2>Geschirr-Lieferant</h2>
-                {!! $gitter([
-                    $kachel('Status', $supplier['is_inactive'] ? 'inaktiv' : 'aktiv'),
-                    $kachel('Ort', $supplier['city'] ?? null),
-                    $kachel('E-Mail', $supplier['email_order'] ?? null, 'wide'),
-                    $kachel('Homepage', $supplier['homepage'] ?? null, 'wide'),
-                ]) !!}
-            </section>
-            <section>
-                <h2>Geschirr-Artikel</h2>
-                <table>
-                    <thead><tr><th width="10%">Art.-Nr.</th><th width="22%">Bezeichnung</th><th>Kategorie</th><th>Material</th><th>Maße</th><th width="12%" class="num">Leihpreis</th><th width="9%" class="num">Pfand</th><th width="8%">Status</th></tr></thead>
-                    <tbody>
-                        @forelse($supplier['items'] as $item)
-                            <tr>
-                                <td>{{ $item['artikel_nr'] ?? '—' }}</td>
-                                <td>{{ $item['label'] ?? '—' }}</td>
-                                <td>{{ $item['category'] ?? '—' }}</td>
-                                <td>{{ $item['material'] ?? '—' }}</td>
-                                <td>{{ $item['masse'] ?? '—' }}</td>
-                                <td class="num">{{ $money($item['rental_price'] ?? null) }}{{ $item['unit'] ? ' / ' . $item['unit'] : '' }}</td>
-                                <td class="num">{{ $money($item['pfand'] ?? null) }}</td>
-                                <td>{{ $item['is_inactive'] ? 'inaktiv' : 'aktiv' }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="8" class="muted">Keine Artikel.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </section>
         @elseif($kind === 'favoriten')
             <section>
                 <h2>Favoriten-Grundprodukte</h2>

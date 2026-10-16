@@ -19,7 +19,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * MCP-Steuerbarkeit · D5b: Concept-Slots/Blocks/Varianten/Paket (Editor-Parität).
- * PUT/DELETE/REORDER/GESCHIRR/DARREICHUNG + concept_blocks.POST/PUT +
+ * PUT/DELETE/REORDER/DARREICHUNG + concept_blocks.POST/PUT +
  * concept_slot_variante.SWAP/RESET + concept_paket.BUILD.
  */
 beforeEach(function () {
@@ -43,10 +43,10 @@ beforeEach(function () {
     $this->slotB = $mkSlot();
 });
 
-it('Registry-Smoke: alle 10 D5b-Tools registriert mit type=object', function () {
+it('Registry-Smoke: alle 9 D5b-Tools registriert mit type=object', function () {
     $namen = [
         'concept_slots.PUT', 'concept_slots.DELETE', 'concept_slots.REORDER',
-        'concept_slots.GESCHIRR', 'concept_slots.DARREICHUNG',
+        'concept_slots.DARREICHUNG',
         'concept_blocks.POST', 'concept_blocks.PUT',
         'concept_slot_variante.SWAP', 'concept_slot_variante.RESET', 'concept_paket.BUILD',
     ];
@@ -81,9 +81,8 @@ it('concept_slots.REORDER: Slots in Zielreihenfolge', function () {
     expect($ordered)->toBe([$this->slotB->id, $this->slotA->id]);
 });
 
-it('concept_slots.GESCHIRR + DARREICHUNG: lösen (null) läuft durch', function () {
-    $g = ($this->run)('foodalchemist.concept_slots.GESCHIRR', ['slot_id' => $this->slotA->id, 'role' => 'Teller']);
-    expect($g->success)->toBeTrue('geschirr: ' . ($g->error ?? ''));
+it('concept_slots.DARREICHUNG: lösen (null) läuft durch; das Geschirr-Tool ist mit dem Rückbau der Geschirr-DB entfallen', function () {
+    expect($this->registry->get('foodalchemist.concept_slots.GESCHIRR'))->toBeNull();
 
     $d = ($this->run)('foodalchemist.concept_slots.DARREICHUNG', ['slot_id' => $this->slotA->id]);
     expect($d->success)->toBeTrue('darreichung: ' . ($d->error ?? ''));

@@ -192,14 +192,14 @@ class Editor extends Component
 
     public ?int $id = null;
 
-    public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | geschirr | notes
+    public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | anrichten | notes
 
     /**
      * Gültige Editor-Laschen (Spec 28/E6; 'sensorik' 2026-08-13 entfernt). EINE Quelle für
      * {@see setTab} UND den optionalen Start-Tab von {@see oeffnen} — z. B. der KI-Kopf/Planung-Flow
      * öffnet direkt auf „Konzept & Planung" ('konzept').
      */
-    public const TABS = ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'notes'];
+    public const TABS = ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'anrichten', 'notes'];
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -1329,7 +1329,7 @@ class Editor extends Component
         $istAufbau = $this->tab === 'aufbau';
         $istStammdaten = $this->tab === 'stammdaten';
         $istKonzeptTab = $this->tab === 'konzept';
-        $istGeschirrTab = $this->tab === 'geschirr';
+        $istAnrichtenTab = $this->tab === 'anrichten';
         // Das Deklarationsblatt lädt die 32 Kennzeichnungs-Spalten je Gericht nach — nur
         // holen, wenn der Tab wirklich offen ist.
         $istDeklarationTab = $this->tab === 'allergene';
@@ -1368,7 +1368,7 @@ class Editor extends Component
                         $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
                     }
                 }
-                if ($istAufbau || $istGeschirrTab) {
+                if ($istAufbau || $istAnrichtenTab) {
                     // Umbau-Spec Phase 5: aufgelöste Darreichung je Position sichtbar machen +
                     // „Variante fehlt", wenn die Konzept-Servierform keine passende Form findet
                     $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
@@ -1561,7 +1561,7 @@ class Editor extends Component
             'darreichungInfo' => $darreichungInfo,
             'zubehoerInfo' => $zubehoerInfo,
             'darreichungOptionen' => $darreichungOptionen,
-            'anrichtenZeilen' => $istGeschirrTab ? $this->anrichtenZeilen($concept, $paket, $team) : [],
+            'anrichtenZeilen' => $istAnrichtenTab ? $this->anrichtenZeilen($concept, $paket, $team) : [],
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),

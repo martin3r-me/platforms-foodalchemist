@@ -240,7 +240,6 @@ class VkModal extends Component
                 'vat_profile_key' => $d->vat_profile_key,
                 'price_override_reason' => $d->price_override_reason,
                 'price_override_expires_at' => $d->price_override_expires_at?->format('Y-m-d'),
-                'tableware_item_id' => $d->tableware_item_id,
                 'vessel_gp_id' => $d->vessel_gp_id,
                 'serving_vehicle_vocab_id' => $d->serving_vehicle_vocab_id,
                 // Spec 83 B3i/B3l: Anrichten je Darreichung (Einheit aus der Form) + Pauschale je Auftragszeile
@@ -1548,10 +1547,6 @@ class VkModal extends Component
                         \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->nonFood()->whereNotIn('status', ['rejected', 'merged']), 'name', $t)
                         ->orderBy('name')->limit(6)->get(['id', 'name']))->all()
                 : [],
-            'geschirrItems' => $team !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)
-                    ->orderBy('label')->get(['id', 'label', 'rental_price'])
-                : collect(),
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
                 ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept, $team)
                 : [],

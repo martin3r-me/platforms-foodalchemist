@@ -77,10 +77,7 @@ class PaketService
         $paket = FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
                 'dishes.dish:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
-                'dishes.unit:id,slug,display_de',
-                // Geschirr-Tab (2026-08-24): Haupt + Alternative je Posten
-                'dishes.dishwareItem:id,label,rental_price,unit',
-                'dishes.dishwareAltItem:id,label,rental_price,unit'])
+                'dishes.unit:id,slug,display_de'])
             ->find($id);
 
         return $paket === null ? null : app(PaketPreisService::class)->anwenden($paket, $team);
@@ -175,9 +172,8 @@ class PaketService
                 $neu->dishes()->create([
                     'team_id' => $team->id, 'sales_recipe_id' => $g->sales_recipe_id,
                     'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id, 'position' => $g->position,
-                    // Darreichung + Geschirr je Gericht gehören zur Position und wandern mit.
+                    // Die Darreichung (mit Gefäß und Zubehör) gehört zur Position und wandert mit.
                     'presentation_id' => $g->presentation_id,
-                    'tableware_item_id' => $g->tableware_item_id, 'tableware_alt_item_id' => $g->tableware_alt_item_id,
                 ]);
             }
             app(ConcepterAggregateService::class)->cachePaket($neu);
@@ -201,7 +197,7 @@ class PaketService
         $this->guardOwner($paket, $team);
 
         // Bestehende Zeilen ERHALTEN statt löschen+neu anlegen: vorher gingen bei jedem Hinzufügen/
-        // Entfernen Darreichung und Geschirr je Gericht verloren (die Paket-Übersicht verlor sogar
+        // Entfernen die Darreichung je Gericht verloren (die Paket-Übersicht verlor sogar
         // Menge+Einheit, weil sie nur die Gericht-IDs schickt). Zuordnung je Gericht in Reihenfolge;
         // ein Feld wird nur überschrieben, wenn das Item es ausdrücklich mitbringt.
         DB::transaction(function () use ($paket, $items) {
@@ -253,23 +249,6 @@ class PaketService
         // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → EK + Cache neu.
         $this->recomputePrice($paket->refresh());
         app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
-    }
-
-    /**
-     * Geschirr je Paket-Posten setzen (2026-08-24, spiegelt ConceptService::setSlotGeschirr).
-     * $role ∈ haupt|alt; $itemId=null = entfernen. Reine Zuordnung — kein Preis-Recompute
-     * (Leihpreis/Logistik hängen am Geschirr-Artikel, nicht am Paket-Wareneinsatz).
-     */
-    public function setGerichtGeschirr(Team $team, int $gerichtRowId, string $role, ?int $itemId): void
-    {
-        $row = \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::findOrFail($gerichtRowId);
-        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($row->package_id);
-        $this->guardOwner($paket, $team);   // Schreiben nur auf eigene Pakete
-        if ($itemId !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)->whereKey($itemId)->exists()) {
-            throw new \RuntimeException('Geschirr-Artikel nicht sichtbar.');
-        }
-        $spalte = $role === 'alt' ? 'tableware_alt_item_id' : 'tableware_item_id';
-        $row->update([$spalte => $itemId]);
     }
 
     /**

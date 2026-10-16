@@ -61,7 +61,6 @@ class ConceptSlotsDarreichungTool extends FoodAlchemistTool implements ToolContr
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'],
-            'related_tools' => ['foodalchemist.concept_slots.GESCHIRR'],
             'examples' => ['Setze bei Slot 12 die Darreichung 88.'],
         ];
     }

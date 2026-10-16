@@ -84,8 +84,6 @@ class PaketeToConceptsCommand extends Command
                     'unit_vocab_id' => $pd->unit_vocab_id,
                     'position' => $pd->position ?? $i,
                     'presentation_id' => $pd->presentation_id,
-                    'tableware_item_id' => $pd->tableware_item_id,
-                    'tableware_alt_item_id' => $pd->tableware_alt_item_id,
                     'is_pflicht' => true,
                 ]);
                 $slots++;

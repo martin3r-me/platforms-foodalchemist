@@ -46,7 +46,7 @@ class UiNavigateTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                     . 'recipes=Basisrezepte, verkauf=Gerichte/Verkaufsrezepte, gps=Grundprodukte, '
                     . 'gp_detail=GP-Detail(id nötig), concepter=Concepter, concepts=Konzepte, pakete=Pakete, '
                     . 'formate=Formate, foodbooks=Foodbooks, speisekarte=Speisekarten, speiseplan=Speisepläne, '
-                    . 'angebote=Angebote, suppliers=Lieferanten, geschirr=Geschirr, orders=Bestellwesen, '
+                    . 'angebote=Angebote, suppliers=Lieferanten, orders=Bestellwesen, '
                     . 'einkauf=Einkauf, produktion=Produktion, planung=Planung, controlling=Controlling, '
                     . 'kalkulation=Kalkulation, knowledge=Wissensmodul, trendradar=Trendradar, '
                     . 'food_dna=Food-DNA, favorites=Favoriten, review=Review-Queue, einstellungen=Einstellungen. '

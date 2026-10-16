@@ -395,5 +395,5 @@ it('Paket-Tausch bietet jedes aktive Paket — Rollen-Filter entfernt (2026-08-2
         ->and($namen)->toContain('Grill B');
 });
 
-// „Paket-Geschirr via Alt-Editor" entfällt — Paket-Geschirr = Concept-Slot-Geschirr
-// (kind=paket-Concept, geschirrWaehle auf dem Slot); abgedeckt durch die Concept-Geschirr-Pfade.
+// „Paket-Geschirr via Alt-Editor" entfällt — das Geschirr hängt nicht mehr an Slot/Posten; das Gefäß gehört zur Darreichung
+// (Reiter „Anrichten“, nur lesend; abgedeckt durch AnrichtenGefaessTest).

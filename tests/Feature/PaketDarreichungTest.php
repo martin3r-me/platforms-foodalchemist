@@ -3,7 +3,6 @@
 use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor as ConcepterEditor;
-use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
@@ -17,7 +16,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * 2026-10-08: Paket-Gerichte behalten beim Hinzufügen/Entfernen ihre Menge, Einheit,
- * Darreichung und ihr Geschirr (vorher: alle Zeilen gelöscht und neu angelegt), und die
+ * Darreichung (vorher: alle Zeilen gelöscht und neu angelegt), und die
  * Darreichung ist im Paket-Editor je Posten wählbar.
  */
 beforeEach(function () {
@@ -33,25 +32,22 @@ beforeEach(function () {
     $kind = FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'code' => 'kinder', 'label' => 'Kinder']);
     $this->standard = FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $this->gericht->id, 'serving_form_id' => $teller->id, 'is_standard' => true, 'quantity_per_unit_g' => 300, 'unit_count' => 1, 'ek_portion' => 2.00, 'sales_net' => 4.00, 'price_mode' => 'auto']);
     $this->kinder = FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $this->gericht->id, 'serving_form_id' => $kind->id, 'is_standard' => false, 'quantity_per_unit_g' => 150, 'unit_count' => 1, 'ek_portion' => 1.00, 'sales_net' => 2.50, 'price_mode' => 'auto']);
-    $this->geschirr = FoodAlchemistGeschirrItem::create(['team_id' => $this->rootTeam->id, 'label' => 'Coupteller 28 cm', 'category' => 'Teller']);
 
     $this->paket = $this->svc->create($this->rootTeam, ['name' => 'Beilagen-Duo']);
     $this->svc->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->gericht->id, 'quantity' => 1, 'unit_vocab_id' => $this->portion->id]]);
     $this->zeile = $this->paket->dishes()->first();
 });
 
-it('Hinzufügen/Entfernen eines Gerichts erhält Menge, Einheit, Darreichung und Geschirr der übrigen', function () {
+it('Hinzufügen/Entfernen eines Gerichts erhält Menge, Einheit und Darreichung der übrigen', function () {
     $this->svc->setGerichtDarreichung($this->rootTeam, $this->zeile->id, $this->kinder->id);
-    $this->svc->setGerichtGeschirr($this->rootTeam, $this->zeile->id, 'haupt', $this->geschirr->id);
 
-    // Paket-Übersicht schickt nur die Gericht-IDs (vorher: Menge/Einheit/Form/Geschirr weg).
+    // Paket-Übersicht schickt nur die Gericht-IDs (vorher: Menge/Einheit/Form weg).
     $this->svc->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->gericht->id], ['sales_recipe_id' => $this->zweites->id]]);
     $a = $this->paket->dishes()->where('sales_recipe_id', $this->gericht->id)->first();
     expect($a->id)->toBe($this->zeile->id)
         ->and((float) $a->quantity)->toBe(1.0)
         ->and((int) $a->unit_vocab_id)->toBe($this->portion->id)
         ->and((int) $a->presentation_id)->toBe($this->kinder->id)
-        ->and((int) $a->tableware_item_id)->toBe($this->geschirr->id)
         ->and($this->paket->dishes()->count())->toBe(2);
 
     $this->svc->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->gericht->id]]);
@@ -72,12 +68,11 @@ it('Darreichung je Posten: Preis/EK des Pakets folgen der Form, fremde Form wird
     expect($this->zeile->fresh()->presentation_id)->toBeNull()->and((float) $this->paket->fresh()->ek_per_person)->toBe(2.0);
 });
 
-it('Duplizieren übernimmt Darreichung und Geschirr je Posten', function () {
+it('Duplizieren übernimmt die Darreichung je Posten', function () {
     $this->svc->setGerichtDarreichung($this->rootTeam, $this->zeile->id, $this->kinder->id);
-    $this->svc->setGerichtGeschirr($this->rootTeam, $this->zeile->id, 'haupt', $this->geschirr->id);
     $kopie = $this->svc->duplicate($this->rootTeam, $this->paket->id);
     $z = $kopie->dishes()->first();
-    expect((int) $z->presentation_id)->toBe($this->kinder->id)->and((int) $z->tableware_item_id)->toBe($this->geschirr->id);
+    expect((int) $z->presentation_id)->toBe($this->kinder->id);
 });
 
 it('Paket-Editor: Form-Auswahl je Posten, Preis der gewählten Form in der Zeile', function () {

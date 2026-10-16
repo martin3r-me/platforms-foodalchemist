@@ -826,15 +826,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D4c: LA→GP-Matching auslösen + Vorschläge übernehmen/verwerfen.
                     \Platform\FoodAlchemist\Tools\MatchRunTool::class,
                     \Platform\FoodAlchemist\Tools\MatchProposalsPutTool::class,
-                    // D4d: Geschirr (Lieferanten + Artikel) — bisher komplett ohne MCP-Abdeckung.
-                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersListTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersPostTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersPutTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersDeactivateTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrItemsListTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrItemsPostTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrItemsPutTool::class,
-                    \Platform\FoodAlchemist\Tools\GeschirrItemsDeactivateTool::class,
                     // D5a: Concepts-Lifecycle (Update/Status/Duplicate/Recompute/Zielpreis/Sektor/Vorlage).
                     \Platform\FoodAlchemist\Tools\ConceptsPutTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsStatusTool::class,
@@ -1049,7 +1040,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ConceptSlotsPutTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsReorderTool::class,
-                    \Platform\FoodAlchemist\Tools\ConceptSlotsGeschirrTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsDarreichungTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptBlocksPostTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptBlocksPutTool::class,
@@ -1075,7 +1065,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PaketeRecomputeTool::class,
                     \Platform\FoodAlchemist\Tools\PaketGerichteSetTool::class,
                     \Platform\FoodAlchemist\Tools\PaketGerichteMengeTool::class,
-                    \Platform\FoodAlchemist\Tools\PaketGerichteGeschirrTool::class,
                     \Platform\FoodAlchemist\Tools\PaketGerichteReorderTool::class,
                     // Format-Modul: Marken-/Themen-Container über den Konzepten (Editionen), Draft-on-create
                     \Platform\FoodAlchemist\Tools\FormatsListTool::class,

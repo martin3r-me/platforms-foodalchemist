@@ -150,7 +150,7 @@
                 'konzept' => ($concept && ! $istPaket) ? 'Konzept & Planung' : null,
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
-                'geschirr' => ($concept || $paket) ? 'Anrichten' : null,
+                'anrichten' => ($concept || $paket) ? 'Anrichten' : null,
                 'notes' => 'Notizen',
             ]" />
 
@@ -1550,7 +1550,7 @@
             @endif
 
             {{-- ── Reiter: ANRICHTEN (nur lesend) — Darreichung, Gefäß, Servier-Typ, Zubehör. Gepflegt wird an der Darreichung im Gericht. ── --}}
-            @if($tab === 'geschirr')
+            @if($tab === 'anrichten')
                 <div class="flex flex-col gap-3" data-anrichten>
                     <p class="{{ $hinweis }}">Je {{ $concept ? 'Gericht' : 'Posten' }}: worauf und womit angerichtet wird. Das Gericht ist neutral, die <span class="font-medium text-[var(--fa-ink-2)]">Darreichung</span> legt Menge und Gefäß fest; gepflegt wird sie im Gericht (Darreichungen). Hier nur zum Lesen.</p>
                     @forelse($anrichtenZeilen as $z)
