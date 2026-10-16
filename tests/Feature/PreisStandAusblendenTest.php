@@ -221,3 +221,25 @@ it('UI: „Frühere Preise" zeigt den Verdacht, Ausblenden verlangt einen Grund,
         ->call('ausblenden', $id)->assertSet('fehler', fn ($f) => str_contains((string) $f, 'übergeordneten Katalog'));
     expect(DB::table('foodalchemist_price_history')->find($id)->ausgeblendet_at)->toBeNull();
 });
+
+it('Zusammenspiel mit Lieferstatus: bei „eingestellt“ bleibt der Verdacht vor dem Ende erhalten, die Linie endet am Einstellungstag, ein ausgeblendeter Stand fehlt auch dort', function () {
+    ($this->importiere)();
+    $this->la->update(['lieferstatus' => 'eingestellt', 'lieferstatus_seit' => '2026-10-11 22:00:00', 'lieferstatus_quelle' => 'necta']);   // 12.10. Berlin
+
+    $segmente = fn () => ($this->verlauf)()['linien'][0]['segmente'];
+    $s = $segmente();
+    expect(collect($s)->firstWhere('preis_gebinde', 63.82)['verdacht'])->toBeTrue()          // Verdacht gilt weiter (Nachbarn davor und danach vorhanden)
+        ->and(end($s)['bis'])->toBeLessThanOrEqual('2026-10-12')                              // Kappung am Einstellungstag, nicht am Fensterende
+        ->and(end($s)['bis'])->toBeLessThan('2026-10-20');
+
+    $this->svc->ausblenden($this->rootTeam, $this->la, 'historie', ($this->zeile)(63.82)->id, 'Erfassungsfehler beim Lieferanten', $this->kurator->id);
+    $nach = $segmente();
+    expect(collect($nach)->pluck('preis_gebinde')->map(fn ($p) => round($p, 2))->all())->not->toContain(63.82)
+        ->and(end($nach)['bis'])->toBeLessThanOrEqual('2026-10-12')
+        ->and(collect($nach)->pluck('verdacht')->all())->each->toBeFalse();
+
+    // Gegenprobe: ohne Lieferstatus läuft die Linie wieder bis heute
+    $this->la->update(['lieferstatus' => null, 'lieferstatus_seit' => null, 'lieferstatus_quelle' => null]);
+    $ohneStatus = $segmente();
+    expect(end($ohneStatus)['bis'])->toBe('2026-10-20');
+});
