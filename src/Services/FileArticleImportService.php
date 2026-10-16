@@ -1019,7 +1019,7 @@ class FileArticleImportService
 
     /**
      * Preis-Status der Datei → Code: `0` Standard-EK, `2` läuft aus, `aktion` = Aktionspreis (wird NICHT als Preiszeile
-     * geschrieben: status 2 heißt seit 16.10.2026 „läuft aus“, eine Aktion gibt es in foodalchemist_prices nicht; Entscheid offen).
+     * geschrieben: status 2 heißt seit 16.10.2026 „läuft aus“; Aktionen gehen als status 'A' in die Preis-Zeitachse, #441).
      */
     private function preisStatus(string $roh): ?string
     {
