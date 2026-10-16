@@ -1148,7 +1148,7 @@ return [
         // M3-09/10: GP-Modal (Naming-Builder + KI-Felder). Antwort-Schema immer
         // {"werte": {…}, "confidence": 0-1, "reasoning": "…"} (GL-07).
         'gp.suggest' => [
-            'klasse' => 'mittel',
+            'klasse' => 'stark',
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
                 . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
                 . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe, '
@@ -1577,7 +1577,7 @@ return [
                 . 'Standardwerte, konservativ): werte = {kcal, protein_g, fat_g, carbs_g, salt_g}.',
         ],
         'gp.domain' => [
-            'klasse' => 'leicht',
+            'klasse' => 'mittel',
             'task' => 'Ordne das Grundprodukt GENAU EINER Wissens-Domain aus der mitgegebenen '
                 . 'Liste zu: werte = {domain_slug}.',
         ],
@@ -1738,7 +1738,7 @@ return [
                 . 'max_vorlauf_tage, temperature, function, batch_max_kg, batch_max_pieces}.',
         ],
         'recipe.geschmack' => [
-            'klasse' => 'leicht',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
+            'klasse' => 'mittel',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
             'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
                 . '(suess|herzhaft|neutral): werte = {taste_direction}.',
         ],

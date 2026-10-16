@@ -18,6 +18,7 @@ uses(TestCase::class);
  */
 const REGISTRY_KLASSEN = [
     'stark' => [
+        'gp.suggest',
         'planung.leitplanken', 'artikel.web_recherche', 'component.replacement_suggest', 'recipe.komponenten_plan', 'recipe.generator',
         'recipe.description', 'vk.generator', 'gp.allergene', 'gp.naehrwerte', 'anker.wissen_auslese', 'recipe.steps', 'recipe.review',
         'conformance.check', 'gp.conformance_revise', 'recipe.ueberarbeiten', 'recipe.extract', 'produktpass.extract', 'vk.plating',
@@ -27,13 +28,14 @@ const REGISTRY_KLASSEN = [
         'signal.margin_levers', 'signal.vk_release_advice',
     ],
     'mittel' => [
-        'gp.suggest', 'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',
+        'recipe.geschmack', 'gp.domain',
+        'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',
         'gp.zaehl_einheiten', 'recipe.verpackungsmasse', 'gp.la_suggest', 'gp.term_la_rank', 'recipe.eigenschaften', 'recipe.sensorik',
         'recipe.regeneration', 'vk.regeneration',
     ],
     'leicht' => [
-        'la.nonfood', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 'gp.domain',
-        'gp.anker', 'recipe.sektor', 'recipe.level', 'recipe.production_depth', 'recipe.geschmack', 'recipe.bauart', 'recipe.equipment',
+        'la.nonfood', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 
+        'gp.anker', 'recipe.sektor', 'recipe.level', 'recipe.production_depth', 'recipe.bauart', 'recipe.equipment',
         'vk.titel_vorschlag', 'recipe.dichteklasse', 'vk.servier_vehikel', 'gp.tags', 'signal.serving_form_suggest',
         'signal.recipe_category_suggest', 'signal.recipe_naming_suggest',
     ],
@@ -91,4 +93,10 @@ it('Non-Food-Erkennung und Titelvorschläge sind LEICHT, Mengen-Schätzungen MIT
     foreach (['gp.verluste', 'recipe.garverlust', 'gp.piece_default_g', 'recipe.verpackungsmasse'] as $key) {
         expect(config('foodalchemist.prompts')[$key]['klasse'])->toBe('mittel', $key);
     }
+});
+
+it('Entscheid Dominique 16.10.: gp.suggest ist STARK, recipe.geschmack und gp.domain sind MITTEL', function () {
+    expect(config('foodalchemist.prompts')['gp.suggest']['klasse'])->toBe('stark')
+        ->and(config('foodalchemist.prompts')['recipe.geschmack']['klasse'])->toBe('mittel')
+        ->and(config('foodalchemist.prompts')['gp.domain']['klasse'])->toBe('mittel');
 });
