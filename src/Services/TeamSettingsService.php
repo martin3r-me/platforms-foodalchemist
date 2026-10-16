@@ -236,7 +236,7 @@ class TeamSettingsService
 
     /**
      * Jod (15.10.2026): freiwilligen Hinweis „mit Jodsalz hergestellt“ auf Speisekarte und Etikett zeigen? Org-vererbt, Standard AUS.
-     * Rechtliche Einordnung (freiwillig, nicht ZZulV-Pflicht) = Kenntnisstand Kurator, vor Einsatz von QM bestätigen lassen.
+     * Rechtliche Einordnung: freiwillige Angabe, keine ZZulV-Pflicht (bestätigt Dominique 16.10.2026).
      */
     public function jodHinweisAktiv(Team $team): bool
     {

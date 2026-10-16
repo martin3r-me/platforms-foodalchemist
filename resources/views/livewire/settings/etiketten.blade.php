@@ -7,8 +7,8 @@
     @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
     @if($hinweis)<x-fa::notice tone="info">{{ $hinweis }}</x-fa::notice>@endif
 
-    {{-- Jod (15.10.2026): freiwilliger Hinweis je Mandant, gilt für Speisekarte und Etikett. Rechtliche Einordnung
-         (freiwillig, keine ZZulV-Pflicht) ist Kenntnisstand Kurator, vor Einsatz von QM bestätigen lassen. --}}
+    {{-- Jod (15.10.2026): freiwilliger Hinweis je Mandant, gilt für Speisekarte und Etikett. Rechtliche Einordnung:
+         freiwillige Angabe, keine ZZulV-Pflicht (bestätigt Dominique 16.10.2026). --}}
     <x-fa::section title="Freiwillige Hinweise" icon="heroicon-o-information-circle" data-etiketten-jod
         description="Gilt für Speisekarte und Etikett dieses Teams. Unter-Teams übernehmen die Einstellung, solange sie keine eigene haben.">
         <label class="inline-flex items-center gap-2 cursor-pointer text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">

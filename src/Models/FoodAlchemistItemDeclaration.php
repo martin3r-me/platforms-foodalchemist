@@ -43,8 +43,7 @@ class FoodAlchemistItemDeclaration extends Model
      * Freiwillige Angaben: gleiche Roh-Domäne {0,1,3,NULL} wie STOFFE, aber NIE Teil der Pflicht-Kennzeichnung, der
      * Zusatzstoff-Legende oder -Nummerierung (Entscheid Dominique 15.10.2026). Jod aus Necta `declarationIodhTlig`.
      *
-     * Rechtliche Einordnung (freiwillig, keine ZZulV-Pflicht) ist Kenntnisstand des Kurators; vor einem Einsatz auf der
-     * Speisekarte von QM bzw. Lebensmittelüberwachung bestätigen lassen.
+     * Rechtliche Einordnung: freiwillige Angabe, keine ZZulV-Pflicht (bestätigt Dominique 16.10.2026).
      */
     public const FREIWILLIG = [
         'iodized' => 'jodiert',
