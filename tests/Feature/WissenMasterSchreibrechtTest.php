@@ -77,10 +77,23 @@ it('★ die Config ist die schaerfere Aussage: ein zweites elternloses Team ist 
         ->and(TeamScope::isMaster($zweiterRoot))->toBeFalse();
 });
 
-it('ungesetzte Config aendert die Master-Antwort nicht', function () {
+it('Spec 84 B1: fehlender Master wird einmal je Prozess ins Log gewarnt, nicht bei jeder Abfrage', function () {
     config(['foodalchemist.master_team_id' => null]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    (fn () => self::$masterWarnungGeloggt = false)->call(new TeamScope());   // Prozess-Merker für den Test zurücksetzen
+    \Illuminate\Support\Facades\Log::spy();
 
-    expect(TeamScope::isMaster($this->rootTeam))->toBeTrue()    // parent_team_id === null
+    TeamScope::isMaster($this->rootTeam);
+    TeamScope::isMaster($this->childA);
+
+    \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')->withArgs(fn ($m) => str_contains($m, 'kein Master-Team konfiguriert'))->once();
+});
+
+it('Spec 84 B1: ohne Config gibt es keinen Master — auch nicht das elternlose Root-Team', function () {
+    config(['foodalchemist.master_team_id' => null]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+
+    expect(TeamScope::isMaster($this->rootTeam))->toBeFalse()   // früher: parent_team_id === null → Master
         ->and(TeamScope::isMaster($this->childA))->toBeFalse();
 });
 

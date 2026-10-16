@@ -116,8 +116,9 @@ final class TeamScope
      * Master = der EINE Kurator des globalen Bestands. Die einzige Instanz, die GLOBALE
      * Zeilen pflegen darf.
      *
-     * Konfiguriert (`foodalchemist.master_team_id`) gewinnt: genau dieses Team. Ungesetzt
-     * gilt weiter die strukturelle Antwort „Team ohne Eltern" — dieselbe wie vor 2026-09-11.
+     * Spec 84 B1 (Dominique 16.10., E1 „Demo ist egal“): EINE Master-Definition — nur das konfigurierte Team
+     * ({@see MasterTeam::istMaster}). Der frühere Rückfall „ungesetzt = jedes Team ohne Eltern“ entfällt: auf io sind alle
+     * Mandanten elternlos, „elternlos“ ist kein Master-Signal. Ohne Konfiguration gibt es keinen Master (einmalige Log-Warnung).
      *
      * Warum die Config die schärfere Aussage ist: auf demo tragen ALLE Teams
      * `parent_team_id = NULL`, weil die Hierarchie nie gepflegt wurde. „Elternlos" ist dort
@@ -130,12 +131,16 @@ final class TeamScope
         if ($team === null) {
             return false;
         }
-        $konfiguriert = MasterTeam::id();   // Spec 82 §13 B4: plattformweite Einstellung vor ENV
+        if (MasterTeam::id() === null && ! self::$masterWarnungGeloggt) {
+            self::$masterWarnungGeloggt = true;
+            \Illuminate\Support\Facades\Log::warning('Spec 84 B1: kein Master-Team konfiguriert — Pairing-Signale, Anker-Wissen und globale Pflege haben keinen Kurator.');
+        }
 
-        return $konfiguriert !== null
-            ? (int) $team->id === $konfiguriert
-            : $team->parent_team_id === null;
+        return MasterTeam::istMaster($team);
     }
+
+    /** Einmal je Prozess warnen (B1), nicht bei jeder Abfrage. */
+    private static bool $masterWarnungGeloggt = false;
 
     /**
      * SCHREIBRECHT MIT MASTER-AUSNAHME — die dritte Regel neben `owns()` (strikt) und
