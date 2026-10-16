@@ -12,11 +12,15 @@ uses(TestCase::class);
  * Reiner Contract-Test (die Service-Verdrahtung `planAusBrief` folgt im nächsten Chunk).
  */
 
-it('concept.plan ist als Tier-B-Prompt mit Task registriert', function () {
+it('concept.plan ist mit KI-Klasse STARK und Task registriert', function () {
+    // Seit #447 (KI-Klassen STARK/MITTEL/LEICHT statt Stufen A–D) trägt jeder Prompt `klasse` statt `tier`.
+    // Der Kreativ-Kopf formt die Leitidee eines Konzepts — er läuft bewusst auf der starken Klasse.
     $p = config('foodalchemist.prompts', [])['concept.plan'] ?? null;
 
     expect($p)->toBeArray()
-        ->and($p['tier'] ?? null)->toBe('B')
+        ->and($p)->not->toHaveKey('tier')
+        ->and(\Platform\FoodAlchemist\Support\KiKlassen::von($p))->toBe(\Platform\FoodAlchemist\Support\KiKlassen::STARK)
+        ->and($p['klasse'] ?? null)->toBe('stark')
         ->and($p['task'] ?? '')->not->toBe('');
 });
 
