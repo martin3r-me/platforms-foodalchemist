@@ -37,7 +37,7 @@
         @php
             $schrift = 'font-size: var(--fa-text-sm); color: var(--fa-ink-3); line-height: 1;';
         @endphp
-        <div style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); grid-template-rows: {{ $diagramm['hoehe'] }}px 1.5rem; column-gap: 0.25rem; margin-top: 1.25rem;" data-preisverlauf-flaeche role="img"
+        <div class="relative" x-data="{ tip: null, mx: 0, my: 0 }" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); grid-template-rows: {{ $diagramm['hoehe'] }}px 1.5rem; column-gap: 0.25rem; margin-top: 1.25rem;" data-preisverlauf-flaeche role="img"
              aria-label="Preisverlauf in {{ $diagramm['einheit'] }}">
             <div class="relative" data-preisverlauf-achse-y>
                 <span style="position: absolute; top: -1.15rem; right: 0; {{ $schrift }}" data-preisverlauf-einheit>{{ $diagramm['einheit'] }}</span>
@@ -64,11 +64,17 @@
                         @endif
                         {{-- Hover: je Stand ein unsichtbares Band über die ganze Höhe, der Browser-Tooltip nennt Datum, Preis je Basiseinheit und Rohpreis je Gebinde --}}
                         @foreach($l['punkte'] as $p)
-                            <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="var(--fa-ink)" fill-opacity="0" data-preisverlauf-band><title>{{ $p['tip'] }}</title></rect>
+                            <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="var(--fa-ink)" fill-opacity="0" data-tip="{{ $p['tip'] }}" data-preisverlauf-band
+                                  x-on:mousemove="tip = $el.getAttribute('data-tip'); mx = $event.clientX - $root.getBoundingClientRect().left; my = $event.clientY - $root.getBoundingClientRect().top"
+                                  x-on:mouseleave="tip = null" />
                         @endforeach
                     </g>
                 @endforeach
             </svg>
+            {{-- Tooltip am Diagramm-Container (relative), an der Mausposition, an den Rändern geklemmt --}}
+            <div x-show="tip" x-cloak x-text="tip" role="tooltip" data-preisverlauf-tooltip
+                 x-bind:style="'left: ' + Math.max(0, Math.min(mx + 14, $root.clientWidth - $el.offsetWidth)) + 'px; top: ' + Math.max(0, my - 48) + 'px'"
+                 class="pointer-events-none absolute z-10 max-w-xs rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
             <div></div>
             <div class="relative" data-preisverlauf-achse-x>
                 @foreach($diagramm['achse_x'] as $a)
@@ -87,6 +93,8 @@
                     <span class="tabular-nums text-[var(--fa-ink)]">{{ number_format($l['aktuell'], 2, ',', '.') }} {{ $diagramm['einheit'] }}</span>
                     @if($l['trend_text'])
                         <span class="tabular-nums text-[var(--fa-ink-2)] font-medium" data-preisverlauf-steigung>Trend {{ $l['trend_text'] }}</span>
+                    @elseif($l['ohne_wechsel'])
+                        <span class="text-[var(--fa-ink-3)]" data-preisverlauf-ohne-wechsel>kein Preiswechsel im Zeitraum</span>
                     @else
                         <span class="text-[var(--fa-ink-3)]">kein Trend (weniger als 2 Stände)</span>
                     @endif

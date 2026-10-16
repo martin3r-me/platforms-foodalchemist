@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Preise;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\PreisVerlaufService;
@@ -32,6 +33,12 @@ class Verlauf extends Component
     {
         $this->modus = $modus === 'gp' ? 'gp' : 'la';
         $this->objektId = $objektId;
+    }
+
+    /** Ein Preis wurde angelegt, geändert oder gelöscht: neu zeichnen (das Ereignis löst das Neurendern aus). */
+    #[On('preise-geaendert')]
+    public function neuLaden(): void
+    {
     }
 
     public function zeitraumSetzen(string $z): void
@@ -136,7 +143,7 @@ class Verlauf extends Component
             }
             $svgLinien[] = [
                 'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $l['lead'] ? 2.5 : 1.75, 'pfad' => trim($pfad), 'luecken' => trim($luecken), 'punkte' => $punkte, 'trend' => $trend,
-                'lead' => $l['lead'], 'lieferant' => $l['lieferant'], 'artikel' => $l['artikel'],
+                'lead' => $l['lead'], 'lieferant' => $l['lieferant'], 'artikel' => $l['artikel'], 'staende' => $l['staende'], 'ohne_wechsel' => $l['ohne_wechsel'] ?? false,
                 'aktuell' => end($l['segmente'])['wert'], 'trend_text' => self::trendText($l['trend'], (string) $daten['einheit']),
             ];
         }
@@ -230,7 +237,9 @@ class Verlauf extends Component
             return null;
         }
         $vz = fn (float $v) => $v < 0 ? '−' : '+';
-        $text = $vz($trend['steigung_pro_monat']).number_format(abs($trend['steigung_pro_monat']), 2, ',', '.').' '.$einheit.' pro Monat';
+        // Kleine Steigungen mit 3 Stellen („+0,004“), damit nicht „+0,00“ neben „+0,7 % pro Jahr“ steht
+        $dez = abs($trend['steigung_pro_monat']) >= 0.01 ? 2 : 3;
+        $text = $vz($trend['steigung_pro_monat']).number_format(abs($trend['steigung_pro_monat']), $dez, ',', '.').' '.$einheit.' pro Monat';
         if ($trend['prozent_pro_jahr'] !== null) {
             $text .= ' · '.$vz((float) $trend['prozent_pro_jahr']).number_format(abs($trend['prozent_pro_jahr']), 1, ',', '.').' % pro Jahr';
         }

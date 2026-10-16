@@ -187,12 +187,14 @@
             </div>{{-- /Reiter GRUNDPRODUKT --}}
 
             {{-- ── Reiter PREISE ───────────────────────────────────────────────── --}}
-            <div x-show="tab === 'preise'" x-cloak class="pt-4 flex flex-col gap-4" x-data="{ neuOffen: false }">
+            {{-- ab lg zweispaltig: links Preise (Liste + frühere Preise, scrollbar), rechts der Preisverlauf (sticky); darunter untereinander --}}
+            <div x-show="tab === 'preise'" x-cloak class="pt-4 grid gap-4 lg:grid-cols-2 lg:items-start" x-data="{ neuOffen: false }" data-preise-reiter>
+              <div class="flex min-w-0 flex-col gap-4" data-preise-links>
                 <x-fa::section title="Preise" icon="heroicon-o-banknotes" :meta="$historie->count() > 0 ? $historie->count() . ' Einträge' : null">
                     <x-slot:actions>
                         @if($darfEdit)
-                            <x-fa::button size="sm" icon="heroicon-m-plus" x-on:click="neuOffen = ! neuOffen"
-                                x-bind:aria-expanded="neuOffen" data-preis-neu-toggle>Preis erfassen</x-fa::button>
+                            <x-fa::button size="sm" variant="primary" icon="heroicon-m-plus" x-on:click="neuOffen = ! neuOffen"
+                                x-bind:aria-expanded="neuOffen" title="Einen Preis von Hand setzen; der bisher gültige endet damit" data-preis-neu-toggle>Preis manuell setzen</x-fa::button>
                         @endif
                     </x-slot:actions>
 
@@ -221,7 +223,7 @@
                         </div>
                     @endif
 
-                    <div class="overflow-x-auto -mx-1 px-1">
+                    <div class="max-h-[28rem] overflow-auto -mx-1 px-1" data-preis-liste>
                         <table class="fa-table" data-preis-historie>
                             <thead>
                                 <tr>
@@ -293,14 +295,20 @@
                             </tbody>
                         </table>
                     </div>
+                    @if($item !== null)
+                        <livewire:foodalchemist.preise.fruehere :item-id="$item->id" :key="'pf-la-'.$item->id" />
+                    @endif
                 </x-fa::section>
+              </div>
 
-                {{-- Preisverlauf als Linie (Preis je Basiseinheit, Rohpreis je Gebinde im Tooltip) --}}
-                @if($item !== null)
+              {{-- Preisverlauf als Linie (Preis je Basiseinheit, Rohpreis je Gebinde im Tooltip); sticky neben der Liste --}}
+              @if($item !== null)
+                <div class="min-w-0 lg:sticky lg:top-0" data-preise-rechts>
                     <x-fa::section title="Preisverlauf" icon="heroicon-o-presentation-chart-line" data-sektion="preisverlauf">
                         <livewire:foodalchemist.preise.verlauf modus="la" :objekt-id="$item->id" :key="'pv-la-'.$item->id" />
                     </x-fa::section>
-                @endif
+                </div>
+              @endif
             </div>{{-- /Reiter PREISE --}}
 
             {{-- ── Reiter ALLERGENE UND NÄHRWERTE ──────────────────────────────── --}}
