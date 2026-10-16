@@ -127,6 +127,9 @@ class FileArticleImportService
     public const PREIS_FELDER = [
         'preis' => ['preis', 'ekpreis', 'ek', 'einkaufspreis', 'nettopreis', 'price'],
         'preisstatus' => ['preisstatus', 'preisart', 'pricestatus'],
+        // Aktionszeitraum (16.10.2026): nur mit Preis-Status „Aktion“; ohne „bis“ wird die Aktion nicht übernommen
+        'aktion_ab' => ['aktionab', 'aktionvon', 'gueltigab', 'aktionsbeginn'],
+        'aktion_bis' => ['aktionbis', 'gueltigbis', 'aktionsende'],
     ];
 
     /** Erlaubte Kalkulationseinheiten — dieselbe Liste wie bei der Hand-Anlage (GL-11). */
@@ -294,8 +297,12 @@ class FileArticleImportService
      *   hinweise: list<string>, befunde: list<array<string, mixed>>
      * }
      */
+    /** Dateiname des laufenden Imports (Herkunft der Aktionspreise in details). */
+    private ?string $aktuelleDatei = null;
+
     public function importiere(Team $team, int $supplierId, string $pfad, bool $apply = false): array
     {
+        $this->aktuelleDatei = basename($pfad);
         $supplier = FoodAlchemistSupplier::visibleToTeam($team)->whereKey($supplierId)->first();
         if (! $supplier) {
             throw new \RuntimeException('Lieferant nicht in der Team-Kette sichtbar (--supplier prüfen).');
@@ -309,7 +316,8 @@ class FileArticleImportService
             'zeilen' => count($datei['zeilen']),
             'apply' => $apply,
             'neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'uebersprungen' => 0, 'fehler' => 0,
-            'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0, 'aktion_nicht_uebernommen' => 0],
+            'preise' => ['neu' => 0, 'geaendert' => 0, 'unveraendert' => 0, 'fehler' => 0, 'aktion_nicht_uebernommen' => 0,
+                'aktion_neu' => 0, 'aktion_unveraendert' => 0, 'aktion_ersetzt' => 0],
             'details' => ['naehrwerte' => 0, 'allergene' => 0, 'zusatzstoffe' => 0],
             'konditionen' => ['status' => null, 'gesetzt' => [], 'unveraendert' => [], 'abgelehnt' => []],
             'kette' => ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0],
@@ -598,8 +606,7 @@ class FileArticleImportService
                 return ['preis' => ['status' => 'fehler', 'grund' => "Preis-Status [{$w['preisstatus']}] ist weder Standard-EK noch „läuft aus“."]];
             }
             if ($status === 'aktion') {
-                return ['preis' => ['status' => 'aktion_nicht_uebernommen',
-                    'grund' => "Aktionspreis nicht übernommen ({$preis} €): Aktionen werden als Preis nicht gespeichert, der Standard-EK bleibt."]];
+                return $this->verarbeiteAktion($team, $item, $preis, $w, $apply);
             }
         }
 
@@ -966,6 +973,48 @@ class FileArticleImportService
         $b = $this->wahrheit($roh);
 
         return $b === null ? null : ($b ? 'ja' : 'nein');
+    }
+
+    /**
+     * Aktionspreis aus der Datei → Preis-Zeitachse status 'A' ({@see AktionspreisService}). Reine Information: der Standard-EK
+     * bleibt. Ohne „Aktion bis“ wird nichts geschrieben (eine unbefristete Aktion wäre ein Normalpreis); „Aktion ab“ fehlt →
+     * Importdatum. Idempotent über den Datei-Schlüssel (Artikel, Team, ab, bis); geänderter Preis ersetzt die alte Aktion.
+     *
+     * @param  array<string, string>  $w
+     * @return array{preis: array<string, mixed>}
+     */
+    private function verarbeiteAktion(Team $team, ?FoodAlchemistSupplierItem $item, float $preis, array $w, bool $apply): array
+    {
+        $bis = $this->datum($w['aktion_bis'] ?? '');
+        if ($bis === null) {
+            return ['preis' => ['status' => 'aktion_nicht_uebernommen',
+                'grund' => "Aktionspreis nicht übernommen ({$preis} €): Spalte „Aktion bis“ fehlt oder ist kein Datum. Der Standard-EK bleibt."]];
+        }
+        $ab = $this->datum($w['aktion_ab'] ?? '') ?? now('Europe/Berlin')->toDateString();
+        if ($item === null || ! $apply) {
+            return ['preis' => ['status' => 'aktion_neu', 'neu' => $preis, 'ab' => $ab, 'bis' => $bis]];   // Trockenlauf
+        }
+        try {
+            $r = app(AktionspreisService::class)->anlegen($team, $item, $preis, $ab, $bis, 'datei', null, ['datei' => $this->aktuelleDatei]);
+        } catch (\RuntimeException $e) {
+            return ['preis' => ['status' => 'fehler', 'grund' => $e->getMessage()]];
+        }
+
+        return ['preis' => ['status' => 'aktion_'.$r['status'], 'neu' => $preis, 'ab' => $ab, 'bis' => $bis]];
+    }
+
+    /** Datum aus der Datei: 31.12.2026, 31.12.26 oder 2026-12-31 → 'Y-m-d'; sonst null. */
+    private function datum(string $roh): ?string
+    {
+        $roh = trim($roh);
+        foreach (['d.m.Y', 'd.m.y', 'Y-m-d'] as $format) {
+            $d = \DateTimeImmutable::createFromFormat('!'.$format, $roh);
+            if ($d !== false && $d->format($format) === $roh) {
+                return $d->format('Y-m-d');
+            }
+        }
+
+        return null;
     }
 
     /**

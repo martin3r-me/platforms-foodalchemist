@@ -817,6 +817,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ArtikelDeklarationenPutTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelNaehrwertePutTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelPreisePostTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelAktionspreisePostTool::class,   // Aktionspreise (16.10.2026)
+                    \Platform\FoodAlchemist\Tools\ArtikelAktionspreiseGetTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelPreiseDeleteTool::class,
                     // D4b-2: Artikel-/Preis-Edit (neue Service-Methoden SupplierItemService::update / PriceService::updatePrice).
                     \Platform\FoodAlchemist\Tools\ArtikelPutTool::class,

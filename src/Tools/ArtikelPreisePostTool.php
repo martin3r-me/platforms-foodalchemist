@@ -19,7 +19,7 @@ class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Legt einen Preis (netto) für einen sichtbaren Lieferantenartikel an. Besitzer-Team: Listenpreis. Anderes Team: eigener Teampreis des Oberteams/Mandanten (gilt für dieses Team und seine Unter-Teams, der Listenpreis bleibt; Unter-Teams schreiben keine eigenen Preise). status optional: 0 Standard-EK, 2 Aktion.';
+        return 'Legt einen Preis (netto) für einen sichtbaren Lieferantenartikel an. Besitzer-Team: Listenpreis. Anderes Team: eigener Teampreis des Oberteams/Mandanten (gilt für dieses Team und seine Unter-Teams, der Listenpreis bleibt; Unter-Teams schreiben keine eigenen Preise). status optional: 0 Standard-EK, 2 läuft aus. Aktionspreise: foodalchemist.artikel_aktionspreise.POST.';
     }
 
     public function getSchema(): array
