@@ -874,6 +874,20 @@ return [
     'bearbeitungssperre' => env('FOODALCHEMIST_BEARBEITUNGSSPERRE', true),
 
     /*
+     * Spec 84 E-1: Messung langsamer Abfragen in der Anwendung (statt MySQL-Slow-Log — der DB-Nutzer auf io hat kein SUPER).
+     * `langsam_ms` = null schaltet die ganze Messung aus (Standard). Gesetzt: jede Abfrage ab dieser Dauer landet im
+     * Log-Kanal `fa-langsam` (täglich, 14 Tage, JSON), dazu je Request/Job eine Zusammenfassung, wenn er mehr als
+     * `zusammenfassung_anzahl` Abfragen oder mehr als `zusammenfassung_ms` Summe hatte (mit N+1-Mustern ab `n_plus_1`).
+     * Auswertung: `php artisan foodalchemist:langsame-abfragen --tage=7`.
+     */
+    'leistung' => [
+        'langsam_ms' => env('FOODALCHEMIST_LANGSAME_ABFRAGEN_MS'),
+        'zusammenfassung_anzahl' => (int) env('FOODALCHEMIST_ABFRAGEN_ZUSAMMENFASSUNG_ANZAHL', 200),
+        'zusammenfassung_ms' => (int) env('FOODALCHEMIST_ABFRAGEN_ZUSAMMENFASSUNG_MS', 2000),
+        'n_plus_1' => (int) env('FOODALCHEMIST_ABFRAGEN_N_PLUS_1', 20),
+    ],
+
+    /*
      * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
      * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
      * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).
