@@ -1420,6 +1420,22 @@ class FoodbookService
         });
     }
 
+    /**
+     * Board: manuellen Kapitel-Fortschritt setzen (offen|in_arbeit|fertig). Nur das Besitzer-Team (ownedKapitel),
+     * Vokabular-Pflicht. Spiegel von {@see OfferCompositionService::kapitelFortschritt} — Spec 84 §5.5: vorher schrieb
+     * die Livewire-Komponente direkt (`$k->update`), jetzt ein Schreibweg für UI und künftiges MCP.
+     */
+    public function kapitelFortschritt(Team $team, int $id, string $wert): FoodAlchemistFoodbookKapitel
+    {
+        $k = $this->ownedKapitel($team, $id);
+        if (! in_array($wert, FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true)) {
+            throw new \RuntimeException('Unbekannte Fortschritt-Stufe.');
+        }
+        $k->update(['fortschritt' => $wert]);
+
+        return $k->refresh();
+    }
+
     public function deleteKapitel(Team $team, int $id): void
     {
         $this->ownedKapitel($team, $id)->delete();
