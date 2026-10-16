@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **Entwurf v0.3, PR 0 umgesetzt (lokal)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **v0.5, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -177,7 +177,7 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 **B1 · Eine Master-Definition**
 - `TeamScope::isMaster` ruft nur `MasterTeam::istMaster`. Rückfall „elternlos = Master“ entfällt.
 - Startprüfung: mehr als ein Team und kein Master → Warnung (Log + Einstellungsseite).
-- **Vorbedingung (E1):** demo bekommt einen Stand mit `MasterTeam` und einen gesetzten Master, *bevor* B1 dort ankommt. Sonst verlieren Pairing-Signale, Anker-Wissen und Wissens-Notbremse auf demo ihren Kurator.
+- ~~Vorbedingung (E1)~~ **entfällt** (Dominique 16.10.: „Demo ist egal.“). Auf demo verlieren Pairing-Signale, Anker-Wissen und Wissens-Notbremse damit ihren Kurator, bis dort ein Master gesetzt ist — bewusst hingenommen.
 
 **B2 · Abfragen zählen, die „unsichtbar“ mit „nicht vorhanden“ verwechseln (vor B3)**
 - 56× `firstOrCreate/updateOrCreate/firstOrNew`, 255× `->exists()`, dazu Slug-/Dubletten-Prüfungen und Abo-/Kündigungs-Kopien („gibt es die Kopie schon?“).
@@ -377,6 +377,15 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## §7 · Reihenfolge und PR-Schnitt
 
+**Stand 16.10. abends (Aufteilung Kurator):** Session „test“ baut die Kette PR 0 → A-1 → A-2 → A-3 → A-4 → B1 → B3/B0b/B4/B5 und E5; Vanessa baut C3a, D1, C2-Test, §5.8 und B2.
+
+| PR | Stand |
+|---|---|
+| 0 | lokal fertig: `fix/spec84-schreib-leck` (Riegel §4.0 + dritte Master-Definition) + `fix/spec84-brief-vorlagen-team` (L1-B, Variante B, Migration `2026_11_09_100000`) |
+| O1 | lokal fertig: `fix/spec84-angebote-unterteam` (`e63fe1cf`) |
+| 2 (B0a) | **gemergt #453** (Vanessa) |
+| alle übrigen | offen |
+
 | # | PR | Teil | Abhängig von | Größe |
 |---|---|---|---|---|
 | **0** | **§4.0 Schreib-Leck:** Eigentümer-Riegel in `SalesRecipeService` (Regeneration/Container), 4 MCP-Tools, Modal-Methoden RecipeModal/GpModal/VkModal; Z. 1093 über Model; Abweisungs-Tests | B | – | S–M |
@@ -413,14 +422,14 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 | # | Frage | Empfehlung |
 |---|---|---|
-| E1 | demo bekommt einen Stand mit `MasterTeam` und einen gesetzten Master **vor** B1. Das heißt demo-Deploy. Wann, und welches Team ist dort Master? | Deploy vor B1; Master = das demo-Team, das kuratiert |
-| E2 | Fehlender Team-Kontext in HTTP/MCP: Fehler oder leer? | **Fehler** (eigener Typ + Log); „leer“ nur hinter dem Notschalter |
-| E3 | Plattform-Admin weiter **ohne** Ausnahme (Spec 82 §13 G)? | ja |
-| E4 | Phase B0 vor dem ersten echten Abo auf io verbindlich? | ja |
-| E5 | Toter Skizzen-Code in Planung/Index (7 Methoden): löschen oder zurück in die UI? | löschen, falls nicht geplant |
-| E6 | C3a (Tool-Liste als eigene Datei, catch loggt) früh als eigener PR, obwohl Teil C sonst Pfadfinder ist? | ja: hoher Wert, null Fachrisiko, beendet den Konfliktmagneten. C3b (Scan/Cache) nicht ohne Not |
-| E7 | PR 0 (§4.0 Schreib-Leck) sofort, vor allem anderen? | **ja**: auf io offen, sobald ein Mandanten-Nutzer eine sichtbare Master-/Stamm-Zeile hat |
-| E8 | **Angebote im Unter-Team (O1, Fund B0a):** Ein Unter-Team mit leerer 77d-Hülle sieht die Angebote des Oberteams (`angebote.GET/LIST/SEARCH`, `reife.GET`), weil Angebote nicht in `InhaltsFreigabe::MODELLE` stehen. Gewollt (Angebot gehört zum Betrieb des Oberteams) oder Lücke? | Dominique entscheidet; bis dahin `->todo()` im Zwei-Mandanten-Test |
+| E1 | demo-Master vor B1? | **Entschieden 16.10.: „Demo ist egal.“** B1 hat keine demo-Vorbedingung; demo läuft danach ohne Master-Kurator, bis dort einer gesetzt ist. |
+| E2 | Fehlender Team-Kontext in HTTP/MCP: Fehler oder leer? | **Entschieden 16.10.: Fehler** (eigener Typ + Log); „leer“ nur hinter dem Notschalter. |
+| E3 | Plattform-Admin weiter **ohne** Ausnahme (Spec 82 §13 G)? | **offen**: Dominique fragt nach Use-Cases. Bis dahin ohne Ausnahme (heutiger Stand). |
+| E4 | Phase B0 vor dem ersten echten Abo auf io verbindlich? | **Entschieden: ja.** B0a gemergt (#453). |
+| E5 | Toter Skizzen-Code in Planung/Index (7 Methoden): löschen oder zurück in die UI? | **Entschieden: löschen** (7 Methoden + `$skizzen*`-Berechnung in `render()`, `PlanungLeitstelleTest` anpassen), eigener kleiner PR (Session „test“). |
+| E6 | C3a früh als eigener PR? | **Entschieden: ja** (baut Vanessa). C3b nicht ohne Not. |
+| E7 | PR 0 (§4.0 Schreib-Leck) sofort? | **Entschieden: ja.** |
+| E8 | **Entschieden 16.10.: Lücke, nicht gewollt** → umgesetzt (`fix/spec84-angebote-unterteam`, `e63fe1cf`). **Angebote im Unter-Team (O1, Fund B0a):** Ein Unter-Team mit leerer 77d-Hülle sieht die Angebote des Oberteams (`angebote.GET/LIST/SEARCH`, `reife.GET`), weil Angebote nicht in `InhaltsFreigabe::MODELLE` stehen. Gewollt (Angebot gehört zum Betrieb des Oberteams) oder Lücke? | Dominique entscheidet; bis dahin `->todo()` im Zwei-Mandanten-Test |
 
 ## §10 · Sparring-Protokoll (Session „Vanessa“, 16.10.)
 
@@ -457,6 +466,8 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | E8 gehört nicht in diese Spec | übernommen: entfernt, an Dominique gemeldet |
 
 ## Changelog
+
+- 2026-10-16 · v0.5: Entscheide E1 (demo egal), E2 (Fehler), E4, E5 (löschen), E6, E7, E8 (Lücke) eingetragen; E3 offen; L1-B Variante B umgesetzt; Stand je PR in §7.
 
 - 2026-10-16 · v0.4: B0a fertig (Vanessa, `test/spec84-zwei-mandanten`, 7d9547bf + 670495e9); dritte Master-Definition `BriefTemplateService` gefunden und in PR 0 behoben (`34bc5243`); E8 Angebote im Unter-Team.
 - 2026-10-16 · v0.3: §4.0 korrigiert (MCP-Tools über `guardRecipe` geschützt, Leck = Livewire-Weg + Services); PR 0 umgesetzt (Commit `cd65d38a`); Prüfliste B2 mit 38 Service-Kandidaten.
