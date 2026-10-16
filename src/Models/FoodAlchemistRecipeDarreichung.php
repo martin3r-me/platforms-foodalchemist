@@ -83,6 +83,12 @@ class FoodAlchemistRecipeDarreichung extends Model
         return $this->hasMany(FoodAlchemistRecipeDarreichungDelta::class, 'presentation_id');
     }
 
+    /** Gefäß der Form (Non-Food-GP, WG 16): definiert zusammen mit der Menge die Darreichung. Ersetzt das alte Default-Geschirr. */
+    public function vessel()
+    {
+        return $this->belongsTo(FoodAlchemistGp::class, 'vessel_gp_id');
+    }
+
     /** Zubehör & Verpackung dieser Form (Non-Food-GPs, Menge je Einheit) — wirkt nur auf den EK. */
     public function zubehoer()
     {

@@ -453,7 +453,7 @@
                                 <th>Preisklasse</th>
                                 <th>Preis</th>
                                 <th>MwSt</th>
-                                <th>Geschirr</th>
+                                <th title="Gefäß der Form (Non-Food, Geschirr & Ausstattung); der Servier-Typ kommt aus dem Gefäß">Gefäß</th>
                                 <th class="text-right">EK je Einheit</th>
                                 <th class="text-right">VK netto</th>
                                 <th class="text-right" title="Wareneinsatz: EK ÷ VK netto">Wareneinsatz</th>
@@ -529,11 +529,14 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <select wire:model="darForm.{{ $d->id }}.tableware_item_id" aria-label="Geschirr"
-                                            wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $feldKlein }} fa-select pr-8 w-36"
-                                            title="Standard-Geschirr dieser Form, der Concepter schlägt es vor">
-                                        <option value="">kein Geschirr</option>
-                                        @foreach($geschirrItems as $gi)<option value="{{ $gi->id }}">{{ $gi->label }}</option>@endforeach
+                                    <select wire:model="darForm.{{ $d->id }}.vessel_gp_id" aria-label="Gefäß"
+                                            wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $feldKlein }} fa-select pr-8 w-40" data-dar-gefaess
+                                            title="Gefäß dieser Form: bestimmt Servier-Typ und Gefäß-Kosten je Einheit">
+                                        <option value="">kein Gefäß</option>
+                                        @foreach($gefaessGps as $gg)<option value="{{ $gg->id }}">{{ $gg->name }}</option>@endforeach
+                                        @if(($darForm[$d->id]['vessel_gp_id'] ?? null) && ! $gefaessGps->contains('id', $darForm[$d->id]['vessel_gp_id']))
+                                            <option value="{{ $darForm[$d->id]['vessel_gp_id'] }}">{{ $darGefaess[$d->id]['gefaess_name'] ?? 'Gefäß' }}</option>
+                                        @endif
                                     </select>
                                 </td>
                                 <td class="num"><x-fa::money :value="$d->ek_portion" /></td>
@@ -594,6 +597,29 @@
                                     </div>
                                 </td>
                             </tr>
+                            {{-- Gefäß & Servier-Typ dieser Form: wirksamer Typ (aus dem Gefäß oder ausdrücklich übersteuert), Hinweise zu Füllmenge und Miete --}}
+                            @php $gi = $darGefaess[$d->id] ?? null; @endphp
+                            @if($gi)
+                                <tr wire:key="dar-gef-{{ $d->id }}" data-dar-gefaess-info="{{ $d->id }}">
+                                    <td colspan="13" class="pt-0 pb-1">
+                                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                            <span class="font-medium">Servier-Typ</span>
+                                            <label class="inline-flex items-center gap-1">
+                                                <select wire:model="darForm.{{ $d->id }}.serving_vehicle_vocab_id" wire:change="darreichungSpeichern({{ $d->id }})" aria-label="Servier-Typ" class="{{ $feldKlein }} fa-select pr-8 w-44" data-dar-typ>
+                                                    <option value="">{{ $gi['gefaess_typ_name'] ? 'aus Gefäß: '.$gi['gefaess_typ_name'] : 'nicht gesetzt' }}</option>
+                                                    @foreach($vehikel as $v)<option value="{{ $v->id }}" @if($v->is_inactive && ($darForm[$d->id]['serving_vehicle_vocab_id'] ?? null) != $v->id) hidden @endif>{{ $v->name }}</option>@endforeach
+                                                </select>
+                                            </label>
+                                            @if($gi['uebersteuert'])<x-fa::badge tone="warn" data-dar-uebersteuert title="Der Typ wurde ausdrücklich gesetzt und weicht vom Typ des Gefäßes ab">übersteuert (Gefäß sagt {{ $gi['gefaess_typ_name'] }})</x-fa::badge>
+                                            @elseif($gi['typ_name'] && $gi['gefaess_id'])<span class="{{ $hinweis }}" data-dar-typ-aus-gefaess>{{ $gi['typ_name'] }} (aus dem Gefäß)</span>@endif
+                                            @if($gi['kosten'] !== null)<span class="tabular-nums" data-dar-gefaess-kosten>Gefäß {{ $euro($gi['kosten']) }} je Einheit</span>@endif
+                                            @if($gi['miete'])<x-fa::badge tone="info" data-dar-miete title="Das Gefäß kommt von einem Verleiher: Miete je Tag/Veranstaltung, nicht je Portion gerechnet">Miete, nicht je Portion gerechnet</x-fa::badge>@endif
+                                            @if($gi['preis_fehlt'])<x-fa::badge tone="warn" title="Kein Preis je Stück am Hauptartikel des Gefäßes">Gefäß-Preis fehlt</x-fa::badge>@endif
+                                            @if($gi['warnung'])<x-fa::badge tone="warn" data-dar-fuellmenge-warnung>{{ $gi['warnung'] }}</x-fa::badge>@endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                             {{-- Zubehör & Verpackung dieser Form (Non-Food, Menge je Einheit): wirkt NUR auf den EK, nie auf Allergene, Nährwerte oder Profil --}}
                             @php $zub = $darZubehoer[$d->id] ?? ['zeilen' => [], 'summe' => 0.0, 'vollstaendig' => true]; @endphp
                             <tr wire:key="dar-zub-{{ $d->id }}" data-dar-zubehoer="{{ $d->id }}">

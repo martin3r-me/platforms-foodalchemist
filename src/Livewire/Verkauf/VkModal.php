@@ -241,6 +241,8 @@ class VkModal extends Component
                 'price_override_reason' => $d->price_override_reason,
                 'price_override_expires_at' => $d->price_override_expires_at?->format('Y-m-d'),
                 'tableware_item_id' => $d->tableware_item_id,
+                'vessel_gp_id' => $d->vessel_gp_id,
+                'serving_vehicle_vocab_id' => $d->serving_vehicle_vocab_id,
                 // Spec 83 B3i/B3l: Anrichten je Darreichung (Einheit aus der Form) + Pauschale je Auftragszeile
                 'anrichten_wert' => $d->anrichten_wert,
                 'anrichten_pauschal_min' => $d->anrichten_pauschal_min,
@@ -1500,6 +1502,15 @@ class VkModal extends Component
             // Spec 51: die Liste ist ABGELEITET. Gespeichert ist nur, was hier bewusst
             // uebersteuert wurde — der Rest kommt aus den Komponenten und folgt ihnen.
             'kaskade' => $this->kaskade(),
+            // Gefäß je Darreichung: wirksamer Typ, Übersteuerung, Warnung (Füllmenge > Volumen), Miete — alles berechnet (DarreichungService::gefaessInfo)
+            'darGefaess' => $this->recipeId !== null && $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->recipeId)->get()
+                    ->mapWithKeys(fn ($d) => [(int) $d->id => app(\Platform\FoodAlchemist\Services\DarreichungService::class)->gefaessInfo($d, $team)])->all()
+                : [],
+            'gefaessGps' => $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->nonFood()->whereNotIn('status', ['rejected', 'merged'])
+                    ->where('sub_category', \Platform\FoodAlchemist\Support\NonFoodRegeln::SUB_GESCHIRR)->orderBy('name')->limit(300)->get(['id', 'name'])
+                : collect(),
             'behaelterVorschau' => $this->behaelterVorschau(),
             'behaelterVorschauPax' => self::VORSCHAU_PORTIONEN,
             'kunden' => $this->recipeId !== null

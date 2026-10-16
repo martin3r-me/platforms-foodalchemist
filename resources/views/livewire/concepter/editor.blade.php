@@ -150,7 +150,7 @@
                 'konzept' => ($concept && ! $istPaket) ? 'Konzept & Planung' : null,
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
-                'geschirr' => ($concept || $paket) ? 'Geschirr' : null,
+                'geschirr' => ($concept || $paket) ? 'Anrichten' : null,
                 'notes' => 'Notizen',
             ]" />
 
@@ -1549,69 +1549,53 @@
                 @endif
             @endif
 
-            {{-- ── Reiter: GESCHIRR (#388 — Haupt-Geschirr + Alternative je Gericht) ── --}}
+            {{-- ── Reiter: ANRICHTEN (nur lesend) — Darreichung, Gefäß, Servier-Typ, Zubehör. Gepflegt wird an der Darreichung im Gericht. ── --}}
             @if($tab === 'geschirr')
-                @php
-                    if ($concept) {
-                        $geschirrZeilen = $concept->slots->filter(fn ($s) => $s->sales_recipe_id !== null || in_array($s->type, ['gericht', 'basisrezept'], true))
-                            ->map(fn ($s) => ['id' => $s->id, 'key' => 'geschirr-slot-' . $s->id, 'pickKey' => 'geschirr-pick-' . $s->id, 'kandKey' => 'gk-' . $s->id, 'name' => $s->wording ?: ($s->dish?->name ?: ($s->title ?: 'Position')), 'haupt' => $s->dishwareItem, 'alt' => $s->dishwareAltItem, 'vorschlag' => true]);
-                    } else {
-                        $geschirrZeilen = $paket->dishes
-                            ->map(fn ($pg) => ['id' => $pg->id, 'key' => 'paket-geschirr-' . $pg->id, 'pickKey' => 'paket-geschirr-pick-' . $pg->id, 'kandKey' => 'pgk-' . $pg->id, 'name' => $pg->dish?->name ?: 'Posten', 'haupt' => $pg->dishwareItem, 'alt' => $pg->dishwareAltItem, 'vorschlag' => false]);
-                    }
-                @endphp
-                <div class="flex flex-col gap-3">
-                    <p class="{{ $hinweis }}">Je {{ $concept ? 'Gericht' : 'Posten' }} ein Haupt-Geschirr und auf Wunsch eine Alternative, etwa von einem anderen Verleiher. Den Geschirr-Katalog pflegst du unter <span class="font-medium text-[var(--fa-ink-2)]">Stammdaten, Geschirr</span>.</p>
-                    @forelse($geschirrZeilen as $zeile)
-                        <section wire:key="{{ $zeile['key'] }}" class="fa-surface flex flex-col gap-3 px-4 py-3">
-                            <h4 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)] break-words">{{ $zeile['name'] }}</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $role => $rolleLabel)
-                                    @php $geschirr = $zeile[$role]; @endphp
-                                    <div class="flex flex-col gap-1.5 min-w-0">
-                                        <span class="{{ $feldLabel }}">{{ $rolleLabel }}</span>
-                                        @if($geschirr)
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] break-words">{{ $geschirr->label }}</span>
-                                                @if($geschirr->rental_price !== null)<x-fa::badge>{{ $euro($geschirr->rental_price) }} Miete</x-fa::badge>@endif
-                                            </div>
-                                            <div class="flex items-center gap-1.5">
-                                                <x-fa::button size="sm" icon="heroicon-m-arrows-right-left" wire:click="geschirrPicker({{ $zeile['id'] }}, '{{ $role }}')">Geschirr ändern</x-fa::button>
-                                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="geschirrEntfernen({{ $zeile['id'] }}, '{{ $role }}')">Entfernen</x-fa::button>
-                                            </div>
-                                        @else
-                                            <div class="flex flex-wrap items-center gap-1.5">
-                                                <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="geschirrPicker({{ $zeile['id'] }}, '{{ $role }}')">Geschirr wählen</x-fa::button>
-                                                @if($zeile['vorschlag'] && $role === 'haupt' && isset($geschirrVorschlag[$zeile['id']]))
-                                                    <x-fa::button size="sm" variant="ai" icon="heroicon-m-light-bulb" wire:click="geschirrWaehle({{ $zeile['id'] }}, 'haupt', {{ $geschirrVorschlag[$zeile['id']]['id'] }})" data-geschirr-vorschlag
-                                                            title="Standard-Geschirr der gültigen Darreichung ({{ $geschirrVorschlag[$zeile['id']]['form'] }}). Klick übernimmt.">{{ $geschirrVorschlag[$zeile['id']]['label'] }} übernehmen</x-fa::button>
-                                                @endif
-                                            </div>
-                                        @endif
-
-                                        @if($geschirrPickSlotId === $zeile['id'] && $geschirrPickRolle === $role)
-                                            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-ground)] p-2" wire:key="{{ $zeile['pickKey'] }}-{{ $role }}">
-                                                <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="geschirrSuche" placeholder="Geschirr suchen …" aria-label="Geschirr suchen" autofocus />
-                                                <div class="flex flex-col gap-px max-h-48 overflow-y-auto">
-                                                    @forelse($geschirrKandidaten as $kandidat)
-                                                        <button type="button" wire:key="{{ $zeile['kandKey'] }}-{{ $role }}-{{ $kandidat->id }}"
-                                                                wire:click="geschirrWaehle({{ $zeile['id'] }}, '{{ $role }}', {{ $kandidat->id }})"
-                                                                class="flex flex-wrap items-baseline gap-x-2 w-full text-left px-2 py-1.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
-                                                            <span>{{ $kandidat->label }}</span>
-                                                            <span class="{{ $klein }} text-[var(--fa-ink-3)]">{{ $kandidat->supplier?->name }}{{ $kandidat->rental_price !== null ? ', ' . $euro($kandidat->rental_price) : '' }}</span>
-                                                        </button>
-                                                    @empty
-                                                        <p class="{{ $leerText }}">{{ trim($geschirrSuche) === '' ? 'Zum Suchen tippen …' : 'Kein Geschirr gefunden.' }}</p>
-                                                    @endforelse
-                                                </div>
-                                            </div>
-                                        @endif
-                                    </div>
-                                @endforeach
-                            </div>
+                <div class="flex flex-col gap-3" data-anrichten>
+                    <p class="{{ $hinweis }}">Je {{ $concept ? 'Gericht' : 'Posten' }}: worauf und womit angerichtet wird. Das Gericht ist neutral, die <span class="font-medium text-[var(--fa-ink-2)]">Darreichung</span> legt Menge und Gefäß fest; gepflegt wird sie im Gericht (Darreichungen). Hier nur zum Lesen.</p>
+                    @forelse($anrichtenZeilen as $z)
+                        @php $g = $z['gefaess']; $b = $z['beigaben']; @endphp
+                        <section wire:key="anrichten-{{ $z['key'] }}" class="fa-surface flex flex-col gap-2 px-4 py-3" data-anrichten-zeile>
+                            <h4 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)] break-words">{{ $z['name'] }}</h4>
+                            @if($z['darreichung'] === null)
+                                <p class="{{ $leerText }}">Keine Darreichung — im Gericht anlegen.</p>
+                            @else
+                                <dl class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-1 text-[length:var(--fa-text-md)]">
+                                    <dt class="{{ $feldLabel }}">Darreichung</dt>
+                                    <dd class="text-[var(--fa-ink)]" data-anrichten-darreichung>{{ $z['darreichung'] }}</dd>
+                                    <dt class="{{ $feldLabel }}">Gefäß</dt>
+                                    <dd class="text-[var(--fa-ink)] flex flex-wrap items-center gap-2" data-anrichten-gefaess>
+                                        @if($g['gefaess_name']){{ $g['gefaess_name'] }}
+                                            @if($g['kosten'] !== null)<x-fa::badge>{{ $euro($g['kosten']) }} je Einheit</x-fa::badge>@endif
+                                            @if($g['miete'])<x-fa::badge tone="info" title="Miete je Tag/Veranstaltung, nicht je Portion gerechnet">Miete</x-fa::badge>@endif
+                                            @if($g['preis_fehlt'])<x-fa::badge tone="warn">Preis fehlt</x-fa::badge>@endif
+                                        @else<span class="text-[var(--fa-ink-3)]">kein Gefäß</span>@endif
+                                    </dd>
+                                    <dt class="{{ $feldLabel }}">Servier-Typ</dt>
+                                    <dd class="text-[var(--fa-ink)] flex flex-wrap items-center gap-2" data-anrichten-typ>
+                                        @if($g['typ_name']){{ $g['typ_name'] }}
+                                            @if($g['uebersteuert'])<x-fa::badge tone="warn" title="Ausdrücklich gesetzt, weicht vom Typ des Gefäßes ab">übersteuert (Gefäß sagt {{ $g['gefaess_typ_name'] }})</x-fa::badge>
+                                            @elseif($g['gefaess_id'])<span class="{{ $klein }} text-[var(--fa-ink-3)]">aus dem Gefäß</span>@endif
+                                        @else<span class="text-[var(--fa-ink-3)]">nicht gesetzt</span>@endif
+                                    </dd>
+                                    <dt class="{{ $feldLabel }}">Zubehör</dt>
+                                    <dd class="text-[var(--fa-ink)]" data-anrichten-zubehoer>
+                                        @forelse($b['zubehoer']['zeilen'] as $zz)
+                                            <span class="inline-flex items-center gap-1 mr-3">{{ $zz['name'] }} ×{{ rtrim(rtrim(number_format($zz['menge'], 3, ',', ''), '0'), ',') }}
+                                                @if($zz['doppelt'])<x-fa::badge title="Steht schon als Gefäß und zählt dort">steht schon als Gefäß</x-fa::badge>
+                                                @elseif($zz['miete'])<x-fa::badge tone="info" title="Miete je Tag/Veranstaltung, nicht je Portion gerechnet">Miete</x-fa::badge>
+                                                @elseif($zz['kosten'] !== null)<span class="tabular-nums text-[var(--fa-ink-3)]">{{ $euro($zz['kosten']) }}</span>
+                                                @else<x-fa::badge tone="warn">Preis fehlt</x-fa::badge>@endif
+                                            </span>
+                                        @empty<span class="text-[var(--fa-ink-3)]">keins</span>@endforelse
+                                    </dd>
+                                </dl>
+                                @if($g['warnung'])<x-fa::notice tone="warn" data-anrichten-warnung>{{ $g['warnung'] }}</x-fa::notice>@endif
+                                @if($b['summe'] > 0)<p class="{{ $klein }} text-[var(--fa-ink-3)]">Gefäß und Zubehör zusammen {{ $euro($b['summe']) }} je Einheit im EK der Darreichung.</p>@endif
+                            @endif
                         </section>
                     @empty
-                        <x-fa::empty icon="heroicon-o-square-3-stack-3d" :title="$concept ? 'Noch keine Gerichte im Konzept' : 'Noch keine Posten im Paket'">Erst im Reiter «Aufbau» {{ $concept ? 'Gerichte oder Basisrezepte einfügen' : 'Posten hinzufügen' }}.</x-fa::empty>
+                        <x-fa::empty icon="heroicon-o-square-3-stack-3d" :title="$concept ? 'Noch keine Gerichte im Konzept' : 'Noch keine Posten im Paket'">Erst im Reiter «Aufbau» {{ $concept ? 'Gerichte oder Pakete' : 'Gerichte' }} hinzufügen.</x-fa::empty>
                     @endforelse
                 </div>
             @endif

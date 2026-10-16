@@ -84,7 +84,7 @@ class GpModal extends Component
     public string $manuellerName = '';
 
     /** Kalkulations-Defaults (GL-02) — direkt persistiert, nur im Edit-Modus (Phase 2). */
-    public array $defaults = ['cooking_loss_default_pct' => '', 'trimming_loss_default_pct' => '', 'piece_default_g' => '', 'diameter_cm' => '', 'length_cm' => '', 'width_cm' => '', 'height_cm' => '', 'volume_ml' => ''];
+    public array $defaults = ['cooking_loss_default_pct' => '', 'trimming_loss_default_pct' => '', 'piece_default_g' => '', 'diameter_cm' => '', 'length_cm' => '', 'width_cm' => '', 'height_cm' => '', 'volume_ml' => '', 'serving_vehicle_vocab_id' => ''];
 
     public bool $force = false;
 
@@ -202,6 +202,7 @@ class GpModal extends Component
                 'width_cm' => $gp->width_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->width_mm) : '',
                 'height_cm' => $gp->height_mm !== null ? \Platform\FoodAlchemist\Support\NonFoodMasse::cm((float) $gp->height_mm) : '',
                 'volume_ml' => $gp->volume_ml !== null ? rtrim(rtrim(number_format((float) $gp->volume_ml, 1, ',', ''), '0'), ',') : '',
+                'serving_vehicle_vocab_id' => $gp->serving_vehicle_vocab_id !== null ? (string) $gp->serving_vehicle_vocab_id : '',
             ];
         }
 
@@ -249,7 +250,9 @@ class GpModal extends Component
     private function speichereMasse(FoodAlchemistGp $gp): void
     {
         if ($gp->istNonFood()) {
-            app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, array_intersect_key($this->defaults, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
+            $masse = app(\Platform\FoodAlchemist\Services\GpMasseService::class);
+            $masse->setze($gp, array_intersect_key($this->defaults, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
+            $masse->setzeServierTyp($gp, ($this->defaults['serving_vehicle_vocab_id'] ?? '') === '' ? null : (int) $this->defaults['serving_vehicle_vocab_id']);
         }
     }
 
@@ -1249,6 +1252,9 @@ class GpModal extends Component
             : null;
 
         return view('foodalchemist::livewire.gps.gp-modal', [
+            'servierTypen' => ($this->builder['commodity_group_code'] ?? '') === '16' && $team !== null
+                ? \Platform\FoodAlchemist\Support\TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->pluck('name', 'id')->all()
+                : [],
             'sperr' => $this->sperrZustand(),   // Spec 65
             'gp' => $gp,
             'neu' => $this->gpId === null,

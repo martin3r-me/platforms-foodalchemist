@@ -71,7 +71,7 @@ class Editor extends Component
     protected function sperrFreiExtra(): array
     {
         return [
-            'beiModalGeschlossen', 'setTab', 'geschirrPicker', 'kohaesionPruefen', 'zutatenToggle', 'gerichtPicker', 'fillToggle',
+            'beiModalGeschlossen', 'setTab', 'kohaesionPruefen', 'zutatenToggle', 'gerichtPicker', 'fillToggle',
             'pickTypWaehle', 'pickHgWaehle', 'pickKlasseWaehle', 'pickGeschmackWaehle', 'pickDiaetWaehle', 'coverageFuellen',
             'vorschlagFuerSlot', 'vorschlagVerwerfen', 'zielSetzen', 'toggleAuswahl', 'zielpreisToggle', 'zielpreisBerechnen',
             'paketOeffnen', 'zurueckZumConcept', 'alsVorlage', '$set', 'eigeneKopieAnlegen',   // Spec 77d: schreibt ins eigene Team
@@ -203,13 +203,6 @@ class Editor extends Component
 
     /** @var array<string, mixed> */
     public array $form = [];
-
-    // #388 Geschirr-Tab: Picker je Gericht-Slot (Haupt/Alternative)
-    public ?int $geschirrPickSlotId = null;
-
-    public string $geschirrPickRolle = 'haupt';   // haupt | alt
-
-    public string $geschirrSuche = '';
 
     // Aufbau (Concept): neuer Slot + festes-Gericht-Picker
     public string $neuerSlotRolle = '';
@@ -396,39 +389,6 @@ class Editor extends Component
         }
     }
 
-    // ── #388 Geschirr-Tab ─────────────────────────────────────────────────────
-
-    /** Picker für slot+role auf/zu (Toggle). */
-    public function geschirrPicker(int $slotId, string $role = 'haupt'): void
-    {
-        $role = $role === 'alt' ? 'alt' : 'haupt';
-        $offen = $this->geschirrPickSlotId === $slotId && $this->geschirrPickRolle === $role;
-        $this->geschirrPickSlotId = $offen ? null : $slotId;
-        $this->geschirrPickRolle = $role;
-        $this->geschirrSuche = '';
-    }
-
-    public function geschirrWaehle(int $slotId, string $role, int $itemId): void
-    {
-        // Paket spiegelt den Conceptor: dort ist $slotId eine package_dish-ID → PaketService.
-        if ($this->type === 'pakete') {
-            app(PaketService::class)->setGerichtGeschirr($this->team(), $slotId, $role, $itemId);
-        } else {
-            app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, $itemId);
-        }
-        $this->geschirrPickSlotId = null;
-        $this->geschirrSuche = '';
-    }
-
-    public function geschirrEntfernen(int $slotId, string $role): void
-    {
-        if ($this->type === 'pakete') {
-            app(PaketService::class)->setGerichtGeschirr($this->team(), $slotId, $role, null);
-        } else {
-            app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, null);
-        }
-    }
-
     public function speichern(): void
     {
         if ($this->id === null) {
@@ -488,22 +448,6 @@ class Editor extends Component
         }
         $this->fehler = null;
         $this->dispatch('concepter-gespeichert', id: $this->id);
-    }
-
-    /** A2: Servier-Vehikel der aufgelösten Darreichung des Picker-Slots (Geschirr-Ranking). */
-    private function geschirrVehikelBevorzugt($concept): ?int
-    {
-        if ($concept === null || $this->geschirrPickSlotId === null) {
-            return null;
-        }
-        $slot = $concept->slots->firstWhere('id', $this->geschirrPickSlotId);
-        if ($slot === null || $slot->sales_recipe_id === null) {
-            return null;
-        }
-        $slot->setRelation('concept', $concept);
-        $dar = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->fuerSlot($slot);
-
-        return $dar?->serving_vehicle_vocab_id !== null ? (int) $dar->serving_vehicle_vocab_id : null;
     }
 
     // ── R6.1: Kohäsions-Beweis über die Menüfolge (Pairing-Graph) ──────
@@ -1328,6 +1272,37 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
+    /**
+     * Reiter „Anrichten“ (nur lesend): je Gericht des Konzepts bzw. Posten des Pakets die gültige Darreichung, ihr Gefäß mit wirksamem Servier-Typ
+     * (aus dem Gefäß oder ausdrücklich übersteuert), Hinweise (Füllmenge, Miete) und das Zubehör mit Kosten. Gepflegt wird an der Darreichung im Gericht.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function anrichtenZeilen($concept, $paket, $team): array
+    {
+        $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
+        $dar = app(\Platform\FoodAlchemist\Services\DarreichungService::class);
+        $zeilen = [];
+        $nimm = function (int|string $key, string $name, ?\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung $d) use (&$zeilen, $dar, $team) {
+            $zeilen[] = ['key' => $key, 'name' => $name, 'darreichung' => $d?->servingForm?->label,
+                'gefaess' => $d !== null ? $dar->gefaessInfo($d, $team) : null, 'beigaben' => $d !== null ? $dar->beigabenKosten($d, $team) : null];
+        };
+        if ($concept !== null) {
+            foreach ($concept->slots->filter(fn ($s) => $s->sales_recipe_id !== null) as $s) {
+                $s->setRelation('concept', $concept);
+                $nimm('slot-'.$s->id, (string) ($s->wording ?: ($s->dish?->name ?: ($s->title ?: 'Position'))), $resolver->fuerSlot($s));
+            }
+        } elseif ($paket !== null) {
+            foreach ($paket->dishes as $pg) {
+                $d = $pg->presentation_id ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')->find($pg->presentation_id)
+                    : ($pg->dish !== null ? $resolver->standardFuer($pg->dish) : null);
+                $nimm('posten-'.$pg->id, (string) ($pg->dish?->name ?: 'Posten'), $d);
+            }
+        }
+
+        return $zeilen;
+    }
+
     public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung, KalkulationService $kalk, SalesRecipeService $sales)
     {
         $team = $this->team();
@@ -1345,7 +1320,6 @@ class Editor extends Component
         $darreichungInfo = [];
         $zubehoerInfo = [];   // Slot → Zubehör & Verpackung der gültigen Darreichung (read-only, interne Sicht)
         $darreichungOptionen = [];
-        $geschirrVorschlag = [];
         $sektionSumme = [];
         $wareneinsatzAmpel = 'unbekannt';
         $zielWareneinsatzPct = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
@@ -1422,14 +1396,6 @@ class Editor extends Component
                             $zub = app(\Platform\FoodAlchemist\Services\DarreichungService::class)->zubehoerKosten($dar, $team);
                             if ($zub['zeilen'] !== []) {
                                 $zubehoerInfo[$slot->id] = $zub;
-                            }
-                            // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
-                            if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->dishwareItem !== null) {
-                                $geschirrVorschlag[$slot->id] = [
-                                    'id' => $dar->tableware_item_id,
-                                    'label' => $dar->dishwareItem->label,
-                                    'form' => $dar->servingForm?->label,
-                                ];
                             }
                         }
                         if ($istAufbau && $concept->serving_form_id !== null) {
@@ -1595,7 +1561,7 @@ class Editor extends Component
             'darreichungInfo' => $darreichungInfo,
             'zubehoerInfo' => $zubehoerInfo,
             'darreichungOptionen' => $darreichungOptionen,
-            'geschirrVorschlag' => $geschirrVorschlag,
+            'anrichtenZeilen' => $istGeschirrTab ? $this->anrichtenZeilen($concept, $paket, $team) : [],
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),
@@ -1625,11 +1591,6 @@ class Editor extends Component
             'rollen' => $istStammdaten ? $pakete->rollen($team) : [],
             'schreibstile' => $istStammdaten ? FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
                 ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']) : collect(),
-            // #388 Geschirr-Tab: Kandidaten nur wenn ein Picker offen ist (sonst leer = günstig).
-            'geschirrKandidaten' => ($istGeschirrTab && $this->geschirrPickSlotId !== null)
-                ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems(
-                    $team, $this->geschirrSuche, 12, $this->geschirrVehikelBevorzugt($concept))
-                : collect(),
             // Sensorik-Tab: Geschmacks-Balance + Textur über die Concept-Gerichte (nur wenn Tab aktiv).
         ]);
     }

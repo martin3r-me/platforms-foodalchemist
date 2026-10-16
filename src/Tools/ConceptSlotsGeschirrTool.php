@@ -18,7 +18,7 @@ class ConceptSlotsGeschirrTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Setzt/löst die Geschirr-Zuordnung (role → item_id) an einem Konzept-Slot. item_id weglassen = lösen.';
+        return 'VERALTET (Gefäß an der Darreichung ersetzt das Geschirr am Slot; entfällt mit dem Rückbau der Geschirr-DB): setzt/löst die Geschirr-Zuordnung (role → item_id) an einem Konzept-Slot. item_id weglassen = lösen.';
     }
 
     public function getSchema(): array

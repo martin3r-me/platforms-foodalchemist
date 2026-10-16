@@ -20,7 +20,7 @@ class PaketGerichteGeschirrTool extends FoodAlchemistTool implements ToolContrac
 
     public function getDescription(): string
     {
-        return 'Setzt/löst den Geschirr-Artikel (role haupt|alt) an einer Paket-Position (row_id). item_id weglassen = lösen.';
+        return 'VERALTET (Gefäß an der Darreichung ersetzt das Geschirr am Posten; entfällt mit dem Rückbau der Geschirr-DB): setzt/löst den Geschirr-Artikel (role haupt|alt) an einer Paket-Position (row_id). item_id weglassen = lösen.';
     }
 
     public function getSchema(): array

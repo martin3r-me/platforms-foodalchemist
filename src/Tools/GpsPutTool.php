@@ -47,6 +47,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert — dann hauptzutat nötig).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (nötig, wenn name leer bleibt).'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): frisch|TK|trocken|konserviert.'],
+                'serving_vehicle' => ['type' => 'string', 'description' => 'Non-Food (WG 16): Servier-Typ des Gefäßes als Name oder Id (als Text) aus dem Vokabular Servier-Vehikel (leer löscht); die Darreichung liest ihn von hier.'],
                 'diameter_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Ø in cm, z. B. 27 oder 7,5 (leer löscht).'],
                 'length_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Länge in cm.'],
                 'width_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Breite in cm.'],
@@ -97,6 +98,9 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             $gp = app(GpNamingService::class)->updateGp($team, $gp, $in);
             // Maße (nur Non-Food, WG 16) in cm/ml; der Name wird dadurch NICHT umgeschrieben — Größe ggf. über pflichtangabe mitgeben
             $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setze($gp, array_intersect_key($arguments, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
+            if (array_key_exists('serving_vehicle', $arguments)) {
+                $gp = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->setzeServierTyp($gp, $arguments['serving_vehicle']);
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
