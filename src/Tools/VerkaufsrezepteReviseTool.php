@@ -9,6 +9,7 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeReviseService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\SalesRecipeService;
 
 /**
  * MCP-Steuerbarkeit · D3: Gericht per Freitext-Anweisung überarbeiten (grounded, `vk.ueberarbeiten`).
@@ -20,11 +21,7 @@ use Platform\FoodAlchemist\Services\RecipeService;
 class VerkaufsrezepteReviseTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** VK-Textfelder → Source-Spalte (Override-First). Spiegel von VkModal::REVISE_TEXTE. */
-    private const REVISE_TEXTE = [
-        'description' => 'description_source',
-        'plating_text' => 'plating_source',
-        'sales_wording_standard' => 'sales_wording_source',
-    ];
+    private const REVISE_TEXTE = SalesRecipeService::REVISE_TEXTE;
 
     public function getName(): string
     {
@@ -103,26 +100,8 @@ class VerkaufsrezepteReviseTool extends FoodAlchemistTool implements ToolContrac
 
         $applied = [];
         try {
-            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $zeilen = app(RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
-                if ($zeilen !== []) {
-                    app(RecipeService::class)->syncIngredients($team, (int) $r->id, $zeilen);
-                    $applied[] = 'zutaten';
-                }
-            }
-            $frisch = $r->fresh();
-            foreach (self::REVISE_TEXTE as $feld => $lineage) {
-                $wert = $werte[$feld] ?? null;
-                if (! is_string($wert) || trim($wert) === '' || $frisch->{$lineage} === 'manual') {
-                    continue;
-                }
-                $frisch->update([
-                    $feld => trim($wert),
-                    $lineage => 'ki',
-                    str_replace('_source', '_ai_confidence', $lineage) => $roh['confidence'],
-                ]);
-                $applied[] = $feld;
-            }
+            // Spec 84 C5: derselbe Schreib-Moment wie das VK-Modal
+            $applied = app(SalesRecipeService::class)->uebernehmeUeberarbeitung($team, (int) $r->id, $werte, $roh['confidence']);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

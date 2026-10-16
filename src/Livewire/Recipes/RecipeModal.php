@@ -420,38 +420,29 @@ class RecipeModal extends Component
 
     public function accept_beschreibung(): void
     {
-        $r = $this->eigenesRezept();
         $vorschlag = $this->kiVorschlag['description'] ?? null;
-        if ($r === null || $vorschlag === null) {
+        if ($vorschlag === null) {
             return;
         }
-        if ($r->description_source === 'manual') {                          // GL-07 Override-First
-            $this->fehler = 'Beschreibung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
-
-            return;
+        $r = $this->setzeFeld('description', 'ki', $vorschlag['werte']['description'] ?? null, $vorschlag['confidence']);
+        if ($r !== null) {
+            $this->form['description'] = (string) $r->description;
+            unset($this->kiVorschlag['description']);
         }
-        $wert = $vorschlag['werte']['description'] ?? null;
-        if (! is_string($wert) || trim($wert) === '') {
-            $this->fehler = 'KI-Vorschlag enthält keine Beschreibung.';
-
-            return;
-        }
-        $r->update(['description' => $wert, 'description_source' => 'ki', 'description_ai_confidence' => $vorschlag['confidence']]);
-        $this->form['description'] = $wert;
-        unset($this->kiVorschlag['description']);
     }
 
     public function clear_beschreibung(): void
     {
-        $this->eigenesRezept()?->update(['description' => null, 'description_source' => null, 'description_ai_confidence' => null]);
-        $this->form['description'] = '';
-        unset($this->kiVorschlag['description']);
+        if ($this->setzeFeld('description', null) !== null) {
+            $this->form['description'] = '';
+            unset($this->kiVorschlag['description']);
+        }
     }
 
     public function manual_beschreibung(): void
     {
         if (trim($this->form['description']) !== '') {
-            $this->eigenesRezept()?->update(['description' => $this->form['description'], 'description_source' => 'manual', 'description_ai_confidence' => null]);
+            $this->setzeFeld('description', 'manual', $this->form['description']);
         }
     }
 
@@ -466,13 +457,13 @@ class RecipeModal extends Component
     /** Sperrt die Zubereitung gegen KI-Überschreiben (GL-07 Override-First). */
     public function manual_zubereitung(): void
     {
-        $this->eigenesRezept()?->update(['preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
+        $this->setzeFeld('preparation', 'manual');
     }
 
     /** Hebt die Lineage-Markierung auf (ki/manual → offen). Der Text bleibt. */
     public function clear_zubereitung(): void
     {
-        $this->eigenesRezept()?->update(['preparation_source' => null, 'preparation_ai_confidence' => null]);
+        $this->setzeFeld('preparation', null);
     }
 
     // ── M4-11: GL-07-Lebenszyklus kategorie ─────────────────────────────
@@ -504,44 +495,49 @@ class RecipeModal extends Component
 
     public function accept_kategorie(): void
     {
-        $r = $this->eigenesRezept();
         $vorschlag = $this->kiVorschlag['category'] ?? null;
-        if ($r === null || $vorschlag === null) {
+        if ($vorschlag === null) {
             return;
         }
-        if ($r->category_source === 'manual') {
-            $this->fehler = 'Kategorie ist manuell gepflegt — erst Reset, dann KI übernehmen.';
-
-            return;
+        $r = $this->setzeFeld('category', 'ki', $vorschlag['werte']['category_id'] ?? null, $vorschlag['confidence'], $vorschlag['reasoning'] ?? null);
+        if ($r !== null) {
+            $this->form['category_id'] = $r->category_id;
+            $this->form['hauptgruppe_id'] = FoodAlchemistRecipeCategory::find($r->category_id)?->main_group_id;
+            unset($this->kiVorschlag['category']);
         }
-        $katId = $vorschlag['werte']['category_id'] ?? null;
-        $kategorie = $katId !== null ? FoodAlchemistRecipeCategory::find((int) $katId) : null;
-        if ($kategorie === null) {
-            $this->fehler = 'KI-Vorschlag enthält keine gültige Kategorie.';
-
-            return;
-        }
-        $r->update([
-            'category_id' => $kategorie->id, 'category_source' => 'ki',
-            'category_ai_confidence' => $vorschlag['confidence'],
-            'category_ai_reasoning' => $vorschlag['reasoning'],
-        ]);
-        $this->form['category_id'] = $kategorie->id;
-        $this->form['hauptgruppe_id'] = $kategorie->main_group_id;
-        unset($this->kiVorschlag['category']);
     }
 
     public function clear_kategorie(): void
     {
-        $this->eigenesRezept()?->update(['category_id' => null, 'category_source' => null, 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
-        $this->form['category_id'] = null;
-        unset($this->kiVorschlag['category']);
+        if ($this->setzeFeld('category', null) !== null) {
+            $this->form['category_id'] = null;
+            unset($this->kiVorschlag['category']);
+        }
     }
 
     public function manual_kategorie(): void
     {
         if ($this->form['category_id'] !== null) {
-            $this->eigenesRezept()?->update(['category_id' => $this->form['category_id'], 'category_source' => 'manual', 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
+            $this->setzeFeld('category', 'manual', $this->form['category_id']);
+        }
+    }
+
+    /**
+     * Spec 84 C5 · Lineage-Feld über {@see RecipeService::setzeFeld} schreiben (derselbe Weg wie MCP). Der Service prüft
+     * Eigentum, Override-First und Referenzen; seine Abweisung landet als Meldung im Modal. null = abgewiesen.
+     */
+    private function setzeFeld(string $feld, ?string $quelle, mixed $wert = null, ?float $konfidenz = null, ?string $begruendung = null): ?FoodAlchemistRecipe
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return null;
+        }
+        try {
+            return app(RecipeService::class)->setzeFeld($team, $this->recipeId, $feld, $quelle, $wert, $konfidenz, $begruendung);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return null;
         }
     }
 
@@ -652,31 +648,12 @@ class RecipeModal extends Component
             return;
         }
         $werte = $this->ueberarbeitung['werte'];
-        if ($this->eigenesRezept() === null) {   // Spec 84 §4.0
-            return;
-        }
-        $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
 
         try {
-            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $zeilen = app(RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
-                if ($zeilen !== []) {
-                    app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
-                }
-            }
-            // Texte im Bestands-Muster (accept_zubereitung): direkter Write MIT Lineage,
-            // Override-First — manuell gepflegte Felder bleiben unangetastet (GL-07 §4.2)
-            $frisch = $r->fresh();
-            if (is_string($werte['description'] ?? null) && trim($werte['description']) !== '' && $frisch->description_source !== 'manual') {
-                $frisch->update(['description' => $werte['description'], 'description_source' => 'ki', 'description_ai_confidence' => $this->ueberarbeitung['confidence']]);
+            // Spec 84 C5: derselbe Schreib-Moment wie recipes.REVISE (Eigentum, Override-First, Lineage im Service)
+            $teile = app(RecipeService::class)->uebernehmeUeberarbeitung($team, $this->recipeId, $werte, $this->ueberarbeitung['confidence']);
+            if (in_array('description', $teile, true)) {
                 $this->form['description'] = $werte['description'];
-            }
-            if (is_string($werte['preparation'] ?? null) && trim($werte['preparation']) !== '' && $frisch->preparation_source !== 'manual') {
-                $frisch->update(['preparation_source' => 'ki', 'preparation_ai_confidence' => $this->ueberarbeitung['confidence']]);
-                // Spec 27: die KI liefert weiter Markdown — Master sind aber die Schritte.
-                // Der Parser übernimmt, `preparation` wird daraus als Spiegel neu gerendert.
-                app(RecipeStepService::class)
-                    ->ausMarkdown($frisch, $werte['preparation'], ueberschreiben: true);
             }
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -1087,7 +1064,7 @@ class RecipeModal extends Component
     public function regenerationSpeichern(SalesRecipeService $vk): void
     {
         $team = Auth::user()?->currentTeamRelation;
-        $r = $this->eigenesRezept();   // Spec 84 §4.0
+        $r = $this->eigenesRezept();   // Vorab-Meldung im Modal; die Riegel sitzen in den Services (Spec 84 C5)
         if ($team === null || $r === null) {
             return;
         }
@@ -1113,11 +1090,8 @@ class RecipeModal extends Component
             ], $this->regenForm['id'] ?? null);
         }
 
-        // Spec 84 §4.0: über das Model statt DB::table, damit Observer laufen; touch() hebt updated_at wie bisher immer an
-        $r->fill([
-            'dichteklasse' => $this->dichteklasse !== '' ? $this->dichteklasse : null,
-            'dichteklasse_source' => $this->dichteklasse !== '' ? 'manual' : null,
-        ])->touch();
+        // Spec 84 C5: über den Service (Eigentümer-Riegel, Model + Observer, touch wie bisher)
+        app(RecipeService::class)->setzeDichteklasse($team, (int) $r->id, $this->dichteklasse);
 
         foreach ($this->behaelterForm as $zweck => $form) {
             if (($form['container_vocab_id'] ?? '') === '') {

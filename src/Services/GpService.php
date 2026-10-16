@@ -465,4 +465,109 @@ class GpService
 
         return ['zeilen' => (int) $zeilen, 'rezepte' => $recipeIds->count()];
     }
+
+    // ── Spec 84 C5: Schreibwege des GP-Modals (vorher direkte Writes in der Komponente) ──────────────────────────────
+
+    /** Meldung wie bisher im Modal (D1). */
+    private const GEERBT = 'Geerbtes Katalog-GP — Pflege nur durchs Besitzer-Team (D1).';
+
+    /** GP zum Schreiben: sichtbar UND eigen (isOwnedBy = Curate::canCurate; globale Stamm-Paket-Zeilen pflegt der Master). */
+    private function eigenesGp(Team $team, int $gpId): FoodAlchemistGp
+    {
+        $gp = FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        if (! $gp->isOwnedBy($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('das GP', self::GEERBT);
+        }
+
+        return $gp;
+    }
+
+    /**
+     * Zustand (§9) mit Lineage: 'ki' (manuell gepflegt → abgewiesen; nur §9-Vokabular), 'manual', null = Reset.
+     * Der Wert wird über GpNamingService::normalisiereZustand normalisiert.
+     */
+    public function setzeZustand(Team $team, int $gpId, ?string $quelle, ?string $wert = null, ?float $konfidenz = null, ?string $begruendung = null): FoodAlchemistGp
+    {
+        $gp = $this->eigenesGp($team, $gpId);
+        if ($quelle === null) {
+            $gp->update(['condition' => null, 'condition_source' => null, 'condition_ai_confidence' => null, 'condition_ai_reasoning' => null]);
+
+            return $gp->refresh();
+        }
+        if ($quelle === 'ki' && $gp->condition_source === 'manual') {
+            throw new \RuntimeException('condition ist manuell gepflegt — erst Reset (clear), dann KI übernehmen.');
+        }
+        $naming = app(GpNamingService::class);
+        $norm = $naming->normalisiereZustand($wert);
+        if ($norm === null || ($quelle === 'ki' && ! in_array($norm, GpNamingService::ZUSTAND_VOCAB, true))) {
+            throw new \RuntimeException($quelle === 'ki' ? 'KI-Vorschlag enthält keinen gültigen §9-Zustand.' : 'Kein gültiger Zustand.');
+        }
+        $gp->update(['condition' => $norm, 'condition_source' => $quelle,
+            'condition_ai_confidence' => $quelle === 'ki' ? $konfidenz : null, 'condition_ai_reasoning' => $quelle === 'ki' ? $begruendung : null]);
+
+        return $gp->refresh();
+    }
+
+    /**
+     * Tags mit Lineage. 'ki': nur die gelieferten Tags, Lineage ki + Zeitstempel (manuell gepflegt → abgewiesen).
+     * 'manual': der volle Satz (null = offen); schreibt nur, wenn sich etwas ändert. null: alle Tags + Lineage leer.
+     *
+     * @param  array<string, bool|null>  $tags  Tag-Name (ohne Präfix) → Wert
+     * @return bool ob geschrieben wurde
+     */
+    public function setzeTags(Team $team, int $gpId, ?string $quelle, array $tags = [], ?float $konfidenz = null, ?string $begruendung = null): bool
+    {
+        $gp = $this->eigenesGp($team, $gpId);
+        if ($quelle === null) {
+            $reset = [];
+            foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
+                $reset["tag_{$tag}"] = null;
+            }
+            $gp->update([...$reset, 'tag_source' => null, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
+
+            return true;
+        }
+        if ($quelle === 'ki' && $gp->tag_source === 'manual') {
+            throw new \RuntimeException('Tags sind manuell gepflegt — erst Reset (clear), dann KI übernehmen.');
+        }
+        $update = [];
+        $geaendert = false;
+        foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
+            if (! array_key_exists($tag, $tags)) {
+                continue;
+            }
+            $neu = $tags[$tag] === null ? null : (bool) $tags[$tag];
+            $update["tag_{$tag}"] = $neu;
+            $alt = $gp->getAttribute("tag_{$tag}");
+            $geaendert = $geaendert || ($alt === null ? $neu !== null : $neu !== (bool) $alt);
+        }
+        if ($quelle === 'ki') {
+            if ($update === []) {
+                throw new \RuntimeException('KI-Vorschlag enthält keine bekannten Tags.');
+            }
+            $gp->update([...$update, 'tag_source' => 'ki', 'tag_ai_confidence' => $konfidenz, 'tag_ai_reasoning' => $begruendung, 'tag_aggregated_at' => now()]);
+
+            return true;
+        }
+        if (! $geaendert) {
+            return false;
+        }
+        $gp->update([...$update, 'tag_source' => $quelle, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
+
+        return true;
+    }
+
+    /** Kalkulations-Defaults (Garverlust, Putzverlust, Stückgewicht). Leer ⇒ NULL, negativ ⇒ 0. */
+    public function setzeKalkDefaults(Team $team, int $gpId, array $in): FoodAlchemistGp
+    {
+        $gp = $this->eigenesGp($team, $gpId);
+        $num = fn ($v) => trim((string) $v) === '' ? null : max(0, (float) str_replace(',', '.', (string) $v));
+        $gp->update([
+            'cooking_loss_default_pct' => $num($in['cooking_loss_default_pct'] ?? ''),
+            'trimming_loss_default_pct' => $num($in['trimming_loss_default_pct'] ?? ''),
+            'piece_default_g' => $num($in['piece_default_g'] ?? ''),
+        ]);
+
+        return $gp->refresh();
+    }
 }

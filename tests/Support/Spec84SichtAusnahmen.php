@@ -1,7 +1,7 @@
 <?php
 
 // Spec 84 B0a · Bestand des Sicht-Wächters (Spec84SichtWaechterTest). Darf nur schrumpfen.
-// Stand 2026-10-16: 125 Treffer in 40 Dateien.
+// Stand 2026-10-17: 120 Treffer in 40 Dateien.
 
 return [
     'Livewire/Angebote/Editor.php' => 11,
@@ -16,7 +16,7 @@ return [
     'Livewire/Gps/GpModal.php' => 3,
     'Livewire/Lager/Index.php' => 2,
     'Livewire/Orders/Editor.php' => 1,
-    'Livewire/Planung/Index.php' => 6,
+    'Livewire/Planung/Index.php' => 1,
     'Livewire/Planung/KapitelRail.php' => 1,
     'Livewire/Produktion/Editor.php' => 5,
     'Livewire/Produktion/Tagesplan.php' => 10,

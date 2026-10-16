@@ -352,6 +352,49 @@ class SalesRecipeService
      *   eigener Parameter und KEIN Eintrag in VK_FELDER: die Lineage darf nicht über die Feld-Whitelist
      *   (MCP `verkaufsrezepte.PUT`) frei gesetzt werden — nur der Editor kennt die Herkunft seiner Werte.
      */
+    /** VK-Textfelder der KI-Überarbeitung → Lineage-Spalte (Override-First). */
+    public const REVISE_TEXTE = [
+        'description' => 'description_source',
+        'plating_text' => 'plating_source',
+        'sales_wording_standard' => 'sales_wording_source',
+    ];
+
+    /**
+     * Spec 84 C5 · KI-Überarbeitung eines Gerichts übernehmen — gemeinsam für VK-Modal und `verkaufsrezepte.REVISE`
+     * (vorher wortgleich doppelt, mit direktem Write im Modal). Komponenten-Sync, dann die Texte mit Lineage ki;
+     * manuell Gepflegtes bleibt unangetastet. Eigentümer-Riegel hier im Service.
+     *
+     * @param  array<string, mixed>  $werte
+     * @return list<string> übernommene Teile (zutaten + Textfelder)
+     */
+    public function uebernehmeUeberarbeitung(Team $team, int $id, array $werte, ?float $konfidenz): array
+    {
+        $r = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($id);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($r, $team, 'das Gericht');
+
+        return DB::transaction(function () use ($team, $r, $werte, $konfidenz) {
+            $uebernommen = [];
+            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
+                $zeilen = app(RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
+                if ($zeilen !== []) {
+                    app(RecipeService::class)->syncIngredients($team, (int) $r->id, $zeilen);
+                    $uebernommen[] = 'zutaten';
+                }
+            }
+            $frisch = $r->fresh();
+            foreach (self::REVISE_TEXTE as $feld => $lineage) {
+                $wert = $werte[$feld] ?? null;
+                if (! is_string($wert) || trim($wert) === '' || $frisch->{$lineage} === 'manual') {
+                    continue;
+                }
+                $frisch->update([$feld => trim($wert), $lineage => 'ki', str_replace('_source', '_ai_confidence', $lineage) => $konfidenz]);
+                $uebernommen[] = $feld;
+            }
+
+            return $uebernommen;
+        });
+    }
+
     public function updateVk(Team $team, int $id, array $in, array $kiLineage = []): FoodAlchemistRecipe
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($id);
