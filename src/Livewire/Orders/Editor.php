@@ -1266,7 +1266,7 @@ class Editor extends Component
         $aq = trim($this->artikelSuche);
         if (mb_strlen($aq) >= 2) {
             $q = FoodAlchemistSupplierItem::visibleToTeam($team)
-                ->where('is_discontinued', false)
+                ->lieferbar()   // eingestellte Artikel sind nicht bestellbar
                 ->whereNotNull('supplier_id')
                 ->with(['supplier:id,name', 'structure.gp:id,name']);
             foreach (Suche::tokens($aq) as $token) {

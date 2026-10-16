@@ -64,7 +64,7 @@ it('Probe misst type, amountFrom, source und Zeilen je Artikel, schreibt nur die
 
 // ── Stufe 2: Import (16.10.2026) ──────────────────────────────────────────────────────────────────────────────────────────
 
-it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staffel), offen = NULL, Zeit UTC, team_id = Team der Preise', function () {
+it('Import: N → 0, A → A, je Artikel+Start+Status eine Zeile (kleinste Staffel), offen = NULL, Zeit UTC, team_id = Team der Preise', function () {
     $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 6, 'supplierItemId' => 36674788, 'tenantId' => 1494, 'type' => 'N',
         'price' => 0.95, 'priceOrderingUnit' => 0.95, 'amountFrom' => 2, 'validFrom' => '2026-10-15T00:00:00', 'validTo' => '3000-12-31T23:59:59', 'source' => 175492];
     $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 7, 'supplierItemId' => 36674789, 'tenantId' => 1494, 'type' => 'X',
@@ -75,7 +75,7 @@ it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staff
     $h = DB::table('foodalchemist_price_history')->where('quelle', 'necta_historie')->orderBy('necta_historie_id')->get()->keyBy('necta_historie_id');
     $a = FoodAlchemistSupplierItem::where('legacy_id', 36674788)->value('id');
     expect($h->keys()->all())->toBe([1, 2, 3, 4, 5])                                                   // 6 = Staffel, 7 = type X, 9 = inaktiv
-        ->and($h[1]->status)->toBe('0')->and($h[4]->status)->toBe('2')
+        ->and($h[1]->status)->toBe('0')->and($h[4]->status)->toBe('A')   // A = Aktion; '2' heißt in prices „läuft aus“
         ->and($h[1]->status_valid_from)->toBe('2025-12-31 23:00:00')->and($h[1]->valid_to)->toBe('2026-05-31 21:59:59')   // Berlin → UTC
         ->and($h[3]->valid_to)->toBeNull()                                                                  // 3000-12-31 = offen
         // Team der Preise (Master), NICHT das des globalen Artikels (NULL): sonst verwirft die Preis-Linie die Historie

@@ -284,13 +284,19 @@ it('lehnt Null-, Negativ- und Unsinn-Preise als Zeilen-Befund ab, ohne den Lauf 
         ->and(FoodAlchemistPrice::count())->toBe(1);
 });
 
-it('nimmt den Aktions-Status aus der Datei und verlangt zu einem Status auch einen Betrag', function () {
+it('Aktionspreis aus der Datei wird NICHT als Preis geschrieben (status 2 = läuft aus); „läuft aus“ schon; Status verlangt einen Betrag', function () {
+    // 16.10.2026: status 2 heißt „läuft aus“; eine Import-Aktion würde sonst als auslaufend gelten (Entscheid zur Aktion offen)
     $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id,
         csv(['Artikel-Nr;Bezeichnung;Preis;Preis-Status', '70012;Zanderfilet;24,90;Aktion']), apply: true);
 
-    expect($bericht['preise']['neu'])->toBe(1);
     $item = FoodAlchemistSupplierItem::firstWhere('article_number', '70012');
-    expect(app(PriceService::class)->activeFor($item->id)->status)->toBe('2');
+    expect($bericht['preise']['aktion_nicht_uebernommen'])->toBe(1)->and($bericht['preise']['neu'])->toBe(0)
+        ->and(app(PriceService::class)->activeFor($item->id))->toBeNull()
+        ->and(collect($bericht['befunde'])->pluck('preis.grund')->filter()->first())->toContain('Aktionspreis nicht übernommen');
+
+    $bericht = $this->import->importiere($this->rootTeam, $this->supplier->id,
+        csv(['Artikel-Nr;Bezeichnung;Preis;Preis-Status', '70012;Zanderfilet;24,90;läuft aus']), apply: true);
+    expect($bericht['preise']['neu'])->toBe(1)->and(app(PriceService::class)->activeFor($item->id)->status)->toBe('2');
 
     expect(fn () => $this->import->importiere($this->rootTeam, $this->supplier->id,
         csv(['Artikel-Nr;Bezeichnung;Preis-Status', '70012;Zanderfilet;Aktion']), apply: true))

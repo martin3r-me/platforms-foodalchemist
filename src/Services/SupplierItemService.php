@@ -85,7 +85,7 @@ class SupplierItemService
     {
         return FoodAlchemistSupplierItem::visibleToTeam($team)
             ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'nonfood'])
-            ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_discontinued', false))
+            ->when($filters['onlyActive'] ?? true, fn ($q) => $q->lieferbar())   // ausgelistet oder von Necta eingestellt fallen raus
             // Spec 16·S2 — WG-Lead-Scope: nur Artikel der übergebenen Lieferanten (whereIn).
             // Leeres/fehlendes Array = kein Scope (globale Suche, Ist-Verhalten unberührt).
             ->when(! empty($filters['supplier_ids']), fn ($q) => $q->whereIn('supplier_id', $filters['supplier_ids']))

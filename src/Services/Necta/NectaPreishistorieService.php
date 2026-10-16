@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Necta PR 2b, Stufe 2 (16.10.2026): {@see nachholen()} schreibt die Preis-Vergangenheit nach `foodalchemist_price_history`
  * (quelle = 'necta_historie'), abgestimmt mit Claudia (PreisVerlaufService):
- *  - Belegt an io (Lauf 10, 87.628 Zeilen): type N = Normalpreis → status '0', A = paralleler Aktionspreis → status '2'
+ *  - Belegt an io (Lauf 10, 87.628 Zeilen): type N = Normalpreis → status '0', A = paralleler Aktionspreis → status 'A' (bis 16.10.2026 '2'; '2' heißt in prices „läuft aus“)
  *    (Artikel 29075911: ab 05.10. gleichzeitig N 12,29 und A 9,99). Anderer type → nicht geschrieben, gezählt.
  *  - Je Artikel + validFrom + Status genau EINE Zeile: die mit der kleinsten amountFrom (Grundpreis; Staffeln verworfen, gezählt).
  *  - status_valid_from = validFrom, valid_to = NULL bei 3000-12-31 (offen), price = Gebindepreis (Claudia rechnet um),
@@ -73,7 +73,7 @@ class NectaPreishistorieService extends NectaLaufBasis
     }
 
     /** type → status der Preis-Linie (belegt an io, siehe Klassenkommentar). */
-    public const TYPE_STATUS = ['N' => '0', 'A' => '2'];
+    public const TYPE_STATUS = ['N' => '0', 'A' => 'A'];   // 'A' = Aktion; '2' heißt in foodalchemist_prices „läuft aus“ (PriceCategory)
 
     private const BLOCK = 1000;
 

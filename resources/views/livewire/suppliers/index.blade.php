@@ -294,6 +294,8 @@
                                 <td class="whitespace-nowrap">
                                     <span class="inline-flex items-center gap-1">
                                         @if($item->is_discontinued)<x-fa::badge>Ausgelistet</x-fa::badge>
+                                        @elseif($item->lieferstatus === 'eingestellt')<x-fa::badge title="Necta: seit {{ $item->lieferstatus_seit ? \Illuminate\Support\Carbon::parse($item->lieferstatus_seit)->format('d.m.Y') : '?' }} kein Preis mehr, nicht bestellbar" data-lieferstatus="eingestellt">Nicht lieferbar</x-fa::badge>
+                                        @elseif($item->lieferstatus === 'auslaufend')<x-fa::badge tone="warn" title="Necta: läuft aus seit {{ $item->lieferstatus_seit ? \Illuminate\Support\Carbon::parse($item->lieferstatus_seit)->format('d.m.Y') : '?' }}, letzter Preis gilt" data-lieferstatus="auslaufend">Läuft aus</x-fa::badge>
                                         @else<x-fa::badge tone="ok">Lieferbar</x-fa::badge>@endif
                                         @if($item->nonfood?->ist_nonfood)<x-fa::badge tone="info" title="Kein Lebensmittel{{ $item->nonfood->subkategorie ? ': '.$item->nonfood->subkategorie : '' }}" data-nonfood-pill>Non-Food</x-fa::badge>
                                         @elseif($item->nonfood?->pruefung_offen)<x-fa::badge tone="warn" title="Food oder Non-Food? Bitte im Artikel entscheiden" data-nonfood-pruefen-pill>Prüfen</x-fa::badge>@endif

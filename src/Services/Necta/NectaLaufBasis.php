@@ -165,6 +165,28 @@ abstract class NectaLaufBasis
                 $this->detailAnlegen($art, $r, $neu[$artikelLegacy], $teamId);
             }
         }
+        // Lieferstatus aus den eben angelegten Preiszeilen (läuft aus / eingestellt), Probe: nur zählen
+        foreach ($neu as $faId) {
+            if ($faId > 0) {
+                $this->lieferstatusZaehlen(app(NectaLieferstatusService::class)->aktualisieren($faId, $teamId, $this->probe, $this->laufId ?? null));
+            }
+        }
+    }
+
+    /** Zähler des Lieferstatus (Nachholer und Abgleich). @param array{lieferstatus:?string, begrenzt:int, widerspruch:bool, geaendert:bool} $r */
+    protected function lieferstatusZaehlen(array $r): void
+    {
+        if ($r['geaendert'] && $r['lieferstatus'] !== null) {
+            $k = "lieferstatus_{$r['lieferstatus']}";
+            $this->zaehler[$k] = ($this->zaehler[$k] ?? 0) + 1;
+        }
+        if ($r['geaendert'] && $r['lieferstatus'] === null) {
+            $this->zaehler['lieferstatus_aufgehoben'] = ($this->zaehler['lieferstatus_aufgehoben'] ?? 0) + 1;
+        }
+        $this->zaehler['preise_begrenzt'] = ($this->zaehler['preise_begrenzt'] ?? 0) + $r['begrenzt'];
+        if ($r['widerspruch']) {
+            $this->zaehler['pruefaelle']['eingestellt_widerspruch'] = ($this->zaehler['pruefaelle']['eingestellt_widerspruch'] ?? 0) + 1;
+        }
     }
 
     /**

@@ -310,7 +310,7 @@ class PriceService
             throw new \RuntimeException('Negative Preise sind Service-Zuschläge und lassen sich nicht von Hand anlegen.');
         }
         if (! in_array($status, ['0', '2'], true)) {
-            throw new \RuntimeException('Status muss 0 (Standard-EK) oder 2 (Aktion) sein.');
+            throw new \RuntimeException('Status muss 0 (Standard-EK) oder 2 (läuft aus) sein.');
         }
 
         $zeile = DB::transaction(function () use ($team, $item, $preis, $status) {
