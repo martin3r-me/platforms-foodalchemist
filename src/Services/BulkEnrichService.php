@@ -568,12 +568,12 @@ class BulkEnrichService
     /** Review: EIN Vorschlag übernehmen (Override-First, Lineage ki, Stempel). */
     public function uebernehmen(Team $team, int $proposalId): bool
     {
-        $prop = FoodAlchemistBulkProposal::whereKey($proposalId)->where('status', BulkProposalStatus::Offen)->first();
+        $prop = FoodAlchemistBulkProposal::whereKey($proposalId)->where('team_id', $team->id)->where('status', BulkProposalStatus::Offen)->first();
         if ($prop === null) {
             return false;
         }
         $r = FoodAlchemistRecipe::visibleToTeam($team)->find($prop->recipe_id);
-        if ($r === null) {
+        if ($r === null || ! $r->isOwnedBy($team)) {                  // Spec 84 B2: nur eigene Rezepte (wie uebernehmenGp)
             return false;
         }
         $wert = $prop->value;                                        // `array`-Cast = das bisherige json_decode
@@ -819,7 +819,7 @@ class BulkEnrichService
 
     public function verwerfen(Team $team, int $proposalId): void
     {
-        $prop = FoodAlchemistBulkProposal::find($proposalId);
+        $prop = FoodAlchemistBulkProposal::whereKey($proposalId)->where('team_id', $team->id)->first();   // Spec 84 B2: nur eigene Vorschläge
         if ($prop !== null && FoodAlchemistRecipe::visibleToTeam($team)->whereKey($prop->recipe_id)->exists()) {
             $prop->update(['status' => BulkProposalStatus::Verworfen]);
             $this->ki->stempleRejected($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
@@ -1008,7 +1008,7 @@ class BulkEnrichService
     /** Review: EIN GP-Vorschlag übernehmen (Override-First, Lineage ki, Stempel). */
     public function uebernehmenGp(Team $team, int $proposalId): bool
     {
-        $prop = FoodAlchemistBulkGpProposal::whereKey($proposalId)->where('status', BulkProposalStatus::Offen)->first();
+        $prop = FoodAlchemistBulkGpProposal::whereKey($proposalId)->where('team_id', $team->id)->where('status', BulkProposalStatus::Offen)->first();
         if ($prop === null) {
             return false;
         }
@@ -1104,7 +1104,7 @@ class BulkEnrichService
 
     public function verwerfenGp(Team $team, int $proposalId): void
     {
-        $prop = FoodAlchemistBulkGpProposal::find($proposalId);
+        $prop = FoodAlchemistBulkGpProposal::whereKey($proposalId)->where('team_id', $team->id)->first();   // Spec 84 B2: nur eigene Vorschläge
         if ($prop !== null && FoodAlchemistGp::visibleToTeam($team)->whereKey($prop->gp_id)->exists()) {
             $prop->update(['status' => BulkProposalStatus::Verworfen]);
             $this->ki->stempleRejected($prop->call_log_id !== null ? (int) $prop->call_log_id : null);

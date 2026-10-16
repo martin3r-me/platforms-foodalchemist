@@ -2576,6 +2576,7 @@ class PlanningCascadeService
         bool $kiBilder = false,
     ): FoodAlchemistCascadeRun {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2: Anreicherung schreibt KI-Felder
         $kind = $vkModus ? 'gericht' : 'rezept';
 
         $run = FoodAlchemistCascadeRun::create([

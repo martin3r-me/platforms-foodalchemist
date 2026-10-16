@@ -536,7 +536,7 @@ class RecipeService
 
         if ($parentId !== null) {
             $parent = FoodAlchemistRecipe::visibleToTeam($team)->find($parentId);
-            if ($parent !== null && $parent->status->value === 'stub') {
+            if ($parent !== null && $parent->status->value === 'stub' && $parent->isOwnedBy($team)) {   // Spec 84 B2: nur eigener Eltern
                 $parent->update(['status' => 'draft']);            // Eltern → draft (hat jetzt Inhalt)
             }
         }
@@ -690,6 +690,7 @@ class RecipeService
     public function deleteGeneratorStub(Team $team, int $id): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2
         if ($recipe->status->value !== 'stub') {
             throw new \RuntimeException('Kein Stub — normales Löschen verwenden (delete()).');
         }
