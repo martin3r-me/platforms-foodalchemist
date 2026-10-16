@@ -57,6 +57,7 @@ Getrennt wird deshalb nach **Artefakt-Sorte am Dispatch-Ort**, nicht nach Klasse
 | `rezepte` | `FOODALCHEMIST_QUEUE_REZEPTE` | Kaskaden-Kinder (Sub-Rezepte) | bis **50** |
 | `kaskade` | `FOODALCHEMIST_QUEUE_KASKADE` | Slot-Concepts (Foodbook/Angebot/Format) | je Slot 1 |
 | `anreichern` | `FOODALCHEMIST_QUEUE_ANREICHERN` | Anreicherung je Sub-Rezept | je Sub 1 |
+| `interaktiv` | `FOODALCHEMIST_QUEUE_INTERAKTIV` | **Einzeljobs mit wartendem Menschen:** Produktpass lesen (später Web-Recherche) | 1 je Klick, nie Massen |
 
 **Defaults sind leer** (`Support\Warteschlange` gibt dann `null` zurück ⇒ Default-Queue).
 Verhalten also unverändert, bis jemand die Variablen setzt. Das ist Absicht: der Code kann
@@ -85,6 +86,40 @@ die Queue-Namen). Ab dem Speichern greift die Trennung.
 > die Liste **in der angegebenen Reihenfolge** — der Fan-out würde die kleinen Jobs dann noch
 > härter aushungern als vor der Trennung.
 
+
+### Interaktive Schlange (16.10.2026) — exakter Worker für Forge
+
+Anlass: Der erste Produktpass auf io stand hinter 648 Non-Food-KI-Stapeln in `default` (io fährt EINEN Worker) und hätte Stunden gewartet. `interaktiv` ist die
+Schlange für Jobs, hinter denen ein Mensch wartet. Sie bekommt einen **eigenen** Worker, damit kein Massenlauf sie aufhält. Reihenfolge wie oben: **erst Worker, dann Env.**
+
+**Forge → Site → Queue → neuer Worker** (Preview-Zeile prüfen, sie muss `--queue=fa-interaktiv` enthalten):
+
+| Feld | Wert |
+|---|---|
+| Connection | `database` |
+| Queue | `fa-interaktiv` |
+| Processes | `1` |
+| Timeout | `300` (muss über dem Job-Timeout 240 des Produktpass-Lesens liegen) |
+| Sleep | `3` |
+| Tries | `1` |
+| Max Memory | `256` |
+| Daemon | ja |
+
+Das entspricht diesem Aufruf (nur zur Kontrolle, nicht von Hand starten):
+
+```bash
+php artisan queue:work database --queue=fa-interaktiv --sleep=3 --tries=1 --timeout=300 --memory=256
+```
+
+Danach **erst** in der Site-Environment `FOODALCHEMIST_QUEUE_INTERAKTIV=fa-interaktiv` setzen, `php artisan config:cache` und `php artisan queue:restart`.
+Prüfung, dass der Worker wirklich läuft (das »Running«-Badge lügt, s. u.):
+
+```bash
+ssh forge@49.13.90.76 "ps -eo args | grep '[q]ueue:work' | grep -oE '\-\-queue=[a-z-]+' | sort | uniq -c"
+```
+
+`fa-interaktiv` muss in der Liste stehen. Ohne gesetzte Variable bleibt alles auf `default` (wie bisher). **Nicht** auf die interaktive Schlange legen: Massenläufe (Non-Food-KI-Stapel,
+Embeddings, Kaskaden) — sonst ist sie keine mehr.
 
 ### Einrichtung 2026-09-03 — drei Fallen, alle live erlebt
 

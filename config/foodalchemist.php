@@ -100,6 +100,7 @@ return [
         'rezepte' => env('FOODALCHEMIST_QUEUE_REZEPTE', ''),
         'kaskade' => env('FOODALCHEMIST_QUEUE_KASKADE', ''),
         'anreichern' => env('FOODALCHEMIST_QUEUE_ANREICHERN', ''),
+        'interaktiv' => env('FOODALCHEMIST_QUEUE_INTERAKTIV', ''),   // Einzeljobs mit wartendem Menschen (Produktpass lesen); eigener Worker nötig
     ],
     /**
      * Routing-Konfiguration

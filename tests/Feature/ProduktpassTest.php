@@ -68,8 +68,8 @@ beforeEach(function () {
     };
 });
 
-it('Hochladen legt eine Version samt Datei an und stellt das Lesen auf die Anreicherungs-Schlange; die nächste Version zählt weiter', function () {
-    config(['foodalchemist.queue.anreichern' => 'anreichern-test']);
+it('Hochladen legt eine Version samt Datei an und stellt das Lesen auf die interaktive Schlange; die nächste Version zählt weiter', function () {
+    config(['foodalchemist.queue.interaktiv' => 'anreichern-test']);
     $v1 = $this->svc->hochladen($this->rootTeam, $this->stamm, ($this->datei)(), $this->kurator->id);
     $v2 = $this->svc->hochladen($this->rootTeam, $this->stamm, ($this->datei)('neu.pdf'), $this->kurator->id);
 

@@ -88,7 +88,7 @@ class ProduktpassService
             $pass->forceDelete();
             throw new \RuntimeException('Die Datei konnte nicht gespeichert werden: '.$e->getMessage());
         }
-        ProduktpassLesenJob::dispatch((int) $pass->id)->onQueue(Warteschlange::anreichern());
+        ProduktpassLesenJob::dispatch((int) $pass->id)->onQueue(Warteschlange::interaktiv());
 
         return $pass->refresh();
     }
@@ -107,7 +107,7 @@ class ProduktpassService
             throw new \RuntimeException('Zu diesem Vorschlag gibt es keine Datei zum Lesen.');
         }
         $pass->update(['status' => 'hochgeladen', 'fehler' => null]);
-        ProduktpassLesenJob::dispatch((int) $pass->id)->onQueue(Warteschlange::anreichern());
+        ProduktpassLesenJob::dispatch((int) $pass->id)->onQueue(Warteschlange::interaktiv());
 
         return $pass->refresh();
     }
