@@ -57,8 +57,12 @@ it('SET: Non-Food mit Unterkategorie, Food bestätigen, Urteil zurücknehmen; Fe
     expect(FoodAlchemistSupplierItemNonfood::where('supplier_item_id', $la->id)->value('quelle'))->toBe('manuell');
 
     expect($tool->execute(['id' => $la->id, 'ist_nonfood' => false], $this->ctx)->data['ist_nonfood'])->toBeFalse();
-    $zurueck = $tool->execute(['id' => $la->id, 'ist_nonfood' => null], $this->ctx);
+    $zurueck = $tool->execute(['id' => $la->id, 'zuruecknehmen' => true], $this->ctx);
     expect($zurueck->data['zurueckgenommen'])->toBeTrue()->and(FoodAlchemistSupplierItemNonfood::where('supplier_item_id', $la->id)->exists())->toBeFalse();
+
+    // früheres Verhalten bleibt: ein ausdrückliches ist_nonfood=null nimmt ebenfalls zurück
+    $tool->execute(['id' => $la->id, 'ist_nonfood' => true], $this->ctx);
+    expect($tool->execute(['id' => $la->id, 'ist_nonfood' => null], $this->ctx)->data['zurueckgenommen'])->toBeTrue();
 
     expect($tool->execute(['id' => $la->id], $this->ctx)->errorCode)->toBe('VALIDATION_ERROR')
         ->and($tool->execute(['id' => $la->id, 'ist_nonfood' => 'ja'], $this->ctx)->errorCode)->toBe('VALIDATION_ERROR')
@@ -69,6 +73,16 @@ it('SET: Non-Food mit Unterkategorie, Food bestätigen, Urteil zurücknehmen; Fe
     $geerbt = ($this->la)('Kochjacke Weiß', $this->rootTeam->id);
     $kind = new ToolContext($this->makeUser($this->childA, 'Kind'), $this->childA);
     expect($tool->execute(['id' => $geerbt->id, 'ist_nonfood' => true], $kind)->errorCode)->toBe('ACCESS_DENIED');
+});
+
+it('Schema: kein Union-Typ (der Core-ToolExecutor stürzt daran ab), ist_nonfood ist boolean, Zurücknehmen ein eigener Schalter', function () {
+    $schema = (new NonfoodSetTool)->getSchema();
+    $typen = array_map(fn ($p) => $p['type'] ?? null, $schema['properties']);
+
+    expect($typen['ist_nonfood'])->toBe('boolean')->and($typen['zuruecknehmen'])->toBe('boolean')->and($schema['required'])->toBe(['id']);
+    foreach ((new NonfoodPruefenTool)->getSchema()['properties'] + $schema['properties'] as $name => $p) {
+        expect(is_array($p['type'] ?? null))->toBeFalse("{$name}: Array-Typ im Schema");
+    }
 });
 
 it('Tools gehören zum Bereich Stammdaten und sind registriert', function () {
