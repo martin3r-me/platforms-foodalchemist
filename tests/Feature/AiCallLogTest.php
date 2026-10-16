@@ -33,7 +33,7 @@ it('Pflicht 1: erfolgreicher Call schreibt genau eine Zeile, callLogId im DTO', 
 
     $log = $zeilen[0];
     expect($log->feature)->toBe('recipe.description')
-        ->and($log->tier)->toBe('C')                                  // aus der Registry
+        ->and($log->tier)->toBe('S')                                  // Klasse stark aus der Registry
         ->and($log->model)->toBe('fake-deterministic-1')
         ->and(json_decode($log->knowledge_used, true))->toBe(['substitutionen@v1', 'fisch_seafood@v1'])
         ->and(strlen($log->prompt_hash))->toBe(64)
@@ -77,16 +77,38 @@ it('Pflicht 3: stempleAccepted/-Rejected setzen die Stempel; null-Id ist no-op',
     expect(DB::table('foodalchemist_ai_call_log')->where('id', $p->callLogId)->value('rejected_at'))->not->toBeNull();
 });
 
-it('Tiering: Registry-Tier loggt; options[tier] übersteuert; Tier-Modell-Mapping greift', function () {
-    config(['foodalchemist.ai.tiers.B' => 'billig-modell-v9']);
+it('KI-Klassen: Registry-Klasse loggt S/M/L; Klassen-Modell greift; options[model] gewinnt; leer = kein Override', function () {
+    $spy = new class extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public array $gesehen = [];
 
-    $this->gw->propose('vk.speisen_klasse', ['name' => 'X']);         // Registry: Tier B
-    $log = DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->first();
-    expect($log->tier)->toBe('B');
-    // FakeProvider ignoriert model-Option — das Mapping selbst ist über die Option testbar:
-    // ein Tier ohne Mapping ändert nichts, Override schreibt das Tier ins Log
-    $this->gw->propose('vk.speisen_klasse', ['name' => 'X'], ['tier' => 'A']);
-    expect(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tier'))->toBe('A');
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesehen[] = $options;
+
+            return parent::chat($messages, $options);
+        }
+    };
+    app()->singleton(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, fn () => $spy);
+    $tier = fn () => DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tier');
+
+    // leer konfiguriert: kein model-/reasoning-Override (bisheriges Verhalten)
+    $this->gw->propose('vk.speisen_klasse', ['name' => 'X']);                    // leicht
+    expect($tier())->toBe('L')->and($spy->gesehen[0])->not->toHaveKey('model')->and($spy->gesehen[0])->not->toHaveKey('reasoning');
+
+    config(['foodalchemist.ai.klassen.leicht.model' => 'leicht-modell-v1', 'foodalchemist.ai.klassen.leicht.reasoning' => 'minimal',
+        'foodalchemist.ai.klassen.mittel.model' => 'mittel-modell-v1', 'foodalchemist.ai.klassen.stark.model' => 'stark-modell-v1']);
+    $spy->gesehen = [];
+    $this->gw->propose('vk.speisen_klasse', ['name' => 'X']);                    // leicht
+    $this->gw->propose('gp.verluste', ['name' => 'X']);                          // mittel
+    $this->gw->propose('recipe.description', ['description' => 'Klarer Fond.']); // stark
+    expect(array_column($spy->gesehen, 'model'))->toBe(['leicht-modell-v1', 'mittel-modell-v1', 'stark-modell-v1'])
+        ->and($spy->gesehen[0]['reasoning'] ?? null)->toBe(['effort' => 'minimal'])   // nur wo konfiguriert
+        ->and($spy->gesehen[1])->not->toHaveKey('reasoning');
+
+    $spy->gesehen = [];
+    $this->gw->propose('vk.speisen_klasse', ['name' => 'X'], ['model' => 'explizit']);
+    expect($spy->gesehen[0]['model'])->toBe('explizit');
 });
 
 it('GL-13-Audit-Faden: Generator schreibt knowledge_used ins Log (vorher verloren)', function () {

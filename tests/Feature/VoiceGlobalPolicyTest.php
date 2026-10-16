@@ -429,7 +429,7 @@ it('Spec 54 (1): callWithTools gibt ein explizit übergebenes model an den Provi
         }
     };
     app()->singleton(FakeAiProvider::class, fn () => $spy);
-    config(['foodalchemist.ai.tiers.D' => 'tier-d-fallback']);
+    config(['foodalchemist.ai.klassen.stark.model' => 'tier-d-fallback']);
 
     app(AiGatewayService::class)->callWithTools('Test', ['foodalchemist.recipes.SEARCH'], 1, ['model' => 'gpt-4o-mini-2024-07-18']);
     expect($spy->gesehen[0]['model'] ?? null)->toBe('gpt-4o-mini-2024-07-18');
@@ -452,7 +452,7 @@ it('Spec 54 (1): VoiceCommandService reicht foodalchemist.ai.voice_model als mod
         }
     };
     app()->singleton(FakeAiProvider::class, fn () => $spy);
-    config(['foodalchemist.ai.tiers.D' => 'tier-d-fallback']);
+    config(['foodalchemist.ai.klassen.stark.model' => 'tier-d-fallback']);
 
     expect(config('foodalchemist.ai.voice_model'))->toBeNull();          // Default, bevor gesetzt
     app(VoiceCommandService::class)->verarbeite('Suche BBQ Sauce');

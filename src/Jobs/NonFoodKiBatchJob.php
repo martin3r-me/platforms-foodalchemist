@@ -65,11 +65,9 @@ class NonFoodKiBatchJob implements ShouldQueue
             ], fn ($v) => $v !== null);
         })->values()->all();
 
-        // Eigenes Modell NUR für diese Massen-Klassifikation (leer = bisheriges Verhalten: Tier B). Kein Tier-B-Umbau: der hängt an 45 Arbeitsschritten.
-        $modell = trim((string) config('foodalchemist.ai.nonfood_model', ''));
+        // Modell kommt aus der KI-Klasse des Prompt-Keys (la.nonfood = leicht), kein eigener Schalter.
         try {
-            $v = $ki->propose('la.nonfood', ['lieferanten' => $lieferanten, 'artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()],
-                $modell !== '' ? ['model' => $modell] : []);
+            $v = $ki->propose('la.nonfood', ['lieferanten' => $lieferanten, 'artikel' => $artikel, 'unterkategorien' => NonFoodRegeln::unterkategorien()]);
         } catch (\Throwable $e) {
             return;   // roter/deaktivierter Call = No-op; die Artikel bleiben in der Prüfliste
         }

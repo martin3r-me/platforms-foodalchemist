@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Ai;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
+use Platform\FoodAlchemist\Support\KiKlassen;
 use Platform\Core\Services\LLMProviderRegistry;
 use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
 use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
@@ -21,8 +22,8 @@ use RuntimeException;
  * M7-01: ai_call_log-Audit — jede Antwort schreibt VOR Rückgabe genau eine
  * Zeile, AUCH der Fehlerpfad (06_KI §5 Pflicht 2, try/finally erzwungen).
  * M7-02: Tiering A–D — Tier aus der Prompt-Registry (V-01), Override via
- * options['tier']; Tier→Modell-Mapping ist Deployment-Config
- * (foodalchemist.ai.tiers — null = Plattform-Default-Modell).
+ * dem Feld `klasse` des Prompt-Keys; Klasse→Modell/Reasoning ist Deployment-Config
+ * (foodalchemist.ai.klassen — leer = Plattform-Default-Modell).
  *
  * Noch offen (planmäßig): Retry/Degeneration + Fence-Stripping (M7-03),
  * Voice-Hüllen via core.semantic_layer (M7-05) — Hook: $systemBlock.
@@ -35,7 +36,7 @@ class AiGatewayService
      *
      * @param array<string, mixed> $context Fachkontext — wird als JSON an die Task gehängt
      * @param array<string, mixed> $options knowledge (GL-13-Block) · knowledge_used (Audit-Slugs)
-     *                                      · tier (Override) · target_table/target_id · Provider-Optionen
+     *                                      · target_table/target_id · Provider-Optionen
      */
     /**
      * #389 Food DNA: kreative/geschmackliche Prompt-Keys, die die Marken-/Küchen-DNA als
@@ -115,9 +116,11 @@ class AiGatewayService
             throw new RuntimeException("Unbekannter Prompt-Key [{$promptKey}] — Registry: config/foodalchemist.php → prompts.");
         }
 
-        // M7-02: Tier aus der Registry, Override per Option; Modell aus dem Tier-Mapping
-        $tier = is_string($options['tier'] ?? null) ? $options['tier'] : ($prompt['tier'] ?? 'B');
-        $tierModell = config('foodalchemist.ai.tiers', [])[$tier] ?? null;
+        // KI-Klassen (16.10.2026): EIN Feld je Prompt-Key (`klasse`) bestimmt Modell und Reasoning. Eine ausdrücklich übergebene options['model'] gewinnt je Call.
+        $klasse = KiKlassen::von($prompt);
+        $tier = KiKlassen::logCode($klasse);   // Log-Spalte `tier` (String(2)): S | M | L
+        $klassenModell = KiKlassen::modell($klasse);
+        $klassenReasoning = KiKlassen::reasoning($klasse);
 
         $messages = [];
         // M7-05 / GL-06 §6 (Hybrid): Voice-Hülle aus core.semantic_layer als
@@ -267,7 +270,7 @@ class AiGatewayService
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
         $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
-        unset($options['conformance_artefakt'], $options['_kanon_prompt_key'], $options['knowledge'], $options['knowledge_used'], $options['knowledge_channels'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
+        unset($options['conformance_artefakt'], $options['_kanon_prompt_key'], $options['knowledge'], $options['knowledge_used'], $options['knowledge_channels'], $options['knowledge_dropped_chars'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
         // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).
@@ -375,8 +378,12 @@ class AiGatewayService
         // 2026-09-18 ungebremst mit; siehe die gleiche Options-Ergänzung dort weiter unten.
         $options += ['with_context' => false, 'tools' => false];
 
-        if ($tierModell !== null && ! isset($options['model'])) {
-            $options['model'] = $tierModell;
+        if ($klassenModell !== null && ! isset($options['model'])) {
+            $options['model'] = $klassenModell;
+        }
+        // Reasoning-Stufe der Klasse. Der Core-OpenAiService liest `reasoning` heute nur in streamChat(), nicht in chat() — bis dahin wirkungslos, aber harmlos.
+        if ($klassenReasoning !== null && ! isset($options['reasoning'])) {
+            $options['reasoning'] = ['effort' => $klassenReasoning];
         }
 
         // Output-Budget: Reasoning-Modelle (gpt-5.x u.a.) verbrauchen einen Teil des
@@ -692,7 +699,7 @@ class AiGatewayService
             // exakt wie vorher (Tier D).
             $antwort = $this->chatMitBackoff($messages, [
                 'temperature' => 0.0,
-                'model' => $optionen['model'] ?? (config('foodalchemist.ai.tiers', [])['D'] ?? null),
+                'model' => $optionen['model'] ?? KiKlassen::modell(KiKlassen::STARK),
                 'with_context' => false,
                 'tools' => false,
             ]);

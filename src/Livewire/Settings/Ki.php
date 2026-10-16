@@ -9,6 +9,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\AiCostCalculator;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Support\KiKlassen;
 use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
@@ -180,7 +181,7 @@ class Ki extends Component
         $bekannteKosten = $kosten->filter(fn ($betrag) => $betrag !== null);
 
         $registry = collect(config('foodalchemist.prompts', []))
-            ->except('demo.echo')->map(fn ($p) => $p['tier'] ?? '?')->sort();
+            ->except('demo.echo')->map(fn ($p) => KiKlassen::von($p))->sort();
         $auditOhnePrompt = collect([...RecipeImageService::BILD_FEATURES, 'voice.command']);
         $registryLuecken = $statistik->pluck('feature')->unique()->diff($registry->keys()->merge($auditOhnePrompt))->sort()->values();
 
@@ -193,7 +194,8 @@ class Ki extends Component
             'kostenWaehrung' => $rechner->currency(),
             'kostenSymbol' => $rechner->symbol(),
             'provider' => config('foodalchemist.ai.provider', 'core'),
-            'tiers' => config('foodalchemist.ai.tiers', []),
+            'klassen' => config('foodalchemist.ai.klassen', []),
+            'abgeloest' => KiKlassen::abgeloesteStufenGesetzt(),
             'fallbackModel' => config('foodalchemist.ai.fallback_model'),
             'registry' => $registry,
             'registryLuecken' => $registryLuecken,

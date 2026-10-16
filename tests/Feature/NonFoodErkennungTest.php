@@ -121,7 +121,7 @@ it('KI-Stapel: sicheres Urteil wird gespeichert, unsicheres bleibt in der Prüfl
     $this->svc->regelLauf(null, true);
     expect(FoodAlchemistSupplierItemNonfood::where('pruefung_offen', true)->count())->toBe(3);
 
-    $this->mock(AiGatewayService::class)->shouldReceive('propose')->once()->with('la.nonfood', Mockery::on(fn ($ctx) => count($ctx['artikel']) === 3), [])
+    $this->mock(AiGatewayService::class)->shouldReceive('propose')->once()->with('la.nonfood', Mockery::on(fn ($ctx) => count($ctx['artikel']) === 3))
         ->andReturn(new AiProposal(['urteile' => [
             ['id' => $a->id, 'nonfood' => true, 'unterkategorie' => NonFoodRegeln::SUB_DEKO, 'konfidenz' => 0.95, 'grund' => 'Trinkbecher'],
             ['id' => $b->id, 'nonfood' => false, 'unterkategorie' => null, 'konfidenz' => 0.9, 'grund' => 'Salatschale'],
@@ -281,7 +281,7 @@ it('KI-Stapel knapp: ohne grund steht „KI: sicher“, unsicher ohne grund „K
         $ctx = $c2;
 
         return true;
-    }), [])->andReturn(new AiProposal(['urteile' => [
+    }))->andReturn(new AiProposal(['urteile' => [
         ['id' => $a->id, 'nonfood' => true, 'unterkategorie' => NonFoodRegeln::SUB_DEKO, 'konfidenz' => 0.95],
         ['id' => $b->id, 'nonfood' => false, 'unterkategorie' => null, 'konfidenz' => 0.4],
         ['id' => $c->id, 'nonfood' => false, 'unterkategorie' => null, 'konfidenz' => 0.55, 'grund' => 'Brotkorb kann Zubehör sein'],
@@ -297,19 +297,14 @@ it('KI-Stapel knapp: ohne grund steht „KI: sicher“, unsicher ohne grund „K
         ->and(collect($ctx['artikel'])->firstWhere('id', $c->id))->toMatchArray(['verkaufsname' => 'Brotkorb Natur', 'l' => 1]);
 });
 
-it('Stapelgröße 50 und eigenes Non-Food-Modell: leer = kein model-Override, gesetzt = model im Aufruf', function () {
-    expect(NonFoodKiBatchJob::STAPEL)->toBe(50);
+it('Stapelgröße 50; la.nonfood läuft ohne eigenen Modell-Schalter (Modell kommt aus der KI-Klasse leicht)', function () {
+    expect(NonFoodKiBatchJob::STAPEL)->toBe(50)
+        ->and((config('foodalchemist.prompts')['la.nonfood']['klasse'] ?? null))->toBe('leicht')
+        ->and(config('foodalchemist.ai'))->not->toHaveKey('nonfood_model');
     $a = ($this->la)('Becher 180 ml');
     $this->svc->regelLauf(null, true);
-    $liefere = fn () => new AiProposal(['urteile' => [['id' => $a->id, 'nonfood' => true, 'unterkategorie' => NonFoodRegeln::SUB_DEKO, 'konfidenz' => 0.9]]], 0.9);
-
-    config(['foodalchemist.ai.nonfood_model' => '']);
-    $this->mock(AiGatewayService::class)->shouldReceive('propose')->once()->with('la.nonfood', Mockery::any(), [])->andReturnUsing($liefere);
-    app()->call([new NonFoodKiBatchJob([$a->id]), 'handle']);
-
-    FoodAlchemistSupplierItemNonfood::where('supplier_item_id', $a->id)->update(['ist_nonfood' => null, 'quelle' => 'regel', 'pruefung_offen' => true]);
-    config(['foodalchemist.ai.nonfood_model' => 'gpt-5.6-luna']);
-    $this->mock(AiGatewayService::class)->shouldReceive('propose')->once()->with('la.nonfood', Mockery::any(), ['model' => 'gpt-5.6-luna'])->andReturnUsing($liefere);
+    $this->mock(AiGatewayService::class)->shouldReceive('propose')->once()->with('la.nonfood', Mockery::any())
+        ->andReturn(new AiProposal(['urteile' => [['id' => $a->id, 'nonfood' => true, 'unterkategorie' => NonFoodRegeln::SUB_DEKO, 'konfidenz' => 0.9]]], 0.9));
     app()->call([new NonFoodKiBatchJob([$a->id]), 'handle']);
 });
 

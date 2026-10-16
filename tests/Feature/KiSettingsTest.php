@@ -40,10 +40,10 @@ it('DoD: Kill-Switch stoppt jeden KI-Call typisiert — VOR Provider und Log', f
     expect(\Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->count())->toBe(1);
 });
 
-it('Settings-Sektion: Umschalten persistiert, Banner + Tier-Pills rendern', function () {
+it('Settings-Sektion: Umschalten persistiert, Banner + Klassen-Pills rendern', function () {
     $c = Livewire::test(Ki::class)
         ->assertSeeHtml('data-ki-kill-switch')
-        ->assertSeeHtml('data-ki-tiers')
+        ->assertSeeHtml('data-ki-klassen')
         ->call('umschalten')
         ->assertSeeHtml('data-ki-aus-banner');
 

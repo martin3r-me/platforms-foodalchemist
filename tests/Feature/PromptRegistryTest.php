@@ -7,78 +7,96 @@ uses(TestCase::class);
 /**
  * M7-04: Prompt-Registry == Anhang-A-Inventar (06_KI). Bewusst NICHT in der
  * Registry (dokumentiert in config): #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER
- * (Tier-D-Tool-Loops → M7-10/M8-01), #37 FOODBOOK_PLAN (Phase 2 ⚠D5),
+ * (Tool-Loops → M7-10/M8-01), #37 FOODBOOK_PLAN (Phase 2 ⚠D5),
  * #39 DISAMBIG (toter Code).
  */
-const REGISTRY_SOLL = [
-    // GP-Welt
-    'gp.suggest' => 'B', 'component.replacement_suggest' => 'B', 'gp.condition' => null, 'gp.tags' => 'C', 'gp.allergene' => 'A',
-    'gp.domain' => 'B', 'gp.piece_default_g' => 'B', 'gp.verluste' => 'B', 'gp.zaehl_einheiten' => 'B',
-    'gp.anker' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
-    'anker.wissen_auslese' => 'B',
-    'la.nonfood' => 'B',                                              // Non-Food-Erkennung am LA, Stufe 2 nach der Regel (Klassifikator in Stapeln)
-    // Rezept-Welt
-    'recipe.generator' => 'B', 'recipe.komponenten_plan' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
-    'recipe.posten' => 'B', 'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.ruestschritt' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',
-    'recipe.level' => 'B', 'recipe.production_depth' => 'B',
-    'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
-    'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
-    'recipe.review' => 'A',
-    'recipe.bauart' => 'B',                                           // Spec 21 S5b-2: Gericht-vs-Komponente nach Bauart (Klassifikator, darum Tier B + keine Food-DNA)
-    'recipe.equipment' => 'B', 'recipe.extract' => 'C', 'produktpass.extract' => 'C', 'artikel.web_recherche' => 'C',
-    'recipe.verpackungsmasse' => 'B',                                  // D: Verpackungs-Einheit → Masse (zweite Meinung neben der LA-Gebindegrösse)
-    'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)
-    'recipe.sensorik' => 'B',                                         // Sensorik-Bewertung des fertigen Gerichts (recipe_sensorik)
-    'gp.naehrwerte' => 'B',                                           // R10: Nährwert-Fallback ohne LA-Daten (Ist-Feature)
-    // VK-Welt
-    'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
-    'vk.plating' => 'A', 'vk.titel_vorschlag' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
-    'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B', 'recipe.dichteklasse' => 'B', 'recipe.regeneration' => 'B',
-    'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
-    'vk.ueberarbeiten' => 'A',                                        // Spec 03 L1a: VK-Revise (freie Anweisung, Facetten sind Vorgabe)
-    // Concepter
-    'concept.wording' => 'A',                                         // Concept-übergreifendes Wording (Schreibstil → Position-Namen + Intro)
-    'concept.brief_geruest' => 'A',                                   // R6.1: Kunden-Brief → Planungs-Gerüst (Rahmen; Gericht-Wahl bleibt deterministisch)
-    'concept.plan' => 'B',                                            // Et.2b Kreativ-Kopf: Kunden-Brief → kreative Concept-Canvas (Leitidee/USP/Inszenierung/Geschmackswelten)
-    'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
-    'planning.dish_proposal_revise' => 'B',                           // menschlich geführte Überarbeitung eines Gericht-Bauplans
-    'planung.leitplanken' => 'B',                                     // Phase C1: Freitext-Briefing → geschlossenes Leitplanken-Vokabular (Klassifikation, temp 0)
-    'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
-    'foodbook.grundgeruest' => 'A',                                   // Foodbook-Grundgerüst = KAPITEL (owner=foodbook), Gänge entstehen im Kapitel-Concept
-    'format.grundgeruest' => 'A',                                     // Format-Grundgerüst = Branding + Concept-Bausteine (owner=format)
-    'praesentation.design_css' => 'A',                                // sandboxed CSS aus menschlichem Gestaltungsbrief
-
-    // Schicht 3: generischer Konformitäts-Critic (artefakt-agnostisch, EIN Prompt für Rezept/VK/GP/LA)
-    'conformance.check' => 'B',
-    // Schicht 3 · Slice 5: GP-Selbstheilung — leitet konforme Feld-Werte aus dem Quell-LA ab (LA-First)
-    'gp.conformance_revise' => 'B',
-    // Sonstiges
-    'price.plausi' => 'B', 'chat.message' => 'A',
-    // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)
-    'signal.supplier_inquiry' => 'B', 'signal.margin_levers' => 'B',
-    'signal.vk_release_advice' => 'B', 'signal.serving_form_suggest' => 'B',
-    'signal.recipe_category_suggest' => 'B',                          // Spec 21 Tranche A: Assist zu rezept_kategorie_problem
-    'signal.recipe_naming_suggest' => 'B',                            // Spec 21 Tranche A: Assist zu rezept_naming_regelwerk
+/**
+ * KI-Klassen (16.10.2026): jeder Prompt-Key gehört zu GENAU EINER Klasse (Feld `klasse`), die Klasse bestimmt Modell + Reasoning.
+ *  stark  = Sicherheit/Fakten (Allergene, Nährwerte, Produktpass, Rezept einlesen) + alles Erzeugende, Planende, Prüfende, Chat
+ *  mittel = fachliche Schätzungen, die in Mengen und Kosten einfließen (im Zweifel stark)
+ *  leicht = Einzelwerte aus kurzen Listen, Titel-/Namensvorschläge, Schlagworte, Non-Food
+ */
+const REGISTRY_KLASSEN = [
+    'stark' => [
+        'gp.suggest',
+        'planung.leitplanken', 'artikel.web_recherche', 'component.replacement_suggest', 'recipe.komponenten_plan', 'recipe.generator',
+        'recipe.description', 'vk.generator', 'gp.allergene', 'gp.naehrwerte', 'anker.wissen_auslese', 'recipe.steps', 'recipe.review',
+        'conformance.check', 'gp.conformance_revise', 'recipe.ueberarbeiten', 'recipe.extract', 'produktpass.extract', 'vk.plating',
+        'vk.marketing', 'vk.wording', 'concept.brief_geruest', 'foodbook.grundgeruest', 'format.grundgeruest', 'concept.plan',
+        'concept.wording', 'foodbook.kapitel_ideen', 'planning.dish_proposal_revise', 'foodbook.kundentext', 'praesentation.design_css',
+        'vk.review', 'vk.ueberarbeiten', 'vk.kohaerenz', 'vk.teller_heber', 'price.plausi', 'chat.message', 'signal.supplier_inquiry',
+        'signal.margin_levers', 'signal.vk_release_advice',
+    ],
+    'mittel' => [
+        'recipe.geschmack', 'gp.domain',
+        'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',
+        'gp.zaehl_einheiten', 'recipe.verpackungsmasse', 'gp.la_suggest', 'gp.term_la_rank', 'recipe.eigenschaften', 'recipe.sensorik',
+        'recipe.regeneration', 'vk.regeneration',
+    ],
+    'leicht' => [
+        'la.nonfood', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 
+        'gp.anker', 'recipe.sektor', 'recipe.level', 'recipe.production_depth', 'recipe.bauart', 'recipe.equipment',
+        'vk.titel_vorschlag', 'recipe.dichteklasse', 'vk.servier_vehikel', 'gp.tags', 'signal.serving_form_suggest',
+        'signal.recipe_category_suggest', 'signal.recipe_naming_suggest',
+    ],
 ];
 
-it('Registry vollständig: alle Soll-Keys vorhanden, mit task + gültigem Tier', function () {
+function registryKlasseSoll(): array
+{
+    $soll = [];
+    foreach (REGISTRY_KLASSEN as $klasse => $keys) {
+        foreach ($keys as $key) {
+            expect($soll)->not->toHaveKey($key, "Key doppelt in der Soll-Liste: {$key}");
+            $soll[$key] = $klasse;
+        }
+    }
+
+    return $soll;
+}
+
+it('Registry vollständig: alle Soll-Keys vorhanden, mit task + genau einer gültigen Klasse', function () {
     $registry = config('foodalchemist.prompts');
 
-    foreach (array_keys(REGISTRY_SOLL) as $key) {
+    foreach (registryKlasseSoll() as $key => $klasse) {
         expect($registry)->toHaveKey($key);
         expect($registry[$key]['task'] ?? '')->not->toBe('', "Task fehlt: {$key}");
-        expect($registry[$key]['tier'] ?? '')->toBeIn(['A', 'B', 'C', 'D'], "Tier ungültig: {$key}");
+        expect($registry[$key]['klasse'] ?? null)->toBe($klasse, "Klasse von {$key}");
+        expect($registry[$key])->not->toHaveKey('tier');   // keine zweite Wahrheit neben der Klasse
     }
 });
 
 it('keine unbekannten Keys außer demo.echo (Inventar-Disziplin)', function () {
-    $extra = array_diff(array_keys(config('foodalchemist.prompts')), array_keys(REGISTRY_SOLL), ['demo.echo']);
+    $extra = array_diff(array_keys(config('foodalchemist.prompts')), array_keys(registryKlasseSoll()), ['demo.echo']);
 
     expect(array_values($extra))->toBe([]);
 });
 
-it('Compliance- und V-02-Features sind Tier A (06_KI §2-Begründung)', function () {
-    foreach (['gp.allergene', 'recipe.steps', 'vk.plating', 'vk.marketing'] as $key) {
-        expect(config('foodalchemist.prompts')[$key]['tier'])->toBe('A', $key);
+it('jeder Key hat genau eine gültige Klasse (stark|mittel|leicht)', function () {
+    foreach (config('foodalchemist.prompts') as $key => $p) {
+        if ($key === 'demo.echo') {
+            continue;
+        }
+        expect(\Platform\FoodAlchemist\Support\KiKlassen::gueltig($p['klasse'] ?? null))->toBeTrue("Klasse fehlt/ungültig: {$key}");
     }
+});
+
+it('Sicherheit und Fakten (Allergene, Nährwerte, Produktpass, Rezept einlesen) sind STARK', function () {
+    foreach (['gp.allergene', 'gp.naehrwerte', 'produktpass.extract', 'recipe.extract', 'recipe.steps', 'vk.plating', 'vk.marketing', 'chat.message'] as $key) {
+        expect(config('foodalchemist.prompts')[$key]['klasse'])->toBe('stark', $key);
+    }
+});
+
+it('Non-Food-Erkennung und Titelvorschläge sind LEICHT, Mengen-Schätzungen MITTEL', function () {
+    foreach (['la.nonfood', 'recipe.titel_vorschlag', 'vk.titel_vorschlag'] as $key) {
+        expect(config('foodalchemist.prompts')[$key]['klasse'])->toBe('leicht', $key);
+    }
+    foreach (['gp.verluste', 'recipe.garverlust', 'gp.piece_default_g', 'recipe.verpackungsmasse'] as $key) {
+        expect(config('foodalchemist.prompts')[$key]['klasse'])->toBe('mittel', $key);
+    }
+});
+
+it('Entscheid Dominique 16.10.: gp.suggest ist STARK, recipe.geschmack und gp.domain sind MITTEL', function () {
+    expect(config('foodalchemist.prompts')['gp.suggest']['klasse'])->toBe('stark')
+        ->and(config('foodalchemist.prompts')['recipe.geschmack']['klasse'])->toBe('mittel')
+        ->and(config('foodalchemist.prompts')['gp.domain']['klasse'])->toBe('mittel');
 });
