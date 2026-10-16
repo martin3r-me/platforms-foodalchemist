@@ -40,7 +40,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * als Treffer, in einer Fehlermeldung oder in einem Vorschlag:
  *   QXAINH  Inhalte von A (Rezepte, Gerichte, Konzepte, Pakete, Formate, Foodbooks, Karten, Pläne, Angebote)
  *   QXASTM  Stammdaten von A (GP, Lieferant, Artikel) — für U sichtbar gewollt (77d: Stammdaten bleiben)
- *   QXAANG  Angebot von A — steht nicht in der 77d-Hülle (InhaltsFreigabe::MODELLE), U sieht es heute; offen, s. todo
+ *   QXAANG  Angebot von A — seit Spec 84 E8 Teil der 77d-Hülle: U mit leerer Hülle sieht es nicht (Dominique 16.10.)
  *   QXMABO  Master-Inhalt, den A abonniert hat (A sieht nur die Fassung)
  *   QXMNIX  Master-Inhalt ohne Abo — sieht außer dem Master niemand
  *
@@ -343,7 +343,7 @@ it('Spec 84 B0a · Mandant A sieht vom Master nur die abonnierte Fassung, nie In
 it('Spec 84 B0a · Unter-Team U mit leerer 77d-Hülle sieht keine Inhalte von A und nichts vom Master', function () {
     [$lecks] = ($this->lesenAls)($this->chefU, $this->u,
         ['ohne' => [], 'A' => $this->ids['A'], 'MNIX' => $this->ids['MNIX']],
-        ['QXAINH', 'QXMABO', 'QXMNIX']);
+        ['QXAINH', 'QXAANG', 'QXMABO', 'QXMNIX']);   // QXAANG: Spec 84 E8, Angebote gehören zur Hülle
 
     expect($lecks)->toBe([], 'Lecks als U:' . PHP_EOL . print_r($lecks, true));
 });
@@ -363,9 +363,6 @@ it('Spec 84 B0a · Gegenprobe 77d: U sieht die Stammdaten von A (gewollt), der M
     expect($u['QXASTM'] ?? 0)->toBeGreaterThan(2)
         ->and($m['QXMNIX'] ?? 0)->toBeGreaterThan(20);
 });
-
-it('Spec 84 B0a · offen: Unter-Team mit leerer 77d-Hülle sieht die Angebote des Oberteams (angebote.GET/LIST/SEARCH, reife.GET)')
-    ->todo(note: 'Angebote stehen nicht in InhaltsFreigabe::MODELLE. Gewollt (Angebot = Betrieb des Oberteams) oder Lücke? Entscheidung Dominique; bis dahin für U nicht als Leck gewertet.');
 
 dataset('spec84_seiten', [
     'Basisrezepte' => [\Platform\FoodAlchemist\Livewire\Recipes\Browser::class, 'QXAINH Basisfond'],

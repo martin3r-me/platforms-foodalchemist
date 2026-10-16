@@ -11,7 +11,7 @@ use Platform\Core\Models\Team;
  * sieht von seinen Vorfahren nur noch, was in seiner gespeicherten Hülle (`foodalchemist_freigabe_objekte`)
  * steht; eigene Inhalte, globaler Bestand und Teams unterhalb der eingeschränkten Stufe bleiben sichtbar.
  *
- * Gilt NUR für Inhalts-Typen (Rezepte, Konzepte, Formate, Pakete, Foodbooks, Speisepläne, Speisekarten).
+ * Gilt NUR für Inhalts-Typen (Rezepte, Konzepte, Formate, Pakete, Foodbooks, Speisepläne, Speisekarten, Angebote).
  * Grundprodukte, Lieferantenartikel und Vokabular bleiben Stammdaten und werden weiter voll geerbt — sonst
  * könnte ein Standort keine eigenen Rezepturen anlegen.
  *
@@ -30,6 +30,9 @@ final class InhaltsFreigabe
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class => 'foodbook',
         \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::class => 'speiseplan',
         \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::class => 'speisekarte',
+        // Spec 84 E8 (Dominique 16.10.): Angebote des Oberteams sieht ein eingeschränktes Unter-Team NICHT. Angebote sind
+        // (noch) kein freigebbarer Ausgabe-Typ — sichtbar bleiben sie nur bei „übernimmt alles“ und für das eigene Team.
+        \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class => 'angebot',
     ];
 
     /** @var array<string, string> Tabelle → Typ (für rohe Queries) */
@@ -41,6 +44,7 @@ final class InhaltsFreigabe
         'foodalchemist_foodbooks' => 'foodbook',
         'foodalchemist_menu_plans' => 'speiseplan',
         'foodalchemist_menu_cards' => 'speisekarte',
+        'foodalchemist_offers' => 'angebot',
     ];
 
     /** @var array<int, array{frei: list<int>, eingeschraenkt: list<int>, huelle: ?int}> */
