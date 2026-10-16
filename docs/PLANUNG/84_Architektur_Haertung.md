@@ -211,6 +211,30 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 | Leistung (Hülle/Abo-Unterabfragen je Abfrage) | vorhandene Caches; Messung vor B3 |
 | Test grün, Produktion offen | B0 simuliert HTTP/MCP ausdrücklich |
 
+### §4.4 Support-Zugang auf Freigabe (E3, Dominique 16.10.)
+
+- **Kein pauschaler Admin-Zugriff** auf Mandanten-Inhalte. Ohne Freigabe gilt die heutige Inhaltssperre (Spec 82 §13 G).
+- **Freigabe erteilt der Mandant** (Owner/Admin seines Hauptteams), **befristet** (Vorschlag 48 h, einstellbar), **jederzeit widerrufbar**.
+- **Protokoll:** jede Freigabe sowie jedes Lesen/Ändern im Support-Zugang als `PlattformProtokoll`-Zeile (wer, wann, was).
+- **Ort:** die drei bestehenden Sperrpunkte: `FaBereichMiddleware`/`InhaltsSperre` in der Middleware, der `\Livewire\on('call')`-Hook im Provider, `FaRechteToolHuelle` für MCP. Kein vierter Weg.
+- **Abhängigkeit:** nach A-2 (die Sperrpunkte lesen das Team über `FaTeam::aktuell()`).
+- **Tests:** ohne Freigabe gesperrt; mit Freigabe lesbar; nach Ablauf gesperrt; Widerruf wirkt sofort; Protokollzeile je Zugriff; Freigabe nur durch Owner/Admin des Hauptteams.
+
+## §5a · Teil E · Skalierung und Leistung (Dominique 16.10.)
+
+**Grundsatz: erst messen, dann bauen.** Befund io (gemessen vom Kurator 16.10.): 2 vCPU, 3 GB RAM, 6 Queue-Worker; Queue, Cache und Session = `database`, kein Redis; `slow_query_log` aus. Größte Tabellen: `price_history` 1,2 Mio Zeilen (520 MB), `supplier_items` 354k, `anchor_beziehungen` 292k, `prices` 284k, `necta_stand` 213k. Die Kontrast-Neuberechnung läuft am PHP-Limit (512 MB).
+
+| # | Schritt | Wer | Wann |
+|---|---|---|---|
+| E-1 | Messung io: eine Woche Slow-Query-Log + Top-Seiten nach Payload/Ladezeit (Vorbild: Wissen hatte 15,5 MB / 71k Knoten) | Kurator | sofort |
+| E-2 | Listen-Audit: jede Liste/Suche auf großen Tabellen paginiert oder begrenzt (Muster Wissen #438), gezielt Lieferanten, Artikel, Preise, Historie, Signale | Vanessa | nach B2 |
+| E-3 | Indizes für den B3-Sichtfilter (`team_id`, `deleted_at`, Hülle-/Abo-Spalten) **vor B3**, mit EXPLAIN-Belegen vorher/nachher | „test“ | vor PR 12 |
+| E-4 | C3b vorgezogen: Livewire-Scan und Tool-Liste cachen, mit Rückfall (Cache fehlt oder Hash passt nicht → live scannen) | Vanessa | nach C3a |
+| E-5 | Speicher: Kontrast-Neuberechnung (Anker-Wissen) in Stapeln statt alles im RAM | Vanessa | nach B2 |
+| E-6 | Infrastruktur: Redis für Queue/Cache/Session, Serverausbau | Entscheid Dominique + Christian (nicht unser Code) | offen |
+
+Verbindung zu Teil B: B3 hängt jede Abfrage an den Sichtfilter (Hülle- und Abo-Unterabfragen). Ohne E-3 und ohne die Messung aus E-1 ist der Leistungsvergleich vor/nach B3 (§4.2) nicht belastbar.
+
 ## §5 · Teil C · Große PHP-Dateien
 
 ### §5.0 Regel
@@ -384,6 +408,9 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | 0 | lokal fertig: `fix/spec84-schreib-leck` (Riegel §4.0 + dritte Master-Definition) + `fix/spec84-brief-vorlagen-team` (L1-B, Variante B, Migration `2026_11_09_100000`) |
 | O1 | lokal fertig: `fix/spec84-angebote-unterteam` (`e63fe1cf`) |
 | 2 (B0a) | **gemergt #453** (Vanessa) |
+| E3 Support-Zugang (§4.4) | offen, nach A-2 („test“) |
+| E5 Skizzen-Code löschen | offen („test“) |
+| Teil E (§5a) | E-1 Kurator; E-3 „test“ vor B3; E-2/E-4/E-5 Vanessa |
 | alle übrigen | offen |
 
 | # | PR | Teil | Abhängig von | Größe |
@@ -424,7 +451,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 |---|---|---|
 | E1 | demo-Master vor B1? | **Entschieden 16.10.: „Demo ist egal.“** B1 hat keine demo-Vorbedingung; demo läuft danach ohne Master-Kurator, bis dort einer gesetzt ist. |
 | E2 | Fehlender Team-Kontext in HTTP/MCP: Fehler oder leer? | **Entschieden 16.10.: Fehler** (eigener Typ + Log); „leer“ nur hinter dem Notschalter. |
-| E3 | Plattform-Admin weiter **ohne** Ausnahme (Spec 82 §13 G)? | **offen**: Dominique fragt nach Use-Cases. Bis dahin ohne Ausnahme (heutiger Stand). |
+| E3 | Plattform-Admin-Zugriff auf Mandanten-Inhalte? | **Entschieden 16.10.: kein pauschaler Zugriff, aber Support-Zugang auf Freigabe** (§4.4, PR „E3“ nach A-2). Ohne Freigabe gilt die Inhaltssperre (Spec 82 §13 G). |
 | E4 | Phase B0 vor dem ersten echten Abo auf io verbindlich? | **Entschieden: ja.** B0a gemergt (#453). |
 | E5 | Toter Skizzen-Code in Planung/Index (7 Methoden): löschen oder zurück in die UI? | **Entschieden: löschen** (7 Methoden + `$skizzen*`-Berechnung in `render()`, `PlanungLeitstelleTest` anpassen), eigener kleiner PR (Session „test“). |
 | E6 | C3a früh als eigener PR? | **Entschieden: ja** (baut Vanessa). C3b nicht ohne Not. |
@@ -467,6 +494,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-16 · v0.5 (Nachtrag): E3 entschieden → §4.4 Support-Zugang auf Freigabe; neuer Teil E Skalierung/Leistung (§5a).
 - 2026-10-16 · v0.5: Entscheide E1 (demo egal), E2 (Fehler), E4, E5 (löschen), E6, E7, E8 (Lücke) eingetragen; E3 offen; L1-B Variante B umgesetzt; Stand je PR in §7.
 
 - 2026-10-16 · v0.4: B0a fertig (Vanessa, `test/spec84-zwei-mandanten`, 7d9547bf + 670495e9); dritte Master-Definition `BriefTemplateService` gefunden und in PR 0 behoben (`34bc5243`); E8 Angebote im Unter-Team.
