@@ -54,9 +54,11 @@
     $belegt = ['inspire_gemessen', 'naehrwert_belegt', 'dossier_geprueft', 'regel'];
 
     // [Titel, offen?, Ton]
+    // Composer-Auswahl (art=auswahl): „Fehlt noch" ist eine Chance, kein Fehler — eingeklappt, die Urteilszeile nennt es schon.
+    $auswahl = ($daten['art'] ?? null) === 'auswahl';
     $gruppen = [
         'konflikt' => ['Konflikt', true, 'crit'],
-        'bedarf_offen' => ['Es fehlt', true, 'warn'],
+        'bedarf_offen' => $auswahl ? ['Fehlt noch', false, null] : ['Es fehlt', true, 'warn'],
         'harmoniert' => ['Harmonie (gemessen)', false, null],
         'spannung' => ['Spannung', false, null],
         'kombination' => ['Klassiker', false, null],
@@ -67,7 +69,19 @@
     $hatUngeprueft = collect($a)->flatten(1)->contains(fn ($x) => is_array($x) && in_array($x['grundlage'] ?? null, ['dossier_entwurf', 'ki_einschaetzung'], true));
 @endphp
 <div class="flex flex-col gap-2.5 text-[length:var(--fa-text-md)]" data-kombination data-art="{{ $daten['art'] ?? '' }}">
+    @if(! empty($daten['urteil']['text']))
+        {{-- Ein Satz Urteil vor den Zahlen (Dominique 16.10.: „würdest du als User verstehen, ob das eine gute Kombi ist?") --}}
+        <p class="font-medium {{ ($daten['urteil']['ton'] ?? null) === 'warn' ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ink)]' }}" data-urteil>{{ $daten['urteil']['text'] }}</p>
+    @endif
     <p class="text-[var(--fa-ink-2)]" data-zusammenfassung>{{ $daten['zusammenfassung'] ?? '' }}</p>
+    @if(! empty($daten['technik']))
+        <div data-technik>
+            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] mb-1">Zubereitung</p>
+            <ul class="flex flex-col gap-0.5 text-[var(--fa-ink-2)]">
+                @foreach($daten['technik'] as $t)<li>→ {{ $t }}</li>@endforeach
+            </ul>
+        </div>
+    @endif
 
     @if(! empty($daten['profil']['anker']))
         <div data-profil>
@@ -121,7 +135,7 @@
 
     @if(! empty($daten['vorschlaege']))
         <div data-vorschlaege>
-            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] mb-1">Was dem Teller fehlt</p>
+            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] mb-1">{{ ($daten['modus'] ?? null) === 'basisrezept' ? 'Was der Zubereitung fehlt' : 'Was dem Teller fehlt' }}</p>
             <ul class="flex flex-col gap-2">
                 @foreach($daten['vorschlaege'] as $v)
                     <li>
@@ -132,8 +146,11 @@
                         @foreach($v['basisrezepte'] as $b)
                             <span class="block text-[var(--fa-ink-2)]">+ {{ $b['name'] }}<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]"> · harmoniert mit {{ $b['mit'] }}</span></span>
                         @endforeach
-                        @if($v['formwechsel'] === [] && $v['basisrezepte'] === [])
-                            <span class="block text-[var(--fa-ink-3)]">{{ ($v['deckung'] ?? 'partner') === 'zubereitung' ? 'über die Zubereitung lösen' : 'kein passendes Basisrezept im Bestand' }}</span>
+                        @foreach($v['zutaten'] ?? [] as $z)
+                            <span class="block text-[var(--fa-ink-2)]" data-vorschlag-zutat>+ {{ $z }}</span>
+                        @endforeach
+                        @if($v['formwechsel'] === [] && $v['basisrezepte'] === [] && ($v['zutaten'] ?? []) === [])
+                            <span class="block text-[var(--fa-ink-3)]">{{ ($v['deckung'] ?? 'partner') === 'zubereitung' ? 'über die Zubereitung lösen' : (($daten['modus'] ?? null) === 'basisrezept' ? 'keine passende Zutat mit ★★★ zur Auswahl' : 'kein passendes Basisrezept im Bestand') }}</span>
                         @endif
                     </li>
                 @endforeach

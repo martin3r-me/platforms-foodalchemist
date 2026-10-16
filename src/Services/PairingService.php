@@ -1575,7 +1575,15 @@ class PairingService
         // ── Spec 60: Kombinationslogik über die Anker-Auswahl — dieselbe Aussage wie im Panel.
         // Daraus: Kontrast-Ring (Lieferanten für offene Bedarfe), Konflikt-Linien und — nur im
         // Composer — der Hinweis „kein gemessener Bezug" an Ankern ohne jede Verbindung (neutral).
-        [$kontrast, $konfliktKanten, $verbunden] = $this->kontrastUndKonflikt($innerIds);
+        [$kontrast, $konfliktKanten, $verbunden] = $this->kontrastUndKonflikt($innerIds, ohneSalz: $composer);
+        // Kein Partner mit dem Grundnamen einer gewählten Zutat („Augenbohne" neben „Augenbohne, gekocht"):
+        // Vergleich über die Spalte grundname (AnkerVarianten), nie über Teilstrings (Bohne ≠ Bohnenkraut).
+        $innerGrund = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $innerIds)->get(['grundname', 'slug'])
+            ->map(fn ($r) => mb_strtolower(trim((string) ($r->grundname ?: $r->slug))))->flip()->all();
+        $kandidaten = array_values(array_filter($kandidaten, fn ($c) => ! isset($innerGrund[$c['grundname']])));
+        $kontrastGrund = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', array_column($kontrast, 'id'))->get(['id', 'grundname', 'slug'])
+            ->mapWithKeys(fn ($r) => [(int) $r->id => mb_strtolower(trim((string) ($r->grundname ?: $r->slug)))])->all();
+        $kontrast = array_values(array_filter($kontrast, fn ($c) => ! isset($innerGrund[$kontrastGrund[(int) $c['id']] ?? ''])));
         // Ein ★★★-Partner, der zugleich einen offenen Bedarf deckt, bleibt im ★★★-Ring und trägt die
         // Kontrast-Achse als Markierung (Dominique 15.10.: vorher wanderten alle 6 ★★★-Partner des
         // Kürbis in den Kontrast-Ring, der ★★★-Ring war leer). Der Kontrast-Ring zeigt den Rest.
@@ -1770,7 +1778,7 @@ class PairingService
             foreach ($kand as $c) {
                 $badge[(int) $c['id']] = $c['typ'];
             }
-            foreach ($this->kontrastUndKonflikt($badgeBasis)[0] as $c) {
+            foreach ($this->kontrastUndKonflikt($badgeBasis, ohneSalz: true)[0] as $c) {
                 if (($badge[(int) $c['id']] ?? null) === 'stern3') {
                     $auchKontrast[(int) $c['id']] = $c['achse_label'];
                 } else {
@@ -1847,13 +1855,18 @@ class PairingService
      * @param  array<int>  $innerIds
      * @return array{0: list<array{id: int, slug: string, display_de: ?string, achse_label: string, fuer: list<int>}>, 1: list<array>, 2: array<int, true>}
      */
-    private function kontrastUndKonflikt(array $innerIds): array
+    private function kontrastUndKonflikt(array $innerIds, bool $ohneSalz = false): array
     {
         if ($innerIds === []) {
             return [[], [], []];
         }
         $logik = app(Pairing\Kombinationslogik::class);
         $analyse = $logik->analysiereBestandteile($logik->bestandteileAusAnkern($innerIds));
+        if ($ohneSalz) {
+            // Composer (Dominique 16.10.): Salz ist keine Pairing-Frage → kein Salz-Lieferant im Ring
+            $analyse['offene_bedarfe'] = array_values(array_filter($analyse['offene_bedarfe'],
+                fn ($b) => $b['achse'] !== \Platform\FoodAlchemist\Enums\Achse::Salz->value));
+        }
         $id = fn (string $schluessel) => (int) substr($schluessel, 1);           // 'a123' → 123
 
         // Ein Lieferant muss zur Auswahl passen: ★★★ zu mindestens einem gewählten Anker ODER Klassiker
