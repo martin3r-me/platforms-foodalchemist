@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 /** Erzeugt einen textlichen Gericht-Bauplan; noch kein Recipe-Datensatz. */
 class GenerateDishProposalJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     public int $timeout = 120;
     public int $tries = 1;

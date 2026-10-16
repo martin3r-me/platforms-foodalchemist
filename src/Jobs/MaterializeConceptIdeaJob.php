@@ -23,7 +23,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
  */
 class MaterializeConceptIdeaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     /** Rezept-Generierung inkl. Grounding — unter dem demo-Worker-Timeout (600 s). */
     public int $timeout = 300;

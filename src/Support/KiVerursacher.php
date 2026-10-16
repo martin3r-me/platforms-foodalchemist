@@ -25,19 +25,18 @@ final class KiVerursacher
     /** Job-Kontext „Plattform“: Lauf des globalen Stamms ohne Team (schlägt einen alten Auth-Login des Workers). */
     public const KONTEXT_PLATTFORM = 0;
 
-    /** Team, für das gerade ein Queue-Job ohne angemeldeten Nutzer arbeitet ({@see imKontext}). */
-    private static ?int $kontextTeamId = null;
-
-    /** Führt $fn aus und rechnet darin entstehende KI-Aufrufe dem Team zu (Jobs ohne Auth::login). Setzt den Kontext danach immer zurück. */
+    /**
+     * Führt $fn aus und rechnet darin entstehende KI-Aufrufe dem Team zu. Seit Spec 84 A-3 nur noch eine dünne Hülle um
+     * {@see FaTeam::imTeam} — EIN Kontext für Kill-Switch, Budget, Call-Log und Abrechnung statt eines eigenen Statics hier.
+     * `KONTEXT_PLATTFORM` (0) = ausdrücklich ohne Team (Plattform-Lauf), `null` = Kontext unverändert lassen.
+     */
     public static function imKontext(?int $teamId, callable $fn): mixed
     {
-        $vorher = self::$kontextTeamId;
-        self::$kontextTeamId = $teamId;
-        try {
+        if ($teamId === null) {
             return $fn();
-        } finally {
-            self::$kontextTeamId = $vorher;
         }
+
+        return FaTeam::imTeam($teamId === self::KONTEXT_PLATTFORM ? null : $teamId, $fn);
     }
 
     /**
@@ -51,10 +50,9 @@ final class KiVerursacher
         }
 
         $ausdruecklich = isset($options['verursacher_team_id']) && is_numeric($options['verursacher_team_id']) ? (int) $options['verursacher_team_id'] : null;
-        // Reihenfolge: ausdrückliche Option > Team des laufenden Jobs > angemeldeter Nutzer. Der Job-Kontext schlägt den Nutzer, weil ein Queue-Worker
-        // einen früheren Auth::login eines anderen Jobs behalten kann.
-        $ausdruecklich ??= self::$kontextTeamId;
-        if ($ausdruecklich === self::KONTEXT_PLATTFORM) {
+        // Reihenfolge: ausdrückliche Option > FaTeam (Job-/MCP-Team schlägt einen alten Auth::login des Workers, Spec 84 A-3).
+        // „Ausdrücklich ohne Team“ (Plattform-Lauf, imKontext(KONTEXT_PLATTFORM)) bleibt Plattform, auch mit altem Login.
+        if ($ausdruecklich === self::KONTEXT_PLATTFORM || ($ausdruecklich === null && FaTeam::ausdruecklich() && FaTeam::aktuell() === null)) {
             return ['abrechnung_team_id' => null, 'verursacher' => self::PLATTFORM];
         }
 
