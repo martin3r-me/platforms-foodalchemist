@@ -146,7 +146,7 @@
     </x-fa::section>
 
     {{-- ── Nutzung ── --}}
-    <x-fa::section title="Nutzung und Kosten" icon="heroicon-o-chart-bar" description="Alle KI-Aufrufe dieses Teams, je Arbeitsschritt und Modell.">
+    <x-fa::section title="Nutzung und Kosten" icon="heroicon-o-chart-bar" description="{{ $stammSicht ? 'Alle KI-Aufrufe dieses Teams und die der globalen Stamm-Arbeiten (ohne Team), je Arbeitsschritt und Modell.' : 'Alle KI-Aufrufe dieses Teams, je Arbeitsschritt und Modell.' }}">
         <x-slot:actions>
             <x-fa::choice name="zeitraum" :options="$zeitraumOptionen" />
         </x-slot:actions>
@@ -175,12 +175,13 @@
                     <tbody>
                         @foreach($statistik as $z)
                             @php
-                                $kostenKey = $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? '');
+                                $kostenKey = $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? '') . '|' . (int) $z->ist_global;
                             @endphp
-                            <tr wire:key="st-{{ $z->feature }}-{{ $z->tier }}-{{ $z->model ?? 'ohne-modell' }}">
+                            <tr wire:key="st-{{ $z->feature }}-{{ $z->tier }}-{{ $z->model ?? 'ohne-modell' }}-{{ (int) $z->ist_global }}" data-ki-zeile data-global="{{ (int) $z->ist_global }}">
                                 <td>
                                     <span class="block text-[var(--fa-ink)]">{{ WS::schrittLabel($z->feature) }}</span>
                                     <span class="block {{ $schluessel }}">{{ $z->feature }}</span>
+                                    @if($z->ist_global)<x-fa::badge tone="neutral" title="Globaler Stamm-Job ohne Team (z. B. Non-Food-Erkennung, Produktpass lesen). Nur das Master-Team sieht diese Zeilen." data-ki-global>Global (Stamm)</x-fa::badge>@endif
                                 </td>
                                 <td>@if($z->tier)<x-fa::badge :tone="$stufenTon[$z->tier] ?? 'neutral'">{{ $z->tier }}</x-fa::badge>@else<span class="text-[var(--fa-ink-3)]">–</span>@endif</td>
                                 <td class="font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] whitespace-nowrap">{{ $z->model ?? '–' }}</td>
@@ -215,6 +216,7 @@
             </div>
             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
                 Mengen in Texteinheiten der KI. Bei älteren Aufrufen ohne gespeicherten Zwischenspeicher-Anteil wird vorsichtig der volle Eingabepreis angesetzt.
+                Fehlgeschlagene Aufrufe stehen unter „Fehler“ (ohne Modell, daher ohne Preis). <strong>Embeddings</strong> (Suche, Ähnlichkeit) laufen über den Plattform-Kern und sind hier <strong>nicht enthalten</strong>.
             </p>
         @endif
     </x-fa::section>

@@ -9,6 +9,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\AiCostCalculator;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
  * M7-08 / 06_KI §5: KI-Settings — Provider-Status, Tier-Zuordnung
@@ -157,18 +158,23 @@ class Ki extends Component
         $cachedSelect = Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')
             ? 'SUM(COALESCE(tokens_cached,0))'
             : '0';
+        // Globale Stamm-Jobs (Non-Food-Erkennung, Produktpass lesen …) laufen ohne Team und stehen mit team_id NULL im Log. Wer den globalen Stamm
+        // pflegt (das Master-Team, dieselbe Regel wie isOwnedBy bei team_id NULL), sieht sie als eigene Zeilen „Global (Stamm)“; alle anderen nie.
+        $stammSicht = $team !== null && MasterTeam::istMaster($team);
+        $global = 'CASE WHEN team_id IS NULL THEN 1 ELSE 0 END';
         $statistik = $team !== null
-            ? DB::table('foodalchemist_ai_call_log')->where('team_id', $team->id)
+            ? DB::table('foodalchemist_ai_call_log')
+                ->where(fn ($w) => $w->where('team_id', $team->id)->when($stammSicht, fn ($w2) => $w2->orWhereNull('team_id')))
                 ->when($tage !== null, fn ($q) => $q->where('created_at', '>=', now()->subDays($tage)))
-                ->selectRaw('feature, tier, model, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
+                ->selectRaw('feature, tier, model, '.$global.' AS ist_global, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
                     . $cachedSelect . ' AS t_cached, SUM(COALESCE(tokens_out,0)) AS t_out, '
                     . 'SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors, '
                     . 'SUM(CASE WHEN accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS accepted')
-                ->groupBy('feature', 'tier', 'model')->orderByDesc('calls')->get()
+                ->groupByRaw('feature, tier, model, '.$global)->orderByDesc('calls')->get()
             : collect();
 
         $rechner = app(AiCostCalculator::class);
-        $key = fn ($z) => $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? '');
+        $key = fn ($z) => $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? '') . '|' . (int) $z->ist_global;
         $kostenUsd = $statistik->mapWithKeys(fn ($z) => [$key($z) => $rechner->costUsd($z)]);
         $kosten = $kostenUsd->map(fn ($usd) => $rechner->displayCost($usd));
         $bekannteKosten = $kosten->filter(fn ($betrag) => $betrag !== null);
@@ -180,6 +186,7 @@ class Ki extends Component
 
         return view('foodalchemist::livewire.settings.ki', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            'stammSicht' => $stammSicht,
             'kosten' => $kosten,
             'kostenGesamt' => $bekannteKosten->sum(),
             'kostenUnbekannt' => $kosten->count() - $bekannteKosten->count(),
