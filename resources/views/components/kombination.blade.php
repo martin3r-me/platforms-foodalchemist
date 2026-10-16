@@ -4,7 +4,7 @@
 
      Kompakt (Dominique 2026-10-07: „sehr viel Text", Spannung immer offen):
      - offen nur, was zu tun ist (Konflikt, Es fehlt); Harmonie, Spannung, Klassiker, ohne Zuordnung
-       eingeklappt mit Anzahl, Grund-Aroma (★★)/„neutral" unter „Weitere Paare" — ★★ ist keine Empfehlung.
+       eingeklappt mit Anzahl, Grund-Aroma (2 Sterne)/„neutral" unter „Weitere Paare" — 2 Sterne sind keine Empfehlung.
      - je Aussage EINE Zeile mit Kurznamen (GP ohne Zusatz nach dem Doppelpunkt, Rezept ohne Klasse
        davor), Achse als Chip; Grundlage als Punkt (● belegt/gemessen, ○ ungeprüft), voller Satz + Grundlage
        im Tooltip. Die Aussage selbst (Text, Grundlage) bleibt unverändert — MCP/Generator lesen sie weiter. --}}
@@ -150,7 +150,7 @@
                             <span class="block text-[var(--fa-ink-2)]" data-vorschlag-zutat>+ {{ $z }}</span>
                         @endforeach
                         @if($v['formwechsel'] === [] && $v['basisrezepte'] === [] && ($v['zutaten'] ?? []) === [])
-                            <span class="block text-[var(--fa-ink-3)]">{{ ($v['deckung'] ?? 'partner') === 'zubereitung' ? 'über die Zubereitung lösen' : (($daten['modus'] ?? null) === 'basisrezept' ? 'keine passende Zutat mit ★★★ zur Auswahl' : 'kein passendes Basisrezept im Bestand') }}</span>
+                            <span class="block text-[var(--fa-ink-3)]">{{ ($v['deckung'] ?? 'partner') === 'zubereitung' ? 'über die Zubereitung lösen' : (($daten['modus'] ?? null) === 'basisrezept' ? 'keine passende Zutat, die gemessen mit der Auswahl harmoniert' : 'kein passendes Basisrezept im Bestand') }}</span>
                         @endif
                     </li>
                 @endforeach
