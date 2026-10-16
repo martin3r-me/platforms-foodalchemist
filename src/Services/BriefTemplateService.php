@@ -12,8 +12,10 @@ use RuntimeException;
  * Schnellstart-Vorlagen (Brief-Templates): kunden-anlegbare Startpunkte für die Planung-Erzeugung.
  * Eine Vorlage = benannter Schnappschuss (Brief + Kreativ-Modus + kompletter Leitplanken-Stand) je Scope.
  *
- * Sichtbarkeit (D1): kuratierte Globals (team_id NULL) ∪ eigene Team-Kette ({@see TeamScope::applyVisible}).
- * Editierbar (create/rename/toggle/delete): NUR team-eigene ({@see TeamScope::owns}) — Globals sind read-only.
+ * Spec 84 L1 (Dominique 16.10.: „Die Vorlagen gehören dem Team.“): jede Vorlage gehört genau einem Team.
+ * Sichtbar: nur die eigene Team-Kette (Unter-Teams sehen die ihres Oberteams), NIE team_id NULL.
+ * Editierbar (create/rename/toggle/delete): NUR team-eigene ({@see TeamScope::owns}). Keinen Master-Sonderweg.
+ * Die früheren 6 Globals sind per Migration 2026_11_09_000001 je Hauptteam kopiert und danach gelöscht.
  * Erstellt wird per Snapshot AUS dem Planung-Editor (dort leben die Regler), verwaltet in den Settings.
  */
 class BriefTemplateService
@@ -21,17 +23,16 @@ class BriefTemplateService
     private const SCOPES = ['rezept', 'gericht', 'concept'];
 
     /**
-     * Sichtbare, aktive Vorlagen für einen Creation-Tab — Globals zuerst, dann eigene, nach sort_order/Label.
+     * Sichtbare, aktive Vorlagen für einen Creation-Tab (eigene + die des Oberteams), nach sort_order/Label.
+     * `is_global` heißt seit Spec 84 L1 „geerbt, nur lesbar“ (Vorlage des Oberteams) — Schlüssel bleibt für UI/MCP stabil.
      * Rückgabe keyed by id (String) → das UI-fertige Bündel für Chips + Anwenden.
      *
      * @return array<string,array{id:int,label:string,brief:string,titel:?string,regler:array,creative_mode:?string,is_global:bool}>
      */
     public function fuer(Team $team, string $scope): array
     {
-        $rows = TeamScope::applyVisible(
-            FoodAlchemistBriefTemplate::query()->where('scope', $scope)->where('active', true),
-            'team_id', $team
-        )->orderByRaw('team_id IS NULL DESC')->orderBy('sort_order')->orderBy('label')->get();
+        $rows = $this->sichtbar(FoodAlchemistBriefTemplate::query()->where('scope', $scope)->where('active', true), $team)
+            ->orderBy('sort_order')->orderBy('label')->get();
 
         $out = [];
         foreach ($rows as $r) {
@@ -43,39 +44,36 @@ class BriefTemplateService
                 'titel' => $r->titel !== null ? (string) $r->titel : null,
                 'regler' => is_array($payload['regler'] ?? null) ? $payload['regler'] : [],
                 'creative_mode' => isset($payload['creative_mode']) ? (string) $payload['creative_mode'] : null,
-                'is_global' => $r->team_id === null,
+                'is_global' => ! TeamScope::owns($r->team_id, $team),
             ];
         }
 
         return $out;
     }
 
-    /** Eine sichtbare, aktive Vorlage (Global ∪ eigene) für den Scope laden — null bei nicht sichtbar/falscher Scope. */
+    /** Eine sichtbare, aktive Vorlage (eigene Team-Kette) für den Scope laden — null bei nicht sichtbar/falscher Scope. */
     public function lade(Team $team, int $id, string $scope): ?FoodAlchemistBriefTemplate
     {
-        return TeamScope::applyVisible(
-            FoodAlchemistBriefTemplate::query()->where('scope', $scope)->where('active', true),
-            'team_id', $team
-        )->find($id);
+        return $this->sichtbar(FoodAlchemistBriefTemplate::query()->where('scope', $scope)->where('active', true), $team)->find($id);
     }
 
     /**
      * Verwaltungs-Liste (Settings/MCP): alle SICHTBAREN Vorlagen inkl. INAKTIVE (zum Reaktivieren),
-     * optional scope-gefiltert — Globals zuerst. Anders als {@see fuer} (nur aktive, fürs Chip-Anwenden).
+     * optional scope-gefiltert. Anders als {@see fuer} (nur aktive, fürs Chip-Anwenden).
      *
      * @return \Illuminate\Support\Collection<int,FoodAlchemistBriefTemplate>
      */
     public function verwaltung(Team $team, ?string $scope = null): \Illuminate\Support\Collection
     {
-        $q = TeamScope::applyVisible(FoodAlchemistBriefTemplate::query(), 'team_id', $team);
+        $q = $this->sichtbar(FoodAlchemistBriefTemplate::query(), $team);
         if ($scope !== null && $scope !== '') {
             $q->where('scope', $scope);
         }
 
-        return $q->orderByRaw('team_id IS NULL DESC')->orderBy('scope')->orderBy('sort_order')->orderBy('label')->get();
+        return $q->orderBy('scope')->orderBy('sort_order')->orderBy('label')->get();
     }
 
-    /** Aktiv-Flag einer team-EIGENEN Vorlage explizit setzen (MCP-Pfad; Globals read-only → wirft). */
+    /** Aktiv-Flag einer team-EIGENEN Vorlage explizit setzen (MCP-Pfad; fremde/geerbte → wirft). */
     public function setActive(Team $team, int $id, bool $active): FoodAlchemistBriefTemplate
     {
         $tpl = $this->eigene($team, $id);
@@ -148,26 +146,18 @@ class BriefTemplateService
         $this->eigene($team, $id)->delete();
     }
 
-    /**
-     * Master-Team = Root der Hierarchie (parent_team_id NULL). Kuratiert die globalen Vorlagen
-     * (team_id NULL) für ALLE — spiegelt {@see \Platform\FoodAlchemist\Livewire\Settings\Wissenskategorien}.
-     */
-    public function istMaster(Team $team): bool
+    /** Spec 84 L1: sichtbar = eigene Team-Kette, ohne team_id NULL (kein applyVisible — das zeigte die Globals). */
+    private function sichtbar(\Illuminate\Database\Eloquent\Builder $q, Team $team): \Illuminate\Database\Eloquent\Builder
     {
-        return $team->parent_team_id === null;
+        return $q->whereIn('team_id', TeamScope::ancestryIds($team));
     }
 
-    /**
-     * Editier-Guard: die Vorlage per id, wenn das Team sie bearbeiten darf — EIGENE (owns) ODER
-     * GLOBALE, wenn das Team Master ist. Sonst wirft es (nicht vorhanden / kuratiert / fremd).
-     */
+    /** Editier-Guard: die Vorlage per id nur, wenn sie dem Team gehört. Sonst wirft es (nicht vorhanden / fremd / geerbt). */
     private function eigene(Team $team, int $id): FoodAlchemistBriefTemplate
     {
         $tpl = FoodAlchemistBriefTemplate::find($id);
-        $darf = $tpl !== null
-            && (TeamScope::owns($tpl->team_id, $team) || ($tpl->team_id === null && $this->istMaster($team)));
-        if (! $darf) {
-            throw new RuntimeException('Nur eigene Vorlagen bearbeitbar; globale Vorlagen kuratiert nur das Master-Team.');
+        if ($tpl === null || ! TeamScope::owns($tpl->team_id, $team)) {
+            throw new RuntimeException('Nur eigene Vorlagen sind bearbeitbar.');
         }
 
         return $tpl;

@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate;
 use Platform\FoodAlchemist\Services\BriefTemplateService;
 
 /**
- * Schnellstart-Vorlagen (Brief-Templates) des Teams auflisten — kuratierte Globals ∪ team-eigene,
+ * Schnellstart-Vorlagen (Brief-Templates) des Teams auflisten — team-eigene ∪ die des Oberteams (Spec 84 L1: keine Globals),
  * inkl. inaktive. Eine Vorlage = benannter Startpunkt (Brief + Kreativ-Modus + Leitplanken-Snapshot)
  * je Scope. Anlegen/Ändern/Löschen via brief_templates.POST/PUT/DELETE.
  */
@@ -23,8 +23,8 @@ class BriefTemplatesListTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Listet die Schnellstart-Vorlagen (Brief-Templates) des Teams — kuratierte Globals (read-only) ∪ '
-            . 'team-eigene (editierbar), inkl. inaktive. Eine Vorlage ist ein benannter Startpunkt für die Planung-Erzeugung: '
+        return 'Listet die Schnellstart-Vorlagen (Brief-Templates) des Teams — team-eigene (editierbar) ∪ die des Oberteams '
+            . '(read-only, is_global=true), inkl. inaktive. Jede Vorlage gehört genau einem Team. Eine Vorlage ist ein benannter Startpunkt für die Planung-Erzeugung: '
             . 'Brief + Kreativ-Modus + Leitplanken-Snapshot, je Scope (rezept|gericht|concept). Optional scope-gefiltert. '
             . 'Anlegen via foodalchemist.brief_templates.POST, ändern via .PUT, löschen via .DELETE.';
     }
@@ -51,13 +51,15 @@ class BriefTemplatesListTool extends FoodAlchemistTool implements ToolContract, 
 
         return ToolResult::success([
             'total' => $rows->count(),
-            'brief_templates' => $rows->map(fn (FoodAlchemistBriefTemplate $t) => self::arr($t))->all(),
+            'brief_templates' => $rows->map(fn (FoodAlchemistBriefTemplate $t) => self::arr($t, $team))->all(),
         ]);
     }
 
     /** Vorlage → MCP-Array (auch von POST/PUT genutzt). */
-    public static function arr(FoodAlchemistBriefTemplate $t): array
+    /** Spec 84 L1: `editable` = gehört dem betrachtenden Team; `is_global` = geerbt (Oberteam), nur lesbar. */
+    public static function arr(FoodAlchemistBriefTemplate $t, ?\Platform\Core\Models\Team $team = null): array
     {
+        $editable = $team !== null ? \Platform\FoodAlchemist\Support\TeamScope::owns($t->team_id, $team) : $t->team_id !== null;
         $payload = is_array($t->payload) ? $t->payload : [];
 
         return [
@@ -69,8 +71,8 @@ class BriefTemplatesListTool extends FoodAlchemistTool implements ToolContract, 
             'creative_mode' => $payload['creative_mode'] ?? null,
             'regler' => is_array($payload['regler'] ?? null) ? $payload['regler'] : [],
             'active' => (bool) $t->active,
-            'is_global' => $t->team_id === null,
-            'editable' => $t->team_id !== null,
+            'is_global' => ! $editable,
+            'editable' => $editable,
         ];
     }
 

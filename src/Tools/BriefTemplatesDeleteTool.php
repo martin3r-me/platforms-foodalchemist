@@ -11,7 +11,7 @@ use RuntimeException;
 
 /**
  * Löscht eine team-eigene Schnellstart-Vorlage (Brief-Template) endgültig (Soft-Delete). Kuratierte
- * Globals sind read-only → Owns-Guard wirft. Zum bloßen Ausblenden ohne Löschen: PUT active=false.
+ * Fremde/geerbte Vorlagen sind read-only → Owns-Guard wirft. Zum bloßen Ausblenden ohne Löschen: PUT active=false.
  */
 class BriefTemplatesDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -22,7 +22,7 @@ class BriefTemplatesDeleteTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Löscht eine team-eigene Schnellstart-Vorlage (Brief-Template). Kuratierte Globals sind read-only. '
+        return 'Löscht eine team-eigene Schnellstart-Vorlage (Brief-Template). Vorlagen des Oberteams sind read-only. '
             . 'Zum vorübergehenden Ausblenden ohne Löschen stattdessen foodalchemist.brief_templates.PUT mit active=false.';
     }
 

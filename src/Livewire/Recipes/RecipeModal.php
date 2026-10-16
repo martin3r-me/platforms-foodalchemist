@@ -420,7 +420,7 @@ class RecipeModal extends Component
 
     public function accept_beschreibung(): void
     {
-        $r = $this->rezept();
+        $r = $this->eigenesRezept();
         $vorschlag = $this->kiVorschlag['description'] ?? null;
         if ($r === null || $vorschlag === null) {
             return;
@@ -443,7 +443,7 @@ class RecipeModal extends Component
 
     public function clear_beschreibung(): void
     {
-        $this->rezept()?->update(['description' => null, 'description_source' => null, 'description_ai_confidence' => null]);
+        $this->eigenesRezept()?->update(['description' => null, 'description_source' => null, 'description_ai_confidence' => null]);
         $this->form['description'] = '';
         unset($this->kiVorschlag['description']);
     }
@@ -451,7 +451,7 @@ class RecipeModal extends Component
     public function manual_beschreibung(): void
     {
         if (trim($this->form['description']) !== '') {
-            $this->rezept()?->update(['description' => $this->form['description'], 'description_source' => 'manual', 'description_ai_confidence' => null]);
+            $this->eigenesRezept()?->update(['description' => $this->form['description'], 'description_source' => 'manual', 'description_ai_confidence' => null]);
         }
     }
 
@@ -466,13 +466,13 @@ class RecipeModal extends Component
     /** Sperrt die Zubereitung gegen KI-Überschreiben (GL-07 Override-First). */
     public function manual_zubereitung(): void
     {
-        $this->rezept()?->update(['preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
+        $this->eigenesRezept()?->update(['preparation_source' => 'manual', 'preparation_ai_confidence' => null]);
     }
 
     /** Hebt die Lineage-Markierung auf (ki/manual → offen). Der Text bleibt. */
     public function clear_zubereitung(): void
     {
-        $this->rezept()?->update(['preparation_source' => null, 'preparation_ai_confidence' => null]);
+        $this->eigenesRezept()?->update(['preparation_source' => null, 'preparation_ai_confidence' => null]);
     }
 
     // ── M4-11: GL-07-Lebenszyklus kategorie ─────────────────────────────
@@ -504,7 +504,7 @@ class RecipeModal extends Component
 
     public function accept_kategorie(): void
     {
-        $r = $this->rezept();
+        $r = $this->eigenesRezept();
         $vorschlag = $this->kiVorschlag['category'] ?? null;
         if ($r === null || $vorschlag === null) {
             return;
@@ -533,7 +533,7 @@ class RecipeModal extends Component
 
     public function clear_kategorie(): void
     {
-        $this->rezept()?->update(['category_id' => null, 'category_source' => null, 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
+        $this->eigenesRezept()?->update(['category_id' => null, 'category_source' => null, 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
         $this->form['category_id'] = null;
         unset($this->kiVorschlag['category']);
     }
@@ -541,8 +541,28 @@ class RecipeModal extends Component
     public function manual_kategorie(): void
     {
         if ($this->form['category_id'] !== null) {
-            $this->rezept()?->update(['category_id' => $this->form['category_id'], 'category_source' => 'manual', 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
+            $this->eigenesRezept()?->update(['category_id' => $this->form['category_id'], 'category_source' => 'manual', 'category_ai_confidence' => null, 'category_ai_reasoning' => null]);
         }
+    }
+
+    /**
+     * Spec 84 §4.0 · Für Schreibwege: das Rezept nur, wenn es dem Team gehört. Sichtbar ist nicht eigen —
+     * Master-, Seed- und Abo-Zeilen zeigt das Modal lesend, der Server muss es trotzdem abweisen.
+     */
+    private function eigenesRezept(): ?FoodAlchemistRecipe
+    {
+        $r = $this->rezept();
+        $team = Auth::user()?->currentTeamRelation;
+        if ($r === null || $team === null) {
+            return null;
+        }
+        if (! $r->isOwnedBy($team)) {
+            $this->fehler = (new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('das Rezept'))->getMessage();
+
+            return null;
+        }
+
+        return $r;
     }
 
     private function rezept(): ?FoodAlchemistRecipe
@@ -632,6 +652,9 @@ class RecipeModal extends Component
             return;
         }
         $werte = $this->ueberarbeitung['werte'];
+        if ($this->eigenesRezept() === null) {   // Spec 84 §4.0
+            return;
+        }
         $r = app(RecipeService::class)->detailAnySicht($team, $this->recipeId);
 
         try {
@@ -1064,7 +1087,7 @@ class RecipeModal extends Component
     public function regenerationSpeichern(SalesRecipeService $vk): void
     {
         $team = Auth::user()?->currentTeamRelation;
-        $r = $this->rezept();
+        $r = $this->eigenesRezept();   // Spec 84 §4.0
         if ($team === null || $r === null) {
             return;
         }
@@ -1090,11 +1113,11 @@ class RecipeModal extends Component
             ], $this->regenForm['id'] ?? null);
         }
 
-        DB::table('foodalchemist_recipes')->where('id', $r->id)->update([
+        // Spec 84 §4.0: über das Model statt DB::table, damit Observer laufen; touch() hebt updated_at wie bisher immer an
+        $r->fill([
             'dichteklasse' => $this->dichteklasse !== '' ? $this->dichteklasse : null,
             'dichteklasse_source' => $this->dichteklasse !== '' ? 'manual' : null,
-            'updated_at' => now(),
-        ]);
+        ])->touch();
 
         foreach ($this->behaelterForm as $zweck => $form) {
             if (($form['container_vocab_id'] ?? '') === '') {

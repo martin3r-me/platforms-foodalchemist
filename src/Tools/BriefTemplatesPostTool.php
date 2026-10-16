@@ -12,8 +12,8 @@ use RuntimeException;
 /**
  * Legt eine team-eigene Schnellstart-Vorlage (Brief-Template) an: Brief + Kreativ-Modus +
  * Leitplanken-Snapshot, je Scope. Der `regler`-Snapshot wird as-is gespeichert; beim Anwenden im
- * Editor werden nur Keys gesetzt, die der Ziel-Regler-Satz des Scopes führt. Kuratierte Globals
- * bleiben unberührt (die pflegt das Master-Team).
+ * Editor werden nur Keys gesetzt, die der Ziel-Regler-Satz des Scopes führt. Die neue Vorlage gehört
+ * genau dem anlegenden Team (Spec 84 L1).
  */
 class BriefTemplatesPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
