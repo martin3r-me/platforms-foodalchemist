@@ -519,6 +519,12 @@ class SensorikService
             return ['status' => 'kein_ergebnis'];   // z. B. Fake-Provider in der Sandbox → nichts schreiben
         }
         $this->speichereRezept($recipeId, $geschmack, $werte['texturen'] ?? [], $hash, $proposal->confidence, $proposal->reasoning);
+        // Spec 60: Texturen fließen ins Aromenprofil — Profil + verwendende Rezepte nachziehen (best-effort)
+        try {
+            app(Pairing\RezeptProfil::class)->nachziehen($recipeId);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Aromenprofil nach Sensorik fehlgeschlagen ({$recipeId}): {$e->getMessage()}");
+        }
 
         return ['status' => 'bewertet', 'geschmack' => $geschmack, 'source' => 'ki'];
     }

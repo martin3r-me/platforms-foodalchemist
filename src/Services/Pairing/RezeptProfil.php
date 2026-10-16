@@ -113,6 +113,35 @@ final class RezeptProfil
     }
 
     /**
+     * Profil eines Rezepts und aller Rezepte, die es (transitiv) verwenden, neu rechnen — z. B. nach
+     * der KI-Sensorik (neue Texturen), ohne Preis-Recompute. Höchstens REKURSION_MAX Ebenen nach oben
+     * (Regelwerk Basisrezepte §4), Zyklen werden übersprungen. Kinder vor Eltern (Eltern-Hash enthält sie).
+     *
+     * @return list<int> neu gerechnete recipe_ids
+     */
+    public function nachziehen(int $recipeId): array
+    {
+        $this->cache = [];
+        $gesehen = [$recipeId => true];
+        $ebene = [$recipeId];
+        $reihenfolge = [$recipeId];
+        for ($tiefe = 0; $tiefe < self::REKURSION_MAX && $ebene !== []; $tiefe++) {
+            $eltern = DB::table('foodalchemist_recipe_ingredients')->whereIn('referenced_recipe_id', $ebene)
+                ->whereNull('deleted_at')->distinct()->pluck('recipe_id')->map(fn ($i) => (int) $i)->all();
+            $ebene = array_values(array_filter($eltern, fn ($i) => ! isset($gesehen[$i])));
+            foreach ($ebene as $i) {
+                $gesehen[$i] = true;
+                $reihenfolge[] = $i;
+            }
+        }
+        foreach ($reihenfolge as $id) {
+            $this->fuer($id);
+        }
+
+        return $reihenfolge;
+    }
+
+    /**
      * Profil eines einzeln eingesetzten Grundprodukts bzw. Ankers (Gericht ohne Basisrezept):
      * derselbe Aufbau wie ein Rezept-Profil, mit 100 % des (ggf. Varianten-)Ankers.
      *

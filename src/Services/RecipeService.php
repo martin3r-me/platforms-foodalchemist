@@ -284,6 +284,8 @@ class RecipeService
         $this->schritteAusMarkdown($recipe, $in);
         app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
 
+        \Platform\FoodAlchemist\Support\SensorikNachholen::ausloesen($team, (int) $recipe->id);   // Spec 60: Texturen für neue Basisrezepte
+
         return $recipe->refresh();
     }
 
@@ -356,6 +358,8 @@ class RecipeService
         if (array_key_exists('yield_kg_manual', $in) && $in['yield_kg_manual'] !== $altManual) {
             app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id); // ek/kg-Nenner (A-3)
         }
+
+        \Platform\FoodAlchemist\Support\SensorikNachholen::ausloesen($team, (int) $recipe->id);
 
         return $recipe->refresh();
     }
@@ -1273,6 +1277,7 @@ class RecipeService
         // still (der Rezept-Observer feuert nur auf Rezept-Felder, nicht auf die Zutaten-Zeilen).
         // Idempotent via source_hash (nur echter Text-Change embeddet neu), async, no-op ohne Provider.
         app(PoolEmbeddingService::class)->queueRecipe($recipe);
+        \Platform\FoodAlchemist\Support\SensorikNachholen::ausloesen($team, (int) $recipe->id);
 
         return $recipe;
     }
