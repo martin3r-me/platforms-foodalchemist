@@ -12,19 +12,19 @@ uses(TestCase::class);
  * Service-Verdrahtung + der UI-Knopf folgen in den nächsten Chunks.
  */
 
-it('recipe.titel_vorschlag ist als Tier-B-Prompt mit Task registriert', function () {
+it('recipe.titel_vorschlag ist als Klasse-leicht-Prompt mit Task registriert', function () {
     $p = config('foodalchemist.prompts', [])['recipe.titel_vorschlag'] ?? null;
 
     expect($p)->toBeArray()
-        ->and($p['tier'] ?? null)->toBe('B')
+        ->and($p['klasse'] ?? null)->toBe('leicht')
         ->and($p['task'] ?? '')->not->toBe('');
 });
 
-it('vk.titel_vorschlag ist als Tier-B-Prompt mit Task registriert', function () {
+it('vk.titel_vorschlag ist als Klasse-leicht-Prompt mit Task registriert', function () {
     $p = config('foodalchemist.prompts', [])['vk.titel_vorschlag'] ?? null;
 
     expect($p)->toBeArray()
-        ->and($p['tier'] ?? null)->toBe('B')
+        ->and($p['klasse'] ?? null)->toBe('leicht')
         ->and($p['task'] ?? '')->not->toBe('');
 });
 

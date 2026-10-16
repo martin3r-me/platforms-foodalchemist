@@ -3,13 +3,14 @@
      Häufigste Aufgabe: den Sprachbefehl einstellen bzw. Nutzung und Kosten ablesen. --}}
 @php
     use Platform\FoodAlchemist\Livewire\Settings\Wissenssteuerung as WS;
+    use Platform\FoodAlchemist\Support\KiKlassen;
 
     $zeileTitel = 'text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]';
     $zeileHilfe = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[70ch]';
     $schluessel = 'font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $zahl = fn ($n) => number_format((int) $n, 0, ',', '.');
-    $stufenTon = ['A' => 'accent', 'B' => 'neutral', 'C' => 'info', 'D' => 'warn'];
-    $nachStufe = collect($registry)->groupBy(fn ($tier) => $tier, true)->sortKeys();
+    $stufenTon = ['stark' => 'accent', 'mittel' => 'info', 'leicht' => 'neutral', 'S' => 'accent', 'M' => 'info', 'L' => 'neutral', 'A' => 'accent', 'B' => 'neutral', 'C' => 'info', 'D' => 'warn'];
+    $nachKlasse = collect(KiKlassen::ALLE)->mapWithKeys(fn ($k) => [$k => collect($registry)->filter(fn ($kl) => $kl === $k)]);
 @endphp
 
 <div class="flex flex-col gap-5" data-settings-ki>
@@ -113,32 +114,42 @@
 
     </fieldset>
 
-    {{-- ── Modellstufen ── --}}
+    {{-- ── Modellstufen: drei KI-Klassen ── --}}
     <x-fa::section title="Modellstufen" icon="heroicon-o-rectangle-stack"
                    :meta="$registry->count() . ' Arbeitsschritte'"
-                   description="Jeder KI-Arbeitsschritt hat eine feste Stufe, jede Stufe ein Modell. So laufen einfache Aufgaben günstig und anspruchsvolle mit dem stärkeren Modell. Nur zur Ansicht.">
-        <div class="flex flex-col gap-3" data-ki-tiers>
-            @foreach($nachStufe as $stufe => $schritte)
-                <div class="flex flex-col gap-1.5" wire:key="stufe-{{ $stufe }}">
+                   description="Jeder KI-Arbeitsschritt gehört zu genau einer Klasse, jede Klasse hat ein Modell. So laufen einfache Aufgaben günstig und anspruchsvolle mit dem stärksten Modell. Nur zur Ansicht — die Modelle werden auf dem Server eingetragen.">
+        <div class="flex flex-col gap-3" data-ki-klassen>
+            @foreach($nachKlasse as $klasse => $schritte)
+                <div class="flex flex-col gap-1.5" wire:key="klasse-{{ $klasse }}">
                     <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-md)]">
-                        <x-fa::badge :tone="$stufenTon[$stufe] ?? 'neutral'">Stufe {{ $stufe }}</x-fa::badge>
-                        <span class="font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $tiers[$stufe] ?? 'Standardmodell der Plattform' }}</span>
+                        <x-fa::badge :tone="$stufenTon[$klasse] ?? 'neutral'">{{ KiKlassen::label($klasse) }}</x-fa::badge>
+                        <span class="font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $klassen[$klasse]['model'] ?? 'Standardmodell der Plattform' }}</span>
+                        @if(! empty($klassen[$klasse]['reasoning']))
+                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Reasoning: {{ $klassen[$klasse]['reasoning'] }}</span>
+                        @endif
                         <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $schritte->count() }} {{ $schritte->count() === 1 ? 'Arbeitsschritt' : 'Arbeitsschritte' }}</span>
                     </p>
+                    <p class="{{ $zeileHilfe }}">{{ KiKlassen::beschreibung($klasse) }}</p>
                     <div class="flex flex-wrap gap-1">
-                        @foreach($schritte as $key => $tier)
-                            <x-fa::badge wire:key="tier-{{ $key }}" title="{{ $key }}">{{ WS::schrittLabel($key) }}</x-fa::badge>
+                        @foreach($schritte as $key => $kl)
+                            <x-fa::badge wire:key="klasse-{{ $key }}" title="{{ $key }}">{{ WS::schrittLabel($key) }}</x-fa::badge>
                         @endforeach
                     </div>
                 </div>
             @endforeach
         </div>
+        @if(! empty($abgeloest))
+            <x-fa::notice tone="warn" title="Alte Stufen-Einstellungen ohne Wirkung" data-ki-abgeloest>
+                Auf diesem Server sind noch {{ implode(', ', $abgeloest) }} gesetzt. Die Stufen A–D gibt es nicht mehr; stattdessen gelten die drei Klassen oben
+                (FOODALCHEMIST_AI_KLASSE_STARK / _MITTEL / _LEICHT, optional je Klasse _REASONING).
+            </x-fa::notice>
+        @endif
         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
             Im gewählten Zeitraum tatsächlich genutzt:
             <span class="font-mono text-[var(--fa-ink-2)]">{{ $aktiveModelle->isEmpty() ? 'keine Aufrufe' : $aktiveModelle->implode(', ') }}</span>
         </p>
         @if($registryLuecken->isNotEmpty())
-            <x-fa::notice tone="warn" title="Aufrufe ohne hinterlegte Stufe" data-ki-registry-luecken>
+            <x-fa::notice tone="warn" title="Aufrufe ohne hinterlegte Klasse" data-ki-registry-luecken>
                 Diese Arbeitsschritte stehen im Nutzungsprotokoll, haben aber keinen hinterlegten KI-Auftrag:
                 {{ $registryLuecken->map(fn ($k) => WS::schrittLabel($k))->implode(', ') }}
             </x-fa::notice>
@@ -161,7 +172,7 @@
                     <thead>
                         <tr>
                             <th>Arbeitsschritt</th>
-                            <th>Stufe</th>
+                            <th>Klasse</th>
                             <th>Modell</th>
                             <th class="num">Aufrufe</th>
                             <th class="num" title="Eingabemenge in Texteinheiten der KI">Eingabe</th>
@@ -183,7 +194,7 @@
                                     <span class="block {{ $schluessel }}">{{ $z->feature }}</span>
                                     @if($z->ist_global)<x-fa::badge tone="neutral" title="Globaler Stamm-Job ohne Team (z. B. Non-Food-Erkennung, Produktpass lesen). Nur das Master-Team sieht diese Zeilen." data-ki-global>Global (Stamm)</x-fa::badge>@endif
                                 </td>
-                                <td>@if($z->tier)<x-fa::badge :tone="$stufenTon[$z->tier] ?? 'neutral'">{{ $z->tier }}</x-fa::badge>@else<span class="text-[var(--fa-ink-3)]">–</span>@endif</td>
+                                <td>@if($z->tier)<x-fa::badge :tone="$stufenTon[$z->tier] ?? 'neutral'">{{ KiKlassen::logLabel($z->tier) }}</x-fa::badge>@else<span class="text-[var(--fa-ink-3)]">–</span>@endif</td>
                                 <td class="font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] whitespace-nowrap">{{ $z->model ?? '–' }}</td>
                                 <td class="num">{{ $zahl($z->calls) }}</td>
                                 <td class="num text-[var(--fa-ink-2)]">{{ $zahl($z->t_in) }}</td>

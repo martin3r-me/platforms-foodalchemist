@@ -730,32 +730,35 @@ return [
         ],
 
         /*
-         * M7-02 / V-01: Tier→Modell-Mapping (06_KI §2). Modell-Strings sind
-         * DEPLOYMENT-Config, nicht Spec — null = Plattform-Default-Modell
-         * (LLMProviderContract-Binding entscheidet). Tier je Prompt steht in
-         * der Registry unten; options['tier'] übersteuert je Call.
-         *   A = Qualität (Generatoren, lange Texte) · B = Mechanik-Labels
-         *   C = Vision (Wissenskontext leer, GL-13 Inv. 7) · D = Reasoning/Tools
+         * KI-KLASSEN (16.10.2026, Dominique: „Datenqualität geht vor“) — ersetzen die Stufen A–D. Jeder Prompt-Key unten trägt genau EIN Feld `klasse`
+         * (stark | mittel | leicht); dieses Feld bestimmt allein, welches Modell läuft. Modell-Strings sind DEPLOYMENT-Config, nicht Spec:
+         * leer = Plattform-Default-Modell (LLMProviderContract-Binding entscheidet) = bisheriges Verhalten.
+         *   STARK  Sicherheit/Fakten (Allergene, Nährwerte, Produktpass, Rezept einlesen, Regelwerk-Prüfung) und alles Erzeugende/Planende
+         *          (Gericht/Basisrezept erzeugen, Planung, Foodbook, Konzept, Kundentexte, Prüfen/Überarbeiten, Chat).
+         *   MITTEL fachliche Schätzungen, die in Mengen/Kosten fließen (Verluste, Garverlust, Stückgewicht, Zähleinheiten, Verpackungsmaße,
+         *          Regenerieren, Posten, Zeiten). Im Zweifel STARK.
+         *   LEICHT Einzelwerte aus kurzen Listen (Kategorie, Zustand, Sektor, Niveau, Speisenklasse, Dichteklasse, Anker, Signale, Titel-/Namens-
+         *          vorschläge, Schlagworte, Non-Food).
+         * `reasoning` je Klasse (low|medium|high …, leer = Modell-Standard) geht als options['reasoning'] = ['effort' => …] an den Provider. ACHTUNG: der
+         * Core-OpenAiService liest `reasoning` heute nur in streamChat(), NICHT in chat() — der FA-Gateway ruft chat(). Bis der Core es dort durchreicht,
+         * bleibt der Wert wirkungslos (kein Fehler). Der Log-Code der Klasse in `ai_call_log.tier` (String(2)) ist S | M | L.
+         * Die alten Variablen FOODALCHEMIST_AI_TIER_A..D wirken NICHT mehr; die Einstellungsseite warnt, wenn sie noch gesetzt sind.
          */
-        'tiers' => [
-            'A' => env('FOODALCHEMIST_AI_TIER_A'),
-            'B' => env('FOODALCHEMIST_AI_TIER_B'),
-            'C' => env('FOODALCHEMIST_AI_TIER_C'),
-            'D' => env('FOODALCHEMIST_AI_TIER_D'),
+        'klassen' => [
+            'stark' => ['model' => env('FOODALCHEMIST_AI_KLASSE_STARK'), 'reasoning' => env('FOODALCHEMIST_AI_KLASSE_STARK_REASONING')],
+            'mittel' => ['model' => env('FOODALCHEMIST_AI_KLASSE_MITTEL'), 'reasoning' => env('FOODALCHEMIST_AI_KLASSE_MITTEL_REASONING')],
+            'leicht' => ['model' => env('FOODALCHEMIST_AI_KLASSE_LEICHT'), 'reasoning' => env('FOODALCHEMIST_AI_KLASSE_LEICHT_REASONING')],
         ],
 
-        // Spec 54 (1): Tier D hängt an mehreren Prompt-Keys (demo.echo, gp.condition,
-        // recipe.category MIT §1.2-Kanon, recipe.name_putzen, AiGatewayService:623) — ein
-        // schnelleres Modell für den Voice-Loop dort einzutragen würde diese Keys mit
-        // umstellen. Eigene, unabhängige Einstellung: `null` = bisheriges Tier-D-Verhalten
-        // (kein anderer Aufrufer betroffen), gesetzt = NUR VoiceCommandService übersteuert
-        // sein `model` explizit.
+        // Nur zur Warnung auf der Einstellungsseite: die abgelösten Stufen-Variablen. Kein Modell-Pfad mehr.
+        'tiers_abgeloest' => [
+            'A' => env('FOODALCHEMIST_AI_TIER_A'), 'B' => env('FOODALCHEMIST_AI_TIER_B'), 'C' => env('FOODALCHEMIST_AI_TIER_C'), 'D' => env('FOODALCHEMIST_AI_TIER_D'),
+        ],
+
+        // Spec 54 (1): der Voice-Loop ist KEIN Prompt-Key (eigener Tool-Loop) und hat darum keine `klasse`. Eigene, unabhängige Einstellung: `null` = Modell der
+        // Klasse STARK, gesetzt = NUR VoiceCommandService übersteuert sein `model` explizit.
         'voice_model' => env('FOODALCHEMIST_AI_VOICE_MODEL'),
 
-        // Non-Food-Erkennung (Massen-Klassifikation, Auftrag 16.10.2026): EIGENES Modell nur für la.nonfood — Tier B hängt an 45 Arbeitsschritten und wird
-        // nicht umgestellt. Leer = bisheriges Verhalten (Tier B, auf io der Plattform-Default). Welches günstige Modell eingetragen wird, entscheidet Dominique;
-        // der Core reicht jeden Modellnamen an OpenAI durch (OpenAiService nutzt options['model']).
-        'nonfood_model' => env('FOODALCHEMIST_AI_MODEL_NONFOOD'),
 
         /*
          * OpenAI-Listenpreise in USD je 1 Mio Tokens (Standard-Verarbeitung,
@@ -1080,7 +1083,7 @@ return [
      * TASK_PROMPT-Registry — Skeleton (M0-14).
      * Der volle Umzug der 42 Prompts aus 06_KI_SPEZIFIKATION kommt mit M7-04
      * (inkl. Tier-Zuordnung A–D, V-01). Format je Key:
-     *   'tier' (A–D) · 'task' (User-Task) · optional 'system' (Feld-Hülle) · 'temperature'
+     *   'klasse' (stark|mittel|leicht) · 'task' (User-Task) · optional 'system' (Feld-Hülle) · 'temperature'
      */
     'prompts' => [
             /*
@@ -1095,7 +1098,7 @@ return [
          * werden verworfen und dem Menschen gemeldet, nicht stillschweigend übernommen.
          */
         'planung.leitplanken' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             // 2500 statt 1200 (Live-Test demo 09.10.): seit Spec 80 liefert der Prompt auch die Suchbegriffe —
             // ein Gericht-Briefing füllte 1200 Tokens, die Antwort brach ab und war kein gültiges JSON (3×).
             'max_tokens' => 2500,
@@ -1138,14 +1141,14 @@ return [
         ],
 
         'demo.echo' => [
-            'tier' => 'D',
+            'klasse' => 'leicht',
             'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '
                 . '{"werte": …, "confidence": 0-1, "reasoning": "…"} zurück (Smoke-Test).',
         ],
         // M3-09/10: GP-Modal (Naming-Builder + KI-Felder). Antwort-Schema immer
         // {"werte": {…}, "confidence": 0-1, "reasoning": "…"} (GL-07).
         'gp.suggest' => [
-            'tier' => 'C',
+            'klasse' => 'mittel',
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
                 . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
                 . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe, '
@@ -1174,7 +1177,7 @@ return [
         ],
         // Web-Recherche zu einem Lieferantenartikel (nur auf Knopfdruck; ArtikelWebRecherche). Antwort-Schema siehe Dienst.
         'artikel.web_recherche' => [
-            'tier' => 'C',
+            'klasse' => 'stark',
             'max_tokens' => 2500,
             'task' => 'Recherchiere im Web zu genau diesem Lieferantenartikel (Bezeichnung, EAN, Marke, Lieferant im Kontext). '
                 . 'Antworte als JSON {"felder": {key: {wert, konfidenz, url, zitat?, einheit?}}, "allergene": {key: {wert: enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}}, '
@@ -1185,7 +1188,7 @@ return [
         ],
         // Non-Food-Erkennung am Lieferantenartikel (Stufe 2 nach der Regel): Klassifikator in Stapeln, nur für „unklar“.
         'la.nonfood' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'max_tokens' => 6000,   // 50 Artikel je Aufruf; Reasoning-Modelle brauchen Luft über den ~25 sichtbaren Tokens je Urteil
             'temperature' => 0,
             'task' => 'Entscheide je Lieferantenartikel, ob er NON-FOOD ist (kein Lebensmittel: Reinigung, Hygiene, Einweg, Verpackung, '
@@ -1198,7 +1201,7 @@ return [
                 . 'Genau ein Urteil je übergebenem Artikel, id unverändert aus `artikel`.',
         ],
         'component.replacement_suggest' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 1800,
             'task' => 'Ranke fachlich relevante Ersatz-Realisierungen für den Quell-Baustein. '
                 . 'werte = {vorschlaege: [{kind, id, score, reason}]}. Erlaubte kinds sind gp, recipe '
@@ -1209,13 +1212,13 @@ return [
                 . 'allein reichen nicht. score liegt zwischen 0 und 1; reason ist ein kurzer deutscher Satz.',
         ],
         'gp.condition' => [
-            'tier' => 'D',
+            'klasse' => 'leicht',
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
                 . 'aus Name und Lieferantenartikeln: werte = {condition}.',
         ],
         // Spec 80 B1: Komponenten-Plan eines Basisrezepts — WAS sind die Bausteine (vor dem Bau, Mensch bestätigt).
         'recipe.komponenten_plan' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 1500,
             'temperature' => 0.2,
             'task' => 'Du planst ein BASISREZEPT (Halbfabrikat, Ansatz in kg/l — keine Portionen). Zerlege es in seine '
@@ -1235,7 +1238,7 @@ return [
         ],
 
         'recipe.generator' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 8000,   // volles Rezept-JSON inkl. Zutatenliste — Reasoning-Headroom
             // Spec 37 (2026-08-07): Typ-Rahmung + Anti-Über-Elaboration + nüchterne Namen VORNE,
             // damit die KI zuerst weiß, dass ein Basisrezept EIN Baustein ist (nicht ein Teller).
@@ -1356,14 +1359,14 @@ return [
                 . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'recipe.description' => [
-            'tier' => 'C',
+            'klasse' => 'stark',
             // Spec 81 (2026-10-09): die Satzzahl steht als Regel `basisrezept.8.3.saetze` in der Regel-Tabelle und
             // kommt über das mitgegebene Regelwerk in den Prompt — hier KEINE zweite Zahl mehr (lief sonst auseinander).
             'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, Satzzahl laut dem '
                 . 'mitgegebenen Regelwerk, Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {description}.',
         ],
         'recipe.category' => [
-            'tier' => 'D',
+            'klasse' => 'leicht',
             'task' => 'Ordne das Rezept der passenden Produktions-Kategorie zu (aus der mitgegebenen '
                 . 'Kategorie-Liste): werte = {category_id, kategorie_name}.',
         ],
@@ -1372,14 +1375,14 @@ return [
         // Röstgemüse im Fond) sind 100. Mit dem 60er-Deckel war „auf ein Viertel reduzieren" (75)
         // nicht sagbar und der EK/kg einer Jus um den Einkochfaktor zu niedrig.
         'recipe.posten' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Ordne das Basisrezept anhand der Zutaten und Zubereitung dem fachlich passenden Küchenposten zu. '
                 . 'Wähle ausschließlich eine ID aus dem mitgegebenen aktiven Postenkatalog. Namen müssen nicht wörtlich im Rezept stehen '
                 . '(z.B. Gemüsebeilage → Entremetier). Erfinde keine Posten. Bei fehlender Eignung oder unauflösbarer Mehrdeutigkeit null. '
                 . 'werte = {station_id: integer|null}. Begründe die Wahl im reasoning.',
         ],
         'recipe.garverlust' => [
-            'tier' => 'C',
+            'klasse' => 'mittel',
             'task' => 'Schätze je Zutat den Garverlust in Prozent (0-100, Regelwerk §6 F6.5): '
                 . 'Reduzieren auf die Hälfte 50, auf ein Drittel 67, auf ein Viertel 75; Fond-Flüssigkeit '
                 . '20-40; abgeseihte/entfernte Feststoffe (Knochen, Karkassen, Röstgemüse, Kräuter, Gewürze '
@@ -1390,7 +1393,7 @@ return [
         // Zukauf-Basisrezept (Dominique 10.10.): Kaufware im Gericht — der Code legt Name und Zeile fest, die KI schreibt
         // nur die Handgriffe. Kleiner Call statt des vollen Generators (~1k statt ~30k Tokens).
         'recipe.ruestschritt' => [
-            'tier' => 'D',
+            'klasse' => 'mittel',
             'task' => 'Eine gekaufte Ware wird in einem Gericht eingesetzt (funktion = ihre Rolle dort). Schreibe die 1–3 '
                 . 'Handgriffe, die die Küche damit macht (z. B. auftauen, temperieren, aufbacken, portionieren, abfüllen, '
                 . 'verlesen, vor dem Service bereitstellen) — KEINE Herstellung der Ware, kein Ersatzprodukt. Hilfsstoffe nur, '
@@ -1398,7 +1401,7 @@ return [
                 . 'werte = {schritte: ["<Satz>", …], hilfsstoffe: [{text, menge, einheit}]}.',
         ],
         'recipe.name_putzen' => [
-            'tier' => 'D',
+            'klasse' => 'leicht',
             // Spec 81 (2026-10-09): „§1.2-Vokabular" zeigte auf einen Dossier-Abschnitt, der mit Paket 5 wegfällt —
             // das Vokabular kommt mitgegeben (Regel basisrezept.1.2.typ), der Prompt verweist nur noch darauf.
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
@@ -1407,14 +1410,14 @@ return [
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
         // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'recipe.titel_vorschlag' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Leite aus dem Brief EINEN nüchternen Basisrezept-Titel in der §1-Syntax '
                 . '«<Typ>: <Bezeichnung>[, Modifikator]» ab (Typ aus dem mitgegebenen Typ-Vokabular, Singular, '
                 . 'keine Abkürzungen, keine Marketing-Adjektive). Benenne nur, was der Brief hergibt — '
                 . 'erfinde keine Leitkomponente, die nicht genannt ist: werte = {name}.',
         ],
         'vk.generator' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 8000,   // volles VK-Rezept inkl. Zutaten/Plating — Reasoning-Headroom
             // Spec 37 (2026-08-07): Typ-Rahmung — ein GERICHT ist ein angerichteter Teller; Komposition
             // ist hier erlaubt (Gegenstück zum Basisrezept). Identität + nüchterne Namen bleiben Pflicht.
@@ -1537,7 +1540,7 @@ return [
                 . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'vk.speisen_klasse' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Klassifiziere das Verkaufsrezept in GENAU EINE Speisen-Klasse aus der '
                 . 'mitgegebenen Taxonomie (Kontext: Name, Komponenten, Diät-Eigenschaften). '
                 . 'ENTSCHEIDUNGSREGEL (E7-Bauart): Frage IMMER „Wie ist das Gericht GEBAUT?", '
@@ -1552,7 +1555,7 @@ return [
                 . 'werte = {dish_class_id, klasse_name, dish_main_group_id}.',
         ],
         'vk.rollen' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             // Teller-Vokabular (Dominique 11.10.) kommt als `vokabular` aus der Regel gericht.teller_rolle.
             'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Werte NUR laut Regel-Block bzw. vokabular im Kontext — '
                 . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; die alten Werte aroma_treiber und '
@@ -1563,23 +1566,23 @@ return [
         // (Tier-D-Tool-Loops → M7-10/M8-01), #37 FOODBOOK_PLAN (Phase 2 ⚠D5),
         // #39 DISAMBIG (toter Code laut Inventar).
         'gp.allergene' => [
-            'tier' => 'A',                                            // Compliance (#4)
+            'klasse' => 'stark',                                            // Compliance (#4)
             'task' => 'Leite die 14 EU-Allergene (LMIV Anhang II) fuer das Grundprodukt ab — '
                 . 'je Allergen enthalten|spuren|nicht_enthalten|unbekannt, im Zweifel unbekannt '
                 . '(F7.1: nie falsch-negativ raten): werte = {allergene: {<slug>: wert}}.',
         ],
         'gp.naehrwerte' => [
-            'tier' => 'B',                                            // R10 (Ist-Feature): Fallback ohne LA-Daten
+            'klasse' => 'stark',                                            // R10 (Ist-Feature): Fallback ohne LA-Daten
             'task' => 'Schaetze die Naehrwerte des Grundprodukts je 100 g (Lebensmittel-'
                 . 'Standardwerte, konservativ): werte = {kcal, protein_g, fat_g, carbs_g, salt_g}.',
         ],
         'gp.domain' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Ordne das Grundprodukt GENAU EINER Wissens-Domain aus der mitgegebenen '
                 . 'Liste zu: werte = {domain_slug}.',
         ],
         'gp.piece_default_g' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Schaetze das Stueck-Durchschnittsgewicht des Grundprodukts in Gramm '
                 . '(kuechenuebliche Handelsware): werte = {piece_default_g}.',
         ],
@@ -1587,7 +1590,7 @@ return [
         // die greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Kuechenuebliche Richtwerte,
         // keine Rechnung; unsicher ⇒ null. Stueckgewicht nur fuer zaehlbare Ware (Ei, Zwiebel, Filet).
         'gp.verluste' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Schaetze fuer das Grundprodukt die kuechenueblichen VORGABEN: cooking_loss_default_pct '
                 . '(Garverlust in %, Gewichtsverlust beim Garen der ueblichen Zubereitung; roh verzehrte oder '
                 . 'bereits gegarte Ware ⇒ 0), trimming_loss_default_pct (Putz-/Parierverlust in % beim '
@@ -1597,7 +1600,7 @@ return [
                 . 'Unsicher ⇒ null, nie raten: werte = {cooking_loss_default_pct, trimming_loss_default_pct, piece_default_g}.',
         ],
         'gp.zaehl_einheiten' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             // #9 (2026-08-28): natuerliche Formen des GP mit Gramm-Gewicht je EINER Einheit. NUR
             // anwendbare Formen (Fluessigkeit/Oel/Pulver ohne Stueck-Form => leere Liste). unit aus
             // dem festen Slug-Set, damit die Form direkt als Rezept-Einheit taugt. Nichts erfinden:
@@ -1618,7 +1621,7 @@ return [
         // Achse). Ersetzt den Agenten-Pilot. NUR was im Text steht — der Code prueft Belege und `muss` nach
         // (AnkerWissenAuslese::bereinige), das Modell ist die Auslese, nicht die Quelle.
         'anker.wissen_auslese' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'task' => 'Lies die Zutaten-Dossiers EINES Aroma-Ankers (Feld dossier) und fasse zusammen, was der Anker '
                 . 'von aussen BRAUCHT und was er selbst LIEFERT. NUR was im Text steht — nichts aus eigenem '
                 . 'Kochwissen, nichts ergaenzen; fehlt eine Aussage, bleibt das Feld leer. Achsen EXAKT aus dem Feld '
@@ -1647,7 +1650,7 @@ return [
         // Uneinigkeit geht in die Review. Anlass: die VPE sagt beim Vanillinzucker 1 kg (Liefer-
         // beutel), gemeint ist das Handels-Paeckchen mit ~8 g — eine Quelle allein irrt still.
         'recipe.verpackungsmasse' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Welche MASSE meint diese Rezeptzeile? Gegeben: Zutat, Menge und eine '
                 . 'Verpackungs-Einheit (Flasche/Dose/Paeckchen/Beutel/Glas/Schale). Antworte mit '
                 . 'der handelsueblichen Masse EINER solchen Verpackung fuer GENAU dieses Produkt '
@@ -1656,32 +1659,32 @@ return [
                 . 'werte = {masse_je_verpackung, einheit: g|ml, begruendung}.',
         ],
         'gp.anker' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
                 . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
         ],
         'gp.la_suggest' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Ordne die unzugeordneten Lieferanten-Artikel dem passenden Grundprodukt '
                 . 'aus der Kandidaten-Liste zu; unsicher => weglassen: werte = {zuordnungen: [{item_id, gp_id}]}.',
         ],
         'gp.term_la_rank' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Ranke die Lieferanten-Artikel-Kandidaten als Basis fuer den Produktbegriff '
                 . '(beste GP-Stammware zuerst): werte = {ranking: [item_id, …]}.',
         ],
         'recipe.sektor' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Beurteile die Eignung des Rezepts je Verpflegungs-Sektor '
                 . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {sektoren: {<slug>: {eignung, grund}}}.',
         ],
         'recipe.level' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Beurteile die Eignung des Rezepts je Niveau-Stufe '
                 . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {niveaus: {<slug>: {eignung, grund}}}.',
         ],
         'recipe.production_depth' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
                 . 'aus den Zutaten: werte = {production_depth}.',
         ],
@@ -1690,7 +1693,7 @@ return [
         // Spec 27: strukturierte Schritte statt Markdown-Blob — die Schritte sind der
         // Master, `preparation` nur ihr Spiegel. phase = Abschnittsname oder null.
         'recipe.steps' => [
-            'tier' => 'A',                                            // langer, strukturierter Einzeltext
+            'klasse' => 'stark',                                            // langer, strukturierter Einzeltext
             'max_tokens' => 8000,
             'task' => 'Schreibe die Zubereitung als Schrittfolge. '
                 . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern nur das '
@@ -1719,7 +1722,7 @@ return [
                 . 'ableitbar ist — nichts erfinden: werte = {steps: [{phase, text}]}.',
         ],
         'recipe.eigenschaften' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Schaetze die operativen Rezept-Eigenschaften: Arbeitszeit je Kochvorgang '
                 . '(work_time_min), einmalige Ruestzeit je Produktionslauf (setup_time_min), variable aktive '
                 . 'Personenminuten je kg, Stueck oder Portion (variable_work_time_min, variable_work_time_basis), '
@@ -1735,12 +1738,12 @@ return [
                 . 'max_vorlauf_tage, temperature, function, batch_max_kg, batch_max_pieces}.',
         ],
         'recipe.geschmack' => [
-            'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
+            'klasse' => 'leicht',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)
             'task' => 'Bestimme die grobe Geschmacksrichtung fuer die Menueplanung '
                 . '(suess|herzhaft|neutral): werte = {taste_direction}.',
         ],
         'recipe.sensorik' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der Zubereitung auf dem '
                 . 'Teller schmeckt/sich anfuehlt, NICHT die rohen Zutaten. Der Kontext liefert zu jeder Zutat ihr '
                 . 'ROH-Profil + Menge (g) + %-Anteil — nimm das als FAKTEN-Anker und wende die ZUBEREITUNG als '
@@ -1754,7 +1757,7 @@ return [
                 . 'texturen: [{slug, intensitaet}]}.',
         ],
         'recipe.review' => [
-            'tier' => 'A',                                            // Spec 03 L6 — Copilot-Pruefpass, read-only
+            'klasse' => 'stark',                                            // Spec 03 L6 — Copilot-Pruefpass, read-only
             'max_tokens' => 6000,                                     // Befund-Liste ueber das ganze Rezept + Reasoning-Headroom
             'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet: Mengen-'
                 . 'verhaeltnisse, falsche Einheiten, fehlende Schluesselkomponenten (Saeure, Salz, '
@@ -1773,7 +1776,7 @@ return [
                 . 'quantity, einheit_slug, begruendung, konfidenz}], gesamturteil}.',
         ],
         'recipe.bauart' => [
-            'tier' => 'B',                                            // Spec 21 S5b-2 — Klassifikator, kein Kreativ-Pass (darum auch KEINE Food-DNA)
+            'klasse' => 'leicht',                                            // Spec 21 S5b-2 — Klassifikator, kein Kreativ-Pass (darum auch KEINE Food-DNA)
             'max_tokens' => 1200,                                     // eine Einstufung + Begruendung, sonst nichts
             'task' => 'Entscheide nach BAUART, ob dieses Rezept ein fertiges GERICHT oder eine '
                 . 'KOMPONENTE ist. Massstab ist ausschliesslich „Wie ist es gebaut?" — NIE „Wo wird '
@@ -1792,7 +1795,7 @@ return [
         // die als knowledge-Option (voller §-Text, ungekappt) mitkommen. Auto-Pass nach
         // Generierung → Tier B (kostenbewusst); auf A bumpen, falls §-Recall zu schwach.
         'conformance.check' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 4000,                                    // §-Befund-Liste + Reasoning-Headroom
             'task' => 'Pruefe das mitgegebene ARTEFAKT (Kontext) §-genau gegen die REGELWERKE im '
                 . 'Wissensblock. Melde NUR belastbare Regelverstoesse — im Zweifel KEIN Befund. Je '
@@ -1810,7 +1813,7 @@ return [
         // dem Quell-LA ab, um die gemeldeten Verstoesse zu beheben. NIEMALS erfinden — was das LA
         // nicht hergibt, bleibt null (Hinweis). Nur tentative GPs (der Adapter guardt den Status).
         'gp.conformance_revise' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 1500,
             'task' => 'Leite die KONFORMEN Werte fuer das Grundprodukt AUS dem beigefuegten Quell-Lieferantenartikel '
                 . '(quell_lieferantenartikel, LA-First) ab, um die gemeldeten Regelverstoesse (verstoesse) zu beheben. '
@@ -1823,19 +1826,19 @@ return [
         // Spec 60: recipe.pairing und recipe.anker entfallen — Pairing-Chips und KI-Anker am Rezept sind
         // durch das Aromenprofil (abgeleitet aus den Zutaten) und die Kombinationslogik ersetzt.
         'recipe.equipment' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Schlage das Equipment-Set fuer die Produktion aus dem mitgegebenen '
                 . 'Vokabular vor: werte = {equipment_slugs: []}.',
         ],
         'recipe.ueberarbeiten' => [
-            'tier' => 'A',                                            // R6 (Ist: KI-Überarbeiten-Button) — freie Anweisung, Gesamt-Rezept
+            'klasse' => 'stark',                                            // R6 (Ist: KI-Überarbeiten-Button) — freie Anweisung, Gesamt-Rezept
             'max_tokens' => 8000,                                     // Gesamt-Rezept zurück (description+preparation+zutaten) — Reasoning-Headroom
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
                 . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
-            'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text + Vision; Foto/Scan seit Core-Fix #925 über den OpenAI-Weg)
+            'klasse' => 'stark',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text + Vision; Foto/Scan seit Core-Fix #925 über den OpenAI-Weg)
             'max_tokens' => 8000,                                     // ganzes (evtl. verschachteltes) Rezept-JSON — Reasoning-Headroom
             // Rezept-IMPORT (2026-08-22): TREUE Extraktion aus roh_text — NICHTS anreichern/erfinden
             // (GL-13 Inv. 7, Wissenskontext bewusst leer). Die Erdung (GP-Bindung) macht der Persistenz-
@@ -1862,7 +1865,7 @@ return [
         // TREU lesen. Nichts raten, nichts schätzen — was nicht im Dokument steht, kommt nicht in die Antwort. Die
         // Übernahme (direkt vs. Vorschlag, Allergene nur nach Bestätigung) entscheidet der Dienst, NICHT dieser Call.
         'produktpass.extract' => [
-            'tier' => 'C',                                            // Text + Vision (PDF/Foto über den OpenAI-Weg der Plattform, wie recipe.extract)
+            'klasse' => 'stark',                                            // Text + Vision (PDF/Foto über den OpenAI-Weg der Plattform, wie recipe.extract)
             'max_tokens' => 8000,
             'task' => 'Lies den angehängten Produktpass bzw. das Datenblatt eines Lieferantenartikels WÖRTLICH aus. '
                 . 'Übernimm NUR, was im Dokument steht; fehlt eine Angabe oder ist sie unleserlich, lass das Feld '
@@ -1889,7 +1892,7 @@ return [
         // Teller verwenden …"). Daraus konnte `RecipeStepService::parse()` keine Schritte
         // machen — der Anrichten-Tab blieb bei „0 Schritte", obwohl der Vorschlag ankam.
         'vk.plating' => [
-            'tier' => 'A',                                            // V-02
+            'klasse' => 'stark',                                            // V-02
             'task' => 'Schreibe die ANRICHTE-Anleitung fuers Gericht als nummerierte Schrittfolge '
                 . '(Markdown: jede Zeile beginnt mit «1.», «2.» …; optional «## Abschnitt» als '
                 . 'Ueberschrift). Ein Schritt = EIN Handgriff am Pass, in Aufbau-Reihenfolge: '
@@ -1910,7 +1913,7 @@ return [
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
         // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'vk.titel_vorschlag' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             // #75: HG-Code NICHT vom LLM raten lassen — aus einem freien Brief kann es die
             // Warengruppe kaum zuverlässig treffen. Der Titel-Vorschlag liefert nur die nüchterne
             // Komponenten-Pipe OHNE Code-Präfix; der §1-HG-Code wird separat/deterministisch
@@ -1921,17 +1924,17 @@ return [
                 . 'der Brief hergibt — erfinde keine Komponente, die nicht genannt ist: werte = {name}.',
         ],
         'vk.marketing' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'task' => 'Schreibe den verkaeuferischen Marketing-Text fuers Foodbook (appetitlich, '
                 . 'ehrlich, im mitgegebenen Schreibstil-Duktus): werte = {marketing_text}.',
         ],
         'vk.wording' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'task' => 'Generiere den kanonischen Marketing-Namen (VK-Wording-Standard, '
                 . 'stil-neutral — Schreibstile transformieren erst spaeter): werte = {sales_wording_standard}.',
         ],
         'concept.brief_geruest' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'max_tokens' => 8000,                                     // volles Slot-/Regel-Gerüst — Reasoning-Headroom
             'system' => 'Du uebersetzt Kunden-Briefs in ein strukturiertes Planungs-Geruest (R4.1). '
                 . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Angaben bleiben weg, Felder null/weglassen). '
@@ -1957,7 +1960,7 @@ return [
         // Kapitel-Concept (menue_gaenge, Concept-Ebene) — hier NICHT. Schwester von concept.brief_geruest,
         // aber eine Ebene hoeher (Buch statt Menue).
         'foodbook.grundgeruest' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'max_tokens' => 8000,
             'system' => 'Du uebersetzt einen Kunden-Brief in das GRUNDGERUEST eines Foodbooks — seine KAPITEL. '
                 . 'Ein Kapitel ist ein Menue, ein Thema, ein Anlass oder ein Service-Format — NIEMALS ein einzelner Gang. '
@@ -1992,7 +1995,7 @@ return [
         // Pakete/Gaenge INNERHALB einer Veranstaltung baut der Conceptor spaeter IM Concept — NICHT hier. Ein
         // Brief ueber EINE Veranstaltung => GENAU EIN Concept-Slot. Schwester von foodbook.grundgeruest.
         'format.grundgeruest' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'max_tokens' => 8000,
             'system' => 'Du uebersetzt einen Brief in das GRUNDGERUEST eines gebrandeten FOODKONZEPTS (Format) — '
                 . 'einer wiederverwendbaren Marke/Vorlage (z.B. ein Streetfood-Konzept, ein Lunchbuffet, ein Flying-Dinner). '
@@ -2030,7 +2033,7 @@ return [
         // aber im Rahmen des Briefs bleiben: KEINE harten Zahlen/Preise/Allergen-/No-Go-Fakten erfinden
         // (die gehoeren ins Geruest/Frame), nichts gegen die Brief-Absicht setzen.
         'concept.plan' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 6000,                                     // Canvas: mehrere Langtext-Felder + Geschmackswelten-Liste — Reasoning-Headroom
             'system' => 'Du bist der kreative Kopf eines Foodkonzepts. Aus einem Kunden-Brief formst du '
                 . 'die Leitidee eines Konzepts aus — Name, Claim, roter Faden, Verkaufsvorteil, Inszenierung '
@@ -2048,7 +2051,7 @@ return [
                 . 'description (1–2 Saetze)}. Nur was der Brief hergibt; fehlende Angaben weglassen.',
         ],
         'concept.wording' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'task' => 'Erzeuge ein stimmiges Konzept-Wording ueber ALLE Positionen STRIKT im vorgegebenen Schreibstil: '
                 . 'richte Tonalitaet, Wortwahl und Satzbau eng an `schreibstil_anweisung` (Sprach-Duktus) aus — '
                 . 'orientiere dich an `schreibstil_beispiele`, falls vorhanden; faellt beides weg, an `schreibstil`. '
@@ -2069,7 +2072,7 @@ return [
         // KEINE Rezepte/GPs/Konzepte (M4-Invariante). Food-DNA-Kette wird injiziert
         // (FOOD_DNA_KEYS), Leitplanken/Ziele/Rahmen stehen im Kontext (Kontext-Vertrag).
         'foodbook.kapitel_ideen' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 4000,
             'system' => 'Du bist ein kreativer Küchenchef in der DIVERGENZ-Phase eines Foodbook-Kapitels. '
                 . 'Du darfst frei ideieren (Anker-Graph/Flavour-Pairing als Inspiration), OHNE zu prüfen, '
@@ -2083,7 +2086,7 @@ return [
                 . 'technische Ziel ohne Mengen. Noch keine vollständigen Rezepturen, Preise oder Datensätze anlegen.',
         ],
         'planning.dish_proposal_revise' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'max_tokens' => 1800,
             'system' => 'Du überarbeitest einen bereits vorhandenen Gericht-Bauplan gezielt nach menschlichem Feedback. '
                 . 'Bleibe auf der Skizzenebene: keine Mengen, Preise, vollständigen Rezepturen oder Datensätze. '
@@ -2099,7 +2102,7 @@ return [
         // Strikt reproduktiv: geschrieben wird nur, was in `gliederung`/`briefing_ist`
         // steht (die Gerichtnamen kommen aus der Wording-Kette, nicht aus dem Modell).
         'foodbook.kundentext' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'max_tokens' => 1500,
             'system' => 'Du schreibst den kundensichtbaren Einleitungstext eines Catering-Angebots. '
                 . 'Du bist NICHT in der Ideen-Phase: du erfindest keine Gerichte, Zutaten, Leistungen, '
@@ -2118,7 +2121,7 @@ return [
         ],
         // Spec 43 Stufe 2: aus einem Freitext-Wunsch sandboxed CSS für die Präsentation erzeugen.
         'praesentation.design_css' => [
-            'tier' => 'A',
+            'klasse' => 'stark',
             'max_tokens' => 2200,
             'system' => 'Du bist Web-/CSS-Designer für hochwertige, moderne Foodbook-Präsentationen '
                 . '(Website-Qualität). Du lieferst AUSSCHLIESSLICH sandboxed CSS — KEIN HTML, KEIN JavaScript, '
@@ -2143,7 +2146,7 @@ return [
         // Werte tragen kulinarische Kriterien, und der Zweifelsfall ist die KONSERVATIVE Richtung:
         // lieber ein Behaelter mehr als einer, in dem die Ware zusammensackt.
         'recipe.dichteklasse' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Zwei PRODUKTeigenschaften schaetzen — keine Rechnung, keine Behaelterzahl. '
                 . 'ERSTENS dichteklasse (wie schwer ist ein Liter davon): fluessig (Suppe, Fond, Sauce, Sud) | '
                 . 'dicht (Pueree, Ragout, Auflaufmasse) | schuettfaehig (Gemuesewuerfel, Reis, Nudeln, '
@@ -2180,7 +2183,7 @@ return [
         // Override-Weg am Gericht. `kalt: true` ist eine Entscheidung (Gerät null = kalt servieren),
         // NICHT „nichts verwertbar" — der Vertrag „keine Zeile = Lücke" braucht diesen Unterschied.
         'recipe.regeneration' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Lege fuer dieses Basisrezept als GANZES fest, wie es am Einsatztag regeneriert '
                 . 'wird — EIN Programm, kein Programm je Zutat. Geraet NUR als id aus dem mitgelieferten '
                 . 'Vokabular `geraete`, nie erfunden. Wird das Produkt kalt serviert oder gar nicht erwaermt '
@@ -2202,18 +2205,18 @@ return [
                 . 'werte = {kalt, geraet_id, temp_c, duration_min, core_temp_c, note}.',
         ],
         'vk.regeneration' => [
-            'tier' => 'B',
+            'klasse' => 'mittel',
             'task' => 'Schlage die Regenerations-Programme als LISTE vor — eine Zeile pro '
                 . 'erkannter Komponente (V-19; Geraet aus Vokabular, kalt = ohne Geraet): '
                 . 'werte = {programme: [{component_label, geraet_id, temp_c, duration_min, core_temp_c, note}]}.',
         ],
         'vk.servier_vehikel' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Schlage das Servier-Vehikel vor (Kontext: Speisen-Klasse + Komposition + '
                 . 'Portion, Vokabular mitgegeben): werte = {servier_vehikel_id}.',
         ],
         'vk.review' => [
-            'tier' => 'A',                                            // Spec 03 L6 — VK-Zweig desselben Pruefpasses
+            'klasse' => 'stark',                                            // Spec 03 L6 — VK-Zweig desselben Pruefpasses
             'max_tokens' => 6000,
             'task' => 'Pruefe das GERICHT (Verkaufsrezept) als Copilot auf Verkaufs-Tauglichkeit: '
                 . 'Portionierung gegen die Speisen-Klasse, Komposition und Teller-Logik, Service-'
@@ -2228,7 +2231,7 @@ return [
                 . 'einheit_slug, begruendung, konfidenz}], gesamturteil}.',
         ],
         'vk.ueberarbeiten' => [
-            'tier' => 'A',                                            // Spec 03 L1a — VK-Variante von recipe.ueberarbeiten
+            'klasse' => 'stark',                                            // Spec 03 L1a — VK-Variante von recipe.ueberarbeiten
             'max_tokens' => 8000,                                     // Gesamt-Gericht zurueck (Komponenten + Texte) — Reasoning-Headroom
             'task' => 'Ueberarbeite das GERICHT (Verkaufsrezept) exakt nach der freien Anweisung '
                 . '(anweisung) — aendere NUR Angefragtes und behalte ids bestehender Komponenten, '
@@ -2242,29 +2245,29 @@ return [
                 . 'zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'vk.kohaerenz' => [
-            'tier' => 'A',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
+            'klasse' => 'stark',                                            // Inline-Prompt im Ist (culinary_coherence_judge) — gehoben
             'task' => 'Beurteile die kulinarische Kohaerenz des Tellers (Score 0-100, Label wie '
                 . '«Klassischer Teller», kurze Begruendung, groesste Schwachstelle als eine Zutat '
                 . 'oder null): werte = {score, label, reasoning, schwachstelle}.',
         ],
         'vk.teller_heber' => [
-            'tier' => 'A',                                            // Inline-Prompt im Ist (plate_suggester) — gehoben
+            'klasse' => 'stark',                                            // Inline-Prompt im Ist (plate_suggester) — gehoben
             'task' => 'Schlage vor, was den Teller hebt (1-3 konkrete, machbare Verbesserungen — '
                 . 'keine Fantasie-Zutaten; typ je Vorschlag: kontrast | ergaenzung | veredelung): '
                 . 'werte = {einschaetzung, vorschlaege: [{typ, zutat, kategorie, reasoning, confidence}]}.',
         ],
         'price.plausi' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'task' => 'Pruefe den auffaelligen Lieferanten-Preis auf Plausibilitaet (Kontext: '
                 . 'Artikel, Historie, Vergleichspreise): werte = {plausibel: bool, grund}.',
         ],
         'chat.message' => [
-            'tier' => 'A',                                            // Inline-Prompt im Ist — gehoben
+            'klasse' => 'stark',                                            // Inline-Prompt im Ist — gehoben
             'task' => 'Beantworte die Kuechen-/Datenfrage als Catering-Souschef auf Basis des '
                 . 'mitgegebenen Kontexts — ehrlich bei Luecken: werte = {antwort}.',
         ],
         'gp.tags' => [
-            'tier' => 'C',
+            'klasse' => 'leicht',
             'task' => 'Bewerte die Eigenschafts-Tags des Grundprodukts (vegan, vegetarisch, halal, '
                 . 'contains_pork, contains_beef, organic, regional, grundnahrungsmittel, convenience, '
                 . 'lactose_free, gluten_free) als true/false; unbewertbare Tags weglassen: werte = {is_vegan: bool, …}.',
@@ -2272,7 +2275,7 @@ return [
         // Signale-Cockpit „KI erledigen lassen" (Assistenz) — erzeugen einen Entwurf/Vorschlag,
         // KEINE Mutation. Antwort-Feld heisst 'entwurf'/'empfehlung'/'vorschlag' (SignalFixService::extractDraft).
         'signal.supplier_inquiry' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'task' => 'Formuliere einen sachlichen, freundlichen Lieferanten-Rueckfrage-Entwurf (deutsche '
                 . 'Geschaeftsmail inkl. Betreff) zu einem auffaelligen Preissprung: nenne den Artikel, den '
                 . 'alten→neuen Preis und die Marge-Wirkung, frage nach dem Grund und ob bessere Konditionen '
@@ -2280,19 +2283,19 @@ return [
                 . 'guenstigere_alternative, beispiele). werte = {entwurf}.',
         ],
         'signal.margin_levers' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'task' => 'Schlage 2-3 konkrete, machbare Hebel vor, um die Marge des Gerichts auf die Zielmarge '
                 . 'zu heben (VK-Erhoehung, guenstigere Warenkorb-Alternative, Portionierung) — keine Fantasie. '
                 . 'Kontext im payload (db_pct/wareneinsatz_pct, ziel_pct, sales_net). werte = {empfehlung}.',
         ],
         'signal.vk_release_advice' => [
-            'tier' => 'B',
+            'klasse' => 'stark',
             'task' => 'Gib eine kurze Freigabe-Empfehlung fuer die vom freigegebenen Snapshot abweichende '
                 . 'Live-VK: soll die neue VK freigegeben werden? Nenne Chance und Risiko (Kunden-Preissprung). '
                 . 'Kontext im payload. werte = {empfehlung}.',
         ],
         'signal.serving_form_suggest' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Schlage je genanntem Gericht die plausibelste Standard-Servierform vor (nach Bauart des '
                 . 'Gerichts, nicht nach Einsatzort). Kontext: beispiele = Gerichtnamen. '
                 . 'werte = {vorschlag} (Liste „Gericht → Form" mit kurzer Begruendung).',
@@ -2301,14 +2304,14 @@ return [
         // stillgelegter Hauptgruppe). Klassifikations-Regel = Bauart, nicht Einsatzort (Taxonomie-
         // Neutralisierung) — deshalb bewusst KEIN Food-DNA-Key: DNA wuerde die Struktur verzerren.
         'signal.recipe_category_suggest' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Schlage je genanntem Rezept die plausibelste Kategorie vor. Klassifiziere nach BAUART '
                 . '(„wie ist es gebaut?"), nie nach Einsatzort („wo wird es serviert?"). Kontext: '
                 . 'beispiele = Rezeptnamen. Nenne keine stillgelegten Hauptgruppen. '
                 . 'werte = {vorschlag} (Liste „Rezept → Kategorie" mit kurzer Begruendung).',
         ],
         'signal.recipe_naming_suggest' => [
-            'tier' => 'B',
+            'klasse' => 'leicht',
             'task' => 'Schlage je genanntem Rezept einen regelkonformen Namen vor. Verkaufsgericht: fuehrendes '
                 . 'Hauptgruppen-Kuerzel in eckigen Klammern, danach 3-5 Kern-Bausteine mit " | " getrennt, '
                 . 'Leitkomponente zuerst (kein Marketing-Satz, keine Verbindungswoerter, keine Grammatur, '
