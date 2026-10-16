@@ -1,11 +1,11 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **Entwurf v0.2, Review Session „Vanessa“ Runde 3 eingearbeitet** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **Entwurf v0.3, PR 0 umgesetzt (lokal)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
 > **Einstieg für die bauende Session:**
-> 0. **Zuerst §4.0 (Schreib-Leck, akut):** Livewire-Modale und 4 MCP-Tools schreiben ohne Eigentümer-Prüfung auf fremde, nur sichtbare Zeilen (Master, Seed, Abo-Fassungen). Das ist ein eigener kleiner Fix-PR vor allem anderen.
+> 0. **Zuerst §4.0 (Schreib-Leck, akut):** Livewire-Modale und Services schreiben ohne Eigentümer-Prüfung auf fremde, nur sichtbare Zeilen (Master, Seed, Abo-Fassungen). Das ist ein eigener kleiner Fix-PR vor allem anderen.
 > 1. Die Entscheidungen in §9 mit Dominique klären (vor allem E1 demo-Master und E2 Fehler statt leer).
 > 2. Mit **§3 Teil A** beginnen (Team-Kontext). Das ist das Geld-Thema seit #452, klein und unabhängig.
 > 3. **§4 B0** (Zwei-Mandanten-Test) parallel dazu bauen. Er berührt keinen Produktivcode und muss vor dem ersten echten Abo auf io stehen.
@@ -137,7 +137,7 @@ Ausdrücklich anderes Team (Scheduler, Artisan, Master-Recompute je Mandant, Too
 | `Recipes/RecipeModal` Z. 648, 652 (`ueberarbeitungUebernehmen`) | Beschreibung/Zubereitung | **keine** |
 | `Recipes/RecipeModal` Z. 1093 (`regenerationSpeichern`) | `dichteklasse` per `DB::table` (umgeht zusätzlich Observer) | **keine**; der Zweig „alles leer“ ruft gar keinen Service |
 | `SalesRecipeService::upsertRegeneration / deleteRegeneration / upsertContainer / deleteContainer` | Regeneration, Behälter | nur `visibleToTeam`, **kein `isOwnedBy`** |
-| MCP `RecipeRegenerationPutTool`, `RecipeRegenerationDeleteTool`, `RecipeContainerPutTool`, `RecipeContainerDeleteTool` | dieselben Service-Methoden | **keine** → derselbe Weg per MCP |
+| MCP `RecipeRegenerationPutTool`, `RecipeRegenerationDeleteTool`, `RecipeContainerPutTool`, `RecipeContainerDeleteTool` | dieselben Service-Methoden | **geschützt** über `FoodAlchemistTool::guardRecipe()` (prüft `isOwnedBy`, Z. 371). *Korrektur v0.3: In v0.2 stand hier „keine“. Der Grep lief nur in den Tool-Dateien und hat den Guard in der Basisklasse übersehen.* |
 | `Gps/GpModal` Z. 263, 721, 733, 748, 802, 822, 1387 (`speichereDefaults`, `accept_/clear_/manual_zustand`, `accept_/clear_tags`, `speichereTags`) | GP-Defaults, Zustand, Tags, auch auf **globalen Stamm-GPs** | **keine**; andere Methoden derselben Datei prüfen `Curate::canCurate` (Z. 310, 343, 370, 400, 632, 652) |
 | `Verkauf/VkModal` Z. 991 (`ueberarbeitungUebernehmen`) | VK-Feld | **keine** |
 
@@ -148,6 +148,10 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 - `RecipeModal` Z. 1093 über Model/Service schreiben, damit Observer laufen.
 - Tests: „Mandant ändert Master-Rezept/Abo-Fassung/Stamm-GP → abgewiesen“, je Livewire-Methode und je MCP-Tool; „Master pflegt globale Basis-Katalog-Zeile → erlaubt“ (Spec 82 §13 I).
 - Danach dieselbe Prüfung für **alle** übrigen Schreibwege als B4-Vorlauf (Zählung in B2).
+
+**Umgesetzt (PR 0, Branch `fix/spec84-schreib-leck`, Commit `cd65d38a`):** neuer Typ `GeerbtNurLesenException` (erbt `RuntimeException`) mit `wennNichtEigen()`. Riegel in `SalesRecipeService` (Regeneration upsert/delete/reorder, Behälter upsert/delete, Kunden-Namen add/delete), `DarreichungService` (`anlegen`, `ensureStandard` erst vor dem Anlegen, `find()` für alle 8 Schreibwege), `RecipeService` (Rezeptbild setzen/entfernen), `ComponentEquivalentService` (`tauscheZutat`, `setSwapLocked`), `ConceptService::setStatus`; in `RecipeModal`, `GpModal` (über `canCurate`, wie `speichern()`), `VkModal`. `dichteklasse` über das Model statt `DB::table`. `Spec84SchreibLeckTest` 24 Fälle; Gegenprobe ohne Riegel: 22 rot, 2 grün (die Besitzer-Fälle).
+
+**Prüfliste B2 (Service-Scan, noch offen):** 38 öffentliche Service-Methoden laden mit `visibleToTeam`, schreiben und haben im Rumpf keinen erkannten Eigentums-Riegel (`isOwnedBy`, `canCurate`, `guard*`, `owned*`, `team_id`-Vergleich). Stichproben zeigen echte Fälle und Fehlalarme (z. B. `AngebotService::setStatus` delegiert an das geschützte `update()`). Echte Fälle außerhalb von PR 0, Auswahl: `PairingService::setGpAnker` (überschreibt per `updateOrInsert` die `team_id` einer fremden Mapping-Zeile), `BulkEnrichService::uebernehmen/verwerfen*`, `TeamProfilService::setzeEquipment`, `TrendService::aendern`, `SpeisenKlassenService::acceptRollen`, `FeedbackService::weiterentwickeln`. MCP-Wege sind oft über Basis-Guards geschützt, Livewire-Wege nicht. Liste: Scan-Skript in §4.0-Anhang neu erzeugen.
 
 ### §4.1 Befunde
 
@@ -452,6 +456,8 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | E8 gehört nicht in diese Spec | übernommen: entfernt, an Dominique gemeldet |
 
 ## Changelog
+
+- 2026-10-16 · v0.3: §4.0 korrigiert (MCP-Tools über `guardRecipe` geschützt, Leck = Livewire-Weg + Services); PR 0 umgesetzt (Commit `cd65d38a`); Prüfliste B2 mit 38 Service-Kandidaten.
 
 - 2026-10-16 · v0.2: Review-Runde 3 (Vanessa) eingearbeitet; neu §4.0 Schreib-Leck (verifiziert) als PR 0; Context-Modell mit festem Vorrang + dehydrating-Hook; C1/C2/C3/C4 umgeschnitten.
 - 2026-10-16 · Entwurf v0.1 (Session „test“), Sparring Vanessa eingearbeitet (Runde 1+2).
