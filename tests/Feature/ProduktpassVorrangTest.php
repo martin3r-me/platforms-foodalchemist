@@ -26,9 +26,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * Produktpass-Vorrang (Entscheid Dominique 16.10.2026, Variante 1): an Feldern mit Pass-Marker in den Kerngruppen (Allergene samt Unterarten,
- * Zusatzstoffe, Nährwerte, Zutatenliste) bleibt der Pass-Wert — auch gegen ein STRENGERES Necta. Jede Abweichung wird Prüffall
+ * Zusatzstoffe, Nährwerte, Zutatenliste, Gebinde) bleibt der Pass-Wert — auch gegen ein STRENGERES Necta. Jede Abweichung wird Prüffall
  * `produktpass_abweichung` + EIN Signal je Artikel (Allergene kritisch, sonst Warnung). Alle übrigen Felder kommen aus Necta; ein leerer
- * Necta-Wert löscht den Pass-Wert nicht.
+ * Necta-Wert löscht den Pass-Wert nicht. Nur Marker aus dem Dokument (Quelle produktpass_ki) schützen, Websuche-Marker nicht.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -207,4 +207,33 @@ it('Oberfläche + MCP: Panel zeigt „Necta-Abweichungen“ mit beiden Knöpfen;
     expect($get->data['necta_abweichungen'])->toHaveCount(1)->and($get->data['necta_abweichungen'][0]['feld'])->toBe('allergen_milk')
         ->and($alsKurator->success)->toBeFalse()
         ->and($alsAdmin->success)->toBeTrue()->and(($this->milch)())->toBe('enthalten');
+});
+
+it('Gebinde gehört zum Kern: Pass-Menge bleibt gegen Necta, Prüffall + Signal Warnung; leere Necta-Menge ist keine Abweichung', function () {
+    $this->a->update(['qty' => 0.66]);
+    ($this->marker)('supplier_item', 'qty', '0.66');
+
+    ($this->necta)(['quantity' => null]);
+    expect((float) $this->a->fresh()->qty)->toBe(0.66)->and(($this->faelle)())->toHaveCount(0);
+
+    ($this->necta)(['quantity' => 1]);
+    $fall = ($this->faelle)()->sole();
+    expect((float) $this->a->fresh()->qty)->toBe(0.66)
+        ->and($fall->feld)->toBe('qty')->and((float) $fall->necta_wert)->toBe(1.0)
+        ->and(($this->signal)()->severity)->toBe('warnung');
+
+    app(ProduktpassAbweichungService::class)->uebernehmen($this->rootTeam, (int) $fall->id, $this->kurator->id);
+    expect((float) $this->a->fresh()->qty)->toBe(1.0);
+});
+
+it('Websuche-Marker schützt nicht: Allergen aus der Websuche + Necta strenger → Strenge-Regel greift, kein Pass-Prüffall; Marker bleibt stehen', function () {
+    FoodAlchemistProduktpassFeld::where('supplier_item_id', $this->a->id)->where('feld', 'allergen_milk')->update(['quelle' => ProduktpassFelder::QUELLE_WEB]);
+
+    $r = ($this->necta)([], ['milk' => 3]);
+
+    expect(($this->milch)())->toBe('enthalten')
+        ->and($r['zaehler']['allergen_verschaerft'])->toBe(1)
+        ->and(($this->faelle)())->toHaveCount(0)
+        ->and(($this->signal)())->toBeNull()
+        ->and(FoodAlchemistProduktpassFeld::where('supplier_item_id', $this->a->id)->where('feld', 'allergen_milk')->exists())->toBeTrue();
 });

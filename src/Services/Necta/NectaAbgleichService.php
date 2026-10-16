@@ -26,7 +26,8 @@ use Symfony\Component\Uid\UuidV7;
  *    nicht von Hand gepflegt (Entscheid Dominique über den Kurator, 15.10.).
  *  - Ab dem zweiten Lauf: FA-Wert ≠ letzter Necta-Stand → von Hand gepflegt → Prüffall `manuell_gepflegt`, FA bleibt.
  *  - Produktpass (Vorrang, Entscheid Dominique 16.10.2026): Felder mit Produktpass-Marker (`foodalchemist_produktpass_felder`,
- *    {@see ProduktpassSchutz}) in den Kerngruppen (Allergene samt Unterarten, Deklaration, Nährwerte, Zutatenliste) behalten den
+ *    {@see ProduktpassSchutz}, nur Quelle Dokument) in den Kerngruppen (Allergene samt Unterarten, Deklaration, Nährwerte, Zutatenliste,
+ *    Gebinde) behalten den
  *    Pass-Wert, auch gegen ein strengeres Necta: Abweichung → Prüffall `produktpass_abweichung` + EIN Signal je Artikel
  *    ({@see ProduktpassAbweichungService}). Übrige Pass-Felder kommen aus Necta; nur ein leerer Necta-Wert löscht sie nicht.
  *  - Kennzeichnung (Allergene, Deklaration/Zusatzstoffe) nach Strenge (Entscheid Dominique 15.10.2026, Lauf 6 auf io:

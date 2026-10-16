@@ -38,7 +38,7 @@ use Throwable;
  *  - Quelle `websuche`: schreibt NIE direkt. Übernahme nur per Klick und nur in LEERE Felder; Allergene nur mit Bestätigung
  *    und nur dort, wo der Artikel noch „unbekannt“ ist; jedes Feld hat eine URL (Normalisierer).
  *  - Übernommene Felder bekommen einen Marker ({@see ProduktpassSchutz}). Kerngruppen (Allergene samt Unterarten, Zusatzstoffe,
- *    Nährwerte, Zutatenliste): der Pass-Wert hat Vorrang vor Necta, auch vor einem strengeren — Abweichung → Prüffall + Signal
+ *    Nährwerte, Zutatenliste, Gebinde) mit Marker aus dem Dokument: der Pass-Wert hat Vorrang vor Necta, auch vor einem strengeren — Abweichung → Prüffall + Signal
  *    ({@see ProduktpassAbweichungService}, Entscheid Dominique 16.10.2026). Übrige Felder kommen aus Necta.
  *  - Rechte wie beim Bearbeiten: `Curate`/{@see FoodAlchemistSupplierItem::isOwnedBy()} — Master an globalen Stamm-Artikeln,
  *    Mandant an eigenen. Sehen darf jeder, dem der Artikel sichtbar ist.

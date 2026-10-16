@@ -8,9 +8,12 @@ use Illuminate\Support\Facades\DB;
  * Schutz der Produktpass-Werte vor dem Necta-Abgleich.
  *
  * Vorrang (Entscheid Dominique 16.10.2026, Variante 1): in den KERNGRUPPEN — Allergene samt Unterarten, Zusatzstoffe/Deklaration,
- * Nährwerte, Zutatenliste — gilt ein Feld mit Marker IMMER mit dem Pass-Wert, ohne Strenge-Regel; jede Necta-Abweichung wird ein
- * Prüffall `produktpass_abweichung` mit Signal. Alle übrigen Felder kommen aus Necta, der Marker schützt dort nur davor, dass ein
- * LEERER Necta-Wert den Pass-Wert löscht ({@see self::istKern()}).
+ * Nährwerte, Zutatenliste, Gebinde (Preisbasis) — gilt ein Feld mit Marker IMMER mit dem Pass-Wert, ohne Strenge-Regel; jede
+ * Necta-Abweichung wird ein Prüffall `produktpass_abweichung` mit Signal. Alle übrigen Felder kommen aus Necta, der Marker schützt dort
+ * nur davor, dass ein LEERER Necta-Wert den Pass-Wert löscht ({@see self::istKern()}).
+ *
+ * Nur das echte Dokument schützt (Quelle `produktpass_ki`). Marker aus der Websuche bleiben stehen, schützen aber nicht: diese Felder
+ * laufen wie ohne Marker (Strenge-Regel bei der Kennzeichnung, sonst Necta).
  *
  * Warum nicht einfach „FA ≠ necta_stand"? Drei Lücken: (a) Kein Stand (erster Abgleich) → Necta würde übernehmen;
  * (b) Der Pass bestätigt zufällig den Necta-Stand, Necta ändert später → der Pass-Wert fiele als „nicht von Hand" weg;
@@ -28,11 +31,14 @@ final class ProduktpassSchutz
         self::$hatMarker = null;
     }
 
-    /** Kerngruppe? Allergene (auch die Unterarten in `details`), Deklaration und Nährwerte ganz, am Artikel nur die Zutatenliste. */
+    /** Am Artikel zum Kern: Zutatenliste und Gebinde (Preisbasis, Entscheid Dominique 16.10.2026). */
+    public const KERN_ARTIKEL = ['ingredients_supplier', 'qty', 'unit_code', 'qty_ordering_per_packaging', 'packaging_unit'];
+
+    /** Kerngruppe? Allergene (auch die Unterarten in `details`), Deklaration und Nährwerte ganz, am Artikel {@see self::KERN_ARTIKEL}. */
     public static function istKern(string $objekt, string $feld): bool
     {
         return in_array($objekt, ['item_allergen', 'item_declaration', 'item_nutritional'], true)
-            || ($objekt === 'supplier_item' && $feld === 'ingredients_supplier');
+            || ($objekt === 'supplier_item' && in_array($feld, self::KERN_ARTIKEL, true));
     }
 
     /** @param object $fa  Zeile aus `foodalchemist_supplier_items` bzw. einer Detail-Tabelle (item_*) */
@@ -51,9 +57,9 @@ final class ProduktpassSchutz
             return false;
         }
         $marker = DB::table('foodalchemist_produktpass_felder')
-            ->where('supplier_item_id', $itemId)->where('objekt', $objekt)->where('feld', $feld)->first(['wert_norm']);
+            ->where('supplier_item_id', $itemId)->where('objekt', $objekt)->where('feld', $feld)->first(['wert_norm', 'quelle']);
 
-        if ($marker === null) {
+        if ($marker === null || $marker->quelle !== \Platform\FoodAlchemist\Models\FoodAlchemistProduktpassFeld::QUELLE) {
             return false;
         }
         if ($feld === 'details') {

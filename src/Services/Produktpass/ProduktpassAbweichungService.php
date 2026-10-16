@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\ProduktpassSchutz;
 
 /**
- * Necta-Abweichungen an Produktpass-Feldern der Kerngruppen (Entscheid Dominique 16.10.2026, Variante 1): der Pass-Wert gilt, bis jemand
+ * Necta-Abweichungen an Produktpass-Feldern der Kerngruppen inkl. Gebinde (Entscheid Dominique 16.10.2026, Variante 1): der Pass-Wert gilt, bis jemand
  * entscheidet. Die Abweichung steht als Prüffall `produktpass_abweichung` (foodalchemist_necta_pruefaelle, legacy_id = Necta-Artikel) und
  * als EIN Signal je Artikel (Schwere: Allergene/Unterarten kritisch, sonst Warnung — die höchste offene zählt).
  *
@@ -165,7 +165,8 @@ class ProduktpassAbweichungService
                 : 'Allergen '.(FoodAlchemistItemAllergen::ALLERGENE[substr($feld, strlen('allergen_'))] ?? $feld),
             'item_declaration' => (FoodAlchemistItemDeclaration::STOFFE + FoodAlchemistItemDeclaration::FREIWILLIG)[$feld] ?? $feld,
             'item_nutritional' => 'Nährwert '.(self::NAEHRWERT_LABEL[$feld] ?? $feld),
-            default => $feld === 'ingredients_supplier' ? 'Zutatenliste' : $feld,
+            default => ['ingredients_supplier' => 'Zutatenliste', 'qty' => 'Gebinde-Menge', 'unit_code' => 'Gebinde-Einheit',
+                'qty_ordering_per_packaging' => 'Stück je Gebinde', 'packaging_unit' => 'Gebinde-Art'][$feld] ?? $feld,
         };
     }
 
@@ -180,6 +181,7 @@ class ProduktpassAbweichungService
             $objekt === 'item_allergen' && $feld === 'details' => json_decode($text, true) ?: null,
             $objekt === 'item_declaration' && $feld !== 'details' => (int) $text,
             $objekt === 'item_nutritional' && is_numeric($text) => (float) $text,
+            $objekt === 'supplier_item' && in_array($feld, ['qty', 'qty_ordering_per_packaging'], true) && is_numeric($text) => (float) $text,
             default => $text,
         };
     }
