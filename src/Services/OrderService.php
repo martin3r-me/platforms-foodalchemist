@@ -1051,7 +1051,7 @@ class OrderService
         }
 
         $ctx = (object) [
-            'qty' => $la->qty !== null ? (float) $la->qty : null,
+            'qty' => FoodAlchemistSupplierItem::mengeVon($la),   // korrigierte Menge vor Necta-qty
             'unit_code' => $la->unit_code,
             'packaging_unit' => $la->packaging_unit,
             'article_number' => $la->article_number,
@@ -1542,7 +1542,7 @@ class OrderService
             return null;
         }
 
-        return (object) ['id' => (int) $la->id, 'qty' => $la->qty !== null ? (float) $la->qty : null, 'unit_code' => $la->unit_code,
+        return (object) ['id' => (int) $la->id, 'qty' => FoodAlchemistSupplierItem::mengeVon($la), 'unit_code' => $la->unit_code,
             'packaging_unit' => $la->packaging_unit, 'article_number' => $la->article_number, 'designation' => $la->designation,
             'aktiver_preis' => $this->preise->activeFor((int) $la->id, $team)?->price];
     }
@@ -1569,7 +1569,7 @@ class OrderService
             'id' => (int) $la->id,
             'supplier_id' => (int) $la->supplier_id,
             'supplier_name' => $la->supplier?->name,
-            'qty' => $la->qty !== null ? (float) $la->qty : null,
+            'qty' => FoodAlchemistSupplierItem::mengeVon($la),   // korrigierte Menge vor Necta-qty
             'unit_code' => $la->unit_code,
             'packaging_unit' => $la->packaging_unit,
             'article_number' => $la->article_number,
@@ -1650,7 +1650,7 @@ class OrderService
         // Spec 82 3a: Preis des bestellenden Teams (Team → Vorfahren → Listenpreis).
         $price = $this->preise->activeFor((int) $la->id, $line->team_id ? Team::find($line->team_id) : null);
         $ctx = (object) [
-            'qty' => $la->qty !== null ? (float) $la->qty : null,
+            'qty' => FoodAlchemistSupplierItem::mengeVon($la),   // korrigierte Menge vor Necta-qty
             'unit_code' => $la->unit_code,
             'packaging_unit' => $la->packaging_unit,
             'article_number' => $la->article_number,

@@ -204,8 +204,8 @@ class IngredientEditor extends Component
                     'artikelnr' => $la->item?->article_number ?? '—',
                     'label' => $la->item?->designation ?? '—',
                     'marke' => $la->item?->brand ?? null,
-                    'vpe' => $la->item?->qty !== null
-                        ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',').' '.($la->item->packaging_unit ?? $la->item->unit_code ?? '')
+                    'vpe' => ($la->item !== null && \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeVon($la->item) !== null)
+                        ? rtrim(rtrim(number_format(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeVon($la->item), 2, ',', '.'), '0'), ',').' '.($la->item->packaging_unit ?? $la->item->unit_code ?? '')
                         : null,
                     'price' => $preis !== null ? number_format($preis, 2, ',', '.').' €' : null,
                     'vergleichspreis' => $vergleich !== null ? number_format($vergleich['value'], 2, ',', '.').' '.$vergleich['unit'] : null,
@@ -384,9 +384,10 @@ class IngredientEditor extends Component
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
             ->whereIn('foodalchemist_supplier_items.unit_code', ['kg', 'l', 'Stk'])
-            ->where('foodalchemist_supplier_items.qty', '>', 0)
+            ->whereRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('foodalchemist_supplier_items').' > 0')
             ->where('foodalchemist_supplier_items.is_discontinued', false)
-            ->select('s.gp_id', 'foodalchemist_supplier_items.qty', 'foodalchemist_supplier_items.unit_code')
+            ->select('s.gp_id', 'foodalchemist_supplier_items.unit_code')
+            ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('foodalchemist_supplier_items').' AS qty')   // korrigierte Menge vor Necta-qty
             ->selectSub($aktiverPreis, 'aktiver_preis')
             ->get()
             ->filter(fn ($r) => $r->aktiver_preis !== null)
@@ -410,9 +411,10 @@ class IngredientEditor extends Component
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
             ->where('foodalchemist_supplier_items.unit_code', 'Stk')
-            ->where('foodalchemist_supplier_items.qty', '>', 0)
+            ->whereRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('foodalchemist_supplier_items').' > 0')
             ->where('foodalchemist_supplier_items.is_discontinued', false)
-            ->select('s.gp_id', 'foodalchemist_supplier_items.qty')
+            ->select('s.gp_id')
+            ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('foodalchemist_supplier_items').' AS qty')
             ->selectSub($aktiverPreis, 'aktiver_preis')
             ->get()
             ->filter(fn ($r) => $r->aktiver_preis !== null)

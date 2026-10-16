@@ -263,7 +263,7 @@ class LagerEinrichtungService
      */
     public function gebinde(?FoodAlchemistSupplierItem $la, string $baseUnit): ?array
     {
-        if ($la === null || (float) $la->qty <= 0) {
+        if ($la === null || (float) FoodAlchemistSupplierItem::mengeVon($la) <= 0) {   // korrigierte Menge vor Necta-qty
             return null;
         }
         $ordering = mb_strtolower(trim((string) $la->ordering_unit));
@@ -285,7 +285,7 @@ class LagerEinrichtungService
             'pack_label' => $units > 1 ? $this->label((string) $la->packaging_unit, 'Karton') : null,
             'pack_units' => $units > 1 ? round($units, 3) : null,
             'unit_label' => $this->label((string) $la->ordering_unit, 'Einheit'),
-            'unit_base' => round((float) $la->qty * $faktor, 4),
+            'unit_base' => round(FoodAlchemistSupplierItem::mengeVon($la) * $faktor, 4),
         ];
     }
 

@@ -477,10 +477,11 @@ class InventurService
         }
         $item = FoodAlchemistSupplierItem::find($supplierItemId);
         $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team) : null; // Spec 82 3a
-        if ($item === null || $price === null || (float) $item->qty <= 0) {
+        $menge = $item !== null ? FoodAlchemistSupplierItem::mengeVon($item) : null;   // korrigierte Menge vor Necta-qty
+        if ($item === null || $price === null || (float) $menge <= 0) {
             return null;
         }
-        $jeEinheit = (float) $price->price / (float) $item->qty;   // € je kg/l/Stk
+        $jeEinheit = (float) $price->price / $menge;   // € je kg/l/Stk
 
         return round($baseUnit === 'Stk' ? $jeEinheit : $jeEinheit / 1000, 6);
     }

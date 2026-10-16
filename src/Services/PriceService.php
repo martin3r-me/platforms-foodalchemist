@@ -430,8 +430,8 @@ class PriceService
             ->join('foodalchemist_suppliers AS sup', 'sup.id', '=', 'i.supplier_id')
             ->whereIn('i.team_id', FoodAlchemistSupplierItem::teamAncestryIds($team))
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
-            ->whereNotNull('i.qty')->where('i.qty', '>', 0)->whereNotNull('i.unit_code')
-            ->select(['i.id', 'i.designation', 'i.qty', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
+            ->whereRaw(FoodAlchemistSupplierItem::mengeSql('i').' > 0')->whereNotNull('i.unit_code')
+            ->select(['i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
             ->selectSub($this->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis')
             ->get()
             ->filter(fn ($i) => $i->aktiver_preis !== null && (float) $i->aktiver_preis > 0)
@@ -484,7 +484,7 @@ class PriceService
         if ($preis === null || $preis < 0) {
             return null;
         }
-        $qty = $item->qty !== null ? (float) $item->qty : null;
+        $qty = FoodAlchemistSupplierItem::mengeVon($item);   // korrigierte Menge (EDI: Menge / Stückzahl) vor Necta-qty
         if ($qty === null || $qty == 0.0) {
             return null; // I4 — GT-5: 47,50 € mit qty NULL ⇒ kein Vergleichspreis
         }

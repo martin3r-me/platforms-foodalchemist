@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Collection;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
@@ -566,7 +567,7 @@ class ReportExportService
                         'article_number' => $lead->article_number,
                         'designation' => $lead->designation,
                         'packaging_unit' => $lead->packaging_unit,
-                        'qty' => $lead->qty,
+                        'qty' => FoodAlchemistSupplierItem::mengeVon($lead),   // korrigierte Menge vor Necta-qty
                         'unit_code' => $lead->unit_code,
                         'price' => $price?->price,
                     ] : null,
@@ -622,7 +623,7 @@ class ReportExportService
                         'article_number' => $item->article_number,
                         'designation' => $item->designation,
                         'packaging_unit' => $item->packaging_unit,
-                        'qty' => $item->qty,
+                        'qty' => FoodAlchemistSupplierItem::mengeVon($item),
                         'unit_code' => $item->unit_code,
                         'is_discontinued' => (bool) $item->is_discontinued,
                         'price' => $item->prices->first()?->price,
@@ -1118,7 +1119,7 @@ class ReportExportService
                 'designation' => $lead->designation ?? $lead->name ?? null,
                 'article_number' => $lead->article_number ?? null,
                 'packaging_unit' => $lead->packaging_unit ?? null,
-                'qty' => $lead->qty,
+                'qty' => FoodAlchemistSupplierItem::mengeVon($lead),
                 'unit_code' => $lead->unit_code,
                 'supplier' => $lead->supplier?->name,
                 'price' => $price?->price,
