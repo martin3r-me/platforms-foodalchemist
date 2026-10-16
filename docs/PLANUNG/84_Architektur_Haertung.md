@@ -159,7 +159,7 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 |---|---|---|---|
 | B-a | Regel greift nur bei Handaufruf, kein Global Scope | 1.118× `visibleToTeam`, 73× `applyVisible`, 552× handgeschriebener `where('team_id')` | hoch |
 | B-b | Modell-Abrufe ohne Sicht-/Rechte-Prüfung im Umfeld (Heuristik ±10 Zeilen) | Livewire 94, Tools 25, Services 295, Jobs 29, Console 13 | mittel; viele harmlos, nicht ohne Einzelprüfung erkennbar |
-| B-c | Zwei Master-Definitionen: `MasterTeam::istMaster` (streng, 49×) vs. `TeamScope::isMaster` (ohne Konfiguration „elternlos = Master“, 11×: Pairing-Signale, Anker-Wissen-Status, Wissens-Notbremse) | – | io: zu (Master gesetzt). **demo: offen**, `MasterTeam` existiert dort noch nicht, ENV leer, alle Teams elternlos |
+| B-c | **Drei** Master-Definitionen: `MasterTeam::istMaster` (streng, 49×) vs. `TeamScope::isMaster` (ohne Konfiguration „elternlos = Master“, 11×: Pairing-Signale, Anker-Wissen-Status, Wissens-Notbremse) vs. `BriefTemplateService::istMaster` (**immer** „elternlos = Master“, unabhängig von der Konfiguration) | – | io: `TeamScope` zu (Master gesetzt), **`BriefTemplateService` war offen**: jeder elternlose Mandant konnte globale Brief-Vorlagen umbenennen/deaktivieren/löschen (Fund Vanessa im B0a-Test). Behoben in PR 0 (Commit `34bc5243`). **demo: offen**, `MasterTeam` existiert dort noch nicht, ENV leer, alle Teams elternlos |
 | B-d | Kein flächiger Zwei-Mandanten-Test | 61 von 878 Testdateien mit Fremd-Team-Fall | mittel |
 | B-e | Policy `view` nutzt `currentTeamRelation` (`FoodAlchemistPolicy.php:19`) | – | klein, mit Teil A erledigt |
 
@@ -420,6 +420,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | E5 | Toter Skizzen-Code in Planung/Index (7 Methoden): löschen oder zurück in die UI? | löschen, falls nicht geplant |
 | E6 | C3a (Tool-Liste als eigene Datei, catch loggt) früh als eigener PR, obwohl Teil C sonst Pfadfinder ist? | ja: hoher Wert, null Fachrisiko, beendet den Konfliktmagneten. C3b (Scan/Cache) nicht ohne Not |
 | E7 | PR 0 (§4.0 Schreib-Leck) sofort, vor allem anderen? | **ja**: auf io offen, sobald ein Mandanten-Nutzer eine sichtbare Master-/Stamm-Zeile hat |
+| E8 | **Angebote im Unter-Team (O1, Fund B0a):** Ein Unter-Team mit leerer 77d-Hülle sieht die Angebote des Oberteams (`angebote.GET/LIST/SEARCH`, `reife.GET`), weil Angebote nicht in `InhaltsFreigabe::MODELLE` stehen. Gewollt (Angebot gehört zum Betrieb des Oberteams) oder Lücke? | Dominique entscheidet; bis dahin `->todo()` im Zwei-Mandanten-Test |
 
 ## §10 · Sparring-Protokoll (Session „Vanessa“, 16.10.)
 
@@ -457,6 +458,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-16 · v0.4: B0a fertig (Vanessa, `test/spec84-zwei-mandanten`, 7d9547bf + 670495e9); dritte Master-Definition `BriefTemplateService` gefunden und in PR 0 behoben (`34bc5243`); E8 Angebote im Unter-Team.
 - 2026-10-16 · v0.3: §4.0 korrigiert (MCP-Tools über `guardRecipe` geschützt, Leck = Livewire-Weg + Services); PR 0 umgesetzt (Commit `cd65d38a`); Prüfliste B2 mit 38 Service-Kandidaten.
 
 - 2026-10-16 · v0.2: Review-Runde 3 (Vanessa) eingearbeitet; neu §4.0 Schreib-Leck (verifiziert) als PR 0; Context-Modell mit festem Vorrang + dehydrating-Hook; C1/C2/C3/C4 umgeschnitten.
