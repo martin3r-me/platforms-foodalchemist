@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **v0.6, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **v0.7, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -260,6 +260,10 @@ Verbindung zu Teil B: B3 hängt jede Abfrage an den Sichtfilter (Hülle- und Abo
 
 ### §5.0 Regel
 
+- **Aktiv gebaut (Dominique 16.10.), sonst Pfadfinder:**
+  - **C1 Schritt 1** (Planung/Index: Nicht-UI-Logik in Services/Query-Klassen/Form-Objekte; Komponente bleibt eine, keine Kinder, keine Verhaltensänderung, Diff mit `--color-moved` prüfbar) → „test“, nach Teil A, zwei getrennte PRs: erst E5 löschen, dann C1-1 verschieben.
+  - **C5** (Modal-Writes über Services: `RecipeService::setzeFeld` mit Riegel, GP über `GpService` mit `canCurate`, VK über `SalesRecipeService::updateVk`) → Vanessa, direkt nach B2.
+  - **C2** nur der Charakterisierungstest jetzt (#458); der Bruch beim nächsten Wareneingang-Eingriff.
 - **Kein Großumbau, kein Ziel „Datei < X Zeilen“.** Die Schnittpläne unten werden beim **nächsten fachlichen Eingriff** in genau diese Datei umgesetzt (Pfadfinder).
 - **Reines Verschieben:** ein PR je Schnitt, ohne Verhaltensänderung. Route und äußerer Komponentenname bleiben. Events und Event-Namen bleiben. Was in ein Kind wandert, nimmt seine Props und seinen Blade-Teil mit. Der Diff wird so geschnitten, dass er sich mit `git diff --color-moved` als Verschiebung prüfen lässt.
 - **Vor jedem Schnitt:** offene Arbeit an der Datei prüfen. Stand 16.10.: **0 offene PRs** im Repo; parallele Sessions können aber lokal daran arbeiten → kurz fragen.
@@ -430,10 +434,14 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | O1 | **gemergt #456**, live auf io |
 | C3a | **gemergt #454** (Vanessa) |
 | E-1 | **gemergt #457** (Vanessa) |
-| A-1 / A-2 / A-3 | lokal fertig, gestapelt auf e0ac84ac: `feat/spec84-a1-fateam`, `feat/spec84-a2-ki-fateam`, `feat/spec84-a3-job-team` |
+| A-1 / A-2 / A-3 / A-4 | lokal fertig, gestapelt auf e0ac84ac: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`; Kern 243/243 grün, großer Lauf (383 Dateien) läuft |
+| E3 Support-Zugang | lokal fertig auf A-4: `feat/spec84-e3-support-zugang` |
+| E5 Skizzen-Code | lokal fertig: `chore/spec84-e5-skizzen-weg` (Planung/Index 4.596 → 4.249 Z.) |
+| B1 eine Master-Definition | in Arbeit: `fix/spec84-b1-master` |
+| PR 7 C2-Charakterisierungstest | **gemergt #458** (Vanessa) |
+| PR 9 §5.8 Sperre beim Schließen | **gemergt #459** (Vanessa): kein Fix nötig, Wächter-Test |
+| §5.5 Foodbook-Fortschritt über FoodbookService | **gemergt #460** (Vanessa) |
 | 2 (B0a) | **gemergt #453** (Vanessa) |
-| E3 Support-Zugang (§4.4) | offen, nach A-2 („test“) |
-| E5 Skizzen-Code löschen | offen („test“) |
 | Teil E (§5a) | E-1 Kurator; E-3 „test“ vor B3; E-2/E-4/E-5 Vanessa |
 | alle übrigen | offen |
 
@@ -518,6 +526,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-16 · v0.7: C1-1 und C5 aktiv (Dominique); Stand A-4, E3, E5, B1; #458–#460 gemergt.
 - 2026-10-16 · v0.6: §3.3a Umsetzung A-1–A-3 inkl. Auflösung H2, PendingDispatch-Falle, Messung über FaTeam; E-1 in der Anwendung; Stand PR 0/O1/C3a/E-1 gemergt.
 - 2026-10-16 · v0.5 (Nachtrag): E3 entschieden → §4.4 Support-Zugang auf Freigabe; neuer Teil E Skalierung/Leistung (§5a).
 - 2026-10-16 · v0.5: Entscheide E1 (demo egal), E2 (Fehler), E4, E5 (löschen), E6, E7, E8 (Lücke) eingetragen; E3 offen; L1-B Variante B umgesetzt; Stand je PR in §7.
