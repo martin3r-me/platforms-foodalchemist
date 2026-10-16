@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **v0.8, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-16 · Status: **v0.9, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -254,6 +254,13 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 | E-5 | Speicher: Kontrast-Neuberechnung (Anker-Wissen) in Stapeln statt alles im RAM | Vanessa | nach B2 |
 | E-6 | Infrastruktur: Redis für Queue/Cache/Session, Serverausbau | Entscheid Dominique + Christian (nicht unser Code) | offen |
 
+**E-3 Ergebnis (EXPLAIN auf io, 17.10., Datei `00_INBOX/_Spec84_E3/e3_explain_io_2026-10-17.txt`, Abfragen `84_E3_explain_abfragen.sql`):**
+- `supplier_items`: 342.509 aktive Zeilen, alle `team_id NULL` → `ref_or_null` über den team_id-Index, rund 177k geschätzte Zeilen. Ein zusammengesetzter Index hätte für die Sicht keine Selektivität; die Kosten liegen bei Suche, Lieferant und Paginierung (E-2).
+- `gps`, `offers`, `recipes`: auf io praktisch leer, Pläne nicht aussagekräftig.
+- Q6 (77d-Hülle): `DEPENDENT SUBQUERY` mit `eq_ref` auf `fa_fro_eindeutig`, gut.
+- **Q7 (Abo-Zweig): `recipes` Vollscan (`ALL`).** Der `OR` zwischen Team-Kette und `id IN (abo_objekte …)` hebelt den Index aus. Harmlos auf io (leer), relevant bei Master-Volumen und ersten Abos.
+- **Entscheidung:** jetzt keine Indizes. B3 Stufe 1 baut den Abo-Zweig UNION- bzw. Semi-Join-tauglich statt als `OR`; die Messung vorher/nachher läuft mit Master-Volumina (Sandbox mit demo-Dump). Weitere Indizes erst mit Daten aus der Messwoche (E-1 ab 23.10.).
+
 Verbindung zu Teil B: B3 hängt jede Abfrage an den Sichtfilter (Hülle- und Abo-Unterabfragen). Ohne E-3 und ohne die Messung aus E-1 ist der Leistungsvergleich vor/nach B3 (§4.2) nicht belastbar.
 
 ## §5 · Teil C · Große PHP-Dateien
@@ -441,8 +448,8 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | Fix Planung-Vorlagen-Tests (main rot nach L1-B) | **gemergt #463** |
 | E5 Skizzen-Code | **gemergt #464** |
 | C1 Schritt 1 (ReglerParams, KaskadenAnsicht, LaufCockpit) | **gemergt #465**; Planung/Index 4.596 → 3.641 Zeilen |
-| A-1 / A-2 / A-3 / A-4 / E3 | gemeldet, rebased auf a4164fcf: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`, `feat/spec84-e3-support-zugang`. Großer Lauf 3.432 Tests (rot nur 3 main-Fälle #463 + 2 vorbestehende), Nachlauf nach Rebase 349/349 |
-| E-3 Indizes für B3 | offen („test“), braucht EXPLAIN auf io |
+| A-1 / A-2 / A-3 / A-4 / E3 | **gemergt #466–#470**, Deploy io; vorher gemeldet, rebased auf a4164fcf: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`, `feat/spec84-e3-support-zugang`. Großer Lauf 3.432 Tests (rot nur 3 main-Fälle #463 + 2 vorbestehende), Nachlauf nach Rebase 349/349 |
+| E-3 Indizes für B3 | EXPLAIN io ausgewertet (17.10.): keine Indizes jetzt; Abo-Zweig in B3 als UNION statt OR; Rest nach Messwoche |
 | B3 Stufe 1–4 + B0b, B4, B5 | offen („test“), nach E-3 |
 | C5 Modal-Writes über Services | offen (Vanessa, nach B2) |
 | E-2, E-4, E-5 | offen (Vanessa) |
@@ -532,6 +539,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-17 · v0.9: A-Kette + E3 gemergt (#466–#470); E-3 EXPLAIN io ausgewertet (Q7 Abo-Zweig Vollscan → UNION in B3).
 - 2026-10-17 · v0.8: Stand nach Merges #461–#465; A-Kette + E3 gemeldet; zwei vorbestehende rote Tests dokumentiert.
 - 2026-10-16 · v0.7: C1-1 und C5 aktiv (Dominique); Stand A-4, E3, E5, B1; #458–#460 gemergt.
 - 2026-10-16 · v0.6: §3.3a Umsetzung A-1–A-3 inkl. Auflösung H2, PendingDispatch-Falle, Messung über FaTeam; E-1 in der Anwendung; Stand PR 0/O1/C3a/E-1 gemergt.
