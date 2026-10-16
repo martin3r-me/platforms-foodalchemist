@@ -250,7 +250,8 @@ it('MCP preise_verlauf.GET: la_id und gp_id, Zeitraum, Punkte je LA, Trend/Steig
 
 it('Trendtext: Minuszeichen bei fallendem Preis, ohne Trend null', function () {
     expect(Verlauf::trendText(['steigung_pro_monat' => -0.1234, 'prozent_pro_jahr' => -2.5], '€/l'))->toBe('−0,12 €/l pro Monat · −2,5 % pro Jahr')
-        ->and(Verlauf::trendText(null, '€/kg'))->toBeNull();
+        ->and(Verlauf::trendText(null, '€/kg'))->toBeNull()
+        ->and(Verlauf::trendText(['steigung_pro_monat' => 0.0042, 'prozent_pro_jahr' => 0.7], '€/kg'))->toBe('+0,004 €/kg pro Monat · +0,7 % pro Jahr');   // nicht „+0,00“
 });
 
 it('Diagramm: durchgehende Treppe mit senkrechtem Strich beim Preiswechsel, gestrichelte Trendlinie, Lead dicker, Tooltip je Stand', function () {
@@ -323,7 +324,10 @@ it('Ansicht: feste Höhe, Beschriftung als HTML in FA-Typografie (nicht im skali
 
     expect($html)->toContain('grid-template-rows: 240px')->toContain('data-preisverlauf-einheit')->toContain('data-preisverlauf-achse-x')
         ->toContain('Jan 26')->toContain('Apr 26')->toContain('preserveAspectRatio="none"')->toContain('data-preisverlauf-band')
-        ->toContain('<title>')->toContain('Trend +')->not->toContain('<text');                   // keine Schrift im SVG: sie skaliert sonst mit
+        ->toContain('Trend +')->not->toContain('<text')                                             // keine Schrift im SVG: sie skaliert sonst mit
+        // Tooltip: eigenes Element im (relativen) Diagramm-Container an der Mausposition, an den Rändern geklemmt — kein natives <title> (das saß oben links im Modal)
+        ->toContain('data-preisverlauf-tooltip')->toContain('class="relative" x-data="{ tip: null, mx: 0, my: 0 }"')->toContain('data-tip="')->toContain('Math.min(mx + 14')
+        ->not->toContain('<title>');
 });
 
 it('Komponente: LA-Modal zeigt eine Linie, GP zeigt je LA eine Linie mit Legende, Zeitraum-Umschalter und Hinweis auf weggelassene Artikel', function () {
@@ -387,4 +391,122 @@ it('Ein Artikel nur mit Aktionsständen zeigt sie trotzdem als Linie (Fallback)'
     $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
 
     expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([7.0, 6.0]);
+});
+
+// ── Preise-Reiter: frühere Preise (Necta-Historie), Layout, Refresh ──────────
+
+it('Frühere Preise: Necta-Historie als Liste, neueste zuerst, Aktion markiert, offener Stand gilt bis zum nächsten, schon gelistete Preiszeilen fehlen', function () {
+    $la = ($this->la)('Hanos', 2.0, 'kg');
+    ($this->preis)($la, 10.0, '2026-05-01');                          // aktuelle Preiszeile: steht schon in der Preisliste
+    ($this->historie)($la, 8.0, '2026-01-01', '2026-02-28 23:59:59');
+    ($this->historie)($la, 9.0, '2026-03-01');                        // offen → gilt bis zum nächsten Stand desselben Status
+    ($this->historie)($la, 10.0, '2026-05-01');                       // dieselbe Stufe wie die Preiszeile → nicht doppelt
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => '2',
+        'price' => 7.0, 'status_valid_from' => '2026-02-01', 'valid_to' => '2026-02-14', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+    $r = $this->svc->fruehere($this->rootTeam, $la);
+
+    expect($r['gesamt'])->toBe(3)->and($r['gekappt'])->toBeFalse()
+        ->and(array_column($r['zeilen'], 'von'))->toBe(['2026-03-01', '2026-02-01', '2026-01-01'])              // neueste zuerst
+        ->and(array_column($r['zeilen'], 'preis'))->toBe([9.0, 7.0, 8.0])->and(array_column($r['zeilen'], 'je_basis'))->toBe([4.5, 3.5, 4.0])   // Gebinde 2 kg
+        ->and(array_column($r['zeilen'], 'aktion'))->toBe([false, true, false])                                  // Aktion sichtbar markiert
+        ->and($r['zeilen'][0]['bis'])->toBe('2026-05-01')->and($r['zeilen'][2]['bis'])->toBe('2026-02-28')      // offen → bis zum nächsten Stand; sonst valid_to
+        ->and($r['zeilen'][0]['quelle'])->toBe('Necta-Historie')->and($r['zeilen'][0]['einheit'])->toBe('€/kg');
+
+    // die Linie zeigt die Aktion weiterhin NICHT
+    $linie = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
+    expect(in_array(3.5, array_column($linie['linien'][0]['segmente'], 'wert'), true))->toBeFalse();
+});
+
+it('Frühere Preise: Sichtbarkeit wie die Linie (fremde Historie nicht, Kappung bei sehr vielen Ständen)', function () {
+    $eigen = ($this->la)('Hanos', 1.0, 'kg', $this->childA->id);
+    ($this->historie)($eigen, 4.0, '2026-01-01');
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $eigen->id, 'team_id' => $this->childB->id, 'status' => '0',
+        'price' => 99.0, 'status_valid_from' => '2026-02-01', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+    expect(array_column($this->svc->fruehere($this->childA, $eigen)['zeilen'], 'preis'))->toBe([4.0]);
+
+    $viele = ($this->la)('Chefs', 1.0, 'kg');
+    foreach (range(1, 30) as $i) {
+        ($this->historie)($viele, 1.0 + $i / 100, Carbon::parse('2026-01-01')->addDays($i)->toDateString());
+    }
+    $r = $this->svc->fruehere($this->rootTeam, $viele, 10);
+    expect($r['gesamt'])->toBe(30)->and(count($r['zeilen']))->toBe(10)->and($r['gekappt'])->toBeTrue();
+});
+
+it('Komponente Frühere Preise: eingeklappte Gruppe „Frühere Preise (n)“ mit Gültig ab/bis, Preis, je Basiseinheit, Quelle, Aktion markiert; ohne Historie nichts', function () {
+    $la = ($this->la)('Hanos', 2.0, 'kg');
+    ($this->historie)($la, 8.0, '2026-01-01', '2026-02-28 23:59:59');
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => '2',
+        'price' => 7.0, 'status_valid_from' => '2026-02-01', 'valid_to' => '2026-02-14', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Preise\Fruehere::class, ['itemId' => $la->id])->html();
+
+    expect($html)->toContain('Frühere Preise (2)')->toContain('data-fruehere-liste')->toContain('x-show="offen"')->toContain('Necta-Historie')
+        ->toContain('01.01.2026')->toContain('28.02.2026')->toContain('4,00 €/kg')->toContain('Gültig ab')->toContain('Gültig bis')->toContain('Je Basiseinheit')
+        ->and(substr_count($html, 'data-aktion="1"'))->toBe(1)->and($html)->toContain('Aktion');
+
+    $leer = ($this->la)('Chefs');
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Preise\Fruehere::class, ['itemId' => $leer->id])->assertDontSeeHtml('data-fruehere-preise')->assertSeeHtml('data-fruehere-wurzel');
+});
+
+it('Preise-Reiter im Artikel-Modal: zweispaltig ab lg (links Preise, rechts Verlauf sticky), Knopf „Preis manuell setzen“ oben im Preise-Block, Kinder mit Key', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 4.0, '2026-01-01');
+    ($this->historie)($la, 3.0, '2025-06-01', '2025-12-31');
+
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\ItemModal::class)->call('oeffnen', $la->id)->html();
+
+    expect($html)->toContain('data-preise-reiter')->toContain('lg:grid-cols-2')->toContain('data-preise-links')->toContain('data-preise-rechts')->toContain('lg:sticky')
+        ->toContain('data-preis-liste')->toContain('max-h-[28rem]')
+        ->toContain('data-preis-neu-toggle')->toContain('Preis manuell setzen')
+        ->toContain('data-sektion="preisverlauf"')->toContain('Frühere Preise (1)')
+        ->toContain('wire:key="pv-la-'.$la->id.'"')->toContain('wire:key="pf-la-'.$la->id.'"');            // Kinder mit Key: kein Zuspringen des Modals
+    expect(strpos($html, 'data-preise-links'))->toBeLessThan(strpos($html, 'data-preise-rechts'));
+});
+
+it('Ein manueller Preis erscheint sofort in Liste und Linie: Modal sendet preise-geaendert, Verlauf und frühere Preise laden daraufhin neu', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 4.0, '2026-01-01');
+
+    $modal = Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\ItemModal::class)->call('oeffnen', $la->id)
+        ->set('preisNeu.price', '5,50')->call('preisAnlegen')->assertDispatched('preise-geaendert');
+    expect(DB::table('foodalchemist_prices')->where('supplier_item_id', $la->id)->where('price', 5.5)->exists())->toBeTrue()
+        ->and($modal->html())->toContain('5,50');                                                         // in der Liste
+
+    // der Verlauf (eigene Komponente) kennt den neuen Preis erst nach dem Ereignis, nicht früher
+    $verlauf = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $la->id])->set('zeitraum', 'alles');
+    expect($verlauf->html())->toContain('5,50 €/kg');
+    DB::table('foodalchemist_prices')->where('supplier_item_id', $la->id)->where('price', 5.5)->update(['price' => 6.25]);
+    $verlauf->dispatch('preise-geaendert', itemId: $la->id);
+    expect($verlauf->html())->toContain('6,25 €/kg');
+});
+
+it('Kein Preiswechsel im Zeitraum: statt „+0,00 €/Stk pro Monat · +0,0 %“ steht „kein Preiswechsel im Zeitraum“, ohne Trendlinie (MCP: Trend null)', function () {
+    $la = ($this->la)('Hanos', 1.0, 'Stk');
+    ($this->preis)($la, 1.91, '2025-10-16', '2026-03-01');
+    ($this->preis)($la, 1.91, '2026-03-01');                          // zwei Stände, derselbe Preis
+
+    $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
+    $html = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $la->id])->set('zeitraum', 'alles')->html();
+
+    expect($r['linien'][0]['ohne_wechsel'])->toBeTrue()->and($r['linien'][0]['trend'])->toBeNull()->and($r['linien'][0]['staende'])->toBe(2);
+    expect($html)->toContain('kein Preiswechsel im Zeitraum')->not->toContain('+0,00')->not->toContain('data-preisverlauf-trend');
+
+    // mit Wechsel bleibt es beim Trend
+    $b = ($this->la)('Chefs', 1.0, 'Stk');
+    ($this->preis)($b, 1.91, '2025-10-16', '2026-03-01');
+    ($this->preis)($b, 2.10, '2026-03-01');
+    expect($this->svc->verlauf($this->rootTeam, [$b->id], ...($this->fenster)('alles'))['linien'][0]['trend'])->not->toBeNull();
+});
+
+it('Ein Preis, der gerade eben angelegt wurde, erscheint sofort in der Linie (Fenster reicht bis zum Ende des heutigen Tages)', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 4.0, '2026-01-01', '2026-06-30 12:00:00');
+    DB::table('foodalchemist_prices')->insert(['uuid' => (string) UuidV7::generate(), 'team_id' => $la->team_id, 'supplier_item_id' => $la->id, 'status' => '0', 'price' => 5.5,
+        'status_valid_from' => null, 'creation_date' => now(), 'valid_to' => null, 'is_blocked' => 0, 'created_at' => now(), 'updated_at' => now()]);   // wie PriceService::createFor: ab jetzt, ohne Länge
+
+    foreach (['12m', 'alles', 'frei'] as $z) {
+        $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)($z));
+        expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([4.0, 5.5]);
+    }
 });

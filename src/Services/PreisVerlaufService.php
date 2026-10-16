@@ -55,7 +55,7 @@ class PreisVerlaufService
     {
         $heute ??= now();
         if ($zeitraum === 'frei') {
-            $b = $bis !== null && $bis !== '' ? Carbon::parse($bis)->endOfDay() : $heute->copy();
+            $b = $bis !== null && $bis !== '' ? Carbon::parse($bis)->endOfDay() : $heute->copy()->endOfDay();
             $v = $von !== null && $von !== '' ? Carbon::parse($von)->startOfDay() : null;
             if ($v !== null && $v->gt($b)) {
                 [$v, $b] = [$b->copy()->startOfDay(), $v->copy()->endOfDay()];
@@ -64,11 +64,12 @@ class PreisVerlaufService
             return [$v, $b];
         }
         if ($zeitraum === 'alles') {
-            return [null, $heute->copy()];
+            return [null, $heute->copy()->endOfDay()];
         }
         $monate = self::ZEITRAEUME[$zeitraum] ?? 12;
 
-        return [$heute->copy()->subMonths($monate)->startOfDay(), $heute->copy()];
+        // Ende = Ende des heutigen Tages: ein Preis, der gerade eben angelegt wurde, hat sonst die Länge null und fehlt in der Linie
+        return [$heute->copy()->subMonths($monate)->startOfDay(), $heute->copy()->endOfDay()];
     }
 
     /**
@@ -171,7 +172,8 @@ class PreisVerlaufService
                     'wert' => round($s['wert'], 4), 'preis_gebinde' => $s['preis'], 'quelle' => $s['quelle'],
                 ], $zugeschnitten),
                 'staende' => count($zugeschnitten),
-                'trend' => $this->trend($zugeschnitten),
+                'ohne_wechsel' => $this->ohneWechsel($zugeschnitten),
+                'trend' => $this->ohneWechsel($zugeschnitten) ? null : $this->trend($zugeschnitten),
             ];
         }
         usort($result, fn ($a, $b) => [! $a['lead'], mb_strtolower((string) $a['lieferant'])] <=> [! $b['lead'], mb_strtolower((string) $b['lieferant'])]);
@@ -208,19 +210,7 @@ class PreisVerlaufService
             $zeilen = $zeilen->concat($h);
         }
 
-        $kette = $team !== null ? PriceService::preisKette($team) : [];
-        $tier = function (object $r, FoodAlchemistSupplierItem $item) use ($kette): ?int {
-            $tid = $r->team_id === null ? null : (int) $r->team_id;
-            if ($tid === null) {
-                return count($kette) + 1;                          // global
-            }
-            $pos = array_search($tid, $kette, true);
-            if ($pos !== false) {
-                return (int) $pos;                                 // eigene Team-Kette, eigenes Team zuerst
-            }
-
-            return $tid === (int) $item->team_id ? count($kette) : null;   // Listenpreis des Besitzers; sonst nicht sichtbar
-        };
+        $tier = $this->stufenFunktion($team);
 
         $nachArtikel = [];
         foreach ($zeilen as $r) {
@@ -264,6 +254,109 @@ class PreisVerlaufService
         }
 
         return $aus;
+    }
+
+    /**
+     * Sichtbarkeits-Stufe einer Preiszeile für den Betrachter: 0.. = eigene Team-Kette (eigenes Team zuerst), danach der Besitzer-Listenpreis,
+     * zuletzt global (NULL); null = nicht sichtbar. Je Artikel gilt nur die beste vorhandene Stufe (nie ein Mix).
+     *
+     * @return \Closure(object, FoodAlchemistSupplierItem): ?int
+     */
+    private function stufenFunktion(?Team $team): \Closure
+    {
+        $kette = $team !== null ? PriceService::preisKette($team) : [];
+
+        return function (object $r, FoodAlchemistSupplierItem $item) use ($kette): ?int {
+            $tid = $r->team_id === null ? null : (int) $r->team_id;
+            if ($tid === null) {
+                return count($kette) + 1;                          // global
+            }
+            $pos = array_search($tid, $kette, true);
+            if ($pos !== false) {
+                return (int) $pos;                                 // eigene Team-Kette, eigenes Team zuerst
+            }
+
+            return $tid === (int) $item->team_id ? count($kette) : null;   // Listenpreis des Besitzers; sonst nicht sichtbar
+        };
+    }
+
+    /**
+     * Frühere Preise eines Artikels aus der Necta-Historie (`price_history`), für die Liste im Preise-Reiter: neueste zuerst, mit Gültig ab/bis,
+     * Preis je Gebinde, Preis je Basiseinheit und Quelle. Aktionspreise (status 2) sind hier SICHTBAR und markiert (in der Linie nicht).
+     * Gleiche Sichtbarkeit wie die Linie (beste Stufe über Preiszeilen und Historie); Stände, die schon als Preiszeile in der Liste stehen, fehlen hier.
+     * Ist ein Stand offen (valid_to leer), gilt er bis zum nächsten Stand desselben Status.
+     *
+     * @return array{zeilen:list<array<string,mixed>>, gesamt:int, gekappt:bool}
+     */
+    public function fruehere(?Team $team, FoodAlchemistSupplierItem $item, int $limit = 200): array
+    {
+        if (! (self::$hatHistorie ??= Schema::hasTable('foodalchemist_price_history'))) {
+            return ['zeilen' => [], 'gesamt' => 0, 'gekappt' => false];
+        }
+        $tier = $this->stufenFunktion($team);
+        $historie = DB::table('foodalchemist_price_history')->where('supplier_item_id', $item->id)
+            ->get(['id', 'team_id', 'status', 'price', 'is_blocked', 'status_valid_from', 'valid_to', 'change_date', 'created_at']);
+
+        $q = DB::table('foodalchemist_prices')->where('supplier_item_id', $item->id)->whereNull('deleted_at');
+        $this->preise->stammFilter($q, 'foodalchemist_prices', $team);
+        $preiszeilen = $q->get(['team_id', 'status', 'price', 'status_valid_from', 'change_date', 'creation_date', 'created_at']);
+
+        $beste = null;
+        foreach ($preiszeilen->concat($historie) as $r) {
+            $t = $tier($r, $item);
+            $beste = $t !== null ? min($beste ?? $t, $t) : $beste;
+        }
+        if ($beste === null) {
+            return ['zeilen' => [], 'gesamt' => 0, 'gekappt' => false];
+        }
+        $schluessel = fn (int $start, float $preis) => $start.'|'.number_format($preis, 4, '.', '');
+        $inListe = [];
+        $startsDerListe = [];   // Status => Anfänge der Preiszeilen: begrenzen einen offenen Stand der Historie
+        foreach ($preiszeilen as $r) {
+            $start = $r->status_valid_from ?? $r->change_date ?? $r->creation_date ?? $r->created_at;
+            if ($r->price !== null && $start !== null) {
+                $ts = Carbon::parse($start)->getTimestamp();
+                $inListe[$schluessel($ts, (float) $r->price)] = true;
+                $startsDerListe[(string) $r->status][] = $ts;
+            }
+        }
+
+        $stand = [];
+        foreach ($historie as $r) {
+            $start = $r->status_valid_from ?? $r->change_date ?? $r->created_at;
+            if ($tier($r, $item) !== $beste || $r->price === null || (float) $r->price < 0 || $r->is_blocked || $start === null) {
+                continue;
+            }
+            $ts = Carbon::parse($start)->getTimestamp();
+            $key = $schluessel($ts, (float) $r->price);
+            if (isset($inListe[$key])) {
+                continue;
+            }
+            $stand[$key.'|'.$r->status] = ['start' => $ts, 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null, 'preis' => (float) $r->price, 'status' => (string) $r->status];
+        }
+        $stand = array_values($stand);
+        usort($stand, fn ($a, $b) => $a['start'] <=> $b['start']);
+
+        $zeilen = [];
+        foreach ($stand as $i => $s) {
+            $ende = $s['ende'];
+            if ($ende === null) {
+                $spaeter = array_filter(
+                    array_merge(array_column(array_filter(array_slice($stand, $i + 1), fn ($n) => $n['status'] === $s['status']), 'start'), $startsDerListe[$s['status']] ?? []),
+                    fn ($t) => $t > $s['start'],
+                );
+                $ende = $spaeter !== [] ? min($spaeter) : null;
+            }
+            $basis = $this->preise->vergleichspreis($item, $s['preis']);
+            $zeilen[] = [
+                'von' => Carbon::createFromTimestamp($s['start'])->toDateString(), 'bis' => $ende !== null ? Carbon::createFromTimestamp($ende)->toDateString() : null,
+                'preis' => $s['preis'], 'je_basis' => $basis !== null ? round((float) $basis['value'], 4) : null, 'einheit' => $basis['unit'] ?? null,
+                'aktion' => $s['status'] === '2', 'quelle' => 'Necta-Historie',
+            ];
+        }
+        $zeilen = array_reverse($zeilen);   // neueste zuerst
+
+        return ['zeilen' => array_slice($zeilen, 0, $limit), 'gesamt' => count($zeilen), 'gekappt' => count($zeilen) > $limit];
     }
 
     /**
@@ -314,6 +407,14 @@ class PreisVerlaufService
         }
 
         return $aus;
+    }
+
+    /** Alle Stufen im Zeitraum haben denselben Preis: es gab keinen Preiswechsel (keine Steigung „+0,00“ ausweisen). */
+    private function ohneWechsel(array $segmente): bool
+    {
+        $werte = array_unique(array_map(fn ($s) => number_format($s['wert'], 4, '.', ''), $segmente));
+
+        return count($segmente) >= 2 && count($werte) === 1;
     }
 
     /**

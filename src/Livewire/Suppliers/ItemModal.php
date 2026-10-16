@@ -202,6 +202,7 @@ class ItemModal extends Component
             app(PriceService::class)->createFor($this->team(), $this->item($this->itemId), (float) $roh, $this->preisNeu['status']);
             $this->preisNeu = ['price' => '', 'status' => '0'];
             $this->fehler = null;
+            $this->dispatch('preise-geaendert', itemId: (int) $this->itemId);   // Liste, frühere Preise und Verlauf neu laden
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -256,6 +257,7 @@ class ItemModal extends Component
         }
         $this->preisEditId = null;
         $this->fehler = null;
+        $this->dispatch('preise-geaendert', itemId: (int) $this->itemId);
     }
 
     public function preisEditAbbrechen(): void
@@ -267,6 +269,7 @@ class ItemModal extends Component
     {
         try {
             app(PriceService::class)->deleteFor($this->team(), $this->item($this->itemId), $priceId);
+            $this->dispatch('preise-geaendert', itemId: (int) $this->itemId);
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
