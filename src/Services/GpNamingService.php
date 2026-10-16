@@ -444,6 +444,7 @@ class GpNamingService
      * Zusatz im Namen (Bio, Vegan, Glutenfrei, Laktosefrei) — STRENG: nur, wenn eine Quelle es AUSDRÜCKLICH sagt (LA-Merkmal, Bio-Kontrollnummer,
      * Text in Bezeichnung/Marketing-/regulierter Name/Zutatenangabe). NIE aus fehlenden oder schwachen Allergenen ableiten („Milch Spuren" ≠ laktosefrei).
      * Widerspruch (vegan, aber Milch/Ei/Fisch … „enthalten"; glutenfrei, aber Gluten „enthalten") → nicht setzen, Hinweis.
+     * Der Aufrufer schaltet eine Handeingabe nie ab, AUSSER bei genau diesem Widerspruch zu „enthalten" (`widerspruch`).
      *
      * @param  array{bezeichnung?: ?string, marketing_name?: ?string, regulierter_name?: ?string, zutaten?: ?string, is_organic?: mixed, is_vegan?: mixed, bio_kontrollnummer?: ?string, allergene?: array<string,?string>}  $q
      * @return array{flags: array{bio: bool, vegan: bool, glutenfrei: bool, laktosefrei: bool}, widerspruch: list<string>, hinweise: list<string>}
@@ -476,14 +477,26 @@ class GpNamingService
         return ['flags' => ['bio' => $bio, 'vegan' => $vegan, 'glutenfrei' => $gluten, 'laktosefrei' => $laktose], 'widerspruch' => $widerspruch, 'hinweise' => $hinweise];
     }
 
-    /** Form/Verarbeitung, die schon in der Hauptzutat steckt (Form „Mousse" bei „Schokoladenmousse"), ist Dublette: leer. */
+    /**
+     * Form/Verarbeitung, die schon in der Hauptzutat steckt (Form „Mousse" bei „Schokoladenmousse"), ist Dublette: leer.
+     * Nur wenn die Form das KOPFWORT einer Hauptzutat-Vokabel ist, also dem Wort entspricht oder (Kompositum, Form ≥ 4 Zeichen) am Wortende steht.
+     * Ein Teilstring irgendwo trifft nicht: „Ei" + „Scheiben", „Reis" + „Korn" bleiben.
+     */
     public function dedupliziereMitHauptzutat(string $hauptzutat, string $feld): string
     {
         $n = fn (string $x) => (string) preg_replace('/[^a-z0-9]+/', '', strtr(mb_strtolower($x), ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 'ss']));
-        $h = $n($hauptzutat);
         $f = $n($feld);
+        if ($f === '') {
+            return $feld;
+        }
+        foreach (preg_split('/\s+/u', trim($hauptzutat), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $wort) {
+            $w = $n($wort);
+            if ($w === $f || (mb_strlen($f) >= 4 && $w !== '' && str_ends_with($w, $f))) {
+                return '';
+            }
+        }
 
-        return $f !== '' && $h !== '' && (str_contains($h, $f) || str_contains($f, $h)) ? '' : $feld;
+        return $feld;
     }
 
     /** Steht ein Platzhalter („unbekannt") als Attribut im Namen? Nur ganze Wörter im Attributteil nach dem Doppelpunkt. */

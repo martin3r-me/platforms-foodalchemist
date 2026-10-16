@@ -1065,11 +1065,12 @@ class GpModal extends Component
         ]);
         foreach ($z['flags'] as $flag => $an) {
             if ($an) {
-                $this->builder[$flag] = true;       // nur auf ausdrückliche Quellaussage; eine Handeingabe wird nie abgeschaltet
+                $this->builder[$flag] = true;       // nur auf ausdrückliche Quellaussage
             }
         }
         foreach ($z['widerspruch'] as $flag) {
-            $this->builder[$flag] = false;           // behauptet, aber widerlegt (z. B. vegan trotz Milch „enthalten")
+            // Handeingabe wird nie abgeschaltet, AUSSER bei echtem Widerspruch zu „enthalten" (z. B. vegan trotz Milch): dann false + Hinweis
+            $this->builder[$flag] = false;
         }
         if ($z['hinweise'] !== []) {
             $this->hinweis = trim(($this->hinweis ?? '').' '.implode(' ', $z['hinweise']));

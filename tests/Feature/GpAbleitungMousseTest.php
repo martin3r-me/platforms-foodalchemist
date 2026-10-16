@@ -82,7 +82,13 @@ it('Halluzinations-Guard: nur belegte Kernwörter, höchstens 3 Inhaltswörter, 
 it('★ Dublette: Form oder Verarbeitung, die schon in der Hauptzutat steckt, entfällt; echte Formen bleiben', function () {
     $n = app(GpNamingService::class);
     expect($n->dedupliziereMitHauptzutat('Schokoladenmousse', 'Mousse'))->toBe('')->and($n->dedupliziereMitHauptzutat('Schokoladenmousse', 'Riegel'))->toBe('Riegel')
-        ->and($n->dedupliziereMitHauptzutat('Salat', ''))->toBe('');
+        ->and($n->dedupliziereMitHauptzutat('Salat', ''))->toBe('')
+        ->and($n->dedupliziereMitHauptzutat('Schokoladenmousse mit Cashew-Creme', 'Mousse'))->toBe('')
+        ->and($n->dedupliziereMitHauptzutat('Mousse', 'Mousse'))->toBe('');
+    // Gegenproben: kurze Hauptzutat als Teilstring der Form ist KEINE Dublette
+    expect($n->dedupliziereMitHauptzutat('Ei', 'Scheiben'))->toBe('Scheiben')->and($n->dedupliziereMitHauptzutat('Reis', 'Korn'))->toBe('Korn')
+        ->and($n->dedupliziereMitHauptzutat('Ei', 'ei'))->toBe('')                       // gleiches Wort bleibt Dublette
+        ->and($n->dedupliziereMitHauptzutat('Kartoffel', 'Stärke'))->toBe('Stärke');
 });
 
 it('★ Warnung §7.1: „Gewicht oder Portion" gleich der Gebindemenge des LA (660 g) warnt, eine echte Portion nicht', function () {
