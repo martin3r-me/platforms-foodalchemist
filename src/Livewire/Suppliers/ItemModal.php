@@ -41,7 +41,7 @@ class ItemModal extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['geschlossen', 'gpGespeichert', 'preisEditAbbrechen'];
+        return ['geschlossen', 'gpGespeichert', 'preisEditAbbrechen', 'produktpassGeaendert'];
     }
 
     /** Abbrechen: ungespeicherten Formularstand verwerfen, Artikel frisch laden. */
@@ -103,6 +103,15 @@ class ItemModal extends Component
         $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei — VOR dem Reset (braucht itemId)
         if ($name === 'item-modal') {
             $this->reset(); // P-2: kein State-Leak
+        }
+    }
+
+    /** Der Produktpass hat Felder geschrieben (Nährwerte, Zutatenliste, Allergene …) — Formulare frisch laden, sonst überschriebe „Speichern" sie mit dem alten Stand. */
+    #[On('produktpass.geaendert')]
+    public function produktpassGeaendert(int $itemId): void
+    {
+        if ($this->itemId === $itemId) {
+            $this->oeffnen($itemId);
         }
     }
 

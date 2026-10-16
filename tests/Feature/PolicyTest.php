@@ -207,6 +207,15 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             }
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistProduktpassFeld') {
+            // Produktpass-Marker (Bauauftrag 16.10.2026): „dieses Feld stammt aus dem Produktpass" — Quelle je Feld + Schutz vor
+            // dem Necta-Abgleich. Eine Hilfstabelle der Produktpass-Version (diese trägt alle vier Traits), kein kuratierter Datensatz.
+            //  - kein BelongsToTeamHierarchy: gelesen wird nur über supplier_item_id (der Artikel ist der Sichtbarkeits-Anker), kein team_id.
+            //  - kein SoftDeletes: unique(supplier_item_id, objekt, feld) + updateOrCreate — eine trashed Zeile wäre für updateOrCreate
+            //    unsichtbar und kollidierte am Unique (dieselbe Falle wie bei ActiveOutlet).
+            //  - kein HasUuidV7/LogsActivity: nie extern adressiert; der Audit läuft über `uebernommen` der Version (alter Wert festgehalten).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).

@@ -25,7 +25,7 @@ const REGISTRY_SOLL = [
     'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
     'recipe.review' => 'A',
     'recipe.bauart' => 'B',                                           // Spec 21 S5b-2: Gericht-vs-Komponente nach Bauart (Klassifikator, darum Tier B + keine Food-DNA)
-    'recipe.equipment' => 'B', 'recipe.extract' => 'C',
+    'recipe.equipment' => 'B', 'recipe.extract' => 'C', 'produktpass.extract' => 'C',
     'recipe.verpackungsmasse' => 'B',                                  // D: Verpackungs-Einheit → Masse (zweite Meinung neben der LA-Gebindegrösse)
     'recipe.ueberarbeiten' => 'A',                                    // R6: KI-Überarbeiten (freie Anweisung, Ist-Button)
     'recipe.sensorik' => 'B',                                         // Sensorik-Bewertung des fertigen Gerichts (recipe_sensorik)

@@ -865,6 +865,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TrendsPutTool::class,
                     \Platform\FoodAlchemist\Tools\TrendsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\TrendBelegePostTool::class,
+                    // Produktpass am Lieferantenartikel (Bauauftrag Kurator 16.10.2026)
+                    \Platform\FoodAlchemist\Tools\ProduktpassPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ProduktpassGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProduktpassAllergeneBestaetigenTool::class,
                     \Platform\FoodAlchemist\Tools\TrendBelegeDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\TrendsMessenTool::class,
                     \Platform\FoodAlchemist\Tools\FundstueckeGetTool::class,

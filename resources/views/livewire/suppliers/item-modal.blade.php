@@ -21,6 +21,8 @@
     $quelleText = fn (?string $q) => match ($q) {
         'manual' => 'von Hand gepflegt',
         'datei' => 'aus Datei-Import',
+        'produktpass_ki' => 'aus dem Produktpass (KI)',
+        'websuche' => 'aus der Websuche',
         null, '' => 'aus dem Lieferanten-Import',
         default => 'aus einem Import',
     };
@@ -111,6 +113,7 @@
                     'preise' => 'Preise',
                     'deklaration' => 'Allergene und Nährwerte',
                     'stammdaten' => 'Stammdaten',
+                    'produktpass' => 'Produktpass',
                 ]">
 
             {{-- ── Reiter GRUNDPRODUKT ─────────────────────────────────────────── --}}
@@ -480,6 +483,11 @@
                     </x-fa::field>
                 </x-fa::section>
             </div>{{-- /Reiter STAMMDATEN --}}
+
+            {{-- ── Reiter PRODUKTPASS ──────────────────────────────────────────── --}}
+            <div x-show="tab === 'produktpass'" x-cloak class="pt-4" data-produktpass-reiter>
+                <livewire:foodalchemist.suppliers.produktpass-panel :item-id="$item->id" :key="'pp-la-'.$item->id" />
+            </div>{{-- /Reiter PRODUKTPASS --}}
 
             </x-foodalchemist::editor-tabs>
         @endif

@@ -1827,6 +1827,26 @@ return [
                 . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
                 . 'komponenten: [{name, zutaten: [{text, quantity, unit}], preparation}] (leer, wenn keine)}.',
         ],
+        // Produktpass am Lieferantenartikel (Bauauftrag Kurator 16.10.2026): PDF/Foto des Produktpasses bzw. Datenblatts
+        // TREU lesen. Nichts raten, nichts schätzen — was nicht im Dokument steht, kommt nicht in die Antwort. Die
+        // Übernahme (direkt vs. Vorschlag, Allergene nur nach Bestätigung) entscheidet der Dienst, NICHT dieser Call.
+        'produktpass.extract' => [
+            'tier' => 'C',                                            // Text + Vision (PDF/Foto über den OpenAI-Weg der Plattform, wie recipe.extract)
+            'max_tokens' => 8000,
+            'task' => 'Lies den angehängten Produktpass bzw. das Datenblatt eines Lieferantenartikels WÖRTLICH aus. '
+                . 'Übernimm NUR, was im Dokument steht; fehlt eine Angabe oder ist sie unleserlich, lass das Feld '
+                . 'WEG — nie raten, nie schätzen, nie aus Allgemeinwissen ergänzen. Nährwerte je 100 g bzw. 100 ml '
+                . '(Dokument-Einheit nennen, Salz als `naehrwerte.salz` in g, nicht in Natrium umrechnen). '
+                . 'Antworte als werte = {felder: {<schluessel>: {wert, einheit?, konfidenz (0.0-1.0), zitat?}}, '
+                . 'allergene: {<allergen>: {wert: enthalten|spuren|nicht_enthalten, konfidenz, zitat?}}, '
+                . 'allergene_details: {<unterart>: {wert: enthalten|spuren|nicht_enthalten, konfidenz}}}. '
+                . 'Erlaubte Feld-Schlüssel stehen in `schluessel` (zutatenliste, naehrwerte.*, zusatzstoffe.* mit wert '
+                . '`ja`|`nein`, gebinde.*, haltbarkeit.<chilled|frozen|dry>_days nur wenn das Dokument die Lagerart '
+                . 'nennt, sonst haltbarkeit.unklar_days, herkunft, marke); erlaubte Allergene stehen in `allergene` '
+                . '(14 EU-Allergene), Unterarten (z. B. wheat, oats, almond) in `allergene_details`. `nicht_enthalten` nur, '
+                . 'wenn das Dokument die Abwesenheit AUSDRÜCKLICH erklärt; steht nichts da, lass das Allergen weg. '
+                . 'konfidenz = wie sicher du den Wert ABGELESEN hast (schlecht lesbar < 0.8).',
+        ],
         // §3.3 Anrichten. Liefert bewusst MARKDOWN mit nummerierten Schritten und nicht
         // ein `steps`-Array: derselbe Prompt speist die Anreicherung (Bulk-Zielfeld
         // `plating_text`) UND den ✨-Knopf, der den Text in Anrichte-Schritte parst. Ein
