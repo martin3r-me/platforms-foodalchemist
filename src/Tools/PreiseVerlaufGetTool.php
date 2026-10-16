@@ -65,7 +65,7 @@ class PreiseVerlaufGetTool extends FoodAlchemistTool implements ToolContract, To
             return ToolResult::success($this->ohneIntern($svc->verlaufFuerGp($team, $gp, $von, $bis)) + ['gp_id' => $gpId]);
         }
 
-        $r = $svc->verlauf($team, [$laId], $von, $bis, $laId);
+        $r = $svc->verlaufFuerLa($team, $laId, $von, $bis);
         if ($r['linien'] === [] && $r['weggelassen'] === 0 && $r['ohne_verlauf'] === 0) {
             return ToolResult::error('Lieferantenartikel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }

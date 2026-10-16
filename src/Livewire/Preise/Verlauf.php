@@ -29,6 +29,9 @@ class Verlauf extends Component
 
     public ?string $bis = null;
 
+    /** Nur modus la: alle Artikel des Grundprodukts statt nur Lead-Vergleich. */
+    public bool $alleArtikel = false;
+
     public function mount(string $modus = 'la', int $objektId = 0): void
     {
         $this->modus = $modus === 'gp' ? 'gp' : 'la';
@@ -39,6 +42,11 @@ class Verlauf extends Component
     #[On('preise-geaendert')]
     public function neuLaden(): void
     {
+    }
+
+    public function alleArtikelUmschalten(): void
+    {
+        $this->alleArtikel = ! $this->alleArtikel;
     }
 
     public function zeitraumSetzen(string $z): void
@@ -58,7 +66,7 @@ class Verlauf extends Component
                 $gp = FoodAlchemistGp::query()->visibleToTeam($team)->find($this->objektId);
                 $daten = $gp !== null ? $svc->verlaufFuerGp($team, $gp, $von, $bis) : null;
             } elseif ($this->objektId > 0) {
-                $daten = $svc->verlauf($team, [$this->objektId], $von, $bis, $this->objektId);
+                $daten = $svc->verlaufFuerLa($team, $this->objektId, $von, $bis, $this->alleArtikel);
             }
         } catch (\Throwable) {
             $fehler = 'Der Zeitraum ist ungültig. Bitte Daten im Format TT.MM.JJJJ wählen.';
@@ -109,9 +117,11 @@ class Verlauf extends Component
 
         $svgLinien = [];
         $weitere = 0;
+        $mitFokus = in_array(true, array_column($linien, 'fokus'), true);
         foreach ($linien as $l) {
-            // Lead immer in der ersten Farbe, alle anderen der Reihe nach (nie dieselbe wie der Lead)
-            $farbe = $l['lead'] ? self::FARBEN[0] : self::FARBEN[1 + ($weitere++ % (count(self::FARBEN) - 1))];
+            // Hauptlinie (am Artikel der Artikel selbst, am Grundprodukt der Lead) immer in der ersten Farbe, alle anderen der Reihe nach
+            $haupt = $mitFokus ? $l['fokus'] : $l['lead'];
+            $farbe = $haupt ? self::FARBEN[0] : self::FARBEN[1 + ($weitere++ % (count(self::FARBEN) - 1))];
             $pfad = '';
             $luecken = '';
             $punkte = [];
@@ -142,7 +152,7 @@ class Verlauf extends Component
                     'x2' => $x($l['trend']['bis_ts']), 'y2' => $y(min($yMax, max($yMin, $l['trend']['ende_wert'])))];
             }
             $svgLinien[] = [
-                'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $l['lead'] ? 2.5 : 1.75, 'pfad' => trim($pfad), 'luecken' => trim($luecken), 'punkte' => $punkte, 'trend' => $trend,
+                'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $haupt ? 2.5 : 1.75, 'gedaempft' => $mitFokus && ! $haupt, 'fokus' => $l['fokus'], 'pfad' => trim($pfad), 'luecken' => trim($luecken), 'punkte' => $punkte, 'trend' => $trend,
                 'lead' => $l['lead'], 'lieferant' => $l['lieferant'], 'artikel' => $l['artikel'], 'staende' => $l['staende'], 'ohne_wechsel' => $l['ohne_wechsel'] ?? false,
                 'aktuell' => end($l['segmente'])['wert'], 'trend_text' => self::trendText($l['trend'], (string) $daten['einheit']),
             ];
