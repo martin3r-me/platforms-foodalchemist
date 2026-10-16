@@ -32,7 +32,9 @@ final class KategorieRegeln
         ],
         'frische' => [
             'Kräuter/Küchenkräuter' => 3, 'Obst/Zitrusfrüchte' => 3, 'Gemüse/Sprossen' => 2,
-            'Gemüse/Blattgemüse/Salate' => 2, 'Gewuerze/Zitrusgewuerze' => 2,
+            'Gemüse/Blattgemüse/Salate' => 2,
+            // „Gewuerze/Zitrusgewuerze" (Inspire) bewusst NICHT pauschal: Kardamom, Koriandersamen, Wacholder
+            // sind zitrisch-aromatisch, aber kein Frische-Gegengewicht (Dominique 16.10.) → FRISCHE_ANKER.
         ],
         'aromatik' => [
             'Gewuerze' => 3, 'Gewuerze/Salz' => 0, 'Würzmittel/Würzung' => 2, 'Würzmittel/Tischsaucen' => 2,
@@ -65,11 +67,21 @@ final class KategorieRegeln
         'Getreide' => 0.5, 'Backwaren' => 0.5, 'Dessert' => 1.0, 'Süßwaren' => 1.5, 'Snacks' => 1.0,
     ];
 
+    /**
+     * Frische per Anker statt per Unterkategorie (Dominique 16.10.; liegt wie die übrigen Kategorie-Regeln als
+     * Konstante hier — ein Umzug in die Regel-Tabelle, Spec 81, dann für alle Regeln gemeinsam).
+     *   FRISCHE_ANKER  Zitrusgewürze, die wirklich frisch wirken (Slug → Stufe)
+     *   FRISCHE_OHNE   Pulver-Formen, die Inspire nicht als Verfahren führt (sonst bekämen sie die Frische der Rohware)
+     */
+    public const FRISCHE_ANKER = ['ginger' => 2, 'fresh_kaffir_lime_leaf' => 2, 'sumac' => 2, 'sumak_berry' => 2];
+
+    public const FRISCHE_OHNE = ['ginger_powder', 'kaffir_lime_leaf_powder', 'orange_peel_powder', 'barley_grass_powder', 'tulsi_powder'];
+
     /** Lieferseite neu ableiten (ersetzt die eigenen Entwürfe, geprüfte/verworfene bleiben). */
     public function eigenschaften(): int
     {
         $anker = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
-            ->get(['id', 'category', 'subcategory', 'verfahren']);
+            ->get(['id', 'slug', 'category', 'subcategory', 'verfahren']);
         $bestand = DB::table('foodalchemist_anchor_eigenschaften')->where('quelle', 'kategorie')
             ->where('status', '!=', WissensStatus::Entwurf->value)->get(['anchor_id', 'achse'])
             ->mapWithKeys(fn ($r) => [$r->anchor_id.'|'.$r->achse => true])->all();
@@ -84,7 +96,11 @@ final class KategorieRegeln
                 if ($achse === 'frische' && ! in_array($a->verfahren, [null, Verfahren::Roh->value], true)) {
                     continue;
                 }
-                $stufe = $this->praefix($pfad, $regeln);
+                if ($achse === 'frische' && in_array($a->slug, self::FRISCHE_OHNE, true)) {
+                    continue;
+                }
+                $stufe = $achse === 'frische' && isset(self::FRISCHE_ANKER[$a->slug])
+                    ? self::FRISCHE_ANKER[$a->slug] : $this->praefix($pfad, $regeln);
                 if ($stufe !== null && $stufe >= 2) {
                     $werte[$achse] = (int) $stufe;
                 }
