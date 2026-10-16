@@ -35,6 +35,41 @@ class AiCostCalculator
             + $output * (float) $preise['out']) / 1_000_000;
     }
 
+    /**
+     * Preis und Kurs für EINEN Aufruf, so wie sie beim Schreiben des Logs gelten (eingefroren: spätere Preisänderungen betreffen nur neue Aufrufe).
+     * Modell ohne Preis → alle Felder null (nie 0): die Auswertung weist diese Aufrufe als „ohne Preis“ aus, statt sie still als gratis zu zählen.
+     *
+     * @return array{kosten_usd: ?float, preis_in_mio: ?float, preis_cached_mio: ?float, preis_out_mio: ?float, usd_eur: ?float}
+     */
+    public function snapshotFuerAufruf(string $feature, ?string $model, int $tokensIn, int $tokensCached, int $tokensOut): array
+    {
+        $model = trim((string) $model);
+        $kurs = config('foodalchemist.ai.usd_eur');
+        $kurs = is_numeric($kurs) && (float) $kurs > 0 ? (float) $kurs : null;
+        $leer = ['kosten_usd' => null, 'preis_in_mio' => null, 'preis_cached_mio' => null, 'preis_out_mio' => null, 'usd_eur' => $kurs];
+
+        $bild = $this->imagePriceUsd($model, $feature);
+        if ($bild !== null) {
+            return ['kosten_usd' => $bild] + $leer;
+        }
+
+        $preise = $this->textPricesFor($model);
+        if ($preise === null) {
+            return $leer;
+        }
+
+        $usd = $this->costUsd((object) ['feature' => $feature, 'model' => $model, 'calls' => 1,
+            't_in' => $tokensIn, 't_cached' => $tokensCached, 't_out' => $tokensOut]);
+
+        return [
+            'kosten_usd' => $usd,
+            'preis_in_mio' => (float) $preise['in'],
+            'preis_cached_mio' => (float) ($preise['cached_in'] ?? $preise['in']),
+            'preis_out_mio' => (float) $preise['out'],
+            'usd_eur' => $kurs,
+        ];
+    }
+
     public function currency(): string
     {
         return config('foodalchemist.ai.usd_eur') ? 'EUR' : 'USD';

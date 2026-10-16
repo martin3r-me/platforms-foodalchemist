@@ -231,4 +231,77 @@
             </p>
         @endif
     </x-fa::section>
+
+    {{-- ── KI-Abrechnung je Mandant (nur Master-Team) ── --}}
+    @if($abrechnung !== null)
+        @php
+            $usd = fn ($v) => number_format((float) $v, 2, ',', '.').' $';
+            $eur = fn ($v) => number_format((float) $v, 2, ',', '.').' €';
+        @endphp
+        <x-fa::section title="Abrechnung je Mandant" icon="heroicon-o-banknotes"
+                       description="KI-Verbrauch je Kunden-Hauptteam mit dem Preis und Kurs, die beim Aufruf galten (eingefroren). Aufrufe vor Einführung der Abrechnung zählen nicht. Plattform = Master-Team und Läufe ohne Nutzer, nicht abrechenbar.">
+            <x-slot:actions>
+                <x-fa::choice name="abrechnungZeitraum" :options="$abrechnungOptionen" />
+            </x-slot:actions>
+            <p class="{{ $zeileHilfe }}">{{ $abrechnung['von']->format('d.m.Y') }} bis {{ $abrechnung['bis']->format('d.m.Y') }}</p>
+            <div class="overflow-x-auto">
+                <table class="fa-table min-w-[820px]" data-ki-abrechnung>
+                    <thead>
+                        <tr>
+                            <th>Mandant</th><th>Klasse</th>
+                            <th class="num">Aufrufe</th><th class="num">Eingabe</th><th class="num">davon gespeichert</th><th class="num">Ausgabe</th>
+                            <th class="num">USD</th><th class="num">EUR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($abrechnung['mandanten'] as $m)
+                            <tr wire:key="abr-{{ $m['team_id'] }}" data-ki-abrechnung-mandant="{{ $m['team_id'] }}" class="font-medium">
+                                <td>
+                                    {{ $m['name'] }}
+                                    @unless($m['abrechenbar'])<x-fa::badge tone="neutral" title="Kein aktiver Mandant (ohne Mandanten-Zeile oder nicht Status aktiv): der Verbrauch wird gezeigt, aber nicht abgerechnet." data-ki-nicht-abrechenbar>nicht abrechenbar</x-fa::badge>@endunless
+                                </td>
+                                <td>Summe</td>
+                                <td class="num">{{ $zahl($m['summe']['calls']) }}</td>
+                                <td class="num">{{ $zahl($m['summe']['t_in']) }}</td><td class="num">{{ $zahl($m['summe']['t_cached']) }}</td><td class="num">{{ $zahl($m['summe']['t_out']) }}</td>
+                                <td class="num">{{ $usd($m['summe']['usd']) }}</td>
+                                <td class="num">{{ $eur($m['summe']['eur']) }}
+                                    @if($m['summe']['ohne_preis'] > 0)<x-fa::badge tone="warn" title="Aufrufe von Modellen ohne hinterlegten Preis: in der Summe NICHT enthalten" data-ki-ohne-preis>{{ $m['summe']['ohne_preis'] }} ohne Preis</x-fa::badge>@endif
+                                    @if($m['summe']['ohne_kurs'] > 0)<x-fa::badge tone="warn" title="Aufrufe ohne gespeicherten USD/EUR-Kurs: nur in USD enthalten" data-ki-ohne-kurs>{{ $m['summe']['ohne_kurs'] }} ohne Kurs</x-fa::badge>@endif
+                                </td>
+                            </tr>
+                            @foreach($m['klassen'] as $k)
+                                <tr wire:key="abr-{{ $m['team_id'] }}-{{ $k['label'] }}">
+                                    <td></td><td class="text-[var(--fa-ink-2)]">{{ $k['label'] }}</td>
+                                    <td class="num">{{ $zahl($k['calls']) }}</td>
+                                    <td class="num text-[var(--fa-ink-2)]">{{ $zahl($k['t_in']) }}</td><td class="num text-[var(--fa-ink-2)]">{{ $zahl($k['t_cached']) }}</td><td class="num text-[var(--fa-ink-2)]">{{ $zahl($k['t_out']) }}</td>
+                                    <td class="num text-[var(--fa-ink-2)]">{{ $usd($k['usd']) }}</td><td class="num text-[var(--fa-ink-2)]">{{ $eur($k['eur']) }}</td>
+                                </tr>
+                            @endforeach
+                        @empty
+                            <tr><td colspan="8" class="text-[var(--fa-ink-3)]">Im Zeitraum kein Mandanten-Verbrauch.</td></tr>
+                        @endforelse
+                    </tbody>
+                    <tfoot>
+                        <tr data-ki-abrechnung-summe>
+                            <td>Abrechenbar gesamt</td><td></td>
+                            <td class="num">{{ $zahl($abrechnung['summe_abrechenbar']['calls']) }}</td><td></td><td></td><td></td>
+                            <td class="num">{{ $usd($abrechnung['summe_abrechenbar']['usd']) }}</td><td class="num">{{ $eur($abrechnung['summe_abrechenbar']['eur']) }}</td>
+                        </tr>
+                        <tr data-ki-abrechnung-plattform class="text-[var(--fa-ink-3)]">
+                            <td>Plattform (nicht abrechenbar)</td><td></td>
+                            <td class="num">{{ $zahl($abrechnung['plattform']['calls']) }}</td><td></td><td></td><td></td>
+                            <td class="num">{{ $usd($abrechnung['plattform']['usd']) }}</td><td class="num">{{ $eur($abrechnung['plattform']['eur']) }}</td>
+                        </tr>
+                        @if($abrechnung['unbekannt']['calls'] > 0)
+                            <tr data-ki-abrechnung-unbekannt class="text-[var(--fa-crit)]">
+                                <td>Verursacher unbekannt</td><td></td>
+                                <td class="num">{{ $zahl($abrechnung['unbekannt']['calls']) }}</td><td></td><td></td><td></td>
+                                <td class="num">{{ $usd($abrechnung['unbekannt']['usd']) }}</td><td class="num">{{ $eur($abrechnung['unbekannt']['eur']) }}</td>
+                            </tr>
+                        @endif
+                    </tfoot>
+                </table>
+            </div>
+        </x-fa::section>
+    @endif
 </div>

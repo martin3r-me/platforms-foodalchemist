@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Ai;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
+use Platform\FoodAlchemist\Support\KiAbrechnung;
 use Platform\FoodAlchemist\Support\KiKlassen;
 use Platform\Core\Services\LLMProviderRegistry;
 use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
@@ -264,6 +265,7 @@ class AiGatewayService
             'knowledge_used' => $knowledgeUsed,
             'knowledge_channels' => $knowledgeChannels !== [] ? $knowledgeChannels : null,
             'target_table' => $options['target_table'] ?? null,
+            'verursacher_optionen' => array_intersect_key($options, ['verursacher_team_id' => 1, 'verursacher' => 1]),
             'target_id' => $options['target_id'] ?? null,
         ];
         $cidFoodDna = $options['food_dna_concept_id'] ?? null;     // #389 → zentraler Canvas
@@ -870,6 +872,10 @@ class AiGatewayService
             ];
             if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')) {
                 $values['tokens_cached'] = $antwort['usage']['input_tokens_details']['cached_tokens'] ?? null;
+            }
+            // KI-Abrechnung: Verursacher + eingefrorener Preis/Kurs je Aufruf (hinter hasColumn wie die anderen Nachrüst-Spalten)
+            if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'abrechnung_team_id')) {
+                $values += KiAbrechnung::fuerLogZeile($feature, $antwort['model'] ?? null, $antwort['usage'] ?? [], $audit['verursacher_optionen'] ?? []);
             }
             // W0-0 Messsonde — wie tokens_cached hinter hasColumn, damit ein noch nicht
             // migrierter Stand den KI-Pfad nicht reißt.

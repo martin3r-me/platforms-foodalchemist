@@ -31,7 +31,7 @@ use Platform\FoodAlchemist\Services\SignalDetektorService;
  */
 class QualityRunJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     /**
      * Die Voll-Messung ist die teuerste lesende Operation des Moduls. 1800 s liegt bewusst

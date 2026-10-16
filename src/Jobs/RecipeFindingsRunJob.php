@@ -26,7 +26,7 @@ use Platform\FoodAlchemist\Services\RecipeFindingsBatchService;
  */
 class RecipeFindingsRunJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     /**
      * Ein Modell-Call je Rezept, gedeckelt auf {@see RecipeFindingsBatchService::MAX_LIMIT}.

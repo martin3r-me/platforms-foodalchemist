@@ -33,7 +33,7 @@ use Platform\FoodAlchemist\Services\GpNamingService;
  */
 class ClassifyLaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     public int $timeout = 120;
 

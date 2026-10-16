@@ -29,7 +29,7 @@ use Platform\FoodAlchemist\Services\FileArticleImportService;
  */
 class ImportArticlesJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     /** Reader (20k Zeilen) + Schreibpfad + Recompute-Kette — großzügig, aber begrenzt. */
     public int $timeout = 900;

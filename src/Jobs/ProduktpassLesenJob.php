@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Platform\FoodAlchemist\Models\FoodAlchemistProduktpass;
 use Platform\FoodAlchemist\Services\Produktpass\ProduktpassService;
+use Platform\FoodAlchemist\Support\KiVerursacher;
 
 /**
  * Produktpass lesen (PDF/Foto → Extrakt → direkte Felder). Läuft auf der INTERAKTIVEN Schlange (Rückfall default,
@@ -33,6 +34,7 @@ class ProduktpassLesenJob implements ShouldQueue
         if ($pass === null || in_array($pass->status, ['verworfen', 'gelesen'], true)) {
             return;   // gelöscht/verworfen oder schon gelesen (doppelter Dispatch) → nichts tun
         }
-        $svc->lesen($pass);
+        // KI-Abrechnung: der Lesevorgang gehört dem Besitzer-Team des Produktpasses (Unter-Team → Hauptteam); Pass des globalen Stamms (ohne Team) = Plattform
+        KiVerursacher::imKontext($pass->team_id !== null ? (int) $pass->team_id : KiVerursacher::KONTEXT_PLATTFORM, fn () => $svc->lesen($pass));
     }
 }

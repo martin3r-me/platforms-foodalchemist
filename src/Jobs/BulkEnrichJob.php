@@ -19,7 +19,7 @@ use Platform\FoodAlchemist\Services\BulkEnrichService;
  */
 class BulkEnrichJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
     public int $timeout = 3600;
 
