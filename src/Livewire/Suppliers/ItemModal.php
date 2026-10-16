@@ -64,6 +64,9 @@ class ItemModal extends Component
 
     public array $eigenschaften = [];
 
+    /** Haltbarkeit (MHD) in Tagen je Lagerart — der Produktpass trägt sie ein, hier lässt sie sich lesen und von Hand ändern. */
+    public array $haltbarkeit = [];
+
     public array $preisNeu = ['price' => '', 'status' => '0'];
 
     /** M2-10: 14 EU-Allergene (tri-state-Binding, GL-01) */
@@ -89,6 +92,7 @@ class ItemModal extends Component
         $this->stammdaten = $item->only(['designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text']);
         $this->verpackung = $item->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering']);
         $this->eigenschaften = $item->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder', 'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier']);
+        $this->haltbarkeit = $item->only(['shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days']);
         $this->allergene = app(SupplierItemService::class)->getAllergens($item);
         $this->deklarationen = app(SupplierItemService::class)->getDeclarations($item);
         $this->naehrwerte = app(SupplierItemService::class)->getNutrition($item);
@@ -128,16 +132,21 @@ class ItemModal extends Component
                     // Dominique 2026-10-05: EAN im Editor bearbeitbar (vorher nur Import)
                     'verpackung.ean_packaging' => ['nullable', 'regex:/^\d{8,14}$/'],
                     'verpackung.ean_ordering' => ['nullable', 'regex:/^\d{8,14}$/'],
+                    'haltbarkeit.*' => ['nullable', 'integer', 'min:1', 'max:3650'],
                 ],
                 [
                     'stammdaten.designation.required' => 'Bezeichnung ist Pflicht.',
                     'verpackung.ean_packaging.regex' => 'EAN bitte als 8 bis 14 Ziffern ohne Leerzeichen.',
                     'verpackung.ean_ordering.regex' => 'EAN bitte als 8 bis 14 Ziffern ohne Leerzeichen.',
+                    'haltbarkeit.*.integer' => 'Haltbarkeit bitte als ganze Tage.',
+                    'haltbarkeit.*.min' => 'Haltbarkeit bitte als ganze Tage (mindestens 1).',
+                    'haltbarkeit.*.max' => 'Haltbarkeit höchstens 3650 Tage.',
                 ],
             );
 
             app(SupplierItemService::class)->update($this->team(), $item, [
                 ...collect($this->stammdaten)->map(fn ($v) => $v === '' ? null : $v)->all(),
+                ...collect($this->haltbarkeit)->only(['shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days'])->map(fn ($v) => $v === '' || $v === null ? null : (int) $v)->all(),
                 ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->eigenschaften)->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder'])
@@ -418,6 +427,7 @@ class ItemModal extends Component
             'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
             'deklarationQuelle' => $item?->declarations?->source,
+            'haltbarkeitAusPass' => $item !== null ? $this->haltbarkeitAusPass($item) : [],
             'allergenQuelle' => $item?->allergens?->source,
             'aktiverPreis' => $aktiv,
             'vergleichspreis' => $item !== null && $aktiv !== null
@@ -430,6 +440,19 @@ class ItemModal extends Component
                     ->orderBy('name')->limit(6)->get(['id', 'name'])
                 : collect(),
         ]);
+    }
+
+    /** Welche Haltbarkeits-Spalten stehen noch so da, wie der Produktpass sie geschrieben hat (Marker + gleicher Wert)? */
+    private function haltbarkeitAusPass(FoodAlchemistSupplierItem $item): array
+    {
+        $marker = \Platform\FoodAlchemist\Models\FoodAlchemistProduktpassFeld::where('supplier_item_id', $item->id)->where('objekt', 'supplier_item')
+            ->whereIn('feld', ['shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days'])->get()->keyBy('feld');
+        $aus = [];
+        foreach ($marker as $feld => $m) {
+            $aus[$feld] = \Platform\FoodAlchemist\Support\ProduktpassFelder::norm($m->wert_norm) === \Platform\FoodAlchemist\Support\ProduktpassFelder::norm($item->{$feld});
+        }
+
+        return array_keys(array_filter($aus));
     }
 
     private function item(?int $id): FoodAlchemistSupplierItem

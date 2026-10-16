@@ -80,14 +80,41 @@ class ProduktpassPanel extends Component
         $this->aktion(fn (ProduktpassService $s, FoodAlchemistProduktpass $p) => $s->versionUebernehmen($this->team(), $p, Auth::id()), $this->angezeigtId, 'Version übernommen.');
     }
 
-    public function allergeneBestaetigen(): void
+    /** Kennzeichnung = Allergene UND Zusatzstoffe zusammen: erst die Bestätigung trägt sie ein. */
+    public function kennzeichnungBestaetigen(): void
     {
-        $this->aktion(fn (ProduktpassService $s, FoodAlchemistProduktpass $p) => $s->allergeneBestaetigen($this->team(), $p, Auth::id()), $this->angezeigtId, 'Allergene bestätigt und eingetragen.');
+        $this->aktion(fn (ProduktpassService $s, FoodAlchemistProduktpass $p) => $s->kennzeichnungBestaetigen($this->team(), $p, Auth::id()), $this->angezeigtId, 'Kennzeichnung bestätigt und eingetragen.');
     }
 
-    public function allergeneVerwerfen(): void
+    public function kennzeichnungVerwerfen(): void
     {
-        $this->aktion(fn (ProduktpassService $s, FoodAlchemistProduktpass $p) => $s->allergeneVerwerfen($this->team(), $p, Auth::id()), $this->angezeigtId, 'Allergen-Vorschlag verworfen. Der bisherige Stand gilt.');
+        $this->aktion(fn (ProduktpassService $s, FoodAlchemistProduktpass $p) => $s->kennzeichnungVerwerfen($this->team(), $p, Auth::id()), $this->angezeigtId, 'Kennzeichnungs-Vorschlag verworfen. Der bisherige Stand gilt.');
+    }
+
+    /** „Alle Vorschläge übernehmen": sichere Nicht-Kennzeichnungs-Felder; Abweichungen von vorhandenen Werten nur nach der Bestätigung im Dialog. */
+    public function alleUebernehmen(bool $mitAbweichungen = false): void
+    {
+        $this->reset(['fehler', 'hinweis']);
+        try {
+            $pass = FoodAlchemistProduktpass::where('supplier_item_id', $this->itemId)->findOrFail((int) $this->angezeigtId);
+            $b = app(ProduktpassService::class)->alleUebernehmen($this->team(), $pass, Auth::id(), $mitAbweichungen);
+            $teile = [count($b['uebernommen']).' Felder übernommen'];
+            if ($b['abweichend_offen'] !== []) {
+                $teile[] = count($b['abweichend_offen']).' mit abweichendem Bestand bleiben Vorschlag';
+            }
+            $this->hinweis = implode(', ', $teile).'.';
+            if ($b['fehler'] !== []) {
+                $this->fehler = implode(' ', array_values($b['fehler']));
+            }
+            $this->dispatch('produktpass.geaendert', itemId: $this->itemId);
+        } catch (FaRechtFehltException|RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->fehler = 'Diese Version gibt es nicht mehr.';
+        } catch (\Throwable $e) {
+            report($e);
+            $this->fehler = 'Das hat nicht geklappt. Bitte noch einmal versuchen oder die Felder einzeln übernehmen.';
+        }
     }
 
     /** „Recherchieren" — nur, wenn eine Quelle `websuche` angebunden ist (Container-Tag `produktdaten.quellen`). */
@@ -124,7 +151,10 @@ class ProduktpassPanel extends Component
         }
         $this->letzterStatus = $aktuellerStatus;
 
+        $vorschau = $pass !== null && $angezeigt !== null && $angezeigt['status'] === 'gelesen' ? $svc->uebernahmeVorschau($item, $pass) : null;
+
         return view('foodalchemist::livewire.suppliers.produktpass-panel', [
+            'vorschau' => $vorschau,
             'item' => $item,
             'darfEdit' => Curate::canCurate(Auth::user(), $item),
             'stand' => $stand,
@@ -148,6 +178,9 @@ class ProduktpassPanel extends Component
             $this->fehler = $e->getMessage();
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             $this->fehler = 'Diese Version gibt es nicht mehr.';
+        } catch (\Throwable $e) {
+            report($e);   // nie SQL- oder Systemtext zum Nutzer
+            $this->fehler = 'Das hat nicht geklappt. Der Wert wurde nicht übernommen.';
         }
     }
 

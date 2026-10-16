@@ -29,6 +29,9 @@ final class ProduktpassFelder
     /** Salz (g/100 g) → Natrium (mg/100 g): Salz / 2,5 in g, ×1000 für mg — gleiche Formel wie der Necta-Mapper (Skript 214: ×400). */
     public const SALZ_ZU_NATRIUM_MG = 400.0;
 
+    /** Obergrenzen der Textspalten am Artikel (Zeichen). Ein Wert darüber wird verständlich abgewiesen, nie als SQL-Fehler gezeigt. */
+    public const MAX_LAENGE = ['origin' => 255, 'brand' => 255, 'packaging_unit' => 32, 'ordering_unit' => 32, 'unit_code' => 32];
+
     private const NAEHRWERTE = ['energy_kcal', 'energy_kj', 'protein', 'fat', 'saturated_fat', 'carbs_absorbable', 'sugar', 'roughage', 'sodium'];
 
     private const GEBINDE = ['qty', 'unit_code', 'qty_ordering_per_packaging', 'packaging_unit'];
@@ -54,7 +57,7 @@ final class ProduktpassFelder
             case 'zusatzstoffe':
                 $alle = FoodAlchemistItemDeclaration::STOFFE + FoodAlchemistItemDeclaration::FREIWILLIG;
                 if (isset($alle[$name])) {
-                    return ['objekt' => 'item_declaration', 'spalte' => $name, 'klasse' => 'direkt', 'typ' => 'jn', 'label' => (string) $alle[$name]];
+                    return ['objekt' => 'item_declaration', 'spalte' => $name, 'klasse' => 'kennzeichnung', 'typ' => 'jn', 'label' => (string) $alle[$name]];
                 }
                 break;
             case 'gebinde':
@@ -73,6 +76,12 @@ final class ProduktpassFelder
                 }
                 break;
         }
+        if ($key === 'verpackungshinweis') {
+            return ['objekt' => 'supplier_item', 'spalte' => 'additional_text', 'klasse' => 'vorschlag', 'typ' => 'text', 'label' => 'Verpackungshinweis'];
+        }
+        if ($key === 'gebinde.menge') {   // virtuell: qty + unit_code als PAAR in der Einheit der Preisrechnung
+            return ['objekt' => 'supplier_item', 'spalte' => 'qty', 'klasse' => 'nur_leer', 'typ' => 'zahl', 'label' => 'Gebinde-Menge'];
+        }
         if ($key === 'herkunft') {
             return ['objekt' => 'supplier_item', 'spalte' => 'origin', 'klasse' => 'vorschlag', 'typ' => 'text', 'label' => 'Herkunft'];
         }
@@ -86,7 +95,7 @@ final class ProduktpassFelder
     /** Alle gültigen Schlüssel (für Schema/Prompt). @return list<string> */
     public static function schluessel(): array
     {
-        $keys = ['zutatenliste', 'herkunft', 'marke', 'haltbarkeit.unklar_days'];
+        $keys = ['zutatenliste', 'herkunft', 'marke', 'verpackungshinweis', 'haltbarkeit.unklar_days'];
         foreach (self::NAEHRWERTE as $n) {
             $keys[] = "naehrwerte.{$n}";
         }

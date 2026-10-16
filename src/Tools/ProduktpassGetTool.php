@@ -55,7 +55,11 @@ class ProduktpassGetTool extends FoodAlchemistTool implements ToolContract, Tool
             }
         }
 
-        return ToolResult::success(['supplier_item_id' => $item->id, 'designation' => $item->designation] + app(ProduktpassService::class)->stand($item, $pass));
+        $stand = app(ProduktpassService::class)->stand($item, $pass);
+        // Haltbarkeit (MHD) am Artikel in Tagen je Lagerart — Quelle je Feld steht in quellen_der_felder; ändern: foodalchemist.artikel.PUT (shelf_life_*_days)
+        $haltbarkeit = ['gekuehlt_tage' => $item->shelf_life_chilled_days, 'tiefgekuehlt_tage' => $item->shelf_life_frozen_days, 'trocken_tage' => $item->shelf_life_dry_days];
+
+        return ToolResult::success(['supplier_item_id' => $item->id, 'designation' => $item->designation, 'haltbarkeit' => $haltbarkeit] + $stand);
     }
 
     public function getMetadata(): array

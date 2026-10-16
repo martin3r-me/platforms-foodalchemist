@@ -21,7 +21,7 @@ class ArtikelPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     {
         return 'Bearbeitet Stammdaten/Verpackung/Eigenschaften eines team-eigenen Lieferantenartikels. '
             . 'felder: designation, article_number, brand, manufacturer, origin, qty, unit_code, ean_packaging, '
-            . 'is_organic, vat, origin_country, preorder_days … (nur Whitelist wirkt).';
+            . 'is_organic, vat, origin_country, preorder_days, shelf_life_chilled_days / shelf_life_frozen_days / shelf_life_dry_days (Haltbarkeit in Tagen) … (nur Whitelist wirkt).';
     }
 
     public function getSchema(): array
