@@ -196,6 +196,7 @@ it('Gruppen-Klassiker: „verträgt Fisch" lässt einen Fisch als Lieferanten zu
     $rang = DB::table('foodalchemist_anchor_beziehungen')->where('anchor_a_id', $this->a['pumpkin'])->where('art', 'kontrast')->where('achse', 'saeure')
         ->pluck('rang', 'anchor_b_id');
     expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Sardelle', 'Matjes'])   // Einzel vor Gruppe, Limette fehlt
-        ->and($rang[$sardelle] - $rang[$limette])->toBe(100000)                                       // Einzel-Klassiker
-        ->and($rang[$hering] - $rang[$limette])->toBe(50000);                                         // nur Gruppe
+        // Einzel-Klassiker +100 000 bzw. Gruppe +50 000; Sardelle und Matjes sind Fisch → Rollen-Abzug als Säure für Kürbis
+        ->and($rang[$sardelle] - $rang[$limette])->toBe(100000 - KontrastAbleitung::ROLLE_ABZUG)
+        ->and($rang[$hering] - $rang[$limette])->toBe(50000 - KontrastAbleitung::ROLLE_ABZUG);
 });
