@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\SignalService;
 use Platform\FoodAlchemist\Support\MasterTeam;
+use Platform\FoodAlchemist\Support\ProduktpassSchutz;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -22,6 +23,8 @@ use Symfony\Component\Uid\UuidV7;
  *  - Erster Abgleich eines Objekts (noch kein `necta_stand`): Abweichungen übernehmen — der Stamm ist frisch importiert und noch
  *    nicht von Hand gepflegt (Entscheid Dominique über den Kurator, 15.10.).
  *  - Ab dem zweiten Lauf: FA-Wert ≠ letzter Necta-Stand → von Hand gepflegt → Prüffall `manuell_gepflegt`, FA bleibt.
+ *  - Produktpass (Bauauftrag 16.10.2026): Felder mit Produktpass-Marker (`foodalchemist_produktpass_felder`, {@see ProduktpassSchutz}) gelten wie
+ *    Handpflege, auch ohne Stand: nie übernehmen, Abweichung → Prüffall `produktpass_abweichung`. Die Kennzeichnung bleibt bei der Strenge-Regel.
  *  - Kennzeichnung (Allergene, Deklaration/Zusatzstoffe) nach Strenge (Entscheid Dominique 15.10.2026, Lauf 6 auf io:
  *    18.491 Allergen-Abweichungen, Lieferanten haben seit dem Juni-Export nachgepflegt): Necta STRENGER als FA → automatisch
  *    übernehmen, auch bei Handpflege (Zähler `allergen_verschaerft` / `deklaration_verschaerft`); Necta LOCKERER → Prüffall,
@@ -378,6 +381,12 @@ class NectaAbgleichService extends NectaLaufBasis
                     // lockerer (oder Unterarten-JSON): nie still → Prüffall, FA bleibt
                     $this->pruefall($objekt === 'item_allergen' ? 'allergen_aenderung' : 'deklaration_aenderung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
                 }
+
+                continue;
+            }
+            if (ProduktpassSchutz::schuetzt($objekt, $fa, $spalte)) {
+                // Produktpass-Wert gilt wie Handpflege — auch ohne Stand und auch dann, wenn er zufällig dem alten Necta-Stand entspricht
+                $this->pruefall('produktpass_abweichung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
 
                 continue;
             }

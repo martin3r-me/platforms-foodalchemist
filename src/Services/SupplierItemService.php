@@ -155,7 +155,7 @@ class SupplierItemService
         'saturated_fat' => ['davon ges. Fettsäuren', 'g'],
         'carbs_absorbable' => ['Kohlenhydrate', 'g'],
         'sugar' => ['davon Zucker', 'g'],
-        'sodium' => ['Natrium', 'g'],
+        'sodium' => ['Natrium', 'mg'],   // mg je 100 g (BLS/Necta-Mapper: Salz g × 400; GL-08: Salz g = Natrium mg × 0,0025) — das Label sagte fälschlich „g“
     ];
 
     /** Kern-Nährwerte des LA als UI-Form (Strings, leer = kein Wert). */
