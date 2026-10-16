@@ -27,13 +27,17 @@ final class Curate
             return false;
         }
 
-        $currentTeamId = (int) ($user->current_team_id ?? 0);
+        // Spec 84 A-2: für den angemeldeten Nutzer das betrachtende Team (MCP-Team nach team.switch, Job-Team), sonst sein UI-Team
+        $istAngemeldet = \Illuminate\Support\Facades\Auth::id() !== null && method_exists($user, 'getAuthIdentifier')
+            && (int) $user->getAuthIdentifier() === (int) \Illuminate\Support\Facades\Auth::id();
+        $betrachtend = $istAngemeldet ? \Platform\FoodAlchemist\Support\FaTeam::aktuell() : null;
+        $currentTeamId = $betrachtend !== null ? (int) $betrachtend->id : (int) ($user->current_team_id ?? 0);
         if ($currentTeamId === 0) {
             return false;
         }
 
         if ($target instanceof Model && in_array(BelongsToTeamHierarchy::class, class_uses_recursive($target), true)) {
-            $aktuell = $user->currentTeamRelation ?? null;
+            $aktuell = $betrachtend ?? ($user->currentTeamRelation ?? null);
             if (! $aktuell instanceof Team || (int) $aktuell->id !== $currentTeamId) {
                 $aktuell = Team::find($currentTeamId);
             }

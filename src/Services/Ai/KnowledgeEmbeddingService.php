@@ -737,7 +737,7 @@ class KnowledgeEmbeddingService
 
     private function searchPartitions(?Team $team = null): array
     {
-        $team ??= Auth::user()?->currentTeamRelation;
+        $team ??= \Platform\FoodAlchemist\Support\FaTeam::aktuell();   // Spec 84 A-2
         if ($team === null) {
             return [$this->globalTeamId()];
         }

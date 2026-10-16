@@ -162,20 +162,9 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         if (! $context->user instanceof \Platform\Core\Models\User) {
             return ToolResult::error('Kein unterstützter Nutzer im Kontext.', 'NO_USER');
         }
-        // MCP ist die Autorität für diesen Aufruf. Kein Login/Teamwechsel in der Sitzung:
-        // nur ein temporärer Nutzer-Klon für bestehende Auth-basierte KI-Dienste.
-        $guard = auth()->guard();
-        $previous = $guard->user();
-        $actor = clone $context->user;
-        $actor->setAttribute('current_team_id', $team->id);
-        $actor->setRelation('currentTeamRelation', $team);
-        $actor->setRelation('currentTeam', $team);
-        $guard->setUser($actor);
-        try {
-            return $this->executeInContext($arguments, $context);
-        } finally {
-            $previous === null ? $guard->forgetUser() : $guard->setUser($previous);
-        }
+        // Spec 84 A-2: MCP ist die Autorität für diesen Aufruf. Der frühere Nutzer-Klon (current_team_id umgebogen) entfällt —
+        // die Tool-Hülle läuft in FaTeam::imTeam(Team des Aufrufs), und KI-Dienste/Curate lesen FaTeam statt des UI-Teams.
+        return \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $this->executeInContext($arguments, $context));
     }
 
     private function executeInContext(array $arguments, ToolContext $context): ToolResult

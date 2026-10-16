@@ -16,7 +16,8 @@ class FoodAlchemistPolicy
 {
     public function view(object $user, Model $model): bool
     {
-        $team = method_exists($user, 'currentTeamRelation') ? $user->currentTeamRelation : null;
+        // Spec 84 A-2 (B-e): das betrachtende Team (MCP-Team nach team.switch), sonst das UI-Team des Nutzers
+        $team = \Platform\FoodAlchemist\Support\FaTeam::aktuell() ?? (method_exists($user, 'currentTeamRelation') ? $user->currentTeamRelation : null);
         if ($team === null) {
             return false;
         }

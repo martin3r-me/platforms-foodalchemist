@@ -215,7 +215,7 @@ class ConformanceService
             // C4: der Gateway baut diesen migrierten Prüfkontext selbst. Kein Präfix-Fallback.
             // Die Weiche hängt am stabilen Artefakt-Schlüssel, NICHT mehr am Anzeigetext im
             // Kontext — der wandert in den Prompt und wäre damit umformulierbar.
-            if ((int) auth()->user()?->currentTeamRelation?->id !== (int) $team->id) {
+            if ((int) \Platform\FoodAlchemist\Support\FaTeam::aktuellId() !== (int) $team->id) {   // Spec 84 A-2
                 throw new \RuntimeException('Prüfteam und aktives KI-Team stimmen nicht überein.');
             }
         } else {

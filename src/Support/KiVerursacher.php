@@ -58,7 +58,7 @@ final class KiVerursacher
             return ['abrechnung_team_id' => null, 'verursacher' => self::PLATTFORM];
         }
 
-        $team = $ausdruecklich !== null ? Team::find($ausdruecklich) : Auth::user()?->currentTeamRelation;
+        $team = $ausdruecklich !== null ? Team::find($ausdruecklich) : FaTeam::aktuell();   // Spec 84 A-2: MCP-/Job-Team statt UI-Team
 
         if ($team === null) {
             // Ohne Nutzer und ohne ausdrückliches Team: Massenlauf der Plattform. Mit Nutzer, aber ohne Team: nicht raten.
