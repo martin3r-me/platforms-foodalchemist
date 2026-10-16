@@ -89,7 +89,7 @@ class GpNamingService
         }
         $z = trim($condition);
 
-        return mb_strtolower($z) === 'tiefgekuehlt' ? 'TK' : $z;
+        return in_array(mb_strtolower($z), ['tiefgekuehlt', 'tiefgekühlt'], true) ? 'TK' : $z;
     }
 
     /**
@@ -111,7 +111,7 @@ class GpNamingService
         $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
         $out['hauptzutat'] = trim((string) strstr($name . ':', ':', true));
         $rest = str_contains($name, ':') ? trim((string) substr($name, strpos($name, ':') + 1)) : '';
-        // Dezimalkomma („62,5 g pro Stueck", „3,5 % Fett") ist kein Trenner der Attribute
+        // Dezimalkomma („62,5 g pro Stück", „3,5 % Fett") ist kein Trenner der Attribute
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
         $pflicht = [];
@@ -121,9 +121,9 @@ class GpNamingService
                 $out['condition'] = $zustand;
             } elseif (mb_strtolower($teil) === 'bio') {
                 $out['bio'] = true;
-            } elseif (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+stueck$/iu', $teil, $m) === 1) {
-                $out['portion'] = $this->normalisierePortion($m[1]);        // Bestand „660 g pro Stueck" und Altform „Portion 150 g pro Stueck"
-            } elseif (preg_match('/^portion\s+(.+?)\s+pro\s+stueck$/iu', $teil, $m) === 1) {
+            } elseif (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
+                $out['portion'] = $this->normalisierePortion($m[1]);        // „660 g pro Stück" (neu) und Bestand „660 g pro Stueck" / Altform „Portion 150 g pro Stueck" (beide Schreibweisen lesbar)
+            } elseif (preg_match('/^portion\s+(.+?)\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
                 $out['portion'] = $m[1];
             } elseif ($out['processing'] === '' && $out['form'] === '' && $pflicht === []) {
                 $norm = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($teil);
@@ -152,7 +152,7 @@ class GpNamingService
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: <condition>, <processing|form>[, <x> g pro Stueck][, <pflicht>][ / (Bio)]…`
+     * `<Hauptzutat>: <condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (Bio)]…`
      */
     public function renderGpName(array $in): string
     {
@@ -175,7 +175,7 @@ class GpNamingService
             $parts[] = $mid;
         }
         if (! empty($in['portion'])) {
-            $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stueck';       // Bestandsformat „660 g pro Stueck" (kein „Portion", Leerzeichen vor der Einheit)
+            $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stück';        // „660 g pro Stück" (echter Umlaut im GP-Namen; kein „Portion", Leerzeichen vor der Einheit)
         }
         if (! empty($in['pflichtangabe'])) {
             $parts[] = $in['pflichtangabe'];
@@ -542,6 +542,7 @@ class GpNamingService
 
     private function normalisiere(string $s): string
     {
-        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $s)));
+        // Beide Schreibweisen gelten als gleich (Dubletten-/Drift-Vergleich): Umlaute auf ae/oe/ue/ss abbilden, wie Matcher und TokenEngine.
+        return strtr(mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $s))), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
     }
 }

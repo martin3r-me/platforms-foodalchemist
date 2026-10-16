@@ -32,6 +32,15 @@ $briefingKlausel = 'BRIEFING (optional, Feld `briefing`): ist es gefuellt, ist e
     . 'leer oder fehlt es, entscheide fachlich frei. ';
 
 /**
+ * Schreibweise neuer Grundprodukt-Namen (Dominique 2026-10-16): echte Umlaute und ß. Die Umschreibung ae/oe/ue/ss gilt
+ * ausschließlich für Dateinamen. Gelesen werden weiterhin beide Schreibweisen (Parser, Matcher, Dublettenprüfung).
+ */
+$umlautKlausel = 'SCHREIBWEISE: Grundprodukt-Namen und ihre Felder (name, hauptzutat, processing, form, pflichtangabe, sub_category) '
+    . 'in korrekter deutscher Rechtschreibung mit echten Umlauten und ß schreiben (Stück, Gemüse, Würfel, flüssig, gewürfelt, '
+    . 'Brötchen, Kräuter, Öl, weiß, süß), nie mit ae/oe/ue/ss umschrieben. ae/oe/ue/ss nur dort, wo ein Eigenname, eine Marke oder '
+    . 'ein Fremdwort es verlangt (Quelle, Feuer, Mousse, Baguette, Hoegaarden). Die Umschreibung gilt nur für Dateinamen.';
+
+/**
  * MENGEN-VERBOT für Schrittfolgen (2026-09-04, Dominique).
  *
  * Anlass: ein Zucchini-Puffer-Rezept war auf ~33 Portionen je Ansatz skaliert. Die
@@ -1160,7 +1169,8 @@ return [
                 . 'steht nicht doppelt in der Hauptzutat. Steht im Kontext haltbarkeit, entscheidet die Lagerart: nur tiefgekuehlt_tage → condition TK, nur trocken_tage → trocken. '
                 . 'Bei Warengruppe 13 (Convenience) wähle den Subtyp 13.1–13.7, der zur Art des Produkts passt (z. B. Dessert/Süßspeise), exakt aus taxonomie. '
                 . 'Gib sub_category immer an, wenn commodity_group_code gesetzt ist und eine Unterkategorie der Warengruppe fachlich passt '
-                . '(exakt aus taxonomie); nur wenn keine passt, "".',
+                . '(exakt aus taxonomie); nur wenn keine passt, "". '
+                . $umlautKlausel,
         ],
         // Web-Recherche zu einem Lieferantenartikel (nur auf Knopfdruck; ArtikelWebRecherche). Antwort-Schema siehe Dienst.
         'artikel.web_recherche' => [
@@ -1807,7 +1817,8 @@ return [
                 . 'HARTE REGEL: NUR aus dem LA + den vorhandenen GP-Daten ableiten — was das LA nicht belegt, gib als '
                 . 'null zurueck (NIEMALS raten/erfinden). Felder: name (§6-Schema, Singular §6.1), zustand (§9: '
                 . 'frisch|TK|trocken|konserviert), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
-                . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}.',
+                . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}. '
+                . $umlautKlausel,
         ],
         // Spec 60: recipe.pairing und recipe.anker entfallen — Pairing-Chips und KI-Anker am Rezept sind
         // durch das Aromenprofil (abgeleitet aus den Zutaten) und die Kombinationslogik ersetzt.
