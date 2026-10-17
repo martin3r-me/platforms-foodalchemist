@@ -68,6 +68,10 @@ beforeEach(function () {
     $this->aboArbeit = $abo->id;
     $this->aboFassung = app(FassungService::class)->veroeffentlichen($this->master, $abo->id, 'Erst', $this->kurator)['fassung_id'];
 
+    // Eigene Fassungs-Zeile in A (A hat zugleich ein Abo): gehört in keine normale Sicht — prüft die Fassungs-Regel INNERHALB der Abo-Menge
+    $this->fassungA = $this->makeRecipe($this->a, 'Fassung A')->id;
+    DB::table('foodalchemist_recipes')->where('id', $this->fassungA)->update(['ist_fassung' => true]);
+
     // 77d: U übernimmt nicht alles; Hülle = die Abo-Fassung (eingeschränkter Abo-Zweig)
     $inhalte->setzeErbtAlles($this->a, $this->u->id, false, $this->chefA);
     DB::table('foodalchemist_freigabe_objekte')->insert(['team_id' => $this->u->id, 'typ' => 'recipe', 'objekt_id' => $this->aboFassung]);
@@ -97,6 +101,7 @@ it('Gleichheit: Schalter an (Abo als Menge) liefert je Team und Modell dieselben
     expect($vorher['a'][FoodAlchemistRecipe::class])->toContain($this->aboFassung)->not->toContain($this->aboArbeit);
     expect($vorher['u'][FoodAlchemistRecipe::class])->toContain($this->aboFassung);
     expect($vorher['b'][FoodAlchemistRecipe::class])->not->toContain($this->aboFassung)->not->toContain($this->aboArbeit);
+    expect($vorher['a'][FoodAlchemistRecipe::class])->not->toContain($this->fassungA);
 
     config(['foodalchemist.team_sicht.stufe' => 1]);
     foreach (($this->teams)() as $k => $t) {
