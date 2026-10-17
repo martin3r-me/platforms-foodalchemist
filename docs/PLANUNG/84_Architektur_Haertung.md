@@ -1,6 +1,6 @@
 # Spec 84 · Architektur-Härtung: Team-Kontext, Mandanten-Sicht, große PHP-Dateien
 
-Stand 2026-10-16 · Status: **v0.9, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
+Stand 2026-10-17 · Status: **v1.0, Umsetzung läuft (Stand je PR in §7)** · Branch `docs/spec84-architektur-haertung`
 Bezug: Spec 77 (77b–d Bereiche/Freigabe), Spec 82 (Team-Architektur, Master/Abo), #452 (KI-Abrechnung je Mandant)
 Messbasis: Modul `platforms-foodalchemist` **86de1f92**, Core `platforms-core` **4a61b3ad**. Beide sind in `food-alchemist.de/composer.server.lock` gepinnt, also genau der Stand auf **foodalchemist.io**. Laravel 13.36, Livewire 4.4.
 
@@ -210,6 +210,8 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 - **Rekursion ausschließen:** `scopeVisibleToTeam` fragt für 77d-Hülle, Abo und Stamm-Paket selbst Modelle bzw. Tabellen ab. Diese inneren Abfragen laufen ausdrücklich `withoutGlobalScope(TeamSicht::class)` (heute über `DB::table`, das bleibt so). Test: Abfrage eines Abo-Typs mit gesetztem Kontext endet, liefert erwartete Zeilen.
 - **Ohne Kontext:** in HTTP/MCP **eigene Ausnahme** `TeamKontextFehlt` + Log (E2). Eine stille Leerliste sähe für KI-Tools wie „keine Daten“ aus und führte zu Neuanlagen. „Leer“ nur hinter dem Notschalter. In Console/Queue offen, aber geloggt.
 - Einzige Umgehung: `->ohneTeamSicht('grund')`, grep-bar.
+- **Umsetzung Stufe 1 (17.10., „test“):** `Models/Scopes/TeamSicht` nur auf Rezept, Paket, Konzept, Format (Wurzel-Modelle, B2-Empfehlung 1: Kind-Tabellen nie). Schalter `foodalchemist.team_sicht.stufe` (0 = aus, Standard). Ein ausdrückliches `visibleToTeam()` entfernt den Scope (keine doppelte Bedingung). `OhneFassungenScope` weicht, wenn TeamSicht greift; `mitFassungen()` unter dem Scope = eigene Kette inkl. Fassungen + Abo. Streng („FA-Eingang“) sind nur Seiten hinter `FaBereichMiddleware` und Tools in `FaRechteToolHuelle`, jeweils mit angemeldetem Nutzer → `TeamKontextFehltException`; Notschalter `team_sicht.ohne_kontext = leer`. Konsole, Queue, Seiten ohne Nutzer (öffentliche Links) und Livewire-Aktionen (`/livewire/update` läuft nicht durch `FaBereichMiddleware`, keine Persistent-Middleware registriert) bleiben bei fehlendem Team offen + Log; mit angemeldetem Nutzer filtern sie trotzdem, weil `FaTeam` das UI-Team liefert. Strenger Livewire-Weg = offener Punkt für Stufe 2. Verweis-Relationen, die schon Fassungen auflösen (50 Stellen), laufen `ohneTeamSicht('verweis')`, also unverändert ungefiltert.
+- **Nebenbefund (mitgebaut):** Rohabfragen mit Alias (`foodalchemist_recipes AS r`) prüften `ist_fassung` an der Tabelle „r“ und blendeten Fassungen nie aus. Jetzt über die Basistabelle — wirkt auch bei Schalter aus.
 - Reihenfolge: Abo-Typen (Rezept, Paket, Konzept, Format) → Foodbook, Speiseplan, Speisekarte → Stamm (GP, LA, Lieferant) → Einstellungen/Vokabular. Jede Stufe hinter einem Schalter (Muster `WissensSichtbarkeit::aktiv()`).
 - **Vorbedingung:** B2 erledigt, Leistungsvergleich auf demo-Datenstand vor/nach.
 
@@ -260,6 +262,18 @@ Die Zählung ist eine Prüfung „im Rumpf der schreibenden Methode“. Ein zent
 - Q6 (77d-Hülle): `DEPENDENT SUBQUERY` mit `eq_ref` auf `fa_fro_eindeutig`, gut.
 - **Q7 (Abo-Zweig): `recipes` Vollscan (`ALL`).** Der `OR` zwischen Team-Kette und `id IN (abo_objekte …)` hebelt den Index aus. Harmlos auf io (leer), relevant bei Master-Volumen und ersten Abos.
 - **Entscheidung:** jetzt keine Indizes. B3 Stufe 1 baut den Abo-Zweig UNION- bzw. Semi-Join-tauglich statt als `OR`; die Messung vorher/nachher läuft mit Master-Volumina (Sandbox mit demo-Dump). Weitere Indizes erst mit Daten aus der Messwoche (E-1 ab 23.10.).
+
+**B3-Messung Abo-Zweig (17.10., lokale Kopie `spec84_b3`, MySQL 8.4.3 = Hauptversion io 8.4.11, Skript `84_B3_abo_menge_messung.sql`):** 35.090 Rezepte, Mandant mit 300 Abo-Fassungen, `ORDER BY name LIMIT 50`.
+
+| Form | Zeit | Plan |
+|---|---|---|
+| heute: `… OR id IN (Abo)` | ≈ 35 ms | Vollscan, wächst linear |
+| UNION als Semi-Join | ≈ 160 ms | schlechter, verworfen |
+| `OR EXISTS` korreliert | ≈ 59 ms | schlechter |
+| **`id IN (SELECT id FROM (Sicht UNION ALL Abo-IDs) m)`** | **≈ 1,6 ms** | abgeleitete Tabelle wird materialisiert, beide Hälften über Index |
+| ohne Abo-Zweig (Referenz) | ≈ 0,6 ms | – |
+
+Gleichheit geprüft: gleiche 500 Zeilen (Anzahl + Prüfsumme); in Pest (SQLite) je Team und Modell (`Spec84TeamSichtTest`). Die Menge ist nur mit eingeschaltetem B3 aktiv. Der Plan auf UNION (Zeile oben) ist damit präzisiert: nicht Semi-Join, sondern materialisierte Menge.
 
 Verbindung zu Teil B: B3 hängt jede Abfrage an den Sichtfilter (Hülle- und Abo-Unterabfragen). Ohne E-3 und ohne die Messung aus E-1 ist der Leistungsvergleich vor/nach B3 (§4.2) nicht belastbar.
 
@@ -450,7 +464,8 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 | C1 Schritt 1 (ReglerParams, KaskadenAnsicht, LaufCockpit) | **gemergt #465**; Planung/Index 4.596 → 3.641 Zeilen |
 | A-1 / A-2 / A-3 / A-4 / E3 | **gemergt #466–#470**, Deploy io; vorher gemeldet, rebased auf a4164fcf: `feat/spec84-a1-fateam`, `-a2-ki-fateam`, `-a3-job-team`, `-a4-versand`, `feat/spec84-e3-support-zugang`. Großer Lauf 3.432 Tests (rot nur 3 main-Fälle #463 + 2 vorbestehende), Nachlauf nach Rebase 349/349 |
 | E-3 Indizes für B3 | EXPLAIN io ausgewertet (17.10.): keine Indizes jetzt; Abo-Zweig in B3 als UNION statt OR; Rest nach Messwoche |
-| B3 Stufe 1–4 + B0b, B4, B5 | offen („test“), nach E-3 |
+| B3 Stufe 1 + B0b | lokal committet („test“), Branch `refactor/spec84-b3-teamsicht` (b80b065b, 164f0f6a), Schalter Standard aus; Einschalten auf io erst mit E-1-Vorher-Werten (Kurator) |
+| B3 Stufe 2–4, B4, B5 | offen („test“) |
 | C5 Modal-Writes über Services | offen (Vanessa, nach B2) |
 | E-2, E-4, E-5 | offen (Vanessa) |
 
@@ -539,6 +554,7 @@ Bewusst **nicht** als Ziel: `app(X::class)` (2.495×) ist in Laravel kein Proble
 
 ## Changelog
 
+- 2026-10-17 · v1.0: B3 Stufe 1 + B0b gebaut (Schalter aus); Abo-Zweig als materialisierte Menge statt OR gemessen (35 → 1,6 ms) inkl. Skript `84_B3_abo_menge_messung.sql`; Alias-Fassungs-Nebenbefund.
 - 2026-10-17 · v0.9: A-Kette + E3 gemergt (#466–#470); E-3 EXPLAIN io ausgewertet (Q7 Abo-Zweig Vollscan → UNION in B3).
 - 2026-10-17 · v0.8: Stand nach Merges #461–#465; A-Kette + E3 gemeldet; zwei vorbestehende rote Tests dokumentiert.
 - 2026-10-16 · v0.7: C1-1 und C5 aktiv (Dominique); Stand A-4, E3, E5, B1; #458–#460 gemergt.
