@@ -72,7 +72,8 @@ it('ein Unter-Team löst über die Kopie seines Haupt-Teams auf', function () {
         'yield_kg' => 2.0, 'work_time_min' => 20, 'default_station_id' => $this->masterPosten,
     ]);
 
-    $order = ($this->auftrag)($this->childA, $r);
+    // Spec 84 B3: der Auftrag entsteht im Unter-Team (in der Oberfläche ist das UI-Team = Auftrags-Team)
+    $order = \Platform\FoodAlchemist\Support\FaTeam::imTeam($this->childA, fn () => ($this->auftrag)($this->childA, $r));
 
     expect((int) ($this->zeile)($order, $r)->station_id)->toBe((int) $kopie->id);
 });

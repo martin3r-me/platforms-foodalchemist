@@ -257,7 +257,7 @@ it('Fehler bei einem Verweis stoppt die anderen nicht und die Veröffentlichung 
 
 it('Preis nach dem Umhängen: das eigene Konzept rechnet mit den Team-Preisen der neuen Paket-Fassung (kein 0 €)', function () {
     $p2 = paketNeueFassung($this);
-    $c = FoodAlchemistConcept::find($this->eigen->id);
+    $c = FoodAlchemistConcept::ohneTeamSicht('test')->find($this->eigen->id);
     $cockpit = app(ConceptService::class)->preisCockpit($c);
     expect($cockpit['quelle'])->toBe('team_kalkulation')->and($c->price_per_person_cache === null || (float) $c->price_per_person_cache >= 0.0)->toBeTrue()
         ->and(DB::table('foodalchemist_concept_slots')->where('id', $this->slotZeile)->value('package_id'))->toBe($p2->id);

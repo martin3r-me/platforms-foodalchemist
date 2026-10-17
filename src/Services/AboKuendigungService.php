@@ -76,6 +76,14 @@ class AboKuendigungService
             throw new \RuntimeException('Dieses Abo ist nicht mehr aktiv.');
         }
         $mandant = Team::findOrFail($abo->mandant_team_id);
+
+        // Spec 84 B3 C: Recht oben am handelnden Team/Nutzer geprüft; gelesen und kopiert wird im Mandanten (Master-UI, MandantBeenden, systemLauf)
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => $this->kuendigenImMandanten($mandant, $abo, $actor, $bestaetigt));
+    }
+
+    /** @return array<string, mixed> */
+    private function kuendigenImMandanten(Team $mandant, FoodAlchemistAbo $abo, ?User $actor, bool $bestaetigt): array
+    {
         $this->hinweise = [];
         $vorher = $this->abos->huelle((int) $mandant->id);
         $nachher = $this->abos->huelle((int) $mandant->id, ohneAboId: (int) $abo->id);
@@ -127,27 +135,29 @@ class AboKuendigungService
             $vorher = $this->abos->huelle($mid);
             $ohne = ['sammlung_id' => $sammlungId, 'objekt_id' => $objektId, 'typ' => $typ];
             $nachher = $this->abos->huelle($mid, ohneSammlungsObjekt: $ohne);
-            $mandanten[$mid] = ['mandant_team_id' => $mid, 'vorschau' => $this->vorschau(Team::findOrFail($mid), $this->wegfallend($vorher, $nachher), $nachher, null, $ohne)];
+            $mTeam = Team::findOrFail($mid);
+            // Spec 84 B3 C: Vorschau je Mandant in dessen Sicht (Recht oben am Master geprüft)
+            $mandanten[$mid] = ['mandant_team_id' => $mid, 'vorschau' => \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mTeam, fn () => $this->vorschau($mTeam, $this->wegfallend($vorher, $nachher), $nachher, null, $ohne))];
         }
         if (! $bestaetigt) {
             return ['mandanten' => array_values($mandanten), 'ausgefuehrt' => false];
         }
 
-        $alleKopien = [];
-        DB::transaction(function () use ($sammlungId, $objektId, $typ, &$mandanten, &$alleKopien) {
+        DB::transaction(function () use ($sammlungId, $objektId, $typ, &$mandanten) {
             foreach ($mandanten as $mid => $m) {
-                [$kopien, $umgehaengt] = $this->kopierenUndUmhaengen(Team::findOrFail($mid), $m['vorschau']['genutzt_je_art'], $m['vorschau']['bleibt_je_art']);
+                $mTeam = Team::findOrFail($mid);
+                [$kopien, $umgehaengt] = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mTeam, fn () => $this->kopierenUndUmhaengen($mTeam, $m['vorschau']['genutzt_je_art'], $m['vorschau']['bleibt_je_art']));
                 $mandanten[$mid]['kopien'] = $kopien['recipe'];
                 $mandanten[$mid]['kopien_je_art'] = $kopien;
                 $mandanten[$mid]['umgehaengt'] = $umgehaengt;
-                foreach ($kopien as $t => $map) {
-                    $alleKopien[$t] = ($alleKopien[$t] ?? []) + $map;
-                }
             }
             DB::table('foodalchemist_sammlung_objekte')->where('sammlung_id', $sammlungId)->where('typ', $typ)->where('objekt_id', $objektId)->delete();
         });
         $this->abos->neuBerechnenAlle();
-        $this->nachrechnen($alleKopien + ['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []]);
+        // Spec 84 B3 C: je Mandant in dessen Sicht nachrechnen (die Kopien gehören ihm; aus Master-Sicht fände find() sie nicht)
+        foreach ($mandanten as $mid => $m) {
+            \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mid, fn () => $this->nachrechnen(($m['kopien_je_art'] ?? []) + ['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []]));
+        }
         $this->protokoll->schreibe('abo_objekt_zurueckgezogen', ['sammlung_id' => $sammlungId, 'typ' => $typ, 'objekt_id' => $objektId,
             'mandanten' => array_keys($mandanten)], $actor, $this->modellFuer($typ)::mitFassungen()->find($objektId));
 
@@ -458,32 +468,32 @@ class AboKuendigungService
 
         // 1. erst alle Köpfe (Rezepte, Pakete, Konzepte), dann die Inhalte — Verweise zeigen auf die Kopien
         foreach ($kette['recipe'] as $fid) {
-            $map['recipe'][$fid] = $this->kopiereKopf(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $mandant, $namen['recipe'][$fid] ?? null);
+            $map['recipe'][$fid] = $this->kopiereKopf(FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $mandant, $namen['recipe'][$fid] ?? null);
         }
         foreach ($kette['paket'] as $fid) {
-            $map['paket'][$fid] = $this->kopiereKopfPaket(FoodAlchemistPaket::mitFassungen()->findOrFail($fid), $mandant, $namen['paket'][$fid] ?? null);
+            $map['paket'][$fid] = $this->kopiereKopfPaket(FoodAlchemistPaket::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $mandant, $namen['paket'][$fid] ?? null);
         }
         foreach ($kette['concept'] as $fid) {
-            $map['concept'][$fid] = $this->kopiereKopfKonzept(FoodAlchemistConcept::mitFassungen()->findOrFail($fid), $mandant, $namen['concept'][$fid] ?? null);
+            $map['concept'][$fid] = $this->kopiereKopfKonzept(FoodAlchemistConcept::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $mandant, $namen['concept'][$fid] ?? null);
         }
         foreach ($kette['format'] as $fid) {
-            $map['format'][$fid] = $this->kopiereKopfFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($fid), $mandant, $namen['format'][$fid] ?? null);
+            $map['format'][$fid] = $this->kopiereKopfFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $mandant, $namen['format'][$fid] ?? null);
         }
         // 2. Inhalte von unten nach oben: Rezepte (samt Darreichungen) → Pakete → Konzepte → Formate
         $darMap = [];
         $slotMap = [];   // Konzept-Slot der Fassung → Slot der Kopie (Format-Wording-Overrides hängen daran)
         foreach ($kette['recipe'] as $fid) {
-            $this->kopiereInhalt(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $map['recipe'][$fid], $map['recipe'], $mandant, $darMap);
+            $this->kopiereInhalt(FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $map['recipe'][$fid], $map['recipe'], $mandant, $darMap);
         }
         $this->kopiereErsatz($kette['recipe'], $map['recipe'], $mandant, $bleibt['recipe']);
         foreach ($kette['paket'] as $fid) {
-            $this->kopiereInhaltPaket(FoodAlchemistPaket::mitFassungen()->findOrFail($fid), $map['paket'][$fid], $map, $darMap, $mandant);
+            $this->kopiereInhaltPaket(FoodAlchemistPaket::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $map['paket'][$fid], $map, $darMap, $mandant);
         }
         foreach ($kette['concept'] as $fid) {
-            $this->kopiereInhaltKonzept(FoodAlchemistConcept::mitFassungen()->findOrFail($fid), $map['concept'][$fid], $map, $darMap, $mandant, $slotMap);
+            $this->kopiereInhaltKonzept(FoodAlchemistConcept::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $map['concept'][$fid], $map, $darMap, $mandant, $slotMap);
         }
         foreach ($kette['format'] as $fid) {
-            $this->kopiereInhaltFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($fid), $map['format'][$fid], $map, $slotMap, $mandant);
+            $this->kopiereInhaltFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($fid), $map['format'][$fid], $map, $slotMap, $mandant);
         }
 
         // 3. lebende Verweise umhängen (Historie bleibt), je Art mit denselben Filtern wie „genutzt“
@@ -695,7 +705,7 @@ class AboKuendigungService
                 'payload_json' => $payload ?: null,
             ])->save();
         }
-        $kopie = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($kopieId);
+        $kopie = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($kopieId);
         $kopie->serviceMoments()->sync($fassung->serviceMoments()->allRelatedIds()->all());
         $kopie->seasons()->sync($fassung->seasons()->allRelatedIds()->all());
         $kopie->targetGroups()->sync($fassung->targetGroups()->allRelatedIds()->all());
@@ -738,7 +748,7 @@ class AboKuendigungService
             ])->save();
             $slotMap[(int) $s->id] = (int) $neuerSlot->id;
         }
-        $kopie = FoodAlchemistConcept::mitFassungen()->findOrFail($kopieId);
+        $kopie = FoodAlchemistConcept::mitFassungen()->ohneTeamSicht('abo-pflege')->findOrFail($kopieId);
         $kopie->serviceMoments()->sync($fassung->serviceMoments()->allRelatedIds()->all());
         $kopie->seasons()->sync($fassung->seasons()->allRelatedIds()->all());
         $kopie->targetGroups()->sync($fassung->targetGroups()->allRelatedIds()->all());
@@ -873,7 +883,7 @@ class AboKuendigungService
     {
         $basis = preg_replace('/@f\d+$/', '', $fassungKey) ?: 'rezept';
         $key = $basis;
-        for ($n = 2; FoodAlchemistRecipe::mitFassungen()->withTrashed()->where('team_id', $mandant->id)->where('recipe_key', $key)->exists(); $n++) {
+        for ($n = 2; FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('eindeutigkeit')->withTrashed()->where('team_id', $mandant->id)->where('recipe_key', $key)->exists(); $n++) {
             $key = "{$basis}_{$n}";
         }
 

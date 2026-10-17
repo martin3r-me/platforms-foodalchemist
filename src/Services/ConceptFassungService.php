@@ -53,6 +53,12 @@ class ConceptFassungService
      */
     public function veroeffentlichen(Team $master, int $conceptId, string $notiz, ?User $actor): array
     {
+        // Spec 84 B3 C: Lesen im Master; das Recht prüft der Rumpf am übergebenen Team + Nutzer, nicht am Kontext
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($master, fn () => $this->veroeffentlichenImTeam($master, $conceptId, $notiz, $actor));
+    }
+
+    private function veroeffentlichenImTeam(Team $master, int $conceptId, string $notiz, ?User $actor): array
+    {
         if (! MasterTeam::istMaster($master)) {
             throw new \RuntimeException('Veröffentlichen gibt es nur im Master-Team (Spec 82 §12 B).');
         }

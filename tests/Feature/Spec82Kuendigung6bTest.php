@@ -163,14 +163,14 @@ it('Rezept: Fond bleibt über das zweite Abo sichtbar → nicht kopiert, die Kop
 
     $k = $this->svc->kuendigen($this->broich, $this->aboS1->id, $this->broichChef, bestaetigt: true)['kopien'];
     expect(array_keys($k))->toBe([$this->jusF->id]);                                                  // nur der Jus, der Fond NICHT
-    $jusK = FoodAlchemistRecipe::findOrFail($k[$this->jusF->id]);
+    $jusK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail($k[$this->jusF->id]);
     expect($jusK->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($this->fondF->id)   // bleibt auf der Fassung (bekommt Updates)
         ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $this->eigenZeile->id)->value('referenced_recipe_id'))->toBe($jusK->id);   // der Verweis des eigenen Rezepts auf die Kopie
 });
 
 it('EK der Kopie (Lisa 1): Fond-Fassung als Zutat rechnet mit den Preisen des Mandanten — vollständig, nie 0 €; ebenso ein eigenes Rezept mit Abo-Fassung als Zutat', function () {
     $k = $this->svc->kuendigen($this->broich, $this->aboS1->id, $this->broichChef, bestaetigt: true)['kopien'];
-    $jusK = FoodAlchemistRecipe::findOrFail($k[$this->jusF->id]);
+    $jusK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail($k[$this->jusF->id]);
     // Erwartung aus der Kostenschicht des Mandanten: Fond 500 g à 4 €/kg (Knochen) + Butter 100 g à 10 €/kg
     $erwartetFond = app(KostenCacheService::class)->fuer($this->fondF, $this->broich);
     expect($erwartetFond['vollstaendig'])->toBeTrue()
@@ -192,7 +192,7 @@ it('Ersatz-Kanten (Lisa 2): die Kante Jus↔Fond geht bei der Kopie nicht verlor
 
 it('zweistufig (Lisa 4): erst Abo A (Fond bleibt Fassung), dann Abo B → jetzt wird der Fond zur Kopie, die Kopie-Jus zeigt auf die Fond-Kopie', function () {
     $a = $this->svc->kuendigen($this->broich, $this->aboS1->id, $this->broichChef, bestaetigt: true)['kopien'];
-    $jusK = FoodAlchemistRecipe::findOrFail($a[$this->jusF->id]);
+    $jusK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail($a[$this->jusF->id]);
     expect($jusK->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($this->fondF->id);
 
     $vor = $this->svc->kuendigen($this->broich, $this->aboS2->id, $this->broichChef, bestaetigt: false)['vorschau'];
@@ -201,7 +201,7 @@ it('zweistufig (Lisa 4): erst Abo A (Fond bleibt Fassung), dann Abo B → jetzt 
         ->and($vor['bleibt'])->toBe([]);
 
     $b = $this->svc->kuendigen($this->broich, $this->aboS2->id, $this->broichChef, bestaetigt: true)['kopien'];
-    $fondK = FoodAlchemistRecipe::findOrFail($b[$this->fondF->id]);
+    $fondK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail($b[$this->fondF->id]);
     expect((bool) $fondK->ist_fassung)->toBeFalse()->and((int) $fondK->team_id)->toBe((int) $this->broich->id)
         ->and($jusK->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($fondK->id)   // jetzt auf der Fond-Kopie
         ->and((float) $jusK->refresh()->ek_total_eur)->toBeGreaterThan(1.0)->and((int) $jusK->ek_n_ingredients_priced)->toBe((int) $jusK->ek_n_ingredients_total);
@@ -242,18 +242,18 @@ it('Paket: über ein zweites Abo sichtbares Paket wird NICHT kopiert und nicht u
         ->and($v['mitkopiert_je_art']['paket'])->toBe([]);
 
     $k = $this->svc->kuendigen($this->soul, $this->aboS3->id, $this->soulChef, bestaetigt: true)['kopien_je_art'];
-    $konzeptK = FoodAlchemistConcept::findOrFail($k['concept'][$this->k1->id]);
+    $konzeptK = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($k['concept'][$this->k1->id]);
     expect($k['paket'])->toBe([])->and($k['recipe'])->toBe([])
         ->and($konzeptK->slots()->whereNotNull('package_id')->value('package_id'))->toBe($p1)                                  // zeigt auf die Fassung (Updates)
         ->and(DB::table('foodalchemist_concept_slots')->where('id', $this->soulSlot)->value('package_id'))->toBe($p1)          // eigener Verweis unverändert
-        ->and(FoodAlchemistConcept::find($konzeptK->id)->ist_fassung)->toBeFalse();
+        ->and(FoodAlchemistConcept::ohneTeamSicht('test')->find($konzeptK->id)->ist_fassung)->toBeFalse();
 });
 
 it('Bilder (Entscheid 1): Titelbild und Galerie werden in den Speicher des Mandanten kopiert', function () {
     ($this->soulAbos)('titel.jpg');
     expect($this->k1->image_context_file_id)->not->toBeNull();
     $r = $this->svc->kuendigen($this->soul, $this->aboS3->id, $this->soulChef, bestaetigt: true);
-    $k = FoodAlchemistConcept::findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
+    $k = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
     $datei = ContextFile::find($k->image_context_file_id);
 
     expect($k->image_context_file_id)->not->toBe($this->k1->image_context_file_id)->and($datei)->not->toBeNull()
@@ -273,7 +273,7 @@ it('Bilder (Entscheid 1): fehlt die Datei, bleibt die Kopie ohne Bild, mit Hinwe
     Storage::disk($galerieDatei->disk)->delete($galerieDatei->path);
 
     $r = $this->svc->kuendigen($this->soul, $this->aboS3->id, $this->soulChef, bestaetigt: true);
-    $k = FoodAlchemistConcept::findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
+    $k = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
     expect($r['ausgefuehrt'])->toBeTrue()->and(FoodAlchemistAbo::find($this->aboS3->id)->status)->toBe(FoodAlchemistAbo::GEKUENDIGT)
         ->and($k->image_path)->toBeNull()->and($k->image_context_file_id)->toBeNull()->and($k->images()->count())->toBe(0)
         ->and(implode(' ', $r['hinweise']))->toContain('Bilddatei')->and($r['hinweise'])->toHaveCount(2);
@@ -302,6 +302,6 @@ it('Bilder: auch ein Fehler beim Schreiben ins Mandanten-Speicher bricht die Kü
         }
     });
     $r = $this->svc->kuendigen($this->soul, $this->aboS3->id, $this->soulChef, bestaetigt: true);
-    $k = FoodAlchemistConcept::findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
+    $k = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($r['kopien_je_art']['concept'][$this->k1->id]);
     expect($r['ausgefuehrt'])->toBeTrue()->and($k->image_path)->toBeNull()->and(implode(' ', $r['hinweise']))->toContain('Bilddatei');
 });

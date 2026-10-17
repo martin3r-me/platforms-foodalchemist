@@ -72,7 +72,9 @@ class RecipeRecomputeService
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {
-            $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)   // Spec 82: auch Fassungen (ohne Kosten)
+            // Spec 82: auch Fassungen (ohne Kosten). Spec 84 B3: Recompute rechnet auch Master-, Fassungs- und Unter-Team-Zeilen
+            // (Kosten-Cache) — das Rezept wird über die Teamgrenze geladen, ohne Zusatzabfrage (V-049 zählt die Läufe)
+            $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('recompute')
                 ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
@@ -255,7 +257,7 @@ class RecipeRecomputeService
      */
     public function recomputeAll(): array
     {
-        $ids = FoodAlchemistRecipe::pluck('id')->all();
+        $ids = FoodAlchemistRecipe::ohneTeamSicht('recompute')->pluck('id')->all();   // Spec 84 B3: „alle“ heißt alle Teams
         $kanten = FoodAlchemistRecipeIngredient::whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
             ->distinct()->get(['recipe_id', 'referenced_recipe_id']);
 
@@ -295,7 +297,8 @@ class RecipeRecomputeService
         FoodAlchemistRecipe::whereIn('id', $order)->pluck('team_id')->filter()->unique()
             ->each(function ($teamId) {
                 if (($team = Team::find($teamId)) !== null) {
-                    app(PricingCascadeService::class)->recomputeTeam($team);
+                    // Spec 84 B3 C: Preis-Kaskade je Team in dessen Sicht
+                    \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => app(PricingCascadeService::class)->recomputeTeam($team));
                 }
             });
 
@@ -725,7 +728,8 @@ class RecipeRecomputeService
             throw new \RuntimeException('Zyklus in den Unter-Rezepten — Kosten nicht berechenbar.');
         }
         $pfad[$recipeId] = true;
-        $recipe = FoodAlchemistRecipe::mitFassungen()->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+        $recipe = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('recompute')   // Spec 84 B3: Kosten folgen den Verweisen über die Teamgrenze
+            ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
             ->findOrFail($recipeId);
         $zutaten = $this->aggregationsZutaten($recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored));
 

@@ -41,7 +41,7 @@ class RecomputeTeamRecipesJob implements ShouldQueue
             return;
         }
 
-        $recipeIds = FoodAlchemistRecipe::whereIn('team_id', self::teamUndNachfahren($team->id))->pluck('id')->all();
+        $recipeIds = FoodAlchemistRecipe::ohneTeamSicht('unterteam-verwaltung')->whereIn('team_id', self::teamUndNachfahren($team->id))->pluck('id')->all();
         if ($recipeIds !== []) {
             $recompute->recomputeMany($recipeIds);     // topologisch, Preis-Kaskade der betroffenen inklusive
         }
@@ -64,6 +64,6 @@ class RecomputeTeamRecipesJob implements ShouldQueue
     /** Anzahl der Rezepte, die ein Lauf für dieses Team anfasst (für die UI-/MCP-Meldung). */
     public static function anzahlRezepte(int $teamId): int
     {
-        return FoodAlchemistRecipe::whereIn('team_id', self::teamUndNachfahren($teamId))->count();
+        return FoodAlchemistRecipe::ohneTeamSicht('unterteam-verwaltung')->whereIn('team_id', self::teamUndNachfahren($teamId))->count();
     }
 }
