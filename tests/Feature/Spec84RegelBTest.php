@@ -241,3 +241,17 @@ it('Historie: A liest das Protokoll seiner Familie inkl. Zwischenfassung; B ohne
     app(AboKuendigungService::class)->kuendigen($this->master, $this->aboA->id, $this->kurator, bestaetigt: true);
     expect($nummern($this->a))->toBe([]);
 });
+
+it('Nachtlauf: eingeplant um 01:40 und räumt eine nicht mehr referenzierte alte Fassung ab', function () {
+    $treffer = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())
+        ->filter(fn ($e) => str_contains((string) $e->command, 'foodalchemist:abo-huelle-nachfuehren'));
+    expect($treffer)->not->toBeEmpty()->and($treffer->first()->expression)->toBe('40 1 * * *');
+
+    $f1 = $this->f['recipe']['f1'];
+    $zeile = ($this->arten['recipe']['verweis'])($this->a, $f1);
+    app(AboService::class)->neuBerechnen($this->a->id);
+    $zeile->delete();   // Löschen rechnet nicht sofort nach …
+    expect(($this->sieht)($this->a, 'recipe', $f1))->toBeTrue();
+    $this->artisan('foodalchemist:abo-huelle-nachfuehren')->assertSuccessful();   // … der Nachtlauf räumt auf
+    expect(($this->sieht)($this->a, 'recipe', $f1))->toBeFalse();
+});

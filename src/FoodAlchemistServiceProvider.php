@@ -141,6 +141,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class,
+                \Platform\FoodAlchemist\Console\AboHuelleNachfuehrenCommand::class,
                 \Platform\FoodAlchemist\Console\InspireImportCommand::class,
                 \Platform\FoodAlchemist\Console\AnkerWissenCommand::class,
                 \Platform\FoodAlchemist\Console\RezeptProfileCommand::class,
@@ -284,6 +285,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->runInBackground()
                     ->description('FoodAlchemist: Kanon-Sicherung gegen den Live-Kanon prüfen (Drift → Signal)');
             }
+
+            // Spec 84 B3 Regel B: Abo-Hüllen nachts nachführen (gelöschte Verweise lassen ältere Fassungen sonst zu lange sichtbar).
+            // 01:40 = vor Gebühren-Zählung (02:10) und Necta-Abgleich (02:30, eigene Sperre); eigene Sperre über withoutOverlapping.
+            $schedule->command(\Platform\FoodAlchemist\Console\AboHuelleNachfuehrenCommand::class)
+                ->dailyAt(config('foodalchemist.scheduler.abo_huelle_zeit', '01:40'))
+                ->withoutOverlapping(30)
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: Abo-Hüllen nachführen (Regel B: ältere Fassungen nur mit eigenem Verweis)');
 
             // Spec 57 · E9: Speiseplan-Aushänge „immer die laufende Woche“ jeden Montag früh neu
             // einfrieren. Nur lesend+veröffentlichend, kein Provider-Call.

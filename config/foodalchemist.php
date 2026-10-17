@@ -481,6 +481,8 @@ return [
         // keinen wöchentlich fehlschlagenden Wächter erben, sondern gar keinen.
         'kanon_team' => (int) env('FOODALCHEMIST_KANON_TEAM', 6),
         'kanon_sicherung_zeit' => env('FOODALCHEMIST_KANON_SICHERUNG_ZEIT', '06:50'),
+        // Spec 84 B3 Regel B: nächtliches Nachführen der Abo-Hüllen (vor Gebühren 02:10 und Necta 02:30).
+        'abo_huelle_zeit' => env('FOODALCHEMIST_ABO_HUELLE_ZEIT', '01:40'),
     ],
 
     'stt' => [
