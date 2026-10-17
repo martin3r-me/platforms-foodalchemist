@@ -742,31 +742,36 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Blade direkt gerendert und dürfen nicht von Auto-Discovery/Cache-Zustand abhängen.
         Livewire::component('foodalchemist.orders.editor', \Platform\FoodAlchemist\Livewire\Orders\Editor::class);
 
-        // Prüfe ob Verzeichnis existiert
-        if (!is_dir($basePath)) {
-            return;
+        // Spec 84 E-4: Alias → Klasse aus dem Scan-Cache (mit Rückfall auf den Live-Scan, kein Cache-Befehl nötig).
+        // Spart je Request das Autoloaden aller Livewire-Klassen (class_exists im Scan).
+        $map = \Platform\FoodAlchemist\Support\ScanCache::livewire(fn () => $this->livewireLiveScan($basePath, $baseNamespace, $prefix));
+        foreach ($map as $alias => $class) {
+            Livewire::component($alias, $class);
+        }
+    }
+
+    /** @return array<string, class-string> Alias → Klasse (bisheriger Scan) */
+    private function livewireLiveScan(string $basePath, string $baseNamespace, string $prefix): array
+    {
+        $map = [];
+        if (! is_dir($basePath)) {
+            return $map;
         }
 
-        // Rekursiv alle PHP-Dateien durchsuchen
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($basePath)
         );
 
         foreach ($iterator as $file) {
-            // Nur PHP-Dateien verarbeiten
-            if (!$file->isFile() || $file->getExtension() !== 'php') {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
                 continue;
             }
 
-            // Relativen Pfad extrahieren
             $relativePath = str_replace($basePath . DIRECTORY_SEPARATOR, '', $file->getPathname());
-            
-            // Klassenpfad generieren (z.B. Entity\Index -> Entity\Index)
             $classPath = str_replace(['/', '.php'], ['\\', ''], $relativePath);
             $class = $baseNamespace . '\\' . $classPath;
 
-            // Prüfe ob Klasse existiert
-            if (!class_exists($class)) {
+            if (! class_exists($class)) {
                 continue;
             }
 
@@ -776,10 +781,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $aliasPath = collect(explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath)))
                 ->map(fn (string $segment) => Str::kebab($segment))
                 ->implode('.');
-            $alias = $prefix . '.' . $aliasPath;
-
-            // Livewire-Komponente registrieren
-            Livewire::component($alias, $class);
+            $map[$prefix . '.' . $aliasPath] = $class;
         }
+        ksort($map);
+
+        return $map;
     }
 }
