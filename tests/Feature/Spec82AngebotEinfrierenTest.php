@@ -56,7 +56,7 @@ beforeEach(function () {
         app(AboService::class)->abonnieren($this->master, $t, $sammlung, $this->kurator);
     }
     $this->publiziere = fn (string $notiz) => $this->fassungen->veroeffentlichen($this->master, $this->jus->id, $notiz, $this->kurator);
-    $this->fassung = fn (int $nr) => FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $this->jus->id)->where('fassung_nr', $nr)->first();
+    $this->fassung = fn (int $nr) => FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('test')->where('fassung_von_id', $this->jus->id)   // Spec 84 B3: Test liest jede Fassung, auch außerhalb der Hülle->where('fassung_nr', $nr)->first();
     ($this->publiziere)('Erstveröffentlichung');
 
     // Broichs Gerichte: eines mit Abo-Fassung (Lamm mit Jus), eines ohne (Salat)
