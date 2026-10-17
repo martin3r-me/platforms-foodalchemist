@@ -22,6 +22,13 @@ class PricingCascadeService
     /** @return array{presentations:int,packages:int,concepts:int,offers:int} */
     public function recomputeTeam(Team $team, int $chunk = 200): array
     {
+        // Spec 84 B3 C: die Kaskade rechnet die Zeilen des übergebenen Teams — gelesen wird in dessen Sicht (Rezepte, Pakete, Konzepte,
+        // Angebote); ab Stufe 1, bei Stufe 0 unverändert. Aufrufer aus fremdem Kontext: Team-Job, Rezept-Recompute, Einstellungen.
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->recomputeTeamImTeam($team, $chunk));
+    }
+
+    private function recomputeTeamImTeam(Team $team, int $chunk): array
+    {
         $stats = ['presentations' => 0, 'packages' => 0, 'concepts' => 0, 'offers' => 0];
         $presentations = app(DarreichungService::class);
         FoodAlchemistRecipeDarreichung::where('team_id', $team->id)->chunkById($chunk, function ($rows) use (&$stats, $presentations) {
@@ -81,57 +88,60 @@ class PricingCascadeService
                 continue;
             }
 
-            $packageIds = DB::table('foodalchemist_package_dishes')
-                ->whereIn('sales_recipe_id', $recipeIds)->whereNull('deleted_at')
-                ->distinct()->pluck('package_id');
-            FoodAlchemistPaket::where('team_id', $team->id)->whereIn('id', $packageIds)
-                ->where('price_mode', 'auto')->get()->each(function ($package) use (&$stats) {
-                    $this->packages->recomputePrice($package);
-                    $stats['packages']++;
-                });
+            // Spec 84 B3 C: je Team in dessen Sicht (Rezept-Recompute ruft das für fremde Teams auf); bei Stufe 0 unverändert
+            \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, function () use ($team, $recipeIds, &$stats) {
+                $packageIds = DB::table('foodalchemist_package_dishes')
+                    ->whereIn('sales_recipe_id', $recipeIds)->whereNull('deleted_at')
+                    ->distinct()->pluck('package_id');
+                FoodAlchemistPaket::where('team_id', $team->id)->whereIn('id', $packageIds)
+                    ->where('price_mode', 'auto')->get()->each(function ($package) use (&$stats) {
+                        $this->packages->recomputePrice($package);
+                        $stats['packages']++;
+                    });
 
-            $conceptIds = DB::table('foodalchemist_concept_slots')
-                ->whereNull('deleted_at')
-                ->where(function ($query) use ($recipeIds, $packageIds) {
-                    $query->whereIn('sales_recipe_id', $recipeIds);
-                    if ($packageIds->isNotEmpty()) {
-                        $query->orWhereIn('package_id', $packageIds);
+                $conceptIds = DB::table('foodalchemist_concept_slots')
+                    ->whereNull('deleted_at')
+                    ->where(function ($query) use ($recipeIds, $packageIds) {
+                        $query->whereIn('sales_recipe_id', $recipeIds);
+                        if ($packageIds->isNotEmpty()) {
+                            $query->orWhereIn('package_id', $packageIds);
+                        }
+                    })->distinct()->pluck('concept_id')->map(fn ($id) => (int) $id)->values()->all();
+
+                // Eingebettete Paket-/Concept-Kaskade von unten nach oben auflösen.
+                $frontier = $conceptIds;
+                $seen = array_fill_keys($conceptIds, true);
+                while ($frontier !== []) {
+                    $parents = DB::table('foodalchemist_concept_slots')
+                        ->whereNull('deleted_at')->whereIn('embedded_concept_id', $frontier)
+                        ->distinct()->pluck('concept_id')->map(fn ($id) => (int) $id)
+                        ->reject(fn ($id) => isset($seen[$id]))->values()->all();
+                    foreach ($parents as $parentId) {
+                        $seen[$parentId] = true;
+                        $conceptIds[] = $parentId;
                     }
-                })->distinct()->pluck('concept_id')->map(fn ($id) => (int) $id)->values()->all();
-
-            // Eingebettete Paket-/Concept-Kaskade von unten nach oben auflösen.
-            $frontier = $conceptIds;
-            $seen = array_fill_keys($conceptIds, true);
-            while ($frontier !== []) {
-                $parents = DB::table('foodalchemist_concept_slots')
-                    ->whereNull('deleted_at')->whereIn('embedded_concept_id', $frontier)
-                    ->distinct()->pluck('concept_id')->map(fn ($id) => (int) $id)
-                    ->reject(fn ($id) => isset($seen[$id]))->values()->all();
-                foreach ($parents as $parentId) {
-                    $seen[$parentId] = true;
-                    $conceptIds[] = $parentId;
+                    $frontier = $parents;
                 }
-                $frontier = $parents;
-            }
 
-            $affectedConcepts = FoodAlchemistConcept::where('team_id', $team->id)
-                ->whereIn('id', $conceptIds)->get()->keyBy('id');
-            foreach ($conceptIds as $conceptId) {
-                if (($concept = $affectedConcepts->get($conceptId)) !== null) {
-                    $this->concepts->recomputeCache($concept);
-                    $stats['concepts']++;
+                $affectedConcepts = FoodAlchemistConcept::where('team_id', $team->id)
+                    ->whereIn('id', $conceptIds)->get()->keyBy('id');
+                foreach ($conceptIds as $conceptId) {
+                    if (($concept = $affectedConcepts->get($conceptId)) !== null) {
+                        $this->concepts->recomputeCache($concept);
+                        $stats['concepts']++;
+                    }
                 }
-            }
 
-            $offerIds = $affectedConcepts->pluck('offer_id')->filter();
-            $offerIds = $offerIds->merge(DB::table('foodalchemist_offer_concept')
-                ->whereIn('concept_id', $affectedConcepts->keys())->pluck('offer_id'))->unique();
-            FoodAlchemistAngebot::where('team_id', $team->id)->whereIn('id', $offerIds)
-                ->whereIn('status', ['anfrage', 'in_arbeit', 'angebot'])->where('price_mode', 'auto')
-                ->get()->each(function ($offer) use (&$stats, $team) {
-                    $this->offers->aktualisiereAutoPreis($team, $offer);
-                    $stats['offers']++;
-                });
+                $offerIds = $affectedConcepts->pluck('offer_id')->filter();
+                $offerIds = $offerIds->merge(DB::table('foodalchemist_offer_concept')
+                    ->whereIn('concept_id', $affectedConcepts->keys())->pluck('offer_id'))->unique();
+                FoodAlchemistAngebot::where('team_id', $team->id)->whereIn('id', $offerIds)
+                    ->whereIn('status', ['anfrage', 'in_arbeit', 'angebot'])->where('price_mode', 'auto')
+                    ->get()->each(function ($offer) use (&$stats, $team) {
+                        $this->offers->aktualisiereAutoPreis($team, $offer);
+                        $stats['offers']++;
+                    });
+            });
         }
 
         return $stats;

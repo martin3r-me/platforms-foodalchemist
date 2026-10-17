@@ -51,7 +51,7 @@ class DynamicPricingMigrationService
             // Altbestand ohne Darreichungszeile hing ausschließlich am Rezept-Cache.
             // Vor der Kaskade eine echte Preis-Wahrheit anlegen; bei vorhandenen
             // Varianten ohne Standard wird weiterhin nichts geraten.
-            FoodAlchemistRecipe::where('team_id', $team->id)->where('is_sales_recipe', true)
+            FoodAlchemistRecipe::ohneTeamSicht('migration')->where('team_id', $team->id)->where('is_sales_recipe', true)
                 ->whereDoesntHave('presentations')
                 ->chunkById($chunk, function ($recipes) use (&$stats, $team) {
                     foreach ($recipes as $recipe) {
@@ -85,7 +85,7 @@ class DynamicPricingMigrationService
                     }
                 });
 
-            FoodAlchemistPaket::where('team_id', $team->id)->chunkById($chunk, function ($rows) use (&$stats) {
+            FoodAlchemistPaket::ohneTeamSicht('migration')->where('team_id', $team->id)->chunkById($chunk, function ($rows) use (&$stats) {
                 foreach ($rows as $row) {
                     $row->update(['price_mode' => 'auto', 'price_override_reason' => null,
                         'price_override_user_id' => null, 'price_override_at' => null, 'price_override_expires_at' => null]);
@@ -96,7 +96,7 @@ class DynamicPricingMigrationService
 
             // Zwei Durchläufe stabilisieren eingebettete Concepts, deren Cache voneinander abhängt.
             for ($pass = 0; $pass < 2; $pass++) {
-                FoodAlchemistConcept::where('team_id', $team->id)
+                FoodAlchemistConcept::ohneTeamSicht('migration')->where('team_id', $team->id)
                     ->chunkById($chunk, function ($rows) use (&$stats, $pass) {
                         foreach ($rows as $row) {
                             $row->update([
