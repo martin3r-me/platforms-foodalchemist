@@ -34,6 +34,13 @@ final class TeamSicht implements Scope
             \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class,
         ],
+        // Spec 84 B3 Stufe 2: Ausgaben (Foodbook, Speiseplan, Speisekarte, Angebot)
+        2 => [
+            \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class,   // Kurator 17.10.: Angebote sind Ausgaben (77d-Hülle seit E8)
+        ],
     ];
 
     /** Aktueller FA-Eingang (`seite`, `mcp`) mit angemeldetem Nutzer — nur dort ist fehlender Kontext ein Fehler. */
