@@ -311,10 +311,8 @@ class SupplierService
      */
     private function volumenProxyRaw(Team $team): array
     {
-        $recipeIds = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->pluck('id');
-        if ($recipeIds->isEmpty()) {
-            return [];
-        }
+        // Spec 84 E-2: sichtbare Rezepte als Unterabfrage statt als PHP-Liste (Master: 35k IDs in einem IN)
+        $recipeIds = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->select('foodalchemist_recipes.id');
 
         return DB::table('foodalchemist_recipe_ingredients AS ri')
             ->join('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')

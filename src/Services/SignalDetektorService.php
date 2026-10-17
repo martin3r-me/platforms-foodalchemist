@@ -604,7 +604,8 @@ class SignalDetektorService
     {
         $grenze = now()->subDays($tageSchwelle)->format('Y-m-d H:i:s');
 
-        $anzahl = DB::table('foodalchemist_gps as g')
+        // Spec 84 E-2: zählen in der Datenbank statt alle GP-IDs zu laden
+        $veraltet = DB::table('foodalchemist_gps as g')
             ->join('foodalchemist_supplier_items as i', 'i.id', '=', 'g.lead_la_supplier_item_id')
             ->leftJoin('foodalchemist_prices as p', function ($j) {
                 $j->on('p.supplier_item_id', '=', 'i.id')->whereNull('p.deleted_at');
@@ -615,8 +616,8 @@ class SignalDetektorService
             ->whereIn('g.team_id', FoodAlchemistGp::teamAncestryIds($team))
             ->groupBy('g.id')
             ->havingRaw('MAX(p.status_valid_from) < ? OR MAX(p.status_valid_from) IS NULL', [$grenze])
-            ->get(['g.id'])
-            ->count();
+            ->select('g.id');
+        $anzahl = DB::query()->fromSub($veraltet, 'veraltet')->count();
 
         if ($anzahl === 0) {
             // Auf 0 gemessen → das offene Sammel-Signal schließen (sonst bleibt es ewig stehen).

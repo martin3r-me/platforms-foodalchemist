@@ -125,7 +125,21 @@ class SignalObjectService
         // Metrik nur EIN EXISTS, das Ergebnis wird für alle Signale derselben Metrik genutzt.
         $metrikCache = [];
 
-        foreach (FoodAlchemistSignal::visibleToTeam($team)->offen()->orderByDesc('created_at')->get() as $sig) {
+        // Spec 84 E-2: SQL-Vorfilter — nur Signale, die das Objekt überhaupt betreffen KÖNNEN (die drei Wege aus betrifft():
+        // direkte Referenz, Lücken-Metrik, Detektor-Beispiele). Vorher wurden alle offenen Signale des Teams samt Payload
+        // geladen (gemessen: 503 → rund 30). betrifft() entscheidet danach wie bisher; das Ergebnis bleibt gleich.
+        $kandidaten = FoodAlchemistSignal::visibleToTeam($team)->offen()
+            ->where(function ($w) use ($kind, $id) {
+                $w->where(fn ($r) => $r->where('ref_type', $kind)->where('ref_id', $id))
+                    ->orWhere('payload', 'like', '%"metrik"%')
+                    ->orWhere('dedup_key', 'datenqualitaet-gp-ohne-la');
+                if ($kind === 'recipe') {
+                    $w->orWhere('payload', 'like', '%"beispiele"%');
+                }
+            })
+            ->orderByDesc('created_at')->get();
+
+        foreach ($kandidaten as $sig) {
             if (! $this->betrifft($team, $sig, $kind, $id, $metrikCache)) {
                 continue;
             }
