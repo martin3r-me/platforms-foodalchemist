@@ -33,6 +33,48 @@ final class AboSicht
             && DB::table('foodalchemist_abo_objekte')->exists());
     }
 
+    /** Abo-Art → Modell (für die Fassungs-Historie). */
+    public const MODELL_JE_TYP = [
+        'recipe' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::class,
+        'paket' => \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class,
+        'concept' => \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class,
+        'format' => \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class,
+    ];
+
+    /**
+     * Spec 84 B3 Regel B · „Historie ist keine Nutzung“ (Kurator/Dominique 17.10.): Darf das Team die Fassungs-Historie dieser Familie lesen?
+     * Ja, wenn es gerade eine Fassung der Familie sieht (Abo-Hülle, inkl. 77d-Einschränkung) oder die Familie als Master selbst besitzt.
+     * EINE Prüfung für Änderungsprotokoll und Zwischenfassungen — nicht je Aufrufer nachbauen.
+     */
+    public static function historieErlaubt(?\Platform\Core\Models\Team $team, string $typ, int $familieId): bool
+    {
+        $modell = self::MODELL_JE_TYP[$typ] ?? null;
+        if ($team === null || $modell === null) {
+            return false;
+        }
+        $tabelle = (new $modell)->getTable();
+        if (MasterTeam::istMaster($team) && DB::table($tabelle)->where('id', $familieId)->where('team_id', $team->id)->exists()) {
+            return true;
+        }
+
+        return $modell::visibleToTeam($team)->where($tabelle.'.ist_fassung', true)->where($tabelle.'.fassung_von_id', $familieId)->exists();
+    }
+
+    /**
+     * Alle Fassungen einer Familie für die Historie (Nummer, Notiz, Allergen-Flag) — über die Hülle hinaus NUR mit {@see historieErlaubt}.
+     * Nie für Listen, Suche, Auswahl, GET per ID oder Editor: dort gilt die Hülle.
+     */
+    public static function historie(?\Platform\Core\Models\Team $team, string $typ, int $familieId): \Illuminate\Database\Eloquent\Builder
+    {
+        $modell = self::MODELL_JE_TYP[$typ];
+        $q = $modell::mitFassungen();
+        if (self::historieErlaubt($team, $typ, $familieId)) {
+            $q->ohneTeamSicht('fassungs-historie');
+        }
+
+        return $q->where('fassung_von_id', $familieId)->where('ist_fassung', true);
+    }
+
     public static function vergessen(): void
     {
         Cache::forget(self::CACHE_VORHANDEN);

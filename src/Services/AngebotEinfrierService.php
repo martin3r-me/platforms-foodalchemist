@@ -285,7 +285,7 @@ class AngebotEinfrierService
         }
         $eigentuemer = Team::find($angebot->team_id) ?? $team;
 
-        return DB::transaction(function () use ($team, $user, $angebot, $zeile, $eintrag, $neu, $gericht, $vorschau, $eigentuemer, $familieId) {
+        $ergebnis = DB::transaction(function () use ($team, $user, $angebot, $zeile, $eintrag, $neu, $gericht, $vorschau, $eigentuemer, $familieId) {
             $umgehaengt = $this->verweiseUmstellen($angebot, $gericht, (int) $eintrag['fassung_id'], (int) $neu->id);
             if ((int) $gericht->id === (int) $eintrag['fassung_id']) {   // das Gericht war selbst die Fassung: die Zeile zeigt jetzt auf die neue
                 $zeile->update(['recipe_id' => $neu->id, 'name' => (string) $neu->name]);
@@ -312,6 +312,9 @@ class AngebotEinfrierService
             return ['uebernahme_id' => (int) $u->id, 'von_nr' => $vorschau['von_nr'], 'nach_nr' => $vorschau['nach_nr'], 'allergen_geaendert' => $vorschau['allergen_geaendert'],
                 'umgehaengt' => $umgehaengt, 'betroffene_ausgaben' => $vorschau['betroffene_ausgaben']];
         });
+        app(AboService::class)->huelleNachfuehren($team);   // Spec 84 B3 Regel B: nicht mehr referenzierte ältere Fassung fällt aus der Hülle
+
+        return $ergebnis;
     }
 
     /**

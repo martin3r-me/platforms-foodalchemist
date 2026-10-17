@@ -112,6 +112,22 @@ class AboService
         AboSicht::vergessen();
     }
 
+    /**
+     * Spec 84 B3 Regel B · Nach einer Verweis-Änderung (Folge, Übernehmen) die Hülle des Mandanten neu rechnen, damit eine nicht mehr
+     * referenzierte ältere Fassung wieder herausfällt. Nur, wenn der Mandant Abos hat (sonst keine Abfrage-Last).
+     */
+    public function huelleNachfuehren(\Platform\Core\Models\Team|int $team): void
+    {
+        $team = $team instanceof \Platform\Core\Models\Team ? $team : \Platform\Core\Models\Team::find($team);
+        if ($team === null) {
+            return;
+        }
+        $mandant = (int) app(FaRechte::class)->hauptTeam($team)->id;
+        if (DB::table('foodalchemist_abos')->where('mandant_team_id', $mandant)->where('status', FoodAlchemistAbo::AKTIV)->exists()) {
+            $this->neuBerechnen($mandant);
+        }
+    }
+
     /** @return array<string, list<int>> gespeicherte Hülle des Mandanten */
     public function neuBerechnen(int $mandantTeamId): array
     {
@@ -168,11 +184,38 @@ class AboService
             return [];
         }
 
+        $leer = ['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []];
+        $erst = $this->huelleAus($familien, $paketFamilien, $konzeptFamilien, $formatFamilien, $leer);
+        // Spec 84 B3 Regel B (Dominique 17.10.): dazu jede ÄLTERE Fassung der abonnierten Familien, auf die noch etwas Eigenes des Mandanten
+        // verweist (Rezept, Konzept, Paket, Angebot, Foodbook, Speiseplan, Speisekarte, Produktion, Bestellvorlage, Lager, Darreichung).
+        // Als zusätzliche Saat in denselben Baum-Gang — so ziehen auch die alten Unter-Fassungen einer alten Fassung mit (Jus F1 → Fond F1).
+        $saat = $this->referenzierteAlteFassungen($mandantTeamId, $erst, [
+            'recipe' => $familien, 'paket' => $paketFamilien, 'concept' => $konzeptFamilien, 'format' => $formatFamilien,
+        ]);
+        if ($saat === $leer) {
+            return $erst;
+        }
+
+        return $this->huelleAus($familien, $paketFamilien, $konzeptFamilien, $formatFamilien, $saat);
+    }
+
+    /**
+     * Hülle aus den abonnierten Familien (jüngste Fassung je Familie samt Baum) plus `$saat` (zusätzliche Fassungs-IDs je Art, Regel B).
+     *
+     * @param  list<int>  $familien
+     * @param  list<int>  $paketFamilien
+     * @param  list<int>  $konzeptFamilien
+     * @param  list<int>  $formatFamilien
+     * @param  array{recipe: list<int>, paket: list<int>, concept: list<int>, format: list<int>}  $saat
+     * @return array<string, list<int>>
+     */
+    private function huelleAus(array $familien, array $paketFamilien, array $konzeptFamilien, array $formatFamilien, array $saat): array
+    {
         // Konzepte (PR 4, auch kind=paket): je Familie die jüngste Fassung; ihre Slots zeigen auf Fassungen von Paket, eingebettetem
         // Paket-Konzept (rekursiv) und Rezept — alle ziehen in die Hülle mit
-        $konzeptFassungen = $this->neuesteFassungenVon('foodalchemist_concepts', $konzeptFamilien);
-        $paketFassungen = $this->neuesteFassungenVon('foodalchemist_packages', $paketFamilien);
-        $formatFassungen = $this->nurFassungen('foodalchemist_formats', $this->neuesteFassungenVon('foodalchemist_formats', $formatFamilien));
+        $konzeptFassungen = array_merge($this->neuesteFassungenVon('foodalchemist_concepts', $konzeptFamilien), $saat['concept']);
+        $paketFassungen = array_merge($this->neuesteFassungenVon('foodalchemist_packages', $paketFamilien), $saat['paket']);
+        $formatFassungen = $this->nurFassungen('foodalchemist_formats', array_merge($this->neuesteFassungenVon('foodalchemist_formats', $formatFamilien), $saat['format']));
         $rezeptSeeds = [];
         // Format-Slots zeigen auf Konzept-Fassungen (und über diese auf Pakete/Rezepte) — sie ziehen in die Konzept-Hülle mit
         if ($formatFassungen !== []) {
@@ -199,7 +242,7 @@ class AboService
         $paketRezepte = $paketFassungen === [] ? [] : DB::table('foodalchemist_package_dishes')->whereIn('package_id', $paketFassungen)
             ->whereNull('deleted_at')->pluck('sales_recipe_id')->map(fn ($v) => (int) $v)->all();
 
-        $offen = array_merge($this->neuesteFassungen($familien), $rezeptSeeds, $paketRezepte);
+        $offen = array_merge($this->neuesteFassungen($familien), $saat['recipe'], $rezeptSeeds, $paketRezepte);
         $fertig = [];
         while ($offen !== []) {
             $offen = array_values(array_diff(array_unique($offen), $fertig));
@@ -228,6 +271,153 @@ class AboService
         }
 
         return $huelle;
+    }
+
+    /**
+     * Spec 84 B3 Regel B · Ältere Fassungen, auf die noch etwas Eigenes des Mandanten verweist — je Art (recipe | paket | concept | format).
+     *
+     * - Kandidaten: nicht gelöschte Fassungen der Familien, die in der Hülle stehen (abonniert oder über den Baum erreicht), die noch NICHT in
+     *   der Hülle sind (also ältere). Nur gegen diese wenigen IDs wird in den Quellen gesucht (Index auf den Verweis-Spalten).
+     * - „Eigenes des Mandanten“ = Team ∈ Kunden-Hauptteam + Nachfahren (die Hülle gehört dem ganzen Mandanten, Kurator 17.10.).
+     *   Kind-Tabellen nehmen das Team immer vom Eltern (recipe_ingredients → recipes, concept_slots → concepts, …), Kopf-Tabellen ihr eigenes.
+     * - Nicht gezählt: Historie und Protokolle (angebot_uebernahmen, sales_facts, signals …), Attribute der Fassung selbst, Herkunfts-Marker.
+     *   Der eingefrorene Angebots-JSON-Stand ebenfalls nicht: das Gericht eines eingefrorenen Angebots folgt nicht und behält seinen Verweis.
+     *
+     * @param  array<string, list<int>>  $huelle  Hülle aus dem ersten Gang
+     * @param  array<string, list<int>>  $familien  abonnierte Familien je Art
+     * @return array{recipe: list<int>, paket: list<int>, concept: list<int>, format: list<int>}
+     */
+    private function referenzierteAlteFassungen(int $mandantTeamId, array $huelle, array $familien): array
+    {
+        $tabellen = ['recipe' => 'foodalchemist_recipes', 'paket' => 'foodalchemist_packages', 'concept' => 'foodalchemist_concepts', 'format' => 'foodalchemist_formats'];
+        $kandidaten = [];
+        foreach ($tabellen as $art => $tabelle) {
+            $drin = $huelle[$art] ?? [];
+            $fam = array_values(array_unique(array_merge($familien[$art] ?? [], $drin === [] ? [] : DB::table($tabelle)->whereIn('id', $drin)->pluck('fassung_von_id')->filter()->map(fn ($v) => (int) $v)->all())));
+            $kandidaten[$art] = $fam === [] ? [] : DB::table($tabelle)->whereIn('fassung_von_id', $fam)->where('ist_fassung', true)->whereNull('deleted_at')
+                ->when($drin !== [], fn ($q) => $q->whereNotIn('id', $drin))->pluck('id')->map(fn ($v) => (int) $v)->all();
+        }
+        $saat = ['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []];
+        if ($kandidaten === $saat) {
+            return $saat;
+        }
+        $teams = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren($mandantTeamId);
+
+        foreach (self::REFERENZ_QUELLEN as $art => $quellen) {
+            if ($kandidaten[$art] === []) {
+                continue;
+            }
+            $treffer = [];
+            foreach ($quellen as [$tabelle, $spalte, $eltern]) {
+                $treffer = array_merge($treffer, $this->verweiseAus($tabelle, $spalte, $eltern, $kandidaten[$art], $teams));
+            }
+            // Darreichung: Verweis auf eine Darreichung der Fassung (presentation_id) hält das Rezept selbst
+            if ($art === 'recipe') {
+                $darreichungen = DB::table('foodalchemist_recipe_presentations')->whereIn('recipe_id', $kandidaten['recipe'])->whereNull('deleted_at')->pluck('recipe_id', 'id')->all();
+                if ($darreichungen !== []) {
+                    foreach (self::DARREICHUNGS_QUELLEN as [$tabelle, $eltern]) {
+                        foreach ($this->verweiseAus($tabelle, 'presentation_id', $eltern, array_map('intval', array_keys($darreichungen)), $teams) as $did) {
+                            $treffer[] = (int) $darreichungen[$did];
+                        }
+                    }
+                }
+            }
+            $saat[$art] = array_values(array_unique(array_intersect($kandidaten[$art], $treffer)));
+        }
+
+        return $saat;
+    }
+
+    /**
+     * Quellen je Art: [Tabelle, Verweis-Spalte, Eltern] — Eltern = [Eltern-Tabelle, FK-Spalte] (Team vom Eltern) oder null (eigene team_id).
+     *
+     * @var array<string, list<array{0: string, 1: string, 2: ?array{0: string, 1: string}}>>
+     */
+    private const REFERENZ_QUELLEN = [
+        'recipe' => [
+            ['foodalchemist_recipe_ingredients', 'referenced_recipe_id', ['foodalchemist_recipes', 'recipe_id']],
+            ['foodalchemist_concept_slots', 'sales_recipe_id', ['foodalchemist_concepts', 'concept_id']],
+            ['foodalchemist_concept_slots', 'variant_source_recipe_id', ['foodalchemist_concepts', 'concept_id']],
+            ['foodalchemist_package_dishes', 'sales_recipe_id', ['foodalchemist_packages', 'package_id']],
+            ['foodalchemist_offer_blocks', 'sales_recipe_id', ['foodalchemist_offer_chapters', 'chapter_id']],
+            ['foodalchemist_foodbook_blocks', 'sales_recipe_id', ['foodalchemist_foodbook_chapters', 'chapter_id']],
+            ['foodalchemist_menu_plan_entries', 'sales_recipe_id', null],
+            ['foodalchemist_menu_card_items', 'sales_recipe_id', null],
+            ['foodalchemist_production_order_lines', 'recipe_id', null],
+            ['foodalchemist_order_template_lines', 'recipe_id', null],
+            ['foodalchemist_inventory_batches', 'recipe_id', null],
+            ['foodalchemist_inventory_stocks', 'recipe_id', null],
+            ['foodalchemist_inventory_movements', 'recipe_id', null],
+            ['foodalchemist_inventory_count_lines', 'recipe_id', null],
+        ],
+        'paket' => [
+            ['foodalchemist_concept_slots', 'package_id', ['foodalchemist_concepts', 'concept_id']],
+            ['foodalchemist_menu_plan_entries', 'package_id', null],
+            ['foodalchemist_order_template_lines', 'paket_id', null],
+        ],
+        'concept' => [
+            ['foodalchemist_concept_slots', 'embedded_concept_id', ['foodalchemist_concepts', 'concept_id']],
+            ['foodalchemist_format_slots', 'concept_id', ['foodalchemist_formats', 'format_id']],
+            ['foodalchemist_offer_blocks', 'concept_id', ['foodalchemist_offer_chapters', 'chapter_id']],
+            ['foodalchemist_foodbook_blocks', 'concept_id', ['foodalchemist_foodbook_chapters', 'chapter_id']],
+            ['foodalchemist_offer_concept', 'concept_id', null],
+            ['foodalchemist_menu_plan_entries', 'concept_id', null],
+            ['foodalchemist_menu_card_items', 'concept_id', null],
+            ['foodalchemist_order_template_lines', 'concept_id', null],
+        ],
+        'format' => [
+            ['foodalchemist_concepts', 'format_id', null],
+            ['foodalchemist_foodbook_chapters', 'format_id', null],
+            ['foodalchemist_offer_chapters', 'format_id', null],
+            ['foodalchemist_menu_card_sections', 'format_id', null],
+        ],
+    ];
+
+    /** Darreichungs-Verweise (presentation_id → recipe_presentations.recipe_id): [Tabelle, Eltern]. */
+    private const DARREICHUNGS_QUELLEN = [
+        ['foodalchemist_offer_blocks', ['foodalchemist_offer_chapters', 'chapter_id']],
+        ['foodalchemist_foodbook_blocks', ['foodalchemist_foodbook_chapters', 'chapter_id']],
+        ['foodalchemist_concept_slots', ['foodalchemist_concepts', 'concept_id']],
+        ['foodalchemist_menu_plan_entries', null],
+        ['foodalchemist_menu_card_items', null],
+    ];
+
+    /** @var array<string, bool> Schema-Merker (Spalte vorhanden?) je „tabelle.spalte“ */
+    private array $spalteDa = [];
+
+    /**
+     * IDs aus `$ids`, auf die `$tabelle.$spalte` von einer Zeile des Mandanten verweist (nicht gelöscht; Team vom Eltern oder eigen).
+     *
+     * @param  ?array{0: string, 1: string}  $eltern
+     * @param  list<int>  $ids
+     * @param  list<int>  $teams
+     * @return list<int>
+     */
+    private function verweiseAus(string $tabelle, string $spalte, ?array $eltern, array $ids, array $teams): array
+    {
+        if (! $this->hatSpalte($tabelle, $spalte)) {
+            return [];
+        }
+        $q = DB::table($tabelle.' AS q')->whereIn('q.'.$spalte, $ids);
+        if ($this->hatSpalte($tabelle, 'deleted_at')) {
+            $q->whereNull('q.deleted_at');
+        }
+        if ($eltern !== null) {
+            [$et, $fk] = $eltern;
+            $q->join($et.' AS e', 'e.id', '=', 'q.'.$fk)->whereIn('e.team_id', $teams);
+            if ($this->hatSpalte($et, 'deleted_at')) {
+                $q->whereNull('e.deleted_at');
+            }
+        } else {
+            $q->whereIn('q.team_id', $teams);
+        }
+
+        return $q->distinct()->pluck('q.'.$spalte)->map(fn ($v) => (int) $v)->all();
+    }
+
+    private function hatSpalte(string $tabelle, string $spalte): bool
+    {
+        return $this->spalteDa[$tabelle.'.'.$spalte] ??= \Illuminate\Support\Facades\Schema::hasColumn($tabelle, $spalte);
     }
 
     /**
