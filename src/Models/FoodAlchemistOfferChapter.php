@@ -79,7 +79,7 @@ class FoodAlchemistOfferChapter extends Model
     public function format(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistFormat::class, 'format_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Diskriminator: rendert dieses Kapitel seinen Inhalt live aus dem verknüpften Format? */

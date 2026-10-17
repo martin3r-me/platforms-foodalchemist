@@ -38,6 +38,7 @@ class FaBereichMiddleware
             abort(403, 'Der Bereich „'.(FaBereiche::KATALOG[$bereich] ?? $bereich).'“ ist für dich bzw. dein Team nicht freigeschaltet.');
         }
 
-        return $next($request);
+        // Spec 84 B3: FA-Seite = Eingang; mit angemeldetem Nutzer ist eine Abfrage ohne Team-Kontext ein Fehler, kein leeres Ergebnis
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::imEingang('seite', $user instanceof User, fn () => $next($request));
     }
 }

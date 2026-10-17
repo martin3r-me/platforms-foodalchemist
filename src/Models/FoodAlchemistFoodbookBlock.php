@@ -62,14 +62,14 @@ class FoodAlchemistFoodbookBlock extends Model
     public function concept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** recipe_ref: einzelnes Gericht (VK-Rezept). */
     public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → dish() */

@@ -37,7 +37,7 @@ class FoodAlchemistRecipeIngredient extends Model
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: auch Fassungs-Zeilen
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: auch Fassungs-Zeilen
     }
 
     public function gp(): BelongsTo
@@ -48,7 +48,7 @@ class FoodAlchemistRecipeIngredient extends Model
     public function referencedRecipe(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'referenced_recipe_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Fassung → Unter-Fassung
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Fassung → Unter-Fassung
     }
 
     public function unit(): BelongsTo

@@ -41,7 +41,7 @@ class FoodAlchemistDishIdeaGroup extends Model
     public function concept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Owner-Planungs-Session (3-Wege-XOR mit chapter/concept, Doppel-Diamant). */
@@ -60,6 +60,6 @@ class FoodAlchemistDishIdeaGroup extends Model
     public function materializedConcept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'materialized_concept_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 }

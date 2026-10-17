@@ -26,6 +26,11 @@ class OhneFassungenScope implements Scope
 
     public function apply(Builder $builder, Model $model): void
     {
+        // Spec 84 B3: greift der automatische Sichtfilter, regelt er die Fassungen selbst (Abo-Zweig = nur Fassungen).
+        // Ein `ist_fassung = 0` hier oben schnitte den Abo-Zweig ab.
+        if (TeamSicht::greiftAuf($builder, $model)) {
+            return;
+        }
         $tabelle = $model->getTable();
         self::$spalteDa[$tabelle] ??= Schema::hasColumn($tabelle, 'ist_fassung');
         if (self::$spalteDa[$tabelle]) {

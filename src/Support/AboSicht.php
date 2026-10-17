@@ -68,22 +68,36 @@ final class AboSicht
      */
     public static function anhaengen($q, string $idSpalte, string $typ, array $kette, array $freigabe): void
     {
-        if (! in_array($typ, self::TYPEN, true) || ! self::aktiv()) {
+        if (($ids = self::objektIds($typ, $kette, $freigabe)) === null) {
             return;
+        }
+        $q->orWhereIn($idSpalte, $ids);
+    }
+
+    /**
+     * Abfrage der Objekt-IDs, die das Team über Abos sieht (eine Spalte `objekt_id`), oder `null`, wenn der Zweig entfällt
+     * (Typ ohne Abo, kein Abo im System, Betrachter ist der Master). Für das OR ({@see anhaengen}) und für die Menge
+     * (UNION ALL, Spec 84 B3) dieselbe Regel.
+     *
+     * @param  array{frei: list<int>, eingeschraenkt: list<int>, huelle: ?int}  $freigabe
+     * @param  list<int>  $kette
+     */
+    public static function objektIds(string $typ, array $kette, array $freigabe): ?\Illuminate\Database\Query\Builder
+    {
+        if (! in_array($typ, self::TYPEN, true) || ! self::aktiv()) {
+            return null;
         }
         $kh = self::kundenHauptTeamId($kette);
         if ($kh === null) {
-            return;
+            return null;
         }
-        $eingeschraenkt = in_array($kh, $freigabe['eingeschraenkt'], true) && $freigabe['huelle'] !== null;
+        $ids = DB::table('foodalchemist_abo_objekte')->select('objekt_id')->where('mandant_team_id', $kh)->where('typ', $typ);
+        // Eingeschränktes Unter-Team (77d): nur, was zusätzlich in SEINER Freigabe-Hülle steht
+        if (in_array($kh, $freigabe['eingeschraenkt'], true) && $freigabe['huelle'] !== null) {
+            $ids->whereIn('objekt_id', fn ($s) => $s->select('objekt_id')->from('foodalchemist_freigabe_objekte')
+                ->where('team_id', $freigabe['huelle'])->where('typ', $typ));
+        }
 
-        $q->orWhere(function ($w) use ($idSpalte, $typ, $kh, $eingeschraenkt, $freigabe) {
-            $w->whereIn($idSpalte, fn ($s) => $s->select('objekt_id')->from('foodalchemist_abo_objekte')
-                ->where('mandant_team_id', $kh)->where('typ', $typ));
-            if ($eingeschraenkt) {
-                $w->whereIn($idSpalte, fn ($s) => $s->select('objekt_id')->from('foodalchemist_freigabe_objekte')
-                    ->where('team_id', $freigabe['huelle'])->where('typ', $typ));
-            }
-        });
+        return $ids;
     }
 }

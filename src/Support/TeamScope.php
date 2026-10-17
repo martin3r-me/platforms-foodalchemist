@@ -41,7 +41,7 @@ final class TeamScope
         // die Freigabe-Prüfung hängt am Alias-Präfix (`r.id`). Vorher blieb der Alias-Fall ungefiltert (Tabellenname `r` ist keine Inhalts-Tabelle).
         [$basisTabelle, $idPraefix] = self::basisTabelleUndPraefix($query, $teamIdColumn);
         if ($team !== null && ($typ = InhaltsFreigabe::typFuerTabelle($basisTabelle)) !== null) {
-            return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $idPraefix . '.id', $typ, $team, $ids));
+            return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $idPraefix . '.id', $typ, $team, $ids, $basisTabelle));
         }
 
         // Spec 82 §12 A3: GP/Lieferant/Artikel — globale stamm_paket-Zeilen nur bei Opt-in.

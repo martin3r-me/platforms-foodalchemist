@@ -35,14 +35,14 @@ class FoodAlchemistConceptSlot extends Model
     public function concept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Befüllung A: austauschbares Paket. */
     public function package(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistPaket::class, 'package_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → package() */
@@ -55,14 +55,14 @@ class FoodAlchemistConceptSlot extends Model
     public function embeddedConcept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'embedded_concept_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
     public function dish(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
-            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → dish() */

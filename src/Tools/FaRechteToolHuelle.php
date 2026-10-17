@@ -64,7 +64,8 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
         $messen = fn () => \Platform\FoodAlchemist\Support\LangsameAbfragen::imEingang(
             'mcp:' . $this->getName(),
             \Platform\FoodAlchemist\Support\FaTeam::aktuellId(),
-            fn () => $this->ausfuehren($arguments, $context),
+            // Spec 84 B3: MCP-Tool = Eingang; mit Nutzer ist fehlender Team-Kontext ein Fehler
+            fn () => \Platform\FoodAlchemist\Models\Scopes\TeamSicht::imEingang('mcp', $user instanceof User, fn () => $this->ausfuehren($arguments, $context)),
         );
 
         return $kTeam instanceof Team ? \Platform\FoodAlchemist\Support\FaTeam::imTeam($kTeam, $messen) : $messen();

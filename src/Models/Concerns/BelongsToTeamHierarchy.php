@@ -31,6 +31,27 @@ trait BelongsToTeamHierarchy
 
     public function scopeVisibleToTeam(Builder $query, Team $team): Builder
     {
+        // Spec 84 B3: die ausdrückliche Sicht ersetzt den automatischen Filter (kein zweites Mal dieselbe Bedingung)
+        $query->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class);
+
+        return static::sichtBedingung($query, $team);
+    }
+
+    /**
+     * Spec 84 B3 · Einzige Umgehung des automatischen Sichtfilters. Der Grund steht im Aufruf (grep-bar), z. B.
+     * `eindeutigkeit`, `verwendung`, `unterteam-verwaltung`, `verweis`, `master-kuration`.
+     */
+    public function scopeOhneTeamSicht(Builder $query, string $grund): Builder
+    {
+        return $query->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class);
+    }
+
+    /**
+     * Die Sicht-Regel selbst — gemeinsam für `visibleToTeam()` und den Global Scope {@see \Platform\FoodAlchemist\Models\Scopes\TeamSicht}.
+     * `$mitFassungen`: nur aus TeamSicht nach `mitFassungen()` — dann zählt die eigene Kette einschließlich Fassungen.
+     */
+    public static function sichtBedingung(Builder $query, Team $team, bool $mitFassungen = false): Builder
+    {
         $col = $query->getModel()->getTable() . '.team_id';
 
         // Sichtbar = globaler Seed (team_id NULL) ODER eigenes Team + Master-Kette (Ancestry bis
@@ -44,7 +65,7 @@ trait BelongsToTeamHierarchy
             $query->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);
 
             return $query->where(fn (Builder $q) => \Platform\FoodAlchemist\Support\InhaltsFreigabe::anwenden(
-                $q, $col, $tabelle . '.id', $typ, $team, self::teamAncestryIds($team)));
+                $q, $col, $tabelle . '.id', $typ, $team, self::teamAncestryIds($team), $tabelle, $mitFassungen));
         }
 
         // Spec 82 §12 A3: Modelle mit STAMM_KLASSE trennen globale Zeilen in basis | stamm_paket —
@@ -68,6 +89,12 @@ trait BelongsToTeamHierarchy
      */
     public static function bootBelongsToTeamHierarchy(): void
     {
+        // Spec 84 B3: Wurzel-Modelle der Stufen bekommen den Sichtfilter (greift erst mit Schalter, siehe TeamSicht::gilt)
+        foreach (\Platform\FoodAlchemist\Models\Scopes\TeamSicht::STUFEN as $modelle) {
+            if (in_array(static::class, $modelle, true)) {
+                static::addGlobalScope(new \Platform\FoodAlchemist\Models\Scopes\TeamSicht);
+            }
+        }
         if (! defined(static::class . '::STAMM_KLASSE')) {
             return;
         }
