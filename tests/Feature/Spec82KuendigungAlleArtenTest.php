@@ -181,10 +181,10 @@ it('Kündigung: Kette ohne Doppel (Gericht EINMAL kopiert), Kopien sind normale 
     expect($r['ausgefuehrt'])->toBeTrue()
         ->and($k['concept'])->toHaveCount(2)->and($k['paket'])->toHaveCount(1)->and($k['recipe'])->toHaveCount(2)   // Gericht wird von Paket, Paket-Konzept UND Konzept gebraucht = eine Kopie
         ->and($r['kopien'])->toBe($k['recipe']);
-    $konzeptK = FoodAlchemistConcept::findOrFail($k['concept'][$this->k1->id]);
-    $paketK = FoodAlchemistPaket::findOrFail($k['paket'][$this->p1->id]);
-    $paketKonzeptK = FoodAlchemistConcept::findOrFail($k['concept'][$this->pk1->id]);
-    $gerichtK = FoodAlchemistRecipe::findOrFail($k['recipe'][FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $this->gericht->id)->where('ist_fassung', true)->value('id')]);
+    $konzeptK = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($k['concept'][$this->k1->id]);
+    $paketK = FoodAlchemistPaket::ohneTeamSicht('test')->findOrFail($k['paket'][$this->p1->id]);
+    $paketKonzeptK = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($k['concept'][$this->pk1->id]);
+    $gerichtK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail($k['recipe'][FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $this->gericht->id)->where('ist_fassung', true)->value('id')]);
 
     expect($konzeptK->ist_fassung)->toBeFalse()->and((int) $konzeptK->team_id)->toBe((int) $this->broich->id)->and((int) $konzeptK->kopie_von_id)->toBe($this->konzept->id)
         ->and($konzeptK->kopie_stand_at)->not->toBeNull()->and($paketK->ist_fassung)->toBeFalse()->and((int) $paketK->kopie_von_id)->toBe($this->paket->id)
@@ -199,7 +199,7 @@ it('Kündigung: Kette ohne Doppel (Gericht EINMAL kopiert), Kopien sind normale 
     $formKopie = FoodAlchemistRecipeDarreichung::find($slotG->presentation_id);
     expect($formKopie)->not->toBeNull()->and((int) $formKopie->recipe_id)->toBe((int) $gerichtK->id)->and((float) $formKopie->quantity_per_unit_g)->toBe(100.0);
     // Kette unter dem Gericht: der Fond ist Unter-Rezept der KOPIE
-    $fondK = FoodAlchemistRecipe::findOrFail(collect($k['recipe'])->reject(fn ($kopieId) => $kopieId === $gerichtK->id)->first());
+    $fondK = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail(collect($k['recipe'])->reject(fn ($kopieId) => $kopieId === $gerichtK->id)->first());
     expect($gerichtK->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($fondK->id);
     // keine Fassungs-Zeile wurde gelöscht
     expect(FoodAlchemistConcept::mitFassungen()->find($this->k1->id))->not->toBeNull()->and(FoodAlchemistPaket::mitFassungen()->find($this->p1->id))->not->toBeNull();
@@ -219,8 +219,8 @@ it('Umhängen: lebende Verweise (eigenes Konzept, Foodbook, Format) auf die Kopi
 
 it('Preis nach der Kündigung: Kopien rechnen mit den Preisen des Mandanten, ohne vollständigen EK „kein Preis“ (nie 0 €)', function () {
     $b = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: true)['kopien_je_art'];
-    $paketB = FoodAlchemistPaket::findOrFail($b['paket'][$this->p1->id]);
-    $konzeptB = FoodAlchemistConcept::findOrFail($b['concept'][$this->k1->id]);
+    $paketB = FoodAlchemistPaket::ohneTeamSicht('test')->findOrFail($b['paket'][$this->p1->id]);
+    $konzeptB = FoodAlchemistConcept::ohneTeamSicht('test')->findOrFail($b['concept'][$this->k1->id]);
     expect((float) $paketB->ek_per_person)->toBeGreaterThan(0.0)->and((float) $konzeptB->ek_per_person_cache)->toBeGreaterThan(0.0);
 
     // Neukunde nutzt dieselbe Kette, hat aber keinen Knochenpreis → das Paket der Kopie ist ohne vollständigen EK nicht bepreist
@@ -229,8 +229,8 @@ it('Preis nach der Kündigung: Kopien rechnen mit den Preisen des Mandanten, ohn
     $z = $cs->addSlot($this->neu, $eigenN->id, ['role' => 'Beilage']);
     DB::table('foodalchemist_concept_slots')->where('id', $z->id)->update(['type' => 'paket', 'package_id' => $this->p1->id]);
     $n = $this->svc->kuendigen($this->neu, $this->aboNeu->id, $this->neuChef, bestaetigt: true)['kopien_je_art'];
-    $paketN = FoodAlchemistPaket::findOrFail($n['paket'][$this->p1->id]);
-    $gerichtN = FoodAlchemistRecipe::findOrFail(collect($n['recipe'])->first());
+    $paketN = FoodAlchemistPaket::ohneTeamSicht('test')->findOrFail($n['paket'][$this->p1->id]);
+    $gerichtN = FoodAlchemistRecipe::ohneTeamSicht('test')->findOrFail(collect($n['recipe'])->first());
     expect($gerichtN->ek_total_eur === null || (float) $gerichtN->ek_total_eur >= 0.0)->toBeTrue()
         ->and($paketN->price_per_person === null || (float) $paketN->price_per_person > 0.0)->toBeTrue();   // nie ein Preis von 0 €
 });
@@ -271,7 +271,7 @@ it('Familien-Regel mit ECHTER Allergen-Sperre (PR 5): kopiert wird die tatsächl
 
     $k = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: true)['kopien_je_art'];
     expect(array_keys($k['paket']))->toBe([$this->p1->id])->and(array_keys($k['paket']))->not->toContain($p2->id);
-    $paketK = FoodAlchemistPaket::findOrFail($k['paket'][$this->p1->id]);
+    $paketK = FoodAlchemistPaket::ohneTeamSicht('test')->findOrFail($k['paket'][$this->p1->id]);
     expect($paketK->name)->toBe('Jus-Duo')                                              // Stand der Fassung 1, nicht der umbenannte
         ->and(slotPaketId($this))->toBe($paketK->id);
 });
@@ -321,7 +321,7 @@ it('Rechte beim Zurückziehen: nur Master mit Freigeben; Löschsperre je Art, bi
     app(PaketService::class)->delete($this->master, $this->paket->id);
     app(ConceptService::class)->delete($this->master, $this->konzept->id);
     app(FormatService::class)->delete($this->master, $format->id);
-    expect(FoodAlchemistPaket::find($this->paket->id))->toBeNull()->and(FoodAlchemistConcept::find($this->konzept->id))->toBeNull();
+    expect(FoodAlchemistPaket::ohneTeamSicht('test')->find($this->paket->id))->toBeNull()->and(FoodAlchemistConcept::ohneTeamSicht('test')->find($this->konzept->id))->toBeNull();
 });
 
 it('MCP abos.WITHDRAW mit typ, abos.DELETE liefert kopien_je_art', function () {
@@ -339,5 +339,5 @@ it('Mandant beenden (systemLauf): AboAuskunft kündigt alle Abos samt Konzepten 
     $x = app(\Platform\FoodAlchemist\Services\AboAuskunft::class)->kuendigen($this->broich, $this->broichChef);
     expect(FoodAlchemistAbo::where('mandant_team_id', $this->broich->id)->where('status', FoodAlchemistAbo::AKTIV)->count())->toBe(0)
         ->and(slotPaketId($this))->not->toBe($this->p1->id)
-        ->and(FoodAlchemistConcept::where('team_id', $this->broich->id)->where('kopie_von_id', $this->konzept->id)->count())->toBe(1);
+        ->and(FoodAlchemistConcept::ohneTeamSicht('test')->where('team_id', $this->broich->id)->where('kopie_von_id', $this->konzept->id)->count())->toBe(1);
 });

@@ -291,7 +291,7 @@ it('Kündigung: Format samt Konzept-Kette als eigene Kopie, Slots zeigen auf Kon
 
     $r = $this->svc->kuendigen($this->broich, $abos[0]->id, $this->broichChef, bestaetigt: true);
     $k = $r['kopien_je_art'];
-    $formatK = FoodAlchemistFormat::findOrFail($k['format'][$f1->id]);
+    $formatK = FoodAlchemistFormat::ohneTeamSicht('test')->findOrFail($k['format'][$f1->id]);
     expect((bool) $formatK->ist_fassung)->toBeFalse()->and((int) $formatK->team_id)->toBe((int) $this->broich->id)->and((int) $formatK->kopie_von_id)->toBe($this->format->id)
         ->and($k['concept'])->toHaveCount(2)->and($r['hinweise'])->toBe([])
         ->and(FoodAlchemistFoodbookKapitel::find($kap->id)->format_id)->toBe($formatK->id);
@@ -316,7 +316,7 @@ it('Kündigung: fehlt die Format-Bilddatei, Kopie ohne dieses Bild + Hinweis, ni
     Storage::disk($datei->disk)->delete($datei->path);
 
     $r = $this->svc->kuendigen($this->broich, $abos[0]->id, $this->broichChef, bestaetigt: true);
-    $formatK = FoodAlchemistFormat::findOrFail($r['kopien_je_art']['format'][$f1->id]);
+    $formatK = FoodAlchemistFormat::ohneTeamSicht('test')->findOrFail($r['kopien_je_art']['format'][$f1->id]);
     expect($r['ausgefuehrt'])->toBeTrue()->and($formatK->images()->count())->toBe(0)->and(implode(' ', $r['hinweise']))->toContain('Bilddatei');
 });
 
