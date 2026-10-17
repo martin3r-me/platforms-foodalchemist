@@ -41,6 +41,12 @@ final class TeamSicht implements Scope
             \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class,   // Kurator 17.10.: Angebote sind Ausgaben (77d-Hülle seit E8)
         ],
+        // Spec 84 B3 Stufe 3: Stamm (GP, Lieferantenartikel, Lieferant) — mit Stamm-Paket-Opt-in (StammPaket::globaleZeilen in sichtBedingung)
+        3 => [
+            \Platform\FoodAlchemist\Models\FoodAlchemistGp::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::class,
+        ],
     ];
 
     /** Aktueller FA-Eingang (`seite`, `mcp`) mit angemeldetem Nutzer — nur dort ist fehlender Kontext ein Fehler. */

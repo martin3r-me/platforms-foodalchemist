@@ -77,12 +77,19 @@ class RecipeRecomputeService
     {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
-        DB::transaction(function () use ($recipeId) {
+        $teamId = null;
+        DB::transaction(function () use ($recipeId, &$teamId) {
             // Spec 82: auch Fassungen (ohne Kosten). Spec 84 B3: Recompute rechnet auch Master-, Fassungs- und Unter-Team-Zeilen
             // (Kosten-Cache) — das Rezept wird über die Teamgrenze geladen, ohne Zusatzabfrage (V-049 zählt die Läufe)
             $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('recompute')
-                ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
+            $teamId = $recipe->team_id;
+            // Spec 84 B3 Vorbedingung Stufe 3 (Kurator 17.10.): alles nach dem Wurzel-Laden liest in der Sicht des Rezept-Teams — sonst fielen
+            // aus fremdem Kontext (Master-Kaskade, recomputeAll, Oberteam-Job) GP und LA-Preise still weg. Die Eager-Loads laufen darin.
+            // Keine Zusatzabfrage (team_id steht in der geladenen Zeile); bei Stufe 0 unverändert. Die Pipeline versendet keine Jobs und ruft
+            // keine KI — die Abrechnung bleibt beim auslösenden Team.
+            \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $recipe->team_id, function () use ($recipe) {
+            $recipe->load(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe']);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
             $this->recomputeTeam = Team::find($recipe->team_id);
             $this->garverlustWgCache = [];
@@ -104,11 +111,13 @@ class RecipeRecomputeService
                 $recipe->production_depth = 'teilfertig';
             }
             $recipe->save();
+            });
         });
 
         // Umbau-Spec Phase 5: Darreichungspreise folgen dem frischen EK (lazy resolved,
         // kein Konstruktor-Zyklus — DarreichungService hängt seinerseits an diesem Service).
-        app(DarreichungService::class)->recomputeFuerRezept($recipeId);
+        // Spec 84 B3: Darreichungspreise lesen LA-Preise (ab Stufe 3 gefiltert) — in der Sicht des Rezept-Teams (team_id aus der Pipeline, keine Abfrage)
+        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $teamId, fn () => app(DarreichungService::class)->recomputeFuerRezept($recipeId));
         if ($cascadePrices) {
             try {
                 app(PricingCascadeService::class)->recomputeRecipes([$recipeId]);
