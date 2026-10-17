@@ -472,3 +472,30 @@ B3 legt `visibleToTeam(Kontext)` automatisch auf Eloquent-Abfragen. Abfragen, di
 | `src/Console/RecomputeCommand.php:44` | exists | FoodAlchemistRecipe | bleibt: Konsole bzw. Job mit Auftrags-Kontext (Teil A), Wurzel-Modell |
 | `src/Console/WareneingangAltbestandCommand.php:58` | exists | FoodAlchemistDeliveryNoteLine | bleibt: Kind eines geprüften Eltern-Datensatzes (Eltern-Schlüssel in der Abfrage) |
 | `src/Console/KnowledgeImportCommand.php:227` | exists | – | nicht betroffen: Query Builder (B3 greift nur auf Eloquent) |
+
+## E-2 · Listen-Audit große Tabellen (Spec 84 §5a, 17.10.)
+
+Gescannt: alle Lesepfade auf `supplier_items`, `prices`, `price_history`, `necta_stand`, `anchor_beziehungen`, `signals` (119 Methoden, davon 84 ohne limit/paginate/chunk; die meisten sind je Entität eingegrenzt).
+
+**Umgebaut:**
+
+| Stelle | PR | Änderung |
+|---|---|---|
+| `PriceService::detectAnomalies` | E-2 A (#475) | eine gestreamte Abfrage statt historyFor je Artikel; Ausreißer zwei Stream-Durchgänge; Grenze 200 + Gesamtzahl |
+| `MatchService::exactBruecken` | E-2 A (#475) | nur EANs/Artikelnummern der geprüften Items statt aller gemappten Artikel |
+| `SignalObjectService::signaleAmObjekt` | E-2 B | SQL-Vorfilter auf die drei möglichen Wege (Referenz, Metrik, Beispiele) statt aller offenen Signale |
+| `SupplierService::volumenProxyRaw` | E-2 B | sichtbare Rezepte als Unterabfrage statt ID-Liste |
+| `SignalDetektorService::veraltetePreise` | E-2 B | COUNT in der Datenbank statt alle GP-IDs laden |
+| `PairingSignale::konfliktImGericht` / `wissenJeAnker` / `widerspruchWissenMessung`, `KontrastAbleitung::baue` | E-5 | in Stapeln bzw. auf die Anker eingegrenzt |
+
+**Bewusst NICHT geändert (nicht erneut suchen):**
+
+| Stelle | Grund |
+|---|---|
+| Necta-Dienste (`NectaAbgleichService`, `NectaNachholService`, `NectaNachfuellService`, `NectaPreishistorieService`) | je Lieferant bzw. in Blöcken, Batch-Jobs ohne UI-Pfad |
+| `ReportExportService` (gpDaten, supplierDaten) | Export ist vollständig gewollt |
+| Signal-Zähler (`Dashboard`, `ReviewQueue`, `SignalService::offeneNachTyp`, `SignalTrendService::offeneNachTypUndSeverity`), `StammPaketService::lieferanten`, `SupplierService::listWithCounts` | gruppierte COUNTs, liefern wenige Zeilen |
+| `SignalService::schliesseGemessen` / `schliesseVerschwundene` | je Team + Typ (+ dedup), wenige Zeilen |
+| Konsole `NectaLieferstatusCommand`, `RecipePackagingUnitsCommand` | Einmal-/Admin-Befehle |
+| je Entität eingegrenzte Lesepfade (LeadLa, PreisVerlauf je Artikel, Produktpass, GpModal, ItemModal, IngredientEditor::gpArtikel …) | wenige Zeilen je Aufruf |
+| MCP-List/Search-Tools (`->items()`) | paginiert (Scan-Fehlalarm) |
