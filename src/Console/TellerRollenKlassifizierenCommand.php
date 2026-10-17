@@ -50,8 +50,9 @@ class TellerRollenKlassifizierenCommand extends Command
         }
         Auth::login($nutzer);
 
-        // Spec 84 B3: Auth::login setzt das UI-Team des Nutzers (kann ein anderes Team sein) — gelesen wird in der Sicht von --team
-        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->ausfuehren($team, $klassen));
+        // Spec 84 (Kurator 17.10.): Auth::login setzt das UI-Team des Nutzers (kann ein anderes Team sein). Das ganze Kommando läuft im
+        // --team — unabhängig von der Stufe: KI-Abrechnung (ai_call_log.team_id) je Mandant, und ab Stufe 1 auch die Sicht.
+        return \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $this->ausfuehren($team, $klassen));
     }
 
     private function ausfuehren(Team $team, SpeisenKlassenService $klassen): int
