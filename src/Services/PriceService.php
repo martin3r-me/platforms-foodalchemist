@@ -401,30 +401,43 @@ class PriceService
      *
      * @return array{spruenge: \Illuminate\Support\Collection, ausreisser: \Illuminate\Support\Collection}
      */
-    public function detectAnomalies(Team $team, float $sprungPct = 30.0, float $ausreisserFaktor = 4.0): array
-    {
-        // (a) Generationen-Sprünge: LAs mit >1 Preiszeile
-        $mehrfach = FoodAlchemistPrice::query()
-            ->whereIn('supplier_item_id', FoodAlchemistSupplierItem::visibleToTeam($team)->select('id'))
-            ->selectRaw('supplier_item_id, COUNT(*) AS n')
-            ->groupBy('supplier_item_id')->having('n', '>', 1)
-            ->pluck('supplier_item_id');
+    /** Spec 84 E-2: höchstens so viele Sprünge bzw. Ausreißer je Bericht (die größten); die Gesamtzahl kommt mit. */
+    public const ANOMALIEN_GRENZE = 200;
 
-        $spruenge = collect();
-        foreach ($mehrfach as $itemId) {
-            $zeilen = $this->historyFor($itemId, $team)->filter(fn ($p) => $p->price !== null && (float) $p->price > 0)->values();
-            for ($i = 0; $i < $zeilen->count() - 1; $i++) {
-                $neu = (float) $zeilen[$i]->price;
-                $alt = (float) $zeilen[$i + 1]->price;
-                $pct = abs($neu - $alt) / $alt * 100;
+    public function detectAnomalies(Team $team, float $sprungPct = 30.0, float $ausreisserFaktor = 4.0, int $grenze = self::ANOMALIEN_GRENZE): array
+    {
+        // (a) Generationen-Sprünge. Spec 84 E-2: EINE gestreamte Abfrage statt historyFor() je Artikel (N+1, bei
+        // 342k Artikeln zehntausende Abfragen in einem Request). Sicht und Reihenfolge je Artikel sind exakt die von
+        // historyFor() (preisSichtFuer + orderAktiv), nur nach Artikel vorsortiert; die Paare entstehen beim Lesen.
+        $q = FoodAlchemistPrice::query()
+            ->select('foodalchemist_prices.supplier_item_id', 'foodalchemist_prices.price')
+            // nur Artikel mit mehr als einer Preiszeile (wie bisher die Vorauswahl) — sonst streamte die Abfrage jede Preiszeile
+            ->whereIn('foodalchemist_prices.supplier_item_id', FoodAlchemistPrice::query()->select('supplier_item_id')
+                ->whereIn('supplier_item_id', FoodAlchemistSupplierItem::visibleToTeam($team)->select('id'))
+                ->groupBy('supplier_item_id')->havingRaw('COUNT(*) > 1'))
+            ->where('foodalchemist_prices.price', '>', 0)
+            ->orderBy('foodalchemist_prices.supplier_item_id');
+        $q = $this->orderAktiv($this->preisSichtFuer($q, $team));
+
+        $spruenge = [];
+        $item = null;
+        $neu = null;
+        foreach ($q->toBase()->cursor() as $p) {
+            $preis = (float) $p->price;
+            if ((int) $p->supplier_item_id === $item && $neu !== null) {
+                $pct = abs($neu - $preis) / $preis * 100;
                 if ($pct > $sprungPct) {
-                    $spruenge->push((object) ['supplier_item_id' => $itemId, 'von' => $alt, 'nach' => $neu, 'sprung_pct' => round($pct, 1)]);
+                    $spruenge[] = (object) ['supplier_item_id' => $item, 'von' => $preis, 'nach' => $neu, 'sprung_pct' => round($pct, 1)];
                 }
             }
+            $item = (int) $p->supplier_item_id;
+            $neu = $preis;
         }
+        usort($spruenge, fn ($a, $b) => [$b->sprung_pct, $a->supplier_item_id, $b->nach] <=> [$a->sprung_pct, $b->supplier_item_id, $a->nach]);
 
-        // (b) WG-Ausreißer: flache Join-Query ohne Eloquent-Modelle (Memory + Tempo)
-        $kandidaten = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items AS i')
+        // (b) WG-Ausreißer. Spec 84 E-2: zwei gestreamte Durchgänge statt alle Kandidaten als Objekte im RAM —
+        // erst nur die Vergleichswerte je Gruppe (für den Median), dann die Ausreißer.
+        $kandidaten = fn () => \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items AS i')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->join('foodalchemist_gps AS g', 'g.id', '=', 's.gp_id')
             ->join('foodalchemist_suppliers AS sup', 'sup.id', '=', 'i.supplier_id')
@@ -433,43 +446,56 @@ class PriceService
             ->whereRaw(FoodAlchemistSupplierItem::mengeSql('i').' > 0')->whereNotNull('i.unit_code')
             ->select(['i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
             ->selectSub($this->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis')
-            ->get()
-            ->filter(fn ($i) => $i->aktiver_preis !== null && (float) $i->aktiver_preis > 0)
-            ->map(function ($i) {
-                $v = $this->vergleichspreis($i, (float) $i->aktiver_preis);
-
-                return $v === null ? null : (object) [
-                    'id' => $i->id,
-                    'label' => $i->designation,
-                    'lieferant' => $i->lieferant,
-                    'wg' => $i->wg ?? '–',
-                    'unit' => $v['unit'],
-                    'value' => $v['value'],
-                ];
-            })
-            ->filter();
-
-        $ausreisser = collect();
-        foreach ($kandidaten->groupBy(fn ($k) => $k->wg . '|' . $k->unit) as $gruppe) {
-            if ($gruppe->count() < 4) {
-                continue; // zu wenig Daten für einen belastbaren Median
+            ->orderBy('i.id')
+            ->cursor();
+        $wert = function (object $i): ?array {
+            if ($i->aktiver_preis === null || (float) $i->aktiver_preis <= 0) {
+                return null;
             }
-            $median = $gruppe->pluck('value')->sort()->values()->get((int) floor($gruppe->count() / 2));
-            foreach ($gruppe as $k) {
-                $faktor = $median > 0 ? max($k->value / $median, $median / max($k->value, 1e-9)) : 0;
-                if ($faktor >= $ausreisserFaktor) {
-                    $ausreisser->push((object) [
-                        'id' => $k->id, 'label' => $k->label, 'lieferant' => $k->lieferant,
-                        'wg' => $k->wg, 'unit' => $k->unit,
-                        'value' => round($k->value, 2), 'median' => round($median, 2), 'faktor' => round($faktor, 1),
-                    ]);
-                }
+            $v = $this->vergleichspreis($i, (float) $i->aktiver_preis);
+
+            return $v === null ? null : [($i->wg ?? '–') . '|' . $v['unit'], $v];
+        };
+
+        $werte = [];
+        foreach ($kandidaten() as $i) {
+            if (($w = $wert($i)) !== null) {
+                $werte[$w[0]][] = $w[1]['value'];
             }
         }
+        $median = [];
+        foreach ($werte as $gruppe => $liste) {
+            if (count($liste) < 4) {
+                continue;                                    // zu wenig Daten für einen belastbaren Median
+            }
+            sort($liste);
+            $median[$gruppe] = $liste[(int) floor(count($liste) / 2)];
+        }
+        unset($werte);
+
+        $ausreisser = [];
+        foreach ($kandidaten() as $i) {
+            if (($w = $wert($i)) === null || ! isset($median[$w[0]])) {
+                continue;
+            }
+            $m = $median[$w[0]];
+            $value = $w[1]['value'];
+            $faktor = $m > 0 ? max($value / $m, $m / max($value, 1e-9)) : 0;
+            if ($faktor >= $ausreisserFaktor) {
+                $ausreisser[] = (object) [
+                    'id' => $i->id, 'label' => $i->designation, 'lieferant' => $i->lieferant,
+                    'wg' => $i->wg ?? '–', 'unit' => $w[1]['unit'],
+                    'value' => round($value, 2), 'median' => round($m, 2), 'faktor' => round($faktor, 1),
+                ];
+            }
+        }
+        usort($ausreisser, fn ($a, $b) => [$b->faktor, $a->id] <=> [$a->faktor, $b->id]);
 
         return [
-            'spruenge' => $spruenge->sortByDesc('sprung_pct')->values(),
-            'ausreisser' => $ausreisser->sortByDesc('faktor')->values(),
+            'spruenge' => collect(array_slice($spruenge, 0, $grenze)),
+            'ausreisser' => collect(array_slice($ausreisser, 0, $grenze)),
+            'spruenge_gesamt' => count($spruenge),
+            'ausreisser_gesamt' => count($ausreisser),
         ];
     }
 

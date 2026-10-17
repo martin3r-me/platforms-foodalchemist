@@ -104,7 +104,7 @@ class MatchService
             ->pluck('supplier_item_id')->flip();
 
         // Exact-Prefetch: EAN→gp + (supplier, artno)→gp aus bereits gemappten LAs (2 Queries)
-        [$eanZuGp, $artnoZuGp] = $this->exactBruecken($team, $supplierId);
+        [$eanZuGp, $artnoZuGp] = $this->exactBruecken($team, $supplierId, $items);
 
         // Fuzzy: invertierter Token-Index über die sichtbaren GPs (1× pro Lauf)
         [$gpDaten, $tokenIndex] = $this->gpTokenIndex($team);
@@ -195,16 +195,28 @@ class MatchService
     }
 
     /** @return array{0: array<string,int>, 1: array<string,int>} ean→gp_id, artno→gp_id (nur eindeutige) */
-    private function exactBruecken(Team $team, int $supplierId): array
+    private function exactBruecken(Team $team, int $supplierId, \Illuminate\Support\Collection $items): array
     {
-        $gemappt = DB::table('foodalchemist_supplier_items AS i')
+        $basis = fn () => TeamScope::applyVisible(DB::table('foodalchemist_supplier_items AS i')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->whereNotNull('s.gp_id')
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
-            ->select('i.supplier_id', 'i.ean_packaging', 'i.ean_ordering', 'i.article_number', 's.gp_id');
+            ->select('i.supplier_id', 'i.ean_packaging', 'i.ean_ordering', 'i.article_number', 's.gp_id'), 'i.team_id', $team);
         // Nur Artikel, die dieses Team sehen darf (global + eigene Kette, Stamm-Paket nur mit Opt-in). Vorher las die Brücke die EAN/Artikelnummern
         // ALLER Teams — ein fremder Mandant steuerte so Treffer-GPs bei (Spec 82 §12 A3, Mandanten-Trennung).
-        $gemappt = TeamScope::applyVisible($gemappt, 'i.team_id', $team)->get();
+        // Spec 84 E-2: nur die gemappten Artikel, deren EAN bzw. (gleicher Lieferant +) Artikelnummer bei den zu prüfenden Items
+        // vorkommt — statt aller sichtbaren gemappten Artikel (global bis 342k) ins RAM. Alle Zeilen mit einer gesuchten EAN
+        // kommen mit, die Mehrdeutigkeits-Regel (verschiedene GPs → keine Brücke) bleibt damit exakt.
+        $eans = $items->flatMap(fn ($i) => [$i->ean_packaging, $i->ean_ordering])->filter(fn ($v) => $v !== null && $v !== '')->unique()->values();
+        $artnos = $items->pluck('article_number')->filter(fn ($v) => $v !== null && $v !== '')->unique()->values();
+        $gemappt = collect();
+        foreach ($eans->chunk(1000) as $block) {
+            $b = $block->values()->all();
+            $gemappt = $gemappt->merge($basis()->where(fn ($w) => $w->whereIn('i.ean_packaging', $b)->orWhereIn('i.ean_ordering', $b))->get());
+        }
+        foreach ($artnos->chunk(1000) as $block) {
+            $gemappt = $gemappt->merge($basis()->where('i.supplier_id', $supplierId)->whereIn('i.article_number', $block->values()->all())->get());
+        }
 
         $sichtbar = FoodAlchemistGp::visibleToTeam($team)->pluck('id')->flip();
         $eanZuGp = [];

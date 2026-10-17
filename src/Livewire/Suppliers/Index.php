@@ -192,6 +192,9 @@ class Index extends Component
                 ->map(fn ($a) => ['label' => $a->label, 'lieferant' => $a->lieferant,
                     'wg' => $a->wg, 'value' => $a->value, 'median' => $a->median, 'faktor' => $a->faktor, 'unit' => $a->unit])
                 ->all(),
+            // Spec 84 E-2: Gesamtzahl für den Hinweis „zeigt die größten …“
+            'spruenge_gesamt' => (int) ($ergebnis['spruenge_gesamt'] ?? count($ergebnis['spruenge'])),
+            'ausreisser_gesamt' => (int) ($ergebnis['ausreisser_gesamt'] ?? count($ergebnis['ausreisser'])),
         ];
         $this->dispatch('modal.open', name: 'preis-anomalien');
     }

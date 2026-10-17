@@ -449,6 +449,9 @@
                 <x-fa::section title="Vergleichspreis weit weg vom Üblichen" icon="heroicon-o-scale"
                     description="Artikel, deren Preis je kg, l oder Stück mindestens das Vierfache oder ein Viertel des mittleren Preises (Median) ihrer Warengruppe beträgt. Häufige Ursache: falsche Gebindemenge.">
                     @if(count($anomalien['ausreisser']) > 0)
+                        @if(($anomalien['ausreisser_gesamt'] ?? 0) > count($anomalien['ausreisser']))
+                            <p class="mb-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-ausreisser-hinweis>Mehr als {{ count($anomalien['ausreisser']) }} Ausreißer ({{ number_format($anomalien['ausreisser_gesamt'], 0, ',', '.') }} insgesamt) – angezeigt werden die größten.</p>
+                        @endif
                         <div class="-mx-4 -mb-4 border-t border-[var(--fa-line)] overflow-x-auto">
                             <table class="fa-table fa-table--compact" data-ausreisser>
                                 <thead>
@@ -480,6 +483,9 @@
                     @endif
                 </x-fa::section>
                 <x-fa::section title="Preissprünge über 30 %" icon="heroicon-o-arrow-trending-up" description="Vergleicht den aktuellen mit dem vorherigen Preis desselben Artikels.">
+                    @if(($anomalien['spruenge_gesamt'] ?? 0) > count($anomalien['spruenge']))
+                        <p class="mb-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-spruenge-hinweis>Mehr als {{ count($anomalien['spruenge']) }} Preissprünge ({{ number_format($anomalien['spruenge_gesamt'], 0, ',', '.') }} insgesamt) – angezeigt werden die größten.</p>
+                    @endif
                     @forelse($anomalien['spruenge'] as $sp)
                         <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
                             <span class="text-[var(--fa-ink-2)]">Artikel {{ $sp->supplier_item_id }}:</span>
