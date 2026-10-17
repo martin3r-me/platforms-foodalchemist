@@ -183,13 +183,14 @@ final class FremdSchreiben
         return 'http:' . (request()->route()?->getName() ?? request()->path());
     }
 
-    /** Erster Frame aus dem Modul-`src/` außerhalb dieser Klasse und des Traits. */
+    /** Erster Frame aus dem Modul-`src/` außerhalb dieser Klasse, des Traits und des Team-Rahmens (FaTeam::imTeam). */
     private static function aufrufer(): ?string
     {
         $src = dirname(__DIR__) . DIRECTORY_SEPARATOR;
         foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 80) as $f) {
             $datei = $f['file'] ?? '';
-            if ($datei !== '' && str_starts_with($datei, $src) && $datei !== __FILE__ && ! str_ends_with($datei, 'BelongsToTeamHierarchy.php')) {
+            if ($datei !== '' && str_starts_with($datei, $src) && $datei !== __FILE__
+                && ! str_ends_with($datei, 'BelongsToTeamHierarchy.php') && ! str_ends_with($datei, 'FaTeam.php')) {
                 return substr($datei, strlen($src)) . ':' . ($f['line'] ?? 0);
             }
         }

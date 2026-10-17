@@ -454,6 +454,12 @@ class AboKuendigungService
      */
     private function kopierenUndUmhaengen(Team $mandant, array $wurzeln, array $bleibt = []): array
     {
+        // Spec 84 B4: Kündigung/Zurückziehen legen Kopien im Mandanten an und hängen seine Verweise um — bewusst fremd (Recht oben geprüft)
+        return \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('abo-pflege', fn () => $this->kopierenUndUmhaengenRoh($mandant, $wurzeln, $bleibt));
+    }
+
+    private function kopierenUndUmhaengenRoh(Team $mandant, array $wurzeln, array $bleibt = []): array
+    {
         $wurzeln = $this->jeArt($wurzeln);
         $bleibt = $this->jeArt($bleibt);
         $map = array_fill_keys(self::ARTEN, []);
@@ -857,6 +863,12 @@ class AboKuendigungService
      * @param  array<string, array<int,int>>  $map
      */
     private function nachrechnen(array $map): void
+    {
+        // Spec 84 B4: Kopien des Mandanten nachrechnen — bewusst fremd
+        \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('abo-pflege', fn () => $this->nachrechnenRoh($map));
+    }
+
+    private function nachrechnenRoh(array $map): void
     {
         if ($this->zaehle($map) === 0) {
             return;
