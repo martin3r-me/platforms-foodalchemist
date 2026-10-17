@@ -9,9 +9,9 @@ namespace Platform\FoodAlchemist\Exceptions;
  */
 final class GeerbtNurLesenException extends \RuntimeException
 {
-    public function __construct(public readonly string $was = 'Eintrag')
+    public function __construct(public readonly string $was = 'Eintrag', ?string $meldung = null)
     {
-        parent::__construct("Geerbt: {$was} kann nur das Besitzer-Team ändern.");
+        parent::__construct($meldung ?? "Geerbt: {$was} kann nur das Besitzer-Team ändern.");
     }
 
     /** Wirft, wenn `$zeile` dem Team nicht gehört (isOwnedBy, inkl. Master-Pflege globaler Basis-Kataloge). */

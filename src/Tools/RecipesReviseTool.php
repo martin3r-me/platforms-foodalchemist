@@ -96,23 +96,8 @@ class RecipesReviseTool extends FoodAlchemistTool implements ToolContract, ToolM
         // accept=true: der EINE Schreib-Moment — dieselben Services wie der Editor (GL-07-Lineage).
         $applied = [];
         try {
-            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $zeilen = app(RecipeReviseService::class)->syncZeilen($recipe, $werte['zutaten']);
-                if ($zeilen !== []) {
-                    app(RecipeService::class)->syncIngredients($team, (int) $recipe->id, $zeilen);
-                    $applied[] = 'zutaten';
-                }
-            }
-            $frisch = $recipe->fresh();
-            if (is_string($werte['description'] ?? null) && trim($werte['description']) !== '' && $frisch->description_source !== 'manual') {
-                $frisch->update(['description' => $werte['description'], 'description_source' => 'ki', 'description_ai_confidence' => $roh['confidence']]);
-                $applied[] = 'description';
-            }
-            if (is_string($werte['preparation'] ?? null) && trim($werte['preparation']) !== '' && $frisch->preparation_source !== 'manual') {
-                $frisch->update(['preparation_source' => 'ki', 'preparation_ai_confidence' => $roh['confidence']]);
-                app(RecipeStepService::class)->ausMarkdown($frisch, $werte['preparation'], ueberschreiben: true);
-                $applied[] = 'preparation';
-            }
+            // Spec 84 C5: derselbe Schreib-Moment wie das Rezept-Modal
+            $applied = app(RecipeService::class)->uebernehmeUeberarbeitung($team, (int) $recipe->id, $werte, $roh['confidence']);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

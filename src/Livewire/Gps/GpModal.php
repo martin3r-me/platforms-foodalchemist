@@ -259,12 +259,7 @@ class GpModal extends Component
     /** Kalkulations-Defaults direkt persistieren (Phase 2; nur Edit). Leer ⇒ NULL. */
     private function speichereDefaults(FoodAlchemistGp $gp): void
     {
-        $num = fn ($v) => trim((string) $v) === '' ? null : max(0, (float) str_replace(',', '.', (string) $v));
-        $gp->update([
-            'cooking_loss_default_pct' => $num($this->defaults['cooking_loss_default_pct'] ?? ''),
-            'trimming_loss_default_pct' => $num($this->defaults['trimming_loss_default_pct'] ?? ''),
-            'piece_default_g' => $num($this->defaults['piece_default_g'] ?? ''),
-        ]);
+        app(\Platform\FoodAlchemist\Services\GpService::class)->setzeKalkDefaults($this->teamOderFehler(), (int) $gp->id, $this->defaults);   // Spec 84 C5
     }
 
     public function speichern(GpNamingService $naming): void
@@ -700,55 +695,33 @@ class GpModal extends Component
         ];
     }
 
-    public function accept_zustand(GpNamingService $naming): void
+    public function accept_zustand(): void
     {
-        $gp = $this->eigenesGp();   // Spec 84 §4.0
         $vorschlag = $this->kiVorschlag['condition'] ?? null;
-        if ($gp === null || $vorschlag === null) {
+        if ($vorschlag === null) {
             return;
         }
-        if ($gp->condition_source === 'manual') {                              // GL-07 Override-First
-            $this->fehler = 'condition ist manuell gepflegt — erst Reset (clear), dann KI übernehmen.';
-
-            return;
+        $gp = $this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeZustand($team, $id, 'ki', $vorschlag['werte']['condition'] ?? null, $vorschlag['confidence'], $vorschlag['reasoning'] ?? null));
+        if ($gp !== null) {
+            $this->builder['condition'] = $gp->condition;
+            unset($this->kiVorschlag['condition']);
         }
-        $wert = $naming->normalisiereZustand($vorschlag['werte']['condition'] ?? null);
-        if ($wert === null || ! in_array($wert, GpNamingService::ZUSTAND_VOCAB, true)) {
-            $this->fehler = 'KI-Vorschlag enthält keinen gültigen §9-Zustand.';
-
-            return;
-        }
-        $gp->update([
-            'condition' => $wert,
-            'condition_source' => 'ki',
-            'condition_ai_confidence' => $vorschlag['confidence'],
-            'condition_ai_reasoning' => $vorschlag['reasoning'],
-        ]);
-        $this->builder['condition'] = $wert;
-        unset($this->kiVorschlag['condition']);
     }
 
     public function clear_zustand(): void
     {
-        $this->eigenesGp()?->update([
-            'condition' => null, 'condition_source' => null,
-            'condition_ai_confidence' => null, 'condition_ai_reasoning' => null,
-        ]);
-        $this->builder['condition'] = '';
-        unset($this->kiVorschlag['condition']);
+        if ($this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeZustand($team, $id, null)) !== null) {
+            $this->builder['condition'] = '';
+            unset($this->kiVorschlag['condition']);
+        }
     }
 
     public function manual_zustand(GpNamingService $naming): void
     {
-        $gp = $this->eigenesGp();   // Spec 84 §4.0
-        $wert = $naming->normalisiereZustand($this->builder['condition'] ?: null);
-        if ($gp === null || $wert === null) {
+        if ($naming->normalisiereZustand($this->builder['condition'] ?: null) === null) {
             return;
         }
-        $gp->update([
-            'condition' => $wert, 'condition_source' => 'manual',
-            'condition_ai_confidence' => null, 'condition_ai_reasoning' => null,
-        ]);
+        $this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeZustand($team, $id, 'manual', $this->builder['condition']));
     }
 
     // ── M3-10: GL-07-Lebenszyklus tags ──────────────────────────────────
@@ -776,56 +749,63 @@ class GpModal extends Component
 
     public function accept_tags(): void
     {
-        $gp = $this->eigenesGp();   // Spec 84 §4.0
         $vorschlag = $this->kiVorschlag['tags'] ?? null;
-        if ($gp === null || $vorschlag === null) {
+        if ($vorschlag === null) {
             return;
         }
-        if ($gp->tag_source === 'manual') {                                  // GL-07 Override-First
-            $this->fehler = 'Tags sind manuell gepflegt — erst Reset (clear), dann KI übernehmen.';
-
-            return;
-        }
-        $update = [];
         $tagWerte = $vorschlag['werte']['tags'] ?? $vorschlag['werte'];      // Fake-Echo packt sie unter 'tags'
-        foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
-            if (array_key_exists($tag, $tagWerte)) {
-                $update["tag_{$tag}"] = (bool) $tagWerte[$tag];
-                $this->tags[$tag] = $tagWerte[$tag] ? '1' : '0';
+        $tags = array_map(fn ($v) => (bool) $v, array_intersect_key((array) $tagWerte, array_flip(FoodAlchemistGp::TAG_FIELDS)));
+        $ok = $this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeTags($team, $id, 'ki', $tags, $vorschlag['confidence'], $vorschlag['reasoning'] ?? null));
+        if ($ok !== null) {
+            foreach ($tags as $tag => $wert) {
+                $this->tags[$tag] = $wert ? '1' : '0';
             }
+            unset($this->kiVorschlag['tags']);
         }
-        if ($update === []) {
-            $this->fehler = 'KI-Vorschlag enthält keine bekannten Tags.';
-
-            return;
-        }
-        $gp->update([...$update,
-            'tag_source' => 'ki',
-            'tag_ai_confidence' => $vorschlag['confidence'],
-            'tag_ai_reasoning' => $vorschlag['reasoning'],
-            'tag_aggregated_at' => now(),
-        ]);
-        unset($this->kiVorschlag['tags']);
     }
 
     public function clear_tags(): void
     {
-        $gp = $this->eigenesGp();   // Spec 84 §4.0
-        if ($gp === null) {
-            return;
+        if ($this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeTags($team, $id, null)) !== null) {
+            foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
+                $this->tags[$tag] = '';
+            }
+            unset($this->kiVorschlag['tags']);
         }
-        $reset = [];
-        foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
-            $reset["tag_{$tag}"] = null;
-            $this->tags[$tag] = '';
-        }
-        $gp->update([...$reset, 'tag_source' => null, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
-        unset($this->kiVorschlag['tags']);
     }
 
     public function manual_tags(): void
     {
-        $this->speichereTags($this->eigenesGp(), source: 'manual');   // Spec 84 §4.0
+        $gp = $this->gp();
+        if ($gp !== null) {
+            $this->speichereTags($gp, source: 'manual');
+        }
+    }
+
+    /**
+     * Spec 84 C5 · Schreibweg des Modals über GpService (Eigentümer-Riegel + Override-First im Service, gleiche Regel
+     * für jeden Aufrufer). Abweisungen landen als Meldung im Modal. null = abgewiesen bzw. kein GP.
+     *
+     * @param  callable(\Platform\FoodAlchemist\Services\GpService, \Platform\Core\Models\Team, int): mixed  $schreiben
+     */
+    private function gpSchreiben(callable $schreiben): mixed
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->gpId === null) {
+            return null;
+        }
+        try {
+            return $schreiben(app(\Platform\FoodAlchemist\Services\GpService::class), $team, (int) $this->gpId) ?? true;
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return null;
+        }
+    }
+
+    private function teamOderFehler(): \Platform\Core\Models\Team
+    {
+        return Auth::user()?->currentTeamRelation ?? throw new \RuntimeException('Kein Team im Kontext.');
     }
 
     // ── ✨ Kopf-Button: Naming-Builder aus Roh-Bezeichnung (NEUE GPs) ────
@@ -1324,25 +1304,6 @@ class GpModal extends Component
         return Auth::user()?->currentTeamRelation;
     }
 
-    /**
-     * Spec 84 §4.0 · Für Schreibwege: das GP nur, wenn das Team es pflegen darf (Curate::canCurate — inkl. Master für
-     * globale Basis-/Stamm-Zeilen). Sichtbar ist nicht eigen; die Meldung entspricht speichern().
-     */
-    private function eigenesGp(): ?FoodAlchemistGp
-    {
-        $gp = $this->gp();
-        if ($gp === null) {
-            return null;
-        }
-        if (! Curate::canCurate(Auth::user(), $gp)) {
-            $this->fehler = 'Geerbtes Katalog-GP — Pflege nur durchs Besitzer-Team (D1).';
-
-            return null;
-        }
-
-        return $gp;
-    }
-
     private function gp(): ?FoodAlchemistGp
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -1394,16 +1355,11 @@ class GpModal extends Component
         if ($gp === null) {
             return;
         }
-        $update = [];
-        $geaendert = false;
+        $tags = [];
         foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
-            $neu = $this->tags[$tag] === '' ? null : $this->tags[$tag] === '1';
-            $update["tag_{$tag}"] = $neu;
-            $alt = $gp->getAttribute("tag_{$tag}");
-            $geaendert = $geaendert || ($alt === null ? $neu !== null : $neu !== (bool) $alt);
+            $tags[$tag] = $this->tags[$tag] === '' ? null : $this->tags[$tag] === '1';
         }
-        if ($geaendert) {
-            $gp->update([...$update, 'tag_source' => $source, 'tag_ai_confidence' => null, 'tag_ai_reasoning' => null]);
-        }
+        // Spec 84 C5: über GpService (Eigentümer-Riegel; schreibt nur bei Änderung)
+        $this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeTags($team, (int) $gp->id, $source, $tags));
     }
 }

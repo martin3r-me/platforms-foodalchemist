@@ -894,11 +894,7 @@ class VkModal extends Component
     public ?array $ueberarbeitung = null;
 
     /** Die drei Text-Felder, die ein VK-Revise anfassen darf (Facetten stehen bewusst NICHT drin). */
-    private const REVISE_TEXTE = [
-        'description' => 'description_source',
-        'plating_text' => 'plating_source',
-        'sales_wording_standard' => 'sales_wording_source',
-    ];
+    private const REVISE_TEXTE = SalesRecipeService::REVISE_TEXTE;
 
     public function kiUeberarbeiten(): void
     {
@@ -977,25 +973,12 @@ class VkModal extends Component
         }
 
         try {
-            // Spec 84 §4.0: sichtbar ist nicht eigen — vor den direkten Text-Writes abweisen
-            \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($r, $team, 'das Gericht');
-            if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $zeilen = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
-                if ($zeilen !== []) {
-                    app(\Platform\FoodAlchemist\Services\RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
+            // Spec 84 C5: derselbe Schreib-Moment wie verkaufsrezepte.REVISE (Eigentum, Override-First, Lineage im Service)
+            $teile = app(SalesRecipeService::class)->uebernehmeUeberarbeitung($team, $this->recipeId, $werte, $konfidenz);
+            foreach ($teile as $feld) {
+                if (isset(SalesRecipeService::REVISE_TEXTE[$feld])) {
+                    $this->form[$feld] = trim((string) $werte[$feld]);
                 }
-            }
-            // Texte im Bestands-Muster (RecipeModal): direkter Write MIT Lineage,
-            // Override-First — manuell Gepflegtes bleibt unangetastet (GL-07 §4.2).
-            $frisch = $r->fresh();
-            foreach (self::REVISE_TEXTE as $feld => $lineage) {
-                $wert = $werte[$feld] ?? null;
-                if (! is_string($wert) || trim($wert) === '' || $frisch->{$lineage} === 'manual') {
-                    continue;
-                }
-                $frisch->update([$feld => trim($wert), $lineage => 'ki',
-                    str_replace('_source', '_ai_confidence', $lineage) => $konfidenz]);
-                $this->form[$feld] = trim($wert);
             }
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();

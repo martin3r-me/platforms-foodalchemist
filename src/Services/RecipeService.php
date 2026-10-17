@@ -987,6 +987,122 @@ class RecipeService
         return self::EIGNUNG_TABELLEN;
     }
 
+    /** Lineage-Felder (GL-07), die {@see setzeFeld} kennt. */
+    public const LINEAGE_FELDER = ['description', 'preparation', 'category'];
+
+    /**
+     * Spec 84 C5 · EIN Schreibweg für die Lineage-Felder des Rezepts (Beschreibung, Zubereitungs-Lineage, Kategorie),
+     * für Editor und MCP. Vorher schrieb das Rezept-Modal direkt; die Regeln standen je Aufrufer einzeln.
+     *
+     *   quelle 'ki'     → Wert + Lineage ki + Konfidenz (+ Begründung bei Kategorie). Manuell gepflegt → abgewiesen
+     *                     (GL-07 Override-First).
+     *   quelle 'manual' → Wert + Lineage manual, Konfidenz/Begründung leer.
+     *   quelle null     → Reset: Wert und Lineage leer. Ausnahme Zubereitung: der Text ist ein Spiegel der Schritte
+     *                     (Spec 27) und bleibt, nur die Lineage wird gesetzt bzw. geleert.
+     *
+     * Eigentümer-Riegel im Service (Spec 84 §4.0): ein geerbtes Rezept (Master, Seed, Abo-Fassung) ist nur lesbar.
+     * Kategorie ist eine Referenz und muss für das Team sichtbar sein (MVP-044).
+     */
+    public function setzeFeld(Team $team, int $recipeId, string $feld, ?string $quelle, mixed $wert = null, ?float $konfidenz = null, ?string $begruendung = null): FoodAlchemistRecipe
+    {
+        if (! in_array($feld, self::LINEAGE_FELDER, true) || ! in_array($quelle, ['ki', 'manual', null], true)) {
+            throw new \InvalidArgumentException("Unbekanntes Lineage-Feld oder Quelle: {$feld}/".var_export($quelle, true));
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'das Rezept');
+
+        $label = ['description' => 'Beschreibung', 'preparation' => 'Zubereitung', 'category' => 'Kategorie'][$feld];
+        if ($quelle === 'ki' && $recipe->{$feld.'_source'} === 'manual') {
+            throw new \RuntimeException("{$label} ist manuell gepflegt — erst Reset, dann KI übernehmen.");
+        }
+        $konfidenz = $konfidenz === null ? null : max(0.0, min(1.0, $konfidenz));
+
+        $update = match ($feld) {
+            'description' => $quelle === null
+                ? ['description' => null, 'description_source' => null, 'description_ai_confidence' => null]
+                : ['description' => $this->pflichtText($wert, $quelle === 'ki' ? 'KI-Vorschlag enthält keine Beschreibung.' : 'Beschreibung ist leer.'),
+                    'description_source' => $quelle, 'description_ai_confidence' => $quelle === 'ki' ? $konfidenz : null],
+            'preparation' => ['preparation_source' => $quelle, 'preparation_ai_confidence' => $quelle === 'ki' ? $konfidenz : null],
+            'category' => $quelle === null
+                ? ['category_id' => null, 'category_source' => null, 'category_ai_confidence' => null, 'category_ai_reasoning' => null]
+                : ['category_id' => $this->sichtbareKategorie($team, $wert, $quelle === 'ki' ? 'KI-Vorschlag enthält keine gültige Kategorie.' : 'Kategorie nicht sichtbar/vorhanden.'),
+                    'category_source' => $quelle, 'category_ai_confidence' => $quelle === 'ki' ? $konfidenz : null,
+                    'category_ai_reasoning' => $quelle === 'ki' ? $begruendung : null],
+        };
+        $recipe->update($update);
+
+        return $recipe->refresh();
+    }
+
+    /**
+     * Spec 84 C5 · KI-Überarbeitung übernehmen — der EINE Schreib-Moment, gemeinsam für Rezept-Modal und
+     * `recipes.REVISE` (vorher wortgleich doppelt). Zutaten-Sync, dann Beschreibung und Zubereitung mit Lineage ki;
+     * manuell gepflegte Felder bleiben unangetastet (Override-First, kein Fehler).
+     *
+     * @param  array<string, mixed>  $werte  KI-Werte (zutaten, description, preparation)
+     * @return list<string> übernommene Teile (zutaten, description, preparation)
+     */
+    public function uebernehmeUeberarbeitung(Team $team, int $recipeId, array $werte, ?float $konfidenz): array
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'das Rezept');
+
+        $uebernommen = [];
+        if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
+            $zeilen = app(RecipeReviseService::class)->syncZeilen($recipe, $werte['zutaten']);
+            if ($zeilen !== []) {
+                $this->syncIngredients($team, $recipeId, $zeilen);
+                $uebernommen[] = 'zutaten';
+            }
+        }
+        $frisch = $recipe->fresh();
+        if (is_string($werte['description'] ?? null) && trim($werte['description']) !== '' && $frisch->description_source !== 'manual') {
+            $this->setzeFeld($team, $recipeId, 'description', 'ki', $werte['description'], $konfidenz);
+            $uebernommen[] = 'description';
+        }
+        if (is_string($werte['preparation'] ?? null) && trim($werte['preparation']) !== '' && $frisch->preparation_source !== 'manual') {
+            $this->setzeFeld($team, $recipeId, 'preparation', 'ki', null, $konfidenz);
+            // Spec 27: die KI liefert Markdown — Master sind die Schritte; `preparation` wird daraus als Spiegel neu gerendert.
+            app(RecipeStepService::class)->ausMarkdown($frisch->fresh(), $werte['preparation'], ueberschreiben: true);
+            $uebernommen[] = 'preparation';
+        }
+
+        return $uebernommen;
+    }
+
+    /**
+     * Spec 84 C5 · Dichteklasse von Hand setzen bzw. leeren (Regeneration/Behälter im Rezept-Modal). Eigentümer-Riegel
+     * im Service; über das Model, damit Observer laufen; `updated_at` steigt wie bisher immer (touch).
+     */
+    public function setzeDichteklasse(Team $team, int $recipeId, ?string $klasse): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'das Rezept');
+        $klasse = $klasse !== null && trim($klasse) !== '' ? $klasse : null;
+        $recipe->fill(['dichteklasse' => $klasse, 'dichteklasse_source' => $klasse !== null ? 'manual' : null])->touch();
+
+        return $recipe->refresh();
+    }
+
+    private function pflichtText(mixed $wert, string $fehler): string
+    {
+        if (! is_string($wert) || trim($wert) === '') {
+            throw new \RuntimeException($fehler);
+        }
+
+        return $wert;
+    }
+
+    private function sichtbareKategorie(Team $team, mixed $wert, string $fehler): int
+    {
+        $id = is_numeric($wert) ? (int) $wert : 0;
+        if ($id <= 0 || ! FoodAlchemistRecipeCategory::visibleToTeam($team)->whereKey($id)->exists()) {
+            throw new \RuntimeException($fehler);
+        }
+
+        return $id;
+    }
+
     public function setzeEignung(Team $team, int $recipeId, string $typ, string $slug, string $source = 'manual', ?float $confidence = null, ?string $grund = null): void
     {
         $meta = self::EIGNUNG_TABELLEN[$typ] ?? throw new \RuntimeException("Unbekannter Eignungs-Typ [{$typ}].");
