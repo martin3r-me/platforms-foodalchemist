@@ -122,7 +122,7 @@ class KapitelIdeenPutTool extends FoodAlchemistTool implements ToolContract, Too
         } catch (ModelNotFoundException $e) {
             return ToolResult::error('Skizze/Gruppe nicht sichtbar/vorhanden.', 'NOT_FOUND');
         } catch (\RuntimeException $e) {
-            $code = str_contains($e->getMessage(), 'Geerbt') ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
 
             return ToolResult::error($e->getMessage(), $code);
         }

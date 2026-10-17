@@ -119,7 +119,7 @@ class KnowledgeService
     {
         $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
         if ($doc === null) {
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+            throw new \Platform\FoodAlchemist\Exceptions\NichtGefundenException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
         if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             if ($doc->team_id === null) {
@@ -127,7 +127,7 @@ class KnowledgeService
                     "\"{$slug}\" ist globales Master-Wissen — nur das Master-Team hat es {$verb}."
                 );
             }
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+            throw new \Platform\FoodAlchemist\Exceptions\NichtGefundenException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
 
         return $doc;
@@ -380,7 +380,7 @@ class KnowledgeService
     {
         $docId = DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->value('knowledge_document_id');
         if ($docId === null) {
-            throw new \RuntimeException('Alias nicht gefunden.');
+            throw new \Platform\FoodAlchemist\Exceptions\NichtGefundenException('Alias nicht gefunden.');
         }
         $doc = DB::table('foodalchemist_knowledge_documents')->where('id', (int) $docId)->first();
         if ($doc === null || ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
@@ -497,7 +497,7 @@ class KnowledgeService
             'team_id', $team
         )->first();
         if ($doc === null) {
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+            throw new \Platform\FoodAlchemist\Exceptions\NichtGefundenException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
 
         return $doc;

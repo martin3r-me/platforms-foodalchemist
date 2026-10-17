@@ -77,7 +77,7 @@ class KnowledgeSetActiveTool extends FoodAlchemistTool implements ToolContract, 
             } catch (WissenGesperrtException $e) {
                 return ToolResult::error($e->getMessage(), 'LOCKED');
             } catch (\RuntimeException $e) {
-                $code = str_contains($e->getMessage(), 'nicht gefunden') ? 'NOT_FOUND' : 'VALIDATION_ERROR';
+                $code = $e instanceof \Platform\FoodAlchemist\Exceptions\NichtGefundenException ? 'NOT_FOUND' : 'VALIDATION_ERROR';
 
                 return ToolResult::error($e->getMessage(), $code);
             }

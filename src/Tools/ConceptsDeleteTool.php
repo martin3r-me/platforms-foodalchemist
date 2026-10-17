@@ -75,7 +75,7 @@ class ConceptsDeleteTool extends FoodAlchemistTool implements ToolContract, Tool
             $svc->delete($team, $conceptId);
         } catch (\RuntimeException $e) {
             // Owner-Guard (geerbtes Konzept) bzw. Race auf den Referenz-Schutz.
-            $code = str_contains($e->getMessage(), 'verwendet') ? 'HAS_REFERENCES' : 'ACCESS_DENIED';
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\NochVerwendetException ? 'HAS_REFERENCES' : 'ACCESS_DENIED';
 
             return ToolResult::error($e->getMessage(), $code);
         }

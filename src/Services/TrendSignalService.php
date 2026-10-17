@@ -63,7 +63,7 @@ class TrendSignalService
         $kosten = $this->kostenJeAbfrage();
         $verbraucht = $this->verbrauchDiesenMonat($team);
         if ($verbraucht + $kosten * count($begriffe) > $budget + 1e-9) {
-            throw new \RuntimeException(sprintf(
+            throw new \Platform\FoodAlchemist\Exceptions\MessBudgetErschoepftException(sprintf(
                 'Monatsbudget für Google Trends erreicht (%.2f $ von %.2f $ verbraucht). Budget in den Einstellungen anheben oder bis zum Monatswechsel warten.',
                 $verbraucht, $budget,
             ));
@@ -104,7 +104,7 @@ class TrendSignalService
                 $ergebnis['gemessen']++;
             } catch (\RuntimeException $e) {
                 $ergebnis['fehler'][] = $trend->name.': '.$e->getMessage();
-                if (str_starts_with($e->getMessage(), 'Monatsbudget')) {
+                if ($e instanceof \Platform\FoodAlchemist\Exceptions\MessBudgetErschoepftException) {
                     break;
                 }
             }

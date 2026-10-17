@@ -84,7 +84,7 @@ class InventoryCountsPutTool extends FoodAlchemistTool implements ToolContract, 
                     }
                     $gezaehlt++;
                 } catch (\RuntimeException $e) {
-                    if (str_contains($e->getMessage(), 'gebucht')) {
+                    if ($e instanceof \Platform\FoodAlchemist\Exceptions\BereitsGebuchtException) {
                         throw $e;
                     }
                     $fehler[] = ['line_id' => $lineId, 'fehler' => $e->getMessage()];

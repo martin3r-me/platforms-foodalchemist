@@ -367,7 +367,7 @@ class ConceptService
         // GT-FB-4 / V-06: referenziertes Concept nicht still löschen — erst aus den Foodbooks nehmen.
         $fbs = $this->verwendetInFoodbooks($team, $id);
         if ($fbs->isNotEmpty()) {
-            throw new \RuntimeException('Das Konzept wird in '.$fbs->count().($fbs->count() === 1 ? ' Foodbook' : ' Foodbooks').' verwendet. Zuerst dort entfernen.');
+            throw new \Platform\FoodAlchemist\Exceptions\NochVerwendetException('Das Konzept wird in '.$fbs->count().($fbs->count() === 1 ? ' Foodbook' : ' Foodbooks').' verwendet. Zuerst dort entfernen.');
         }
 
         $concept->delete();
