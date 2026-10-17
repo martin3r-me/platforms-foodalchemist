@@ -203,3 +203,65 @@ it('B0b MCP: Tool-Hülle mit Nutzer, aber ohne Team → TeamKontextFehltExceptio
     $ids = $huelle->execute([], new ToolContext($mitB, $this->b))->data['ids'];
     expect($ids)->not->toContain($this->aboFassung)->not->toContain($this->aboArbeit)->not->toBeEmpty();
 });
+
+// ── Stufe 0 (Standard, so geht der Code live): kein Verhaltensunterschied außer dem Alias-Fix ──
+
+it('Stufe 0 (a): TeamSicht hängt nichts an — SQL und Bindungen mit Scope = ohne Scope, für alle vier Modelle, auch mit Kontext', function () {
+    expect(config('foodalchemist.team_sicht.stufe'))->toBe(0);
+    foreach ($this->modelle as $m) {
+        foreach ([$this->a, $this->b, null] as $t) {
+            [$mit, $ohne] = FaTeam::imTeam($t, fn () => [$m::query(), $m::query()->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class)]);
+            expect([$mit->toSql(), $mit->getBindings()])->toBe([$ohne->toSql(), $ohne->getBindings()], $m);
+            expect($mit->toSql())->toContain('ist_fassung');   // OhneFassungenScope greift wie vorher
+        }
+    }
+});
+
+it('Stufe 0 (b): an Seite und MCP-Tool mit Nutzer ohne Team-Kontext wird NIE geworfen', function () {
+    expect(config('foodalchemist.team_sicht.stufe'))->toBe(0);
+    Route::middleware(['web', FaBereichMiddleware::class])->get('/_spec84_stufe0', fn () => (string) FoodAlchemistRecipe::count());
+    $ohne = $this->makeUser($this->b, 'Stufe0 ohne');
+    $ohne->forceFill(['current_team_id' => null])->save();
+    $this->withoutExceptionHandling();
+    expect((int) $this->actingAs($ohne)->get('/_spec84_stufe0')->getContent())->toBe(FoodAlchemistRecipe::count());
+
+    $innen = new class implements ToolContract
+    {
+        public function getName(): string { return 'foodalchemist.spec84_stufe0.GET'; }
+
+        public function getDescription(): string { return 'Test'; }
+
+        public function getSchema(): array { return ['type' => 'object', 'properties' => []]; }
+
+        public function execute(array $arguments, ToolContext $context): ToolResult
+        {
+            return ToolResult::success(['n' => FoodAlchemistRecipe::count()]);
+        }
+    };
+    expect((new FaRechteToolHuelle($innen))->execute([], new ToolContext($ohne->fresh(), null))->data['n'])->toBe(FoodAlchemistRecipe::count());
+});
+
+it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen dasselbe SQL wie mit TeamSicht-Scope', function () {
+    expect(config('foodalchemist.team_sicht.stufe'))->toBe(0);
+    $geprueft = 0;
+    foreach (glob(__DIR__ . '/../../src/Models/*.php') as $datei) {
+        $code = file_get_contents($datei);
+        if (! str_contains($code, "ohneTeamSicht('verweis')")) {
+            continue;
+        }
+        $klasse = 'Platform\\FoodAlchemist\\Models\\' . basename($datei, '.php');
+        // Methodenname je Fundstelle: die letzte `function x(` vor dem Treffer
+        preg_match_all("/ohneTeamSicht\\('verweis'\\)/", $code, $treffer, PREG_OFFSET_CAPTURE);
+        foreach ($treffer[0] as [, $pos]) {
+            preg_match_all('/function\s+(\w+)\s*\(/', substr($code, 0, $pos), $fn);
+            $methode = end($fn[1]);
+            $rel = FaTeam::imTeam($this->a, fn () => (new $klasse)->{$methode}());
+            $mitScope = (clone $rel->getQuery())->withGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class, new \Platform\FoodAlchemist\Models\Scopes\TeamSicht);
+            $a = FaTeam::imTeam($this->a, fn () => [$rel->toBase()->toSql(), $rel->toBase()->getBindings()]);
+            $b = FaTeam::imTeam($this->a, fn () => [$mitScope->toBase()->toSql(), $mitScope->toBase()->getBindings()]);
+            expect($a)->toBe($b, "{$klasse}::{$methode}");
+            $geprueft++;
+        }
+    }
+    expect($geprueft)->toBe(50);
+});
