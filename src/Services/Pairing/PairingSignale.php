@@ -155,8 +155,16 @@ final class PairingSignale
     public function konfliktImGericht(Team $team): int
     {
         $keys = [];
-        $paare = DB::table('foodalchemist_anchor_beziehungen')->where('art', 'konflikt')
-            ->where('status', '!=', WissensStatus::Verworfen->value)->get(['anchor_a_id', 'anchor_b_id']);
+        // Spec 84 E-2/E-5: nur Konflikt-Paare, deren BEIDE Anker in Gerichten dieses Teams vorkommen (vorher: alle Paare).
+        // Gleiches Ergebnis — ein Rezept kann nur Paare tragen, deren Anker es selbst hat.
+        $teamAnker = DB::table('foodalchemist_recipe_profile_anker as pa')
+            ->join('foodalchemist_recipes as r', 'r.id', '=', 'pa.recipe_id')
+            ->where('r.team_id', $team->id)->whereNull('r.deleted_at')->where('r.is_sales_recipe', true)
+            ->distinct()->pluck('pa.anchor_id')->map(fn ($v) => (int) $v)->all();
+        $paare = $teamAnker === [] ? collect() : DB::table('foodalchemist_anchor_beziehungen')->where('art', 'konflikt')
+            ->where('status', '!=', WissensStatus::Verworfen->value)
+            ->whereIn('anchor_a_id', $teamAnker)->whereIn('anchor_b_id', $teamAnker)
+            ->get(['anchor_a_id', 'anchor_b_id']);
         if ($paare->isNotEmpty()) {
             $anker = $paare->flatMap(fn ($p) => [(int) $p->anchor_a_id, (int) $p->anchor_b_id])->unique()->values()->all();
             $jeRezept = DB::table('foodalchemist_recipe_profile_anker as pa')
