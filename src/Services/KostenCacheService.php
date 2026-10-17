@@ -39,7 +39,8 @@ class KostenCacheService
         // wäre die Besitzer-Entscheidung falsch. Dann einmal vollständig nachladen.
         foreach (['team_id', 'ist_fassung', 'ek_total_eur', 'ek_per_kg_eur', 'ek_n_ingredients_total', 'ek_n_ingredients_priced', 'ek_price_basis'] as $spalte) {
             if (! array_key_exists($spalte, $recipe->getAttributes())) {
-                $recipe = FoodAlchemistRecipe::mitFassungen()->findOrFail($recipe->id);
+                // Spec 84 B3: dieselbe id, die der Aufrufer schon hat — nur fehlende Spalten nachladen, unabhängig vom Kontext
+                $recipe = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('nachladen')->findOrFail($recipe->id);
                 break;
             }
         }

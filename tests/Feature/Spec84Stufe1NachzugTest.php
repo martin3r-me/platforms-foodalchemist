@@ -134,3 +134,19 @@ it('Sweep: foodalchemist:teller-rollen findet die Gerichte von --team auch, wenn
     $null = $scope(0);
     expect($null)->toBeGreaterThan(0)->and($scope(1))->toBe($null);
 });
+
+it('Nachladen: KostenCache und TeamVk mit Teil-Spalten-Modell aus fremdem Kontext — Stufe 1 = Stufe 0', function () {
+    $rezept = FoodAlchemistRecipe::where('team_id', $this->a->id)->where('is_sales_recipe', true)->firstOrFail();
+    $ergebnis = function (int $stufe) use ($rezept) {
+        config(['foodalchemist.team_sicht.stufe' => $stufe]);
+        $teil = FoodAlchemistRecipe::ohneTeamSicht('test')->select(['id', 'name'])->findOrFail($rezept->id);   // wie das Angebot: nur Teil-Spalten
+        $teil2 = FoodAlchemistRecipe::ohneTeamSicht('test')->select(['id', 'name'])->findOrFail($rezept->id);
+
+        return FaTeam::imTeam($this->b, fn () => [
+            app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($teil, $this->a),
+            app(\Platform\FoodAlchemist\Services\TeamVkService::class)->fuer($teil2, $this->a),
+        ]);
+    };
+    $null = $ergebnis(0);
+    expect($ergebnis(1))->toBe($null);
+});

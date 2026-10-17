@@ -29,7 +29,8 @@ class TeamVkService
     public function fuer(FoodAlchemistRecipe $recipe, Team $team, ?FoodAlchemistOutlet $outlet = null, ?FoodAlchemistRecipeDarreichung $darreichung = null): array
     {
         if (! array_key_exists('ist_fassung', $recipe->getAttributes())) {
-            $recipe = FoodAlchemistRecipe::mitFassungen()->findOrFail($recipe->id);
+            // Spec 84 B3: dieselbe id, die der Aufrufer schon hat — nur fehlende Spalten nachladen, unabhängig vom Kontext
+            $recipe = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('nachladen')->findOrFail($recipe->id);
         }
         if (! $recipe->ist_fassung) {
             $r = app(DarreichungResolver::class)->vkNettoMitQuelle($recipe, $outlet);
