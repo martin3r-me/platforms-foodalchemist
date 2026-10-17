@@ -29,6 +29,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * eigene Kategorie, bewusste Fremdschreiber über FremdSchreiben::erlaubt('grund') ohne Zeile, Mengen-Begrenzung je Prozess.
  */
 beforeEach(function () {
+    config(['foodalchemist.fremd_schreiben.modus' => 'aus']);   // Aufbau ohne Protokoll, auch wenn die Umgebung „log“ setzt
     $this->seedTeamHierarchy();
     FremdSchreiben::zuruecksetzen();
     $this->logDatei = storage_path('logs/fa-fremdschreiben-test-'.getmypid().'.log');
