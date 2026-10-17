@@ -150,6 +150,12 @@ class FassungSignalService
     /** Aktions-Signal „Neuere Fassung verfügbar“ für ein Team und eine Familie: anlegen, aktualisieren oder schließen. */
     public function aktion(Team $team, int $familieId): void
     {
+        // Spec 84 B3 C: Signal je Team in dessen Sicht (Schleifen über Teams)
+        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->aktionImTeam($team, $familieId));
+    }
+
+    private function aktionImTeam(Team $team, int $familieId): void
+    {
         $key = 'fassung-neu:'.$familieId;
         $neu = $this->vergleich->neuesteFuer($familieId, $team);
         $betroffen = [];
@@ -271,6 +277,12 @@ class FassungSignalService
 
     /** Aktions-Signal „Neuere Fassung verfügbar“ für ein Team und eine Konzept-/Paket-Familie: anlegen, aktualisieren oder schließen. */
     public function aktionBaustein(Team $team, string $art, int $familieId): void
+    {
+        // Spec 84 B3 C: Signal je Team in dessen Sicht (Schleifen über Teams)
+        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->aktionBausteinImTeam($team, $art, $familieId));
+    }
+
+    private function aktionBausteinImTeam(Team $team, string $art, int $familieId): void
     {
         $key = 'fassung-neu:'.$art.':'.$familieId;
         $modell = self::BAUSTEIN_MODELL[$art];

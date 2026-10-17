@@ -57,6 +57,12 @@ class FassungService
      */
     public function veroeffentlichen(Team $master, int $recipeId, string $notiz, ?User $actor): array
     {
+        // Spec 84 B3 C: Lesen im Master; das Recht prüft der Rumpf am übergebenen Team + Nutzer, nicht am Kontext
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($master, fn () => $this->veroeffentlichenImTeam($master, $recipeId, $notiz, $actor));
+    }
+
+    private function veroeffentlichenImTeam(Team $master, int $recipeId, string $notiz, ?User $actor): array
+    {
         if (! MasterTeam::istMaster($master)) {
             throw new \RuntimeException('Veröffentlichen gibt es nur im Master-Team (Spec 82 §12 B).');
         }
@@ -65,7 +71,7 @@ class FassungService
         if ($notiz === '') {
             throw new \RuntimeException('Beim Veröffentlichen ist eine Änderungsnotiz Pflicht (Änderungsprotokoll der Abonnenten).');
         }
-        $wurzel = FoodAlchemistRecipe::where('team_id', $master->id)->where('ist_fassung', false)->findOrFail($recipeId);
+        $wurzel = FoodAlchemistRecipe::ohneTeamSicht('abo-pflege')->where('team_id', $master->id)->where('ist_fassung', false)->findOrFail($recipeId);
 
         $baum = $this->baumKinderZuerst($wurzel, (int) $master->id);
         $this->pruefeNurStammGps($baum);
@@ -77,7 +83,7 @@ class FassungService
             $allergen = [];
             foreach ($baum as $recipe) {
                 $hash = $this->inhaltHash($recipe, $map);
-                $vorher = FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)
+                $vorher = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('abo-pflege')->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)
                     ->whereNull('deleted_at')->orderByDesc('fassung_nr')->orderByDesc('id')->first();
                 if ($vorher !== null && $vorher->inhalt_hash === $hash) {
                     $map[$recipe->id] = (int) $vorher->id;
@@ -86,7 +92,7 @@ class FassungService
                     continue;
                 }
                 // Nummer über ALLE Fassungen der Familie, auch soft-gelöschte: UNIQUE(team_id, recipe_key) zählt sie mit
-                $nr = (int) FoodAlchemistRecipe::mitFassungen()->withTrashed()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
+                $nr = (int) FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('eindeutigkeit')->withTrashed()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
                 $fassung = $this->kopiere($recipe, $map, $nr, $hash, $notiz, $actor);
                 $this->recompute->recomputePipeline($fassung->id, false);
                 $fassung->refresh();
@@ -136,7 +142,7 @@ class FassungService
                 throw new \RuntimeException("Zyklus in den Unter-Rezepten bei „{$r->name}“ — so lässt sich nichts veröffentlichen.");
             }
             $pfad[$r->id] = true;
-            $kinder = FoodAlchemistRecipe::whereIn('id', $r->ingredients()->whereNotNull('referenced_recipe_id')->pluck('referenced_recipe_id'))
+            $kinder = FoodAlchemistRecipe::ohneTeamSicht('abo-pflege')->whereIn('id', $r->ingredients()->whereNotNull('referenced_recipe_id')->pluck('referenced_recipe_id'))
                 ->where('team_id', $masterId)->where('ist_fassung', false)->orderBy('id')->get();
             foreach ($kinder as $kind) {
                 $besuche($kind, $pfad);

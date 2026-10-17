@@ -109,6 +109,12 @@ class MandantExportService
     /** Export anstoßen (ein laufender wird wiederverwendet). Das Bauen übernimmt der Job. */
     public function starte(Team $mandant, ?User $user): FoodAlchemistMandantExport
     {
+        // Spec 84 B3 C: Export des Mandanten; der Job trägt den Mandanten, das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => $this->starteImTeam($mandant, $user));
+    }
+
+    private function starteImTeam(Team $mandant, ?User $user): FoodAlchemistMandantExport
+    {
         $this->pruefeMandant($mandant);
         if (! $this->darfAusloesen($user, $mandant)) {
             throw new FaRechtFehltException(FaRolle::Admin, null, 'Datenexport auslösen (Plattform-Admin oder Inhaber des Mandanten)');
@@ -174,6 +180,12 @@ class MandantExportService
      * Das ZIP schreiben (vom Job). Streamt je Tabelle in eine Temp-Datei, danach ins private Storage.
      */
     public function baue(FoodAlchemistMandantExport $export): void
+    {
+        // Spec 84 B3 C: Export liest in der Sicht des exportierten Mandanten
+        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $export->team_id, fn () => $this->baueImTeam($export));
+    }
+
+    private function baueImTeam(FoodAlchemistMandantExport $export): void
     {
         $mandant = Team::findOrFail($export->team_id);
         $teamIds = array_merge([(int) $mandant->id], $this->standorte->unterTeamIds($mandant));

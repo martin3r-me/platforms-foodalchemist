@@ -47,6 +47,12 @@ class AngebotEinfrierService
      */
     public function einfrieren(Team $team, ?User $user, FoodAlchemistAngebot $angebot): ?FoodAlchemistAngebotEinfrierung
     {
+        // Spec 84 B3 C: gelesen wird in der Sicht des handelnden Teams (nie des Angebots-Eigentümers — das verliehe Lesesicht); das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->einfrierenImTeam($team, $user, $angebot));
+    }
+
+    private function einfrierenImTeam(Team $team, ?User $user, FoodAlchemistAngebot $angebot): ?FoodAlchemistAngebotEinfrierung
+    {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Kuratieren, 'Angebot einfrieren');
         if (($bestehend = $this->aktive($angebot)) !== null) {
             return $bestehend;
@@ -90,6 +96,12 @@ class AngebotEinfrierService
 
     /** Snapshot verwerfen (Rückweg auf Entwurf). Er bleibt als Historie, ist aber nicht mehr aktiv. */
     public function verwerfen(Team $team, ?User $user, FoodAlchemistAngebot $angebot): bool
+    {
+        // Spec 84 B3 C: gelesen wird in der Sicht des handelnden Teams (nie des Angebots-Eigentümers — das verliehe Lesesicht); das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->verwerfenImTeam($team, $user, $angebot));
+    }
+
+    private function verwerfenImTeam(Team $team, ?User $user, FoodAlchemistAngebot $angebot): bool
     {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Kuratieren, 'Eingefrorenen Stand verwerfen');
         $aktiv = $this->aktive($angebot);
@@ -253,6 +265,12 @@ class AngebotEinfrierService
      * @return array<string,mixed> Bericht
      */
     public function uebernehmen(Team $team, ?User $user, FoodAlchemistAngebot $angebot, int $zeileId, int $familieId, bool $bestaetigt = false): array
+    {
+        // Spec 84 B3 C: gelesen wird in der Sicht des handelnden Teams (nie des Angebots-Eigentümers — das verliehe Lesesicht); das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->uebernehmenImTeam($team, $user, $angebot, $zeileId, $familieId, $bestaetigt));
+    }
+
+    private function uebernehmenImTeam(Team $team, ?User $user, FoodAlchemistAngebot $angebot, int $zeileId, int $familieId, bool $bestaetigt = false): array
     {
         $vorschau = $this->uebernahmeVorschau($angebot, $zeileId, $familieId);
         $this->rechte->pruefe($user, $team, $vorschau['braucht_bestaetigung'] ? FaRolle::Freigeben : FaRolle::Kuratieren,

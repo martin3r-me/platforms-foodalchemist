@@ -115,6 +115,27 @@ final class TeamSicht implements Scope
         }
     }
 
+    /**
+     * Spec 84 B3 C · Service mit ausdrücklichem Team liest in dessen Sicht — aber NUR mit eingeschaltetem Filter. `FaTeam::imTeam`
+     * setzt mehr als die Sicht (Team versandter Jobs, KI-Abrechnung, Messung); bei Stufe 0 bleibt darum alles wie bisher.
+     * Verleiht kein Recht: die Services prüfen am übergebenen Team + angemeldeten Nutzer, nie am Kontext.
+     *
+     * @template T
+     * @param  callable(): T  $fn
+     * @return T
+     */
+    public static function lesenIm(\Platform\Core\Models\Team|int $team, callable $fn): mixed
+    {
+        return self::stufe() >= 1 ? FaTeam::imTeam($team, $fn) : $fn();
+    }
+
+    /** Prozess-Merker leeren (Tests): Eingang und „schon geloggt“ je Modell. */
+    public static function zuruecksetzen(): void
+    {
+        self::$eingang = null;
+        self::$offenGeloggt = [];
+    }
+
     private static function ohneKontext(Builder $builder, Model $model): void
     {
         $klasse = $model::class;

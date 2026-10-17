@@ -69,6 +69,21 @@ class RecipeRecomputeService
     /** Pipeline für EIN Rezept — idempotent (I4), eine Transaktion (V-07). */
     public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
     {
+        // Spec 84 B3 C: Recompute läuft auch auf Master- und Fremdzeilen (Kosten-Cache, Fassungen) — gelesen wird in der Sicht
+        // des Rezept-Teams. Nur mit eingeschaltetem Sichtfilter; bei Stufe 0 keine Zusatzabfrage.
+        if (\Platform\FoodAlchemist\Models\Scopes\TeamSicht::stufe() >= 1) {
+            $tid = DB::table('foodalchemist_recipes')->where('id', $recipeId)->value('team_id');
+            if ($tid !== null && (int) $tid !== \Platform\FoodAlchemist\Support\FaTeam::aktuellIdOhneAbfrage()) {
+                \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $tid, fn () => $this->recomputePipelineImTeam($recipeId, $cascadePrices));
+
+                return;
+            }
+        }
+        $this->recomputePipelineImTeam($recipeId, $cascadePrices);
+    }
+
+    private function recomputePipelineImTeam(int $recipeId, bool $cascadePrices): void
+    {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {
@@ -295,7 +310,8 @@ class RecipeRecomputeService
         FoodAlchemistRecipe::whereIn('id', $order)->pluck('team_id')->filter()->unique()
             ->each(function ($teamId) {
                 if (($team = Team::find($teamId)) !== null) {
-                    app(PricingCascadeService::class)->recomputeTeam($team);
+                    // Spec 84 B3 C: Preis-Kaskade je Team in dessen Sicht
+                    \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => app(PricingCascadeService::class)->recomputeTeam($team));
                 }
             });
 

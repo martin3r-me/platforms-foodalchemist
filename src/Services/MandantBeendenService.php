@@ -81,6 +81,12 @@ class MandantBeendenService
      */
     public function vorschau(Team $mandant, ?User $user): array
     {
+        // Spec 84 B3 C: Admin handelt am Mandanten; gelesen wird in dessen Sicht, das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => $this->vorschauImTeam($mandant, $user));
+    }
+
+    private function vorschauImTeam(Team $mandant, ?User $user): array
+    {
         $this->nurPlattformAdmin($user, 'Mandant beenden: Vorschau');
         $this->pruefeMandant($mandant);
 
@@ -117,6 +123,12 @@ class MandantBeendenService
      */
     public function starte(Team $mandant, ?User $user, ?array $schritte = null): FoodAlchemistMandantBeendenLauf
     {
+        // Spec 84 B3 C: Admin handelt am Mandanten; versandte Jobs tragen den Mandanten, das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => $this->starteImTeam($mandant, $user, $schritte));
+    }
+
+    private function starteImTeam(Team $mandant, ?User $user, ?array $schritte = null): FoodAlchemistMandantBeendenLauf
+    {
         $admin = $this->nurPlattformAdmin($user, 'Mandant beenden');
         $this->pruefeMandant($mandant);
         if (($offen = $this->offenerLauf($mandant)) !== null) {
@@ -144,6 +156,12 @@ class MandantBeendenService
      * @return array{lauf: array<string,mixed>, abgeschlossen: bool, angehalten_bei: ?string, grund: ?string}
      */
     public function fuehreAus(Team $mandant, ?User $user, bool $bestaetigt, ?array $schritte = null): array
+    {
+        // Spec 84 B3 C: Admin handelt am Mandanten; gelesen wird in dessen Sicht, das Recht prüft der Rumpf
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => $this->fuehreAusImTeam($mandant, $user, $bestaetigt, $schritte));
+    }
+
+    private function fuehreAusImTeam(Team $mandant, ?User $user, bool $bestaetigt, ?array $schritte = null): array
     {
         $admin = $this->nurPlattformAdmin($user, 'Mandant beenden');
         $this->pruefeMandant($mandant);

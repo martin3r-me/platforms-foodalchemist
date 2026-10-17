@@ -113,7 +113,7 @@ it('L5 DoD: Draft-Quarantäne — Rezept entsteht als draft mit created_via=mcp,
         ->and($res->data['statistik']['offen'])->toBe(0)
         ->and($res->data['offene'])->toBe([]);
 
-    $recipe = FoodAlchemistRecipe::find($res->data['recipe']['id']);
+    $recipe = FoodAlchemistRecipe::ohneTeamSicht('test')->find($res->data['recipe']['id']);
     $zeile = FoodAlchemistRecipeIngredient::where('recipe_id', $recipe->id)->first();
     expect($recipe->team_id)->toBe($this->rootTeam->id)
         ->and($recipe->preparation)->toBe('1. Schalotten anschwitzen.')
@@ -236,10 +236,10 @@ it('#504-Muster: Tenancy — Rezept landet im Kontext-Team, Fremd-Team-GP wird N
     expect($res->success)->toBeTrue((string) $res->error)
         ->and($res->data['statistik']['bestand_gp'])->toBe(0)          // kein Leak über die Team-Grenze
         ->and($res->data['statistik']['offen'])->toBe(1)
-        ->and(FoodAlchemistRecipe::find($res->data['recipe']['id'])->team_id)->toBe($this->childB->id)
+        ->and(FoodAlchemistRecipe::ohneTeamSicht('test')->find($res->data['recipe']['id'])->team_id)->toBe($this->childB->id)   // Spec 84 B3: Prüfung über die Teamgrenze
         ->and(auth()->user())->toBe($this->user);
     $call = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.generator')->latest('id')->first();
-    $recipe = FoodAlchemistRecipe::find($res->data['recipe']['id']);
+    $recipe = FoodAlchemistRecipe::ohneTeamSicht('test')->find($res->data['recipe']['id']);
     expect($call->team_id)->toBe($this->childB->id)
         ->and($call->knowledge_run_id)->toBe($recipe->knowledge_run_id)
         ->and(\Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_runs')->where('id', $call->knowledge_run_id)->value('team_id'))

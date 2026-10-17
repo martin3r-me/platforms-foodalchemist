@@ -42,6 +42,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     config(['foodalchemist.team_sicht.stufe' => 0]);
+    \Platform\FoodAlchemist\Models\Scopes\TeamSicht::zuruecksetzen();   // „einmal je Prozess geloggt“ darf nicht aus einem früheren Test stammen
 
     $this->master = Team::create(['name' => 'Master', 'user_id' => 1, 'personal_team' => false]);
     config(['foodalchemist.master_team_id' => $this->master->id]);
