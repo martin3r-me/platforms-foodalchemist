@@ -27,31 +27,66 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
      */
     public const FUER_JEDE_ROLLE = ['foodalchemist.outlets.SET_ACTIVE', 'foodalchemist.standorte.SET_BRILLE'];
 
-    public function __construct(private readonly ToolContract $tool) {}
+    private ?ToolContract $tool;
+
+    /** Spec 84 E-4: verzögert gebaute Hülle — Klasse + gecachter Name/Metadaten, das Tool selbst erst bei Bedarf. */
+    private ?string $klasse = null;
+
+    private ?string $name = null;
+
+    private ?array $metadaten = null;
+
+    public function __construct(ToolContract $tool)
+    {
+        $this->tool = $tool;
+    }
+
+    /**
+     * Spec 84 E-4 · Hülle ohne das Tool zu bauen: Name und Metadaten kommen aus dem Scan-Cache, Beschreibung, Schema und
+     * Ausführung bauen das Tool beim ersten Zugriff (Schema darf Config lesen, darum nicht gecacht). Spart je Request
+     * das Laden und Instanziieren aller FA-Tools.
+     *
+     * @param  class-string<ToolContract>  $klasse
+     */
+    public static function verzoegert(string $klasse, string $name, array $metadaten): self
+    {
+        $h = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $h->tool = null;
+        $h->klasse = $klasse;
+        $h->name = $name;
+        $h->metadaten = $metadaten;
+
+        return $h;
+    }
 
     public function innen(): ToolContract
     {
-        return $this->tool;
+        return $this->tool ??= new ($this->klasse)();
     }
 
     public function getName(): string
     {
-        return $this->tool->getName();
+        return $this->name ?? $this->innen()->getName();
     }
 
     public function getDescription(): string
     {
-        return $this->tool->getDescription();
+        return $this->innen()->getDescription();
     }
 
     public function getSchema(): array
     {
-        return $this->tool->getSchema();
+        return $this->innen()->getSchema();
     }
 
     public function getMetadata(): array
     {
-        return $this->tool instanceof ToolMetadataContract ? $this->tool->getMetadata() : [];
+        if ($this->metadaten !== null) {
+            return $this->metadaten;
+        }
+        $t = $this->innen();
+
+        return $t instanceof ToolMetadataContract ? $t->getMetadata() : [];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult
@@ -113,6 +148,6 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
             }
         }
 
-        return $this->tool->execute($arguments, $context);
+        return $this->innen()->execute($arguments, $context);
     }
 }
