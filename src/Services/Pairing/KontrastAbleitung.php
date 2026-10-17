@@ -137,8 +137,16 @@ final class KontrastAbleitung
             ->get(['id', 'grundname', 'slug'])
             ->mapWithKeys(fn ($r) => [(int) $r->id => mb_strtolower(trim((string) ($r->grundname ?: $r->slug)))])->all();
 
-        $zeilen = [];
+        // Spec 84 E-5: Ergebnis-Kanten nicht mehr alle im RAM sammeln (276.750 Zeilen-Arrays, am io-Limit 512 MB), sondern
+        // in Stapeln von 1 000 direkt schreiben — in DERSELBEN Transaktion wie das Löschen der alten Kanten, Leser sehen
+        // also weiter nie einen halben Stand. Die Transaktion umfasst jetzt auch die Rechenzeit (gemessen ~14 s
+        // Graph-Abfragen zusätzlich zu ~70 s Schreiben, die schon bisher in der Transaktion lagen).
+        $anzahl = 0;
         $ts = now();
+        DB::transaction(function () use ($bedarfe, $lieferanten, $konflikt, $vertraegt, $inGruppe, $verbreitung, $rolleAbzug, $grundform, $grundname, $ts, &$anzahl) {
+        DB::table('foodalchemist_anchor_beziehungen')->where('art', Kantenart::Kontrast->value)
+            ->where('grundlage', 'bedarf_x_eigenschaft')->delete();
+        $stapel = [];
         foreach ($bedarfe as $b) {
             $achse = Achse::tryFrom((string) $b->achse);
             if ($achse === null || ! $achse->lieferbar()) {
@@ -176,23 +184,24 @@ final class KontrastAbleitung
                 return true;
             }));
             foreach (array_slice($rangliste, 0, self::MAX_JE_BEDARF) as [$id, $rang, $geprueft]) {
-                $zeilen[] = [
+                $anzahl++;
+                $stapel[] = [
                     'anchor_a_id' => $a, 'anchor_b_id' => $id, 'art' => Kantenart::Kontrast->value,
                     'achse' => $achse->value, 'rang' => $rang, 'grundlage' => 'bedarf_x_eigenschaft',
                     'status' => $geprueft ? WissensStatus::Geprueft->value : WissensStatus::Entwurf->value,
                     'created_at' => $ts, 'updated_at' => $ts,
                 ];
+                if (count($stapel) >= 1000) {
+                    DB::table('foodalchemist_anchor_beziehungen')->insert($stapel);
+                    $stapel = [];
+                }
             }
         }
-
-        DB::transaction(function () use ($zeilen) {
-            DB::table('foodalchemist_anchor_beziehungen')->where('art', Kantenart::Kontrast->value)
-                ->where('grundlage', 'bedarf_x_eigenschaft')->delete();
-            foreach (array_chunk($zeilen, 1000) as $chunk) {
-                DB::table('foodalchemist_anchor_beziehungen')->insert($chunk);
-            }
+        if ($stapel !== []) {
+            DB::table('foodalchemist_anchor_beziehungen')->insert($stapel);
+        }
         });
 
-        return ['bedarfe' => $bedarfe->count(), 'kanten' => count($zeilen)];
+        return ['bedarfe' => $bedarfe->count(), 'kanten' => $anzahl];
     }
 }
