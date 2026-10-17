@@ -69,6 +69,12 @@ class RecipeRecomputeService
     /** Pipeline für EIN Rezept — idempotent (I4), eine Transaktion (V-07). */
     public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
     {
+        // Spec 84 B4: Recompute schreibt Kosten-Cache auch auf Master-, Fassungs- und Unter-Team-Zeilen — bewusst fremd
+        \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('recompute', fn () => $this->recomputePipelineRoh($recipeId, $cascadePrices));
+    }
+
+    private function recomputePipelineRoh(int $recipeId, bool $cascadePrices = true): void
+    {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {

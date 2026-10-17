@@ -129,6 +129,12 @@ final class TeamSicht implements Scope
         return self::stufe() >= 1 ? FaTeam::imTeam($team, $fn) : $fn();
     }
 
+    /** Aktueller FA-Eingang (`seite`, `mcp`) oder null — für Protokolle (Spec 84 B4). */
+    public static function eingang(): ?string
+    {
+        return self::$eingang;
+    }
+
     /** Prozess-Merker leeren (Tests): Eingang und „schon geloggt“ je Modell. */
     public static function zuruecksetzen(): void
     {

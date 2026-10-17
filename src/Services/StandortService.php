@@ -80,8 +80,9 @@ class StandortService
         if (! FoodAlchemistOutlet::where('team_id', $oberteam->id)->where('is_inactive', false)->whereKey($outletId)->exists()) {
             throw new \RuntimeException('Kalkulationsprofil nicht gefunden — zuordnen lassen sich nur aktive Kalkulationsprofile des Oberteams.');
         }
-        FoodAlchemistTeamBetrieb::withTrashed()->updateOrCreate(['team_id' => $unterTeamId],
-            ['outlet_id' => $outletId, 'set_by' => $actor?->id, 'deleted_at' => null]);
+        // Spec 84 B4: das Oberteam pflegt die Zeile seines Unter-Teams — bewusst fremd (B2: unterteam-verwaltung)
+        \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('unterteam-verwaltung', fn () => FoodAlchemistTeamBetrieb::withTrashed()->updateOrCreate(['team_id' => $unterTeamId],
+            ['outlet_id' => $outletId, 'set_by' => $actor?->id, 'deleted_at' => null]));
     }
 
     // ── Team-Brille ──

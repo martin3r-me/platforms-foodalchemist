@@ -69,6 +69,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \Platform\FoodAlchemist\Console\LangsameAbfragenCommand::class,   // Spec 84 E-1: Auswertung fa-langsam
+                \Platform\FoodAlchemist\Console\FremdSchreibenCommand::class,   // Spec 84 B4: Auswertung fa-fremdschreiben
                 \Platform\FoodAlchemist\Console\NectaNachholenCommand::class,   // Necta-Abgleich: Einmal-Nachholer (Bauauftrag 15.10.2026)
                 \Platform\FoodAlchemist\Console\NectaAbgleichCommand::class,    // Necta-Abgleich: nächtlich + wöchentlich (PR 2)
                 \Platform\FoodAlchemist\Console\NectaDeklarationReparierenCommand::class,   // Einmal-Reparatur Deklarationen (Lauf 3, 15.10.2026)
@@ -543,6 +544,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         );
         // Spec 84 E-1: langsame Abfragen messen (aus, solange foodalchemist.leistung.langsam_ms null ist)
         \Platform\FoodAlchemist\Support\LangsameAbfragen::registrieren($this->app);
+        \Platform\FoodAlchemist\Support\FremdSchreiben::registrieren($this->app);   // Spec 84 B4: Kanal fa-fremdschreiben
 
         $this->app->terminating(function () {
             \Platform\FoodAlchemist\Support\StammPaket::flush();

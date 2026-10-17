@@ -26,6 +26,12 @@ class SignalService
      */
     public function erzeuge(Team $team, SignalTyp $typ, SignalSeverity $severity, string $titel, array $opts = []): FoodAlchemistSignal
     {
+        // Spec 84 B4: Signale gehen ausdrücklich an das übergebene Team (z. B. Fassungs-Signal an Mandanten) — bewusst fremd
+        return \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('signal', fn () => $this->erzeugeRoh($team, $typ, $severity, $titel, $opts));
+    }
+
+    private function erzeugeRoh(Team $team, SignalTyp $typ, SignalSeverity $severity, string $titel, array $opts = []): FoodAlchemistSignal
+    {
         // `title` ist VARCHAR(255) — lange Rezeptnamen (z. B. FIN-Aroma-Ketten) sprengen die Spalte
         // auf MySQL (SQLite erzwingt die Länge NICHT → in Tests unsichtbar). Defensiv kappen; der
         // volle Befund steht ohnehin in description/payload.
