@@ -58,7 +58,8 @@ class FassungsVergleich
      */
     public function zwischen(int $familieId, int $vonNr, int $nachNr): array
     {
-        return FoodAlchemistRecipe::mitFassungen()->where('ist_fassung', true)->where('fassung_von_id', $familieId)
+        // Spec 84 B3 Regel B: Zwischenfassungen sind Historie, keine Nutzung — lesbar, solange das Team die Familie sieht
+        return \Platform\FoodAlchemist\Support\AboSicht::historie(\Platform\FoodAlchemist\Support\FaTeam::aktuell(), 'recipe', $familieId)
             ->where('fassung_nr', '>', $vonNr)->where('fassung_nr', '<=', $nachNr)->orderBy('fassung_nr')->get()
             ->map(fn ($f) => ['fassung_id' => (int) $f->id, 'fassung_nr' => (int) $f->fassung_nr, 'aenderungsnotiz' => $f->aenderungsnotiz,
                 'allergen_geaendert' => (bool) $f->fassung_allergen_geaendert])->all();
