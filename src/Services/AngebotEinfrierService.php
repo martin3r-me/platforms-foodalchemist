@@ -325,15 +325,22 @@ class AngebotEinfrierService
     public function betroffeneAusgaben(FoodAlchemistAngebot $angebot, int $familieId): array
     {
         $out = [];
-        $teamIds = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $this->rechte->hauptTeam(Team::findOrFail($angebot->team_id))->id);
-        foreach (FoodAlchemistAngebot::whereIn('team_id', $teamIds)->where('id', '!=', $angebot->id)->orderBy('id')->get() as $a) {
-            $aktiv = $this->aktive($a);
-            $art = null;
-            if ($aktiv !== null && $aktiv->zeilen->contains(fn ($z) => collect($z->fassungen)->contains('fassung_von_id', $familieId))) {
-                $art = 'eingefroren';
-            } elseif ($this->positionsGerichte($a)->contains(fn ($g) => collect($this->fassungenImBaum($g))->contains('fassung_von_id', $familieId))) {
-                $art = 'live';
-            }
+        // Spec 84 B3 (Kurator 17.10.): der Teilbaum des Angebots-Teams — das Hauptteam sieht so den ganzen Mandanten, ein Unter-Team nur sich
+        // und seine Unter-Teams, NIE Geschwister (vorher: immer der ganze Mandant ab dem Hauptteam = Geschwister-Leck). Aufrufer sind Werkzeug
+        // (guardOwned) und Angebots-Editor: das Angebots-Team ist das handelnde Team. Die Sicht geht nur aufwärts, daher ohne Sichtfilter
+        // mit ausdrücklichem Team-Filter.
+        $teamIds = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $angebot->team_id);
+        foreach (FoodAlchemistAngebot::ohneTeamSicht('mandant-weit')->whereIn('team_id', $teamIds)->where('id', '!=', $angebot->id)->orderBy('id')->get() as $a) {
+            // Spec 84 B3: Gerichte und Snapshot eines Unter-Team-Angebots in der Sicht SEINES Teams prüfen (ab Stufe 1). Zurück gehen nur
+            // Kennung, Name, Status und Art — keine Inhalte des Unter-Teams.
+            $art = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $a->team_id, function () use ($a, $familieId) {
+                $aktiv = $this->aktive($a);
+                if ($aktiv !== null && $aktiv->zeilen->contains(fn ($z) => collect($z->fassungen)->contains('fassung_von_id', $familieId))) {
+                    return 'eingefroren';
+                }
+
+                return $this->positionsGerichte($a)->contains(fn ($g) => collect($this->fassungenImBaum($g))->contains('fassung_von_id', $familieId)) ? 'live' : null;
+            });
             if ($art !== null) {
                 $out[] = ['angebot_id' => (int) $a->id, 'name' => $a->name, 'status' => (string) ($a->status->value ?? $a->status), 'art' => $art];
             }
