@@ -78,8 +78,9 @@ it('★ Match-Brücke über EAN: weder Stamm-Paket ohne Opt-in noch ein FREMDER 
         ($this->map)($la, $gp);
     }
 
+    // Spec 84 E-2 (#475): die Brücke lädt nur die EANs der zu prüfenden Items — hier genau diese drei
     $bruecken = fn () => (new ReflectionMethod(MatchService::class, 'exactBruecken'))
-        ->invoke(app(MatchService::class), $this->rootTeam, $this->sup->id)[0];
+        ->invoke(app(MatchService::class), $this->rootTeam, $this->sup->id, collect([$fremdLa, $paketLa, $eigenLa]))[0];
     $eans = fn () => array_map('strval', array_keys($bruecken()));      // numerische String-Schlüssel werden zu int
 
     expect($eans())->toBe(['4000000000031']);               // nur der eigene Artikel
