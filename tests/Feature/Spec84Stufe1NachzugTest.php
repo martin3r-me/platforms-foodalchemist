@@ -136,7 +136,7 @@ it('Sweep: foodalchemist:teller-rollen findet die Gerichte von --team auch, wenn
 });
 
 it('Nachladen: KostenCache und TeamVk mit Teil-Spalten-Modell aus fremdem Kontext — Stufe 1 = Stufe 0', function () {
-    $rezept = FoodAlchemistRecipe::where('team_id', $this->a->id)->where('is_sales_recipe', true)->firstOrFail();
+    $rezept = FoodAlchemistRecipe::ohneTeamSicht('test')->where('team_id', $this->a->id)->where('is_sales_recipe', true)->firstOrFail();   // Test-Aufbau über die Teamgrenze
     $ergebnis = function (int $stufe) use ($rezept) {
         config(['foodalchemist.team_sicht.stufe' => $stufe]);
         $teil = FoodAlchemistRecipe::ohneTeamSicht('test')->select(['id', 'name'])->findOrFail($rezept->id);   // wie das Angebot: nur Teil-Spalten
