@@ -154,6 +154,13 @@ class RecipeImageService
      */
     public function uebernimmManuellesFoto(Team $team, FoodAlchemistRecipe $recipe, UploadedFile $datei, ?string $caption = null, bool $istErgebnis = false): FoodAlchemistRecipeStepPhoto
     {
+        // Spec 84: sichtbar ist nicht eigen. Ein Kaskaden-Schritt kann über „Bestand zuerst“ an ein fremdes Rezept gebunden
+        // sein (Oberteam-Rezept, Abo-Fassung des Masters); ein Foto dort legte eine Zeile am fremden Rezept an und setzte
+        // dessen Titelbild zurück. Gilt auch für uebernimmVorhandenesFoto (delegiert hierher). VOR dem Speichern der Datei.
+        if (! $recipe->isOwnedBy($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('das Rezept',
+                'Dieses Rezept gehört einem anderen Team (übernommener Bestand) – Fotos bitte am eigenen Rezept anlegen.');
+        }
         $media = app(FoodAlchemistMediaService::class)->storeImage(
             $datei,
             $team,
