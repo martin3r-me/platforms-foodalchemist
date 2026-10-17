@@ -210,9 +210,11 @@ it('Stufe 0 (a): TeamSicht hängt nichts an — SQL und Bindungen mit Scope = oh
     expect(config('foodalchemist.team_sicht.stufe'))->toBe(0);
     foreach ($this->modelle as $m) {
         foreach ([$this->a, $this->b, null] as $t) {
-            [$mit, $ohne] = FaTeam::imTeam($t, fn () => [$m::query(), $m::query()->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class)]);
-            expect([$mit->toSql(), $mit->getBindings()])->toBe([$ohne->toSql(), $ohne->getBindings()], $m);
-            expect($mit->toSql())->toContain('ist_fassung');   // OhneFassungenScope greift wie vorher
+            // Scopes werden erst beim Bauen des SQL angewandt — darum toSql() INNERHALB des Team-Rahmens
+            [$mit, $ohne] = FaTeam::imTeam($t, fn () => array_map(fn ($q) => [$q->toSql(), $q->getBindings()],
+                [$m::query(), $m::query()->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class)]));
+            expect($mit)->toBe($ohne, $m);
+            expect($mit[0])->toContain('ist_fassung');   // OhneFassungenScope greift wie vorher
         }
     }
 });
