@@ -50,6 +50,12 @@ class TellerRollenKlassifizierenCommand extends Command
         }
         Auth::login($nutzer);
 
+        // Spec 84 B3: Auth::login setzt das UI-Team des Nutzers (kann ein anderes Team sein) — gelesen wird in der Sicht von --team
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => $this->ausfuehren($team, $klassen));
+    }
+
+    private function ausfuehren(Team $team, SpeisenKlassenService $klassen): int
+    {
         $alle = (bool) $this->option('alle');
         $scope = self::scope($team, (int) $this->option('ab-id'), $alle);
         $gerichte = (clone $scope)->count();

@@ -115,3 +115,22 @@ it('Preis-Kaskade für Team A aus fremdem Kontext (B) rechnet bei Stufe 1 diesel
     expect($null['offers'])->toBe(1);
     expect($lauf(1))->toBe($null);   // Stufe 1: Rezepte von A aus B-Kontext
 });
+
+it('Sweep: foodalchemist:teller-rollen findet die Gerichte von --team auch, wenn der angemeldete Nutzer ein anderes UI-Team hat', function () {
+    $sig = (new \Platform\FoodAlchemist\Console\TellerRollenKlassifizierenCommand)->getName();
+    $gericht = $this->makeRecipe($this->u, 'Gericht U', ['is_sales_recipe' => true]);
+    $this->makeIngredient($gericht, 'Salz');
+    DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $gericht->id)->update(['role' => null]);
+    $nutzer = $this->makeUser($this->u, 'Koch U');
+    $nutzer->forceFill(['current_team_id' => $this->b->id])->save();   // UI-Team ist ein fremder Mandant
+    \Illuminate\Support\Facades\DB::table('team_user')->where('team_id', $this->u->id)->where('user_id', '!=', $nutzer->id)->delete();
+    $scope = function (int $stufe) use ($sig) {
+        config(['foodalchemist.team_sicht.stufe' => $stufe]);
+        \Illuminate\Support\Facades\Artisan::call($sig, ['--team' => $this->u->id]);
+        preg_match('/Scope: (\d+) Gerichte/', \Illuminate\Support\Facades\Artisan::output(), $m);
+
+        return (int) ($m[1] ?? -1);
+    };
+    $null = $scope(0);
+    expect($null)->toBeGreaterThan(0)->and($scope(1))->toBe($null);
+});
