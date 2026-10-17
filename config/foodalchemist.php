@@ -890,6 +890,15 @@ return [
     ],
 
     /*
+     * Spec 84 B4: Schreiben auf fremde Zeilen (Modell-Ereignis saving/deleting). `modus` = aus | log | werfen; „werfen“ verhält sich in
+     * diesem Ausbau wie „log“ (Werfen erst nach einer sauberen io-Woche, eigener PR). Kanal `fa-fremdschreiben` (täglich, 14 Tage, JSON),
+     * Auswertung `php artisan foodalchemist:fremd-schreiben --tage=7`. Auf io: log.
+     */
+    'fremd_schreiben' => [
+        'modus' => env('FOODALCHEMIST_FREMD_SCHREIBEN', 'aus'),
+    ],
+
+    /*
      * Spec 84 B3: automatischer Sichtfilter (Global Scope TeamSicht). `stufe` 0 = aus (Standard), 1 = Abo-Typen (Rezept, Paket,
      * Konzept, Format). Mit Stufe ≥ 1 läuft auch der Abo-Zweig als Menge statt OR. Einschalten auf io erst mit E-1-Vorher-Werten.
      * `ohne_kontext`: an einem FA-Eingang (Seite, MCP-Tool) ohne Team → `werfen` (TeamKontextFehltException) oder Notschalter `leer`.

@@ -95,6 +95,9 @@ trait BelongsToTeamHierarchy
                 static::addGlobalScope(new \Platform\FoodAlchemist\Models\Scopes\TeamSicht);
             }
         }
+        // Spec 84 B4: Schreiben auf fremde Zeilen protokollieren (nie werfen in diesem Ausbau), siehe FremdSchreiben
+        static::saving(fn ($model) => \Platform\FoodAlchemist\Support\FremdSchreiben::pruefe($model, 'speichern'));
+        static::deleting(fn ($model) => \Platform\FoodAlchemist\Support\FremdSchreiben::pruefe($model, 'loeschen'));
         if (! defined(static::class . '::STAMM_KLASSE')) {
             return;
         }
