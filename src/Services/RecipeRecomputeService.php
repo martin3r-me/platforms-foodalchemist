@@ -69,25 +69,12 @@ class RecipeRecomputeService
     /** Pipeline für EIN Rezept — idempotent (I4), eine Transaktion (V-07). */
     public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
     {
-        // Spec 84 B3 C: Recompute läuft auch auf Master- und Fremdzeilen (Kosten-Cache, Fassungen) — gelesen wird in der Sicht
-        // des Rezept-Teams. Nur mit eingeschaltetem Sichtfilter; bei Stufe 0 keine Zusatzabfrage.
-        if (\Platform\FoodAlchemist\Models\Scopes\TeamSicht::stufe() >= 1) {
-            $tid = DB::table('foodalchemist_recipes')->where('id', $recipeId)->value('team_id');
-            if ($tid !== null && (int) $tid !== \Platform\FoodAlchemist\Support\FaTeam::aktuellIdOhneAbfrage()) {
-                \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm((int) $tid, fn () => $this->recomputePipelineImTeam($recipeId, $cascadePrices));
-
-                return;
-            }
-        }
-        $this->recomputePipelineImTeam($recipeId, $cascadePrices);
-    }
-
-    private function recomputePipelineImTeam(int $recipeId, bool $cascadePrices): void
-    {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {
-            $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)   // Spec 82: auch Fassungen (ohne Kosten)
+            // Spec 82: auch Fassungen (ohne Kosten). Spec 84 B3: Recompute rechnet auch Master-, Fassungs- und Unter-Team-Zeilen
+            // (Kosten-Cache) — das Rezept wird über die Teamgrenze geladen, ohne Zusatzabfrage (V-049 zählt die Läufe)
+            $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('recompute')
                 ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
@@ -270,7 +257,7 @@ class RecipeRecomputeService
      */
     public function recomputeAll(): array
     {
-        $ids = FoodAlchemistRecipe::pluck('id')->all();
+        $ids = FoodAlchemistRecipe::ohneTeamSicht('recompute')->pluck('id')->all();   // Spec 84 B3: „alle“ heißt alle Teams
         $kanten = FoodAlchemistRecipeIngredient::whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
             ->distinct()->get(['recipe_id', 'referenced_recipe_id']);
 
@@ -741,7 +728,8 @@ class RecipeRecomputeService
             throw new \RuntimeException('Zyklus in den Unter-Rezepten — Kosten nicht berechenbar.');
         }
         $pfad[$recipeId] = true;
-        $recipe = FoodAlchemistRecipe::mitFassungen()->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+        $recipe = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('recompute')   // Spec 84 B3: Kosten folgen den Verweisen über die Teamgrenze
+            ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
             ->findOrFail($recipeId);
         $zutaten = $this->aggregationsZutaten($recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored));
 
