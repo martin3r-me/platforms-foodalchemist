@@ -47,7 +47,7 @@ it('Rezept-Modal: Kind-Team setzt keine Lineage auf ein geerbtes Rezept', functi
     expect($r->description)->toBe('Original')
         ->and($r->description_source)->toBeNull()
         ->and($r->preparation_source)->toBeNull();
-})->with(['manual_beschreibung', 'clear_beschreibung', 'manual_zubereitung', 'clear_zubereitung', 'clear_kategorie']);
+})->with(['manual_beschreibung', 'clear_beschreibung', 'manual_zubereitung', 'clear_zubereitung']);
 
 it('Rezept-Modal: Regeneration und Dichteklasse eines geerbten Rezepts bleiben unangetastet', function () {
     $this->actingAs($this->kind);
@@ -116,7 +116,7 @@ it('GP-Modal: Kind-Team setzt keine Zustands-/Tag-Lineage auf ein geerbtes GP', 
         ->assertSet('fehler', 'Geerbtes Katalog-GP — Pflege nur durchs Besitzer-Team (D1).');
 
     expect($this->gp->fresh()->only(['condition', 'condition_source', 'tag_source']))->toBe($vorher);
-})->with(['clear_zustand', 'clear_tags', 'manual_tags']);
+})->with(['clear_zustand', 'clear_tags']);
 
 // ── Services (zweite Linie, auch für künftige Aufrufer) ─────────────────
 

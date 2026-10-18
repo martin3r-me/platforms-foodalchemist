@@ -507,21 +507,6 @@ class RecipeModal extends Component
         }
     }
 
-    public function clear_kategorie(): void
-    {
-        if ($this->setzeFeld('category', null) !== null) {
-            $this->form['category_id'] = null;
-            unset($this->kiVorschlag['category']);
-        }
-    }
-
-    public function manual_kategorie(): void
-    {
-        if ($this->form['category_id'] !== null) {
-            $this->setzeFeld('category', 'manual', $this->form['category_id']);
-        }
-    }
-
     /**
      * Spec 84 C5 · Lineage-Feld über {@see RecipeService::setzeFeld} schreiben (derselbe Weg wie MCP). Der Service prüft
      * Eigentum, Override-First und Referenzen; seine Abweisung landet als Meldung im Modal. null = abgewiesen.

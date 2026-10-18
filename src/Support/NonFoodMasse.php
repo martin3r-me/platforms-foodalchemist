@@ -22,14 +22,6 @@ final class NonFoodMasse
         return self::zahl($mm / 10);
     }
 
-    /** „27“ / „7,5“ / „7.5“ → mm; leer/ungültig → null. */
-    public static function mmAusCm(mixed $eingabe): ?float
-    {
-        $zahl = self::lese($eingabe);
-
-        return $zahl === null ? null : round($zahl * 10, 1);
-    }
-
     /** „212“ / „1,5“ → ml (nur ml; Eingabe in l geht über volumenAusText). */
     public static function lese(mixed $eingabe): ?float
     {

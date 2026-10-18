@@ -73,11 +73,6 @@ class TokenEngine
         return $this->tokenize($this->normalisiereEinkaufsform($name));
     }
 
-    public function wantsCanned(string $name): bool
-    {
-        return preg_match('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b|\bdosentomaten?\b/iu', $name) === 1;
-    }
-
     /**
      * §9-Zustandswörter aus freiem Text — Wort-Boundary wie GpZustandBackfillCommand::MUSTER
      * (dieselbe Quelle: Regelwerk_Grundprodukte.md §9 „frisch, tiefgekuehlt (TK), trocken,

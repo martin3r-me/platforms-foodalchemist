@@ -171,21 +171,6 @@ class RecipeExtractService
         return $result;
     }
 
-    /**
-     * Extrahiert reinen Text aus einem (text-basierten) PDF via smalot/pdfparser. Scan-/Bild-PDFs
-     * liefern (fast) keinen Text → Hinweis; der Import-Tab nimmt dafür {@see ausPdf} (Scan → KI).
-     */
-    public function pdfText(string $pfad): string
-    {
-        $text = trim((new \Smalot\PdfParser\Parser())->parseFile($pfad)->getText());
-        if (mb_strlen($text) < 20) {
-            throw new \RuntimeException('Aus diesem PDF ließ sich kaum Text lesen — vermutlich ein Scan/Bild-PDF. '
-                . 'Im Import-Reiter der Planung werden Scans als Bild gelesen (OpenAI-Weg).');
-        }
-
-        return $text;
-    }
-
     /** Findet in $zutaten die Zeile, deren Text zum Komponenten-Namen passt (normalisiert). */
     private function findeZeileNachName(array $zutaten, string $name): ?int
     {
