@@ -216,6 +216,7 @@
                         <tr class="border-t border-[var(--fa-line-strong)]">
                             <td colspan="9" class="text-right text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                                 Summe ca. (genutztes Modell × offizielle Listenpreise, {{ $kostenWaehrung }}, ohne Steuer)
+                                @if($kursZeile ?? null)<span class="block" data-ki-kurs>{{ $kursZeile }}</span>@endif
                                 @if($kostenUnbekannt > 0)
                                     <span class="block text-[var(--fa-warn)]">{{ $kostenUnbekannt }} {{ $kostenUnbekannt === 1 ? 'Zeile' : 'Zeilen' }} ohne bekannten Preis nicht enthalten</span>
                                 @endif

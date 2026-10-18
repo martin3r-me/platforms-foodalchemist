@@ -483,6 +483,9 @@ return [
         'kanon_sicherung_zeit' => env('FOODALCHEMIST_KANON_SICHERUNG_ZEIT', '06:50'),
         // Spec 84 B3 Regel B: nächtliches Nachführen der Abo-Hüllen (vor Gebühren 02:10 und Necta 02:30).
         'abo_huelle_zeit' => env('FOODALCHEMIST_ABO_HUELLE_ZEIT', '01:40'),
+        // KI-Kosten: EZB-Tageskurs (veröffentlicht ~16:00 MEZ), Uhrzeit in Europe/Berlin
+        'wechselkurs_aktiv' => env('FOODALCHEMIST_WECHSELKURS', true),
+        'wechselkurs_zeit' => env('FOODALCHEMIST_WECHSELKURS_ZEIT', '16:30'),
     ],
 
     'stt' => [
