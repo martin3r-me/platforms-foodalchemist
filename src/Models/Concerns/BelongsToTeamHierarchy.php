@@ -79,8 +79,11 @@ trait BelongsToTeamHierarchy
             });
         }
 
-        return $query->where(function (Builder $q) use ($col, $team) {
-            $q->whereNull($col)->orWhereIn($col, self::teamAncestryIds($team));
+        // Spec 84 B3 Stufe 4: Vokabular/Einstellungen nur bis zur Kundengrenze (erst ab Schalter 4, siehe TeamSicht::kette)
+        $kette = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(static::class, self::teamAncestryIds($team));
+
+        return $query->where(function (Builder $q) use ($col, $kette) {
+            $q->whereNull($col)->orWhereIn($col, $kette);
         });
     }
 

@@ -222,7 +222,8 @@ class TeamSettingsService
      */
     private function ahnenZeilen(Team $team): array
     {
-        $kette = FoodAlchemistTeamSetting::teamAncestryIds($team);   // [self, parent, …, root]
+        // [self, parent, …, root]; Spec 84 B3 Stufe 4: ab Schalter 4 nur bis zur Kundengrenze (nie die Einstellungen des Masters)
+        $kette = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(FoodAlchemistTeamSetting::class, FoodAlchemistTeamSetting::teamAncestryIds($team));
         $rows = FoodAlchemistTeamSetting::whereIn('team_id', $kette)->get()->keyBy('team_id');
 
         return array_values(array_filter(array_map(fn ($tid) => $rows->get($tid), $kette)));

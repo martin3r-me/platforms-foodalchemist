@@ -82,6 +82,42 @@ final class TeamSicht implements Scope
         ],
     ];
 
+    /**
+     * Kappung Stufe 4 (Kurator 18.10., Vorbedingung Einschalten): für Vokabular/Einstellungen endet die Kette an der Kundengrenze
+     * (kundenHauptTeam, wie DnaResolver::teamIds) — ein Mandant unter dem Master sieht nie dessen Einstellungen, Aufschlagsklassen,
+     * Vorlagen. Greift erst mit Schalter >= 4 und nur für STUFEN[4]; sonst unverändert die volle Kette.
+     *
+     * @param  list<int>  $kette  eigenes Team zuerst … Wurzel
+     * @return list<int>
+     */
+    public static function kette(string $modelKlasse, array $kette): array
+    {
+        return self::stufe() >= 4 && in_array($modelKlasse, self::STUFEN[4], true) ? self::gekappt($kette) : $kette;
+    }
+
+    /** Wie {@see kette()}, für rohe Abfragen über den Tabellennamen (TeamScope::applyVisible, Services mit eigener Ketten-Abfrage). */
+    public static function ketteFuerTabelle(string $tabelle, array $kette): array
+    {
+        if (self::stufe() < 4) {
+            return $kette;
+        }
+        self::$stufe4Tabellen ??= array_map(fn (string $m) => (new $m)->getTable(), self::STUFEN[4]);
+
+        return in_array($tabelle, self::$stufe4Tabellen, true) ? self::gekappt($kette) : $kette;
+    }
+
+    /** @param list<int> $kette @return list<int> Kette bis einschließlich Kunden-Hauptteam; der Master selbst behält seine Kette */
+    public static function gekappt(array $kette): array
+    {
+        $grenze = \Platform\FoodAlchemist\Support\AboSicht::kundenHauptTeamId($kette);
+        $pos = $grenze === null ? false : array_search($grenze, $kette, true);
+
+        return $pos === false ? $kette : array_slice($kette, 0, $pos + 1);
+    }
+
+    /** @var list<string>|null */
+    private static ?array $stufe4Tabellen = null;
+
     /** Aktueller FA-Eingang (`seite`, `mcp`) mit angemeldetem Nutzer — nur dort ist fehlender Kontext ein Fehler. */
     private static ?string $eingang = null;
 
