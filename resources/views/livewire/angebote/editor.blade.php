@@ -430,6 +430,17 @@
                             <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 {{ $haken }}" />
                             <span>Textkapitel <span class="{{ $hinweis }}">ohne eigenes Essen, etwa Einleitung oder Überschrift. Kennzahlen kommen dann nur aus den Unterkapiteln.</span></span>
                         </label>
+                        @if($kapitel->format_id !== null)
+                            @php $fpm = $kapitel->format_price_mode ?? 'additiv'; @endphp
+                            <x-fa::field label="Preis des Formats" for="ang-kap-formatpreis" class="max-w-md" data-angebot-formatpreis
+                                hint="Alternativen: der Gast wählt eine Variante, das Angebot zeigt die Spanne von–bis.">
+                                <x-fa::select id="ang-kap-formatpreis" wire:key="fpm-{{ $kapitel->id }}-{{ $fpm }}"
+                                    wire:change="formatPreisModus({{ $kapitel->id }}, $event.target.value)">
+                                    <option value="additiv" @selected($fpm === 'additiv')>Summe aller Teile</option>
+                                    <option value="alternativen" @selected($fpm === 'alternativen')>Alternativen (von–bis)</option>
+                                </x-fa::select>
+                            </x-fa::field>
+                        @endif
                     </x-fa::section>
 
                     {{-- Inhalt (Block-Liste) — die häufigste Arbeit im Aufbau --}}
