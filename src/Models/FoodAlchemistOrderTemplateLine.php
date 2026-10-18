@@ -39,7 +39,7 @@ class FoodAlchemistOrderTemplateLine extends Model
 
     public function template(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistOrderTemplate::class, 'order_template_id');
+        return $this->belongsTo(FoodAlchemistOrderTemplate::class, 'order_template_id')->ohneTeamSicht('verweis');
     }
 
     public function gp(): BelongsTo

@@ -58,6 +58,7 @@ final class TeamSicht implements Scope
             \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistServierform::class,
@@ -67,13 +68,17 @@ final class TeamSicht implements Scope
             \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class,
-            \Platform\FoodAlchemist\Models\FoodAlchemistOutletSetting::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistRule::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistCanvasTemplate::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistLabelTemplate::class,
+            // Inhalte ohne Freigabe-Hülle (Kurator 18.10.): Kalkulation (Preise/Margen) und Bestellvorlage — eigenes Team + Kette bis zur
+            // Kundengrenze, Master-Zeilen nie beim Mandanten. Fachlich Stufe 2; hier geführt, damit sie erst mit Stufe 4 scharf werden
+            // (io steht dann schon auf Stufe 3 — ein Eintrag in STUFEN[2] wäre mit dem Merge sofort live). Kind-Tabellen (Position/Zeile) nie.
+            \Platform\FoodAlchemist\Models\FoodAlchemistKalkulation::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistOrderTemplate::class,
         ],
     ];
 

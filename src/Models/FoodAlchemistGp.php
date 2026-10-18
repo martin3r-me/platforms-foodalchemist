@@ -112,12 +112,12 @@ class FoodAlchemistGp extends Model
 
     public function commodity_group(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistLookupWarengruppe::class, 'commodity_group_code', 'code');
+        return $this->belongsTo(FoodAlchemistLookupWarengruppe::class, 'commodity_group_code', 'code')->ohneTeamSicht('verweis');
     }
 
     public function preferredCountUnit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'preferred_count_unit_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'preferred_count_unit_id')->ohneTeamSicht('verweis');
     }
 
     public function derivedFrom(): BelongsTo

@@ -266,5 +266,5 @@ it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen das
             $geprueft++;
         }
     }
-    expect($geprueft)->toBe(93);   // 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant)
+    expect($geprueft)->toBe(133);   // 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant) + 40 der Stufe 4 (Vokabular/Einstellungen; HatAusgabeZuordnung liegt in Concerns/)
 });

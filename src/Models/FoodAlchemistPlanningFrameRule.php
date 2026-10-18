@@ -49,6 +49,6 @@ class FoodAlchemistPlanningFrameRule extends Model
 
     public function season(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSaison::class, 'ref_id');
+        return $this->belongsTo(FoodAlchemistSaison::class, 'ref_id')->ohneTeamSicht('verweis');
     }
 }

@@ -158,7 +158,7 @@ class FoodAlchemistConcept extends Model
     /** Organisatorische Kategorie (M10c-B, Baum). */
     public function category(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConceptCategory::class, 'category_id');
+        return $this->belongsTo(FoodAlchemistConceptCategory::class, 'category_id')->ohneTeamSicht('verweis');
     }
 
     /** Schreibstil am Concept (M10R-1, §10.8) — Foodbook kann ihn überschreiben. */
@@ -178,7 +178,7 @@ class FoodAlchemistConcept extends Model
     /** Servierform (einfach) — Scharnier zur Darreichungs-Auflösung der Slots. */
     public function servingForm(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → servingForm() */
@@ -190,7 +190,7 @@ class FoodAlchemistConcept extends Model
     /** Eventtyp (einfach). */
     public function eventType(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id');
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → eventType() */
