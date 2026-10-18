@@ -1853,15 +1853,16 @@ class DataQualityService
     /** VK-Gerichte, deren Standard-Darreichung auf der Servierform „unbestimmt" steht. */
     private function unbestimmteServierform(Team $team): int
     {
-        $unbId = FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
-        if ($unbId === null) {
+        // F2 (unique je Team): „unbestimmt“ kann global UND als Mandanten-Kopie existieren → alle sichtbaren
+        $unbIds = FoodAlchemistServierform::visibleToTeam($team)->where('code', 'unbestimmt')->pluck('id')->all();
+        if ($unbIds === []) {
             return 0;
         }
 
         return $this->rezepte($team, true)
             ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipe_presentations as p')
                 ->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
-                ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at'))
+                ->whereIn('p.serving_form_id', $unbIds)->where('p.is_standard', true)->whereNull('p.deleted_at'))
             ->count();
     }
 
@@ -1972,14 +1973,14 @@ class DataQualityService
             case 'vk_anker_fehlt':
                 return [$this->rezepte($team, true)->whereNotExists($this->rezeptHatAnker()), 'recipe'];
             case 'vk_servierform_unbestimmt':
-                $unbId = FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
-                if ($unbId === null) {
+                $unbIds = FoodAlchemistServierform::visibleToTeam($team)->where('code', 'unbestimmt')->pluck('id')->all();
+                if ($unbIds === []) {
                     return [null, 'recipe'];
                 }
 
                 return [$this->rezepte($team, true)->whereExists(fn ($x) => $x->select(DB::raw(1))
                     ->from('foodalchemist_recipe_presentations as p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
-                    ->where('p.serving_form_id', $unbId)->where('p.is_standard', true)->whereNull('p.deleted_at')), 'recipe'];
+                    ->whereIn('p.serving_form_id', $unbIds)->where('p.is_standard', true)->whereNull('p.deleted_at')), 'recipe'];
             case 'ri_gemini_unverifiziert':
                 return [FoodAlchemistRecipe::visibleToTeam($team)->whereExists(fn ($q) => $q->select(DB::raw(1))
                     ->from('foodalchemist_recipe_ingredients as ri')->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')

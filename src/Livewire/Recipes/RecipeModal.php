@@ -822,7 +822,8 @@ class RecipeModal extends Component
             $vorschlag = $ki->propose('recipe.equipment', [
                 'name' => $this->form['name'],
                 'equipment_slugs' => [],
-                'vokabular' => FoodAlchemistVocabKochequipment::pluck('slug')->all(),
+                // F2 (unique je Team): nur das sichtbare Equipment — sonst stünden fremde Mandanten-Kopien im Vokabular
+                'vokabular' => FoodAlchemistVocabKochequipment::visibleToTeam(Auth::user()?->currentTeamRelation)->pluck('slug')->unique()->values()->all(),
                 'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
             ]);
         } catch (\RuntimeException $e) {
@@ -832,7 +833,9 @@ class RecipeModal extends Component
         }
         $slugs = array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string');
         if ($slugs !== []) {
-            $ids = FoodAlchemistVocabKochequipment::whereIn('slug', $slugs)
+            // je Slug EINE Zeile: die eigene vor der geerbten/globalen (seit F2 kann derselbe Slug je Team existieren)
+            $ids = FoodAlchemistVocabKochequipment::visibleToTeam(Auth::user()?->currentTeamRelation)->whereIn('slug', $slugs)
+                ->orderByRaw('team_id IS NULL')->orderByDesc('team_id')->get(['id', 'slug'])->unique('slug')
                 ->pluck('id')->map(fn ($i) => (string) $i)->all();
             $this->form['equipment_ids'] = array_values(array_unique([...$this->form['equipment_ids'], ...$ids]));
         }
