@@ -214,6 +214,13 @@ abstract class NectaLaufBasis
         if ($art === 'preise' && DB::table('foodalchemist_prices')->where('legacy_id', $zeile['legacy_id'])->exists()) {
             return;   // Preiszeile schon da (legacy_id global unique)
         }
+        // Allergene/Deklaration/Nährwerte: EINE Zeile je Artikel (Unique supplier_item_id) — auch gelöschte und ohne legacy_id zählen.
+        // Absturz Vollauf 18.10. (1062 auf item_allergens): Necta lieferte den Artikel doppelt bzw. die Zeile kam nicht aus Necta.
+        if ($art !== 'preise' && DB::table($tabelle)->where('supplier_item_id', $faArtikelId)->exists()) {
+            $this->zaehler["{$art}_schon_da"] = ($this->zaehler["{$art}_schon_da"] ?? 0) + 1;
+
+            return;
+        }
         $this->zaehler[$zaehlKey]++;
         $this->beispiel($art, $zeile);
         if ($this->probe) {
