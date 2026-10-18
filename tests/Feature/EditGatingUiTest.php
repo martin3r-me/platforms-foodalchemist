@@ -12,6 +12,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Plattform-Basis 18.10.: nur der Master legt Einheiten an (global)
     app(VocabularyService::class)->createEinheit($this->rootTeam, ['slug' => 'stk', 'display_de' => 'Stück']);
 });
 
@@ -25,6 +26,7 @@ function renderEinheitenView($testCase): string
         'includeInactive' => false,
         'neu' => ['slug' => '', 'display_de' => '', 'dimension' => '', 'default_in_g' => '', 'default_in_ml' => '', 'sort_order' => 50],
         'form' => [],
+        'plattformPflege' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster(auth()->user()->currentTeamRelation),
     ])->render();
 }
 
@@ -36,7 +38,8 @@ it('Kind-User sieht für geerbte Einheiten KEINE Edit-Buttons, nur die geerbt-Pi
     expect($html)->toContain('data-unit-aktionen="readonly"')
         ->and($html)->not->toContain('data-unit-aktionen="edit"')
         ->and($html)->toContain('geerbt')
-        ->and($html)->not->toContain('wire:click="edit(');
+        ->and($html)->not->toContain('wire:click="edit(')
+        ->and($html)->not->toContain('data-unit-neu');   // kein Anlegen für Mandanten
 });
 
 it('Besitzer-User sieht die Edit-Buttons', function () {
@@ -46,5 +49,6 @@ it('Besitzer-User sieht die Edit-Buttons', function () {
 
     expect($html)->toContain('data-unit-aktionen="edit"')
         ->and($html)->toContain('wire:click="edit(')
-        ->and($html)->not->toContain('data-unit-aktionen="readonly"');
+        ->and($html)->not->toContain('data-unit-aktionen="readonly"')
+        ->and($html)->toContain('data-unit-neu');
 });

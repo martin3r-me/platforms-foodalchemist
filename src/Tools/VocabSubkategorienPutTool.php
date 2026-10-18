@@ -18,7 +18,7 @@ class VocabSubkategorienPutTool extends FoodAlchemistTool implements ToolContrac
 
     public function getDescription(): string
     {
-        return 'Benennt eine Sub-Kategorie um (warengruppe_code, alt, neu). Gibt die Anzahl angepasster GPs zurück.';
+        return 'Benennt eine Sub-Kategorie um (warengruppe_code, alt, neu). Nur Master-Team (Plattform-Basis). Gibt die Anzahl angepasster GPs zurück.';
     }
 
     public function getSchema(): array
@@ -50,7 +50,10 @@ class VocabSubkategorienPutTool extends FoodAlchemistTool implements ToolContrac
         try {
             $count = app(VocabularyService::class)->renameSubCategory($team, $code, $alt, $neu);
         } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            // Plattform-Basis: Mandanten legen keine Einheiten/Warengruppen/Sub-Kategorien an (Typ, nicht Wortlaut)
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+
+            return ToolResult::error($e->getMessage(), $code);
         }
 
         return ToolResult::success(['warengruppe_code' => $code, 'alt' => $alt, 'neu' => $neu, 'angepasste_gps' => (int) $count]);

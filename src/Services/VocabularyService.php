@@ -54,18 +54,40 @@ class VocabularyService
                 || mb_strtolower((string) $e->display_de) === $gesucht);
     }
 
+    /**
+     * Plattform-Basis (Entscheid Dominique 18.10.): Einheiten, Warengruppen und ihre Sub-Kategorien sind globale Plattform-Sprache —
+     * globale GPs und abonnierte Master-Rezepte zeigen auf dieselben Zeilen. Anlegen, Umbenennen, Sortieren nur das Master-Team,
+     * und zwar global (team_id NULL). Mandanten lesen nur.
+     */
+    private function nurPlattformPflege(Team $team, string $was): void
+    {
+        if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException(
+                $was, "{$was} sind Plattform-Sprache und werden zentral vom Master-Team gepflegt."
+            );
+        }
+    }
+
+    /** Globale Sub-Kategorie-Zeilen plus Master-Reste vor dem Umzug (plattform-basis-heben) — eine Liste, keine zweite globale Kopie. */
+    private function basisSubZeilen(Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        return FoodAlchemistWarengruppeSubkategorie::ohneTeamSicht('master-kuration')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id));
+    }
+
     public function createEinheit(Team $team, array $input): FoodAlchemistVocabEinheit
     {
+        $this->nurPlattformPflege($team, 'Einheiten');
         $slug = Str::slug($input['slug'] ?? $input['display_de'] ?? '');
         if ($slug === '') {
             throw new RuntimeException('Einheit braucht einen Slug.');
         }
         if (FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', $slug)->exists()) {
-            throw new RuntimeException("Slug [{$slug}] existiert bereits in der Team-Kette."); // V-06
+            throw new RuntimeException("Slug [{$slug}] existiert bereits."); // V-06
         }
 
         return FoodAlchemistVocabEinheit::create([
-            'team_id' => $team->id,
+            'team_id' => null,
             'slug' => $slug,
             'display_de' => ($input['display_de'] ?? '') ?: $slug,
             'dimension' => ($input['dimension'] ?? '') ?: null,
@@ -138,12 +160,13 @@ class VocabularyService
     }
 
     /**
-     * Eigene Warengruppe anlegen (team-eigen). Code = bereinigter Vorgabe-Code oder
-     * Slug der Bezeichnung (≤8 Z., GROSS), team-eindeutig. Custom-WG haben keine
-     * §8-Pflichtangaben/Necta-Regel (reine Team-Klassifikation, Regelwerk §3 v3.4).
+     * Warengruppe anlegen — nur Master, global (Plattform-Basis 18.10.). Code = bereinigter Vorgabe-Code oder
+     * Slug der Bezeichnung (≤8 Z., GROSS), eindeutig gegen die globalen Zeilen (und Master-Reste vor dem Umzug).
+     * Zusätzliche WG haben keine §8-Pflichtangaben/Necta-Regel (Regelwerk §3 v3.4).
      */
     public function createWarengruppe(Team $team, string $name, ?string $code = null): FoodAlchemistLookupWarengruppe
     {
+        $this->nurPlattformPflege($team, 'Warengruppen');
         $name = trim($name);
         if ($name === '') {
             throw new RuntimeException('Warengruppe braucht einen Namen.');
@@ -155,14 +178,16 @@ class VocabularyService
         $code = mb_substr($code, 0, 8);
         $basis = $code;
         $i = 2;
-        while (FoodAlchemistLookupWarengruppe::where('team_id', $team->id)->where('code', $code)->exists()) {
+        $basisZeilen = fn () => FoodAlchemistLookupWarengruppe::ohneTeamSicht('eindeutigkeit')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id));
+        while ($basisZeilen()->where('code', $code)->exists()) {
             $suffix = (string) $i++;
             $code = mb_substr($basis, 0, max(1, 8 - mb_strlen($suffix))).$suffix;
         }
-        $maxSort = FoodAlchemistLookupWarengruppe::where('team_id', $team->id)->max('sort_order');
+        $maxSort = $basisZeilen()->max('sort_order');
 
         return FoodAlchemistLookupWarengruppe::create([
-            'team_id' => $team->id,
+            'team_id' => null,
             'code' => $code,
             'name' => $name,
             'sort_order' => (int) $maxSort + 1,
@@ -274,32 +299,34 @@ class VocabularyService
         if ($warengruppeCode === '') {
             throw new RuntimeException('Erst eine Warengruppe wählen.');
         }
-        $vorhanden = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+        $this->nurPlattformPflege($team, 'Sub-Kategorien');
+        $vorhanden = $this->basisSubZeilen($team)
             ->where('commodity_group_code', $warengruppeCode)->where('name', $name)->exists();
         if ($vorhanden) {
             throw new RuntimeException('Diese Sub-Kategorie gibt es in der Warengruppe schon.');
         }
-        $maxPos = FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+        $maxPos = $this->basisSubZeilen($team)
             ->where('commodity_group_code', $warengruppeCode)->max('position');
 
         return FoodAlchemistWarengruppeSubkategorie::create([
-            'team_id' => $team->id,
+            'team_id' => null,
             'commodity_group_code' => $warengruppeCode,
             'name' => $name,
             'position' => (int) $maxPos + 1,
         ]);
     }
 
-    /** Rename propagiert auf die GPs (AT-D1-03) — via D-3-Service, nur eigene Zeilen. */
+    /** Rename propagiert auf die GPs (AT-D1-03) — via D-3-Service; nur Master (Plattform-Basis), zieht globale + Master-GPs mit. */
     public function renameSubCategory(Team $team, string $warengruppeCode, string $alt, string $neu): int
     {
         $neu = trim($neu);
         if ($neu === '') {
             throw new RuntimeException('Neuer Sub-Kategorie-Name darf nicht leer sein.');
         }
+        $this->nurPlattformPflege($team, 'Sub-Kategorien');
 
         // #371: verwalteten Eintrag mitziehen, damit Liste und GP-Werte synchron bleiben.
-        FoodAlchemistWarengruppeSubkategorie::where('team_id', $team->id)
+        $this->basisSubZeilen($team)
             ->where('commodity_group_code', $warengruppeCode)->where('name', $alt)
             ->update(['name' => $neu]);
 
@@ -317,15 +344,15 @@ class VocabularyService
      *
      * `$namesInOrder` ist die vollständige, angezeigte Reihenfolge — inkl. bislang unverwalteter
      * GP-Freitextwerte. Da nur verwaltete Einträge eine `position` speichern können, werden
-     * Freitextwerte beim ersten Umsortieren team-lokal materialisiert (die GPs selbst bleiben
-     * unberührt — `n` zählt weiter aus dem Bestand). Nur eigene Zeilen (isOwnedBy) werden
-     * geschrieben; geerbte/globale Einträge bekommen bei Bedarf eine team-lokale Ordnung.
+     * Freitextwerte beim ersten Umsortieren als globale Einträge materialisiert (die GPs selbst bleiben
+     * unberührt — `n` zählt weiter aus dem Bestand). Nur Master (Plattform-Basis 18.10.), schreibt global.
      */
     public function reorderSubCategories(Team $team, string $warengruppeCode, array $namesInOrder): void
     {
         if ($warengruppeCode === '') {
             return;
         }
+        $this->nurPlattformPflege($team, 'Sub-Kategorien');
 
         DB::transaction(function () use ($team, $warengruppeCode, $namesInOrder) {
             $pos = 0;
@@ -335,8 +362,7 @@ class VocabularyService
                     continue;
                 }
 
-                $row = FoodAlchemistWarengruppeSubkategorie::withTrashed()
-                    ->where('team_id', $team->id)
+                $row = $this->basisSubZeilen($team)->withTrashed()
                     ->where('commodity_group_code', $warengruppeCode)
                     ->where('name', $name)
                     ->first();
@@ -348,7 +374,7 @@ class VocabularyService
                     $row->update(['position' => $pos]);
                 } else {
                     FoodAlchemistWarengruppeSubkategorie::create([
-                        'team_id' => $team->id,
+                        'team_id' => null,
                         'commodity_group_code' => $warengruppeCode,
                         'name' => $name,
                         'position' => $pos,

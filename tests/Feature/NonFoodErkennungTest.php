@@ -149,17 +149,28 @@ it('KI-Stapel: ein roter Call lässt die Prüfliste unverändert', function () {
     expect(FoodAlchemistSupplierItemNonfood::where('supplier_item_id', $a->id)->first())->toMatchArray(['ist_nonfood' => null, 'pruefung_offen' => true]);
 });
 
-it('Einrichten: Warengruppe 16 und sieben Unterkategorien, Trockenlauf schreibt nichts, zweiter Lauf ändert nichts', function () {
-    $trocken = $this->svc->einrichten($this->rootTeam, false);
+it('Einrichten: Warengruppe 16 und sieben Unterkategorien global, Trockenlauf schreibt nichts, zweiter Lauf ändert nichts', function () {
+    $trocken = $this->svc->einrichten(false);
     expect($trocken['wg_angelegt'])->toBeTrue()->and($trocken['unterkategorien_angelegt'])->toHaveCount(7)
         ->and(FoodAlchemistLookupWarengruppe::where('code', '16')->count())->toBe(0);
 
-    $this->svc->einrichten($this->rootTeam, true);
-    $zweiter = $this->svc->einrichten($this->rootTeam, true);
+    $this->svc->einrichten(true);
+    $zweiter = $this->svc->einrichten(true);
 
-    expect(FoodAlchemistLookupWarengruppe::where('team_id', $this->rootTeam->id)->where('code', '16')->count())->toBe(1)
-        ->and(FoodAlchemistWarengruppeSubkategorie::where('team_id', $this->rootTeam->id)->where('commodity_group_code', '16')->count())->toBe(7)
+    expect(FoodAlchemistLookupWarengruppe::where('code', '16')->count())->toBe(1)
+        ->and(FoodAlchemistLookupWarengruppe::where('code', '16')->value('team_id'))->toBeNull()   // Plattform-Basis 18.10.
+        ->and(FoodAlchemistWarengruppeSubkategorie::whereNull('team_id')->where('commodity_group_code', '16')->count())->toBe(7)
         ->and($zweiter['wg_angelegt'])->toBeFalse()->and($zweiter['unterkategorien_angelegt'])->toBe([]);
+});
+
+it('Einrichten: liegt WG 16 noch im Master-Team (vor dem Umzug), entsteht keine zweite', function () {
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    FoodAlchemistLookupWarengruppe::create(['team_id' => $this->rootTeam->id, 'code' => '16', 'name' => 'Non-Food', 'sort_order' => 16]);
+
+    $r = $this->svc->einrichten(true);
+
+    expect($r['wg_angelegt'])->toBeFalse()
+        ->and(FoodAlchemistLookupWarengruppe::where('code', '16')->count())->toBe(1);
 });
 
 it('Kommandos: einrichten und erkennen laufen, Dry-Run ist Default, --ki braucht --apply', function () {
@@ -173,7 +184,7 @@ it('Kommandos: einrichten und erkennen laufen, Dry-Run ist Default, --ki braucht
 
     $this->artisan('foodalchemist:nonfood-einrichten', ['--team' => $this->rootTeam->id])->assertSuccessful();
     expect(FoodAlchemistLookupWarengruppe::where('code', '16')->count())->toBe(0);
-    $this->artisan('foodalchemist:nonfood-einrichten', ['--team' => $this->rootTeam->id, '--apply' => true])->assertSuccessful();
+    $this->artisan('foodalchemist:nonfood-einrichten', ['--apply' => true])->assertSuccessful();
     expect(FoodAlchemistLookupWarengruppe::where('code', '16')->count())->toBe(1);
 });
 

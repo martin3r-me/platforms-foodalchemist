@@ -249,11 +249,15 @@ class GpService
     /**
      * M1-03 / D-1 AT-D1-03: Sub-Kategorie auf den GPs umbenennen — NUR eigene Zeilen
      * (D1: geerbte Katalog-GPs bleiben unangetastet). Transaktional, gibt affected zurück.
+     * Plattform-Basis 18.10.: Sub-Kategorien sind global und nur der Master benennt sie um — er zieht dabei die globalen
+     * GPs mit (sie hängen per Text an der Sub-Kategorie, sonst stünde dort ein verwaister Freitext). Mandanten-GPs bleiben.
      */
     public function renameSubKategorie(Team $team, string $warengruppeCode, string $alt, string $neu): int
     {
-        return \Illuminate\Support\Facades\DB::transaction(fn () => FoodAlchemistGp::query()
-            ->where('team_id', $team->id)
+        $mitGlobal = \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team);
+
+        return \Illuminate\Support\Facades\DB::transaction(fn () => FoodAlchemistGp::ohneTeamSicht('master-kuration')
+            ->where(fn ($q) => $q->where('team_id', $team->id)->when($mitGlobal, fn ($q) => $q->orWhereNull('team_id')))
             ->where('commodity_group_code', $warengruppeCode)
             ->where('sub_category', $alt)
             ->update(['sub_category' => $neu]));

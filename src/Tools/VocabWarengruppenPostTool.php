@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
-/** MCP-Steuerbarkeit · D13: team-eigene Warengruppe anlegen. Safe-additiv. */
+/** MCP-Steuerbarkeit · D13: Warengruppe anlegen — Plattform-Basis, nur Master-Team, global. Safe-additiv. */
 class VocabWarengruppenPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,7 +18,7 @@ class VocabWarengruppenPostTool extends FoodAlchemistTool implements ToolContrac
 
     public function getDescription(): string
     {
-        return 'Legt eine team-eigene Warengruppe an (name; optional code). Kanonische §3-Warengruppen bleiben read-only.';
+        return 'Legt eine globale Warengruppe an (name; optional code). Nur Master-Team — Warengruppen sind Plattform-Sprache, Mandanten erhalten ACCESS_DENIED.';
     }
 
     public function getSchema(): array
@@ -47,7 +47,10 @@ class VocabWarengruppenPostTool extends FoodAlchemistTool implements ToolContrac
         try {
             $wg = app(VocabularyService::class)->createWarengruppe($team, $name, ($c = trim((string) ($arguments['code'] ?? ''))) !== '' ? $c : null);
         } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            // Plattform-Basis: Mandanten legen keine Einheiten/Warengruppen/Sub-Kategorien an (Typ, nicht Wortlaut)
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+
+            return ToolResult::error($e->getMessage(), $code);
         }
 
         return ToolResult::success(['id' => (int) $wg->id, 'name' => $wg->name, 'code' => $wg->code ?? null]);
