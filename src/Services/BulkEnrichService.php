@@ -222,19 +222,6 @@ class BulkEnrichService
         return $runId;
     }
 
-    /**
-     * Spec 03 L1b: Anreicherungs-Lauf am GERICHT — gleicher Vorschlags-Speicher und
-     * gleiche Review-Mechanik, nur andere Schrittfolge. Die Arbeitsmenge wird hier
-     * auf Verkaufsrezepte geschnitten: ein mitgegebenes Basisrezept fällt raus,
-     * statt VK-Schritte auf der falschen Ebene zu fahren.
-     */
-    public function starteVk(Team $team, array $recipeIds, array $schritte = self::SCHRITTE_VK): int
-    {
-        $ids = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereIn('id', $recipeIds)->pluck('id')->all();
-
-        return $this->starte($team, $ids, $schritte, BulkRunType::EnrichVk);
-    }
-
     /** Job-Kern: ein Rezept × Schritte → Vorschläge (kein Fach-Write). */
     public function verarbeiteRezept(Team $team, int $runId, int $recipeId, array $schritte): void
     {

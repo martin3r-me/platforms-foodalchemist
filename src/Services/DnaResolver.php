@@ -7,7 +7,7 @@ use Platform\Core\Models\Team;
 /**
  * Spec 82 · Schritt 6 (§7) — Team-DNA FELDWEISE über die Team-Kette.
  *
- * Vorher: „nächster Canvas der Kette gewinnt“ ({@see CanvasService::findFoodDna}) — ein Unter-Team mit
+ * Vorher: „nächster Canvas der Kette gewinnt“ (früher CanvasService::findFoodDna, gelöscht Spec 85) — ein Unter-Team mit
  * einem einzigen ausgefüllten Feld verlor damit die gesamte DNA des Oberteams. Jetzt gilt je FELD:
  *
  *  - Skalar: ein VERBINDLICHER Wert des obersten Teams gewinnt (und sperrt alle Teams darunter für dieses

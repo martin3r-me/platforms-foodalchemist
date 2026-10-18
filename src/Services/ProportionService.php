@@ -67,16 +67,6 @@ class ProportionService
         return $pctExtra / 100.0 * $sumOtherG;
     }
 
-    /** Rückweg: pct_extra = m_extra / Σ(andere) × 100. Σ ≤ 0 → null. */
-    public function extraPercent(float $massG, float $sumOtherG): ?float
-    {
-        if ($sumOtherG <= 0.0) {
-            return null;
-        }
-
-        return $massG / $sumOtherG * 100.0;
-    }
-
     // ── Brining (Equilibrium) ──────────────────────────────────────────────
 
     /**

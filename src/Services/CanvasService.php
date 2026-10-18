@@ -167,33 +167,6 @@ class CanvasService
             ->where('owner_type', $ownerType)->where('owner_id', $ownerId)->first();
     }
 
-    /**
-     * Spec 82 §7 (Vorab-Fix): Food-DNA des Teams MIT Vererbung. Hat das Team selbst keinen Canvas,
-     * gilt der des nächsten Eltern-Teams (Unter-Team → Oberteam). Vorher suchte die Kaskade exakt
-     * `team_id = eigenes Team` — ein Unter-Team ohne eigene DNA bekam gar keine.
-     * Feldweises Überschreiben kommt erst mit Schritt 6; hier gilt: nächster Canvas der Kette gewinnt.
-     *
-     * Nur bis zur Kundengrenze ({@see \Platform\FoodAlchemist\Services\FaRechte::kundenHauptTeam}): ein
-     * Mandant erbt nie die DNA des Master-Teams, auch wenn jemand später ein Eltern-Team setzt.
-     */
-    public function findFoodDna(Team $team): ?FoodAlchemistCanvas
-    {
-        $grenze = (int) app(FaRechte::class)->kundenHauptTeam($team)->id;
-        $current = $team;
-        for ($guard = 0; $current !== null && $guard < 32; $guard++) {   // Zyklen-Schutz
-            $canvas = $this->find('food_dna', 'team', (int) $current->id);
-            if ($canvas !== null) {
-                return $canvas;
-            }
-            if ((int) $current->id === $grenze) {
-                return null;
-            }
-            $current = $current->parent_team_id ? $current->parentTeam : null;
-        }
-
-        return null;
-    }
-
     /** Canvas holen oder anlegen (Edit-Pfad). */
     public function canvasFor(Team $team, string $type, string $ownerType, ?int $ownerId): FoodAlchemistCanvas
     {
@@ -276,11 +249,6 @@ class CanvasService
         $pos = (int) ($canvas->entries()->where('field_key', $key)->max('position') ?? -1) + 1;
 
         return $canvas->entries()->create(['field_key' => $key, 'position' => $pos, 'value' => trim($value), 'meta' => $meta, 'is_binding' => $verbindlich]);
-    }
-
-    public function updateEntry(int $entryId, string $value, array $meta = []): void
-    {
-        FoodAlchemistCanvasEntry::where('id', $entryId)->update(['value' => trim($value), 'meta' => $meta]);
     }
 
     public function removeEntry(int $entryId): void

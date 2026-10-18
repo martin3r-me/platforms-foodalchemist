@@ -68,7 +68,7 @@ beforeEach(function () {
 });
 
 it('L1b: der Lauf am Gericht erzeugt die vier VK-Text-Vorschläge offen (B-1-Schritte ohne Fake-Antwort bleiben leer) — und schreibt nichts (GL-07)', function () {
-    $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
+    $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, BulkRunType::EnrichVk);
 
     $run = $this->svc->status($this->rootTeam, $runId);
     expect($run->status)->toBe(BulkRunStatus::Done)
@@ -90,7 +90,7 @@ it('L1b: der Lauf am Gericht erzeugt die vier VK-Text-Vorschläge offen (B-1-Sch
 });
 
 it('L1b: »Alle übernehmen« schreibt VK-Wording, Plating, Beschreibung und Klasse mit Lineage ki', function () {
-    $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
+    $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, BulkRunType::EnrichVk);
     $n = $this->svc->alleUebernehmen($this->rootTeam, $runId);
 
     $r = $this->vk->fresh();
@@ -119,7 +119,7 @@ it('L1b: Override-First je Feld — manuell gepflegtes Wording und manuelle Klas
         'dish_class_id' => $andere->id, 'dish_class_source' => 'manual',
     ]);
 
-    $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
+    $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, BulkRunType::EnrichVk);
     $n = $this->svc->alleUebernehmen($this->rootTeam, $runId);
 
     $r = $this->vk->fresh();
@@ -132,23 +132,12 @@ it('L1b: Override-First je Feld — manuell gepflegtes Wording und manuelle Klas
         ->whereIn('field', ['wording', 'speisen_klasse'])->where('status', 'offen')->count())->toBe(2);
 });
 
-it('L1b: ein Basisrezept fällt aus dem VK-Lauf (falsche Ebene wird nicht angereichert)', function () {
-    $basis = FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-l1b', 'name' => 'Fond: Kalb', 'status' => 'draft',
-    ]);
-
-    $runId = $this->svc->starteVk($this->rootTeam, [$basis->id, $this->vk->id]);
-
-    expect((int) $this->svc->status($this->rootTeam, $runId)->total)->toBe(1)
-        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('recipe_id', $basis->id)->count())->toBe(0);
-});
-
 it('L1b: VK-Schritte auf einem Basisrezept erzeugen einen ehrlichen Fehler statt eines Vorschlags', function () {
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-l1b-2', 'name' => 'Fond: Rind', 'status' => 'draft',
     ]);
 
-    // Der direkte Weg (ohne den ->verkauf()-Schnitt von starteVk) muss trotzdem sauber scheitern.
+    // Auch ohne Ebenen-Schnitt im Einstieg scheitern VK-Schritte am Basisrezept sauber.
     $runId = $this->svc->starte($this->rootTeam, [$basis->id], BulkEnrichService::SCHRITTE_VK);
 
     expect((int) $this->svc->status($this->rootTeam, $runId)->failed)->toBe(1)

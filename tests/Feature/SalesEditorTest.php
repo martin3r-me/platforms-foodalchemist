@@ -114,7 +114,7 @@ it('V-19: Regen-Zeilen CRUD + Reorder; Liste bleibt sortiert', function () {
     expect(DB::table('foodalchemist_recipe_regenerations')->where('recipe_id', $vk->id)->whereNull('deleted_at')->count())->toBe(1);
 });
 
-it('§7.7: Verwendungsnachweise — Upsert je Kunde, distinct team-scoped, FK-Kaskade', function () {
+it('§7.7: Verwendungsnachweise — Upsert je Kunde, FK-Kaskade', function () {
     $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'FIN: Dog | BBQ');
 
     $this->svc->addCustomerName($this->rootTeam, $vk->id, 'Hotel Adler', 'Honey Dog');
@@ -122,9 +122,7 @@ it('§7.7: Verwendungsnachweise — Upsert je Kunde, distinct team-scoped, FK-Ka
     $this->svc->addCustomerName($this->rootTeam, $vk->id, 'Messe Catering', 'BBQ Dog');
 
     expect(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $vk->id)->whereNull('deleted_at')->count())->toBe(2)
-        ->and(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $vk->id)->where('customer_name', 'Hotel Adler')->value('marketing_name'))->toBe('Honey Dog v2')
-        ->and($this->svc->distinctCustomerNames($this->rootTeam))->toBe(['Hotel Adler', 'Messe Catering'])
-        ->and($this->svc->distinctCustomerNames($this->childA))->toBe([]);  // team-scoped
+        ->and(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $vk->id)->where('customer_name', 'Hotel Adler')->value('marketing_name'))->toBe('Honey Dog v2');
 
     $vk->forceDelete();                                               // hartes Löschen → FK kaskadiert
     expect(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $vk->id)->count())->toBe(0);

@@ -309,23 +309,6 @@ class PraesentationsDesigns extends Component
         $this->markiereGeaendert();
     }
 
-    /** Reorder aus dem Drag-&-Drop (Alpine liefert die neue Index-Reihenfolge). */
-    public function bloeckeNeuOrdnen(array $reihenfolge): void
-    {
-        $neu = [];
-        foreach ($reihenfolge as $i) {
-            $i = (int) $i;
-            if (isset($this->layout[$i])) {
-                $neu[] = $this->layout[$i];
-            }
-        }
-        if (count($neu) === count($this->layout)) {
-            $this->layout = $neu;
-            $this->selectedBlockIndex = null;
-            $this->markiereGeaendert();
-        }
-    }
-
     /** Drag-&-Drop: Block von Position $from an Position $to schieben. */
     public function bloeckeNachDrop(int $from, int $to): void
     {
@@ -359,12 +342,6 @@ class PraesentationsDesigns extends Component
             return;
         }
         $this->layout[$index]['style'][$key] = $value;
-        $this->markiereGeaendert();
-    }
-
-    public function tokenSetzen(string $gruppe, string $key, mixed $value): void
-    {
-        $this->tokens[$gruppe][$key] = $value;
         $this->markiereGeaendert();
     }
 
