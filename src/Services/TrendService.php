@@ -620,13 +620,8 @@ class TrendService
     // ── Radar-Geometrie (Click Dummy 3) ────────────────────────────────────
 
     /**
-     * Position je Trend im Radar: Ring = Ebene, Sektor = Kategorie (Food links, Getränke/Deko/Events rechts).
-     * Die Lage im Ring kommt aus einem stabilen Hash des Slugs — sie trägt keine Bedeutung, bleibt aber gleich.
-     *
-     * @return array{x:float, y:float}
-     */
-    /**
-     * Positionen für alle Radar-Trends ohne Überlappung (Dominique 09.10.: zwei Food-Megatrends lagen
+     * Position je Trend im Radar: Ring = Ebene, Sektor = Kategorie (Food links, Getränke/Deko/Events rechts),
+     * ohne Überlappung (Dominique 09.10.: zwei Food-Megatrends lagen
      * übereinander). Je Zelle (Kategorie × Ebene) gleichmäßig über den Sektor verteilt; Lage im Sektor
      * und Abstand von der Mitte bleiben stabil am Namen (Hash), damit das Radar beim Neuladen nicht springt.
      *
@@ -661,17 +656,6 @@ class TrendService
         }
 
         return $out;
-    }
-
-    public function radarPosition(FoodAlchemistTrend $trend, float $cx = 320, float $cy = 320, float $maxR = 268): array
-    {
-        [$von, $bis] = self::SEKTOREN[$trend->kategorie] ?? self::SEKTOREN['food'];
-        [$innen, $aussen] = self::RINGE[$trend->ebene] ?? self::RINGE['mode'];
-        $winkel = $von + $this->hash01($trend->slug.'a') * ($bis - $von);
-        $r = ($innen + $this->hash01($trend->slug.'b') * ($aussen - $innen)) * $maxR;
-        $rad = deg2rad($winkel);
-
-        return ['x' => round($cx + $r * cos($rad), 1), 'y' => round($cy - $r * sin($rad), 1)];
     }
 
     /** Radiusband je Ebene als Anteil des Außenradius. */

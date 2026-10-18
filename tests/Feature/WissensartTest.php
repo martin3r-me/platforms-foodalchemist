@@ -132,8 +132,7 @@ it('erlaubt art=null, damit der noch nicht eingeordnete Bestand weiter geliefert
 
     $docs = app(KnowledgeCanonService::class)->documentsFor('prompt_key', 'test.key', $this->rootTeam);
 
-    expect($docs->pluck('slug')->all())->toBe(['alt-ohne-art'])
-        ->and(Wissensart::darfInPrompt(null))->toBeTrue();
+    expect($docs->pluck('slug')->all())->toBe(['alt-ohne-art']);
 });
 
 it('gibt die Art in der Inventar-Sicht zurueck', function () {

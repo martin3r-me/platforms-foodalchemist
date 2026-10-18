@@ -45,7 +45,7 @@ it('entfernt den Vorspann und behaelt den Paragraphen ganz', function () {
         ->and($rein)->toContain('Mittelwert bei Bereich')
         ->and($rein)->not->toContain('Skripte 200-208')
         ->and($rein)->not->toContain('Pflicht-Referenz')
-        ->and(DossierText::vorspannLaenge($md))->toBeGreaterThan(400);
+        ->and(mb_strlen($md) - mb_strlen($rein))->toBeGreaterThan(400);
 });
 
 it('laesst NORMATIVE Tabellen unangetastet — das war die Falle des Plans', function () {
@@ -63,8 +63,7 @@ it('laesst NORMATIVE Tabellen unangetastet — das war die Falle des Plans', fun
 it('laesst ein Dokument OHNE generierten Vorspann unveraendert', function () {
     $fremd = "# Convenience und Recipe Engineering\n\nEinleitung ohne Regelwerk-Baustein.\n\n## 1) Stufen 0-5\n\nText.";
 
-    expect(DossierText::ohneVorspann($fremd))->toBe($fremd)
-        ->and(DossierText::vorspannLaenge($fremd))->toBe(0);
+    expect(DossierText::ohneVorspann($fremd))->toBe($fremd);
 });
 
 it('behaelt alles, wenn der Vorspann OHNE folgende Ueberschrift steht', function () {

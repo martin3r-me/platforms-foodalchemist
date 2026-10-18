@@ -455,23 +455,6 @@ class KnowledgeService
     }
 
     /**
-     * Bindet ein BESTEHENDES, sichtbares Doc an einen Einsatzort — auch globalen
-     * Seed / Vault-Kanon. Anders als update() (Inhalts-Edit, für Vault-Docs
-     * gesperrt) ist Binden ein rein kuratorischer Akt: der Doc-Inhalt wird nicht
-     * angefasst, darum KEIN source_path-/owns-Guard auf dem DOC. Sichtbarkeit =
-     * globaler Seed (team_id NULL) ODER eigene Ancestry; sonst NOT_FOUND (kein
-     * Existenz-Leak über die Teamgrenze). Die Bindung selbst trägt team_id des
-     * Callers (siehe bindLayer) → tenancy-scoped. Idempotent.
-     */
-    public function bindExisting(Team $team, string $slug, string $targetKey, string $mode = 'discovery'): object
-    {
-        $doc = $this->findSichtbar($team, $slug);
-        $this->bindLayer($team, (int) $doc->id, $targetKey, $mode, 'mcp');
-
-        return $this->find($slug);
-    }
-
-    /**
      * Löst eine Layer-Bindung — aber NUR eine team-eigene (owns): globale/Fremd-
      * Bindungen bleiben unberührt. Soft-Delete, damit Reads (whereNull deleted_at)
      * sie ignorieren und ein späteres Re-Bind sauber neu anlegt. Gibt zurück, ob

@@ -617,58 +617,6 @@ class KnowledgeEmbeddingService
     }
 
     /**
-     * Semantische Suche → Liste passender knowledge_documents-Slugs der
-     * gewünschten Kategorie(n), bestes Match zuerst. Leeres Ergebnis bei
-     * fehlendem Provider / Fehler (GL-13 Invariante 6).
-     *
-     * @param  list<string>  $kategorien
-     * @return list<string>  Slugs — für 'pairing' OHNE "pairing."-Präfix (= Stem,
-     *                        konsistent mit KnowledgeContextService::pairingStems()).
-     */
-    public function searchSlugs(string $query, array $kategorien, int $limit = 4, ?float $minScore = null): array
-    {
-        $query = trim($query);
-        if ($query === '' || $limit <= 0 || ! $this->isProviderAvailable()) {
-            return [];
-        }
-        $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
-
-        $hits = $this->searchMerged($query, self::ENTITY_TYPE, $limit * 3, $minScore);
-
-        if ($hits === []) {
-            return [];
-        }
-
-        // entity_id → Doc (Slug + Kategorie) auflösen und auf Kategorie filtern.
-        $ids = array_map(static fn ($h) => (int) $h['entity_id'], $hits);
-        $docs = DB::table('foodalchemist_knowledge_documents')
-            ->whereIn('id', $ids)
-            ->whereIn('category', $kategorien)
-            ->where('active', 1)
-            ->whereNull('deleted_at')
-            ->get(['id', 'slug', 'category'])
-            ->keyBy('id');
-
-        $slugs = [];
-        foreach ($hits as $hit) {                                   // bereits nach Score sortiert
-            $doc = $docs->get((int) $hit['entity_id']);
-            if ($doc === null) {
-                continue;
-            }
-            $slug = $doc->slug;
-            if ($doc->category === 'pairing' && str_starts_with($slug, 'pairing.')) {
-                $slug = substr($slug, 8);                           // Stem-Form
-            }
-            $slugs[$slug] = true;
-            if (count($slugs) >= $limit) {
-                break;
-            }
-        }
-
-        return array_map('strval', array_keys($slugs));
-    }
-
-    /**
      * Manuelle Browser-Semantiksuche (#469): Freitext → geordnete Liste von
      * knowledge_documents-IDs über den gesamten indizierten Korpus (bestes Match
      * zuerst), OHNE Kategorie-Filter — der Browser filtert selbst nach Kategorie/

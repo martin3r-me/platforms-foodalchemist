@@ -49,11 +49,6 @@ class KnowledgeCanonService
      */
     public const SCOPES = ['feature', 'prompt_key', 'achse'];
 
-    /** Scope-Schlüssel einer Achsen-Bindung: `occasion:dinner`. */
-    public static function achsenKey(string $achse, string $wert): string
-    {
-        return trim($achse).':'.trim($wert);
-    }
     public const ROLES = ['root', 'child'];
     public const MODES = ['pflicht', 'wenn_platz'];
 

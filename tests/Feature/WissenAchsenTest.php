@@ -47,7 +47,7 @@ beforeEach(function () {
     $this->mkAchse = function (int $docId, string $achse, string $wert, int $ord = 10): void {
         DB::table('foodalchemist_knowledge_canon')->insert([
             'uuid' => (string) UuidV7::generate(), 'team_id' => null,
-            'scope' => 'achse', 'scope_key' => KnowledgeCanonService::achsenKey($achse, $wert),
+            'scope' => 'achse', 'scope_key' => $achse.':'.$wert,
             'role' => 'root', 'ord' => $ord,
             'knowledge_document_id' => $docId, 'mode' => 'pflicht', 'active' => 1,
             'created_at' => now(), 'updated_at' => now(),
