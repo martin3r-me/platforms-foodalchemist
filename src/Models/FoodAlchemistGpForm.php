@@ -28,6 +28,6 @@ class FoodAlchemistGpForm extends Model
 
     public function gp(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id');
+        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id')->ohneTeamSicht('verweis');
     }
 }

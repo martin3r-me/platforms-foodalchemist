@@ -125,7 +125,7 @@ class FoodAlchemistSupplierItem extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplier::class, 'supplier_id');
+        return $this->belongsTo(FoodAlchemistSupplier::class, 'supplier_id')->ohneTeamSicht('verweis');
     }
 
     public function structure(): HasOne

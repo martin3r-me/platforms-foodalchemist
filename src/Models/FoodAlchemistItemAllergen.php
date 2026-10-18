@@ -42,6 +42,6 @@ class FoodAlchemistItemAllergen extends Model
 
     public function item(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');
+        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id')->ohneTeamSicht('verweis');
     }
 }

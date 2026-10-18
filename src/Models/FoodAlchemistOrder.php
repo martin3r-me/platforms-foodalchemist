@@ -41,7 +41,7 @@ class FoodAlchemistOrder extends Model
 
     public function supplier(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplier::class, 'supplier_id');
+        return $this->belongsTo(FoodAlchemistSupplier::class, 'supplier_id')->ohneTeamSicht('verweis');
     }
 
     public function lines(): HasMany
