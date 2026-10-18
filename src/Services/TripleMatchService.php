@@ -57,8 +57,12 @@ class TripleMatchService
         if (($pct !== null && $pct < 0) || ($eur !== null && $eur < 0)) {
             throw new \RuntimeException('Toleranzen dürfen nicht negativ sein.');
         }
-        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::updateOrCreate(['team_id' => $team->id],
-            ['tm_toleranz_preis_pct' => $pct, 'tm_toleranz_preis_eur' => $eur]));   // Spec 84 Stufe 4: Zeile des Teams auch aus fremdem Kontext finden
+        // Spec 84 (§6): lesenIm nur zum Lesen — die Zeile des Teams auch aus fremdem Kontext finden (Oberteam pflegt Unter-Team).
+        // Geschrieben wird im Kontext des Aufrufers; das bewusste Fremdschreiben ist eine ausdrückliche, greppbare Ausnahme (B4).
+        $zeile = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::where('team_id', $team->id)->first());
+        \Platform\FoodAlchemist\Support\FremdSchreiben::erlaubt('unterteam-verwaltung', fn () => $zeile !== null
+            ? $zeile->update(['tm_toleranz_preis_pct' => $pct, 'tm_toleranz_preis_eur' => $eur])
+            : FoodAlchemistTeamSetting::create(['team_id' => $team->id, 'tm_toleranz_preis_pct' => $pct, 'tm_toleranz_preis_eur' => $eur]));
     }
 
     /** Preis passt, wenn die Abweichung höchstens ±pct % ODER ±eur je Gebinde beträgt (das Großzügigere gilt). */

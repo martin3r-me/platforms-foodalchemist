@@ -449,6 +449,7 @@ Kein Umbau-Programm. Diese Regeln gelten für neuen und angefassten Code:
 7. **Mehrstufige Schreibvorgänge in einer Transaktion**, außer sie umschließt einen langen KI-Aufruf (dann Zustände so schreiben, dass ein Abbruch keine halben Daten hinterlässt).
 8. **Prüffrage, keine Grenze:** Wächst eine Livewire-Komponente über ~800 Zeilen, fragt der Review, ob Nicht-UI-Logik in einen Service gehört (vgl. §5.2 Schritt 1).
 9. **Sichtbar ist nicht eigen:** Jeder Schreibweg prüft `isOwnedBy`/`canCurate` im Service, nicht nur `visibleToTeam` (§4.0).
+10. **`lesenIm` nur für Lesen; Schreiben auf fremde Zeilen nur über `FremdSchreiben::erlaubt` mit Grund** (Kurator 18.10.). `TeamSicht::lesenIm($team, …)` findet die Zeilen eines anderen Teams, das Speichern läuft im Kontext des Aufrufers — so bleibt jedes bewusste Fremdschreiben eine ausdrückliche, greppbare Ausnahme im B4-Protokoll und wird nie still durch einen Kontextwechsel „eigen“. Muster: `TripleMatchService::setzeToleranz`, `StandortService::betriebZuordnen`.
 
 **D1 · Einzige echte Phase in Teil D: Fehlertypen statt Textvergleich**
 7 Stellen entscheiden den Fehlercode per `str_contains($e->getMessage(), …)`:
