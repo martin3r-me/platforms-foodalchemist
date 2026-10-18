@@ -467,17 +467,6 @@ class Editor extends Component
         ]), 'Zahlungsstatus gespeichert.');
     }
 
-    public function saveApproval(OrderService $orders): void
-    {
-        if ($this->orderId === null) {
-            return;
-        }
-        $this->fuehreAus(fn ($team) => $orders->updateApproval($team, $this->orderId, [
-            'approval_status' => $this->formApprovalStatus,
-            'approval_note' => $this->formApprovalNote,
-        ], Auth::id()), 'Freigabe gespeichert.');
-    }
-
     /** Spec 75c: Freigabe-Box als Übergabe — Kuratieren fragt an, Freigeben gibt frei (und sendet) oder lehnt ab. */
     public function freigabeAnfragen(OrderService $orders): void
     {

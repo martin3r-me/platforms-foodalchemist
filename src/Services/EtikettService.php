@@ -542,32 +542,6 @@ class EtikettService
         ];
     }
 
-    /** Haltbarkeits-Vorschlag am Rezept setzen (nur eigene Rezepte des Teams). */
-    public function haltbarkeitSetzen(Team $team, int $recipeId, mixed $gekuehlt, mixed $tk, ?string $lagerart = null): FoodAlchemistRecipe
-    {
-        $r = FoodAlchemistRecipe::where('team_id', $team->id)->find($recipeId);
-        if ($r === null) {
-            throw new \RuntimeException('Haltbarkeit lässt sich nur an eigenen Rezepten speichern — dieses Rezept gehört einem anderen Team.');
-        }
-        $tage = function (mixed $v, string $was): ?int {
-            $v = trim((string) ($v ?? ''));
-            if ($v === '') {
-                return null;
-            }
-            if (! ctype_digit($v) || (int) $v > 3650) {
-                throw new \RuntimeException($was . ': ganze Tage zwischen 0 und 3650.');
-            }
-
-            return (int) $v;
-        };
-        $r->forceFill([
-            'shelf_life_chilled_days' => $tage($gekuehlt, 'Haltbarkeit gekühlt'), 'shelf_life_frozen_days' => $tage($tk, 'Haltbarkeit TK'),
-            'storage_type' => in_array($lagerart, array_keys(self::LAGERUNG), true) ? $lagerart : $r->storage_type,
-        ])->save();
-
-        return $r;
-    }
-
     /** Druck-URL (für Knöpfe und MCP). */
     public function druckUrl(string $quelle, int $id, ?int $vorlageId = null, array $eingabe = [], int $anzahl = 1, int $startplatz = 1, bool $pdf = false): string
     {

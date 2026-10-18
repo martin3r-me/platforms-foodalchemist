@@ -157,11 +157,6 @@ class Index extends Component
         $this->neuerLiefertag = null;
     }
 
-    public function bedarfPlanen(int $productionId): void
-    {
-        $this->dispatch('orders-editor.production', id: $productionId)->to(Editor::class);
-    }
-
     public function ausgewaehlteBedarfePlanen(): void
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $this->selectedDemandIds))));

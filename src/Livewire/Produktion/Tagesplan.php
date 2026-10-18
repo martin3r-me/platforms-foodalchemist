@@ -181,12 +181,6 @@ class Tagesplan extends Component
         $this->postenFilter = $this->postenFilter === $id ? null : $id;
     }
 
-    /** Auftrag ins Detail-Panel wählen — zweiter Klick auf dieselbe Zeile schließt es. */
-    public function waehleAuftrag(?int $id): void
-    {
-        $this->orderId = $this->orderId === $id ? null : $id;
-    }
-
     /** Tag ins Detail-Panel wählen — zweiter Klick auf denselben Tag schließt es. */
     public function waehleTag(?string $tag): void
     {

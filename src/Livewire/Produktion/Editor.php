@@ -228,25 +228,6 @@ class Editor extends Component
     }
 
     /**
-     * Concepter-/Foodbook-Muster: „+" direkt aus der Kandidatenliste — setzt die Auswahl je
-     * nach Ziel-Typ und fügt mit der aktuellen Menge hinzu. Liste + Suche bleiben offen.
-     */
-    public function zielAusListe(int $id): void
-    {
-        if ($this->zielTyp === 'angebot') {
-            $this->angebotZielHinzufuegen($id);
-
-            return;
-        }
-        if ($this->zielTyp === 'concept') {
-            $this->auswahlConceptId = $id;
-        } else {
-            $this->auswahlRecipeId = $id;
-        }
-        $this->zielHinzufuegen();
-    }
-
-    /**
      * Ziele-Browser: flache, serverseitig gefilterte Listen fuer den Alpine-Picker.
      * Das Browsen ist renderless; nur das Einfuegen veraendert den Auftrag.
      */

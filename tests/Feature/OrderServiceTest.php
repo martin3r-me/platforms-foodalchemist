@@ -1975,9 +1975,7 @@ it('E2 UI: freigegebener Produktionsbedarf erscheint im Bestellwesen', function 
         ->set('sicht', 'bedarfe')
         ->assertSee('Bankett')
         ->assertSee('offen')
-        ->assertSee('Planen')
-        ->call('bedarfPlanen', $po->id)
-        ->assertDispatched('orders-editor.production', id: $po->id);
+        ->assertSee('Planen');
 
     Livewire::test(OrdersEditor::class)
         ->call('oeffnenNeu', null, null, $po->id)
