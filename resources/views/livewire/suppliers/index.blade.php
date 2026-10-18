@@ -119,6 +119,15 @@
                 </x-slot:actions>
             @endif
         </x-fa::page-header>
+        {{-- PR 3: offene Necta-Prüffälle (nur Master-Team) --}}
+        @if(($nectaPruefaelleOffen ?? 0) > 0)
+            <x-fa::notice tone="warn" data-necta-pruefaelle-hinweis>
+                {{ $fmt($nectaPruefaelleOffen) }} offene Necta-Prüffälle warten auf eine Entscheidung.
+                <x-slot:actions>
+                    <x-fa::button size="sm" icon="heroicon-m-clipboard-document-check" :href="route('foodalchemist.suppliers.necta-pruefaelle')" wire:navigate>Prüffälle öffnen</x-fa::button>
+                </x-slot:actions>
+            </x-fa::notice>
+        @endif
 
         {{-- Fehler aus Seitenaktionen (Bevorzugen, Mehrfachauswahl, Abgleich) — vorher nur im Dialog sichtbar --}}
         @if($fehler)

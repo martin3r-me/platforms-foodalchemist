@@ -22,6 +22,9 @@ class NectaLieferstatusService
 {
     public const QUELLE = 'necta';
 
+    /** Von einem Menschen im Prüffall entschieden (PR 3): Necta überschreibt den Status nicht mehr, meldet aber neue Widersprüche. */
+    public const QUELLE_PRUEFUNG = 'pruefung';
+
     /**
      * @return array{lieferstatus: ?string, seit: ?string, begrenzt: int, widerspruch: bool, geaendert: bool}
      */
@@ -43,6 +46,12 @@ class NectaLieferstatusService
         }
 
         $artikel = DB::table('foodalchemist_supplier_items')->where('id', $faArtikelId)->first(['lieferstatus', 'lieferstatus_seit', 'lieferstatus_quelle']);
+        if ($artikel !== null && $artikel->lieferstatus_quelle === self::QUELLE_PRUEFUNG) {
+            // im Prüffall entschieden: Status bleibt, aber ein NEUER Widerspruch darf kein toter Winkel werden (Kurator 18.10., F2)
+            $this->entschiedenenStatusPruefen($faArtikelId, $teamId, $artikel, $juengste, $raus, $probe, $laufId);
+
+            return $raus;
+        }
         if ($artikel === null || ($artikel->lieferstatus_quelle !== null && $artikel->lieferstatus_quelle !== self::QUELLE)) {
             return $raus;   // Handpflege gewinnt
         }
@@ -95,16 +104,77 @@ class NectaLieferstatusService
 
     private function pruefall(object $eingestellt, bool $probe, ?int $laufId): void
     {
-        if ($probe) {
+        $this->widerspruch((int) $eingestellt->legacy_id, 'Normalpreis in der Necta-Historie nach dem Eingestellt-Beginn',
+            'eingestellt seit '.$eingestellt->status_valid_from, $probe, $laufId);
+    }
+
+    /** Prüffall eingestellt_widerspruch anlegen bzw. aktualisieren — außer, derselbe Necta-Wert wurde schon mit „aktiv lassen“ entschieden. */
+    private function widerspruch(int $preisLegacy, string $faWert, string $nectaWert, bool $probe, ?int $laufId): void
+    {
+        if ($probe || NectaPruefallSperre::schonVerworfen('eingestellt_widerspruch', 'price', $preisLegacy, 'status', $nectaWert)) {
             return;
         }
-        $schluessel = ['art' => 'eingestellt_widerspruch', 'objekt' => 'price', 'legacy_id' => (int) $eingestellt->legacy_id, 'feld' => 'status', 'status' => 'offen'];
-        $werte = ['fa_wert' => 'Normalpreis in der Necta-Historie nach dem Eingestellt-Beginn',
-            'necta_wert' => 'eingestellt seit '.$eingestellt->status_valid_from, 'lauf_id' => $laufId, 'updated_at' => now()];
+        $schluessel = ['art' => 'eingestellt_widerspruch', 'objekt' => 'price', 'legacy_id' => $preisLegacy, 'feld' => 'status', 'status' => 'offen'];
+        $werte = ['fa_wert' => $faWert, 'necta_wert' => $nectaWert, 'lauf_id' => $laufId, 'updated_at' => now()];
         $offen = DB::table('foodalchemist_necta_pruefaelle')->where($schluessel)->value('id');
         $offen !== null
             ? DB::table('foodalchemist_necta_pruefaelle')->where('id', $offen)->update($werte)
             : DB::table('foodalchemist_necta_pruefaelle')->insert(['uuid' => (string) UuidV7::generate()] + $schluessel + $werte + ['created_at' => now()]);
+    }
+
+    /**
+     * Status mit Quelle „pruefung“: bestätigt eingestellt → ein Necta-Normalpreis NACH dem bestätigten Datum ist ein neuer Widerspruch;
+     * aktiv gelassen → eine (neue) Necta-Eingestellt-Zeile ist ein neuer Widerspruch. Der Status selbst ändert sich nie automatisch.
+     *
+     * @param  array<string,mixed>  $raus
+     */
+    private function entschiedenenStatusPruefen(int $faArtikelId, ?int $teamId, object $artikel, ?object $juengste, array &$raus, bool $probe, ?int $laufId): void
+    {
+        if ($artikel->lieferstatus === 'eingestellt' && $artikel->lieferstatus_seit !== null) {
+            $seit = (string) $artikel->lieferstatus_seit;
+            $normal = DB::table('foodalchemist_prices')->where('supplier_item_id', $faArtikelId)->where('team_id', $teamId)->whereNotNull('legacy_id')
+                ->whereNull('deleted_at')->where('status', '0')->whereNotNull('price')->where('status_valid_from', '>', $seit)
+                ->orderBy('status_valid_from')->first(['legacy_id', 'status_valid_from'])
+                ?? DB::table('foodalchemist_price_history')->where('supplier_item_id', $faArtikelId)->where('team_id', $teamId)
+                    ->where('quelle', 'necta_historie')->where('status', '0')->where('status_valid_from', '>', $seit)
+                    ->orderBy('status_valid_from')->first(['legacy_id', 'status_valid_from']);
+            if ($normal !== null) {
+                // Schlüssel = die bestätigte Eingestellt-Zeile (steht sicher in prices); der neue Normalpreis steht im Necta-Wert → die Sperre
+                // greift nur für genau diesen Normalpreis, ein späterer wird wieder gemeldet
+                $eingestelltLegacy = DB::table('foodalchemist_prices')->where('supplier_item_id', $faArtikelId)->where('team_id', $teamId)
+                    ->whereNotNull('legacy_id')->whereNull('deleted_at')->where('status_valid_from', $seit)->orderByDesc('id')->value('legacy_id')
+                    ?? $normal->legacy_id;
+                if ($eingestelltLegacy !== null) {
+                    $raus['widerspruch'] = true;
+                    $this->widerspruch((int) $eingestelltLegacy, 'als eingestellt bestätigt seit '.$seit, 'Normalpreis ab '.$normal->status_valid_from, $probe, $laufId);
+                }
+            }
+
+            return;
+        }
+        if ($artikel->lieferstatus === null && $raus['lieferstatus'] === 'eingestellt' && $juengste !== null) {
+            $raus['widerspruch'] = true;
+            $this->widerspruch((int) $juengste->legacy_id, 'aktiv gelassen (Prüffall-Entscheidung)', 'eingestellt seit '.$juengste->status_valid_from, $probe, $laufId);
+        }
+    }
+
+    /** Prüffall-Entscheidung „als eingestellt bestätigen“: Status eingestellt seit dem Eingestellt-Beginn, Quelle pruefung, Preise begrenzt. */
+    public function alsEingestelltBestaetigen(object $eingestelltPreis): int
+    {
+        $seit = (string) $eingestelltPreis->status_valid_from;
+        $n = $this->begrenzen((int) $eingestelltPreis->supplier_item_id, $eingestelltPreis->team_id !== null ? (int) $eingestelltPreis->team_id : null,
+            (int) $eingestelltPreis->id, $seit, false, null);
+        DB::table('foodalchemist_supplier_items')->where('id', $eingestelltPreis->supplier_item_id)->update([
+            'lieferstatus' => 'eingestellt', 'lieferstatus_seit' => $seit, 'lieferstatus_quelle' => self::QUELLE_PRUEFUNG, 'updated_at' => now()]);
+
+        return $n;
+    }
+
+    /** Prüffall-Entscheidung „aktiv lassen“: kein Lieferstatus, Quelle pruefung (Necta setzt ihn nicht wieder still auf eingestellt). */
+    public function aktivLassen(int $faArtikelId): void
+    {
+        DB::table('foodalchemist_supplier_items')->where('id', $faArtikelId)->update([
+            'lieferstatus' => null, 'lieferstatus_seit' => null, 'lieferstatus_quelle' => self::QUELLE_PRUEFUNG, 'updated_at' => now()]);
     }
 
     private static function tag(?string $zeit): ?string
