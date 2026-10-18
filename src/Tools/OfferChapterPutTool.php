@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Tools;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -14,6 +15,8 @@ use Platform\FoodAlchemist\Services\OfferCompositionService;
  * #380 Composer · MCP-Lockstep: ein Angebot-Kapitel bearbeiten (Titel/Kundentitel/Claim/Text/
  * Preis-Modus/Per-Kapitel-Pax). Spiegelt FoodbookBlocksPutTool (felder-Allow-List), die
  * Struktur-/Preis-Wahrheit bleibt im {@see OfferCompositionService::updateKapitel}.
+ * `format_price_mode` (Spec 85 D-2, nur Format-Kapitel) läuft über
+ * {@see OfferCompositionService::setFormatPriceMode} — gleiche Eigentums-Prüfung, eine Transaktion.
  */
 class OfferChapterPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -30,7 +33,9 @@ class OfferChapterPutTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Bearbeitet ein Kapitel eines team-eigenen Angebots (felder: title, consumer_title, claim, description, '
-            . 'price_mode [auto|manuell], price_per_person, personen). Nur bekannte Felder werden übernommen.';
+            . 'price_mode [auto|manuell], price_per_person, personen; nur bei Format-Kapiteln: format_price_mode '
+            . '[additiv|alternativen] — additiv = Summe aller Teile, alternativen = Gast wählt eine Variante, Preis als Spanne). '
+            . 'Nur bekannte Felder werden übernommen.';
     }
 
     public function getSchema(): array
@@ -56,7 +61,8 @@ class OfferChapterPutTool extends FoodAlchemistTool implements ToolContract, Too
             return ToolResult::error('felder muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
         }
         $in = array_intersect_key($felder, array_flip(self::FELDER));
-        if ($in === []) {
+        $formatModus = array_key_exists('format_price_mode', $felder) ? (string) $felder['format_price_mode'] : null;
+        if ($in === [] && $formatModus === null) {
             return ToolResult::error('Keine bekannten Felder in felder.', 'VALIDATION_ERROR');
         }
         $chapterId = (int) ($arguments['chapter_id'] ?? 0);
@@ -64,15 +70,28 @@ class OfferChapterPutTool extends FoodAlchemistTool implements ToolContract, Too
             return $guard;
         }
 
+        $comp = app(OfferCompositionService::class);
         try {
-            app(OfferCompositionService::class)->updateKapitel($team, $chapterId, $in);
+            DB::transaction(function () use ($comp, $team, $chapterId, $in, $formatModus) {
+                if ($formatModus !== null) {   // zuerst: lehnt der Service ab (kein Format-Kapitel), wird nichts geschrieben
+                    $comp->setFormatPriceMode($team, $chapterId, $formatModus);
+                }
+                if ($in !== []) {
+                    $comp->updateKapitel($team, $chapterId, $in);
+                }
+            });
         } catch (ModelNotFoundException) {
             return ToolResult::error('Kapitel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['chapter_id' => $chapterId, 'updated' => array_keys($in)]);
+        $updated = array_keys($in);
+        if ($formatModus !== null) {
+            $updated[] = 'format_price_mode';
+        }
+
+        return ToolResult::success(['chapter_id' => $chapterId, 'updated' => $updated]);
     }
 
     public function getMetadata(): array
