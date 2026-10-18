@@ -873,16 +873,4 @@ class ConcepterAggregateService
 
         return $paket->refresh();
     }
-
-    public function cacheConcept(FoodAlchemistConcept $concept): FoodAlchemistConcept
-    {
-        $agg = $this->conceptAggregat($concept);
-        $concept->update([
-            'nutrition_cache' => $agg['naehrwerte'],
-            'work_time_min_cache' => $agg['work_time_min'],
-            'ek_per_person_cache' => $agg['ek_per_person'],
-        ]);
-
-        return $concept->refresh();
-    }
 }

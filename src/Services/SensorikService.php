@@ -3,7 +3,6 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
-use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 
 /**
@@ -147,13 +146,6 @@ class SensorikService
     public function fuerGp(int $gpId): array
     {
         return $this->auswertung([(int) $gpId], 'gp');
-    }
-
-    public function fuerConcept(FoodAlchemistConcept $concept): array
-    {
-        $recipeIds = $concept->slots->pluck('sales_recipe_id')->filter()->unique()->values()->all();
-
-        return $this->auswertung($this->gpIdsFromRecipes($recipeIds), 'roh');
     }
 
     // ── B: Gericht als KOMPOSITION (statt Blend) + Rollen-Soll-Check ─────────

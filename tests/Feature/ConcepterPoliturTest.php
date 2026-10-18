@@ -33,13 +33,6 @@ beforeEach(function () {
     $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
 });
 
-it('Wo verwendet?: Paket → Concepts, die es referenzieren', function () {
-    $treffer = $this->pakete->verwendetInConcepts($this->rootTeam, $this->paket->id);
-
-    expect($treffer)->toHaveCount(1)
-        ->and($treffer->first()->id)->toBe($this->concept->id);
-});
-
 it('Wo verwendet?: Concept → Foodbooks, die es referenzieren', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Portfolio 2026']);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['name' => 'Buffets']);

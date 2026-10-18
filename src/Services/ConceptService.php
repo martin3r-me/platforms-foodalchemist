@@ -572,8 +572,7 @@ class ConceptService
 
     /**
      * Kaskade (2026-08-24): „Wo verwendet?" für ein Paket (kind=paket-Concept) — in welchen Concepts
-     * es als Position eingebettet ist (embedded_concept_id). Spiegelt PaketService::verwendetInConcepts
-     * auf den neuen Embed-Pfad.
+     * es als Position eingebettet ist (embedded_concept_id).
      */
     public function eingebettetInConcepts(Team $team, int $paketConceptId): \Illuminate\Support\Collection
     {
@@ -1168,37 +1167,6 @@ class ConceptService
             ->orderBy('position')->orderBy('name')->get(['id', 'name', 'parent_id']);
 
         return $this->flacherBaum($alle);
-    }
-
-    /**
-     * Rollup-Anzahl Concepts je Kategorie (Kategorie + alle Unterkategorien) — passend zum
-     * descendant-inklusiven Filter in paginateBrowser. Speist die Count-Badges der Kategorie-
-     * Sidebar (gleiche Optik wie Basisrezepte-/Gerichte-Browser). Nur >0 wird zurückgegeben.
-     *
-     * @return array<int, int>
-     */
-    public function categoryCounts(Team $team, bool $vorlagen = false): array
-    {
-        $direkt = FoodAlchemistConcept::visibleToTeam($team)
-            ->when($vorlagen, fn ($q) => $q->vorlagen(), fn ($q) => $q->echte())
-            ->whereNotNull('category_id')
-            ->selectRaw('category_id, COUNT(*) as c')
-            ->groupBy('category_id')
-            ->pluck('c', 'category_id')->all();
-
-        $counts = [];
-        foreach ($this->categoriesFlat($team) as $row) {
-            $self = (int) ($direkt[$row['id']] ?? 0);
-            if ($self === 0) {
-                continue; // Kinder tragen ihre eigenen Counts über ihre ancestors bei
-            }
-            $counts[$row['id']] = ($counts[$row['id']] ?? 0) + $self;
-            foreach ($row['ancestors'] as $anc) {
-                $counts[$anc] = ($counts[$anc] ?? 0) + $self;
-            }
-        }
-
-        return $counts;
     }
 
     /**
