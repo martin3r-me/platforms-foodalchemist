@@ -44,6 +44,9 @@ abstract class NectaLaufBasis
     /** @var array<string,mixed> */
     protected array $zaehler = [];
 
+    /** @var array<int, true> FA-Artikel, deren Allergene/Deklaration dieser Lauf geschrieben hat → Rezepte am Ende nachrechnen */
+    protected array $kennzeichnungGeaendert = [];
+
     /** @var array<string, list<array<string,mixed>>> */
     protected array $beispiele = [];
 
@@ -61,6 +64,7 @@ abstract class NectaLaufBasis
             'allergene_neu' => 0, 'deklaration_neu' => 0, 'naehrwerte_neu' => 0, 'preise_neu' => 0, 'api_seiten' => 0,
             'neue_lieferanten' => [], 'neue_artikel_je_lieferant' => [], 'lieferanten_erledigt' => 0, 'uebersprungen' => []];
         $this->beispiele = [];
+        $this->kennzeichnungGeaendert = [];
         $this->unbekannteDeklarationsfelder = [];
     }
 
@@ -223,11 +227,63 @@ abstract class NectaLaufBasis
         }
         $this->zaehler[$zaehlKey]++;
         $this->beispiel($art, $zeile);
+        $this->kennzeichnungMerken($objekt, $faArtikelId);   // auch in der Probe: sie zählt die nachzurechnenden Rezepte
         if ($this->probe) {
             return;
         }
         $this->einfuegen($tabelle, $zeile + ['supplier_item_id' => $faArtikelId, 'team_id' => $team]);
         $this->stand($objekt, (int) $zeile['legacy_id'], $zeile);
+    }
+
+    /** Allergene oder Deklaration eines Artikels geschrieben → am Laufende die Rezepte nachrechnen (Dedup über den Schlüssel). */
+    protected function kennzeichnungMerken(string $objekt, int $faArtikelId): void
+    {
+        if (in_array($objekt, ['item_allergen', 'item_declaration'], true)) {
+            $this->kennzeichnungGeaendert[$faArtikelId] = true;
+        }
+    }
+
+    /**
+     * Rezepte nachrechnen, deren Allergene/Zusatzstoffe an einem geänderten Artikel hängen (Kurator 18.10.: veraltete Rezept-Allergene
+     * nach einer Necta-Änderung sind ein Sicherheitsthema). Artikel → GPs (Struktur) + deren Derivate (erben LIVE) → Rezepte inkl.
+     * Eltern und Fassungen → recomputeMany: dedupliziert, Kinder vor Eltern, jedes Rezept in der Sicht SEINES Teams (Pipeline lesenIm).
+     * Läuft synchron am Ende des nächtlichen bzw. wöchentlichen Laufs (02:30 / 03:30 — außerhalb der Nutzung). Probe: nur zählen.
+     */
+    protected function rezepteNachrechnen(callable $log): void
+    {
+        $artikel = array_keys($this->kennzeichnungGeaendert);
+        $this->zaehler['artikel_kennzeichnung_geaendert'] = count($artikel);
+        $this->zaehler['rezepte_nachgerechnet'] = 0;
+        if ($artikel === []) {
+            return;
+        }
+        $gpIds = [];
+        foreach (array_chunk($artikel, 1000) as $teil) {
+            $gpIds = array_merge($gpIds, DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', $teil)
+                ->whereNull('deleted_at')->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->all());
+        }
+        $gpIds = array_values(array_unique($gpIds));
+        if ($gpIds !== []) {
+            $gpIds = array_values(array_unique(array_merge($gpIds, DB::table('foodalchemist_gps')->whereIn('derivat_von_gp_id', $gpIds)
+                ->whereNull('deleted_at')->pluck('id')->map(fn ($v) => (int) $v)->all())));
+        }
+        $rezepte = app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->rezepteMitGps($gpIds);
+        if ($rezepte === []) {
+            return;
+        }
+        if ($this->probe) {
+            $this->zaehler['rezepte_nachgerechnet'] = count($rezepte);   // Probe: so viele würden nachgerechnet
+
+            return;
+        }
+        try {
+            $this->zaehler['rezepte_nachgerechnet'] = count(app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeMany($rezepte));
+        } catch (\Throwable $e) {
+            // Nachrechnen darf den Lauf nicht kippen (Necta-Daten sind geschrieben); Fehler steht im Lauf und im Log
+            $this->zaehler['rezepte_nachrechnen_fehler'] = $e->getMessage();
+            \Illuminate\Support\Facades\Log::warning('Necta: Rezepte nachrechnen fehlgeschlagen — '.$e->getMessage());
+        }
+        $log(sprintf('Rezepte nachgerechnet: %d (aus %d Artikeln mit geänderten Allergenen/Deklarationen)', $this->zaehler['rezepte_nachgerechnet'], count($artikel)));
     }
 
     /** @return array{0:string, 1:string, 2:array<string,mixed>, 3:?int} [Tabelle, Objekt, Zeile, Team] */

@@ -118,6 +118,7 @@ class NectaAbgleichService extends NectaLaufBasis
             if (! $this->probe) {
                 $this->passSignaleSchreiben();
             }
+            $this->rezepteNachrechnen($log);
             $this->laufBeenden('fertig');
         } catch (\Throwable $e) {
             $this->laufBeenden('fehler', $e->getMessage());
@@ -379,6 +380,7 @@ class NectaAbgleichService extends NectaLaufBasis
     {
         $this->zaehler["{$art}_wiederbelebt"] = ($this->zaehler["{$art}_wiederbelebt"] ?? 0) + 1;
         $this->beispiel("{$art}_wiederbelebt", ['supplier_item_id' => $fa->supplier_item_id, 'legacy_id' => $necta['legacy_id']]);
+        $this->kennzeichnungMerken($objekt, (int) $fa->supplier_item_id);
         if ($this->probe) {
             return;
         }
@@ -482,6 +484,7 @@ class NectaAbgleichService extends NectaLaufBasis
             $this->zaehler['objekte_aktualisiert']++;
             $this->zaehler['felder_uebernommen'] += count($uebernehmen);
             $this->beispiel('uebernommen', ['objekt' => $objekt, 'legacy_id' => $legacy] + $uebernehmen);
+            $this->kennzeichnungMerken($objekt, (int) ($fa->supplier_item_id ?? 0));   // auch in der Probe (zählt die Rezepte)
         }
         if ($this->probe) {
             return;

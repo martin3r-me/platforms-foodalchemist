@@ -475,3 +475,39 @@ it('Handzeile ohne Necta-Stand, Allergene: strenger übernommen, lockerer und �
         ->and($zeile->allergen_celery)->toBeNull()                    // unbekannt → nicht_enthalten NICHT still bei Handzeile
         ->and($faelle)->toBe(['allergen_celery', 'allergen_milk']);
 });
+
+// ── Kurator 18.10. (F3): veraltete Rezept-Allergene nach Necta-Änderung sind ein Sicherheitsthema ──
+
+it('★ Necta verschärft ein Artikel-Allergen → das Rezept über GP ist nach dem Lauf verschärft, Zähler „rezepte_nachgerechnet“', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Splitterbrötchen');
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $this->a->id, 'gp_id' => $gp->id]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Schoko-Sandwich');
+    $this->makeIngredient($rezept, 'Splitterbrötchen', $gp);
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputePipeline($rezept->id);
+    expect($rezept->fresh()->allergen_milk)->not->toBe('enthalten')   // Ausgangslage: Milch am Artikel unbekannt
+        ->and($rezept->fresh()->allergen_gluten)->toBe('enthalten');
+
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    expect(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->value('allergen_milk'))->toBe('enthalten')
+        ->and($rezept->fresh()->allergen_milk)->toBe('enthalten')                  // ohne Nachrechnen bliebe das Rezept alt
+        ->and($r['zaehler']['rezepte_nachgerechnet'])->toBe(1)
+        ->and($r['zaehler']['artikel_kennzeichnung_geaendert'])->toBe(1);
+});
+
+it('Nachrechnen: ohne Kennzeichnungs-Änderung kein Rezept; Probe zählt nur und schreibt nichts', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Splitterbrötchen');
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $this->a->id, 'gp_id' => $gp->id]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Schoko-Sandwich');
+    $this->makeIngredient($rezept, 'Splitterbrötchen', $gp);
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputePipeline($rezept->id);
+    $vorher = $rezept->fresh()->allergen_milk;
+
+    $nacht = ($this->lauf)();                                       // nächtlich: nur Preise, A hat keine neuen Allergene
+    expect($nacht['zaehler']['rezepte_nachgerechnet'])->toBe(0);
+
+    $probe = ($this->lauf)(['voll' => true, 'probe' => true]);
+    expect($probe['zaehler']['rezepte_nachgerechnet'])->toBe(1)      // würde nachgerechnet
+        ->and($rezept->fresh()->allergen_milk)->toBe($vorher);       // Probe schreibt nichts
+});
