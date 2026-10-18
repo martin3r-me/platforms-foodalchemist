@@ -85,6 +85,7 @@ class AboKuendigungService
     private function kuendigenImMandanten(Team $mandant, FoodAlchemistAbo $abo, ?User $actor, bool $bestaetigt): array
     {
         $this->hinweise = [];
+        $this->servierformenNachgelegt = 0;
         $vorher = $this->abos->huelle((int) $mandant->id);
         $nachher = $this->abos->huelle((int) $mandant->id, ohneAboId: (int) $abo->id);
         $vorschau = $this->vorschau($mandant, $this->wegfallend($vorher, $nachher), $nachher, (int) $abo->id);
@@ -104,7 +105,8 @@ class AboKuendigungService
             'kopiert' => $this->zaehle($ergebnis[0]), 'umgehaengt' => $ergebnis[1], 'verschwindet' => $this->zaehle($vorschau['verschwindet_je_art'])], $actor, $abo);
 
         // `kopien` bleibt die Rezept-Map (Aufrufer MandantBeenden/UI/Tests), `kopien_je_art` trägt alle Arten
-        return ['vorschau' => $vorschau, 'ausgefuehrt' => true, 'kopien' => $ergebnis[0]['recipe'], 'kopien_je_art' => $ergebnis[0], 'umgehaengt' => $ergebnis[1], 'hinweise' => $this->hinweise];
+        return ['vorschau' => $vorschau, 'ausgefuehrt' => true, 'kopien' => $ergebnis[0]['recipe'], 'kopien_je_art' => $ergebnis[0], 'umgehaengt' => $ergebnis[1], 'hinweise' => $this->hinweise,
+            'servierformen_nachgelegt' => $this->servierformenNachgelegt];   // Plan B (c): fehlende Servierformen beim Mandanten nachgelegt
     }
 
     /**
@@ -146,7 +148,9 @@ class AboKuendigungService
         DB::transaction(function () use ($sammlungId, $objektId, $typ, &$mandanten) {
             foreach ($mandanten as $mid => $m) {
                 $mTeam = Team::findOrFail($mid);
+                $this->servierformenNachgelegt = 0;
                 [$kopien, $umgehaengt] = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mTeam, fn () => $this->kopierenUndUmhaengen($mTeam, $m['vorschau']['genutzt_je_art'], $m['vorschau']['bleibt_je_art']));
+                $mandanten[$mid]['servierformen_nachgelegt'] = $this->servierformenNachgelegt;
                 $mandanten[$mid]['kopien'] = $kopien['recipe'];
                 $mandanten[$mid]['kopien_je_art'] = $kopien;
                 $mandanten[$mid]['umgehaengt'] = $umgehaengt;
@@ -568,10 +572,37 @@ class AboKuendigungService
             ->pluck('id')->map(fn ($v) => (int) $v)->all();
     }
 
+    /** Plan B (c): Vokabular-Verweise der Kopie zeigen nie auf Master-Zeilen — sichtbare Zeile gleichen Codes, sonst NULL. */
+    private const VOKABULAR_REZEPT = ['category_id' => 'foodalchemist_recipe_categories', 'dish_main_group_id' => 'foodalchemist_dish_main_groups',
+        'dish_class_id' => 'foodalchemist_dish_classes', 'markup_class_id' => 'foodalchemist_markup_classes',
+        'container_warm_vocab_id' => 'foodalchemist_vocab_containers', 'container_cold_vocab_id' => 'foodalchemist_vocab_containers',
+        'serving_vehicle_vocab_id' => 'foodalchemist_vocab_serving_vehicles'];
+
+    private const VOKABULAR_DARREICHUNG = ['markup_class_id' => 'foodalchemist_markup_classes',
+        'container_warm_vocab_id' => 'foodalchemist_vocab_containers', 'container_cold_vocab_id' => 'foodalchemist_vocab_containers',
+        'regeneration_device_vocab_id' => 'foodalchemist_vocab_regeneration_devices', 'serving_vehicle_vocab_id' => 'foodalchemist_vocab_serving_vehicles'];
+
+    private int $servierformenNachgelegt = 0;
+
+    /** @param array<string,string> $spalten Spalte → Vokabular-Tabelle @return array<string,?int> */
+    private function vokabularUmhaengen(\Illuminate\Database\Eloquent\Model $kopie, array $spalten, Team $mandant): array
+    {
+        $umhaenger = app(\Platform\FoodAlchemist\Support\VokabularUmhaenger::class);
+        $werte = [];
+        foreach ($spalten as $spalte => $tabelle) {
+            if (array_key_exists($spalte, $kopie->getAttributes()) && $kopie->getAttribute($spalte) !== null) {
+                $werte[$spalte] = $umhaenger->fuer($mandant, $tabelle, $kopie->getAttribute($spalte));
+            }
+        }
+
+        return $werte;
+    }
+
     private function kopiereKopf(FoodAlchemistRecipe $fassung, Team $mandant, ?string $name = null): int
     {
         $kopie = $fassung->replicate(['uuid', 'legacy_id', 'recipe_key', 'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash',
             'veroeffentlicht_at', 'veroeffentlicht_von', 'aenderungsnotiz', 'fassung_allergen_geaendert', 'kopie_von_id', 'kopie_stand_at']);
+        $kopie->forceFill($this->vokabularUmhaengen($kopie, self::VOKABULAR_REZEPT, $mandant));
         $kopie->forceFill([
             'team_id' => $mandant->id, 'ist_fassung' => false, 'recipe_key' => $this->freierKey($mandant, (string) $fassung->recipe_key),
             'kopie_von_id' => $fassung->fassung_von_id, 'kopie_stand_at' => now(),   // originalGeaendert() vergleicht gegen die Familie
@@ -596,13 +627,21 @@ class AboKuendigungService
         foreach (FoodAlchemistRecipeStep::where('recipe_id', $fassung->id)->get() as $s) {
             $s->replicate(['uuid'])->forceFill(['recipe_id' => $kopieId, 'team_id' => $mandant->id])->save();
         }
+        $umhaenger = app(\Platform\FoodAlchemist\Support\VokabularUmhaenger::class);
         foreach (DB::table('foodalchemist_recipe_equipment')->where('recipe_id', $fassung->id)->get() as $e) {
             $zeile = (array) $e;
             unset($zeile['id']);
-            DB::table('foodalchemist_recipe_equipment')->insert([...$zeile, 'recipe_id' => $kopieId]);
+            $geraet = $umhaenger->fuer($mandant, 'foodalchemist_vocab_kitchen_equipment', $zeile['equipment_id'] ?? null);
+            if ($geraet === null) {
+                continue;   // Plan B (c): Gerät gibt es beim Mandanten nicht → Zuordnung entfällt (nie das Master-Gerät)
+            }
+            DB::table('foodalchemist_recipe_equipment')->insertOrIgnore([...$zeile, 'recipe_id' => $kopieId, 'equipment_id' => $geraet]);
         }
         foreach (FoodAlchemistRecipeDarreichung::where('recipe_id', $fassung->id)->get() as $d) {
             $dk = $d->replicate(['uuid', 'legacy_id']);
+            $dk->forceFill($this->vokabularUmhaengen($dk, self::VOKABULAR_DARREICHUNG, $mandant) + [
+                'serving_form_id' => $umhaenger->servierformFuer($mandant, (int) $d->serving_form_id, $this->servierformenNachgelegt),
+            ]);
             $dk->forceFill(['recipe_id' => $kopieId, 'team_id' => $mandant->id])->save();
             $darMap[(int) $d->id] = (int) $dk->id;   // D9: auch die angehängten Formen gehen mit (samt Deltas auf umgemappten Zutaten)
             foreach ($d->deltas()->get() as $delta) {

@@ -37,6 +37,9 @@ class MargeService
         if ($ekPerKgEur === null || $vkMengeProEinheitG === null || $vkMengeProEinheitG <= 0) {
             return null;                                             // kein EK / keine Portionierung → leer, nie Fehler
         }
+        if (($klasse->raw_markup_pct ?? null) === null) {
+            return null;   // Plan B F5: Klasse ohne Aufschlag (Paket-Kopie ohne BHG-Werte) → kein Preis statt still VK = EK
+        }
 
         $mwst = $mwstSatz ?? (float) ($klasse->vat_rate ?? 19);
         $ekBasis = $ekPerKgEur * $vkMengeProEinheitG / 1000;
