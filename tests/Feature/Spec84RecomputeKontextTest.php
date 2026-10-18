@@ -54,7 +54,8 @@ beforeEach(function () {
             $zeilen = [];
             foreach ([$this->sub->id, $this->gericht->id] as $id) {
                 $z = (array) DB::table('foodalchemist_recipes')->where('id', $id)->first();
-                unset($z['updated_at']);
+                // Zeitstempel (updated_at, allergens_aggregated_at …) hängen an der Uhr, nicht an der Sicht — unter Last kippt sonst die Sekunde
+                $z = array_filter($z, fn ($k) => ! str_ends_with((string) $k, '_at'), ARRAY_FILTER_USE_KEY);
                 $zeilen[$id] = $z;
             }
 

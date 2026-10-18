@@ -244,7 +244,7 @@ it('Stufe 0 (b): an Seite und MCP-Tool mit Nutzer ohne Team-Kontext wird NIE gew
     expect((new FaRechteToolHuelle($innen))->execute([], new ToolContext($ohne->fresh(), null))->data['n'])->toBe(FoodAlchemistRecipe::count());
 });
 
-it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen dasselbe SQL wie mit TeamSicht-Scope', function () {
+it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen dasselbe SQL wie mit TeamSicht-Scope (Stufe 1 + 3)', function () {
     expect(config('foodalchemist.team_sicht.stufe'))->toBe(0);
     $geprueft = 0;
     foreach (glob(__DIR__ . '/../../src/Models/*.php') as $datei) {
@@ -266,5 +266,5 @@ it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen das
             $geprueft++;
         }
     }
-    expect($geprueft)->toBe(50);
+    expect($geprueft)->toBe(93);   // 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant)
 });
