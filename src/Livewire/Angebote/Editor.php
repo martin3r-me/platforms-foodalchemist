@@ -87,7 +87,6 @@ class Editor extends Component
         $this->slotWordingAbbrechen();
         $this->kiTextVerwerfen();
         $this->neuesKapitelTitel = '';
-        $this->neuerSlot = '';
         $this->brandingLoadedId = null;        // render() lädt Branding + Präsentation neu
         $this->presentationLoadedId = null;
         $this->canvasLaden();
@@ -164,9 +163,6 @@ class Editor extends Component
     public string $firmaSuche = '';
 
     public string $kontaktSuche = '';
-
-    // ── Gerüst-Review (Angebot-Spezifikum, erhalten): Slots VOR der Kaskade ─────
-    public string $neuerSlot = '';
 
     // ── Branding / CI (pro Angebot) ────────────────────────────────────────────
     public array $brandingForm = ['brand_color' => '#6d28d9', 'band_color' => '', 'footer_text' => ''];
@@ -470,31 +466,9 @@ class Editor extends Component
     //  Angebots-lokale Menü-Entwürfe (Concepter-Editor, nested) — erhalten
     // ══════════════════════════════════════════════════════════════════════════
 
-    public function neuesMenue(AngebotService $svc): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        $c = $svc->neuesConcept($this->team(), $this->selectedId);
-        $this->dispatch('angebot-gespeichert');
-        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $c->id);
-    }
-
     public function bearbeiteMenue(int $conceptId): void
     {
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $conceptId);
-    }
-
-    public function uebernehmeMenue(int $conceptId, AngebotService $svc): void
-    {
-        $svc->promoteConcept($this->team(), $conceptId);
-        $this->dispatch('angebot-gespeichert');
-    }
-
-    public function entferneMenue(int $conceptId, AngebotService $svc): void
-    {
-        $svc->entferneConcept($this->team(), $conceptId);
-        $this->dispatch('angebot-gespeichert');
     }
 
     public function referenziereConcept(int $conceptId, AngebotService $svc): void
@@ -1500,50 +1474,6 @@ class Editor extends Component
         return implode(' — ', $teile);
     }
 
-    /** Slot ans Angebots-Gerüst anhängen (frameFor legt das Gerüst bei Bedarf an). */
-    public function geruestSlotNeu(\Platform\FoodAlchemist\Services\PlanningFrameService $frames): void
-    {
-        if ($this->selectedId === null || trim($this->neuerSlot) === '') {
-            return;
-        }
-        try {
-            $frame = $frames->frameFor($this->team(), 'offer', (int) $this->selectedId);
-            $frames->addSlot($this->team(), $frame, ['label' => trim($this->neuerSlot)]);
-            $this->neuerSlot = '';
-        } catch (\Throwable $e) {
-            $this->errorToast($e->getMessage());
-        }
-    }
-
-    /** Einen Gerüst-Slot löschen. */
-    public function geruestSlotLoeschen(int $slotId, \Platform\FoodAlchemist\Services\PlanningFrameService $frames): void
-    {
-        try {
-            $frames->removeSlot($this->team(), $slotId);
-        } catch (\Throwable $e) {
-            $this->errorToast($e->getMessage());
-        }
-    }
-
-    /** KI-Kickoff: Slots aus dem Angebots-Brief vorschlagen — graceful ohne Provider. */
-    public function geruestKickoff(\Platform\FoodAlchemist\Services\ConceptGeneratorService $gen): void
-    {
-        $team = $this->team();
-        if ($this->selectedId === null) {
-            return;
-        }
-        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->find($this->selectedId);
-        if ($angebot === null) {
-            return;
-        }
-        try {
-            $gen->geruestAusBriefFuerOwner($team, 'offer', (int) $this->selectedId, $this->angebotBrief($angebot));
-            $this->savedToast('Gerüst-Vorschlag erstellt — prüfe/ergänze die Slots, dann Voll-Kaskade.');
-        } catch (\Throwable $e) {
-            $this->errorToast($e->getMessage());
-        }
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
     //  Nested-Livewire-Signale (erhalten)
     // ══════════════════════════════════════════════════════════════════════════
@@ -1676,14 +1606,6 @@ class Editor extends Component
         // Board: EIN Baum mit Status + Preis je Kapitel (gegen die Betriebsbrille gerechnet).
         $kapitelBoard = $angebot ? $this->kapitelBoardDaten($team, $angebot, $komposition, $zielWareneinsatzPct) : [];
 
-        // Gerüst-Slots (read-only) für den Review-Tab — kein Create beim Rendern.
-        $offerFrame = $this->selectedId !== null
-            ? app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('offer', (int) $this->selectedId)
-            : null;
-        $geruestSlots = $offerFrame !== null
-            ? $offerFrame->slots()->orderBy('position')->orderBy('id')->get(['id', 'label', 'target_count', 'price_anchor'])
-            : collect();
-
         // Präsentations-Status + Kunden-Link + Design-Auswahl fürs Branding-&-Präsentation-Tab.
         $presentationInfo = null;
         $presentationLink = null;
@@ -1777,7 +1699,6 @@ class Editor extends Component
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             // Gerüst-Review (Slots VOR der Kaskade)
-            'geruestSlots' => $geruestSlots,
             // Betriebe fürs Status-/Zuordnungs-Bauteil (nur aktive)
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
