@@ -853,14 +853,6 @@ class SalesRecipeService
         });
     }
 
-    /** @return list<string> Autocomplete, team-scoped (§7.7) */
-    public function distinctCustomerNames(Team $team): array
-    {
-        return DB::table('foodalchemist_recipe_customer_names')
-            ->where('team_id', $team->id)->whereNull('deleted_at')
-            ->distinct()->orderBy('customer_name')->pluck('customer_name')->all();
-    }
-
     /**
      * VERKAUFT-ALS-Box + Marge-Cockpit in einem Aufruf (alles abgeleitet, GL-02 I9):
      * g/Einheit = Primär-Eingabe oder aus Yield/Anzahl; VK-Daten via MargeService.

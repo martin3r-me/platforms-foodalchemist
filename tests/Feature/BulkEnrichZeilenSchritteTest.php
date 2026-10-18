@@ -214,7 +214,7 @@ it('B-2: ohne offene Zutat kein Provider-Call — der Vorschlag ist leer', funct
 // ── Gericht: Rollen, Servier-Vehikel, Geschmack ───────────────────────────────────────
 
 it('B-1: Rollen landen nur in Zeilen ohne Rolle — die manuelle Rolle der Jus überlebt den Fake', function () {
-    $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
+    $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, \Platform\FoodAlchemist\Enums\BulkRunType::EnrichVk);
     expect((int) $this->svc->status($this->rootTeam, $runId)->failed)->toBe(0);
 
     $prop = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('field', 'rollen')->first();
@@ -225,7 +225,7 @@ it('B-1: Rollen landen nur in Zeilen ohne Rolle — die manuelle Rolle der Jus �
 });
 
 it('B-1: Servier-Vehikel kommt mit Lineage ki ans Gericht und in die Standard-Darreichung; Geschmack setzt das Enum', function () {
-    $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
+    $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, \Platform\FoodAlchemist\Enums\BulkRunType::EnrichVk);
     $props = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereIn('field', ['servier_vehikel', 'geschmack'])->get()->keyBy('field');
     expect($props['servier_vehikel']->status)->toBe('offen')
         ->and($props['geschmack']->status)->toBe('offen')
@@ -249,7 +249,7 @@ it('B-1: Servier-Vehikel — manuell gesetzt gewinnt, ein Vehikel außerhalb des
     $this->vk->update(['serving_vehicle_vocab_id' => $this->vehikelId, 'serving_vehicle_source' => 'manual']);
     expect($this->svc->luecken($this->vk->fresh(), ['servier_vehikel']))->toBe([]);   // gefüllt = keine Lücke
 
-    // Direkter Lauf trotz gefülltem Feld (starteVk schneidet nicht) → Override-First greift beim Übernehmen.
+    // Direkter Lauf trotz gefülltem Feld → Override-First greift beim Übernehmen.
     $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], ['servier_vehikel']);
     $prop = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('field', 'servier_vehikel')->first();
     expect($this->svc->uebernehmen($this->rootTeam, $prop->id))->toBeFalse()

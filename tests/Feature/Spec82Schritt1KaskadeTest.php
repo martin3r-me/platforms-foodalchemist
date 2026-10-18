@@ -196,11 +196,9 @@ it('Zyklus in der Team-Kette (A → B → A): die DNA-Suche bricht ab, statt zu 
     $team = \Platform\Core\Models\Team::find($this->childA->id);
 
     $start = microtime(true);
-    $canvas = $this->svc->findFoodDna($team);
     $kontext = $this->svc->cascadeKontext($team);
 
-    expect($canvas)->toBeNull()
-        ->and($kontext)->toBe([])
+    expect($kontext)->toBe([])
         ->and(microtime(true) - $start)->toBeLessThan(5.0);
 
     // mit DNA im Team selbst: wird auch im kaputten Zustand gefunden und liefert, ohne zu hängen

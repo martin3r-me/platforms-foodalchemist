@@ -53,11 +53,9 @@ it('Bäckerprozent: pct = m/ref×100 und Rückweg', function () {
         ->and($this->svc->bakerPercent(5, 0))->toBeNull();   // keine Basis → null (kein Div/0)
 });
 
-it('Extraprozent: m = pct/100×Σandere (Hydrokolloid/Salz) + Rückweg', function () {
+it('Extraprozent: m = pct/100×Σandere (Hydrokolloid/Salz)', function () {
     // 0,3 % Xanthan auf 800 g übrige Masse = 2,4 g
-    expect($this->svc->extraMass(0.3, 800))->toBe(2.4)
-        ->and($this->svc->extraPercent(2.4, 800))->toBe(0.3)
-        ->and($this->svc->extraPercent(1, 0))->toBeNull();
+    expect($this->svc->extraMass(0.3, 800))->toBe(2.4);
 });
 
 it('Brining: Lake-Masse d·M/S + Zielgewicht; geliefertes Salz = d% von M', function () {

@@ -153,12 +153,6 @@ class VocabularyService
      */
     public const PARAGRAF3_CODES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15'];
 
-    /** Ist dieser Code eine der 15 kanonischen §3-WG (für UI-Kennzeichnung „Empfehlung")? */
-    public function istKanonischeWarengruppe(string $code): bool
-    {
-        return in_array($code, self::PARAGRAF3_CODES, true);
-    }
-
     /**
      * Warengruppe anlegen — nur Master, global (Plattform-Basis 18.10.). Code = bereinigter Vorgabe-Code oder
      * Slug der Bezeichnung (≤8 Z., GROSS), eindeutig gegen die globalen Zeilen (und Master-Reste vor dem Umzug).
@@ -483,39 +477,6 @@ class VocabularyService
             'code' => $code,
             'label' => $label,
             'sort_order' => (int) FoodAlchemistDishMainGroup::max('sort_order') + 1,
-        ]);
-    }
-
-    /**
-     * #372: Speisen-Klasse zu einer Hauptgruppe anlegen. `diaetform` aus der festen Liste
-     * (fleisch|fisch|vegi|vegan|neutral|allergie); is_vegi/is_vegan werden daraus abgeleitet.
-     */
-    public function createDishClass(Team $team, int $mainGroupId, array $input): FoodAlchemistDishClass
-    {
-        $hg = FoodAlchemistDishMainGroup::findOrFail($mainGroupId);
-        $label = trim($input['label'] ?? '');
-        if ($label === '') {
-            throw new RuntimeException('Klasse braucht eine Bezeichnung.');
-        }
-
-        $diaet = in_array($input['diet_form'] ?? '', ['fleisch', 'fisch', 'vegi', 'vegan', 'neutral', 'allergie'], true)
-            ? $input['diet_form'] : 'neutral';
-
-        $basis = mb_substr(Str::slug($label, '_') ?: 'class', 0, 30);
-        $code = $basis;
-        $i = 2;
-        while (FoodAlchemistDishClass::where('team_id', $team->id)->where('code', $code)->exists()) {
-            $code = mb_substr($basis, 0, 28).'_'.$i++;
-        }
-
-        return FoodAlchemistDishClass::create([
-            'team_id' => $team->id,
-            'dish_main_group_id' => $hg->id,
-            'code' => $code,
-            'label' => $label,
-            'diet_form' => $diaet,
-            'is_vegi' => in_array($diaet, ['vegi', 'vegan'], true),
-            'is_vegan' => $diaet === 'vegan',
         ]);
     }
 
