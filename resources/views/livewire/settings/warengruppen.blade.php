@@ -20,11 +20,16 @@
     <div class="flex flex-wrap gap-4 items-start">
         {{-- Warengruppen links --}}
         <x-fa::section title="Warengruppen" :meta="$warengruppen->count()" class="w-96 max-w-full shrink-0" data-warengruppen-liste x-data="{ dragId: null }">
-            <div class="flex gap-1.5" data-wg-neu>
-                <label for="wg-neu" class="sr-only">Eigene Warengruppe anlegen</label>
-                <x-fa::input id="wg-neu" size="sm" wire:model="neuWg" wire:keydown.enter="wgNeu" placeholder="Eigene Warengruppe" class="flex-1 min-w-0" />
-                <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="wgNeu" title="Eigene Warengruppe anlegen. Die Standard-Warengruppen sind nur eine Empfehlung.">Anlegen</x-fa::button>
-            </div>
+            {{-- Plattform-Basis 18.10.: Warengruppen sind global, anlegen nur das Master-Team --}}
+            @if($plattformPflege)
+                <div class="flex gap-1.5" data-wg-neu>
+                    <label for="wg-neu" class="sr-only">Warengruppe anlegen</label>
+                    <x-fa::input id="wg-neu" size="sm" wire:model="neuWg" wire:keydown.enter="wgNeu" placeholder="Neue Warengruppe (für alle Mandanten)" class="flex-1 min-w-0" />
+                    <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="wgNeu" title="Warengruppe für die ganze Plattform anlegen.">Anlegen</x-fa::button>
+                </div>
+            @else
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-wg-plattform-hinweis>Warengruppen werden zentral gepflegt und gelten für alle.</p>
+            @endif
 
             <div class="flex flex-col gap-0.5 -mx-1">
                 @foreach($warengruppen as $wg)
@@ -40,7 +45,9 @@
                             <x-fa::input size="sm" wire:model="editName" wire:keydown.enter="saveName" wire:keydown.escape="$set('editId', null)" aria-label="Name der Warengruppe" class="flex-1 min-w-0" autofocus />
                             <x-fa::button size="sm" variant="primary" wire:click="saveName">Speichern</x-fa::button>
                         @else
-                            <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $wg->id, 'upMethod' => 'wgHoch', 'downMethod' => 'wgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
+                            @if($plattformPflege)
+                                <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $wg->id, 'upMethod' => 'wgHoch', 'downMethod' => 'wgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
+                            @endif
                             <a href="#" role="button" wire:click.prevent="waehleWg('{{ $wg->code }}')" @if($aktiv) aria-current="true" @endif
                                     class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $wg->code }}</span>
@@ -69,12 +76,14 @@
 
         {{-- Unterkategorien rechts --}}
         <x-fa::section title="Unterkategorien" :meta="$gewaehlt?->name" class="flex-1 basis-[24rem] min-w-0" data-subkat x-data="{ dragIdx: null }"
-            description="Feste Liste je Warengruppe, ergänzt um Werte, die schon an Grundprodukten stehen. Umbenennen gilt für alle eigenen Grundprodukte, geerbte bleiben unberührt.">
-            <div class="flex gap-1.5">
-                <label for="sub-neu" class="sr-only">Neue Unterkategorie</label>
-                <x-fa::input id="sub-neu" wire:model="neuSub" wire:keydown.enter="addSub" placeholder="{{ $subWg === '' ? 'Erst links eine Warengruppe wählen' : 'Neue Unterkategorie' }}" class="flex-1 min-w-0" :disabled="$subWg === ''" />
-                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="addSub" :disabled="$subWg === ''">Unterkategorie anlegen</x-fa::button>
-            </div>
+            description="Feste Liste je Warengruppe, ergänzt um Werte, die schon an Grundprodukten stehen. Die Liste wird zentral gepflegt und gilt für alle.">
+            @if($plattformPflege)
+                <div class="flex gap-1.5" data-sub-neu>
+                    <label for="sub-neu" class="sr-only">Neue Unterkategorie</label>
+                    <x-fa::input id="sub-neu" wire:model="neuSub" wire:keydown.enter="addSub" placeholder="{{ $subWg === '' ? 'Erst links eine Warengruppe wählen' : 'Neue Unterkategorie' }}" class="flex-1 min-w-0" :disabled="$subWg === ''" />
+                    <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="addSub" :disabled="$subWg === ''">Unterkategorie anlegen</x-fa::button>
+                </div>
+            @endif
 
             <div class="overflow-x-auto -mx-4">
                 <table class="fa-table">
@@ -94,6 +103,7 @@
                                 :class="{ 'ring-1 ring-inset ring-[var(--fa-accent-line)]': dragIdx !== null && dragIdx !== {{ $loop->index }} }">
                                 {{-- Umsortieren: Ziehgriff (Drag-and-Drop) + Hoch/Runter als zuverlässige Alternative --}}
                                 <td class="whitespace-nowrap">
+                                    @if($plattformPflege)
                                     <span class="inline-flex items-center gap-0.5 align-middle">
                                         <span class="inline-flex items-center justify-center w-5 h-6 cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] hover:text-[var(--fa-accent)] select-none"
                                               draggable="true"
@@ -109,6 +119,7 @@
                                                     title="Nach unten" aria-label="Nach unten">@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
                                         </span>
                                     </span>
+                                    @endif
                                 </td>
                                 @if($renameAlt === $sub->sub_category)
                                     <td><x-fa::input size="sm" wire:model="renameNeu" wire:keydown.enter="rename" wire:keydown.escape="$set('renameAlt', null)" aria-label="Neuer Name" class="w-full min-w-40" autofocus /></td>
@@ -124,7 +135,9 @@
                                     <td class="num text-[var(--fa-ink-2)]">{{ number_format($sub->n, 0, ',', '.') }}</td>
                                     <td class="whitespace-nowrap">
                                         <div class="flex items-center justify-end gap-1">
-                                            <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="startRename('{{ addslashes($sub->sub_category) }}')">Umbenennen</x-fa::button>
+                                            @if($plattformPflege)
+                                                <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="startRename('{{ addslashes($sub->sub_category) }}')">Umbenennen</x-fa::button>
+                                            @endif
                                             <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                                 <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $sub->sub_category }}"
                                                     x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
@@ -146,7 +159,7 @@
                                     @if($subWg === '')
                                         <x-fa::empty compact icon="heroicon-o-cursor-arrow-rays" title="Keine Warengruppe gewählt">Links eine Warengruppe wählen, um ihre Unterkategorien zu sehen.</x-fa::empty>
                                     @else
-                                        <x-fa::empty compact icon="heroicon-o-tag" title="Keine Unterkategorien in dieser Warengruppe">Oben die erste Unterkategorie anlegen.</x-fa::empty>
+                                        <x-fa::empty compact icon="heroicon-o-tag" title="Keine Unterkategorien in dieser Warengruppe">{{ $plattformPflege ? 'Oben die erste Unterkategorie anlegen.' : 'Für diese Warengruppe sind noch keine Unterkategorien gepflegt.' }}</x-fa::empty>
                                     @endif
                                 </td>
                             </tr>

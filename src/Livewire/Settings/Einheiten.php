@@ -98,6 +98,7 @@ class Einheiten extends Component
             'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'einheiten' => $vocab->listEinheiten($team, $this->includeInactive),
+            'plattformPflege' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team),   // Plattform-Basis 18.10.
         ]);
     }
 

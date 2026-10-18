@@ -33,7 +33,7 @@ beforeEach(function () {
     $this->actingAs($this->user);
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->ctx = new ToolContext($this->user, $this->rootTeam);
-    app(NonFoodService::class)->einrichten($this->rootTeam, true);
+    app(NonFoodService::class)->einrichten(true);   // Plattform-Basis 18.10.: WG 16 global
     $this->gp = fn (string $name, string $wg) => tap($this->makeGp($this->rootTeam, $name), fn ($g) => $g->update(['commodity_group_code' => $wg, 'status' => 'approved']))->fresh();
 });
 

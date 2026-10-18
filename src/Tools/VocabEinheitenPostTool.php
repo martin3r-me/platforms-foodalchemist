@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
-/** MCP-Steuerbarkeit · D13: Einheit-Vokabular anlegen (team-eigen). Safe-additiv, kein Delete. */
+/** MCP-Steuerbarkeit · D13: Einheit-Vokabular anlegen — Plattform-Basis, nur Master-Team, global. Safe-additiv, kein Delete. */
 class VocabEinheitenPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,7 +18,7 @@ class VocabEinheitenPostTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Legt eine team-eigene Einheit an (slug, display_de, dimension mass|volume|count; optional default_in_g/default_in_ml).';
+        return 'Legt eine globale Einheit an — nur Master-Team, Mandanten erhalten ACCESS_DENIED (slug, display_de, dimension mass|volume|count; optional default_in_g/default_in_ml).';
     }
 
     public function getSchema(): array
@@ -47,7 +47,10 @@ class VocabEinheitenPostTool extends FoodAlchemistTool implements ToolContract, 
         try {
             $unit = app(VocabularyService::class)->createEinheit($team, $in);
         } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            // Plattform-Basis: Mandanten legen keine Einheiten/Warengruppen/Sub-Kategorien an (Typ, nicht Wortlaut)
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+
+            return ToolResult::error($e->getMessage(), $code);
         }
 
         return ToolResult::success(['id' => (int) $unit->id, 'slug' => $unit->slug]);

@@ -10,9 +10,11 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * M1-02: Einheiten-CRUD — D1-Ownership, Slug-Kollision (V-06),
  * Inaktiv-Lebenszyklus (AT-D1-04), Delete-Guard bei GP-Referenz.
+ * Plattform-Basis 18.10.: Einheiten pflegt nur das Master-Team, und zwar global (team_id NULL) — Root ist hier der Master.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
     $this->vocab = app(VocabularyService::class);
 
     $this->stk = $this->vocab->createEinheit($this->rootTeam, [
@@ -21,7 +23,8 @@ beforeEach(function () {
 });
 
 it('legt an, normalisiert Dezimal-Komma und listet je Team-Kette', function () {
-    expect((float) $this->stk->default_in_g)->toBe(85.5)
+    expect($this->stk->team_id)->toBeNull()   // Master legt global an, nie ins eigene Team
+        ->and((float) $this->stk->default_in_g)->toBe(85.5)
         ->and($this->vocab->listEinheiten($this->childA)->pluck('slug'))->toContain('stk') // geerbt sichtbar
         ->and($this->vocab->listEinheiten($this->childB)->pluck('slug'))->toContain('stk');
 });
@@ -78,10 +81,8 @@ it('blockt Delete bei GP-Referenz, erlaubt ihn ohne (V-06)', function () {
     expect(FoodAlchemistVocabEinheit::find($this->stk->id))->toBeNull();
 });
 
-it('Kind-Team legt EIGENE Einheit an — Eltern und Geschwister sehen sie nicht', function () {
-    $this->vocab->createEinheit($this->childA, ['slug' => 'kiste', 'display_de' => 'Kiste']);
-
-    expect($this->vocab->listEinheiten($this->childA)->pluck('slug'))->toContain('kiste')
-        ->and($this->vocab->listEinheiten($this->rootTeam)->pluck('slug'))->not->toContain('kiste')
-        ->and($this->vocab->listEinheiten($this->childB)->pluck('slug'))->not->toContain('kiste');
+it('Kind-Team legt KEINE Einheit an — Einheiten sind Plattform-Sprache (Plattform-Basis 18.10.)', function () {
+    expect(fn () => $this->vocab->createEinheit($this->childA, ['slug' => 'kiste', 'display_de' => 'Kiste']))
+        ->toThrow(\Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::class, 'Plattform-Sprache');
+    expect(FoodAlchemistVocabEinheit::where('slug', 'kiste')->exists())->toBeFalse();
 });

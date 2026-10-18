@@ -48,7 +48,10 @@ class VocabSubkategorienReorderTool extends FoodAlchemistTool implements ToolCon
         try {
             app(VocabularyService::class)->reorderSubCategories($team, $code, array_map('strval', $names));
         } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            // Plattform-Basis: Mandanten legen keine Einheiten/Warengruppen/Sub-Kategorien an (Typ, nicht Wortlaut)
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+
+            return ToolResult::error($e->getMessage(), $code);
         }
 
         return ToolResult::success(['warengruppe_code' => $code, 'names' => array_map('strval', $names)]);

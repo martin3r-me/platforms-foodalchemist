@@ -184,7 +184,7 @@ class Warengruppen extends Component
             return;
         }
         [$namen[$index], $namen[$ziel]] = [$namen[$ziel], $namen[$index]];
-        app(VocabularyService::class)->reorderSubCategories($this->team(), $this->subWg, $namen);
+        $this->sortiereSubs($namen);
     }
 
     /** Drag-and-Drop: gezogene Zeile ($von) hinter die Ziel-Zeile ($nach) einsortieren. */
@@ -200,7 +200,17 @@ class Warengruppen extends Component
         $namen = array_values($namen);
         $at = array_search($zielName, $namen, true);
         array_splice($namen, $at + 1, 0, [$item]);
-        app(VocabularyService::class)->reorderSubCategories($this->team(), $this->subWg, $namen);
+        $this->sortiereSubs($namen);
+    }
+
+    /** Plattform-Basis: Sortieren darf nur der Master — Mandanten bekommen die Meldung statt eines Fehlers. */
+    private function sortiereSubs(array $namen): void
+    {
+        try {
+            app(VocabularyService::class)->reorderSubCategories($this->team(), $this->subWg, $namen);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     /** @return array<int, string> angezeigte Sub-Kategorie-Namen der gewählten WG, in Anzeige-Reihenfolge. */
@@ -227,6 +237,7 @@ class Warengruppen extends Component
             'team' => $team,
             'warengruppen' => $warengruppen,
             'paragraf3' => VocabularyService::PARAGRAF3_CODES,
+            'plattformPflege' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team),   // Plattform-Basis 18.10.
             'subKategorien' => $this->subWg !== '' ? $vocab->listSubCategories($team, $this->subWg) : collect(),
         ]);
     }

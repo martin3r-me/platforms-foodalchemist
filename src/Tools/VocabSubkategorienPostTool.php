@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
-/** MCP-Steuerbarkeit · D13: Sub-Kategorie einer Warengruppe anlegen (team-eigen). */
+/** MCP-Steuerbarkeit · D13: Sub-Kategorie einer Warengruppe anlegen — Plattform-Basis, nur Master-Team, global. */
 class VocabSubkategorienPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,7 +18,7 @@ class VocabSubkategorienPostTool extends FoodAlchemistTool implements ToolContra
 
     public function getDescription(): string
     {
-        return 'Legt eine Sub-Kategorie unter einer Warengruppe an (warengruppe_code, name).';
+        return 'Legt eine globale Sub-Kategorie unter einer Warengruppe an (warengruppe_code, name). Nur Master-Team, Mandanten erhalten ACCESS_DENIED.';
     }
 
     public function getSchema(): array
@@ -48,7 +48,10 @@ class VocabSubkategorienPostTool extends FoodAlchemistTool implements ToolContra
         try {
             $sub = app(VocabularyService::class)->createSubCategory($team, $code, $name);
         } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            // Plattform-Basis: Mandanten legen keine Einheiten/Warengruppen/Sub-Kategorien an (Typ, nicht Wortlaut)
+            $code = $e instanceof \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException ? 'ACCESS_DENIED' : 'VALIDATION_ERROR';
+
+            return ToolResult::error($e->getMessage(), $code);
         }
 
         return ToolResult::success(['id' => (int) $sub->id, 'warengruppe_code' => $code, 'name' => $name]);

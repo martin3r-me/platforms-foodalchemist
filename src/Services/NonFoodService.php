@@ -154,28 +154,34 @@ class NonFoodService
 
     /**
      * Warengruppe 16 „Non-Food“ und ihre Unterkategorien anlegen — idempotent, als Kommando statt Migration (Spec 82 §6).
+     * Plattform-Basis 18.10.: Warengruppen und Sub-Kategorien sind global (team_id NULL). Geprüft wird gegen die globalen Zeilen und
+     * gegen Master-Reste vor dem Umzug (plattform-basis-heben), damit nie eine zweite WG 16 entsteht.
      *
      * @return array{wg_angelegt:bool, unterkategorien_angelegt:list<string>}
      */
-    public function einrichten(Team $team, bool $schreiben): array
+    public function einrichten(bool $schreiben): array
     {
+        $master = \Platform\FoodAlchemist\Support\MasterTeam::id();
+        $basis = fn (string $modell) => $modell::ohneTeamSicht('eindeutigkeit')
+            ->where(fn ($q) => $q->whereNull('team_id')->when($master !== null, fn ($q) => $q->orWhere('team_id', $master)));
+
         $out = ['wg_angelegt' => false, 'unterkategorien_angelegt' => []];
-        $wg = FoodAlchemistLookupWarengruppe::query()->where('team_id', $team->id)->where('code', NonFoodRegeln::WG_CODE)->first();
+        $wg = $basis(FoodAlchemistLookupWarengruppe::class)->where('code', NonFoodRegeln::WG_CODE)->first();
         if ($wg === null) {
             $out['wg_angelegt'] = true;
             if ($schreiben) {
-                $max = FoodAlchemistLookupWarengruppe::query()->where('team_id', $team->id)->max('sort_order');
-                FoodAlchemistLookupWarengruppe::create(['team_id' => $team->id, 'code' => NonFoodRegeln::WG_CODE, 'name' => NonFoodRegeln::WG_NAME, 'sort_order' => (int) $max + 1]);
+                $max = $basis(FoodAlchemistLookupWarengruppe::class)->max('sort_order');
+                FoodAlchemistLookupWarengruppe::create(['team_id' => null, 'code' => NonFoodRegeln::WG_CODE, 'name' => NonFoodRegeln::WG_NAME, 'sort_order' => (int) $max + 1]);
             }
         }
-        $vorhanden = FoodAlchemistWarengruppeSubkategorie::query()->where('team_id', $team->id)->where('commodity_group_code', NonFoodRegeln::WG_CODE)->pluck('name')->all();
+        $vorhanden = $basis(FoodAlchemistWarengruppeSubkategorie::class)->where('commodity_group_code', NonFoodRegeln::WG_CODE)->pluck('name')->all();
         foreach (NonFoodRegeln::unterkategorien() as $i => $name) {
             if (in_array($name, $vorhanden, true)) {
                 continue;
             }
             $out['unterkategorien_angelegt'][] = $name;
             if ($schreiben) {
-                FoodAlchemistWarengruppeSubkategorie::create(['team_id' => $team->id, 'commodity_group_code' => NonFoodRegeln::WG_CODE, 'name' => $name, 'position' => $i + 1]);
+                FoodAlchemistWarengruppeSubkategorie::create(['team_id' => null, 'commodity_group_code' => NonFoodRegeln::WG_CODE, 'name' => $name, 'position' => $i + 1]);
             }
         }
 

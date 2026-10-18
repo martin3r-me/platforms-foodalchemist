@@ -103,7 +103,8 @@ it('KI: Notschalter (Methode) ist ohne Sperre abgewiesen; zweite Person kann bei
 
 it('Einheiten: Anlegen nur mit Sperre, „Fertig" gibt frei; Filter bleibt ohne Sperre bedienbar', function () {
     $this->actingAs($this->anna);
-    $anzahl = fn () => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::where('team_id', $this->rootTeam->id)->count();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Plattform-Basis 18.10.: Einheiten legt nur der Master an, global
+    $anzahl = fn () => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::whereNull('team_id')->where('slug', 'sperrtest')->count();
     $vorher = $anzahl();
 
     $c = Livewire::test(EinheitenSettings::class)

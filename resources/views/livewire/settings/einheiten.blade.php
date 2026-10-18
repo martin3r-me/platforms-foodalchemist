@@ -106,9 +106,10 @@
         </fieldset>
     </x-fa::section>
 
-    {{-- Neu anlegen (eigenes Team — Kind-Teams ergänzen Eigenes, D1) --}}
+    {{-- Plattform-Basis 18.10.: Einheiten sind global, neu anlegen nur das Master-Team --}}
+    @if($plattformPflege)
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
-    <x-fa::section title="Neue Einheit" description="Wird für dein Team angelegt." data-unit-neu>
+    <x-fa::section title="Neue Einheit" description="Wird für die ganze Plattform angelegt und gilt für alle Mandanten." data-unit-neu>
         <div class="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] items-start">
             <x-fa::field label="Kürzel" for="unit-neu-slug" hint="Kleinbuchstaben, z. B. el">
                 <x-fa::input id="unit-neu-slug" wire:model="neu.slug" placeholder="el" />
@@ -129,4 +130,5 @@
         </div>
     </x-fa::section>
     </fieldset>
+    @endif
 </div>

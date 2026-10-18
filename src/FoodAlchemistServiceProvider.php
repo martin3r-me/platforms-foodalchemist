@@ -117,6 +117,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenVerweiseCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSpurenCommand::class,
                 \Platform\FoodAlchemist\Console\WissenGlobalHebenCommand::class,
+                \Platform\FoodAlchemist\Console\PlattformBasisHebenCommand::class,
                 \Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenEinordnungSicherungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerungSicherungCommand::class,

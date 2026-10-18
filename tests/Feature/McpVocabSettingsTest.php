@@ -15,6 +15,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Plattform-Basis 18.10.: Root ist Master, schreibt Einheiten/WG/Subs global
     $this->user = $this->makeUser($this->rootTeam);
     $this->actingAs($this->user);
     $this->registry = app(ToolRegistry::class);
@@ -43,6 +44,7 @@ it('vocab_einheiten: POST / PUT / TOGGLE (kein Delete)', function () {
     $post = ($this->run)('foodalchemist.vocab_einheiten.POST', ['slug' => 'el', 'display_de' => 'Esslöffel', 'dimension' => 'volume', 'default_in_ml' => 15]);
     expect($post->success)->toBeTrue('post: ' . ($post->error ?? ''));
     $id = $post->data['id'];
+    expect(FoodAlchemistVocabEinheit::find($id)->team_id)->toBeNull();   // global, nie ins Master-Team
 
     $put = ($this->run)('foodalchemist.vocab_einheiten.PUT', ['id' => $id, 'felder' => ['display_de' => 'EL']]);
     expect($put->success)->toBeTrue('put: ' . ($put->error ?? ''));
@@ -95,4 +97,19 @@ it('Safe-Guard: fremde/geerbte Einheit ist read-only', function () {
     $put = ($this->run)('foodalchemist.vocab_einheiten.PUT', ['id' => $id, 'felder' => ['display_de' => 'TL']], $this->childKontext);
     expect($put->success)->toBeFalse();
     expect(FoodAlchemistVocabEinheit::find($id)->display_de)->toBe('Teelöffel');
+});
+
+it('Plattform-Basis: Mandant bekommt bei Einheit/WG/Sub-Kategorie anlegen, umbenennen, sortieren ACCESS_DENIED', function () {
+    $faelle = [
+        ['foodalchemist.vocab_einheiten.POST', ['slug' => 'kiste', 'display_de' => 'Kiste', 'dimension' => 'count']],
+        ['foodalchemist.vocab_warengruppen.POST', ['name' => 'Eigene WG']],
+        ['foodalchemist.vocab_subkategorien.POST', ['warengruppe_code' => '01', 'name' => 'Eigene Sub']],
+        ['foodalchemist.vocab_subkategorien.PUT', ['warengruppe_code' => '01', 'alt' => 'A', 'neu' => 'B']],
+        ['foodalchemist.vocab_subkategorien.REORDER', ['warengruppe_code' => '01', 'names' => ['A']]],
+    ];
+    foreach ($faelle as [$tool, $args]) {
+        $r = ($this->run)($tool, $args, $this->childKontext);
+        expect($r->success)->toBeFalse($tool)->and($r->errorCode)->toBe('ACCESS_DENIED', $tool);
+    }
+    expect(FoodAlchemistVocabEinheit::where('slug', 'kiste')->exists())->toBeFalse();
 });

@@ -21,6 +21,6 @@ return [
     'Services/StammLieferantService.php::setStamm' => 'eigene Stamm-Zeile (team_id = Team), die einen sichtbaren Lieferanten referenziert',
     'Services/SupplierItemService.php::create' => 'eigener Artikel (team_id = Team) an einem sichtbaren Lieferanten',
     'Services/SupplierService.php::addContact' => 'eigener Kontakt (team_id = Team) an einem sichtbaren Lieferanten',
-    'Services/VocabularyService.php::createEinheit' => 'eigene Einheit; exists() über die Kette ist nur Dubletten-Schutz',
+    'Services/VocabularyService.php::createEinheit' => 'globale Einheit nur durch den Master (nurPlattformPflege); exists() ist nur Dubletten-Schutz',
     'Services/VocabularyService.php::createRecipeCategory' => 'eigene Kategorie, die eine sichtbare Hauptgruppe referenziert',
 ];

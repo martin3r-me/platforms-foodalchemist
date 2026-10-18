@@ -49,14 +49,16 @@ it('Ohne Master-Konfiguration schreibt niemand global (fail closed); eigene Zeil
 
     expect(fn () => $svc->updateEinheit($this->rootTeam, $this->einheit->id, ['display_de' => 'X']))->toThrow(RuntimeException::class);
 
-    $eigene = $svc->createEinheit($this->childA, ['slug' => 'eigen-a', 'display_de' => 'eigen']);
+    // Plattform-Basis 18.10.: Mandanten legen keine Einheiten mehr an — eine team-eigene Bestandszeile bleibt aber pflegbar
+    $eigene = FoodAlchemistVocabEinheit::create(['team_id' => $this->childA->id, 'slug' => 'eigen-a', 'display_de' => 'eigen']);
     expect($svc->updateEinheit($this->childA, $eigene->id, ['display_de' => 'eigen2'])->display_de)->toBe('eigen2');
 });
 
 it('Team ergänzt eigene Zeilen, fremde Teams schreiben sie nicht', function () {
     ($this->mitMaster)();
     $svc = app(VocabularyService::class);
-    $eigene = $svc->createEinheit($this->childA, ['slug' => 'eigen-a', 'display_de' => 'eigen']);
+    // Plattform-Basis 18.10.: Mandanten legen keine Einheiten mehr an — eine team-eigene Bestandszeile bleibt aber pflegbar
+    $eigene = FoodAlchemistVocabEinheit::create(['team_id' => $this->childA->id, 'slug' => 'eigen-a', 'display_de' => 'eigen']);
 
     expect(fn () => $svc->updateEinheit($this->childB, $eigene->id, ['display_de' => 'x']))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 });
