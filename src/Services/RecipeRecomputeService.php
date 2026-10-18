@@ -157,8 +157,9 @@ class RecipeRecomputeService
      * @param  array<int|string>  $recipeIds
      * @return array<int> betroffene recipe_ids (Start-Menge zuerst, dann transitive Eltern)
      */
-    public function recomputeMany(array $recipeIds): array
+    public function recomputeMany(array $recipeIds, ?array &$fehler = null): array
     {
+        $fehler = [];   // recipe_id => erste Fehlermeldung (Necta-Lauf meldet sie als Signal, Kurator 18.10.)
         // 1. Betroffene Menge sammeln (Starts + alle transitiven Eltern), NOCH nicht rechnen.
         $betroffen = $this->betroffeneRezepteMany($recipeIds);
         if ($betroffen === []) {
@@ -174,6 +175,7 @@ class RecipeRecomputeService
             try {
                 $this->recomputePipeline($id, false);
             } catch (\Throwable $e) {
+                $fehler[$id] = $e->getMessage();
                 Log::warning("Recompute-Propagation: Rezept {$id} fehlgeschlagen — {$e->getMessage()} (I8: Edit nicht geblockt)");
             }
         }

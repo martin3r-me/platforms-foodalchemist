@@ -475,3 +475,83 @@ it('Handzeile ohne Necta-Stand, Allergene: strenger übernommen, lockerer und �
         ->and($zeile->allergen_celery)->toBeNull()                    // unbekannt → nicht_enthalten NICHT still bei Handzeile
         ->and($faelle)->toBe(['allergen_celery', 'allergen_milk']);
 });
+
+// ── Kurator 18.10. (F3): veraltete Rezept-Allergene nach Necta-Änderung sind ein Sicherheitsthema ──
+
+it('★ Necta verschärft ein Artikel-Allergen → das Rezept über GP ist nach dem Lauf verschärft, Zähler „rezepte_nachgerechnet“', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Splitterbrötchen');
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $this->a->id, 'gp_id' => $gp->id]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Schoko-Sandwich');
+    $this->makeIngredient($rezept, 'Splitterbrötchen', $gp);
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputePipeline($rezept->id);
+    expect($rezept->fresh()->allergen_milk)->not->toBe('enthalten')   // Ausgangslage: Milch am Artikel unbekannt
+        ->and($rezept->fresh()->allergen_gluten)->toBe('enthalten');
+
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    expect(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->value('allergen_milk'))->toBe('enthalten')
+        ->and($rezept->fresh()->allergen_milk)->toBe('enthalten')                  // ohne Nachrechnen bliebe das Rezept alt
+        ->and($r['zaehler']['rezepte_nachgerechnet'])->toBe(1)
+        ->and($r['zaehler']['artikel_kennzeichnung_geaendert'])->toBe(1);
+});
+
+it('Nachrechnen: ohne Kennzeichnungs-Änderung kein Rezept; Probe zählt nur und schreibt nichts', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Splitterbrötchen');
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $this->a->id, 'gp_id' => $gp->id]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Schoko-Sandwich');
+    $this->makeIngredient($rezept, 'Splitterbrötchen', $gp);
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputePipeline($rezept->id);
+    $vorher = $rezept->fresh()->allergen_milk;
+
+    $nacht = ($this->lauf)();                                       // nächtlich: nur Preise, A hat keine neuen Allergene
+    expect($nacht['zaehler']['rezepte_nachgerechnet'])->toBe(0);
+
+    $probe = ($this->lauf)(['voll' => true, 'probe' => true]);
+    expect($probe['zaehler']['rezepte_nachgerechnet'])->toBe(1)      // würde nachgerechnet
+        ->and($rezept->fresh()->allergen_milk)->toBe($vorher);       // Probe schreibt nichts
+});
+
+it('★ Nachrechnen scheitert für ein Rezept: die anderen werden nachgerechnet, kritisches Signal an den Master, Lauf bleibt fertig', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Splitterbrötchen');
+    \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $this->a->id, 'gp_id' => $gp->id]);
+    $gut = $this->makeRecipe($this->rootTeam, 'Schoko-Sandwich');
+    $this->makeIngredient($gut, 'Splitterbrötchen', $gp);
+    $kaputt = $this->makeRecipe($this->rootTeam, 'Kaputtes Rezept');
+    $this->makeIngredient($kaputt, 'Splitterbrötchen', $gp);
+    $recompute = app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class);
+    $recompute->recomputePipeline($gut->id);
+    $recompute->recomputePipeline($kaputt->id);
+
+    $this->app->instance(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class, new class(
+        app(\Platform\FoodAlchemist\Services\GpAggregateService::class), app(\Platform\FoodAlchemist\Services\PriceService::class), $kaputt->id
+    ) extends \Platform\FoodAlchemist\Services\RecipeRecomputeService {
+        public function __construct($gp, $preise, private int $kaputt)
+        {
+            parent::__construct($gp, $preise);
+        }
+
+        public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
+        {
+            if ($recipeId === $this->kaputt) {
+                throw new RuntimeException('Testfehler im Rezept');
+            }
+            parent::recomputePipeline($recipeId, $cascadePrices);
+        }
+    });
+
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    $signal = DB::table('foodalchemist_signals')->where('type', SignalTyp::NectaRezepteNachrechnenFehler->value)->sole();
+    $payload = json_decode($signal->payload, true);
+    expect(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->status)->toBe('fertig')
+        ->and($gut->fresh()->allergen_milk)->toBe('enthalten')                                       // das andere Rezept ist nachgerechnet
+        ->and($kaputt->fresh()->allergen_milk)->not->toBe('enthalten')
+        ->and($signal->severity)->toBe('kritisch')->and((int) $signal->team_id)->toBe($this->rootTeam->id)
+        ->and($signal->title)->toContain('1 Rezepte konnten nach Allergen-Änderung nicht nachgerechnet werden')
+        ->and($payload['rezept_ids'])->toBe([$kaputt->id])
+        ->and($payload['erster_fehler'])->toBe('Testfehler im Rezept')
+        ->and($r['zaehler']['rezepte_nachgerechnet'])->toBe(1)
+        ->and($r['zaehler']['rezepte_nachrechnen_fehler'])->toBe(1);
+});
