@@ -624,9 +624,15 @@ class ReportExportService
         $supplier = FoodAlchemistSupplier::visibleToTeam($team)->findOrFail($id);
 
         // Spec 84: nur sichtbare Artikel (Eigenzeilen fremder Teams unter einem globalen Lieferanten nie; Stamm-Paket-Regel wie die LA-Liste)
+        // Spec 84 (18.10.): der aktive Preis kommt als Unterabfrage in DERSELBEN Abfrage (gleiche Regel wie activeFor, preisSichtFuer bleibt
+        // der einzige Riegel) — vorher eine Abfrage je Artikel (#491): Broichs Lieferant mit 21.014 Artikeln = 21.014 Abfragen, Timeout/Speicher.
         $items = FoodAlchemistSupplierItem::visibleToTeam($team)->where('foodalchemist_supplier_items.supplier_id', $supplier->id)
+            ->select('foodalchemist_supplier_items.*')
+            ->selectSub(app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team), 'aktiver_preis')
             ->with(['structure.gp:id,name,lead_la_supplier_item_id'])
             ->orderBy('designation')->get();
+        // dieselbe Form wie FoodAlchemistPrice::price (Cast decimal:4), damit der Bericht byte-gleich bleibt
+        $preisForm = fn ($roh) => $roh === null ? null : (new \Platform\FoodAlchemist\Models\FoodAlchemistPrice)->setRawAttributes(['price' => $roh])->price;
 
         return [
             'typ' => 'lieferant',
@@ -652,7 +658,7 @@ class ReportExportService
                         'qty' => FoodAlchemistSupplierItem::mengeVon($item),
                         'unit_code' => $item->unit_code,
                         'is_discontinued' => (bool) $item->is_discontinued,
-                        'price' => $this->preisFuer($item)?->price,   // Spec 84: Preis-Riegel
+                        'price' => $preisForm($item->aktiver_preis),   // Spec 84: Preis-Riegel (Unterabfrage über preisSichtFuer)
                         'gp' => $item->structure?->gp?->name,
                         'is_lead' => $item->structure?->gp !== null
                             && (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id,

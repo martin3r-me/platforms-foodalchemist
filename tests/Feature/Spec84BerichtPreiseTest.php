@@ -108,3 +108,38 @@ it('Rezept-PDF-Tool läuft über denselben Datenweg: kein Master-Preis', functio
     expect(preiseIm($daten))->not->toContain(MASTERPREIS);
     expect($res->success || in_array($res->errorCode, ['PDF_UNAVAILABLE'], true))->toBeTrue((string) $res->error);
 });
+
+// ── Lieferanten-Bericht: Preise in EINER Abfrage (vorher eine je Artikel, #491) ───────────────────────────────
+
+it('Lieferanten-Bericht: Abfragen-Zahl hängt nicht an der Artikelzahl (Preise als Unterabfrage)', function () {
+    $zaehle = function () {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->svc->supplierDaten($this->broich, $this->lief->id, ($this->opt)());
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $n;
+    };
+    $wenige = $zaehle();
+    foreach (range(1, 30) as $i) {
+        $la = FoodAlchemistSupplierItem::create(['team_id' => null, 'supplier_id' => $this->lief->id, 'designation' => "Artikel {$i}",
+            'qty' => 1.0, 'unit_code' => 'kg', 'stamm_class' => StammPaket::PAKET]);
+        app(PriceService::class)->createTeamPrice($i % 2 ? $this->broich : $this->master, $la, 3.0 + $i);
+    }
+
+    expect($zaehle())->toBe($wenige);
+});
+
+it('Lieferanten-Bericht: Preis je Artikel = activeFor in der Sicht des Teams, gleiche Form (decimal:4) — Broich, Foodpol, Master', function () {
+    foreach ([$this->broich, $this->foodpol, $this->master] as $team) {
+        try {
+            $items = $this->svc->supplierDaten($team, $this->lief->id, ($this->opt)())['report']['supplier']['items'];
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            continue;   // Foodpol sieht den Lieferanten nicht (kein Opt-in)
+        }
+        $erwartet = FoodAlchemistSupplierItem::visibleToTeam($team)->where('supplier_id', $this->lief->id)->orderBy('designation')->get()
+            ->map(fn ($la) => app(PriceService::class)->activeFor((int) $la->id, $team)?->price)->all();
+        expect(array_column($items, 'price'))->toBe($erwartet, "Team {$team->name}");
+    }
+});
