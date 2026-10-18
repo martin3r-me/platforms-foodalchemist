@@ -339,12 +339,6 @@ class ProduktpassService
         return $pass->refresh();
     }
 
-    /** Alter Name (bis 16.10.2026), gleiche Wirkung: bestätigt die gesamte Kennzeichnung. */
-    public function allergeneBestaetigen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null, FaRolle $mindestens = FaRolle::Kuratieren): FoodAlchemistProduktpass
-    {
-        return $this->kennzeichnungBestaetigen($team, $pass, $userId, $mindestens);
-    }
-
     public function kennzeichnungVerwerfen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null): FoodAlchemistProduktpass
     {
         $this->pruefeSchreiben($team, $pass->item()->firstOrFail(), $userId, FaRolle::Kuratieren, 'Kennzeichnungs-Vorschlag verwerfen');
@@ -353,12 +347,6 @@ class ProduktpassService
         }
 
         return $pass->refresh();
-    }
-
-    /** Alter Name, gleiche Wirkung. */
-    public function allergeneVerwerfen(Team $team, FoodAlchemistProduktpass $pass, ?int $userId = null): FoodAlchemistProduktpass
-    {
-        return $this->kennzeichnungVerwerfen($team, $pass, $userId);
     }
 
     // ── Anzeige / MCP ───────────────────────────────────────────────────────

@@ -195,39 +195,6 @@ class ItemModal extends Component
         app(NonFoodService::class)->setzeManuell($item, $neu['ist'] === '' ? null : $neu['ist'] === '1', $neu['subkategorie'] !== '' ? $neu['subkategorie'] : null);
     }
 
-    public function allergeneSpeichern(): void
-    {
-        try {
-            app(SupplierItemService::class)->setAllergens($this->team(), $this->item($this->itemId), $this->allergene);
-            $this->fehler = null;
-            $this->dispatch('item-gespeichert');
-        } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    public function deklarationenSpeichern(): void
-    {
-        try {
-            app(SupplierItemService::class)->setDeclarations($this->team(), $this->item($this->itemId), $this->deklarationen);
-            $this->fehler = null;
-            $this->dispatch('item-gespeichert');
-        } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    public function naehrwerteSpeichern(): void
-    {
-        try {
-            app(SupplierItemService::class)->setNutrition($this->team(), $this->item($this->itemId), $this->naehrwerte);
-            $this->fehler = null;
-            $this->dispatch('item-gespeichert');
-        } catch (RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
     public function preisAnlegen(): void
     {
         try {

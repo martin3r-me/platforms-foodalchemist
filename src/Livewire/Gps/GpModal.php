@@ -716,14 +716,6 @@ class GpModal extends Component
         }
     }
 
-    public function manual_zustand(GpNamingService $naming): void
-    {
-        if ($naming->normalisiereZustand($this->builder['condition'] ?: null) === null) {
-            return;
-        }
-        $this->gpSchreiben(fn ($svc, $team, $id) => $svc->setzeZustand($team, $id, 'manual', $this->builder['condition']));
-    }
-
     // ── M3-10: GL-07-Lebenszyklus tags ──────────────────────────────────
 
     public function ai_tags(AiGatewayService $ki): void
@@ -771,14 +763,6 @@ class GpModal extends Component
                 $this->tags[$tag] = '';
             }
             unset($this->kiVorschlag['tags']);
-        }
-    }
-
-    public function manual_tags(): void
-    {
-        $gp = $this->gp();
-        if ($gp !== null) {
-            $this->speichereTags($gp, source: 'manual');
         }
     }
 

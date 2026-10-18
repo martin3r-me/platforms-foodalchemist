@@ -1,16 +1,16 @@
 {{--
     M0-09 / P-3: KI-Feld-Header — macht GL-07 sichtbar und bedienbar.
 
-    LABEL — Quelle (ki|manual|unbefüllt) · Konfidenz %   [Übernehmen] [Reset] [Manuell] [✨ Autopilot]
+    LABEL — Quelle (ki|manual|unbefüllt) · Konfidenz %   [Übernehmen] [Reset] [✨ Autopilot]
     [Wert / Chips via Default-Slot]
 
-    Event-Vertrag (GL-07-Quadrupel, P-3-Mapping): Die Buttons rufen per wire:click
+    Event-Vertrag (GL-07, P-3-Mapping): Die Buttons rufen per wire:click
     Methoden auf der BESITZENDEN Livewire-Komponente — Namensschema:
         ✨ Autopilot  → ai_<field>()       (Propose; persistiert NICHTS, GL-07 I3)
         Übernehmen    → accept_<field>()   (nur sichtbar bei :has-proposal="true";
                                             Override-First-Check macht der Server, GL-07 I2)
         Reset         → clear_<field>()    (Wert + Lineage → NULL; nur bei gesetzter Quelle)
-        Manuell       → manual_<field>()   (Besitzer schaltet Edit-Modus frei; Edit setzt source='manual')
+    Einen Knopf „Manuell“ gibt es nicht (seit 2026-07-01): Editieren + Speichern setzt source='manual'.
 
     Quelle-Zustände (GL-07 §4.1): null = unbefüllt · 'ki' (+ Konfidenz %) · 'manual' · 'auto'.
     reasoning wird als title-Tooltip am Quelle-Badge gereicht (Review-Hilfe).
