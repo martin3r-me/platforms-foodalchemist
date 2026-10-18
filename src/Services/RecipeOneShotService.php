@@ -904,7 +904,7 @@ class RecipeOneShotService
             // (BAN → ALC, Auto-VK 45,90 → 23,90 €). Override-First: die Darreichung gewinnt, die Kaskade
             // füllt nur, wenn auch dort nichts steht.
             $gepflegt = $recipe->standardPresentation()->first()?->markup_class_id;
-            $ak = $gepflegt !== null ? (int) $gepflegt : $this->markupKaskade($recipe)['id'];
+            $ak = $gepflegt !== null ? (int) $gepflegt : $this->markupKaskade($team, $recipe)['id'];
             if ($recipe->markup_class_id === null && $ak !== null) {
                 $this->sales->updateVk($team, $recipe->id, ['markup_class_id' => $ak]);
                 // `updateVk` stempelt `last_modified_by='vk_editor'` — das ist die
@@ -958,7 +958,7 @@ class RecipeOneShotService
         $zielVk = $zielVk !== null && $zielVk > 0 ? round($zielVk, 2) : null;
 
         try {
-            $kaskade = $this->markupKaskade($recipe);
+            $kaskade = $this->markupKaskade($team, $recipe);
 
             // Preis-Wahrheit ist die Darreichung — die VORHANDENE, nicht eine neue.
             $standard = $recipe->relationLoaded('standardPresentation')
@@ -1034,7 +1034,7 @@ class RecipeOneShotService
      *
      * @return array{id: ?int, code: ?string, quelle: string}
      */
-    private function markupKaskade(FoodAlchemistRecipe $recipe): array
+    private function markupKaskade(Team $team, FoodAlchemistRecipe $recipe): array
     {
         if ($recipe->markup_class_id !== null) {
             return ['id' => (int) $recipe->markup_class_id, 'code' => $recipe->markupClass?->code, 'quelle' => 'gesetzt'];
@@ -1042,13 +1042,16 @@ class RecipeOneShotService
         // Code über die ID auflösen statt über eine Relation: `FoodAlchemistDishMainGroup`
         // hat kein `defaultMarkupClass()`, und ein `?->` darauf liefert kommentarlos null —
         // die Klasse sähe leer aus, obwohl sie ableitbar ist.
-        $code = fn (int $id): ?string => \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::find($id)?->code;
+        // Spec 84 (18.10.): ein Default zählt nur, wenn die Klasse für das Team sichtbar ist — sonst gab die Speisen-Klasse
+        // (Master-Vokabular) dem Mandanten die Master-Aufschlagsklasse (BHG-Marge im Mandanten-VK). Unsichtbar = nicht gesetzt.
+        $sichtbar = fn (?int $id) => $id === null ? null
+            : \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->first(['id', 'code']);
 
-        if (($id = $recipe->dishClass?->default_markup_class_id) !== null) {
-            return ['id' => (int) $id, 'code' => $code((int) $id), 'quelle' => 'speisen_klasse'];
+        if (($ak = $sichtbar($recipe->dishClass?->default_markup_class_id)) !== null) {
+            return ['id' => (int) $ak->id, 'code' => $ak->code, 'quelle' => 'speisen_klasse'];
         }
-        if (($id = $recipe->dishMainGroup?->default_markup_class_id) !== null) {
-            return ['id' => (int) $id, 'code' => $code((int) $id), 'quelle' => 'hauptgruppe'];
+        if (($ak = $sichtbar($recipe->dishMainGroup?->default_markup_class_id)) !== null) {
+            return ['id' => (int) $ak->id, 'code' => $ak->code, 'quelle' => 'hauptgruppe'];
         }
 
         return ['id' => null, 'code' => null, 'quelle' => 'keine'];
