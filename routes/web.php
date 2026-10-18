@@ -80,6 +80,10 @@ Route::get('/rezepte', \Platform\FoodAlchemist\Livewire\Recipes\Browser::class)
 Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::class)
     ->name('foodalchemist.suppliers.index');
 
+/** PR 3 · Necta-Prüffälle (nur Master-Team): Abweichungen aus dem Necta-Abgleich entscheiden. */
+Route::get('/lieferanten/necta-pruefaelle', \Platform\FoodAlchemist\Livewire\Suppliers\NectaPruefaelle::class)
+    ->name('foodalchemist.suppliers.necta-pruefaelle');
+
 /**
  * Spec 32: Die beiden Einkaufs-Auswertungen sind ins Controlling-Zentrum gewandert
  * (Preisvergleich → Tab „Preise", Optimierung → Tab „Wareneinsatz"). Die Routen bleiben

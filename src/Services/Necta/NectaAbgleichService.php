@@ -618,6 +618,11 @@ class NectaAbgleichService extends NectaLaufBasis
         }
         $schluessel = ['art' => $art, 'objekt' => $objekt, 'legacy_id' => $legacy, 'feld' => $feld, 'status' => 'offen'];
         $werte = ['fa_wert' => self::text($faWert), 'necta_wert' => self::text($nectaWert), 'lauf_id' => $this->laufId, 'updated_at' => now()];
+        if (NectaPruefallSperre::schonVerworfen($art, $objekt, $legacy, $feld, $werte['necta_wert'])) {
+            $this->zaehler['pruefaelle_unterdrueckt'] = ($this->zaehler['pruefaelle_unterdrueckt'] ?? 0) + 1;   // „FA behalten“ gilt für DIESEN Necta-Wert
+
+            return;
+        }
         $offen = DB::table('foodalchemist_necta_pruefaelle')->where($schluessel)->value('id');
         $offen !== null
             ? DB::table('foodalchemist_necta_pruefaelle')->where('id', $offen)->update($werte)

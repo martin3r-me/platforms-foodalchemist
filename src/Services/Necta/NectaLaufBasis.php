@@ -257,59 +257,13 @@ abstract class NectaLaufBasis
         if ($artikel === []) {
             return;
         }
-        $gpIds = [];
-        foreach (array_chunk($artikel, 1000) as $teil) {
-            $gpIds = array_merge($gpIds, DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', $teil)
-                ->whereNull('deleted_at')->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->all());
+        $r = app(NectaRezeptNachrechnen::class)->nachrechnen($artikel, sprintf('Necta-Lauf #%d', (int) $this->laufId),
+            'necta_rezepte_nachrechnen_fehler:'.$this->laufId, $this->laufId, $this->probe);
+        $this->zaehler['rezepte_nachgerechnet'] = $r['nachgerechnet'];
+        if ($r['fehler'] !== []) {
+            $this->zaehler['rezepte_nachrechnen_fehler'] = count($r['fehler']);
         }
-        $gpIds = array_values(array_unique($gpIds));
-        if ($gpIds !== []) {
-            $gpIds = array_values(array_unique(array_merge($gpIds, DB::table('foodalchemist_gps')->whereIn('derivat_von_gp_id', $gpIds)
-                ->whereNull('deleted_at')->pluck('id')->map(fn ($v) => (int) $v)->all())));
-        }
-        $rezepte = app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->rezepteMitGps($gpIds);
-        if ($rezepte === []) {
-            return;
-        }
-        if ($this->probe) {
-            $this->zaehler['rezepte_nachgerechnet'] = count($rezepte);   // Probe: so viele würden nachgerechnet
-
-            return;
-        }
-        $fehler = [];
-        try {
-            $betroffen = app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeMany($rezepte, $fehler);
-            $this->zaehler['rezepte_nachgerechnet'] = count($betroffen) - count($fehler);
-        } catch (\Throwable $e) {
-            // vor der Rezept-Schleife gescheitert (z. B. Eltern-Suche): dann gilt keins als nachgerechnet
-            foreach ($rezepte as $rid) {
-                $fehler[(int) $rid] ??= $e->getMessage();
-            }
-            \Illuminate\Support\Facades\Log::warning('Necta: Rezepte nachrechnen fehlgeschlagen — '.$e->getMessage());
-        }
-        if ($fehler !== []) {
-            // Lauf bleibt „fertig“ (Necta-Daten stimmen), aber veraltete Rezept-Allergene liest nachts niemand im Zähler → kritisches Signal
-            $this->zaehler['rezepte_nachrechnen_fehler'] = count($fehler);
-            $this->signalNachrechnenFehler($fehler);
-        }
-        $log(sprintf('Rezepte nachgerechnet: %d (aus %d Artikeln mit geänderten Allergenen/Deklarationen)', $this->zaehler['rezepte_nachgerechnet'], count($artikel)));
-    }
-
-    /** @param array<int, string> $fehler recipe_id => Fehlermeldung */
-    private function signalNachrechnenFehler(array $fehler): void
-    {
-        $master = $this->masterTeam();
-        if ($master === null) {
-            return;
-        }
-        $erster = (string) reset($fehler);
-        $ids = array_keys($fehler);
-        $titel = sprintf('Necta-Lauf #%d: %d Rezepte konnten nach Allergen-Änderung nicht nachgerechnet werden', (int) $this->laufId, count($ids));
-        app(SignalService::class)->erzeuge($master, SignalTyp::NectaRezepteNachrechnenFehler, SignalSeverity::Kritisch, $titel, [
-            'dedup_key' => 'necta_rezepte_nachrechnen_fehler:'.$this->laufId, 'source' => 'necta_abgleich', 'ref_type' => 'necta_lauf', 'ref_id' => $this->laufId,
-            'description' => mb_substr('Rezepte '.implode(', ', array_slice($ids, 0, 50)).(count($ids) > 50 ? ' …' : '').' — erster Fehler: '.$erster, 0, 1000),
-            'payload' => ['lauf_id' => $this->laufId, 'anzahl' => count($ids), 'rezept_ids' => $ids, 'erster_fehler' => mb_substr($erster, 0, 500)],
-        ]);
+        $log(sprintf('Rezepte nachgerechnet: %d (aus %d Artikeln mit geänderten Allergenen/Deklarationen)', $r['nachgerechnet'], count($artikel)));
     }
 
     /** @return array{0:string, 1:string, 2:array<string,mixed>, 3:?int} [Tabelle, Objekt, Zeile, Team] */
