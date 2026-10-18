@@ -63,7 +63,10 @@ class ConcepterDimensionen extends Component
         }
         $teamId = Auth::user()?->currentTeamRelation?->id;
         $nameSpalte = $vokabular === 'servierformen' ? 'label' : 'name';
-        if (DB::table($meta['tabelle'])->where($nameSpalte, $name)->whereNull('deleted_at')->exists()) {
+        // F2 (unique je Team): Kollision nur in der eigenen Sicht — ein ungescopter Check blockierte Mandanten, sobald IRGENDEIN Team den
+        // Namen hat, und verriet dessen Existenz (wie Behaelter::create, E2)
+        if (TeamScope::applyVisible(DB::table($meta['tabelle'])->where($nameSpalte, $name)->whereNull('deleted_at'), 'team_id',
+            Auth::user()?->currentTeamRelation)->exists()) {
             $this->fehler = "«{$name}» existiert schon in {$meta['label']}.";
 
             return;

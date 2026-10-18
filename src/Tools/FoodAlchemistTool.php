@@ -162,11 +162,12 @@ abstract class FoodAlchemistTool
         $id = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
             ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
             ->where(fn ($q) => $q->where('code', $wert)->orWhereRaw('LOWER(label) = ?', [mb_strtolower($wert)]))
+            ->orderByRaw('team_id IS NULL')->orderByDesc('team_id')   // F2: eigene Kopie vor geerbter/globaler Zeile
             ->value('id');
         if ($id === null) {
             $verf = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
                 ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
-                ->orderBy('code')->pluck('code')->implode(', ');
+                ->orderBy('code')->pluck('code')->unique()->implode(', ');
             throw new \RuntimeException("Unbekannte Servierform \"{$wert}\". Verfügbar: {$verf}");
         }
 
