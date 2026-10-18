@@ -74,9 +74,11 @@ class NectaPruefallService
         unset($ohneLieferant['lieferant']);
 
         return [
-            'je_art' => $this->abfrage($ohneArt)->groupBy('pf.art')->selectRaw('pf.art, COUNT(*) AS n')->pluck('n', 'art')->map(fn ($n) => (int) $n)->all(),
-            'je_lieferant' => $this->abfrage($ohneLieferant)->join('foodalchemist_suppliers as su', 'su.id', '=', DB::raw('COALESCE(sid.supplier_id, sip.supplier_id)'))
-                ->groupBy('su.id', 'su.name')->selectRaw('su.id, su.name, COUNT(*) AS n')->orderByDesc('n')->limit(200)->get()
+            // MySQL only_full_group_by (Hotfix nach #496): select() ERSETZT die Spalten der Grundabfrage (pf.* …) — nur gruppierte Spalten + Aggregate
+            'je_art' => $this->abfrage($ohneArt)->select(['pf.art', DB::raw('COUNT(*) AS n')])->groupBy('pf.art')
+                ->pluck('n', 'art')->map(fn ($n) => (int) $n)->all(),
+            'je_lieferant' => $this->abfrage($ohneLieferant)->whereNotNull('sl.id')
+                ->select(['sl.id', 'sl.name', DB::raw('COUNT(*) AS n')])->groupBy('sl.id', 'sl.name')->orderByDesc('n')->limit(200)->get()
                 ->map(fn ($r) => ['id' => (int) $r->id, 'name' => (string) $r->name, 'n' => (int) $r->n])->all(),
         ];
     }
