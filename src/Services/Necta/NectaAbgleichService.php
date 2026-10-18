@@ -321,34 +321,67 @@ class NectaAbgleichService extends NectaLaufBasis
 
         // Details bekannter Artikel, seitenweise: je Seite EINE Abfrage für die FA-Zeilen (nicht eine je Artikel);
         // die neuen Artikel hat neueArtikelAbschliessen schon angelegt
+        $gesehenDetails = [];
         foreach (['allergene', 'deklaration', 'naehrwerte'] as $art) {
             $tabelle = $this->detailZiel($art, ['supplierItemId' => 0], null)[0];
             $seite = 1;
             do {
                 $antwort = $this->holen(self::DETAIL_RESSOURCEN[$art], $seite, ['supplierId' => $l['legacy_id']]);
                 $ids = array_map(fn ($r) => (int) ($r['supplierItemId'] ?? 0), $antwort['items']);
-                $faZeilen = $ids === [] ? collect() : DB::table($tabelle)->whereIn('legacy_id', $ids)->whereNull('deleted_at')->get()->keyBy('legacy_id');
-                $faArtikel = null;
+                // Schlüssel ist der FA-Artikel (Unique supplier_item_id), nicht legacy_id: Zeilen aus Handpflege/Produktpass haben keine
+                // legacy_id, gelöschte sieht der Unique-Index trotzdem — beides führte 18.10. zum 1062-Absturz beim Einfügen
+                $faArtikel = $ids === [] ? [] : DB::table('foodalchemist_supplier_items')->whereIn('legacy_id', $ids)->pluck('id', 'legacy_id')->all();
+                $faZeilen = $faArtikel === [] ? collect() : DB::table($tabelle)->whereIn('supplier_item_id', array_values($faArtikel))->get()->keyBy('supplier_item_id');
                 foreach ($antwort['items'] as $r) {
                     $artikelLegacy = (int) ($r['supplierItemId'] ?? 0);
-                    if (isset($neu[$artikelLegacy])) {
+                    if (isset($neu[$artikelLegacy]) || ! isset($faArtikel[$artikelLegacy])) {
                         continue;
                     }
-                    [, $objekt, $necta] = $this->detailZiel($art, $r, null);
-                    $fa = $faZeilen->get($artikelLegacy);
-                    if ($fa === null) {
-                        $faArtikel ??= DB::table('foodalchemist_supplier_items')->whereIn('legacy_id', $ids)->pluck('id', 'legacy_id')->all();
-                        if (isset($faArtikel[$artikelLegacy])) {
-                            $this->detailAnlegen($art, $r, (int) $faArtikel[$artikelLegacy], null);
-                        }
+                    $faId = (int) $faArtikel[$artikelLegacy];
+                    if (isset($gesehenDetails[$art][$faId])) {
+                        $this->zaehler['detail_doppelt_in_necta'] = ($this->zaehler['detail_doppelt_in_necta'] ?? 0) + 1;   // erster Necta-Datensatz gilt
 
                         continue;
+                    }
+                    $gesehenDetails[$art][$faId] = true;
+                    [, $objekt, $necta] = $this->detailZiel($art, $r, null);
+                    $fa = $faZeilen->get($faId);
+                    if ($fa === null) {
+                        $this->detailAnlegen($art, $r, $faId, null);
+
+                        continue;
+                    }
+                    if ($fa->deleted_at !== null) {
+                        $this->detailWiederbeleben($art, $tabelle, $objekt, $fa, $necta);
+
+                        continue;
+                    }
+                    if ($fa->legacy_id === null && ! $this->probe) {
+                        DB::table($tabelle)->where('id', $fa->id)->update(['legacy_id' => $artikelLegacy]);   // Zuordnung nachtragen, Werte prüft vergleichen()
                     }
                     $this->vergleichen($objekt, $tabelle, $fa, $necta);
                 }
                 $seite++;
             } while ($seite <= max(1, $antwort['totalPages']) && $antwort['items'] !== []);
         }
+    }
+
+    /**
+     * Gelöschte Detailzeile (Allergene/Deklaration/Nährwerte), die Necta wieder liefert: Der Unique-Index auf supplier_item_id lässt
+     * keine zweite Zeile zu. Die gelöschte Zeile trägt keinen gültigen Stand mehr — sie wird mit den Necta-Werten belegt wie eine neue
+     * (gleiche Regeln wie detailAnlegen: Necta ist Erstbefüllung, kein Abgleich gegen alte Werte).
+     *
+     * @param  array<string,mixed>  $necta  gemappte Necta-Werte (inkl. legacy_id)
+     */
+    private function detailWiederbeleben(string $art, string $tabelle, string $objekt, object $fa, array $necta): void
+    {
+        $this->zaehler["{$art}_wiederbelebt"] = ($this->zaehler["{$art}_wiederbelebt"] ?? 0) + 1;
+        $this->beispiel("{$art}_wiederbelebt", ['supplier_item_id' => $fa->supplier_item_id, 'legacy_id' => $necta['legacy_id']]);
+        if ($this->probe) {
+            return;
+        }
+        DB::table($tabelle)->where('id', $fa->id)->update([...$necta, 'deleted_at' => null, 'updated_at' => now()->toDateTimeString()]);
+        $this->stand($objekt, (int) $necta['legacy_id'], $necta);
     }
 
     /**

@@ -237,3 +237,14 @@ it('Websuche-Marker schützt nicht: Allergen aus der Websuche + Necta strenger �
         ->and(($this->signal)())->toBeNull()
         ->and(FoodAlchemistProduktpassFeld::where('supplier_item_id', $this->a->id)->where('feld', 'allergen_milk')->exists())->toBeTrue();
 });
+
+it('Absturz 18.10.: Pass-Allergenzeile OHNE legacy_id — Vollabgleich fügt keine zweite Zeile ein (1062), Pass-Vorrang greift weiter', function () {
+    DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->update(['legacy_id' => null]);   // so legt der Pass sie ohne Necta an
+
+    ($this->necta)([], ['milk' => 3]);
+
+    expect(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
+        ->and(($this->milch)())->toBe('nicht_enthalten')                                      // Pass bleibt
+        ->and(($this->faelle)()->sole()->necta_wert)->toBe('enthalten')                       // Abweichung → Prüffall
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->value('legacy_id'))->toBe(36674788);   // Zuordnung nachgetragen
+});

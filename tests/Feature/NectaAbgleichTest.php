@@ -373,3 +373,66 @@ it('Abwesenheit erklärt NICHT bei Handpflege auf „unbekannt“ und nie bei We
         ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->orderBy('feld')->pluck('feld')->all())
         ->toBe(['allergen_gluten', 'allergen_soy', 'details.oats']);
 });
+
+// ── Absturz Vollauf 18.10. (1062 Duplicate entry auf foodalchemist_item_allergens.supplier_item_id) ──
+
+it('1062: Allergenzeile ohne legacy_id (Handpflege) wird abgeglichen statt doppelt eingefügt', function () {
+    DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->update(['legacy_id' => null, 'source' => 'manual']);
+    ($this->lauf)();
+
+    $r = ($this->lauf)(['voll' => true]);
+
+    expect(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->status)->not->toBe('fehler')
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->value('allergen_milk'))->toBe('enthalten')   // strenger: auto
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->value('legacy_id'))->toBe(36674788);
+});
+
+it('1062: gelöschte Allergenzeile, die Necta wieder liefert, wird mit den Necta-Werten neu belegt (keine zweite Zeile)', function () {
+    DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->update(['deleted_at' => now(), 'allergen_gluten' => 'nicht_enthalten']);
+    ($this->lauf)();
+
+    $r = ($this->lauf)(['voll' => true]);
+
+    $zeile = DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->sole();
+    expect($zeile->deleted_at)->toBeNull()
+        ->and($zeile->allergen_gluten)->toBe('enthalten')->and($zeile->allergen_milk)->toBe('enthalten')
+        ->and($r['zaehler']['allergene_wiederbelebt'])->toBe(1)
+        ->and(DB::table('foodalchemist_necta_stand')->where('objekt', 'item_allergen')->where('legacy_id', 36674788)->exists())->toBeTrue();
+});
+
+it('1062: Necta liefert denselben Artikel doppelt — im Vollabgleich und beim neuen Artikel je EINE Zeile, erster Datensatz gilt', function () {
+    DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->delete();   // A ohne Zeile → Vollabgleich legt an
+    $this->attrappe->daten['supplier-item-allergens'] = [
+        ['supplierItemId' => 36674788, 'gluten' => 3],
+        ['supplierItemId' => 36674788, 'gluten' => 3, 'milk' => 3],
+        ['supplierItemId' => 36674799, 'gluten' => 3],
+        ['supplierItemId' => 36674799, 'gluten' => 3],
+    ];
+
+    ($this->lauf)();                                                  // C ist neu: Detail-Anlage aus dem Delta
+    $r = ($this->lauf)(['voll' => true]);
+
+    $c = FoodAlchemistSupplierItem::where('legacy_id', 36674799)->sole();
+    expect(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->status)->not->toBe('fehler')
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
+        ->and(DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $c->id)->count())->toBe(1)
+        ->and($r['zaehler']['detail_doppelt_in_necta'])->toBeGreaterThanOrEqual(1);
+});
+
+it('1062: dieselben Fälle auch bei Deklaration und Nährwerten (eine Zeile je Artikel, gelöschte/ohne legacy_id)', function () {
+    $einfuegen = fn (string $t, array $w) => DB::table($t)->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+        'supplier_item_id' => $this->a->id, 'created_at' => now(), 'updated_at' => now()] + $w);
+    $einfuegen('foodalchemist_item_nutritionals', ['legacy_id' => null, 'protein' => 5.0]);
+    $einfuegen('foodalchemist_item_declarations', ['legacy_id' => 36674788, 'deleted_at' => now()]);
+    $this->attrappe->daten['supplier-item-nutritional-values'] = [['supplierItemId' => 36674788, 'protein' => 6.0]];
+    $this->attrappe->daten['supplier-item-declaration-substances'] = [['supplierItemId' => 36674788]];
+    ($this->lauf)();
+
+    $r = ($this->lauf)(['voll' => true]);
+
+    expect(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->status)->not->toBe('fehler')
+        ->and(DB::table('foodalchemist_item_nutritionals')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
+        ->and(DB::table('foodalchemist_item_declarations')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
+        ->and(DB::table('foodalchemist_item_declarations')->where('supplier_item_id', $this->a->id)->value('deleted_at'))->toBeNull();
+});
