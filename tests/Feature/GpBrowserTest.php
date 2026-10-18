@@ -175,7 +175,7 @@ it('DetailPanel: zeigt Stammdaten nach gp-selected und respektiert D1-Sichtbarke
         ->assertSee('Gemüse'); // Warengruppen-Name aufgelöst
 
     // D1-Leak-Probe: Root darf Kind-eigenes GP nicht sehen
-    $kindGpId = \Platform\FoodAlchemist\Models\FoodAlchemistGp::where('name', 'Kind-Spezial')->firstOrFail()->id;
+    $kindGpId = \Platform\FoodAlchemist\Models\FoodAlchemistGp::ohneTeamSicht('test')->where('name', 'Kind-Spezial')->firstOrFail()->id;
     Livewire::test(DetailPanel::class)
         ->dispatch('gp-selected', id: $kindGpId)
         ->assertDontSee('Kind-Spezial');
