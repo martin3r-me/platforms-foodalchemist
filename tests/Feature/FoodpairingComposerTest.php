@@ -109,7 +109,9 @@ it('B2: ohne seed_anker fehlt der pairing_vorgabe-Key (byte-identisch)', functio
         ->and($out['kontext']['pairing_vorgabe'])->toBe([]);
 });
 
-it('B1: composerGeneriere dispatcht GenerateRecipeJob mit seed_anker — NICHT in generation_params', function () {
+it('B1: Übernehmen → goKaskade dispatcht GenerateRecipeJob mit seed_anker — NICHT in generation_params', function () {
+    // Spec 85 C-b: der Direkt-Pfad composerGeneriere ist gelöscht (UI seit 3746b4e6 nur noch
+    // „Übernehmen“) — dieselbe Fan-out-Isolation gilt jetzt für den einzigen Weg.
     Queue::fake();
     $tomate = ($this->mkAnker)('tomate');
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Composer', 'brief' => '']);
@@ -117,7 +119,8 @@ it('B1: composerGeneriere dispatcht GenerateRecipeJob mit seed_anker — NICHT i
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->set('composerAnker', [['id' => $tomate, 'slug' => 'tomate', 'label' => 'Tomate']])
-        ->call('composerGeneriere', 'rezept')
+        ->call('composerUebernehmen', 'rezept')
+        ->call('goKaskade', 'rezept')
         ->assertSet('laeuft', true)
         ->assertNoRedirect();
 

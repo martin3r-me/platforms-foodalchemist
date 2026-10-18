@@ -1988,7 +1988,6 @@ it('Slice 2 / D1-Read: getürkte laufId auf fremden Lauf → Run-Action verpufft
         ->and($failed->refresh()->status)->toBe('failed')
         ->and($fremdRezept->refresh()->status->value)->toBe('draft');
 })->with([
-    'alleFrei' => [fn ($lw) => $lw->call('alleFrei')],
     'alleVerwerfen' => [fn ($lw) => $lw->call('alleVerwerfen')],
     'laufFortsetzen' => [fn ($lw) => $lw->call('laufFortsetzen')],
     'laufWiederAufnehmen' => [fn ($lw) => $lw->call('laufWiederAufnehmen')],

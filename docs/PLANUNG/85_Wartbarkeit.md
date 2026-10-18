@@ -1,6 +1,6 @@
 # Spec 85 · Wartbarkeit und technische Schulden
 
-Stand 2026-10-18 · Status: **v1.0, vom Kurator freigegeben 18.10.; Umsetzung ab 19.10.** · Branch `docs/spec85-wartbarkeit`
+Stand 2026-10-18 · Status: **v1.1** (v1.0 freigegeben 18.10., #503; v1.1 Entscheidungen D-1–D-4, D-7) · Umsetzung ab 19.10.
 Bezug: Spec 84 (Teil C ausgelagert hierher; Team-Sicht bleibt in 84), Specs 53–83 (offene Punkte geprüft)
 Messbasis: Modul `platforms-foodalchemist` **eaad31b7** (main 18.10.2026). Quellen der Inventur: Code-Durchsicht (Marker, toter Code), Test-Harness und Wächter-Listen, Specs 53–84 gegen den Code geprüft, Schuldenliste von Session „test“ (`00_INBOX/_Spec85_Schuldenliste_test_2026-10-18.md`), Lücken aus der Session vom 18.10. (Kurator).
 
@@ -42,7 +42,7 @@ Quelle: **V** = Vanessa (Code-Durchsicht/Session), **T** = Session „test“ (N
 |---|---|---|---|---|---|---|---|
 | I1-1 | `src/Tools/**` (MCP-Schreibtools) | Bearbeitungssperre wird nicht geprüft; KI/MCP schreibt in einen gesperrten Datensatz | **hoch** | `BearbeitungssperreService` in 0 Tool-Dateien | Vanessa | Sperr-Prüfung in der gemeinsamen Tool-Hülle (`FaRechteToolHuelle`), Antwort `gesperrt` | S (Spec 65) |
 | I1-2 | `BearbeitungssperreService` | keine Versionsprüfung beim Speichern (Schutz 2 aus Spec 65): paralleles Speichern überschreibt still | **hoch** | Service kennt nur sperren/haelt/verlaengern/freigeben | Vanessa | Versionsfeld (`updated_at`-Vergleich) im Speichern der Editoren | S (Spec 65) |
-| I1-3 | Spec 65 Pakete B–E | Teil-Editoren speichern sofort statt als Entwurf | mittel | keine B–E-Commits | Kurator/Dominique | entscheiden, ob B–E noch gebraucht werden, sonst Spec 65 schließen | S |
+| I1-3 | Spec 65 Pakete B–E | Teil-Editoren speichern sofort statt als Entwurf | mittel | keine B–E-Commits | – | **geschlossen (D-3)** | S |
 | I1-4 | `tests/Feature/FormatDimensionenTest.php:62` | Cross-Team-Attach-Test läuft **nie** (braucht `TeamFactory`, die es nicht gibt) | **hoch** | `->skip(! class_exists(TeamFactory))`, 0 Factories im Repo | Vanessa | Team über den Seed-Helfer anlegen, Skip raus | V |
 | I1-5 | `tests/Feature/WissenMasterUnsichtbarP2Test.php:105` | Sicherheitstest überspringt sich, wenn das Bindings-Tool umbenannt wird | mittel | Skip per Tool-Name | Vanessa | fehlschlagen statt überspringen | V |
 | I1-6 | ~90 direkte `Gp::find`/`SupplierItem::find`-Lesestellen | Stufe 3 deckt sie nur, soweit die Suite sie durchläuft | mittel | Spec 84 Stufe 3 | test | Sweep mit Urteil je Stelle, Test aus fremdem Kontext | T1, K |
@@ -81,7 +81,7 @@ Quelle: **V** = Vanessa (Code-Durchsicht/Session), **T** = Session „test“ (N
 
 | # | Ort | Befund | Schwere | Beleg | Zuständig | Vorschlag | Quelle |
 |---|---|---|---|---|---|---|---|
-| I3-1 | VK-Altspalten `recipes.sales_net` u. a. neben der Standard-Darreichung | überall Rückfall auf die Altspalte: SpeisekarteService:25/564, MenuEngineeringService:142/167, MenuCandidatePoolService:71–160, ConcepterAggregateService:85/247, SalesRecipeService:491–573 (spiegelt), DarreichungService:91/177–211/671, VkModal:498; `MoneyTruthReport` existiert nur wegen dieser Doppelung | **hoch** | Kommentare „Legacy-Fallback“ | Kurator/Dominique | Stichtag: MoneyTruthReport auf io = 0 Abweichungen → Rückfälle entfernen, Spiegeln einstellen, Spalten droppen (eigene Spec-Etappe) | V |
+| I3-1 | VK-Altspalten `recipes.sales_net` u. a. neben der Standard-Darreichung | überall Rückfall auf die Altspalte: SpeisekarteService:25/564, MenuEngineeringService:142/167, MenuCandidatePoolService:71–160, ConcepterAggregateService:85/247, SalesRecipeService:491–573 (spiegelt), DarreichungService:91/177–211/671, VkModal:498; `MoneyTruthReport` existiert nur wegen dieser Doppelung | **hoch** | Kommentare „Legacy-Fallback“ | Vanessa | **D-1: vor dem Rezept-Import abbauen** — Rückfälle entfernen, Spiegeln einstellen, Spalten droppen; MoneyTruthReport als Prüfung | V |
 | I3-2 | deutsch-englische Alias-Relationen, 19 Models (Recipe 10, Concept 8 …) | `@deprecated` (Refactor „#486 Phase 1“, alter Ticket-Bezug, nicht PR #486), deutsche Namen noch als Eager-Load-Strings genutzt (AngebotService:397, ConceptService:76, GpService:60, SalesRecipeService:279/282, RecipeService:151/174, MenuCandidatePoolService:52/108 …) | mittel | 48 Aliase | Pfadfinder | Phase 2: Aufrufer umstellen (Rector/PHPStan für Allerweltsnamen), dann Aliase löschen; `Recipe::standardDarreichung()` hat schon 0 Aufrufer | V |
 | I3-3 | `WordingResolver.php:82–96`, `FoodbookService:2004/2241` | `block.customer_text` als Legacy-Stufe vor `wording` | mittel | V | Pfadfinder | Daten migrieren, Stufe entfernen | V |
 | I3-4 | `GpFormService:16/100/108` | Form „stk“ wird ins Legacy-Feld `piece_default_g` gespiegelt | mittel | V | Pfadfinder | Leser umstellen, Spiegel weg | V |
@@ -103,7 +103,7 @@ Methode: Token-Zählung über `src`, `resources`, `routes`, `config` ohne Kommen
 
 | # | Ort | Befund | Schwere | Zuständig | Vorschlag | Quelle |
 |---|---|---|---|---|---|---|
-| I4-1 | `Planung/Index::alleFrei`, `::composerGeneriere` (+ `$composerSeed`) | nur Tests | niedrig | Vanessa | **löschen (entschieden C-b)**, eigener PR vor C1 | V |
+| I4-1 | `Planung/Index::alleFrei`, `::composerGeneriere` (+ `$composerSeed`) | nur Tests | niedrig | Vanessa | **gelöscht (C-b)** | V |
 | I4-2 | `MargeService::effektiverVk` (+ `vkVorschlag`-Pfad) | nur Golden-Test | niedrig | Kurator/Dominique | löschen oder als bewusste Naht markieren | V |
 | I4-3 | 51 Service-/Support-Methoden ohne Aufrufer (davon ~20 ganz ohne Test), z. B. `EtikettService::haltbarkeitSetzen`, `KnowledgeService::bindExisting`, `SpeisekarteLeitstelleService::preisAmpeln`, `SensorikService::fuerConcept`, `ConcepterAggregateService::cacheConcept`, `TeamSettingsService::topfDeckelFuer/mindestMarginPct/seasonMarginBand`, `ProductionCapacityService::alsNaechstes/letzteAenderungen`, `PairingService::recipeAnkers`, `ProduktpassService::allergeneBestaetigen/Verwerfen`, `CanvasService::updateEntry`, `ConceptService::categoryCounts` … (vollständige Liste: Anhang A) | Ballast, teils verwaiste Funktionen samt Tests (`FoodbookService::kapitelFreigeben` 5 Testdateien, `IdeenService::kiDivergenz` 3) | mittel | Vanessa | je Kandidat Spec/PR-Historie prüfen, Liste an Dominique, dann ein Lösch-PR je Bereich | V |
 | I4-4 | 24 Livewire-Aktionen ohne View-Bezug, z. B. `Angebote/Editor::neuesMenue/uebernehmeMenue/entferneMenue/formatPreisModus/geruest*`, `Orders/Editor::saveApproval`, `Orders/Index::versandfaehigeAusloesen`, `Settings/PraesentationsDesigns::bloeckeNeuOrdnen/tokenSetzen`, `Settings/Taxonomie::hgSort`, `Produktion/Editor::zielAusListe`, `Suppliers/ItemModal::allergene-/deklarationen-/naehrwerteSpeichern`, `GpModal::manual_zustand/manual_tags`, `RecipeModal::clear_/manual_kategorie` (Anhang A) | Ballast | niedrig | Vanessa | wie I4-3 | V |
@@ -113,7 +113,7 @@ Methode: Token-Zählung über `src`, `resources`, `routes`, `config` ohne Kommen
 
 | # | Ort | Befund | Schwere | Beleg | Zuständig | Vorschlag | Quelle |
 |---|---|---|---|---|---|---|---|
-| I5-1 | `Regeln/RegelBuch.php:13/53` | liest nur globale Regeln; Team-Regeln im Schema vorbereitet, nicht im Lesepfad (Mandanten-Hausstandards greifen nicht) | mittel | `whereNull('team_id')` | Kurator/Dominique | Auflösung Zeile > Team > global (Spec 81) | S |
+| I5-1 | `Regeln/RegelBuch.php:13/53` | liest nur globale Regeln; Team-Regeln im Schema vorbereitet, nicht im Lesepfad (Mandanten-Hausstandards greifen nicht) | mittel | `whereNull('team_id')` | test | **D-7: bauen** — Auflösung Zeile > Team > global (Spec 81), nach Stufe 4 | S |
 | I5-2 | Spec 64 §2/§4 | Lieferanten-Kontakte in Alttabelle außerhalb CRM; `FoodbookReifeAdapter.php:57` prüft das alte Feld `customer` (tote Prüfung); `zusatz_empfaenger`, Portfolio „je Kunde“, Formate-Kunde als Freitext | mittel | Grep | Kurator | Spec 64 neu terminieren; Reife-Adapter sofort auf CRM-Link umstellen | S |
 | I5-3 | `MandantExportService.php:22` | Export ohne Dateien, ohne Rotation, ohne Knopf (Spec 82) | mittel | „NICHT enthalten: Fotos, Logos“ | Kurator | vor erstem Mandanten-Ausstieg vervollständigen | S |
 | I5-4 | `MatchHeuristics` (Spec 80 K4/K3) | Matcher liest Verarbeitung/Form nicht; `gp-felder-backfill` nicht angewendet | mittel | Z.354/446 | Kurator | Backfill (Freigabe) + Matcher-Erweiterung | S |
@@ -141,7 +141,7 @@ Methode: Token-Zählung über `src`, `resources`, `routes`, `config` ohne Kommen
 | # | Ort | Befund | Schwere | Beleg | Zuständig | Vorschlag | Quelle |
 |---|---|---|---|---|---|---|---|
 | I7-1 | Unique `(team_id, code/slug)` bei `team_id NULL` | MySQL setzt sie nicht durch; globale Dubletten möglich (Plattform-Basis prüft heute selbst) | mittel | T23, #493 | Pfadfinder | generierte Spalte `COALESCE(team_id, 0)` im Unique oder Wächter | T23, V |
-| I7-2 | Kalkulation/OrderTemplate | ohne Freigabe-Hülle, vorläufig in `STUFEN[4]` | mittel | T25 | Kurator/Dominique | InhaltsFreigabe-Typ ja/nein | T25 |
+| I7-2 | Kalkulation/OrderTemplate | ohne Freigabe-Hülle, vorläufig in `STUFEN[4]` | mittel | T25 | – | **D-4: dauerhaft nur Team**, kein Abo-Typ; aus `STUFEN[4]`-Vorläufigkeit in feste Regel überführen | T25 |
 | I7-3 | `RecipeConformanceAdapter.php:166` `const TIERARTEN`, kein Tierart-Feld (Spec 57/59/81) | Fisch ohne Fisch-Allergen zählt als Fleisch | niedrig | S | Kurator | Tierart als Regel-Daten/Feld | S |
 | I7-4 | `NectaMapper.php:14/121` | Platzhalterwert `TODO_country_<id>` in `origin_country` | niedrig | V | Pfadfinder | Länder-Mapping oder NULL | V |
 | I7-5 | `ImportSliceCommand` | Altwerkzeug legt team-eigene Einheiten/WG an (seit Plattform-Basis falsch); Docblock nennt nicht existierendes `import-legacy` | niedrig | Z.18, Z.980–1044 | Vanessa | als Altwerkzeug sperren (nur mit `--force`) oder löschen | K, V |
@@ -295,15 +295,15 @@ Startpunkte, kein fertiger Schnittplan: vor dem Schnitt wie in §5 vermessen. C5
 | W-a | Sperrklinke im Wächter | **Entschieden 18.10.: ja**, jeder Schnitt-PR senkt die Basis |
 | W-b | Merge-Zeitpunkt Wächter | **Entschieden 18.10.:** nach dem Stufe-4-PR von test, Basis beim Merge messen |
 | C-a | Reihenfolge C1 | **Entschieden 18.10.:** Import → Trendradar → KaskadenLauf → Brief → später AusBrief |
-| C-b | `alleFrei`, `composerGeneriere` (+ `$composerSeed`) | **Entschieden 18.10.: löschen**, eigener PR vor C1 |
+| C-b | `alleFrei`, `composerGeneriere` (+ `$composerSeed`) | **Entschieden 18.10.: löschen** → umgesetzt (PR „Spec 85 C-b“) |
 | C-c | Support-Klassen für `goKaskade`/`leitplankenAusBriefing` | **Entschieden 18.10.: ja**, eigene Commits in PR-4 |
-| D-1 | I3-1 VK-Altspalten: Stichtag und Abbau | **offen** (Dominique) |
-| D-2 | I4-3/I4-4 tote Methoden löschen (Liste Anhang A) | **offen** (Dominique, je Bereich) |
-| D-3 | I1-3 Spec 65 Pakete B–E noch gebraucht? | **offen** |
-| D-4 | I7-2 Kalkulation/OrderTemplate Freigabe-Typ | **offen** |
-| D-5 | I2-9 Skips an Entscheidungen (M6-05, Spec 35, Dossier-Vorspann) | **offen** |
-| D-6 | I1-13 Sichtweite BulkProposal | **offen** |
-| D-7 | I5-1 Team-Regeln im RegelBuch | **offen** |
+| D-1 | I3-1 VK-Altspalten: Stichtag und Abbau | **Entschieden 18.10.: abbauen VOR dem Rezept-Import** (io hat 0 Rezepte → keine Daten-Migration); der Import schreibt nur ins Darreichungsmodell. Plan (Services, Spalten, Drop, MoneyTruthReport als Prüfung) von Vanessa an den Kurator |
+| D-2 | I4-3/I4-4 tote Methoden löschen (Liste Anhang A) | **Entschieden 18.10.: erst Liste zeigen** — lesbare Liste je Bereich an Dominique (`00_INBOX/_Spec85_D2_Toter_Code_Liste.md`), danach Lösch-PRs je Bereich |
+| D-3 | I1-3 Spec 65 Pakete B–E noch gebraucht? | **Entschieden 18.10.: nein, Spec 65 B–E geschlossen.** I1-1/I1-2 (Sperre für MCP, Versionsprüfung) bleiben Welle 2 |
+| D-4 | I7-2 Kalkulation/OrderTemplate Freigabe-Typ | **Entschieden 18.10.: dauerhaft nur Team**, kein Abo-Typ |
+| D-5 | I2-9 Skips an Entscheidungen (M6-05, Spec 35, Dossier-Vorspann) | **offen** (entscheidet der Kurator) |
+| D-6 | I1-13 Sichtweite BulkProposal | **offen** (entscheidet der Kurator) |
+| D-7 | I5-1 Team-Regeln im RegelBuch | **Entschieden 18.10.: ja, jetzt bauen** (Auflösung Zeile > Team > global, Spec 81) — test nach Stufe 4 |
 
 ## §11 · Reihenfolge und Zuständigkeit
 
@@ -313,7 +313,9 @@ Startpunkte, kein fertiger Schnittplan: vor dem Schnitt wie in §5 vermessen. C5
 | Welle 1 (§3: Wächter, C-b, Test-Ballast) | Vanessa | ab 19.10. |
 | Welle 2 (Sperre für MCP + Version, MySQL-Spur, C1) | Vanessa | nach Welle 1 |
 | I1-6 bis I1-11, I2-2, I2-4, I2-13–I2-15, I6-1 bis I6-4, C2 | test | nach Abschluss von Spec 84 |
-| Entscheidungen D-1 bis D-7 | Kurator / Dominique | – |
+| Entscheidungen D-5, D-6 | Kurator | – |
+| D-2-Liste, D-1-Plan | Vanessa | nach Welle 1 |
+| D-7 Team-Regeln im RegelBuch | test | nach Stufe 4 |
 | I8-1, I5-8 (Core) | Martin | Core-Tickets |
 | Spec 84 Teil C → „ausgelagert in Spec 85“ + Statustabelle (I8-4) | Vanessa | nach dem Stufe-4-PR von test |
 
@@ -326,4 +328,5 @@ Hinweis: `FaRechte::pruefeKontingent`, `FaBereiche::routeZugeordnet`, `SignalCoc
 
 ## Changelog
 
+- 2026-10-18 · v1.1: Entscheidungen Dominique eingetragen — D-1 VK-Altspalten vor dem Rezept-Import abbauen, D-2 erst Liste, D-3 Spec 65 B–E geschlossen, D-4 Kalkulation/OrderTemplate dauerhaft nur Team, D-7 Team-Regeln bauen (test); D-5/D-6 beim Kurator. C-b umgesetzt.
 - 2026-10-18 · v1.0: aus Spec 84 Teil C ausgelagert und erweitert (Dominique: „Wartbarkeit und technische Schulden“). Inventur I1–I9 aus Code-Durchsicht, Test-Harness, Specs 53–84 (gegen Code geprüft), Liste „test“ (25 Punkte, 2/21/22 als Querverweis Spec 84) und Kurator-Lücken (Nachtrag Kurator: I8-5, §1 io-Datenregel). Plan in drei Wellen; Größen-Wächter mit Sperrklinke (Basis 19 Dateien auf eaad31b7); C1 PR-1 … PR-5; C2/C3/C4/C6 übernommen; C5 erledigt (#473); Entscheidungen W-a, W-b, C-a, C-b, C-c; D-1 bis D-7 offen.

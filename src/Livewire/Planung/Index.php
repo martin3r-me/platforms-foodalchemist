@@ -106,16 +106,8 @@ class Index extends Component
     public string $composerModus = \Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::MODUS_GERICHT;
 
     /**
-     * Foodpairing-Composer B1: Seed-Anker-Slugs für den GERADE laufenden Go. Bewusst `protected`
-     * (Livewire serialisiert es NICHT → strikt transient, nur innerhalb des composerGeneriere-Requests
-     * gesetzt) und wird in goKaskade NUR in die Lauf-Params gehängt, nie in die persistierten
-     * generation_params → Fan-out-Kinder erben die Anker nicht.
-     */
-    protected array $composerSeed = [];
-
-    /**
      * Foodpairing-Composer (2026-08-24): PERSISTENTES Seed-Pin für den „in den Erstellen-Tab springen"-
-     * Flow. Anders als $composerSeed (transient) überlebt es den Tab-Wechsel als Livewire-State, damit
+     * Flow. Überlebt den Tab-Wechsel als Livewire-State, damit
      * der reguläre Go im Erstellen-Tab (mit vollem Leitplanken-Regler) die Anker als seed_anker mitnimmt.
      * Form: ['scope' => 'rezept'|'gericht', 'slugs' => [...]]. Wird in goKaskade nach Verwendung geleert.
      */
@@ -2296,12 +2288,12 @@ class Index extends Component
         }
         // Foodpairing-Composer: gezielte Seed-Anker NUR in die Lauf-Params (Depth-1-lokal, exakt wie
         // titel_vorgabe) — NIE in setGenerationParams, sonst erbte jedes Fan-out-Kind die Anker.
-        // Quelle: $composerSeed (transient, Direkt-Pfad composerGeneriere) ODER das persistente
-        // $composerSeedPin (composerUebernehmen → Erstellen-Tab, überlebt den Tab-Wechsel), nur für den
-        // passenden Scope. Pin nach Verwendung leeren → kein Re-Seed bei späterem unabhängigem Go.
-        $seed = $this->composerSeed;
+        // Quelle: das persistente $composerSeedPin (composerUebernehmen → Erstellen-Tab, überlebt den
+        // Tab-Wechsel), nur für den passenden Scope. Pin nach Verwendung leeren → kein Re-Seed bei
+        // späterem unabhängigem Go.
+        $seed = [];
         $seedAusPin = false;
-        if ($seed === [] && ($this->composerSeedPin['scope'] ?? null) === $scope) {
+        if (($this->composerSeedPin['scope'] ?? null) === $scope) {
             $seed = array_values($this->composerSeedPin['slugs'] ?? []);
             $seedAusPin = true;
         }
@@ -2586,18 +2578,6 @@ class Index extends Component
         } else {
             $this->zutatenOffen[] = $stepId;
         }
-    }
-
-    /** Alle offenen Entwürfe des Laufs freigeben. */
-    public function alleFrei(PlanningCascadeService $cascade): void
-    {
-        $team = $this->team();
-        if ($team === null || $this->laufId === null) {
-            return;
-        }
-        $cascade->gibRunFrei($team, $this->laufId);
-        $this->meldung = 'Alle Entwürfe freigegeben.';
-        $this->refreshLaeuft($cascade);
     }
 
     /**
@@ -3125,26 +3105,6 @@ class Index extends Component
             return;
         }
         $this->composerSeedPin = ['scope' => $scope, 'slugs' => $slugs];
-    }
-
-    /**
-     * Foodpairing-Composer B1 (2026-08-22): DIREKT-Pfad — aus den gewählten Anker-Pairings ohne
-     * Zwischenschritt ein Basisrezept ($scope='rezept') oder Gericht ($scope='gericht') erzeugen.
-     * Die Anker reisen als VERBINDLICHER seed_anker-Key (transient) in den bestehenden Generator.
-     * Concept ist bewusst ausgeschlossen (eigener Generator-Pfad ohne pairing-Routing).
-     */
-    public function composerGeneriere(string $scope, PlanningCascadeService $cascade, PlanningSessionService $svc): void
-    {
-        $slugs = $this->composerVorbereiten($scope);
-        if ($slugs === null) {
-            return;
-        }
-        $this->composerSeed = $slugs;
-        try {
-            $this->goKaskade($scope, $cascade, $svc);
-        } finally {
-            $this->composerSeed = [];
-        }
     }
 
     // ── Import-Tab (Rezept-Import: TREU extrahieren → GEERDET anlegen) ────────────
