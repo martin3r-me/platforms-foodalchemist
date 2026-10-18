@@ -261,3 +261,26 @@ it('MCP: GET listet für den Master, ENTSCHEIDEN zweistufig (Vorschau → Schlü
     $mandant = new \Platform\Core\Contracts\ToolContext($this->makeUser($this->childA, 'Mandant'), $this->childA);
     expect($reg->get('foodalchemist.necta_pruefaelle.GET')->execute([], $mandant)->errorCode)->toBe('ACCESS_DENIED');
 });
+
+it('MySQL only_full_group_by (Hotfix nach #496): keine gruppierte Abfrage im Dienst wählt „*“ oder nicht gruppierte Spalten', function () {
+    ($this->allergene)($this->a, ['allergen_milk' => 'enthalten']);
+    ($this->fall)('allergen_aenderung', 'item_allergen', 36674788, 'allergen_milk', 'enthalten', 'nicht_enthalten');
+    $sql = [];
+    DB::listen(function ($q) use (&$sql) {
+        if (stripos($q->sql, 'group by') !== false) {
+            $sql[] = $q->sql;
+        }
+    });
+
+    $this->svc->zaehler($this->rootTeam);
+    $this->svc->zaehler($this->rootTeam, ['art' => 'allergen_aenderung', 'lieferant' => $this->lieferant->id]);
+    $this->svc->liste($this->rootTeam, ['art' => 'eingestellt_widerspruch', 'normalpreis_tage' => 90]);
+    $this->svc->liste($this->rootTeam);
+
+    expect($sql)->not->toBeEmpty();
+    foreach ($sql as $s) {
+        $auswahl = substr($s, 0, stripos($s, ' from '));
+        // „pf.*“ / "pf".* bzw. nicht gruppierte COALESCE-Spalten: SQLite duldet es, MySQL wirft 1055 (COUNT(*) ist erlaubt)
+        expect(preg_match('/\.\s*\*/', $auswahl))->toBe(0, $s)->and($auswahl)->not->toContain('COALESCE');
+    }
+});
