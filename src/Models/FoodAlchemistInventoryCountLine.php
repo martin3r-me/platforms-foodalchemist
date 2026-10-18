@@ -57,12 +57,12 @@ class FoodAlchemistInventoryCountLine extends Model
 
     public function gp(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id');
+        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id')->ohneTeamSicht('verweis');
     }
 
     public function supplierItem(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');
+        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id')->ohneTeamSicht('verweis');
     }
 
     /** Wert der gezählten Menge (null = nicht gezählt oder kein Preis). */

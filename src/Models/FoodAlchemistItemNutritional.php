@@ -29,7 +29,7 @@ class FoodAlchemistItemNutritional extends Model
 
     public function item(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');
+        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id')->ohneTeamSicht('verweis');
     }
 
     /** GL-08: Salz (g) = Natrium (mg) × 0.0025. */

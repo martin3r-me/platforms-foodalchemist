@@ -24,7 +24,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  *
  * Aufbau: Unter-Team childA besitzt Unter-Rezept S (mit eigenem, bepreistem GP) und Gericht E (mit S als Zutat). Gerechnet wird aus Kontexten,
  * die childA-Zeilen NICHT sehen (Sicht geht nur aufwärts): Master direkt, Master über recomputeAll, Oberteam über RecomputeTeamRecipesJob.
- * Maßstab: dieselben Kosten wie bei Stufe 0.
+ * Maßstab: dieselben Kosten wie bei Stufe 0 — bei Stufe 1 (Rezepte gefiltert) und Stufe 3 (zusätzlich GP/Artikel gefiltert; Vorbedingung Stufe 3).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -54,7 +54,8 @@ beforeEach(function () {
             $zeilen = [];
             foreach ([$this->sub->id, $this->gericht->id] as $id) {
                 $z = (array) DB::table('foodalchemist_recipes')->where('id', $id)->first();
-                unset($z['updated_at']);
+                // Zeitstempel (updated_at, allergens_aggregated_at …) hängen an der Uhr, nicht an der Sicht — unter Last kippt sonst die Sekunde
+                $z = array_filter($z, fn ($k) => ! str_ends_with((string) $k, '_at'), ARRAY_FILTER_USE_KEY);
                 $zeilen[$id] = $z;
             }
 
@@ -69,8 +70,13 @@ beforeEach(function () {
         expect((float) $null[$this->sub->id]['ek_per_kg_eur'])->toBeGreaterThan(0.0)
             ->and((float) $null[$this->gericht->id]['ek_per_kg_eur'])->toBeGreaterThan(0.0);
         expect(($this->stand)(1, $kontext, $lauf))->toBe($null);
+        // Spec 84 Vorbedingung Stufe 3: GP und LA-Preis des Unter-Teams aus fremdem Kontext (Stamm-Modelle gefiltert)
+        expect(($this->stand)(3, $kontext, $lauf))->toBe($null);
     };
-    // Kontext-Teams sehen childA-Zeilen bei Stufe 1 nicht (sonst prüfte der Test nichts)
+    // Kontext-Teams sehen childA-Zeilen bei Stufe 1 nicht (sonst prüfte der Test nichts) — bei Stufe 3 auch GP und Artikel nicht
+    config(['foodalchemist.team_sicht.stufe' => 3]);
+    expect(FaTeam::imTeam($this->master, fn () => \Platform\FoodAlchemist\Models\FoodAlchemistGp::whereKey($gp->id)->exists()))->toBeFalse()
+        ->and(FaTeam::imTeam($this->master, fn () => FoodAlchemistSupplierItem::whereKey($la->id)->exists()))->toBeFalse();
     config(['foodalchemist.team_sicht.stufe' => 1]);
     expect(FaTeam::imTeam($this->master, fn () => FoodAlchemistRecipe::whereKey($this->sub->id)->exists()))->toBeFalse()
         ->and(FaTeam::imTeam($this->rootTeam, fn () => FoodAlchemistRecipe::whereKey($this->sub->id)->exists()))->toBeFalse();

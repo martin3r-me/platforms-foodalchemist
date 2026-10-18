@@ -77,7 +77,7 @@ it('recipes.DUPLICATE: kopiert (auch fremd-sichtbare Vorlage → eigene Kopie); 
     $vorlage = ($this->mkRecipe)(['name' => 'Fond: Vorlage']);
     $dup = ($this->runChild)('foodalchemist.recipes.DUPLICATE', ['id' => $vorlage->id, 'name' => 'Fond: Kind-Kopie']);
     expect($dup->success)->toBeTrue()->and($dup->data['name'])->toBe('Fond: Kind-Kopie');
-    expect((int) FoodAlchemistRecipe::find($dup->data['id'])->team_id)->toBe((int) $this->childA->id);
+    expect((int) FoodAlchemistRecipe::ohneTeamSicht('test')->find($dup->data['id'])->team_id)->toBe((int) $this->childA->id);
 
     expect(($this->run)('foodalchemist.recipes.DUPLICATE', ['id' => $vorlage->id, 'name' => '  '])->errorCode)->toBe('VALIDATION_ERROR');
 });

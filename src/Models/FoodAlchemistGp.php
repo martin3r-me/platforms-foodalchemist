@@ -157,7 +157,7 @@ class FoodAlchemistGp extends Model
     /** Kalkulationsführender Lieferantenartikel (GL-03; V-27-Kette folgt in D-2). */
     public function leadLa(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'lead_la_supplier_item_id');
+        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'lead_la_supplier_item_id')->ohneTeamSicht('verweis');
     }
 
     /**

@@ -44,7 +44,7 @@ class FoodAlchemistOrderTemplateLine extends Model
 
     public function gp(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id');
+        return $this->belongsTo(FoodAlchemistGp::class, 'gp_id')->ohneTeamSicht('verweis');
     }
 
     public function recipe(): BelongsTo
@@ -55,7 +55,7 @@ class FoodAlchemistOrderTemplateLine extends Model
 
     public function supplierItem(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');
+        return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id')->ohneTeamSicht('verweis');
     }
 
     public function concept(): BelongsTo
