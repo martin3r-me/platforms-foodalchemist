@@ -26,6 +26,28 @@ class ReportExportService
     /** @var array<int, ?Team> Team je ID — die Zeilen-EK-Abfrage braucht das Team je Rezept. */
     private array $teamCache = [];
 
+    /** Spec 84 (Dominique 13.10./Kurator 18.10.): Team, dessen Preissicht der Bericht zeigt — gesetzt von jedem öffentlichen *Daten-Einstieg. */
+    private ?Team $preisTeam = null;
+
+    /** @var array<string, ?\Platform\FoodAlchemist\Models\FoodAlchemistPrice> Memo je Team:Artikel */
+    private array $preisMemo = [];
+
+    /**
+     * Aktueller Preis eines Lieferantenartikels für das Berichts-Team — NUR über PriceService::activeFor (preisSichtFuer), den einen
+     * Preis-Riegel: kein Master-/Fremdpreis (BHG-Konditionen), kein Listenpreis-Fallback; kein Preis = leer („Kosten unvollständig“).
+     */
+    private function preisFuer(?FoodAlchemistSupplierItem $la): ?\Platform\FoodAlchemist\Models\FoodAlchemistPrice
+    {
+        if ($la === null || $this->preisTeam === null) {
+            return null;
+        }
+        $key = $this->preisTeam->id.':'.$la->id;
+
+        return array_key_exists($key, $this->preisMemo)
+            ? $this->preisMemo[$key]
+            : $this->preisMemo[$key] = app(PriceService::class)->activeFor((int) $la->id, $this->preisTeam);
+    }
+
     /** @return array<string, bool|string> */
     public function optionen(array $query, string $scope): array
     {
@@ -93,6 +115,7 @@ class ReportExportService
     /** @return array<string, mixed> */
     public function rezeptDaten(Team $team, int $id, array $optionen): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)
             ->with($this->recipeRelations())
             ->findOrFail($id);
@@ -186,6 +209,7 @@ class ReportExportService
     /** @return array<string, mixed> */
     public function conceptDaten(Team $team, int $id, array $optionen): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $concept = FoodAlchemistConcept::visibleToTeam($team)
             ->with([
                 'category:id,name',
@@ -295,6 +319,7 @@ class ReportExportService
      */
     public function formatDaten(Team $team, int $formatId, array $optionen): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $format = FoodAlchemistFormat::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
@@ -377,6 +402,7 @@ class ReportExportService
      */
     public function foodbookDaten(Team $team, int $foodbookId, array $optionen, array $kapitelFilter = []): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)
             ->with([
                 'chapters' => fn ($q) => $q->orderBy('position'),
@@ -458,6 +484,7 @@ class ReportExportService
      */
     public function speisekarteDaten(Team $team, int $karteId, array $optionen, array $rubrikFilter = []): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)
             ->with([
                 'sections' => fn ($q) => $q->orderBy('position'),
@@ -533,18 +560,18 @@ class ReportExportService
     /** @return array<string, mixed> */
     public function gpDaten(Team $team, int $id, array $optionen): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $gp = FoodAlchemistGp::visibleToTeam($team)
             ->with([
                 'commodity_group',
                 'leadLa.supplier:id,name',
-                'leadLa.prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1),
                 'structures.item.supplier:id,name',
                 'recipeIngredients.recipe:id,name,is_sales_recipe,ek_total_eur,sales_net',
             ])
             ->findOrFail($id);
 
         $lead = $gp->leadLa;
-        $price = $lead?->prices instanceof Collection ? $lead->prices->first() : null;
+        $price = $this->preisFuer($lead);   // Spec 84: nur über den Preis-Riegel (preisSichtFuer)
 
         return [
             'typ' => 'gp',
@@ -593,12 +620,12 @@ class ReportExportService
     /** @return array<string, mixed> */
     public function supplierDaten(Team $team, int $id, array $optionen): array
     {
-        $supplier = FoodAlchemistSupplier::visibleToTeam($team)
-            ->with(['items' => fn ($q) => $q->whereNull('deleted_at')->orderBy('designation')])
-            ->findOrFail($id);
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)->findOrFail($id);
 
-        $items = $supplier->items()->whereNull('deleted_at')
-            ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1)])
+        // Spec 84: nur sichtbare Artikel (Eigenzeilen fremder Teams unter einem globalen Lieferanten nie; Stamm-Paket-Regel wie die LA-Liste)
+        $items = FoodAlchemistSupplierItem::visibleToTeam($team)->where('foodalchemist_supplier_items.supplier_id', $supplier->id)
+            ->with(['structure.gp:id,name,lead_la_supplier_item_id'])
             ->orderBy('designation')->get();
 
         return [
@@ -625,7 +652,7 @@ class ReportExportService
                         'qty' => FoodAlchemistSupplierItem::mengeVon($item),
                         'unit_code' => $item->unit_code,
                         'is_discontinued' => (bool) $item->is_discontinued,
-                        'price' => $item->prices->first()?->price,
+                        'price' => $this->preisFuer($item)?->price,   // Spec 84: Preis-Riegel
                         'gp' => $item->structure?->gp?->name,
                         'is_lead' => $item->structure?->gp !== null
                             && (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id,
@@ -638,6 +665,7 @@ class ReportExportService
     /** @return array<string, mixed> */
     public function favoritenDaten(Team $team, array $optionen, int $limit = 300): array
     {
+        $this->preisTeam = $team;   // Spec 84: Preise nur in der Sicht dieses Teams
         $items = app(FavoriteGpService::class)->suggest($team, $limit, null, false);
 
         return [
@@ -680,7 +708,6 @@ class ReportExportService
             'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
             'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
             'ingredients.gp.leadLa.supplier:id,name',
-            'ingredients.gp.leadLa.prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1),
             'ingredients.referencedRecipe',
         ];
     }
@@ -985,7 +1012,7 @@ class ReportExportService
         $gp = $z->gp;
         $sub = $z->referencedRecipe;
         $lead = $gp?->leadLa;
-        $price = $lead?->prices instanceof Collection ? $lead->prices->first() : null;
+        $price = $this->preisFuer($lead);   // Spec 84: nur über den Preis-Riegel (preisSichtFuer)
 
         // Kaskaden-Adresse: Komponente 3 des Gerichts = „K3", ihre 2. Komponente = „K3.2".
         // Sie macht die Zugehörigkeit über Seitenumbrüche hinweg lesbar (Einrückung allein
