@@ -436,3 +436,42 @@ it('1062: dieselben Fälle auch bei Deklaration und Nährwerten (eine Zeile je A
         ->and(DB::table('foodalchemist_item_declarations')->where('supplier_item_id', $this->a->id)->count())->toBe(1)
         ->and(DB::table('foodalchemist_item_declarations')->where('supplier_item_id', $this->a->id)->value('deleted_at'))->toBeNull();
 });
+
+it('Handzeile ohne Necta-Stand (source manual / ohne legacy_id): Nährwert nicht überschrieben → manuell_gepflegt; Gegenprobe Necta-Zeile wird übernommen', function () {
+    $einfuegen = fn (int $item, array $w) => DB::table('foodalchemist_item_nutritionals')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => null, 'supplier_item_id' => $item, 'created_at' => now(), 'updated_at' => now()] + $w);
+    $einfuegen($this->a->id, ['legacy_id' => null, 'source' => 'manual', 'protein' => 5.0]);
+    $c = FoodAlchemistSupplierItem::create(['team_id' => null, 'legacy_id' => 36674799, 'supplier_id' => $this->lieferant->id,
+        'designation' => 'Dinkelstange', 'stamm_class' => StammPaket::PAKET]);
+    $einfuegen($c->id, ['legacy_id' => 36674799, 'protein' => 5.0]);   // Gegenprobe: aus Necta importiert, noch kein Stand
+    $this->attrappe->daten['supplier-item-nutritional-values'] = [
+        ['supplierItemId' => 36674788, 'protein' => 6.0],
+        ['supplierItemId' => 36674799, 'protein' => 6.0],
+    ];
+    ($this->lauf)();
+
+    ($this->lauf)(['voll' => true]);
+
+    $protein = fn (int $item) => (float) DB::table('foodalchemist_item_nutritionals')->where('supplier_item_id', $item)->value('protein');
+    expect($protein($this->a->id))->toBe(5.0)                                                        // Handwert bleibt
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'manuell_gepflegt')->where('objekt', 'item_nutritional')
+            ->where('legacy_id', 36674788)->where('feld', 'protein')->exists())->toBeTrue()
+        ->and($protein($c->id))->toBe(6.0)                                                           // Necta-Zeile: erster Abgleich übernimmt
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'manuell_gepflegt')->where('legacy_id', 36674799)->exists())->toBeFalse();
+});
+
+it('Handzeile ohne Necta-Stand, Allergene: strenger übernommen, lockerer und „Abwesenheit erklärt“ werden Prüffall', function () {
+    DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->update([
+        'legacy_id' => null, 'source' => 'manual', 'allergen_gluten' => 'spuren', 'allergen_milk' => 'enthalten', 'allergen_celery' => null]);
+    $this->attrappe->daten['supplier-item-allergens'] = [['supplierItemId' => 36674788, 'gluten' => 3, 'milk' => 1, 'celery' => 1]];
+    ($this->lauf)();
+
+    ($this->lauf)(['voll' => true]);
+
+    $zeile = DB::table('foodalchemist_item_allergens')->where('supplier_item_id', $this->a->id)->sole();
+    $faelle = DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->where('legacy_id', 36674788)->pluck('feld')->sort()->values()->all();
+    expect($zeile->allergen_gluten)->toBe('enthalten')                // strenger: Sicherheit vor Handpflege
+        ->and($zeile->allergen_milk)->toBe('enthalten')               // lockerer: bleibt
+        ->and($zeile->allergen_celery)->toBeNull()                    // unbekannt → nicht_enthalten NICHT still bei Handzeile
+        ->and($faelle)->toBe(['allergen_celery', 'allergen_milk']);
+});

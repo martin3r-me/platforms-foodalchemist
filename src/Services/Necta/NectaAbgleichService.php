@@ -356,10 +356,12 @@ class NectaAbgleichService extends NectaLaufBasis
 
                         continue;
                     }
+                    // Zeile ohne legacy_id oder mit Quelle manual kam nicht aus Necta: gilt ohne Necta-Stand als von Hand gepflegt (Kurator 18.10.)
+                    $handzeile = $fa->legacy_id === null || ($fa->source ?? null) === 'manual';
                     if ($fa->legacy_id === null && ! $this->probe) {
                         DB::table($tabelle)->where('id', $fa->id)->update(['legacy_id' => $artikelLegacy]);   // Zuordnung nachtragen, Werte prüft vergleichen()
                     }
-                    $this->vergleichen($objekt, $tabelle, $fa, $necta);
+                    $this->vergleichen($objekt, $tabelle, $fa, $necta, $handzeile);
                 }
                 $seite++;
             } while ($seite <= max(1, $antwort['totalPages']) && $antwort['items'] !== []);
@@ -389,11 +391,14 @@ class NectaAbgleichService extends NectaLaufBasis
      *
      * @param  array<string,mixed>  $necta  gemappte Necta-Werte (inkl. legacy_id)
      */
-    private function vergleichen(string $objekt, string $tabelle, object $fa, array $necta): void
+    private function vergleichen(string $objekt, string $tabelle, object $fa, array $necta, bool $handzeile = false): void
     {
         $legacy = (int) $necta['legacy_id'];
         unset($necta['legacy_id']);
         $stand = $this->standLesen($objekt, $legacy);
+        // Handzeile ohne Necta-Stand (Kurator 18.10.): strenger übernehmen bleibt (Sicherheit), lockerer Prüffall, alles andere
+        // manuell_gepflegt statt „erster Abgleich übernimmt Necta“ — sonst würden handgepflegte Werte still überschrieben
+        $handOhneStand = $handzeile && $stand === null;
         $kennzeichnung = in_array($objekt, self::KENNZEICHNUNG, true);
         $uebernehmen = [];
         foreach ($necta as $spalte => $nWert) {
@@ -420,7 +425,7 @@ class NectaAbgleichService extends NectaLaufBasis
                 continue;
             }
             if ($kennzeichnung && $spalte === 'details' && $objekt === 'item_allergen') {
-                $neu = $this->unterartenAbgleichen($legacy, $fa->{$spalte} ?? null, $nWert, $stand === null ? null : ($stand[$spalte] ?? null), $stand !== null);
+                $neu = $this->unterartenAbgleichen($legacy, $fa->{$spalte} ?? null, $nWert, $stand === null ? null : ($stand[$spalte] ?? null), $stand !== null, $handOhneStand);
                 if (self::norm($neu) !== $f) {
                     $uebernehmen[$spalte] = $neu;
                 }
@@ -429,7 +434,7 @@ class NectaAbgleichService extends NectaLaufBasis
             }
             if ($kennzeichnung) {
                 $strenge = $spalte === 'details' ? null : self::strenge($objekt, $nWert) <=> self::strenge($objekt, $fa->{$spalte} ?? null);
-                $nichtVonHand = $stand === null || self::norm($stand[$spalte] ?? null) === $f;
+                $nichtVonHand = ($stand === null && ! $handOhneStand) || ($stand !== null && self::norm($stand[$spalte] ?? null) === $f);
                 if ($strenge === -1 && $nichtVonHand && self::abwesenheitErklaert($objekt, $fa->{$spalte} ?? null, $nWert)) {
                     // Entscheid Dominique 15.10.: ausdrückliche Lieferanten-Erklärung der Abwesenheit (k.A. → nicht_enthalten / nein)
                     $uebernehmen[$spalte] = $nWert;
@@ -452,6 +457,11 @@ class NectaAbgleichService extends NectaLaufBasis
                     // lockerer (oder Unterarten-JSON): nie still → Prüffall, FA bleibt
                     $this->pruefall($objekt === 'item_allergen' ? 'allergen_aenderung' : 'deklaration_aenderung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
                 }
+
+                continue;
+            }
+            if ($handOhneStand) {
+                $this->pruefall('manuell_gepflegt', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
 
                 continue;
             }
@@ -496,7 +506,7 @@ class NectaAbgleichService extends NectaLaufBasis
      * Allergen-Unterarten je Schlüssel nach Strenge: strenger → übernehmen, gleich → bleibt, lockerer → Prüffall
      * `details.<unterart>` (FA-Wert bleibt). Rückgabe: neues details-JSON (sortiert) bzw. NULL, wenn leer.
      */
-    private function unterartenAbgleichen(int $legacy, mixed $faJson, mixed $nectaJson, mixed $standJson = null, bool $mitStand = false): ?string
+    private function unterartenAbgleichen(int $legacy, mixed $faJson, mixed $nectaJson, mixed $standJson = null, bool $mitStand = false, bool $vonHand = false): ?string
     {
         $fa = is_string($faJson) ? (array) json_decode($faJson, true) : (array) ($faJson ?? []);
         $necta = is_string($nectaJson) ? (array) json_decode($nectaJson, true) : (array) ($nectaJson ?? []);
@@ -510,7 +520,7 @@ class NectaAbgleichService extends NectaLaufBasis
                 $ergebnis[$unterart] = $n;   // NULL = unbekannt (strenger als nicht_enthalten) → Schlüssel fällt unten weg
                 $this->zaehler['unterart_verschaerft']++;
                 $this->beispiel('verschaerft', ['objekt' => 'item_allergen', 'legacy_id' => $legacy, 'feld' => "details.{$unterart}", 'fa' => $f, 'necta' => $n]);
-            } elseif ($vergleich === -1 && (! $mitStand || ($standD[$unterart] ?? null) === $f)
+            } elseif ($vergleich === -1 && ! $vonHand && (! $mitStand || ($standD[$unterart] ?? null) === $f)
                 && self::abwesenheitErklaert('item_allergen', $f, $n)) {
                 $ergebnis[$unterart] = $n;   // Abwesenheit erklärt (unbekannt → nicht_enthalten), nicht von Hand gepflegt
                 $this->zaehler['allergen_abwesenheit_erklaert']++;
