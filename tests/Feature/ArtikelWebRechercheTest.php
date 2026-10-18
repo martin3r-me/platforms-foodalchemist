@@ -100,7 +100,12 @@ it('Standard-Transport: bis der Core Websuche mit Quellen liefert, kommt eine le
 
 it('Prompt artikel.web_recherche: url-Pflicht, nie raten, nicht_enthalten nur mit Zitat', function () {
     $p = config('foodalchemist.prompts')['artikel.web_recherche'];
-    expect($p['task'])->toContain('url')->toContain('rate nie')->toContain('wörtlichem zitat')->and($p)->toHaveKey('tier');
+    // Seit #447 (KI-Klassen STARK/MITTEL/LEICHT statt Stufen A–D) trägt jeder Prompt `klasse` statt `tier` (vgl. #471).
+    // Produktdaten und Allergene sind Sicherheit und Fakten → starke Klasse.
+    expect($p['task'])->toContain('url')->toContain('rate nie')->toContain('wörtlichem zitat')
+        ->and($p)->not->toHaveKey('tier')
+        ->and(\Platform\FoodAlchemist\Support\KiKlassen::von($p))->toBe(\Platform\FoodAlchemist\Support\KiKlassen::STARK)
+        ->and($p['klasse'] ?? null)->toBe('stark');
 });
 
 it('★ hängt als Produktdaten-Quelle websuche im Container-Tag; erlaubte Schlüssel = Produktpass-Schlüssel', function () {
