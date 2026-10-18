@@ -42,7 +42,7 @@ class TripleMatchService
     /** @return array{pct: float, eur: float} */
     public function toleranz(Team $team): array
     {
-        $s = FoodAlchemistTeamSetting::where('team_id', $team->id)->first();
+        $s = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::where('team_id', $team->id)->first());   // Spec 84 Stufe 4
 
         return [
             'pct' => $s?->tm_toleranz_preis_pct !== null ? (float) $s->tm_toleranz_preis_pct : self::TOLERANZ_PCT_DEFAULT,
@@ -57,7 +57,8 @@ class TripleMatchService
         if (($pct !== null && $pct < 0) || ($eur !== null && $eur < 0)) {
             throw new \RuntimeException('Toleranzen dürfen nicht negativ sein.');
         }
-        FoodAlchemistTeamSetting::updateOrCreate(['team_id' => $team->id], ['tm_toleranz_preis_pct' => $pct, 'tm_toleranz_preis_eur' => $eur]);
+        \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::updateOrCreate(['team_id' => $team->id],
+            ['tm_toleranz_preis_pct' => $pct, 'tm_toleranz_preis_eur' => $eur]));   // Spec 84 Stufe 4: Zeile des Teams auch aus fremdem Kontext finden
     }
 
     /** Preis passt, wenn die Abweichung höchstens ±pct % ODER ±eur je Gebinde beträgt (das Großzügigere gilt). */

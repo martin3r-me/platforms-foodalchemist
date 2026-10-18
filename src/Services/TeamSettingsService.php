@@ -224,7 +224,7 @@ class TeamSettingsService
     {
         // [self, parent, …, root]; Spec 84 B3 Stufe 4: ab Schalter 4 nur bis zur Kundengrenze (nie die Einstellungen des Masters)
         $kette = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(FoodAlchemistTeamSetting::class, FoodAlchemistTeamSetting::teamAncestryIds($team));
-        $rows = FoodAlchemistTeamSetting::whereIn('team_id', $kette)->get()->keyBy('team_id');
+        $rows = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::whereIn('team_id', $kette)->get()->keyBy('team_id'));
 
         return array_values(array_filter(array_map(fn ($tid) => $rows->get($tid), $kette)));
     }
@@ -348,7 +348,9 @@ class TeamSettingsService
 
     public function for(Team $team): FoodAlchemistTeamSetting
     {
-        return FoodAlchemistTeamSetting::firstOrNew(['team_id' => $team->id]);
+        // Spec 84 B3 Stufe 4: in der Sicht des übergebenen Teams lesen — ein Oberteam pflegt die Einstellungen eines Unter-Teams
+        // (sonst fände der Scope im Kontext des Oberteams die Zeile des Unter-Teams nicht und legte eine zweite an)
+        return \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($team, fn () => FoodAlchemistTeamSetting::firstOrNew(['team_id' => $team->id]));
     }
 
     public function update(Team $team, array $attributes): FoodAlchemistTeamSetting
