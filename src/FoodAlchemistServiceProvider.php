@@ -117,6 +117,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenVerweiseCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSpurenCommand::class,
                 \Platform\FoodAlchemist\Console\WissenGlobalHebenCommand::class,
+                \Platform\FoodAlchemist\Console\WechselkursHolenCommand::class,
                 \Platform\FoodAlchemist\Console\PlattformBasisHebenCommand::class,
                 \Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenEinordnungSicherungCommand::class,
@@ -220,6 +221,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             // (foodalchemist.necta.abgleich_aktiv, Standard aus): erst Probelauf und Dominiques Ja, dann einschalten.
             if (config('foodalchemist.necta.abgleich_aktiv', false)) {
                 \Platform\FoodAlchemist\Console\NectaAbgleichCommand::planen($schedule);
+            }
+
+            // KI-Kosten (Dominique 18.10.2026): EZB-Tageskurs EUR/USD, 16:30 Europe/Berlin — fern vom Necta-/Gebühren-Fenster (nachts)
+            if (config('foodalchemist.scheduler.wechselkurs_aktiv', true)) {
+                \Platform\FoodAlchemist\Console\WechselkursHolenCommand::planen($schedule);
             }
 
             // Spec 82 §13 D: FA-Gebühren täglich zählen (Tageswerte in team_billable_usages). Idempotent; verpasste Tage mit --von/--bis nachholen.

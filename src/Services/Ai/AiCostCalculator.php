@@ -44,8 +44,7 @@ class AiCostCalculator
     public function snapshotFuerAufruf(string $feature, ?string $model, int $tokensIn, int $tokensCached, int $tokensOut): array
     {
         $model = trim((string) $model);
-        $kurs = config('foodalchemist.ai.usd_eur');
-        $kurs = is_numeric($kurs) && (float) $kurs > 0 ? (float) $kurs : null;
+        $kurs = $this->kurs();
         $leer = ['kosten_usd' => null, 'preis_in_mio' => null, 'preis_cached_mio' => null, 'preis_out_mio' => null, 'usd_eur' => $kurs];
 
         $bild = $this->imagePriceUsd($model, $feature);
@@ -70,9 +69,18 @@ class AiCostCalculator
         ];
     }
 
+    /**
+     * EUR je 1 USD — EINE Quelle für Snapshot je Aufruf, Anzeige und KI-Budget: neuester EZB-Tageskurs, sonst env
+     * (foodalchemist.ai.usd_eur). Ein fehlender Kurs blockiert nie einen KI-Aufruf ({@see WechselkursService}).
+     */
+    public function kurs(): ?float
+    {
+        return app(WechselkursService::class)->usdEur();
+    }
+
     public function currency(): string
     {
-        return config('foodalchemist.ai.usd_eur') ? 'EUR' : 'USD';
+        return $this->kurs() !== null ? 'EUR' : 'USD';
     }
 
     public function displayCost(?float $usd): ?float
@@ -81,9 +89,9 @@ class AiCostCalculator
             return null;
         }
 
-        $rate = config('foodalchemist.ai.usd_eur');
+        $rate = $this->kurs();
 
-        return $rate ? $usd * (float) $rate : $usd;
+        return $rate !== null ? $usd * $rate : $usd;
     }
 
     public function symbol(): string

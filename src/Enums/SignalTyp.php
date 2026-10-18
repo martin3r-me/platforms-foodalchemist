@@ -150,6 +150,8 @@ enum SignalTyp: string
     // Kurator 18.10.: der Lauf hat Artikel-Allergene/-Deklarationen geändert, aber Rezepte ließen sich nicht nachrechnen — deren gespeicherte
     // Allergene sind veraltet (Sicherheitsthema, darum kritisch). Der Lauf selbst bleibt „fertig“: die Necta-Daten stimmen.
     case NectaRezepteNachrechnenFehler = 'necta_rezepte_nachrechnen_fehler';
+    // KI-Kosten (Dominique 18.10.2026): der tägliche EZB-Kurs kam seit mehr als 5 Kalendertagen nicht — KI läuft weiter mit dem letzten Kurs.
+    case WechselkursVeraltet = 'wechselkurs_veraltet';
     // Produktpass-Vorrang (Dominique 16.10.2026): Necta liefert an einem Kern-Feld (Allergene/Unterarten, Zusatzstoffe, Nährwerte, Zutatenliste)
     // etwas anderes als der Produktpass. Der Pass-Wert bleibt; EIN Signal je Artikel, bis jede Abweichung entschieden ist.
     case ProduktpassAbweichung = 'produktpass_abweichung';
@@ -163,6 +165,7 @@ enum SignalTyp: string
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
+            self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
             self::ProduktpassAbweichung => 'Necta weicht vom Produktpass ab',
             self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
             self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
@@ -225,6 +228,7 @@ enum SignalTyp: string
             self::NectaLieferantNeu => 'heroicon-o-truck',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
+            self::WechselkursVeraltet => 'heroicon-o-currency-euro',
             self::ProduktpassAbweichung => 'heroicon-o-document-magnifying-glass',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',

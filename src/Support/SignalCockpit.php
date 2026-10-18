@@ -144,6 +144,8 @@ final class SignalCockpit
         // Necta-Abgleich: Ereignis, kein Datenmangel — der Weg ist eine Freischalt-Entscheidung des Masters.
         'necta_abgleich_fehler' => 'Der Lauf steht mit Fehlermeldung in der Laufliste (necta_laeufe). Ursache prüfen (Verbindung, '
             . 'Necta erreichbar), dann den Abgleich erneut starten: Bereits Übernommenes bleibt, der Lauf ist über legacy_id wiederholbar.',
+        'wechselkurs_veraltet' => 'Der tägliche EZB-Abruf (16:30) liefert keinen neuen Kurs. KI-Kosten und Budget rechnen mit dem letzten gespeicherten '
+            . 'Kurs weiter. Prüfen, ob www.ecb.europa.eu erreichbar ist, dann `foodalchemist:wechselkurs-holen` von Hand starten.',
         'necta_rezepte_nachrechnen_fehler' => 'Die gespeicherten Allergene dieser Rezepte sind veraltet. Fehlermeldung im Signal lesen, Ursache '
             . 'beheben, dann die Rezepte neu berechnen (Rezept öffnen und speichern oder foodalchemist:recompute). Der Necta-Lauf selbst ist vollständig.',
         'produktpass_abweichung' => 'Der Produktpass-Wert gilt weiter. Am Artikel den Reiter Produktpass öffnen, Abschnitt „Necta-Abweichungen“: '

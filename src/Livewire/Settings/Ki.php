@@ -156,6 +156,20 @@ class Ki extends Component
             : 'KI ausgeschaltet. Alle KI-Aufrufe dieses Teams werden gestoppt.';
     }
 
+    /** „Kurs 0,8887 € je $ (EZB 16.10.2026)“ bzw. Rückfall auf den eingestellten Kurs; null ohne Kurs (Anzeige in USD). */
+    private static function kursZeile(?float $kurs): ?string
+    {
+        if ($kurs === null) {
+            return null;
+        }
+        $ezb = app(\Platform\FoodAlchemist\Services\Ai\WechselkursService::class)->neuester();
+        $wert = number_format($kurs, 4, ',', '.');
+
+        return $ezb !== null && abs($ezb['usd_eur'] - $kurs) < 1e-9
+            ? sprintf('Kurs %s € je $ (EZB %s)', $wert, \Illuminate\Support\Carbon::parse($ezb['datum'])->format('d.m.Y'))
+            : sprintf('Kurs %s € je $ (eingestellter Kurs, kein EZB-Tageskurs gespeichert)', $wert);
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -212,6 +226,8 @@ class Ki extends Component
             'kostenGesamt' => $bekannteKosten->sum(),
             'kostenUnbekannt' => $kosten->count() - $bekannteKosten->count(),
             'kostenWaehrung' => $rechner->currency(),
+            // KI-Kosten (18.10.): welcher Kurs gerade gilt — EZB-Tageskurs oder env-Rückfall
+            'kursZeile' => self::kursZeile($rechner->kurs()),
             'kostenSymbol' => $rechner->symbol(),
             'provider' => config('foodalchemist.ai.provider', 'core'),
             'klassen' => config('foodalchemist.ai.klassen', []),
