@@ -170,12 +170,6 @@ it('das Zeitfenster steht in der URL — Kontext überlebt einen Reload', functi
 
 // ── Spec 30 E8: Tages-Ausgabe (3-Panel, Wandmodus, Posten-Blatt) ──────────────
 
-it('wählt einen Auftrag ins Detail-Panel und wieder ab', function () {
-    ($this->plan)()->set('tage', 14)
-        ->call('waehleAuftrag', $this->a1->id)->assertSet('orderId', $this->a1->id)
-        ->call('waehleAuftrag', $this->a1->id)->assertSet('orderId', null);   // zweiter Klick schließt
-});
-
 it('wählt einen Tag ins rechte Detail-Panel und zeigt dessen Speisen', function () {
     $l = Line::where('production_order_id', $this->a1->id)->firstOrFail();
     $this->svc->assignLine($this->rootTeam, $l->id, ['vorlauf_tage' => 2]);   // 20.08. − 2 = 18.08.

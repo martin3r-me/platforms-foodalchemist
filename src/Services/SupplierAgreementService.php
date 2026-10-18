@@ -45,20 +45,6 @@ class SupplierAgreementService
             ->orderByDesc('valid_from')->orderByDesc('id')->get();
     }
 
-    /**
-     * Fällige Wiedervorlagen (follow_up_at <= heute + withinDays) — team-sichtbar.
-     *
-     * @return Collection<int, FoodAlchemistSupplierAgreement>
-     */
-    public function dueForFollowUp(Team $team, int $withinDays = 0): Collection
-    {
-        $grenze = now()->addDays(max(0, $withinDays))->toDateString();
-
-        return FoodAlchemistSupplierAgreement::visibleToTeam($team)
-            ->whereNotNull('follow_up_at')->whereDate('follow_up_at', '<=', $grenze)
-            ->orderBy('follow_up_at')->get();
-    }
-
     /** Dokument-Metadaten anlegen (Supplier muss sichtbar sein). */
     public function addDocument(Team $team, int $supplierId, array $input): FoodAlchemistSupplierDocument
     {

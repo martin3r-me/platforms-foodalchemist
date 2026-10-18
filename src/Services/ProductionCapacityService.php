@@ -291,32 +291,6 @@ class ProductionCapacityService
         return in_array($wert, [true, 1, '1'], true);
     }
 
-    /** @return Collection<int, object> */
-    public function alsNaechstes(Collection $zeilen, int $limit = 12): Collection
-    {
-        return $zeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))
-            ->sortBy([
-                fn ($a, $b) => strcmp((string) $a->plan_date, (string) $b->plan_date),
-                fn ($a, $b) => ($a->blocked_reason ? 1 : 0) <=> ($b->blocked_reason ? 1 : 0),
-                fn ($a, $b) => ($a->station_id ?? PHP_INT_MAX) <=> ($b->station_id ?? PHP_INT_MAX),
-                fn ($a, $b) => ((int) $a->position) <=> ((int) $b->position),
-            ])->take(max(1, min(50, $limit)))->values();
-    }
-
-    /** Wahrer Cockpit-Feed aus dem append-only Ereignisprotokoll. */
-    public function letzteAenderungen(Team $team, string $von, string $bis, int $limit = 12): Collection
-    {
-        return DB::table('foodalchemist_production_events as e')
-            ->join('foodalchemist_production_orders as o', 'o.id', '=', 'e.order_id')
-            ->leftJoin('foodalchemist_production_order_lines as l', 'l.id', '=', 'e.line_id')
-            ->leftJoin('foodalchemist_recipes as r', 'r.id', '=', 'l.recipe_id')
-            ->where('e.team_id', $team->id)->where('o.team_id', $team->id)
-            ->whereDate('e.created_at', '>=', $von)->whereDate('e.created_at', '<=', $bis)
-            ->orderByDesc('e.created_at')->limit(max(1, min(50, $limit)))
-            ->get(['e.event_type', 'e.from_state', 'e.to_state', 'e.reason_code', 'e.created_at',
-                'o.name as auftrag', 'r.name as rezept', 'l.titel']);
-    }
-
     /** Aktive Posten des Teams, keyed by id (≤ ~30 Zeilen — die Kapazität rechnet PHP). */
     private function postenDesTeams(Team $team): Collection
     {
