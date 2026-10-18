@@ -164,8 +164,11 @@ class RecipeGeneratorService
                 // Weg-B-Befund 1 (2026-10-12): dieselbe Liste wie recipe_klasse.POST — der frühere
                 // INNER JOIN verwarf die vier flachen Diät-Klassen ohne Hauptgruppe (Modell A).
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Services\SpeisenKlassenService::taxonomie($team);
-                $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
-                    ->orderBy('code')->pluck('label', 'code')->all();
+                // Spec 84 (18.10.): nur die für das Team sichtbaren Aufschlagsklassen — vorher gingen die Klassen ALLER Teams
+                // (auch die BHG-Margen des Masters) in den Prompt. Bei gleichem Code gewinnt die eigene Klasse (letzte Zuweisung zählt).
+                $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)
+                    ->where('is_inactive', false)->orderByRaw('team_id = ? asc', [$team->id])->orderBy('code')
+                    ->get(['code', 'label'])->pluck('label', 'code')->sortKeys()->all();
             }
             // Sub-Rezept-Erkennung an die Rezept-Taxonomie binden (statt hartcodierter Prompt-Wortliste):
             // die real konfigurierten Basisrezept-Hauptgruppen mitgeben, damit die KI »sub_rezept:true«
@@ -297,13 +300,18 @@ class RecipeGeneratorService
                         ->where('code', trim($m[1]))->where('is_inactive', false)->first();
                 }
                 $ak = isset($kiRezept['aufschlagsklasse_code'])
-                    ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('code', $kiRezept['aufschlagsklasse_code'])->first()
+                    // Spec 84 (18.10.): Code nur unter den sichtbaren Klassen auflösen, eigene vor geerbter — nie die Klasse eines fremden Teams
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->where('code', $kiRezept['aufschlagsklasse_code'])
+                        ->where('is_inactive', false)->orderByRaw('team_id = ? desc', [$team->id])->orderBy('id')->first()
                     : null;
+                // Spec 84 (18.10.): Klassen-/HG-Default nur, wenn die Aufschlagsklasse für das Team sichtbar ist (nie die Master-Klasse)
+                $sichtbareAk = fn (?int $id): ?int => $id !== null
+                    && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->exists() ? $id : null;
                 $recipe->update(array_filter([
                     'dish_class_id' => $klasse?->id,
                     'dish_class_source' => $klasse !== null ? 'ki' : null,
                     'dish_main_group_id' => $hg?->id,
-                    'markup_class_id' => $ak?->id ?? $klasse?->default_markup_class_id ?? $hg?->default_markup_class_id,
+                    'markup_class_id' => $ak?->id ?? $sichtbareAk($klasse?->default_markup_class_id) ?? $sichtbareAk($hg?->default_markup_class_id),
                     'vat_rate' => $ak?->vat_rate,
                     // L8b: die Portion kommt AUS DEM VORSCHLAG — sie ist die letzte
                     // Vorbedingung des Wirtschaftlichkeits-Glieds (L8a) und die einzige,

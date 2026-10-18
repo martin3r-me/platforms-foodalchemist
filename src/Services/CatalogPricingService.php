@@ -84,10 +84,15 @@ class CatalogPricingService
     {
         $presentation->loadMissing('markupClass', 'recipe.markupClass');
         $base = $preBase ?? $this->enterpriseBaseRate($team, $outlet);
-        $class = $presentation->markupClass;
+        // Spec 84 (18.10.): EIN Riegel im Preisweg — eine Klasse an Darreichung oder Gericht zählt nur, wenn sie für das Team sichtbar ist.
+        // Abo-Fassungen tragen die Klasse des Masters (Anzeige liest deren Label per 'verweis'); ihr Faktor darf nie in den Mandanten-VK.
+        // Bewusst KEIN Abgleich über den Code: hat der Mandant eine eigene Klasse mit gleichem Code, gilt trotzdem nur der Team-Standard —
+        // das Umhängen auf die eigene Kopie macht das Grundeinstellungs-Paket, nicht der Preisweg.
+        $sichtbar = fn ($klasse) => $klasse !== null && FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($klasse->id)->exists() ? $klasse : null;
+        $class = $sichtbar($presentation->markupClass);
         $classSource = $class !== null ? 'darreichung' : null;
-        if ($class === null && $presentation->recipe?->markupClass !== null) {
-            $class = $presentation->recipe->markupClass;
+        if ($class === null && ($gerichtKlasse = $sichtbar($presentation->recipe?->markupClass)) !== null) {
+            $class = $gerichtKlasse;
             $classSource = 'gericht';
         }
         if ($class === null && ($defaultId = $this->settings->defaultMarkupClassId($team)) !== null) {
