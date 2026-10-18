@@ -89,18 +89,6 @@ final class Vokabular implements RegelArt
         return $out;
     }
 
-    public function gruppeVon(FoodAlchemistRule $regel, string $text): ?string
-    {
-        $k = $this->kanonisch($regel, $text);
-        foreach ((array) ($regel->params['werte'] ?? []) as $w) {
-            if ($k !== null && (string) $w['wert'] === $k) {
-                return isset($w['gruppe']) ? (string) $w['gruppe'] : null;
-            }
-        }
-
-        return null;
-    }
-
     public function pruefe(FoodAlchemistRule $regel, string $text, array $kontext = []): array
     {
         if (trim($text) === '' || $this->kanonisch($regel, $text) !== null) {

@@ -224,15 +224,15 @@ it('UI: Fundstück eines anderen Standorts trägt den Standortnamen, ohne Lösch
 it('Radar-Position: Ring nach Ebene, Sektor nach Kategorie, stabil', function () {
     $food = $this->svc->anlegen($this->rootTeam, ['name' => 'Superfood', 'typ' => 'trend', 'ebene' => 'konsum', 'kategorie' => 'food']);
     $deko = $this->svc->anlegen($this->rootTeam, ['name' => 'Coral Coast', 'typ' => 'hype', 'ebene' => 'meta', 'kategorie' => 'deko']);
-    $p = $this->svc->radarPosition($food);
-    $q = $this->svc->radarPosition($deko);
+    $pos = $this->svc->radarPositionen([$food, $deko]);
+    [$p, $q] = [$pos[$food->id], $pos[$deko->id]];
     $r = fn ($pt) => sqrt(($pt['x'] - 320) ** 2 + ($pt['y'] - 320) ** 2) / 268;
 
     expect($p['x'])->toBeLessThan(320)                       // Food links
         ->and($q['x'])->toBeGreaterThan(320)                 // Non-Food rechts
         ->and($r($p))->toBeGreaterThanOrEqual(0.35)->toBeLessThanOrEqual(0.57)
         ->and($r($q))->toBeGreaterThanOrEqual(0.85)->toBeLessThanOrEqual(0.97)
-        ->and($this->svc->radarPosition($food->refresh()))->toBe($p);
+        ->and($this->svc->radarPositionen([$food->refresh(), $deko->refresh()])[$food->id])->toBe($p);
 });
 
 it('Datei-Beleg: Screenshot wird am Trend abgelegt und beim Löschen mit entfernt', function () {

@@ -59,8 +59,8 @@ beforeEach(function () {
 });
 
 it('embeddet Pairing-Docs und rankt das semantisch passende zuerst', function () {
-    ($this->mkDoc)('pairing.trueffel', 'pairing', 'Trüffel', "# Trüffel\n## Pairings\n[[Pasta]] · [[Sellerie]]\n## Notizen\nx\n");
-    ($this->mkDoc)('pairing.schokolade', 'pairing', 'Schokolade', "# Schokolade\n## Pairings\n[[Chili]] · [[Orange]]\n## Notizen\nx\n");
+    $trueffel = ($this->mkDoc)('pairing.trueffel', 'pairing', 'Trüffel', "# Trüffel\n## Pairings\n[[Pasta]] · [[Sellerie]]\n## Notizen\nx\n");
+    $schokolade = ($this->mkDoc)('pairing.schokolade', 'pairing', 'Schokolade', "# Schokolade\n## Pairings\n[[Chili]] · [[Orange]]\n## Notizen\nx\n");
 
     $stats = $this->svc->embedCorpus(['pairing']);
 
@@ -68,12 +68,12 @@ it('embeddet Pairing-Docs und rankt das semantisch passende zuerst', function ()
         ->and($stats['kategorien']['pairing'])->toBe(2)
         ->and(DB::table('core_embeddings')->where('entity_type', KnowledgeEmbeddingService::ENTITY_TYPE)->count())->toBe(2);
 
-    // Treffer kommen OHNE "pairing."-Präfix zurück (Stem-Form), bestes Match zuerst.
-    $hits = $this->svc->searchSlugs('Hauptgericht mit Pasta und Sellerie', ['pairing'], 2);
+    // Bestes Match zuerst (Spec 85 D-2: searchSlugs gelöscht, Ranking über searchDocIds geprüft).
+    $hits = $this->svc->searchDocIds('Hauptgericht mit Pasta und Sellerie', 2);
 
     expect($hits)->not->toBeEmpty()
-        ->and($hits[0])->toBe('trueffel')
-        ->and($hits)->not->toContain('schokolade');
+        ->and($hits[0])->toBe($trueffel)
+        ->and($hits)->not->toContain($schokolade);
 });
 
 it('durchsucht den ganzen Korpus kategorieübergreifend (Browser-Semantiksuche, searchDocIds + Default alle Kategorien)', function () {
@@ -93,15 +93,15 @@ it('durchsucht den ganzen Korpus kategorieübergreifend (Browser-Semantiksuche, 
 
 it('findet ein Domain-Doc über einen Token im Inhalt, den der Slug nicht trägt', function () {
     // "topinambur" steht NUR im Inhalt — die Lexik (Slug/Titel/Alias) würde es verfehlen.
-    ($this->mkDoc)('wurzelgemuese', 'domain', 'Wurzelgemüse', "# Wurzelgemüse\nTopinambur, Pastinake, Petersilienwurzel.\n");
-    ($this->mkDoc)('zitrus', 'domain', 'Zitrus', "# Zitrus\nOrange, Zitrone, Limette.\n");
+    $wurzel = ($this->mkDoc)('wurzelgemuese', 'domain', 'Wurzelgemüse', "# Wurzelgemüse\nTopinambur, Pastinake, Petersilienwurzel.\n");
+    $zitrus = ($this->mkDoc)('zitrus', 'domain', 'Zitrus', "# Zitrus\nOrange, Zitrone, Limette.\n");
 
     $this->svc->embedCorpus(['domain']);
 
-    $hits = $this->svc->searchSlugs('Topinambur Velouté', ['domain'], 2);
+    $hits = $this->svc->searchDocIds('Topinambur Velouté', 2);
 
-    expect($hits)->toContain('wurzelgemuese')
-        ->and($hits)->not->toContain('zitrus');
+    expect($hits)->toContain($wurzel)
+        ->and($hits)->not->toContain($zitrus);
 });
 
 it('verdrahtet den semantischen Fallback in discoverDomains (über contextFor)', function () {
@@ -139,7 +139,7 @@ it('degradiert sauber ohne Provider — leere Treffer, kein Fehler', function ()
 
     expect($this->svc->isProviderAvailable())->toBeFalse()
         ->and($this->svc->searchEnabled())->toBeFalse()
-        ->and($this->svc->searchSlugs('Trüffel', ['pairing'], 3))->toBe([])
+        ->and($this->svc->searchDocIds('Trüffel', 3))->toBe([])
         ->and($this->svc->embedCorpus(['pairing'])['available'])->toBeFalse();
 });
 

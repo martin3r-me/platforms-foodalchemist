@@ -32,12 +32,6 @@ class InspireImportService
     /** Spec 60 · P2: Harmonie-Tabelle (stufe 2|3, beide Richtungen). */
     private const EDGES = \Platform\FoodAlchemist\Services\Pairing\AnkerGraph::TABELLE;
 
-    /** Zählt bereits importierte Inspire-Anker (für den „schon importiert?"-Guard). */
-    public function existingInspireAnchors(): int
-    {
-        return (int) DB::table(self::ANCHORS)->whereNotNull('inspire_id')->count();
-    }
-
     /** Rollback: löscht alle Inspire-Kanten und -Anker (für sauberen Redo). */
     public function purgeInspire(): array
     {

@@ -70,12 +70,4 @@ final class DossierText
 
         return $rest !== '' ? $rest : $md;
     }
-
-    /**
-     * Wie viele Zeichen `ohneVorspann()` entfernen würde — für Messsonde und Protokoll.
-     */
-    public static function vorspannLaenge(string $md): int
-    {
-        return max(0, mb_strlen(ltrim($md)) - mb_strlen(self::ohneVorspann($md)));
-    }
 }

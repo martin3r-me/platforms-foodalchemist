@@ -74,10 +74,4 @@ final class Wissensart
     {
         return $art === null || in_array($art, self::ALLE, true);
     }
-
-    /** Darf ein Dossier dieser Art in einen Prompt? `null` (noch nicht eingeordnet) ja — sonst bricht der Bestand. */
-    public static function darfInPrompt(?string $art): bool
-    {
-        return $art === null || ! in_array($art, self::NIE_IM_PROMPT, true);
-    }
 }

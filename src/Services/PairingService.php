@@ -64,23 +64,6 @@ class PairingService
         return $an === $bn || $praefix($an, $bn);
     }
 
-    /** T3: GERICHTET — nur gleich/allgemeiner als die Hauptzutat; längster gültiger gewinnt. */
-    public function bestIdentityAnchor(string $hauptzutatSlug, array $ankerSlugs): ?string
-    {
-        $hn = $this->normalizeAnkerSlug($hauptzutatSlug);
-        $bester = null;
-        foreach ($ankerSlugs as $anker) {
-            $an = $this->normalizeAnkerSlug($anker);
-            if ($an === $hn || str_starts_with($hn, $an . '_')) {   // gleich ODER allgemeiner
-                if ($bester === null || mb_strlen($an) > mb_strlen($this->normalizeAnkerSlug($bester))) {
-                    $bester = $anker;
-                }
-            }
-        }
-
-        return $bester;
-    }
-
     // ── Komponenten-Auflösung (3.1) ──────────────────────────────────────
 
     private ?array $anchorIndex = null;
@@ -1171,22 +1154,6 @@ class PairingService
                 'ai_reasoning' => mb_strimwidth($reasoning, 0, 500), 'deleted_at' => null,
                 'updated_at' => now(), 'created_at' => now()],
         );
-    }
-
-    /**
-     * Anker eines Rezepts = sein Aromenprofil (Spec 60 · P7c), stärkster Anteil zuerst.
-     * `source` = 'profil', `anteil` in % — dieselbe Form wie früher die KI-Anker am Rezept.
-     */
-    public function recipeAnkers(int $recipeId): Collection
-    {
-        app(Pairing\RezeptProfil::class)->fuer($recipeId);
-
-        return DB::table('foodalchemist_recipe_profile_anker AS m')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
-            ->where('m.recipe_id', $recipeId)->orderByDesc('m.anteil')->orderBy('a.slug')
-            ->get(['a.id', 'a.slug', 'a.display_de', 'm.anteil'])
-            ->map(fn ($r) => (object) ['id' => (int) $r->id, 'slug' => $r->slug, 'display_de' => $r->display_de,
-                'source' => 'profil', 'ai_confidence' => null, 'anteil' => (float) $r->anteil]);
     }
 
     /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel, Aroma-Ähnlichkeit/Ersatz-Logik). */

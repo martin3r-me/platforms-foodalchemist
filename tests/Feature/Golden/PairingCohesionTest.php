@@ -43,14 +43,6 @@ it('T1/T2: Slug-Toleranz — Präfix ja, Geschwister-Sorten und Teilstring nein'
         ->and($this->svc->ankerSlugMatches('rum', 'rumpsteak'))->toBeFalse();
 });
 
-it('T3: Identitäts-Anker GERICHTET — nie eine Sorte für den generischen GP', function () {
-    $vokabular = ['apfel', 'apfel_braeburn', 'apfel_granny_smith'];
-
-    expect($this->svc->bestIdentityAnchor('aepfel_braeburn', $vokabular))->toBe('apfel_braeburn')
-        ->and($this->svc->bestIdentityAnchor('aepfel_fuji', $vokabular))->toBe('apfel')
-        ->and($this->svc->bestIdentityAnchor('aepfel', $vokabular))->toBe('apfel');
-});
-
 it('T4: Kohäsion durchgerechnet — nur 3★ zählt; Stufe 2 ist neutral (0), nicht „fast gut"', function () {
     $e = ($this->mkAnker)('erdbeere');
     $b = ($this->mkAnker)('basilikum');
