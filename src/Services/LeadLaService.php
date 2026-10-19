@@ -284,6 +284,7 @@ class LeadLaService
         if ($laId !== null && ! $this->gehoertZuGp($gp, $laId)) {
             throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
+        $this->pruefeLeadBesitzer($team, $gp);
         $gp->update(['lead_la_supplier_item_id' => $laId]);
         // Spec 82 3b: der globale Lead gilt für alle Teams ohne eigenen Pin → Team-Kosten aller Teams veraltet
         app(KostenCacheService::class)->markiereVeraltet(app(KostenCacheService::class)->rezepteMitGps([(int) $gp->id]), null);
@@ -307,6 +308,36 @@ class LeadLaService
         if ($recompute) {
             $this->recomputeGpNutzer($gp);
         }
+    }
+
+    /**
+     * Darf dieses Team den globalen Lead des GP setzen? Besitzer (`isOwnedBy`: eigenes Team, Master bei globalen stamm_paket-Zeilen)
+     * und — nur für den Lead — der Master auch bei globalen BASIS-GPs (Dominique 18.10.: „Global ist Master-Team, ich muss sie
+     * irgendwo einstellen und pflegen“). Mandanten nie. Bewusst hier statt in `isOwnedBy`/`Curate`: die übrige Pflege globaler
+     * Basis-GPs bleibt unverändert. Grundlage auch für PR-B (wer den globalen Lead setzt, wer einen eigenen Pin).
+     */
+    public static function darfGlobalenLead(Team $team, FoodAlchemistGp $gp): bool
+    {
+        return $gp->isOwnedBy($team) || ($gp->team_id === null && \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team));
+    }
+
+    /**
+     * Spec 85 Controlling PR-A (Dominique 19.10.): der globale Lead gilt für alle Teams — im angemeldeten Weg (Seite, MCP, KI) setzt
+     * ihn nur, wer `darfGlobalenLead` erfüllt (Besitzer; bei globalen GPs der Master), mit Rolle Kuratieren. Systemwege ohne
+     * Anmeldung (Neuwahl-Job, Kommando, Migration) bleiben offen — dieselbe Linie wie `FaRechte::pruefeAngemeldet`.
+     *
+     * @throws \Platform\FoodAlchemist\Exceptions\LeadNurBesitzerException
+     * @throws \Platform\FoodAlchemist\Exceptions\FaRechtFehltException
+     */
+    private function pruefeLeadBesitzer(Team $team, FoodAlchemistGp $gp): void
+    {
+        if (\Illuminate\Support\Facades\Auth::id() === null) {
+            return;
+        }
+        if (! self::darfGlobalenLead($team, $gp)) {
+            throw new \Platform\FoodAlchemist\Exceptions\LeadNurBesitzerException((int) $gp->id, (string) $gp->name);
+        }
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Bezugsquelle für alle setzen');
     }
 
     /** R9.2: GP-nutzende Rezepte neu rechnen (Direktnutzer + transitive Eltern). */

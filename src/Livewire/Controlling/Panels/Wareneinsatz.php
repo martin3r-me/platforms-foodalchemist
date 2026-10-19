@@ -159,6 +159,7 @@ class Wareneinsatz extends Component
 
         $gesetzt = [];
         $fehlgeschlagen = 0;
+        $fremd = 0;   // Spec 85 PR-A: GP gehört nicht diesem Team — Bezugsquelle für alle setzt nur der Besitzer
         foreach ($zeilen as $z) {
             $gp = FoodAlchemistGp::visibleToTeam($team)->whereKey($z['gp_id'])->first();
             if ($gp === null) {
@@ -171,6 +172,12 @@ class Wareneinsatz extends Component
                 $lead->setLeadLa($team, $gp, (int) $z['cheapest_rebate_la_id'],
                     'Controlling · Wareneinsatz-Batch', recompute: false);
                 $gesetzt[] = (int) $gp->id;
+            } catch (\Platform\FoodAlchemist\Exceptions\LeadNurBesitzerException) {
+                $fremd++;
+            } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
+                $this->fehler = $e->getMessage();   // Rolle fehlt — für alle Zeilen gleich, also abbrechen
+
+                return;
             } catch (RuntimeException) {
                 // Eine einzelne verweigerte Zeile (z. B. LA nicht mehr am GP) darf den Rest
                 // nicht kippen — sie wird gezählt und am Ende ehrlich ausgewiesen.
@@ -188,7 +195,8 @@ class Wareneinsatz extends Component
         $nGesetzt = count($gesetzt);
         $this->hinweis = $nGesetzt . ($nGesetzt === 1 ? ' Bezugsquelle' : ' Bezugsquellen') . ' umgestellt, '
             . $nRezepte . ($nRezepte === 1 ? ' Rezept' : ' Rezepte') . ' nachgerechnet.'
-            . ($fehlgeschlagen > 0 ? ' ' . $fehlgeschlagen . ($fehlgeschlagen === 1 ? ' Position' : ' Positionen') . ' übersprungen.' : '');
+            . ($fehlgeschlagen > 0 ? ' ' . $fehlgeschlagen . ($fehlgeschlagen === 1 ? ' Position' : ' Positionen') . ' übersprungen.' : '')
+            . ($fremd > 0 ? ' ' . $fremd . ($fremd === 1 ? ' Grundprodukt gehört' : ' Grundprodukte gehören') . ' nicht eurem Team — deren Bezugsquelle für alle setzt nur der Besitzer.' : '');
     }
 
     /**
