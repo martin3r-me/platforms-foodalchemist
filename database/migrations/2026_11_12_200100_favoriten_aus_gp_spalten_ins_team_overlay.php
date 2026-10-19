@@ -14,6 +14,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_gps', 'is_favorite')) {
+            return;   // FAV-3 hat die Spalten schon entfernt
+        }
         $favoriten = DB::table('foodalchemist_gps')->where('is_favorite', true)->whereNull('deleted_at')
             ->get(['id', 'team_id', 'favorite_rank']);
         if ($favoriten->isEmpty()) {
@@ -41,6 +44,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Rückweg: die GP-Spalten stehen bis FAV-3 unverändert — nichts zurückzuschreiben.
+        // Rückweg: nichts zurückzuschreiben (die Spalten entfernt FAV-3, das Overlay bleibt).
     }
 };

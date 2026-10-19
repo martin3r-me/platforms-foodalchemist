@@ -93,6 +93,7 @@ it('Rechte: Betrachter pflegt nicht; ein nicht sichtbarer GP wird abgelehnt; jed
 
 it('Migration: alte GP-Spalten werden die Liste des Masters (global) bzw. des Besitzers (team-eigen) — idempotent', function () {
     $eigen = $this->makeGp($this->rootTeam, 'Hausbrühe');
+    (require __DIR__ . '/../../database/migrations/2026_11_12_300000_drop_favoriten_spalten_von_gps.php')->down();   // FAV-3: Spalten für den Altbestand zurückholen
     DB::table('foodalchemist_gps')->where('id', $this->gp['butter']->id)->update(['is_favorite' => true, 'favorite_rank' => 3]);
     DB::table('foodalchemist_gps')->where('id', $eigen->id)->update(['is_favorite' => true]);
     $mig = require __DIR__ . '/../../database/migrations/2026_11_12_200100_favoriten_aus_gp_spalten_ins_team_overlay.php';
