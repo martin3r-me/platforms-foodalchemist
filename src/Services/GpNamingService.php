@@ -22,7 +22,7 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 class GpNamingService
 {
     /** §9 / DB-CHECK — kanonisches Zustand-Vokabular (A7: EIN Validator-Set). */
-    public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert', 'gepoekelt', 'geraeuchert', 'luftgetrocknet'];  // ab Regelwerk v3.6.0 (§9)
+    public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert'];
 
     /*
      * §7.1 Verpackungswörter und §10 Platzhalter-Marker („generisch") sind seit Spec 81 Regeln als Daten
