@@ -49,6 +49,7 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 'beispiele' => ['type' => 'object'],
                 'notiz' => ['type' => 'string'],
                 'dossier_slug' => ['type' => 'string'],
+                'ebene' => ['type' => 'string', 'enum' => ['global', 'team'], 'description' => 'team = Hausstandard des Teams setzen: nur schluessel, params, notiz (Spec 85 D-7)'],
             ],
         ];
     }
@@ -58,6 +59,9 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if (($arguments['ebene'] ?? 'global') === 'team') {
+            return $this->teamSetzen($team, $arguments, $context);
         }
         if (! RegelService::darf($context->user)) {
             return ToolResult::error('Regeln pflegt nur der Plattform-Administrator.', 'FORBIDDEN');
@@ -92,6 +96,29 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             'schluessel' => $r->schluessel, 'version' => $r->version, 'aktiv' => false,
             'hinweis' => 'Einschalten in Einstellungen › Regeln, nach Ansicht des Probelaufs.',
         ]);
+    }
+
+    /** Spec 85 D-7: Hausstandard des Teams — eigener Schreibweg (RegelService::speichereTeam), wirkt sofort. */
+    private function teamSetzen(\Platform\Core\Models\Team $team, array $arguments, ToolContext $context): ToolResult
+    {
+        $schluessel = trim((string) ($arguments['schluessel'] ?? ''));
+        if (! in_array($schluessel, \Platform\FoodAlchemist\Services\Regeln\RegelBuch::UEBERSTEUERBAR, true)) {
+            return ToolResult::error("Regel «{$schluessel}» ist nicht übersteuerbar — sie gilt für alle gleich.", 'NICHT_UEBERSTEUERBAR');
+        }
+        if (! is_array($arguments['params'] ?? null)) {
+            return ToolResult::error('params fehlt (z. B. {"wert": 70} bei einer Schwelle).', 'VALIDATION_ERROR');
+        }
+        try {
+            $r = app(RegelService::class)->speichereTeam($team, $schluessel, $arguments['params'], isset($arguments['notiz']) ? (string) $arguments['notiz'] : null,
+                $context->user, 'mcp');
+        } catch (RegelUngueltig $e) {
+            return ToolResult::error(implode(' · ', $e->fehler), $e->typ);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            return ToolResult::error($e->getMessage(), 'FORBIDDEN');
+        }
+
+        return ToolResult::success(['ebene' => 'team', 'schluessel' => $r->schluessel, 'version' => $r->version, 'aktiv' => true,
+            'wert' => \Platform\FoodAlchemist\Support\HausstandardSicht::kurz($r), 'hinweis' => 'Wirkt sofort für dieses Team und seine Unter-Teams ohne eigene Abweichung.']);
     }
 
     public function getMetadata(): array
