@@ -172,7 +172,8 @@ class TeamSettingsService
         }
         // Spec 77c: auch der dem Unter-Team zugeordnete Betrieb des Oberteams — dessen Profil gilt (Zeile am Besitzer-Team)
         if ((int) $outlet->team_id !== (int) $team->id
-            && ! in_array((int) $outlet->team_id, app(\Platform\FoodAlchemist\Services\FaRechte::class)->teamKette($team), true)) {
+            && ! in_array((int) $outlet->team_id, \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(\Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class,
+                app(\Platform\FoodAlchemist\Services\FaRechte::class)->teamKette($team)), true)) {   // Spec 84 Stufe 4: gekappt an der Kundengrenze
             return null;
         }
 

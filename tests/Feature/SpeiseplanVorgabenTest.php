@@ -302,3 +302,16 @@ it('MCP: speiseplaene.PUT setzt vorgaben (gleiche Validierung), GET liefert sie 
     $get = $registry->get('foodalchemist.speiseplaene.GET')->execute(['id' => $this->plan->id], $ctx);
     expect($get->data['speiseplan']['vorgaben'])->toBe([['chip_id' => $vegan->id, 'mahlzeit' => 'mittag', 'min' => 2, 'max' => null]]);
 });
+
+it('Spec 84 Stufe 4: Hauptgruppen-Name eines Abo-Gerichts (Master-HG) bleibt sichtbar — gespeicherter Verweis wie die Relation', function () {
+    $master = \Platform\Core\Models\Team::create(['name' => 'Master', 'user_id' => 1, 'personal_team' => false]);
+    $hg = FoodAlchemistDishMainGroup::create(['team_id' => $master->id, 'code' => 'MHG', 'label' => 'Master-Hauptgang']);
+    $g = ($this->gericht)('abo1', ['dish_main_group_id' => $hg->id]);   // wie eine Abo-Fassung: Verweis auf die Master-Hauptgruppe
+    ($this->eintrag)($g, '2026-07-06');
+
+    foreach ([0, 4] as $stufe) {
+        config(['foodalchemist.team_sicht.stufe' => $stufe]);
+        $ab = \Platform\FoodAlchemist\Support\FaTeam::imTeam($this->rootTeam, fn () => $this->svc->wochenAbwechslung($this->plan->fresh(), 'mittag', $this->montag));
+        expect(collect($ab['warengruppen'])->firstWhere('id', $hg->id)['name'])->toBe('Master-Hauptgang', "Stufe {$stufe}");
+    }
+});
