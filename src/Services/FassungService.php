@@ -29,9 +29,8 @@ class FassungService
     private const NIE_KOPIEREN = [
         'uuid', 'legacy_id', 'recipe_key', 'kopie_von_id', 'kopie_stand_at', 'created_at', 'updated_at', 'deleted_at',
         'ek_total_eur', 'ek_per_kg_eur', 'ek_price_basis', 'ek_n_ingredients_priced', 'ek_n_ingredients_total',
-        'additional_costs_eur', 'sales_net', 'sales_gross',
-        // Preisklasse/Aufschlag gehören dem Master — beim Mandanten greift NUR sein Kalkulationsfaktor (Dominique 13.10.)
-        'markup_class_id', 'markup_class_legacy_id',
+        'additional_costs_eur',
+        // VK und Preisklasse stehen an der Darreichung (Spec 85 D-1); für die Darreichung gilt DARREICHUNG_NIE.
         'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash', 'veroeffentlicht_at', 'veroeffentlicht_von',
         'aenderungsnotiz', 'fassung_allergen_geaendert',
     ];

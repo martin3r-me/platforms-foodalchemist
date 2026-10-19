@@ -74,7 +74,7 @@ class PaketService
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
-                'dishes.dish:id,name,ek_total_eur,is_sales_recipe,yield_kg,sales_net,sales_unit_count', 'dishes.dish.standardPresentation',
+                'dishes.dish:id,name,ek_total_eur,is_sales_recipe,yield_kg,sales_unit_count', 'dishes.dish.standardPresentation',
                 'dishes.unit:id,slug,display_de'])
             ->find($id);
 
@@ -315,7 +315,7 @@ class PaketService
         $expired = $paket->price_override_expires_at?->isPast() ?? false;
         $auto = $paket->price_mode === 'auto' || $expired;
         $gerichte = $paket->dishes()->with([
-            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg,sales_net',
+            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
             'unit:id,slug,dimension,default_in_g',
         ])->get();
 
@@ -450,7 +450,7 @@ class PaketService
         }
 
         $gerichte = $paket->dishes()->with([
-            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg,sales_net',
+            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
             'unit:id,slug,dimension,default_in_g',
         ])->get();
 
@@ -544,7 +544,7 @@ class PaketService
             ->when(($filter['diet_form'] ?? '') !== '', fn ($q) => $q
                 ->whereIn('dish_class_id', FoodAlchemistDishClass::where('diet_form', $filter['diet_form'])->pluck('id')))
             ->orderBy('name')->limit($limit)
-            ->select(['id', 'name', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
+            ->select(['id', 'name'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     /** Pakete als Concept-Position (linke Liste, Umschalter) — Suche über Name/Rolle + Klasse-Filter. */

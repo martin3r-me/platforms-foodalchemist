@@ -161,11 +161,8 @@ class VkModal extends Component
                 'sales_wording_standard' => $r->sales_wording_standard,
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
-                // Preis-Wahrheit ist die Standard-Darreichung. Der Rezeptwert bleibt nur
-                // Kompatibilitaets-Cache und darf im Kalkulations-Tab keine abweichende
-                // Preisklasse anzeigen.
-                'markup_class_id' => $standardPresentation?->markup_class_id
-                    ?? $r->markup_class_id ?? $defaultMarkupClassId,   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+                // Preis-Wahrheit ist die Standard-Darreichung (Spec 85 D-1: die Rezeptspalte gibt es nicht mehr).
+                'markup_class_id' => $standardPresentation?->markup_class_id ?? $defaultMarkupClassId,
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -234,7 +231,7 @@ class VkModal extends Component
                 'quantity_per_unit_g' => $d->quantity_per_unit_g,
                 'unit_count' => $d->unit_count,
                 'unit_vocab_id' => $d->unit_vocab_id,
-                'markup_class_id' => $d->markup_class_id ?? $d->recipe?->markup_class_id ?? $defaultMarkupClassId,   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+                'markup_class_id' => $d->markup_class_id ?? $defaultMarkupClassId,
                 'price_mode' => $d->price_mode,
                 'sales_net' => $d->sales_net,
                 'vat_profile_key' => $d->vat_profile_key,
@@ -494,8 +491,7 @@ class VkModal extends Component
             $update = array_map(
                 fn ($v) => $v === '' ? null : $v, $this->form,
             );
-            // Preis-Wahrheit liegt an der Darreichung. Ein im Rezeptkopf angezeigter
-            // Legacy-VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
+            // Preis-Wahrheit liegt an der Darreichung: der angezeigte VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
             app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update, $this->kiLineage);
             $this->kiLineage = [];

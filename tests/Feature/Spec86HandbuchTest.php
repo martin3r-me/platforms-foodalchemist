@@ -23,7 +23,8 @@ beforeEach(function () {
     $this->baue = function ($mitSchritten = true) {
         $team = $this->rootTeam;
         $concept = $this->makeConcept($team, 'Menü A', ['kind' => 'concept', 'consumer_name' => 'Genuss']);
-        $dish = $this->makeRecipe($team, 'Zanderfilet', ['is_sales_recipe' => true, 'sales_net' => 12.34]);
+        $dish = $this->makeRecipe($team, 'Zanderfilet', ['is_sales_recipe' => true]);
+        $this->makeStandardDarreichung($dish, 12.34);
         $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id, 'wording' => 'Zanderfilet auf Linsen', 'position' => 1]);
         $fb = $this->makeFoodbook($team, 'Sommerfest', ['personen' => 6]);
         $kap = $this->makeChapter($fb, ['title' => 'Hauptgänge', 'consumer_title' => 'Hauptgänge', 'position' => 1]);
@@ -127,7 +128,7 @@ it('Zutaten und aufklappbares Basisrezept stehen im Handbuch, ohne Preise und Li
     $fb = ($this->baue)();
     $team = $this->rootTeam;
     $dish = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::where('name', 'Zanderfilet')->firstOrFail();
-    $linsen = $this->makeRecipe($team, 'Linsengemüse Basis', ['is_sales_recipe' => false, 'sales_net' => 7.77]);
+    $linsen = $this->makeRecipe($team, 'Linsengemüse Basis', ['is_sales_recipe' => false, 'ek_per_kg_eur' => 7.77]);   // Basisrezept ohne VK (Spec 85 D-1); der EK darf nicht durchsickern
     $this->makeIngredient($linsen, 'Beluga-Linsen', $this->makeGp($team, 'Beluga-Linsen'), '500', 1);
     FoodAlchemistRecipeStep::create(['team_id' => $team->id, 'recipe_id' => $linsen->id, 'position' => 1, 'ebene' => 'produktion', 'text' => 'Linsen 25 min weich garen.']);
     $this->makeIngredient($dish, 'Zander', $this->makeGp($team, 'Zanderfilet mit Haut'), '180', 1);

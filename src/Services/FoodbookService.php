@@ -84,7 +84,7 @@ class FoodbookService
             ->with(['chapters' => fn ($q) => $q->orderBy('position'),
                 'chapters.blocks' => fn ($q) => $q->orderBy('position'),
                 'chapters.blocks.concept:id,name,price_per_person_cache,price_display',   // price_display → Editor-Chip istEinzelpreis
-                'chapters.blocks.dish:id,name,sales_net,ek_total_eur,sales_unit_count', 'chapters.blocks.dish.standardPresentation',   // Spec 85: EK je Portion (blockPreis)
+                'chapters.blocks.dish:id,name,ek_total_eur,sales_unit_count', 'chapters.blocks.dish.standardPresentation',   // Spec 85: EK je Portion (blockPreis)
                 'crmCompany', 'crmContact',   // #369: CRM-Kunde-Link
                 'serviceMoments', 'targetGroups', 'defaultEventType', 'defaultServingForm']) // Spec 19 E3.3: Bedarf-Defaults
             ->find($id);
@@ -1381,7 +1381,7 @@ class FoodbookService
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,ek_total_eur,sales_net,sales_unit_count', 'blocks.dish.standardPresentation',
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,ek_total_eur,sales_unit_count', 'blocks.dish.standardPresentation',
             'blocks.staffel', 'children']);
 
         $vk = 0.0;
@@ -1574,7 +1574,7 @@ class FoodbookService
             'chapters.blocks.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
             'chapters.blocks.concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
-            'chapters.blocks.dish:id,name,sales_wording_standard,ek_total_eur,sales_net,sales_unit_count', 'chapters.blocks.dish.standardPresentation',
+            'chapters.blocks.dish:id,name,sales_wording_standard,ek_total_eur,sales_unit_count', 'chapters.blocks.dish.standardPresentation',
             // B (2026-08-31): LEBENDES Format-Kapitel — Identität + Editionen live aus dem Format. Editionen =
             // format_slots (type=concept) → Concept; die Wording-Kette der Editions-Concepte wie bei chapters.blocks.
             'chapters.format', 'chapters.format.images',
@@ -1967,7 +1967,7 @@ class FoodbookService
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             ->orderBy('name')->limit($limit)
-            ->select(['id', 'name', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
+            ->select(['id', 'name'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     // ── Format buchen (F5) — WIE EIN CONCEPT, kein Live-Format-Sonderweg ──────────

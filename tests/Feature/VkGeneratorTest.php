@@ -47,8 +47,7 @@ it('vkModus: VK angelegt, Basisrezept-Komponente resolved, Klasse/AK aus Vorschl
     expect($r->is_sales_recipe)->toBeTrue()
         ->and($r->dish_class_id)->toBe($this->class->id)
         ->and($r->dish_class_source)->toBe('ki')
-        ->and($r->markup_class_id)->toBe($this->alc->id)
-        ->and((float) $r->vat_rate)->toBe(19.0)
+        ->and($r->fresh()->vk_klasse?->id)->toBe($this->alc->id)       // Spec 85 D-1: an der Standard-Darreichung
         ->and($res['statistik']['bestand_sub'])->toBe(1)              // Basisrezept ZUERST gefunden
         ->and($r->ingredients()->first()->referenced_recipe_id)->toBe($this->basis->id)
         ->and((float) $r->ek_total_eur)->toBeGreaterThan(0);          // Recompute lief
@@ -97,7 +96,7 @@ it('vkModus: ungültige Klasse/AK fallen still raus — VK trotzdem angelegt (Ed
 
     expect($res['recipe']->is_sales_recipe)->toBeTrue()
         ->and($res['recipe']->dish_class_id)->toBeNull()
-        ->and($res['recipe']->markup_class_id)->toBeNull();
+        ->and($res['recipe']->fresh()->vk_klasse)->toBeNull();
 });
 
 it('vkModus: ohne AK-Code greift die Default-AK der Klasse', function () {
@@ -109,7 +108,7 @@ it('vkModus: ohne AK-Code greift die Default-AK der Klasse', function () {
         'dish_class_id' => $this->class->id,
     ], vkModus: true);
 
-    expect($res['recipe']->markup_class_id)->toBe($this->alc->id);
+    expect($res['recipe']->fresh()->vk_klasse?->id)->toBe($this->alc->id);
 });
 
 // ── Spec 03 L8b: die Portions-Quelle ────────────────────────────────────────

@@ -41,37 +41,14 @@ it('A1: createLeer setzt den Team-Default statt ihn zu verwerfen', function () {
 
     $gericht = app(SalesRecipeService::class)->createLeer($this->rootTeam, '[HG] Testgericht');
 
-    expect($gericht->markup_class_id)->toBe($this->klasse->id);
-});
-
-it('A1: create() reicht eine übergebene Aufschlagsklasse durch', function () {
-    $r = app(RecipeService::class)->create($this->rootTeam, [
-        'name' => '[HG] Direkt gesetzt',
-        'is_sales_recipe' => true,
-        'markup_class_id' => $this->klasse->id,
-    ]);
-
-    expect($r->markup_class_id)->toBe($this->klasse->id);
+    expect($gericht->vk_klasse?->id)->toBe($this->klasse->id);   // Spec 85 D-1: an der Standard-Darreichung
 });
 
 it('A1: ohne Angabe bleibt die Klasse leer — kein geratener Default', function () {
     $r = app(RecipeService::class)->create($this->rootTeam, ['name' => '[HG] Ohne Klasse', 'is_sales_recipe' => true]);
 
-    expect($r->markup_class_id)->toBeNull();
+    expect($r->vk_klasse)->toBeNull();
 });
 
-it('A1: eine fremde Aufschlagsklasse landet NICHT still am Rezept (Tenancy)', function () {
-    $fremdesTeam = Team::create(['name' => 'Fremd', 'user_id' => 1, 'personal_team' => false]);
-    $fremd = ($this->mkKlasse)($fremdesTeam, 'FREMD');
-
-    // TeamScope::referenz autorisiert — entweder wirft es, oder die Referenz kommt nicht an.
-    // Beides ist richtig; falsch wäre allein, dass die fremde ID am Rezept steht.
-    try {
-        $r = app(RecipeService::class)->create($this->rootTeam, [
-            'name' => '[HG] Fremdreferenz', 'is_sales_recipe' => true, 'markup_class_id' => $fremd->id,
-        ]);
-        expect($r->markup_class_id)->not->toBe($fremd->id);
-    } catch (\Throwable $e) {
-        expect(true)->toBeTrue();
-    }
-});
+// Spec 85 D-1 PR-C: `RecipeService::create()` nimmt keine Aufschlagsklasse mehr an (die Rezept-Spalte ist weg). Die Klasse
+// setzt die Darreichung: Vorbelegung → Spec85AufschlagsklasseDarreichungTest, Tenancy über updateVk → ReferenzAutorisierungTest.

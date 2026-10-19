@@ -140,20 +140,18 @@ it('A: unvergleichbare Gerichte fallen aus der Quoten-Rechnung, bleiben aber in 
         ->and($a['abweichend_gesamt'])->toBe(0);
 });
 
-// ── B · V-046 / V-059 — welche Zahl die Preis-Leiter liefert ──────────────────
+// ── B · Preis-Wahrheit — genau eine Standard-Darreichung je Verkaufsrezept (Spec 85 D-1 PR-C) ─────
+// Seit PR-C gibt es keinen Rezept-Preis mehr: „Divergenz Darreichung ↔ Rezept" und „Legacy-Rückfall" fallen weg.
+// Gezählt wird, ob ein Gericht seinen Preis aus GENAU EINER Standard-Darreichung bekommt.
 
-it('B: zählt Preis-Divergenz, Legacy-Rückfall, V-059-Lage und „gar kein VK" getrennt', function () {
-    // 1 · beide Zahlen da und ungleich ⇒ Divergenz (die Zahl, die V-046 wollte)
-    ($this->mkGericht)('[FIX] Divergent | A', ['sales_net' => 20.00],
+it('B: zählt Standard ohne Preis, ohne Darreichung, Formen ohne Standard (V-059) und „gar kein VK" getrennt', function () {
+    ($this->mkGericht)('[FIX] Gepflegt | A', [],
         ['sales_net' => 24.00, 'ek_portion' => 5.0, 'quantity_per_unit_g' => 200, 'unit_count' => 1]);
-    // 2 · Darreichung ohne Preis ⇒ Leiter fällt auf die Legacy-Spalte
-    ($this->mkGericht)('[FIX] Legacy | B', ['sales_net' => 15.00],
+    ($this->mkGericht)('[FIX] Standard ohne Preis | B', [],
         ['sales_net' => null, 'ek_portion' => 4.0, 'quantity_per_unit_g' => 200, 'unit_count' => 1]);
-    // 3 · Darreichungs-Zeile vorhanden, aber keine mit is_standard ⇒ V-059
-    ($this->mkGericht)('[FIX] Ohne Standard | C', ['sales_net' => 9.00],
+    ($this->mkGericht)('[FIX] Ohne Standard | C', [],
         ['is_standard' => false, 'sales_net' => 11.00, 'ek_portion' => 3.0, 'quantity_per_unit_g' => 200, 'unit_count' => 1]);
-    // 4 · nichts gepflegt
-    ($this->mkGericht)('[FIX] Preislos | D', ['sales_net' => null]);
+    ($this->mkGericht)('[FIX] Preislos | D');
 
     $b = $this->svc->messe($this->rootTeam)['b_preis_wahrheit'];
 
@@ -161,21 +159,19 @@ it('B: zählt Preis-Divergenz, Legacy-Rückfall, V-059-Lage und „gar kein VK" 
         ->and($b['mit_standard_darreichung'])->toBe(2)
         ->and($b['darreichungen_ohne_standard'])->toBe(1)
         ->and($b['ohne_darreichung'])->toBe(1)
-        ->and($b['preis_divergenz'])->toBe(1)
-        ->and($b['nur_legacy_preis'])->toBe(2) // B (Darreichung ohne Preis) + C (kein Standard)
-        ->and($b['kein_preis'])->toBe(1)
-        ->and($b['beispiele'][0]['delta_eur'])->toBe(4.0);
+        ->and($b['kein_preis'])->toBe(3)          // B (Standard ohne Preis) + C (kein Standard) + D (nichts)
+        ->and($b['mehrere_standard'])->toBe(0)
+        ->and(collect($b['beispiele'])->pluck('problem')->sort()->values()->all())->toBe(['ohne_darreichung', 'ohne_standard', 'standard_ohne_preis'])
+        ->and(array_key_exists('preis_divergenz', $b))->toBeFalse();
 });
 
-it('B: gleiche Zahl auf beiden Wegen ist KEINE Divergenz (Cent-Rundung toleriert)', function () {
-    ($this->mkGericht)('[FIX] Gleich | A', ['sales_net' => 24.00],
+it('B: ein Gericht mit bepreister Standard-Darreichung ist kein Befund', function () {
+    ($this->mkGericht)('[FIX] Gleich | A', [],
         ['sales_net' => 24.00, 'ek_portion' => 5.0, 'quantity_per_unit_g' => 200, 'unit_count' => 1]);
 
     $b = $this->svc->messe($this->rootTeam)['b_preis_wahrheit'];
 
-    expect($b['preis_divergenz'])->toBe(0)
-        ->and($b['nur_legacy_preis'])->toBe(0)
-        ->and($b['beispiele'])->toBe([]);
+    expect($b['kein_preis'])->toBe(0)->and($b['mehrere_standard'])->toBe(0)->and($b['beispiele'])->toBe([]);
 });
 
 // ── C · V-053 — drei Fassungen von „aktiver Preis" ────────────────────────────

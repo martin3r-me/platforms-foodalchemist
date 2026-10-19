@@ -71,7 +71,6 @@ class RecipeOneShotService
     public function __construct(
         private BulkEnrichService $bulk,
         private CoherenceService $coherence,
-        private SalesRecipeService $sales,
         private DarreichungService $darreichungen,
         private CatalogPricingService $catalogPricing,
         private MargeService $marge,
@@ -828,11 +827,10 @@ class RecipeOneShotService
      * genau diese drei Vorbedingungen und lässt danach die BESTEHENDE Preis-Maschine
      * rechnen. Vier Entscheidungen tragen es:
      *
-     * 1. **Kein zweiter Schreibweg.** Portion und Aufschlagsklasse gehen durch
-     *    `SalesRecipeService::updateVk` — dort hängt die Selbstheilung der
-     *    Standard-Darreichung schon dran (`syncStandardDarreichung`), und die
-     *    Darreichung ist die Preis-Wahrheit. `ensureStandard` danach ist nur noch
-     *    der Fall „nichts zu ändern, aber auch keine Darreichung da".
+     * 1. **Kein zweiter Schreibweg.** Die Aufschlagsklasse steht nur an der Standard-Darreichung (Spec 85 D-1):
+     *    `ensureStandard` legt sie an und belegt die Klasse vor (Speisen-Klasse → Hauptgruppe → Team);
+     *    eine leere Klasse füllt die Kaskade über `DarreichungService::aktualisieren`. Die Darreichung ist die
+     *    Preis-Wahrheit.
      *    Der VK selbst wird NIE geschrieben: `price_mode` bleibt `auto`, der Preis
      *    entsteht in `DarreichungService::recomputePreise` aus EK × Aufschlag und
      *    ist damit jederzeit überschreibbar (DoD „kein Auto-Publish von Preisen";
@@ -897,25 +895,19 @@ class RecipeOneShotService
         try {
             $recipe = $recipe->fresh() ?? $recipe;                // Klasse/HG kommen aus dem Pass davor
 
-            // ── Schreiben 1: Aufschlagsklasse festschreiben ──
-            // Weg-B-Befund 5 (2026-10-12): war die Klasse nur an der Standard-Darreichung gepflegt
-            // (recipe_darreichung.PUT, ohne Rückspiegelung), stand die Rezept-Spalte leer, die Kaskade
-            // nahm ihren Default und `syncStandardDarreichung` schrieb ihn über die gepflegte Klasse
-            // (BAN → ALC, Auto-VK 45,90 → 23,90 €). Override-First: die Darreichung gewinnt, die Kaskade
-            // füllt nur, wenn auch dort nichts steht.
-            $gepflegt = $recipe->standardPresentation()->first()?->markup_class_id;
-            $ak = $gepflegt !== null ? (int) $gepflegt : $this->markupKaskade($team, $recipe)['id'];
-            if ($recipe->markup_class_id === null && $ak !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C (Spiegel in die Rezeptspalte)
-                $this->sales->updateVk($team, $recipe->id, ['markup_class_id' => $ak]);
-                // `updateVk` stempelt `last_modified_by='vk_editor'` — das ist die
-                // Provenienz der Editor-Fläche. Hier hat kein Mensch editiert, also
-                // zurück auf die Provenienz des Laufs (roh, damit `updated_at` steht).
-                \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')
-                    ->where('id', $recipe->id)->update(['last_modified_by' => 'vk_generator']);
+            // ── Schreiben: Standard-Darreichung (idempotent; rechnet EK/VK beim Anlegen mit) ──
+            // Spec 85 D-1: die Aufschlagsklasse steht NUR an der Darreichung. Beim Anlegen belegt
+            // DarreichungService::vorbelegteKlasseId sie vor (Speisen-Klasse → Hauptgruppe → Team-Standard).
+            // Override-First (Weg-B-Befund 5, 12.10.): eine gepflegte Klasse bleibt; die Kaskade füllt nur eine leere.
+            $standard = $this->darreichungen->ensureStandard($team, $recipe->id, 'one_shot');
+            if ($standard !== null && $standard->markup_class_id === null
+                && ($ak = $this->markupKaskade($team, $recipe)['id']) !== null) {
+                $this->darreichungen->aktualisieren($team, (int) $standard->id, ['markup_class_id' => $ak]);
+            } elseif ($standard !== null && $standard->price_mode === 'auto' && $standard->sales_net === null) {
+                // Spec 85 D-1 PR-C: eine vorhandene Auto-Darreichung ohne gerechneten VK (z. B. angelegt, bevor die Zutaten standen)
+                // wird hier nachgerechnet — ensureStandard rechnet nur beim Neuanlegen, die Messung danach läse sonst „kein VK“.
+                $this->darreichungen->recomputePreise($standard->fresh(), $recipe);
             }
-
-            // ── Schreiben 2: Standard-Darreichung (idempotent; rechnet EK/VK beim Anlegen mit) ──
-            $this->darreichungen->ensureStandard($team, $recipe->id, 'one_shot');
 
             // ── Messen: derselbe Code, den auch Schicht 4 read-only nutzt ──
             return $this->vkVorbedingungen($team, $recipe->fresh() ?? $recipe, $zielVk);

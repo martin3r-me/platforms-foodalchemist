@@ -84,7 +84,8 @@ it('GOLDEN: im Bestandsfall (gleiche Zahl oder keine Darreichung) bleibt die Poo
 
     expect($projektion)->toBe([
         'gold-spiegel' => ['sales_net' => 18.5, 'w_sales_net' => 18.5, 'quelle' => 'darreichung', 'vollstaendig' => true],
-        'gold-legacy' => ['sales_net' => 24.0, 'w_sales_net' => 24.0, 'quelle' => 'legacy', 'vollstaendig' => true],
+        // Spec 85 D-1 PR-C: der Fixture-VK liegt an der Standard-Darreichung, der EK kommt weiter aus recipes.ek_total_eur → „gemischt“
+        'gold-legacy' => ['sales_net' => 24.0, 'w_sales_net' => 24.0, 'quelle' => 'gemischt', 'vollstaendig' => true],
         'gold-preislos' => ['sales_net' => null, 'w_sales_net' => null, 'quelle' => 'legacy', 'vollstaendig' => false],
     ]);
 
@@ -148,12 +149,12 @@ it('EINE Zahl: Pool-sales_net und die Wirtschafts-Achse sind per Konstruktion id
 
     // Die Quelle ist VK-BEZOGEN und damit schärfer als `wirtschaft.quelle` (die das
     // Zahlenpaar VK+EK beschreibt und `gemischt` kennt): 'darreichung' genau dann, wenn
-    // die Standard-Darreichung einen Preis trägt, sonst 'legacy', sonst 'keine'.
+    // die Standard-Darreichung einen Preis trägt, sonst 'keine' — seit Spec 85 D-1 PR-C gibt es keinen Legacy-VK mehr.
     $quellen = $pool->mapWithKeys(fn ($k, $id) => [FoodAlchemistRecipe::find($id)->recipe_key => $k['preis_quelle']])->all();
     expect($quellen)->toBe([
-        'eins-a' => 'darreichung',   // 20 € an der Darreichung schlägt 99 € Legacy
-        'eins-b' => 'legacy',        // Darreichung ohne Preis → Legacy-Spalte
-        'eins-c' => 'legacy',        // gar keine Darreichung
+        'eins-a' => 'darreichung',   // die eigene Darreichung (20 €) ersetzt die Brücken-Darreichung (99 €)
+        'eins-b' => 'keine',         // Standard-Darreichung ohne Preis → kein VK (kein Rückfall mehr)
+        'eins-c' => 'darreichung',   // Fixture-VK landet über die Brücke an der Standard-Darreichung
         'eins-d' => 'keine',         // nirgends ein Preis
     ]);
 });

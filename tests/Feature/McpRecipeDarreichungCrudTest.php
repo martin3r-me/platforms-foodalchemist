@@ -38,9 +38,12 @@ it('Registry-Smoke: recipe_darreichung.* + _delta.PUT registriert', function () 
     }
 });
 
-it('POST legt Darreichung an (erste = Standard); unbekannte serving_form → VALIDATION_ERROR', function () {
+it('POST legt Darreichung an (neues Gericht hat schon die Standard-Darreichung); unbekannte serving_form → VALIDATION_ERROR', function () {
+    // Spec 85 D-1 PR-C: verkaufsrezepte.POST legt die Standard-Darreichung sofort an (technische Form „unbestimmt“) —
+    // eine per POST ergänzte Form ist darum nicht Standard; umstellen geht über recipe_darreichung.STANDARD.
     $res = ($this->postDar)('teller');
-    expect($res->success)->toBeTrue()->and($res->data['is_standard'])->toBeTrue();
+    expect($res->success)->toBeTrue()->and($res->data['is_standard'])->toBeFalse()
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->vkId)->where('is_standard', true)->count())->toBe(1);
 
     $bad = ($this->postDar)('gibtsnicht');
     expect($bad->success)->toBeFalse()->and($bad->errorCode)->toBe('VALIDATION_ERROR');

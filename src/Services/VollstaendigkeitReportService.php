@@ -119,8 +119,8 @@ class VollstaendigkeitReportService
     {
         $gesamt = $this->gerichte($team)->count();
 
-        // Spec 85 D-1 PR-B: „ohne Aufschlagsklasse“ = Standard-Darreichung ohne Klasse; Rückfall Altspalte bis PR-C.
-        $ohneKlasse = (clone $this->gerichte($team))->whereNull('markup_class_id')
+        // Spec 85 D-1: „ohne Aufschlagsklasse“ = Standard-Darreichung ohne Klasse.
+        $ohneKlasse = (clone $this->gerichte($team))
             ->whereDoesntHave('standardPresentation', fn ($q) => $q->whereNotNull('markup_class_id'))->count();
         $ohnePortionAmRezept = (clone $this->gerichte($team))->whereNull('sales_quantity_per_unit_g')->count();
 
@@ -149,17 +149,15 @@ class VollstaendigkeitReportService
                 ->where('f.code', 'unbestimmt'))
             ->count();
 
-        // Spec 85 D-1: „ohne VK“ = keine Standard-Darreichung mit VK > 0; Rückfall Altspalte bis PR-C.
+        // Spec 85 D-1: „ohne VK“ = keine Standard-Darreichung mit VK > 0.
         $ohneVk = (clone $this->gerichte($team))
             ->whereDoesntHave('standardPresentation', fn ($q) => $q->where('sales_net', '>', 0))
-            ->where(fn ($q) => $q->whereNull('sales_net')->orWhere('sales_net', '<=', 0))
             ->count();
 
         $beispiele = (clone $this->gerichte($team))
-            ->whereNull('markup_class_id')   // Spec 85 D-1: Rückfall Altspalte bis PR-C
             ->whereDoesntHave('standardPresentation', fn ($q) => $q->whereNotNull('markup_class_id'))
             ->orderBy('id')->limit($limit)
-            ->select(['id', 'name', 'markup_class_id', 'sales_quantity_per_unit_g', 'sales_net'])->mitStandardVk()->get()
+            ->select(['id', 'name', 'sales_quantity_per_unit_g'])->mitStandardVk()->get()
             ->map(fn ($r) => [
                 'recipe_id' => (int) $r->id,
                 'name' => (string) $r->name,

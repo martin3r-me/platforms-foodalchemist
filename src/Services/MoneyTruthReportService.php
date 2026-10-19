@@ -23,10 +23,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  *      Darreichung (`ek_portion` gegen `sales_net` derselben Zeile). Die Differenz ist
  *      der Betrag, um den `wareneinsatz_ueber_ziel` heute zu selten meldet.
  *
- *  B · Preis-Wahrheit (V-046-Nachmessung): wie oft weichen Darreichungs- und Rezept-Preis
- *      voneinander ab, wie oft fällt die Leiter auf die Legacy-Spalte, und wie oft trägt
- *      ein Gericht Darreichungen **ohne** `is_standard` (die in V-059 benannte Rest-Divergenz
- *      zwischen geladenem und ungeladenem Weg).
+ *  B · Preis-Wahrheit (Spec 85 D-1): trägt jedes Verkaufsrezept genau EINE Standard-Darreichung mit Preis?
+ *      Gezählt: ohne Darreichung, Darreichungen ohne `is_standard` (V-059), mehrere Standard-Formen, kein VK.
+ *      (Bis D-1 PR-C verglich der Block Darreichungs- und Rezept-Preis — die Rezept-Spalte gibt es nicht mehr.)
  *
  *  C · Lead-LA-Preiszeilen (V-053): wie viele GPs gelten der Datenqualitäts-Ampel als
  *      versorgt, weil ihr Prädikat laxer ist als das des Money-Paths? Drei Fassungen
@@ -45,9 +44,6 @@ class MoneyTruthReportService
 {
     /** Ab dieser Differenz gilt eine Quote als abweichend (Rundungs-Rauschen unter 0,1 pp). */
     private const QUOTE_EPSILON_PP = 0.1;
-
-    /** Ab dieser Differenz gelten zwei Geldbeträge als ungleich (halber Cent). */
-    private const GELD_EPSILON = 0.005;
 
     public function __construct(private PriceService $prices) {}
 
@@ -159,84 +155,54 @@ class MoneyTruthReportService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // B · V-046/V-059 — welche Zahl die Preis-Leiter wirklich liefert
+    // B · Spec 85 D-1 — Struktur der Preis-Wahrheit: genau EINE Standard-Darreichung je Verkaufsrezept
+    // (vorher V-046/V-059: Darreichungs-Preis gegen die Rezept-Altspalte; die gibt es seit PR-C nicht mehr)
     // ─────────────────────────────────────────────────────────────────────────
 
     private function blockPreisWahrheit(Team $team, int $limit): array
     {
         $gerichte = $this->vkGerichte($team)->with('standardPresentation')->get();
+        $ids = $gerichte->pluck('id')->all();
 
-        $mitStandard = 0;
-        $ohneDarreichung = 0;
-        $darreichungenOhneStandard = 0;
-        $preisDivergenz = 0;
-        $nurLegacy = 0;
-        $keinPreis = 0;
+        // Eine Query je Kennzahl für alle Gerichte: Darreichungs-Zeilen überhaupt / Zahl der Standard-Formen.
+        $mitZeilen = array_fill_keys(DB::table('foodalchemist_recipe_presentations')
+            ->whereNull('deleted_at')->whereIn('recipe_id', $ids)
+            ->distinct()->pluck('recipe_id')->map(fn ($id) => (int) $id)->all(), true);
+        $mehrereStandard = DB::table('foodalchemist_recipe_presentations')
+            ->whereNull('deleted_at')->where('is_standard', true)->whereIn('recipe_id', $ids)
+            ->groupBy('recipe_id')->havingRaw('COUNT(*) > 1')
+            ->pluck('recipe_id')->map(fn ($id) => (int) $id)->all();
+        $mehrere = array_fill_keys($mehrereStandard, true);
+
+        $zaehler = ['mit_standard_darreichung' => 0, 'ohne_darreichung' => 0, 'darreichungen_ohne_standard' => 0, 'kein_preis' => 0];
         $beispiele = [];
-
-        // Eine Query für alle: hat das Gericht überhaupt Darreichungs-Zeilen?
-        $mitZeilen = DB::table('foodalchemist_recipe_presentations')
-            ->whereNull('deleted_at')
-            ->whereIn('recipe_id', $gerichte->pluck('id')->all())
-            ->distinct()
-            ->pluck('recipe_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-        $mitZeilen = array_fill_keys($mitZeilen, true);
-
         foreach ($gerichte as $recipe) {
             $standard = $recipe->standardPresentation;
-            $hatZeilen = isset($mitZeilen[(int) $recipe->id]);
-
+            $problem = null;
             if ($standard !== null) {
-                $mitStandard++;
-            } elseif (! $hatZeilen) {
-                $ohneDarreichung++;
-            } else {
-                // V-059: Zeilen ja, `is_standard` nein → geladener und ungeladener Weg
-                // der Preis-Leiter antworten unterschiedlich.
-                $darreichungenOhneStandard++;
-            }
-
-            $vkStandard = $standard?->sales_net !== null ? (float) $standard->sales_net : null;
-            $vkLegacy = $recipe->sales_net !== null ? (float) $recipe->sales_net : null;
-
-            if ($vkStandard === null && $vkLegacy === null) {
-                $keinPreis++;
-
-                continue;
-            }
-
-            if ($vkStandard === null) {
-                $nurLegacy++;
-
-                continue;
-            }
-
-            if ($vkLegacy !== null && abs($vkStandard - $vkLegacy) > self::GELD_EPSILON) {
-                $preisDivergenz++;
-                if (count($beispiele) < $limit) {
-                    $beispiele[] = [
-                        'recipe_id' => (int) $recipe->id,
-                        'name' => (string) $recipe->name,
-                        'vk_darreichung_eur' => round($vkStandard, 2),
-                        'vk_legacy_eur' => round($vkLegacy, 2),
-                        'delta_eur' => round($vkStandard - $vkLegacy, 2),
-                    ];
+                $zaehler['mit_standard_darreichung']++;
+                if ($standard->sales_net === null || (float) $standard->sales_net <= 0) {
+                    $zaehler['kein_preis']++;
+                    $problem = 'standard_ohne_preis';
                 }
+            } elseif (! isset($mitZeilen[(int) $recipe->id])) {
+                $zaehler['ohne_darreichung']++;
+                $zaehler['kein_preis']++;
+                $problem = 'ohne_darreichung';
+            } else {
+                $zaehler['darreichungen_ohne_standard']++;   // V-059: Formen ja, Standard nein → kein Preis des Gerichts
+                $zaehler['kein_preis']++;
+                $problem = 'ohne_standard';
+            }
+            if (isset($mehrere[(int) $recipe->id])) {
+                $problem = 'mehrere_standard';
+            }
+            if ($problem !== null && count($beispiele) < $limit) {
+                $beispiele[] = ['recipe_id' => (int) $recipe->id, 'name' => (string) $recipe->name, 'problem' => $problem];
             }
         }
 
-        return [
-            'vk_gerichte' => $gerichte->count(),
-            'mit_standard_darreichung' => $mitStandard,
-            'ohne_darreichung' => $ohneDarreichung,
-            'darreichungen_ohne_standard' => $darreichungenOhneStandard,
-            'preis_divergenz' => $preisDivergenz,
-            'nur_legacy_preis' => $nurLegacy,
-            'kein_preis' => $keinPreis,
-            'beispiele' => $beispiele,
-        ];
+        return ['vk_gerichte' => $gerichte->count(), ...$zaehler, 'mehrere_standard' => count($mehrereStandard), 'beispiele' => $beispiele];
     }
 
     // ─────────────────────────────────────────────────────────────────────────

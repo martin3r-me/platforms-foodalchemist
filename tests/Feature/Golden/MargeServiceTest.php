@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
+use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Services\MargeService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -29,18 +31,24 @@ it('GT-8: ALC-Beispiel exakt — ek_basis 1,30 → vk_netto 6,76 → vk_brutto 8
 });
 
 it('GT-8 / I9: ein voller Recompute-Lauf verändert persistierte vk_*-Werte NICHT', function () {
+    // Spec 85 D-1: der persistierte VK steht an der Standard-Darreichung (Rezept-Spalten gedroppt).
     $this->seedTeamHierarchy();
     $rezept = FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'i9', 'name' => 'Sauce: I9', 'status' => 'draft',
-        'sales_net' => 6.76, 'sales_gross' => 8.04, 'vat_rate' => 19,
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'i9', 'name' => 'HG: I9', 'status' => 'draft', 'is_sales_recipe' => true,
+    ]);
+    $form = FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'code' => 'teller', 'label' => 'Teller']);
+    $standard = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $rezept->id, 'serving_form_id' => $form->id, 'is_standard' => true,
+        'unit_count' => 1, 'price_mode' => 'fixed', 'sales_net' => 6.76, 'sales_gross' => 8.04, 'created_via' => 'test',
     ]);
 
     app(RecipeRecomputeService::class)->recomputeAndPropagate($rezept->id);
 
-    $danach = DB::table('foodalchemist_recipes')->where('id', $rezept->id)->first(['sales_net', 'sales_gross', 'vat_rate']);
+    $danach = DB::table('foodalchemist_recipe_presentations')->where('id', $standard->id)->first(['sales_net', 'sales_gross']);
+    // I9: der fixierte NETTO bleibt; der Brutto ist abgeleitet und folgt der zentralen Speisen-MwSt (7 %), seit PR-C gibt es keine
+    // eigene vat_rate-Spalte mehr — die 19 % im Fixture waren nie die Wahrheit.
     expect((float) $danach->sales_net)->toBe(6.76)
-        ->and((float) $danach->sales_gross)->toBe(8.04)
-        ->and((float) $danach->vat_rate)->toBe(19.0);
+        ->and((float) $danach->sales_gross)->toBe(round(6.76 * 1.07, 2));
 });
 
 it('W-1-Guard: deckungsbeitrag wirft typisiert im Vorschlags-Pfad', function () {

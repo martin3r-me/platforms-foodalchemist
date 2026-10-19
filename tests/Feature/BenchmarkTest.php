@@ -34,7 +34,7 @@ it('kpisFuerTeam rechnet Portfolio-Kennzahlen korrekt', function () {
         ->and($k['ek_coverage_pct'])->toBe(100.0)
         ->and($k['allergen_high_pct'])->toBe(50.0)
         ->and($k['avg_w_pct'])->toBe(35.0)
-        ->and($k['forms_complete_pct'])->toBe(0.0);   // keine Darreichungen angelegt
+        ->and($k['forms_complete_pct'])->toBe(100.0);   // Spec 85 D-1 PR-C: der VK liegt an der Standard-Darreichung, ein VK-Gericht ohne Darreichung gibt es nicht mehr
 });
 
 it('benchmark: childA vs. Peer-Median (nur childB hat Portfolio; root leer → kein Peer)', function () {

@@ -382,11 +382,8 @@ class ImportSliceCommand extends Command
                     'spec_aggregated_at' => self::utcOrNull($r['spec_aggregiert_am'] ?? null),
                     'ai_confidence' => $r['ai_confidence'] ?? null,
                     'ai_reasoning' => self::nullIfBlank($r['ai_begruendung'] ?? null),
-                    'markup_class_legacy_id' => $r['aufschlagsklasse_id'] ?? null,
                     'dish_class_legacy_id' => $r['speisen_klasse_id'] ?? null,
-                    'sales_net' => $r['vk_netto'] ?? null,
-                    'sales_gross' => $r['vk_brutto'] ?? null,
-                    'vat_rate' => $r['mwst_satz'] ?? null,
+                    // Spec 85 D-1: VK, MwSt und Aufschlagsklasse stehen nur an der Darreichung (Import unten).
                     'sales_unit_vocab_id' => $einheitMap[(int) ($r['vk_einheit_vocab_id'] ?? 0)] ?? null,
                     'sales_quantity_per_unit_g' => $r['vk_menge_pro_einheit_g'] ?? null,
                     'sales_unit_count' => $r['vk_anzahl_einheiten'] ?? null,
@@ -854,24 +851,8 @@ class ImportSliceCommand extends Command
             return $stats;
         }
 
-        // VK-Spiegel (Phase 3): recipes.vk_netto = Anzeige-Cache der Standard-Darreichung,
-        // fill-only — kuratierte FA-Werte bleiben. Preis-Wahrheit liegt an der Darreichung.
-        $gespiegelt = DB::update('
-            UPDATE foodalchemist_recipes
-            SET vk_netto = (
-                SELECT d.vk_netto FROM foodalchemist_recipe_presentations d
-                WHERE d.recipe_id = foodalchemist_recipes.id
-                  AND d.ist_standard = 1 AND d.deleted_at IS NULL
-            )
-            WHERE vk_netto IS NULL
-              AND EXISTS (
-                SELECT 1 FROM foodalchemist_recipe_presentations d
-                WHERE d.recipe_id = foodalchemist_recipes.id
-                  AND d.ist_standard = 1 AND d.deleted_at IS NULL
-                  AND d.vk_netto IS NOT NULL
-              )
-        ');
-        $stats['vk_mirror'] = ['source' => '—', 'imported' => $gespiegelt, 'skipped' => '—'];
+        // Spec 85 D-1: kein VK-Spiegel mehr ins Rezept (die Spalten gibt es nicht mehr; der alte Spiegel nutzte
+        // zudem längst umbenannte Spalten vk_netto/ist_standard und lief nicht mehr).
 
         // FK-Resolve: M4-01-Rohwerte → echte FKs (idempotent, nur 1.407 Rezepte)
         $klasseMap = $this->targetMap('foodalchemist_dish_classes');
@@ -880,12 +861,11 @@ class ImportSliceCommand extends Command
         $vehikelMap = $this->targetMap('foodalchemist_vocab_serving_vehicles');
         $resolved = 0;
         foreach (DB::table('foodalchemist_recipes')->whereNotNull('legacy_id')->get([
-            'id', 'speisen_klasse_legacy_id', 'aufschlagsklasse_legacy_id', 'behaelter_warm_legacy_id',
+            'id', 'speisen_klasse_legacy_id', 'behaelter_warm_legacy_id',
             'behaelter_kalt_legacy_id', 'servier_vehikel_legacy_id',
         ]) as $r) {
             $update = array_filter([
                 'dish_class_id' => $r->speisen_klasse_legacy_id !== null ? ($klasseMap[(int) $r->speisen_klasse_legacy_id] ?? null) : null,
-                'markup_class_id' => $r->aufschlagsklasse_legacy_id !== null ? ($akMap[(int) $r->aufschlagsklasse_legacy_id] ?? null) : null,
                 'container_warm_vocab_id' => $r->behaelter_warm_legacy_id !== null ? ($behMap[(int) $r->behaelter_warm_legacy_id] ?? null) : null,
                 'container_cold_vocab_id' => $r->behaelter_kalt_legacy_id !== null ? ($behMap[(int) $r->behaelter_kalt_legacy_id] ?? null) : null,
                 'serving_vehicle_vocab_id' => $r->servier_vehikel_legacy_id !== null ? ($vehikelMap[(int) $r->servier_vehikel_legacy_id] ?? null) : null,
@@ -941,7 +921,7 @@ class ImportSliceCommand extends Command
         ]);
         // M6-01: Verkaufslayer zuerst (FKs auf recipes + Stammdaten)
         DB::table('foodalchemist_recipes')->update([
-            'dish_class_id' => null, 'markup_class_id' => null, 'container_warm_vocab_id' => null,
+            'dish_class_id' => null, 'container_warm_vocab_id' => null,
             'container_cold_vocab_id' => null, 'serving_vehicle_vocab_id' => null,
         ]);
         // Darreichungen (Phase 3): FK-Ketten zuerst lösen, dann Kinder → Eltern

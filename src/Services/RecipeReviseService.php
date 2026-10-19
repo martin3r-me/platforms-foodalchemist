@@ -201,7 +201,7 @@ class RecipeReviseService
     {
         $r->loadMissing([
             'ingredients.gp', 'ingredients.referencedRecipe', 'ingredients.unit',
-            'dishClass', 'darreichungen.servingForm', 'salesUnit', 'markupClass',
+            'dishClass', 'darreichungen.servingForm', 'salesUnit',
         ]);
 
         $facetten = [

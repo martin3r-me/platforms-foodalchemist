@@ -48,10 +48,10 @@ class BenchmarkService
         // Ø Wareneinsatz % = Ø(EK/VK) über bepreiste Gerichte (VK>0 UND EK>0).
         // PHP-seitig (engine-agnostisch, 07 §7): decimal-Casts sind auf SQLite TEXT →
         // raw-SQL-Division verhält sich dialektabhängig, darum in PHP rechnen.
-        // Spec 85 D-1: der VK kommt von der Standard-Darreichung; Rückfall Altspalte bis PR-C (COALESCE).
+        // Spec 85 D-1: der VK kommt von der Standard-Darreichung.
         // Unterabfrage statt Join: die Basis filtert mit unqualifizierten Spalten (team_id, deleted_at).
-        $vkSql = 'COALESCE((SELECT std.sales_net FROM foodalchemist_recipe_presentations std WHERE std.recipe_id = foodalchemist_recipes.id'
-            . ' AND std.is_standard = 1 AND std.deleted_at IS NULL ORDER BY std.id LIMIT 1), foodalchemist_recipes.sales_net)';
+        $vkSql = '(SELECT std.sales_net FROM foodalchemist_recipe_presentations std WHERE std.recipe_id = foodalchemist_recipes.id'
+            . ' AND std.is_standard = 1 AND std.deleted_at IS NULL ORDER BY std.id LIMIT 1)';
         $ekPortionSql = '(SELECT std.ek_portion FROM foodalchemist_recipe_presentations std WHERE std.recipe_id = foodalchemist_recipes.id'
             . ' AND std.is_standard = 1 AND std.deleted_at IS NULL ORDER BY std.id LIMIT 1)';
         $preiszeilen = (clone $base)

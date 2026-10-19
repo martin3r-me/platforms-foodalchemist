@@ -658,7 +658,7 @@ class SpeiseplanService
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             ->with(['dishClass:id,diet_form'])
             ->orderBy('name')->limit($limit)
-            ->select(['id', 'name', 'dish_class_id', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
+            ->select(['id', 'name', 'dish_class_id'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     /** Concepts (Fix-Menüs) für den Zell-Picker. */

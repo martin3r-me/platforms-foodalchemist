@@ -22,7 +22,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik;
  *
  * Preis-Modell (Gastro): jede Position trägt einen FLACHEN VK (€/Position, kein ×Pax).
  *  - gericht_ref  → VK aus der Darreichung (Glas/Flasche/Portion) bzw. Standard-Darreichung
- *                   des Rezepts (DarreichungResolver), Legacy-Fallback recipes.sales_net.
+ *                   des Rezepts (DarreichungResolver).
  *  - menue_ref    → Concept-€/Person (Fix-Menü / Mehrgänger) über ConceptService::preisCockpit.
  *  - price_mode='manuell' übersteuert mit price_value.
  *
@@ -85,7 +85,7 @@ class SpeisekarteService
             ->with([
                 'sections' => fn ($q) => $q->orderBy('position'),
                 'sections.items' => fn ($q) => $q->orderBy('position'),
-                'sections.items.dish:id,name,ek_total_eur,sales_net,sales_unit_count', 'sections.items.dish.standardPresentation',
+                'sections.items.dish:id,name,ek_total_eur,sales_unit_count', 'sections.items.dish.standardPresentation',
                 'sections.items.concept:id,name,price_per_person_cache',
                 'outlet', 'crmCompany', 'crmContact',
             ])
@@ -708,7 +708,7 @@ class SpeisekarteService
             // andere Aufrufer lesen weiter nur id/name/vk_netto (Spec 85 D-1: VK aus der Standard-Darreichung).
             ->with(['dishClass:id,diet_form'])
             ->orderBy('name')->limit($limit)
-            ->select(['id', 'name', 'dish_class_id', 'sales_net'])->mitStandardVk()->get();
+            ->select(['id', 'name', 'dish_class_id'])->mitStandardVk()->get();
     }
 
     /**

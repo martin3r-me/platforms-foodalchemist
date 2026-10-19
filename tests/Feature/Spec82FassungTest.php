@@ -88,10 +88,10 @@ it('Leck-Sperre: Fassungen tragen nie ek_*, Zusatzkosten oder VK des Masters —
     app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeMany($ids);
 
     foreach (FoodAlchemistRecipe::mitFassungen()->whereIn('id', $ids)->get() as $f) {
-        expect([$f->ek_total_eur, $f->ek_per_kg_eur, $f->additional_costs_eur, $f->sales_net, $f->sales_gross])->toBe([null, null, null, null, null], $f->name);
+        expect([$f->ek_total_eur, $f->ek_per_kg_eur, $f->additional_costs_eur, $f->vk_netto])->toBe([null, null, null, null], $f->name);
     }
     // Arbeitszeilen des Masters behalten ihre Werte
-    expect((float) $this->fond->fresh()->sales_net)->toBe(9.0);
+    expect($this->fond->fresh()->vk_netto)->toBe(9.0);
 });
 
 it('Arbeitsstand ≠ Fassung: Master bearbeitet, Abonnent sieht weiter f1; erst Veröffentlichen bringt f2, unveränderter Fond wird wiederverwendet', function () {

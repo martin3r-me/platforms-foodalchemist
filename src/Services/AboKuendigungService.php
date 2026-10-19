@@ -574,7 +574,7 @@ class AboKuendigungService
 
     /** Plan B (c): Vokabular-Verweise der Kopie zeigen nie auf Master-Zeilen — sichtbare Zeile gleichen Codes, sonst NULL. */
     private const VOKABULAR_REZEPT = ['category_id' => 'foodalchemist_recipe_categories', 'dish_main_group_id' => 'foodalchemist_dish_main_groups',
-        'dish_class_id' => 'foodalchemist_dish_classes', 'markup_class_id' => 'foodalchemist_markup_classes',
+        'dish_class_id' => 'foodalchemist_dish_classes',
         'container_warm_vocab_id' => 'foodalchemist_vocab_containers', 'container_cold_vocab_id' => 'foodalchemist_vocab_containers',
         'serving_vehicle_vocab_id' => 'foodalchemist_vocab_serving_vehicles'];
 

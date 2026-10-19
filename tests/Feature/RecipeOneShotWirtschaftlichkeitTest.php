@@ -88,7 +88,7 @@ it('L8a: der One-Shot-Roundtrip endet bepreist — Portion + AK + Standard-Darre
     expect($std)->not->toBeNull()
         ->and((float) $std->sales_net)->toBe(8.0)
         ->and($std->price_mode)->toBe('auto')
-        ->and((float) $r->fresh()->sales_net)->toBe(8.0);
+        ->and($r->fresh()->vk_netto)->toBe(8.0);
 });
 
 it('L8a: eine fehlende Portionsgröße wird im Anreicherungs-Pass geschlossen und danach bepreist', function () {
@@ -165,7 +165,7 @@ it('L8a: gepflegte Portion und gesetzte AK werden nicht überschrieben (GL-07)',
  * Weg-B-Befund 5 (Gericht 3920, 2026-10-12): die AK stand nur an der Standard-Darreichung (recipe_darreichung.PUT),
  * die Rezept-Spalte war leer → die Kaskade nahm ALC und `syncStandardDarreichung` überschrieb BAN (Auto-VK 45,90 → 23,90 €).
  */
-it('L8a: eine nur an der Darreichung gepflegte AK gewinnt gegen den Kaskaden-Default und wird ans Rezept gespiegelt', function () {
+it('L8a: eine nur an der Darreichung gepflegte AK gewinnt gegen den Kaskaden-Default', function () {
     $ban = FoodAlchemistMarkupClass::create([
         'code' => 'BAN', 'label' => 'Bankett', 'class_factor_pct' => 120,
         'vat_profile_key' => 'regulaer', 'raw_markup_pct' => 200, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
@@ -173,13 +173,11 @@ it('L8a: eine nur an der Darreichung gepflegte AK gewinnt gegen den Kaskaden-Def
     $r = ($this->gericht)(['markup_class_id' => null]);
     $standard = app(DarreichungService::class)->ensureStandard($this->rootTeam, $r->id, 'test');
     app(DarreichungService::class)->aktualisieren($this->rootTeam, $standard->id, ['markup_class_id' => $ban->id]);
-    expect($r->fresh()->markup_class_id)->toBeNull();                      // Ausgangslage wie auf demo
 
     $w = $this->svc->anreichern($this->rootTeam, $r->fresh())['wirtschaftlichkeit'];
 
     expect($w['aufschlagsklasse'])->toBe('BAN')
-        ->and($standard->fresh()->markup_class_id)->toBe($ban->id)          // nicht auf ALC gedreht
-        ->and($r->fresh()->markup_class_id)->toBe($ban->id);               // Rezept-Spalte nachgezogen
+        ->and($standard->fresh()->markup_class_id)->toBe($ban->id);         // nicht auf ALC gedreht (Spec 85 D-1: keine Rezept-Spalte mehr)
 });
 
 it('L8a: teil-unbepreiste Zutaten machen den VK vorläufig', function () {
@@ -251,7 +249,7 @@ it('L8b-2: ein zu niedriger Ziel-VK wird NICHT durchgesetzt — gezeigt wird, wa
         ->and($w['ampel'])->toBe('gruen');        // die Ist-Ampel bleibt davon unberührt
 
     // Und der Preis am Objekt hat sich nicht bewegt — die Vorgabe wird nirgends geschrieben.
-    expect((float) $r->fresh()->sales_net)->toBe(8.0);
+    expect($r->fresh()->vk_netto)->toBe(8.0);
 });
 
 it('L8b-2: liegt der kalkulierte VK unter dem Ziel, ist das Ziel tragfähig (negatives Delta)', function () {

@@ -149,7 +149,7 @@ it('akzeptiert deutsche Dezimalkommas beim Fixpreis einer Darreichung', function
     ]);
 
     expect((float) $presentation->fresh()->sales_net)->toBe(1.5)
-        ->and((float) $this->recipe->fresh()->sales_net)->toBe(1.5);
+        ->and($this->recipe->fresh()->vk_netto)->toBe(1.5);
 });
 
 it('berechnet die Standard-Darreichung bei leerer Grammatur aus dem Rezept-Yield', function () {

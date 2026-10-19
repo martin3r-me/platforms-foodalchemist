@@ -52,8 +52,8 @@ it('updateVk: nur VK-Feldgruppen (V-12), brutto konsistent, Wording-Edit setzt L
 
     $standard = $nach->standardPresentation()->firstOrFail();
     expect((float) $standard->sales_gross)->toBe(10.59)
-        ->and((float) $nach->sales_net)->toBe(9.90)
-        ->and((float) $nach->sales_gross)->toBe(10.59)                  // zentrale Speisen-MwSt 7 %
+        ->and((float) $standard->sales_net)->toBe(9.90)
+        ->and($nach->fresh()->vk_netto)->toBe(9.9)                      // Spec 85 D-1 PR-C: VK nur an der Standard-Darreichung (zentrale Speisen-MwSt 7 %)
         ->and($nach->sales_wording_standard)->toBe('Honey Dog')
         ->and($nach->sales_wording_source)->toBe('manual')
         ->and($nach->sales_wording_ai_confidence)->toBeNull()
@@ -63,9 +63,10 @@ it('updateVk: nur VK-Feldgruppen (V-12), brutto konsistent, Wording-Edit setzt L
     // Netto zurück auf null ⇒ die Standard-Darreichung fällt auf AUTO (Darreichungen-Umbau) statt „kein
     // Preis". Der wirksame Brutto folgt dann konsistent dem Auto-Netto (7 % Speisen-MwSt), nicht null.
     $auto = $this->svc->updateVk($this->rootTeam, $vk->id, ['sales_net' => null]);
-    expect($auto->standardPresentation()->firstOrFail()->price_mode)->toBe('auto')
-        ->and((float) $auto->sales_net)->toBeGreaterThan(0.0)
-        ->and((float) $auto->sales_gross)->toBe(round((float) $auto->sales_net * 1.07, 2));
+    $autoStd = $auto->standardPresentation()->firstOrFail();
+    expect($autoStd->price_mode)->toBe('auto')
+        ->and((float) $autoStd->sales_net)->toBeGreaterThan(0.0)
+        ->and((float) $autoStd->sales_gross)->toBe(round((float) $autoStd->sales_net * 1.07, 2));
 });
 
 /**

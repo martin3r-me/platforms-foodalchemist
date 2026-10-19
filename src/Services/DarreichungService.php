@@ -28,7 +28,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungZubehoer;
  *  - auto: dynamischer Vorschlag aus Unternehmens-Basissatz × relativem Klassenfaktor
  *  - fixed: Live-VK bleibt, der Vergleichsvorschlag rechnet weiter; Begründung ist Pflicht
  *  - MwSt kommt als Profil-Schlüssel aus Darreichung → Preisklasse → Team
- *  - Standard-Darreichung spiegelt sales_net nach recipes.sales_net (Anzeige-Cache)
+ *  - Preis-Wahrheit ist die Darreichung; die Rezept-Spalten sales_net/markup_class_id gibt es nicht mehr (Spec 85 D-1)
  */
 class DarreichungService
 {
@@ -94,7 +94,7 @@ class DarreichungService
     /**
      * Stellt sicher, dass ein (VK-)Gericht eine Standard-Darreichung hat. Legt sonst
      * eine auf der Form „unbestimmt" an (Review-Queue, kein teller-Default — Servierform-
-     * Regel der Umbau-Spec) und übernimmt die Legacy-VK-Felder als Startwerte. Idempotent.
+     * Regel der Umbau-Spec) mit vorbelegter Aufschlagsklasse. Idempotent.
      * Gibt die Standard-Darreichung zurück (oder null, wenn die unbestimmt-Form fehlt).
      */
     public function ensureStandard(Team $team, int $recipeId, string $createdVia = 'mcp'): ?FoodAlchemistRecipeDarreichung
@@ -142,9 +142,6 @@ class DarreichungService
      */
     public function vorbelegteKlasseId(Team $team, FoodAlchemistRecipe $recipe): ?int
     {
-        if ($recipe->markup_class_id !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
-            return (int) $recipe->markup_class_id;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
-        }
         $sichtbar = fn (?int $id) => $id !== null
             && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->exists() ? $id : null;
 
@@ -370,7 +367,6 @@ class DarreichungService
                 ->update(['is_standard' => false]);
             $darreichung->update(['is_standard' => true]);
         });
-        $this->spiegleStandardVk($darreichung->recipe->fresh());
     }
 
     /** Delta setzen/ändern — nur Zutatenzeilen des eigenen Rezepts (E5 strukturell). */
@@ -665,10 +661,6 @@ class DarreichungService
                 ],
             ]);
         }
-
-        if ($darreichung->is_standard) {
-            $this->spiegleStandardVk($recipe);
-        }
     }
 
     /**
@@ -846,24 +838,6 @@ class DarreichungService
         }
 
         return $out;
-    }
-
-    /** recipes.sales_net = Anzeige-Cache der Standard-Darreichung (Preis-Wahrheit = Darreichung). */
-    private function spiegleStandardVk(FoodAlchemistRecipe $recipe): void
-    {
-        $standard = $recipe->standardPresentation()->first();
-        if ($standard !== null) {
-            $team = Team::find($recipe->team_id);
-            $vatDefaults = $team !== null ? app(TeamSettingsService::class)->mwst($team) : TeamSettingsService::MWST_DEFAULTS;
-            $vatKey = in_array($standard->vat_profile_key, ['regulaer', 'ermaessigt'], true)
-                ? $standard->vat_profile_key : $vatDefaults['default_satz'];
-            DB::table('foodalchemist_recipes')->where('id', $recipe->id)
-                ->update([
-                    'sales_net' => $standard->sales_net,
-                    'sales_gross' => $standard->sales_gross,
-                    'vat_rate' => (float) ($vatDefaults[$vatKey] ?? 0),
-                ]);
-        }
     }
 
     /** Technische Standardform für alte Gerichte ohne Darreichung selbstheilend bereitstellen. */

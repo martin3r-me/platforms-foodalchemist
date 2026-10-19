@@ -182,12 +182,7 @@ class Aufschlagsklassen extends Component
         // ist nullOnDelete, deshalb ist die Sperre eine UX-Sicherung, keine FK-Notwendigkeit.
         // Spec 85 D-1 PR-B: die Klasse eines Gerichts steht an seinen Darreichungen (gezählt: Gerichte, nicht Formen).
         $nRec = TeamScope::applyVisible(DB::table('foodalchemist_recipe_presentations'), 'team_id', $team)
-            ->whereNull('deleted_at')->where('markup_class_id', $id)->distinct()->count('recipe_id')
-            + TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)   // Spec 85 D-1: Rückfall Altspalte bis PR-C
-                ->whereNull('deleted_at')->where('markup_class_id', $id)
-                ->whereNotExists(fn ($q) => $q->from('foodalchemist_recipe_presentations AS p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
-                    ->whereNull('p.deleted_at')->where('p.markup_class_id', $id))
-                ->count();
+            ->whereNull('deleted_at')->where('markup_class_id', $id)->distinct()->count('recipe_id');
         $nCls = TeamScope::applyVisible(DB::table('foodalchemist_dish_classes'), 'team_id', $team)
             ->whereNull('deleted_at')->where('default_markup_class_id', $id)->count();
         if ($nRec + $nCls > 0) {
@@ -225,22 +220,12 @@ class Aufschlagsklassen extends Component
         return $werte;
     }
 
-    /** @return array<int, int> Klasse → Zahl der sichtbaren Gerichte (Darreichungen; Gerichte nur mit Altspalte zählen bis PR-C mit). */
+    /** @return array<int, int> Klasse → Zahl der sichtbaren Gerichte über ihre Darreichungen (Spec 85 D-1 PR-C: Altspalte gedroppt). */
     private function zaehler($team): array
     {
-        $n = TeamScope::applyVisible(DB::table('foodalchemist_recipe_presentations'), 'team_id', $team)
+        return TeamScope::applyVisible(DB::table('foodalchemist_recipe_presentations'), 'team_id', $team)
             ->whereNull('deleted_at')->whereNotNull('markup_class_id')
             ->selectRaw('markup_class_id, COUNT(DISTINCT recipe_id) AS n')->groupBy('markup_class_id')->pluck('n', 'markup_class_id')->map(fn ($v) => (int) $v)->all();
-        $alt = TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)
-            ->whereNull('deleted_at')->whereNotNull('markup_class_id')
-            ->whereNotExists(fn ($q) => $q->from('foodalchemist_recipe_presentations AS p')->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
-                ->whereNull('p.deleted_at')->whereColumn('p.markup_class_id', 'foodalchemist_recipes.markup_class_id'))
-            ->selectRaw('markup_class_id, COUNT(*) AS n')->groupBy('markup_class_id')->pluck('n', 'markup_class_id');
-        foreach ($alt as $klasse => $anzahl) {
-            $n[(int) $klasse] = ($n[(int) $klasse] ?? 0) + (int) $anzahl;
-        }
-
-        return $n;
     }
 
     public function render()
@@ -271,7 +256,7 @@ class Aufschlagsklassen extends Component
             'standardId' => $team !== null ? app(TeamSettingsService::class)->defaultMarkupClassId($team) : null,
             'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
             // MVP-040: nur sichtbare Gerichte zählen — der Zähler verriet sonst fremde Team-Nutzung.
-            // Spec 85 D-1 PR-B: Gerichte je Klasse über ihre Darreichungen (DISTINCT recipe_id) + Rückfall Altspalte bis PR-C (wie der Lösch-Riegel).
+            // Spec 85 D-1 PR-B: Gerichte je Klasse über ihre Darreichungen (DISTINCT recipe_id) (Spec 85 D-1 PR-C: nur noch Darreichungen).
             'zaehler' => $this->zaehler($team),
         ]);
     }

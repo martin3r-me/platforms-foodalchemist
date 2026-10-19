@@ -21,7 +21,8 @@ beforeEach(function () {
 
     $team = $this->rootTeam;
     $concept = $this->makeConcept($team, 'Menü A', ['kind' => 'concept', 'consumer_name' => 'Genuss']);
-    $dish = $this->makeRecipe($team, 'Zanderfilet', ['is_sales_recipe' => true, 'sales_net' => 12.34]);
+    $dish = $this->makeRecipe($team, 'Zanderfilet', ['is_sales_recipe' => true]);
+    $this->makeStandardDarreichung($dish, 12.34);
     $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id, 'wording' => 'Zanderfilet auf Linsen', 'position' => 1]);
     FoodAlchemistRecipeStep::create(['team_id' => $team->id, 'recipe_id' => $dish->id, 'position' => 1, 'ebene' => 'produktion', 'text' => 'Kross braten.']);
     $this->fb = $this->makeFoodbook($team, 'Sommerfest', ['personen' => 6]);

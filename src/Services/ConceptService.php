@@ -69,8 +69,8 @@ class ConceptService
                 'slots.package.dishes.dish:id,name,sales_wording_standard',
                 // Kaskade: eingebettetes Paket = kind=paket-Concept (Preis + Posten für Anzeige)
                 'slots.embeddedConcept:id,name,kind,class,price_per_person_cache,ek_per_person_cache',
-                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard,ek_total_eur,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net,sales_unit_count', 'slots.embeddedConcept.slots.dish.standardPresentation',
-                'slots.dish:id,name,sales_wording_standard,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net,sales_unit_count', 'slots.dish.standardPresentation',
+                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard,ek_total_eur,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_unit_count', 'slots.embeddedConcept.slots.dish.standardPresentation',
+                'slots.dish:id,name,sales_wording_standard,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_unit_count', 'slots.dish.standardPresentation',
                 'slots.dish.dishClass:id,label',
                 'slots.unit:id,slug,display_de',
                 'vorlageQuelle:id,name',
@@ -681,7 +681,7 @@ class ConceptService
                 'slots.unit:id,slug,dimension,default_in_g',
                 'slots.package:id,name,price_per_person,ek_per_person,price_stale',
                 'slots.embeddedConcept:id,name,price_per_person_cache,ek_per_person_cache',
-                'slots.dish:id,name,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces,sales_net', 'slots.dish.standardPresentation'])
+                'slots.dish:id,name,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces', 'slots.dish.standardPresentation'])
             ->get();
 
         $map = [];
@@ -719,7 +719,7 @@ class ConceptService
             'slots.unit:id,slug,dimension,default_in_g',
             'slots.package:id,name,price_per_person,ek_per_person,price_stale',
             'slots.embeddedConcept:id,name,price_per_person_cache,ek_per_person_cache',   // Kaskade: eingebettetes Paket
-            'slots.dish:id,name,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces,sales_net', 'slots.dish.standardPresentation']);
+            'slots.dish:id,name,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces', 'slots.dish.standardPresentation']);
 
         $zeilen = [];
         $vkTotal = 0.0;

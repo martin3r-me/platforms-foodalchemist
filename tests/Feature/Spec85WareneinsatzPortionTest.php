@@ -109,7 +109,7 @@ it('Wochenauswertung: nachgeladene Spalten erscheinen als eigener Block mit Aufr
         $this->standard->delete();   // kein ek_portion → Rückfall Ansatz ÷ Portionen braucht sales_unit_count
         foreach ([1, 2] as $_) {
             $pos = new FoodAlchemistSpeisekartePosition(['type' => 'gericht_ref', 'price_mode' => 'auto']);
-            $pos->setRelation('dish', \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->select(['id', 'ek_total_eur', 'sales_net'])->find($this->gericht->id));
+            $pos->setRelation('dish', \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->select(['id', 'ek_total_eur'])->find($this->gericht->id));
             app(SpeisekarteService::class)->positionEkVk($pos);   // Aufrufer aus src/ → SpeisekarteService
         }
 

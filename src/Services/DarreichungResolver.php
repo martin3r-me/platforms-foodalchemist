@@ -19,8 +19,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
  *   2. (Phase 4, vorbereitet) Darreichung passend zur Servierform des Konzepts
  *   3. Standard-Darreichung des Gerichts
  *
- * Stateless. Preis-Wahrheit liegt an der Darreichung; recipes.sales_net ist
- * nur noch Anzeige-Spiegel der Standard-Form (Import füllt ihn fill-only).
+ * Stateless. Preis-Wahrheit liegt an der Darreichung; die Rezept-Spalten sales_net/markup_class_id gibt es
+ * seit Spec 85 D-1 PR-C nicht mehr.
  */
 class DarreichungResolver
 {
@@ -65,9 +65,8 @@ class DarreichungResolver
      *      vom Aufrufer aus der Dimensions-Kaskade gereicht) →
      *   3. standardFuer().
      *
-     * `$servingFormId === null` UND keine block-Darreichung ⇒ standardFuer(), dessen sales_net
-     * per Invariante der Anzeige-Spiegel `recipes.sales_net` ist → bit-identisch zu heute
-     * (keine sichtbaren Preisänderungen im Bestand). dish === null ⇒ null.
+     * `$servingFormId === null` UND keine block-Darreichung ⇒ standardFuer() (der VK des Gerichts).
+     * dish === null ⇒ null.
      */
     public function fuerBlock(FoodAlchemistFoodbookBlock $block, ?int $servingFormId = null): ?FoodAlchemistRecipeDarreichung
     {
@@ -115,7 +114,7 @@ class DarreichungResolver
 
     /**
      * VK netto EINES GERICHTS ohne Kontext — die Preis-Leiter selbst: Standard-Darreichung
-     * (M2-Wahrheit) → `recipes.sales_net` (Legacy-Spiegel) → keine Zahl. Gibt die Quelle mit
+     * (M2-Wahrheit) → keine Zahl (die Rezept-Altspalte gibt es seit Spec 85 D-1 PR-C nicht mehr). Gibt die Quelle mit
      * aus, damit ein Aufrufer sie benennen kann statt sie zu erraten.
      *
      * **Warum hier und nicht beim Aufrufer (V-046):** dieselbe Leiter lag verstreut in
@@ -129,12 +128,12 @@ class DarreichungResolver
      *
      * ⚠️ **Bekannte Rest-Divergenz (V-059, NICHT in diesem Zug behoben):** genau dieser Fallback
      * unterscheidet die beiden Wege. Hat ein Gericht Darreichungen, aber keine mit `is_standard`,
-     * liefert der geladene Weg `null` (⇒ Legacy-Spalte), der ungeladene die erste Darreichung.
+     * liefert der geladene Weg `null` (⇒ keine Zahl), der ungeladene die erste Darreichung.
      * Im Bestand ist der Fall leer (0 von 31 Gerichten mit Darreichung, Dev-MySQL 2026-07-27);
      * ihn aufzulösen heißt, entweder alle Darreichungen eager zu laden oder den Fallback
      * fallenzulassen — eine Auswahl-Entscheidung, die Dominique gehört.
      *
-     * @return array{vk: ?float, quelle: 'darreichung'|'legacy'|'keine'}
+     * @return array{vk: ?float, quelle: 'darreichung'|'keine'}
      */
     public function vkNettoMitQuelle(FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): array
     {
@@ -153,17 +152,13 @@ class DarreichungResolver
             }
         }
 
-        if ($recipe->sales_net !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
-            return ['vk' => (float) $recipe->sales_net, 'quelle' => 'legacy'];
-        }
-
         return ['vk' => null, 'quelle' => 'keine'];
     }
 
     /**
      * VK netto eines Gerichts als Zahl — {@see vkNettoMitQuelle()} ohne die Quelle. Spec 85 D-1 PR-A: die
-     * Leser lesen den VK nur noch hier (bzw. per SQL an der Standard-Darreichung), nie direkt aus
-     * `recipes.sales_net`. Für Listen vorher `standardPresentation` eager laden (sonst eine Query je Gericht).
+     * Leser lesen den VK nur noch hier (bzw. per SQL an der Standard-Darreichung). Für Listen vorher
+     * `standardPresentation` eager laden (sonst eine Query je Gericht).
      */
     public function vkNetto(FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): ?float
     {
@@ -242,10 +237,10 @@ class DarreichungResolver
             return $standard->markupClass;
         }
 
-        return $recipe->markup_class_id !== null ? $recipe->markupClass : null;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+        return null;
     }
 
-    /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
+    /** VK netto im Kontext (Darreichung des Slots, sonst die Standard-Darreichung des Gerichts). */
     public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot, ?FoodAlchemistOutlet $outlet = null): ?float
     {
         $darreichung = $this->fuerSlot($slot);
@@ -259,6 +254,6 @@ class DarreichungResolver
             }
         }
 
-        return $slot->dish?->sales_net !== null ? (float) $slot->dish->sales_net : null;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+        return $slot->dish !== null ? $this->vkNetto($slot->dish, $outlet) : null;   // Spec 85 D-1: Standard-Darreichung des Gerichts
     }
 }
