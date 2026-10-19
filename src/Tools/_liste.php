@@ -223,6 +223,8 @@ return [
     \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
+    \Platform\FoodAlchemist\Tools\KiKlassenGetTool::class,
+    \Platform\FoodAlchemist\Tools\KiKlassenPutTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeAliasTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeBindingsGetTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeBudgetPutTool::class,

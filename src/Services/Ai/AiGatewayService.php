@@ -119,7 +119,7 @@ class AiGatewayService
         }
 
         // KI-Klassen (16.10.2026): EIN Feld je Prompt-Key (`klasse`) bestimmt Modell und Reasoning. Eine ausdrücklich übergebene options['model'] gewinnt je Call.
-        $klasse = KiKlassen::von($prompt);
+        $klasse = app(KiKlassenEinstellung::class)->klasseFuer($promptKey);   // Spec 85: eingestellt (Master-Admin) > Code
         $tier = KiKlassen::logCode($klasse);   // Log-Spalte `tier` (String(2)): S | M | L
         $klassenModell = KiKlassen::modell($klasse);
         $klassenReasoning = KiKlassen::reasoning($klasse);

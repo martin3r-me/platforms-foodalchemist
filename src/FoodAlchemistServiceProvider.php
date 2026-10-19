@@ -50,6 +50,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Spec 84 §3.3: Merker des Team-Kontexts je Request/Job (scoped = Laravel leert ihn zwischen Jobs)
         $this->app->scoped(\Platform\FoodAlchemist\Support\FaTeam::class);
         $this->app->scoped(\Platform\FoodAlchemist\Support\AngebotFestpreise::class);   // eingefrorenes Angebot: Festpreise je Request
+        $this->app->scoped(\Platform\FoodAlchemist\Services\Ai\KiKlassenEinstellung::class);   // Spec 85: KI-Klasse je Schritt, je Request gelesen
         // Spec 84 §4.4 (E3): aktive Support-Freigabe je Request/Job gemerkt (FaRechte::rolle fragt die Sperre sehr oft)
         $this->app->scoped(\Platform\FoodAlchemist\Services\SupportFreigabeService::class);
         // Spec 77c: Team-Namen der Standort-Spalte je Request merken

@@ -143,6 +143,22 @@ class Ki extends Component
             . 'Tippen bleiben verfügbar.',
     ];
 
+    /** Spec 85: KI-Klasse eines Arbeitsschritts einstellen (nur Admin im Master-Team); '' = Standard aus dem Code. */
+    public function klasseSetzen(string $key, string $klasse): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\Ai\KiKlassenEinstellung::class)->setze($team, $key, $klasse === '' ? null : $klasse);
+            $this->meldung = 'KI-Klasse für „' . \Platform\FoodAlchemist\Livewire\Settings\Wissenssteuerung::schrittLabel($key) . '“: '
+                . ($klasse === '' ? 'Standard aus dem Code.' : KiKlassen::label($klasse) . '.');
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException | \InvalidArgumentException $e) {
+            $this->meldung = $e->getMessage();
+        }
+    }
+
     public function umschalten(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -198,8 +214,8 @@ class Ki extends Component
         $kosten = $kostenUsd->map(fn ($usd) => $rechner->displayCost($usd));
         $bekannteKosten = $kosten->filter(fn ($betrag) => $betrag !== null);
 
-        $registry = collect(config('foodalchemist.prompts', []))
-            ->except('demo.echo')->map(fn ($p) => KiKlassen::von($p))->sort();
+        $einstellung = app(\Platform\FoodAlchemist\Services\Ai\KiKlassenEinstellung::class);   // Spec 85: wirksame Klasse (eingestellt > Code)
+        $registry = collect($einstellung->schritte())->mapWithKeys(fn ($k) => [$k => $einstellung->klasseFuer($k)])->sort();
         $auditOhnePrompt = collect([...RecipeImageService::BILD_FEATURES, 'voice.command']);
         $registryLuecken = $statistik->pluck('feature')->unique()->diff($registry->keys()->merge($auditOhnePrompt))->sort()->values();
 
@@ -234,6 +250,10 @@ class Ki extends Component
             'abgeloest' => KiKlassen::abgeloesteStufenGesetzt(),
             'fallbackModel' => config('foodalchemist.ai.fallback_model'),
             'registry' => $registry,
+            // Spec 85: Auswahl je Schritt nur für Admin im Master-Team; alle anderen sehen nur die Zuordnung
+            'klassenPflege' => $team !== null && $einstellung->darfEinstellen($team),
+            'klassenStandard' => collect($einstellung->schritte())->mapWithKeys(fn ($k) => [$k => $einstellung->standard($k)]),
+            'klassenEingestellt' => $einstellung->eingestellt(),
             'registryLuecken' => $registryLuecken,
             'aktiveModelle' => $statistik->whereNotNull('model')->pluck('model')->unique()->sort()->values(),
             'statistik' => $statistik,
