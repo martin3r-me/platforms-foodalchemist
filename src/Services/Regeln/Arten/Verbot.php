@@ -81,7 +81,8 @@ final class Verbot implements RegelArt
         }
         foreach ((array) ($p['muster'] ?? []) as $m) {
             if (RegelText::passt((string) $m, $text)) {
-                return (string) $m;
+                // Fundstelle statt Regex in der Meldung (erste Gruppe, sonst der ganze Treffer)
+                return @preg_match((string) $m, $text, $f) === 1 ? (string) ($f[1] ?? $f[0]) : (string) $m;
             }
         }
 

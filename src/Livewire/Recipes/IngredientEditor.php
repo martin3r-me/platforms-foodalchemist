@@ -690,7 +690,7 @@ class IngredientEditor extends Component
                     ->whereNull('deleted_at')->whereNotNull('sub_category'), 'team_id', $team)
                     ->distinct()->orderBy('sub_category')
                     ->get(['commodity_group_code', 'sub_category'])->all(),
-                'zustande' => ['frisch', 'TK', 'trocken', 'konserviert'],
+                'zustande' => \Platform\FoodAlchemist\Services\GpNamingService::ZUSTAND_VOCAB,
                 'hauptgruppen' => TeamScope::applyVisible(DB::table('foodalchemist_recipe_main_groups')
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'label'])->all(),
                 'kategorien' => TeamScope::applyVisible(DB::table('foodalchemist_recipe_categories')

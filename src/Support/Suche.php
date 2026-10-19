@@ -35,11 +35,21 @@ final class Suche
      */
     public static function like($query, string $column, string $suche)
     {
-        foreach (self::tokens($suche) as $token) {
-            $query->whereRaw("LOWER({$column}) LIKE ?", ['%' . $token . '%']);
-        }
+        return self::likeAny($query, [$column], $suche);
+    }
 
-        return $query;
+    /**
+     * Umlaut-tolerante Varianten eines Tokens (Dominique 19.10.: GP-Namen mit echten Umlauten, Bestand großteils ASCII):
+     * „pueree“ findet „Püree“ und umgekehrt, „suess“ findet „süß“. ß→ss nur in eine Richtung (nie „Wasser“ → „Waßer“).
+     *
+     * @return list<string>
+     */
+    public static function varianten(string $token): array
+    {
+        $ascii = strtr($token, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $umlaut = strtr($ascii, ['ae' => 'ä', 'oe' => 'ö', 'ue' => 'ü']);
+
+        return array_values(array_unique([$token, $ascii, $umlaut]));
     }
 
     /**
@@ -58,10 +68,12 @@ final class Suche
     {
         foreach (self::tokens($suche) as $token) {
             $query->where(function ($w) use ($columns, $token) {
-                foreach (array_values($columns) as $i => $col) {
-                    $i === 0
-                        ? $w->whereRaw("LOWER({$col}) LIKE ?", ['%' . $token . '%'])
-                        : $w->orWhereRaw("LOWER({$col}) LIKE ?", ['%' . $token . '%']);
+                $erstes = true;
+                foreach (array_values($columns) as $col) {
+                    foreach (self::varianten($token) as $v) {
+                        $erstes ? $w->whereRaw("LOWER({$col}) LIKE ?", ['%' . $v . '%']) : $w->orWhereRaw("LOWER({$col}) LIKE ?", ['%' . $v . '%']);
+                        $erstes = false;
+                    }
                 }
             });
         }

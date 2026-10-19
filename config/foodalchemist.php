@@ -1189,7 +1189,9 @@ return [
             'klasse' => 'mittel',   // Dominique 19.10.: Feld-Ableitung braucht nicht die starke Klasse (io ≈ 2 Cent je Aufruf auf STARK)
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
                 . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
-                . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe, '
+                . '(' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '; gepökelt/geräuchert/luftgetrocknet sind Zustand, nicht Verarbeitung; '
+                . 'mehrere Behandlungen ⇒ Vorrang luftgetrocknet > geräuchert > gepökelt; TK + Behandlung ⇒ condition = '
+                . 'die Behandlung, „TK“ steht vorn in processing, z. B. „TK, geschnitten“), processing, form, pflichtangabe, '
                 . 'commodity_group_code, sub_category}. Übersetze fremdsprachige Lieferantentexte '
                 . 'fachlich korrekt ins Deutsche. commodity_group_code und sub_category müssen '
                 . 'exakt aus der im Kontext übergebenen taxonomie stammen; nichts erfinden. '
@@ -1257,8 +1259,10 @@ return [
         ],
         'gp.condition' => [
             'klasse' => 'leicht',
-            'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
-                . 'aus Name und Lieferantenartikeln: werte = {condition}.',
+            'task' => 'Bestimme den §9-Zustand (' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . ') des Grundprodukts '
+                . 'aus Name und Lieferantenartikeln: werte = {condition}. Mehrere Behandlungen ⇒ Vorrang luftgetrocknet > '
+                . 'geräuchert > gepökelt; TK + Behandlung ⇒ die Behandlung (TK ist Zusatz im Namen). Echt widersprüchliche '
+                . 'Angaben (z. B. frisch und konserviert) ⇒ condition = null.',
         ],
         // Spec 80 B1: Komponenten-Plan eines Basisrezepts — WAS sind die Bausteine (vor dem Bau, Mensch bestätigt).
         'recipe.komponenten_plan' => [
@@ -1863,7 +1867,7 @@ return [
                 . '(quell_lieferantenartikel, LA-First) ab, um die gemeldeten Regelverstoesse (verstoesse) zu beheben. '
                 . 'HARTE REGEL: NUR aus dem LA + den vorhandenen GP-Daten ableiten — was das LA nicht belegt, gib als '
                 . 'null zurueck (NIEMALS raten/erfinden). Felder: name (§6-Schema, Singular §6.1), zustand (§9: '
-                . 'frisch|TK|trocken|konserviert), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
+                . '' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
                 . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}. '
                 . $umlautKlausel,
         ],

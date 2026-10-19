@@ -39,7 +39,7 @@ final class FertigungstiefeAusInhalt
                 continue;
             }
             $wg = (string) ($gp->commodity_group_code ?? '');
-            if ($wg === '13' || (mb_strtoupper((string) $gp->condition) === 'TK' && in_array($wg, ['01', '02'], true))) {
+            if ($wg === '13' || (\Platform\FoodAlchemist\Services\GpNamingService::istTk($gp->condition, (string) $gp->name, (string) $gp->processing) && in_array($wg, ['01', '02'], true))) {
                 return 'teilfertig';
             }
         }

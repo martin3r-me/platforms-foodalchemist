@@ -243,7 +243,9 @@ class LagerEinrichtungService
         $wg = (string) $gp->commodity_group_code;
 
         return match (true) {
-            $zustand === 'tk' => 'tk',
+            // v3.6.0 (Dominique 19.10.): TK auch als Zusatz im Namen/in der Verarbeitung ⇒ Tiefkühlung; Behandlungen ⇒ Kühlung
+            GpNamingService::istTk($gp->condition, (string) $gp->name, (string) $gp->processing) => 'tk',
+            in_array($zustand, [...GpNamingService::BEHANDLUNG, 'gepoekelt', 'geraeuchert'], true) => 'kuehl',   // Kanon + Alt-Schreibweise
             $wg === '15' => 'getraenke',
             $zustand === 'frisch' && in_array($wg, self::WG_KUEHL, true) => 'kuehl',
             $zustand === 'frisch' => 'trocken',          // frische Backwaren, Eier-Ersatz, …

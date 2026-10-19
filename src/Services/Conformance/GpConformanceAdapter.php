@@ -76,7 +76,7 @@ class GpConformanceAdapter implements ConformanceAdapter
             'name' => $gp->name,
             'warengruppe' => $gp->commodity_group_code,          // §3
             'sub_kategorie' => $gp->sub_category,
-            'zustand' => $gp->condition,                          // §9 frisch|TK|trocken|konserviert
+            'zustand' => $gp->condition,                          // §9 GpNamingService::ZUSTAND_VOCAB
             'bio' => $gp->bio,
             'verarbeitung' => $gp->processing,
             'form' => $gp->form,

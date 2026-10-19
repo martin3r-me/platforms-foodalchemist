@@ -16,7 +16,7 @@
             <option value="{{ $p->id }}">{{ ! empty($mitPlatzOrt) && $p->location ? $p->location->name . ' · ' : '' }}{{ $p->name }}</option>
         @endforeach
     </x-fa::select>
-    <x-fa::select wire:model.live="filter.zustand" size="sm" class="w-36" placeholder="Jeder Zustand" :options="['frisch' => 'frisch', 'TK' => 'TK', 'trocken' => 'trocken', 'konserviert' => 'konserviert']" aria-label="Zustand" />
+    <x-fa::select wire:model.live="filter.zustand" size="sm" class="w-36" placeholder="Jeder Zustand" :options="array_combine(\Platform\FoodAlchemist\Services\GpNamingService::ZUSTAND_VOCAB, \Platform\FoodAlchemist\Services\GpNamingService::ZUSTAND_VOCAB)" aria-label="Zustand" />
     <x-fa::select wire:model.live="filter.warengruppe" size="sm" class="w-52" placeholder="Alle Warengruppen" :options="$warengruppen" aria-label="Warengruppe" />
     @if(! empty($lieferanten))
         <x-fa::select wire:model.live="filter.lieferant" size="sm" class="w-48" placeholder="Alle Lieferanten" :options="$lieferanten" aria-label="Lieferant" />

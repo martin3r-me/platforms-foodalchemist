@@ -569,7 +569,7 @@ class Index extends Component
 
         return array_values(array_filter($svc->artikel($this->team(), $ortId), fn ($r) => ($suche === '' || str_contains(mb_strtolower($r['name']), $suche))
             && ($f['stellplatz'] === '' || ($f['stellplatz'] === 'ohne' ? $r['bin_id'] === null : (int) $f['stellplatz'] === $r['bin_id']))
-            && ($f['zustand'] === '' || mb_strtolower((string) $r['zustand']) === mb_strtolower($f['zustand']))
+            && ($f['zustand'] === '' || \Platform\FoodAlchemist\Services\GpNamingService::zustandPasst($r['zustand'], (string) $r['name'], (string) $f['zustand']))   // TK auch als Zusatz (v3.6.0)
             && ($f['warengruppe'] === '' || (string) $r['warengruppe'] === (string) $f['warengruppe'])));
     }
 

@@ -198,7 +198,8 @@ class MatchHeuristics
     /**
      * Spec 80 B4 · eine Zeile, die nur ein Unterrezept werden darf oder eine Lücke bleibt — nie ein rohes GP.
      * Typ aus dem Vokabular (§1.2, „Püree: Petersilienwurzel", „Matte: Petersilie") oder Zubereitungs-Präfix
-     * („Gel:", „Jus:"). Ausnahme: nennt die Zeile eine Einkaufsform (TK/trocken/konserviert, „Blätterteig: TK"),
+     * („Gel:", „Jus:"). Ausnahme: nennt die Zeile eine Einkaufsform (TK/trocken/konserviert, seit v3.6 auch gepökelt/geraeuchert/
+     * luftgetrocknet; „Blätterteig: TK"),
      * ist sie Ware, kein Basisrezept — gleiche Grenze wie `RecipeGeneratorService::validiereProposedSub`.
      *
      * EINE Stelle für alle automatischen Schreibpfade (syncIngredients, Mint bei der Anreicherung,
@@ -218,7 +219,7 @@ class MatchHeuristics
             return false;
         }
 
-        return ! in_array($this->engine->produktForm($name)['zustand'], ['TK', 'trocken', 'konserviert'], true);
+        return ! in_array($this->engine->produktForm($name)['zustand'], ['TK', 'trocken', 'konserviert', ...\Platform\FoodAlchemist\Services\GpNamingService::BEHANDLUNG], true);
     }
 
     /**
@@ -348,7 +349,8 @@ class MatchHeuristics
         }
         foreach ($tokens as $t) {
             if (str_contains($t, 'konserv') || str_contains($t, 'getrocknet')
-                || str_contains($t, 'eingelegt') || str_contains($t, 'haltbar')) {
+                || str_contains($t, 'eingelegt') || str_contains($t, 'haltbar')
+                || str_contains($t, 'gepoekelt') || str_contains($t, 'geraeuchert')) {   // v3.6 §9: haltbar gemacht
                 return 'preserved';
             }
             foreach (TokenEngine::verarbeitetMarker() as $m) {
@@ -365,11 +367,16 @@ class MatchHeuristics
     public function zustandClassResolved(string $gpName, ?string $zustandCol): string
     {
         $z = $zustandCol !== null ? trim($zustandCol) : '';
+        // v3.6.0 2b: Behandlung als Zustand + TK im Namen ⇒ physisch TK-Ware (TK-Vorzug im Ranking greift)
+        if (in_array($z, \Platform\FoodAlchemist\Services\GpNamingService::BEHANDLUNG, true)
+            && \Platform\FoodAlchemist\Services\GpNamingService::istTk(null, $gpName)) {
+            return 'frozen';
+        }
         if ($z !== '') {
             $mapped = match ($z) {
                 'frisch' => 'fresh',
                 'TK' => 'frozen',
-                'trocken', 'konserviert' => 'preserved',
+                'trocken', 'konserviert', 'gepökelt', 'geräuchert', 'luftgetrocknet', 'gepoekelt', 'geraeuchert' => 'preserved',   // v3.6 §9: Behandlung = haltbar gemacht
                 default => null,
             };
             if ($mapped !== null) {

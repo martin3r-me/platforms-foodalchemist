@@ -46,7 +46,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
                 'id' => ['type' => 'integer', 'description' => 'GP-Id (team-eigen).'],
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert — dann hauptzutat nötig).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (nötig, wenn name leer bleibt).'],
-                'condition' => ['type' => 'string', 'description' => 'Zustand (§9): frisch|TK|trocken|konserviert.'],
+                'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'serving_vehicle' => ['type' => 'string', 'description' => 'Non-Food (WG 16): Servier-Typ des Gefäßes als Name oder Id (als Text) aus dem Vokabular Servier-Vehikel (leer löscht); die Darreichung liest ihn von hier.'],
                 'diameter_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Ø in cm, z. B. 27 oder 7,5 (leer löscht).'],
                 'length_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Länge in cm.'],

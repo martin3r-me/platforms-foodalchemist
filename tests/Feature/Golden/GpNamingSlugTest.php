@@ -54,10 +54,11 @@ it('GT-12-04 (A2-SOLL): Langform tiefgekuehlt wird zu TK normalisiert, DANN vali
     expect($kaputt['errors'][0])->toContain('§9');
 });
 
-it('GT-12-09 (I6): slugify byte-identisch — ä→a (EIN Zeichen), gp_key immer 3 Slots', function () {
+it('GT-12-09 (I6, geändert 19.10.): slugify transliteriert Umlaute einheitlich ae/oe/ue/ss, gp_key immer 3 Slots', function () {
+    // Dominique 19.10.: GP-Namen mit echten Umlauten — vorher ü→u (Rust-Erbe), damit kollidierten „Karottenpüree“/„Karottenpueree“ nicht
     expect($this->svc->slugify('Wuerfel 5 mm'))->toBe('wuerfel_5_mm')
-        ->and($this->svc->slugify('Grüne Bohnen'))->toBe('grune_bohnen')     // ü→u, NICHT ue!
-        ->and($this->svc->slugify('Süßkartoffel'))->toBe('suskartoffel')     // ß→s, NICHT ss!
+        ->and($this->svc->slugify('Grüne Bohnen'))->toBe('gruene_bohnen')
+        ->and($this->svc->slugify('Süßkartoffel'))->toBe('suesskartoffel')
         ->and($this->svc->slugify('  Crème (fraîche) '))->toBe('crème_fraîche') // Unicode bleibt, Ränder getrimmt
         ->and($this->svc->buildGpKey('apfel', 'Wuerfel 5 mm', null))->toBe('apfel|wuerfel_5_mm|');
 });
