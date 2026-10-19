@@ -904,8 +904,8 @@ class Index extends Component
         $alleRubrikIds = [];
         $baum = [];
         $vorschau = null;
-        // Ebene 2: Aufbau-Board UND Kundensicht-Vorschau gegen die Betriebsbrille (ambient) rechnen.
-        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
+        // Ebene 2: Aufbau-Board UND Kundensicht-Vorschau — dokument-gebundener Betrieb ?? Betriebsbrille (wie der Druck, Kurator 19.10.).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->fuerDokument($team, $karte?->outlet_id);
         if ($karte) {
             $baum = $svc->rubrikTree($team, $karte->id);
             $board = $svc->boardDaten($team, $karte, $outlet);

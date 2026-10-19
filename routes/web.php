@@ -372,7 +372,9 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
     $kapitelFilter = is_array($kapRaw)
         ? array_values(array_filter(array_map('intval', $kapRaw)))
         : array_values(array_filter(array_map('intval', explode(',', (string) $kapRaw))));
-    $data = $svc->dokumentDaten($team, $fb, $intern, $kapitelFilter, $mitKaskade) + ['deklaration' => $deklaration];
+    // Kurator 19.10.: Druck rechnet wie die Seite — dokument-gebundener Betrieb ?? aktives Kalkulationsprofil
+    $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->fuerDokument($team, $fb->outlet_id);
+    $data = $svc->dokumentDaten($team, $fb, $intern, $kapitelFilter, $mitKaskade, $outlet) + ['deklaration' => $deklaration];
 
     if (request()->boolean('pdf')) {
         // Härten: kein stiller HTML-Fallback mehr — wenn PDF verlangt, aber die Engine fehlt,
@@ -449,7 +451,8 @@ Route::get('/angebote', \Platform\FoodAlchemist\Livewire\Angebote\Index::class)
 Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\AngebotService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $angebot = $svc->detail($team, $id) ?? abort(404);
-    $data = $svc->dokumentDaten($team, $angebot);
+    // Kurator 19.10.: wie die Seite gegen das aktive Kalkulationsprofil (das Angebot bindet keinen Betrieb)
+    $data = $svc->dokumentDaten($team, $angebot, app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team));
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
@@ -472,7 +475,7 @@ Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist
 Route::get('/angebote/{id}/karte', function (int $id, \Platform\FoodAlchemist\Services\AngebotService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     try {
-        $data = $svc->karteDaten($team, $id);
+        $data = $svc->karteDaten($team, $id, app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team));   // wie die Seite
     } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
         abort(404);
     }
@@ -533,9 +536,8 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
     $plan = $svc->detail($team, $id) ?? abort(404);
     $mahlzeit = (string) request()->query('mahlzeit', 'mittag');
     $format = (string) request()->query('format', 'woche');
-    $outlet = $plan->outlet_id !== null
-        ? \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($plan->outlet_id)
-        : null;
+    // Kurator 19.10.: dokument-gebundener Betrieb ?? aktives Kalkulationsprofil (vorher nur der gebundene)
+    $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->fuerDokument($team, $plan->outlet_id);
 
     // Spec 57 · Paket 6: CSV der Woche (Semikolon + BOM wie der Produktionsschein).
     if ($format === 'csv') {
@@ -629,7 +631,8 @@ Route::get('/speisekarten/{id}/dokument', function (int $id, \Platform\FoodAlche
     $rubrikFilter = is_array($rubRaw)
         ? array_values(array_filter(array_map('intval', $rubRaw)))
         : array_values(array_filter(array_map('intval', explode(',', (string) $rubRaw))));
-    $data = $svc->dokumentDaten($team, $karte, $intern, $rubrikFilter, $mitKaskade);
+    $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->fuerDokument($team, $karte->outlet_id);   // wie die Seite (Kurator 19.10.)
+    $data = $svc->dokumentDaten($team, $karte, $intern, $rubrikFilter, $mitKaskade, $outlet);
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {

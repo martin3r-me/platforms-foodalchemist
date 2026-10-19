@@ -51,6 +51,12 @@ class ActiveOutletBar extends Component
         // Spec 77c: Unter-Team mit festem Betrieb — nur Anzeige
         $fest = $team !== null ? app(\Platform\FoodAlchemist\Services\StandortService::class)->zugeordneterBetrieb($team) : null;
 
-        return view('foodalchemist::livewire.active-outlet-bar', ['betriebe' => $betriebe, 'fest' => $fest]);
+        // Kopplung (Kurator 19.10.): steht das Profil auf dem Betrieb, den die Team-Brille vorgibt, sagt die Leiste das
+        $standorte = app(\Platform\FoodAlchemist\Services\StandortService::class);
+        $ausBrille = $team !== null && $fest === null ? $standorte->profilDerBrille($team) : null;
+        $folgtBrille = $ausBrille !== null && $this->aktiverBetrieb === (int) $ausBrille->id
+            ? (string) (\Platform\Core\Models\Team::find($standorte->brille($team)['team_id'])?->name ?? '') : null;
+
+        return view('foodalchemist::livewire.active-outlet-bar', ['betriebe' => $betriebe, 'fest' => $fest, 'folgtBrille' => $folgtBrille]);
     }
 }
