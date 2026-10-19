@@ -215,6 +215,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             }
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistKiKlasseOverride') {
+            // Spec 85 (Dominique 19.10.): globale Plattform-Einstellung je Prompt-Key, nur Admin im Master-Team — kein Team-Datensatz.
+            //  - kein BelongsToTeamHierarchy: keine team_id, gilt für alle Teams.
+            //  - kein SoftDeletes: unique(feature_key) + firstOrNew; „Standard“ = klasse NULL, die Zeile bleibt (Verlauf hängt an ihr).
+            //  - kein HasUuidV7: adressiert über feature_key (UI und MCP ki_klassen.PUT).
+            //  - LogsActivity trägt das Model: jede Änderung im Aktivitätsprotokoll.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistProduktpassFeld') {
             // Produktpass-Marker (Bauauftrag 16.10.2026): „dieses Feld stammt aus dem Produktpass" — Quelle je Feld + Schutz vor
             // dem Necta-Abgleich. Eine Hilfstabelle der Produktpass-Version (diese trägt alle vier Traits), kein kuratierter Datensatz.

@@ -117,7 +117,7 @@
     {{-- ── Modellstufen: drei KI-Klassen ── --}}
     <x-fa::section title="Modellstufen" icon="heroicon-o-rectangle-stack"
                    :meta="$registry->count() . ' Arbeitsschritte'"
-                   description="Jeder KI-Arbeitsschritt gehört zu genau einer Klasse, jede Klasse hat ein Modell. So laufen einfache Aufgaben günstig und anspruchsvolle mit dem stärksten Modell. Nur zur Ansicht — die Modelle werden auf dem Server eingetragen.">
+                   :description="'Jeder KI-Arbeitsschritt gehört zu genau einer Klasse, jede Klasse hat ein Modell. So laufen einfache Aufgaben günstig und anspruchsvolle mit dem stärksten Modell. ' . ($klassenPflege ? 'Die Klasse je Schritt stellst du unten ein (gilt für alle Teams); die Modelle je Klasse stehen auf dem Server.' : 'Nur zur Ansicht — die Modelle werden auf dem Server eingetragen.')">
         <div class="flex flex-col gap-3" data-ki-klassen>
             @foreach($nachKlasse as $klasse => $schritte)
                 <div class="flex flex-col gap-1.5" wire:key="klasse-{{ $klasse }}">
@@ -138,6 +138,9 @@
                 </div>
             @endforeach
         </div>
+        @if($klassenPflege)
+            @include('foodalchemist::livewire.settings.partials.ki-klassen-pflege')
+        @endif
         @if(! empty($abgeloest))
             <x-fa::notice tone="warn" title="Alte Stufen-Einstellungen ohne Wirkung" data-ki-abgeloest>
                 Auf diesem Server sind noch {{ implode(', ', $abgeloest) }} gesetzt. Die Stufen A–D gibt es nicht mehr; stattdessen gelten die drei Klassen oben
