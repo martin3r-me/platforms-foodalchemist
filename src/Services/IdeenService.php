@@ -23,7 +23,7 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
  * **Invariante (M4):** Ideen/Gruppen erzeugen NIE Rezepte/GPs/Konzepte — sie sind Entwürfe,
  * erst das Kapitel-Go (E7.3) materialisiert. Deshalb setzt dieser Service `status` nur auf
  * `entwurf|verworfen`; `freigegeben` + `generation_status` + `materialized_*` gehören der
- * Anlage (E7). `kiDivergenz()` (E6.4) legt ebenfalls NUR Entwurf-Skizzen an — produkt-blinde
+ * Anlage (E7). Die KI-Divergenz (`kiDivergenzSession`, `kiDivergenzConcept`) legt ebenfalls NUR Entwurf-Skizzen an — produkt-blinde
  * KI-Divergenz, keine Erdung (die kommt beim Go, E7.4).
  *
  * Owner-XOR: jede Idee/Gruppe hängt an GENAU einem von chapter_id/concept_id. Team-Scope wie
@@ -265,106 +265,8 @@ class IdeenService
     // ── KI-Divergenz (E6.4) ────────────────────────────────────────────────────
 
     /**
-     * KI-Divergenz für ein Kapitel: der Gateway liefert freie Gericht-Skizzen, die als
-     * Entwurf-Ideen (`created_via='ai_gateway'`) landen. PRODUKT-BLIND — die KI darf erfinden,
-     * die Erdung folgt erst beim Kapitel-Go (E7.4). Ändert NICHTS am Sortiment (M4-Invariante).
-     *
-     * Kontext-Vertrag (Spec 19 §KI-Führung): `leitplanken()` (Zielgruppen/Dimensionen) +
-     * `kapitelZiele()` (SOLL Menge/Preis/Niveau) + Rahmen-Prompt (`promptKontext` des Foodbook-
-     * Frames, falls vorhanden) + `KnowledgeContextService` (Routing `foodbook.plan`). Die
-     * Food-DNA-Kette hängt `AiGatewayService::propose` selbst an (FOOD_DNA_KEYS).
-     *
-     * Ohne gebundenen LLM-Provider wirft `propose()` typisiert (KiNichtVerfuegbar/KiDeaktiviert);
-     * die Aufrufer (UI/MCP) fangen das als Fehler ab — hier bewusst NICHT geschluckt.
-     *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
-     */
-    public function kiDivergenz(Team $team, int $chapterId, int $anzahl = 5): array
-    {
-        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
-        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
-        $verlangt = max(1, $anzahl);
-        $anzahl = min(self::IDEEN_MAX, $verlangt);
-
-        $kapitel = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
-        if (! $kapitel->isOwnedBy($team)) {
-            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbtes Foodbook — KI-Divergenz nur durchs Besitzer-Team (D1).');
-        }
-        $kapitel->loadMissing(['foodbook.serviceMoments', 'foodbook.targetGroups', 'targetGroups', 'parent.targetGroups']);
-        $fb = $kapitel->foodbook;
-
-        $fbSvc = app(FoodbookService::class);
-        $frameSvc = app(PlanningFrameService::class);
-        $frame = $frameSvc->find('foodbook', (int) $fb->id);
-
-        $beschreibung = trim(implode(' ', array_filter([
-            (string) $kapitel->title, (string) $kapitel->description, (string) $fb->title,
-        ])));
-        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $beschreibung);
-
-        $kontext = [
-            'kapitel' => (string) $kapitel->title,
-            'kapitel_beschreibung' => $this->clean($kapitel->description),
-            'anzahl' => $anzahl,
-            'leitplanken' => $fbSvc->leitplanken($team, $fb, null, $kapitel),
-            'ziele' => $fbSvc->kapitelZiele($team, $kapitel),
-            'rahmen' => $frame !== null ? $frameSvc->promptKontext($frame) : null,
-        ];
-
-        $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, [
-            'knowledge' => $wissen['block'],
-            'knowledge_used' => $wissen['files_used'],
-            'food_dna_foodbook_id' => (int) $fb->id,
-            // Spec 82 §7 (Entscheidung 4): CRM-Firma des Foodbooks, falls verknüpft
-            'food_dna_crm_company_id' => $fb->crm_company_id !== null ? (int) $fb->crm_company_id : null,
-        ]);
-
-        $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
-        $owner = ['chapter_id' => $chapterId, 'concept_id' => null, 'planning_session_id' => null];
-        $angelegt = [];
-        foreach ($rohe as $i) {
-            if (! is_array($i)) {
-                continue;
-            }
-            $titel = trim((string) ($i['titel'] ?? $i['title'] ?? ''));
-            if ($titel === '') {
-                continue;                                            // leere KI-Zeile überspringen (kein Insert)
-            }
-            $angelegt[] = FoodAlchemistDishIdea::create([
-                'team_id' => $team->id,
-                'chapter_id' => $chapterId,
-                'concept_id' => null,
-                'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
-                'title' => $titel,
-                'description' => $this->clean($i['beschreibung'] ?? $i['description'] ?? null),
-                'sales_recipe_id' => null,
-                'target_form' => 'einzel',
-                'group_id' => null,
-                'status' => 'entwurf',
-                'created_via' => 'ai_gateway',
-                'source_meta' => [
-                    'quelle' => 'ki_divergenz',
-                    'confidence' => $proposal->confidence,
-                    'call_log_id' => $proposal->callLogId,
-                    'komponenten' => $this->komponentenPlan($i['komponenten'] ?? []),
-                ],
-            ]);
-        }
-
-        return [
-            'angelegt' => $angelegt,
-            'roh' => count($rohe),
-            'confidence' => $proposal->confidence,
-            'call_log_id' => $proposal->callLogId,
-            'grenze' => self::IDEEN_MAX,
-            'verlangt' => $verlangt,
-            'gedeckelt' => max(0, $verlangt - $anzahl),
-        ];
-    }
-
-    /**
      * Concept-Divergenz (P1b): KI erfindet freie Gericht-Skizzen für EIN Konzept — produkt-blind,
-     * erdet NICHTS (das macht der Fan-out beim Go). Spiegelt {@see kiDivergenz} (Kapitel), aber
+     * erdet NICHTS (das macht der Fan-out beim Go). Spiegelt die frühere Kapitel-Divergenz (kiDivergenz, gelöscht Spec 85), aber
      * owner=concept: lädt das Konzept + dessen PlanningFrame (owner_type='concept', vom Concept-
      * Generator angelegt) als Rahmen; nutzt denselben produkt-blinden Prompt `foodbook.kapitel_ideen`.
      * Legt bis zu `$anzahl` Entwurf-Skizzen mit `concept_id` an (Owner-XOR trägt concept bereits).
@@ -518,7 +420,7 @@ class IdeenService
 
     /**
      * Session-Divergenz (Spec 40 E0): KI leitet aus dem Analyse-Text der Planungs-Session mehrere freie
-     * Gericht-Skizzen ab — der Analyse→Skizzen-Übergang der Leitstelle SELBST. Spiegelt {@see kiDivergenz}
+     * Gericht-Skizzen ab — der Analyse→Skizzen-Übergang der Leitstelle SELBST. Spiegelt die frühere Kapitel-Divergenz
      * (Kapitel) / {@see kiDivergenzConcept} (Konzept), aber owner=planning_session: es gibt (bewusst) KEIN
      * Ausgabe-Gerüst und KEINE Bestands-Erdung (das erdet erst der Go). Seed = der Analyse-Text (produkt-
      * blindes Prompt-Feld `kapitel_beschreibung`); `creative_mode` fließt als Kontext-Hinweis in den Prompt

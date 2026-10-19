@@ -15,7 +15,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 /**
  * Fan-out-Worker der Planungs-Kaskade (P1b): erdet EINE erfundene Concept-Idee zu einem VK-Gericht
  * und verdrahtet es in den vorgemerkten leeren Concept-Slot. Ein Job je erfundenem Gericht (analog
- * {@see MaterializeIdeaJob} am Foodbook-Kapitel) — so bleibt jede Generierung in ihrer eigenen
+ * MaterializeIdeaJob am Foodbook-Kapitel, gelöscht Spec 85) — so bleibt jede Generierung in ihrer eigenen
  * Queue-Ausführung (kein 502) und meldet ihr Ergebnis an den eigenen Kaskaden-Step zurück.
  *
  * Die eigentliche Arbeit (Generierung + Verdrahtung + Lineage + Step-Rückmeldung) liegt in

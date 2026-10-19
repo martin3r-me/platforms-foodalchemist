@@ -192,58 +192,6 @@ function bindDivergenzStub(array $ideen): void
     });
 }
 
-it('KI-Divergenz legt Entwurf-Skizzen an (created_via=ai_gateway), erdet nichts', function () {
-    bindDivergenzStub([
-        ['titel' => 'Bete-Tatar mit Meerrettich', 'beschreibung' => 'erdig-scharf, roh angemacht'],
-        ['title' => 'Fenchel-Orangen-Salat'],                         // englischer Key + ohne Beschreibung
-        ['titel' => '   '],                                           // leere Zeile → übersprungen
-    ]);
-
-    $res = $this->svc->kiDivergenz($this->rootTeam, $this->kapitel->id, 5);
-
-    expect($res['roh'])->toBe(3)
-        ->and($res['angelegt'])->toHaveCount(2)                       // die leere Zeile fiel raus
-        ->and($res['confidence'])->toBe(0.9);
-
-    $a = $res['angelegt'][0];
-    expect($a->status)->toBe('entwurf')
-        ->and($a->created_via)->toBe('ai_gateway')
-        ->and($a->chapter_id)->toBe($this->kapitel->id)
-        ->and($a->concept_id)->toBeNull()
-        ->and($a->target_form)->toBe('einzel')
-        ->and($a->sales_recipe_id)->toBeNull()
-        ->and($a->source_meta['quelle'])->toBe('ki_divergenz')
-        ->and($res['angelegt'][1]->description)->toBeNull();
-
-    // Positionen laufen hoch, Owner-gescoped.
-    expect($res['angelegt'][0]->position)->toBe(1)
-        ->and($res['angelegt'][1]->position)->toBe(2);
-
-    // Invariante: KEINE Rezepte/Konzepte materialisiert — nur Skizzen.
-    expect(FoodAlchemistRecipe::count())->toBe(1)
-        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::count())->toBe(0);
-});
-
-it('KI-Divergenz bleibt leer, wenn der Provider keine Ideen liefert (Fake-Echo, kein Fehler)', function () {
-    config(['foodalchemist.ai.provider' => 'fake']);   // Kontext-Echo → kein `ideen`-Key in werte
-
-    $res = $this->svc->kiDivergenz($this->rootTeam, $this->kapitel->id, 3);
-
-    expect($res['angelegt'])->toHaveCount(0)
-        ->and($res['roh'])->toBe(0)
-        ->and(FoodAlchemistDishIdea::count())->toBe(0);
-});
-
-it('KI-Divergenz kappt Cross-Team-Zugriff (Tenancy)', function () {
-    bindDivergenzStub([['titel' => 'Fremd-Idee']]);
-    $this->actingAs($this->makeUser($this->childA));
-
-    expect(fn () => $this->svc->kiDivergenz($this->childA, $this->kapitel->id, 3))
-        ->toThrow(RuntimeException::class, 'nur durchs Besitzer-Team');
-
-    expect(FoodAlchemistDishIdea::count())->toBe(0);
-});
-
 // ── Spec 40 E0: KI-Divergenz auf Session-Ebene (Analyse → Skizzen) ───────────
 
 it('E0 kiDivergenzSession legt Session-Skizzen an (planning_session_id, quelle=ki_divergenz_session)', function () {

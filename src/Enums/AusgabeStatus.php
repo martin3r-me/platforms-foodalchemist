@@ -20,7 +20,7 @@ namespace Platform\FoodAlchemist\Enums;
  * Veröffentlichen *setzt* auf `aktiv` — `versendet`/`veroeffentlicht` verschwinden. Das
  * Versand-Ereignis geht dabei nicht verloren, denn es hing nie am Kopf: eingefroren wird je
  * Kapitel/Rubrik über `snapshot_at`/`snapshot_json` (harte Grenze in
- * {@see \Platform\FoodAlchemist\Services\FoodbookService::anlageZuruckziehen}).
+ * FoodbookService::anlageZuruckziehen, gelöscht Spec 85).
  *
  * **Abgrenzung zur Phase.** {@see \Platform\FoodAlchemist\Services\PhaseService} (kontext →
  * struktur → befuellung → kalkulation → freigabe) beschreibt den BAU-Fortschritt und endet mit
