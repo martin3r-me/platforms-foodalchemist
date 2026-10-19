@@ -242,6 +242,7 @@ foodalchemist.angebote.LIST
 foodalchemist.angebote.POST
 foodalchemist.angebote.SEARCH
 foodalchemist.artikel.LIST
+foodalchemist.ausgabe_drift.GET
 foodalchemist.artikel.SEARCH
 foodalchemist.assemblierung.APPLY
 foodalchemist.assemblierung.POST
@@ -407,8 +408,6 @@ foodalchemist.terminology.POST
 foodalchemist.ui.OPEN
 foodalchemist.verkaufsrezepte.LIST
 foodalchemist.verkaufsrezepte.SEARCH
-foodalchemist.vk_snapshots.GET
-foodalchemist.vk_snapshots.RELEASE
 foodalchemist.zielgruppen.GET
 foodalchemist.zielgruppen.POST
 

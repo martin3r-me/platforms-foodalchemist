@@ -679,7 +679,7 @@ class TeamSettingsService
         return $v !== null && (float) $v > 0 ? (float) $v : 3.0;
     }
 
-    /** R2.5: max. relatives VK-Delta (%) ggü. freigegebenem Snapshot, ab dem „VK-Anpassung empfohlen" feuert. Default 5 %. */
+    /** Spec 85 F5: max. relatives VK-Delta (%) zwischen eingefrorenem Link-Preis und Live-VK, ab dem „Veröffentlichte Preise veraltet" feuert. Default 5 %. */
     public function maxVkDeltaPct(Team $team): float
     {
         $v = $this->for($team)->max_vk_delta_pct;

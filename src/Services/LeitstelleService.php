@@ -30,7 +30,6 @@ class LeitstelleService
 {
     public function __construct(
         private FoodbookService $foodbooks,
-        private VkSnapshotService $vkSnapshots,
     ) {}
 
     private const DISH_IDEAS_TABLE = 'foodalchemist_dish_ideas';
@@ -284,7 +283,7 @@ class LeitstelleService
      * Kapitel-Board (Dominique 2026-08-27) — EINE Sicht statt der drei Tabs Übersicht/
      * Fortschritt/Preise: pro Kapitel (Baum, depth) alle drei Linsen zusammengeführt —
      * Status (WE-Ampel + Ziele/Positionen/bepreist) · Inhalt+Preis (Duality-Positionen mit
-     * EK/VK/WE-% + VK-Deep-Link + R2.5-Snapshot). Verschmilzt die frühere Preis-Sicht (preiseBaum, gelöscht Spec 85) +
+     * EK/VK/WE-% + VK-Deep-Link; Spec 85 F5: Link-Preis-Drift meldet das Signal `vk_anpassung_empfohlen`). Verschmilzt die frühere Preis-Sicht (preiseBaum, gelöscht Spec 85) +
      * {@see kapitelMatrix}: kapitelAggregat/wareneinsatzAmpel werden nur EINMAL je Kapitel
      * gerechnet (die alten Tabs riefen sie doppelt). Coverage/Befunde je Kapitel liefert
      * die Fläche separat (gruppierte CoverageService-Befunde), damit hier kein N×-Call anfällt.
@@ -299,13 +298,6 @@ class LeitstelleService
     public function kapitelBoard(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistOutlet $outlet = null): array
     {
         $fb = $this->ladeFoodbook($team, $fb);
-        // r2_5-Badge (freigegebener Snapshot ↔ Live-VK) bleibt team-weit — die interne
-        // Pro-Gericht-Drift hängt am VkSnapshotService (team-only); der Betrieb wirkt hier auf
-        // die live gerechneten VK/EK/WE-Werte, nicht auf das Snapshot-Badge.
-        $r2_5 = [];
-        foreach ($this->vkSnapshots->pending($team) as $p) {
-            $r2_5[$p['recipe_id']] = $p;
-        }
         $board = [];
         foreach ($fb->chapters as $k) {
             $inhalt = $this->inhaltsBloecke($k);
@@ -322,22 +314,16 @@ class LeitstelleService
                         'vk' => $vk, 'ek' => $ek, 'preis_einheit' => 'gast',
                         'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
                         'ref_typ' => 'concept', 'ref_id' => $block->concept !== null ? (int) $block->concept->id : null,
-                        'r2_5' => null,
                     ];
                 } else {
                     $vk = $preis['vk_pp'] > 0 ? $preis['vk_pp'] : $preis['pauschal'];
                     $ek = $preis['ek_pp'];
                     $recipeId = $block->sales_recipe_id !== null ? (int) $block->sales_recipe_id : null;
-                    $abw = ($recipeId !== null && isset($r2_5[$recipeId])) ? $r2_5[$recipeId] : null;
                     $positionen[] = [
                         'art' => 'einzel', 'label' => $block->dish?->name ?? ($block->label ?? 'Gericht'),
                         'vk' => $vk, 'ek' => $ek, 'preis_einheit' => 'position',
                         'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
                         'ref_typ' => 'recipe', 'ref_id' => $recipeId,
-                        'r2_5' => $abw === null ? null : [
-                            'delta_pct' => (float) $abw['delta_pct'], 'richtung' => (string) $abw['richtung'],
-                            'published_net' => (float) $abw['published_net'], 'live_net' => (float) $abw['live_net'],
-                        ],
                     ];
                 }
             }

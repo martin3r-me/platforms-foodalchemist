@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
@@ -11,7 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 
 /**
  * Ebene 2 · Ausgabe-Drift — das eigentliche Controlling-Loch: die veröffentlichte Kundensicht
- * (Foodbook/Speisekarte/Speiseplan) friert ihre Preise beim Publish ein, während der interne VK
+ * (Foodbook/Speisekarte/Speiseplan/Angebot) friert ihre Preise beim Publish ein, während der interne VK
  * per Auto-Aufschlag (Strategie A) mitläuft. So driftet der eingefrorene Kundenpreis unbemerkt von
  * der Kostenrealität weg — und der Auto-Aufschlag maskiert genau das.
  *
@@ -118,13 +119,14 @@ class AusgabeDriftService
         return $this->teamCoreAusgaben($team);
     }
 
-    /** Team-Core: der inline-Kopf-Snapshot der drei Doc-Typen (freigegeben + mit Snapshot). */
+    /** Team-Core: der inline-Kopf-Snapshot der vier Doc-Typen (freigegeben + mit Snapshot). */
     private function teamCoreAusgaben(Team $team): array
     {
         $typen = [
             PresentationService::TYPE_FOODBOOK => FoodAlchemistFoodbook::class,
             PresentationService::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
             PresentationService::TYPE_SPEISEPLAN => FoodAlchemistSpeiseplan::class,
+            PresentationService::TYPE_ANGEBOT => FoodAlchemistAngebot::class,   // Spec 85 F5: auch das Angebot wird eingefroren
         ];
 
         $out = [];

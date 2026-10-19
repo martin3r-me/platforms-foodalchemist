@@ -12,7 +12,7 @@ return [
     'src/Services/FoodbookService.php' => [2412, 'mit C4 (Spec 85 §8/§9)'],
     'src/Services/PairingService.php' => [2591, 'Lesen / Bewerten / Pflege (Spec 85 §9)'],
     'src/Services/Ai/KnowledgeContextService.php' => [2171, 'Routing / Budget / Prompt-Bau (Spec 85 §9)'],
-    'src/Services/DataQualityService.php' => [2060, 'Metriken je Bereich (Spec 85 §9)'],
+    'src/Services/DataQualityService.php' => [2040, 'Metriken je Bereich (Spec 85 §9)'],
     'src/Livewire/Angebote/Editor.php' => [1790, 'C4 Komposition (Spec 85 §8)'],
     'resources/views/livewire/produktion/tagesplan.blade.php' => [1646, 'C6 mit Produktion/Tagesplan (Spec 85 §9)'],
     'src/Livewire/Concepter/Editor.php' => [1637, 'C6 Slots / Paket-Positionen (Spec 85 §9)'],

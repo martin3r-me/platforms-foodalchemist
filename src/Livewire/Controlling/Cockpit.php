@@ -27,11 +27,11 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  *
  * Das hier ist deshalb eine **Werkbank, keine Berichtsseite**. Jeder Tab zeigt eine Lage UND
  * trägt die Aktion dazu. Geschrieben wird ausschließlich über die bestehenden Services
- * ({@see \Platform\FoodAlchemist\Services\LeadLaService}, `OrderService`, `VkSnapshotService`,
+ * ({@see \Platform\FoodAlchemist\Services\LeadLaService}, `OrderService`, `SignalDetektorService`,
  * `SignalFixService`) — dort hängen Tenant-Guard, Recompute-Kaskade und Protokoll.
  *
  * **Kein eigenes Objekt.** Jede Maßnahme landet auf einem Objekt, das schon Lifecycle und Audit
- * hat (Lead-LA am GP, Zeile in der Bestellschiene, VK-Snapshot, Signal-Status). Ein zusätzlicher
+ * hat (Lead-LA am GP, Zeile in der Bestellschiene, veröffentlichter Link, Signal-Status). Ein zusätzlicher
  * „Controlling-Fall" wäre eine zweite Wahrheit ohne eigenen Nutzen.
  *
  * **Server-Modus-Tabs, bewusst.** Der Alpine-Modus von `editor-tabs` hält alle Panels im DOM;

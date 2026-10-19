@@ -24,7 +24,7 @@ enum SignalTyp: string
     case AnkerFehlt = 'anker_fehlt';
     case ServierformUnbestimmt = 'servierform_unbestimmt';
     case EkKetteUnvollstaendig = 'ek_kette_unvollstaendig';
-    // R2.5: Live-VK weicht vom freigegebenen Snapshot über die Leitplanke ab.
+    // Spec 85 F5: ein veröffentlichter Link zeigt Preise, die über die Leitplanke vom Live-VK abweichen (AusgabeDriftService).
     case VkAnpassungEmpfohlen = 'vk_anpassung_empfohlen';
     // R9.1: Vertrags-Kündigungsfrist eines Lieferanten läuft ab.
     case VertragsfristFaellig = 'vertragsfrist_faellig';
@@ -100,7 +100,7 @@ enum SignalTyp: string
     // S4c-2 — der Rest von Tranche D, beide gegen ein FREMDES Soll gemessen und darum
     // je mit einer eigenen dritten Arbeitsmenge: `foodbook_ziel_verfehlt` gegen die
     // Kapitel-Ziele im Planungs-Gerüst (ohne Gerüst kein Befund, wie S4b-1),
-    // `foodbook_stale` gegen den freigegebenen VK-Snapshot (R2.5) — und nur an Büchern,
+    // `foodbook_stale` gegen die eingefrorenen Preise des veröffentlichten Links (Spec 85 F5) — und nur an Büchern,
     // die schon draußen sind: in der Kalkulation SOLLEN Preise sich bewegen.
     case FoodbookZielVerfehlt = 'foodbook_ziel_verfehlt';
     case FoodbookStale = 'foodbook_stale';

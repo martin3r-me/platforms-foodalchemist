@@ -836,7 +836,7 @@ class RecipeOneShotService
      *    Der VK selbst wird NIE geschrieben: `price_mode` bleibt `auto`, der Preis
      *    entsteht in `DarreichungService::recomputePreise` aus EK × Aufschlag und
      *    ist damit jederzeit überschreibbar (DoD „kein Auto-Publish von Preisen";
-     *    die R2.5-Trennung Live-Marge ↔ freigegebener Snapshot bleibt unberührt).
+     *    der Kunde sieht im veröffentlichten Link weiter die eingefrorenen Preise, Spec 85 F5).
      *
      * 2. **Nur Lücken füllen** (wie der Anreicherungs-Pass, GL-07) — und die Portion
      *    NICHT raten. Die Aufschlagsklasse hat einen belastbaren Default

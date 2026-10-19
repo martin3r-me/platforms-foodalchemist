@@ -121,7 +121,7 @@ class Wissenssteuerung extends Component
         'serving_form_suggest' => 'Servierform vorschlagen', 'speisen_klasse' => 'Speisenklasse', 'steps' => 'Arbeitsschritte',
         'suggest' => 'Vorschlag', 'supplier_inquiry' => 'Lieferanten-Anfrage', 'tags' => 'Schlagworte', 'teller_heber' => 'Teller-Heber',
         'term_la_rank' => 'Artikel-Rangfolge', 'titel_vorschlag' => 'Titelvorschlag', 'ueberarbeiten' => 'Überarbeiten',
-        'verpackungsmasse' => 'Verpackungsmaße', 'vk_release_advice' => 'Freigabe-Empfehlung', 'wording' => 'Formulierung',
+        'verpackungsmasse' => 'Verpackungsmaße', 'vk_release_advice' => 'Empfehlung Neu-Veröffentlichen', 'wording' => 'Formulierung',
         'zaehl_einheiten' => 'Zähleinheiten',
     ];
 

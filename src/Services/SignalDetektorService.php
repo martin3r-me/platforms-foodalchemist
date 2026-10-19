@@ -84,6 +84,20 @@ class SignalDetektorService
     }
 
     /**
+     * Spec 85 F5: nur die Ausgabe-Drift neu prüfen (Knopf „Jetzt prüfen“ im Controlling) — Team-Links plus die Betriebe mit
+     * eigener Kostenstruktur, wie im vollen Lauf. Gibt die Zahl gedrifteter Ausgaben dieses Laufs zurück.
+     */
+    public function ausgabeDriftPruefen(Team $team): int
+    {
+        $n = $this->vkAnpassungEmpfohlen($team);
+        foreach ($this->betriebeMitOverrides($team) as $o) {
+            $n += $this->vkAnpassungEmpfohlen($team, $o);
+        }
+
+        return $n;
+    }
+
+    /**
      * Die Betriebe, die einen eigenen Signal-Lauf verdienen: aktive Outlets mit mindestens einem
      * kostenrelevanten Override (Marge / Ziel-Wareneinsatz / Stundensatz / HK2-Zuschlag /
      * Lohnnebenkosten). Ein Betrieb ohne Override rechnet exakt wie die Team-Baseline — die
@@ -934,8 +948,8 @@ class SignalDetektorService
     }
 
     /**
-     * Ausgabe-Drift (ex R2.5, reorientiert): die VERÖFFENTLICHTE Kundensicht (Foodbook/Speisekarte/
-     * Speiseplan) friert ihre Preise beim Publish ein; der interne VK läuft per Auto-Aufschlag mit.
+     * Ausgabe-Drift (Spec 85 F5: die einzige Kundenpreis-Drift; die separate VK-Freigabe ist entfallen): die VERÖFFENTLICHTE
+     * Kundensicht (Foodbook/Speisekarte/Speiseplan/Angebot) friert ihre Preise beim Publish ein; der interne VK läuft per Auto-Aufschlag mit.
      * So driftet der eingefrorene Kundenpreis unbemerkt von der Kostenrealität weg — genau das
      * maskiert der Auto-Aufschlag. Das Signal hält die eingefrorene Ausgabe gegen den aktuellen
      * Live-VK ({@see AusgabeDriftService}); Remediation = neu veröffentlichen (Republish).

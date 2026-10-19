@@ -84,6 +84,40 @@ it('Team-Core: veröffentlichte Ausgabe driftet gegen den Live-VK → NULL-Lane-
         ->and(FoodAlchemistSignal::where('team_id', $this->childA->id)->where('type', SignalTyp::VkAnpassungEmpfohlen->value)->where('status', 'offen')->count())->toBe(0);
 });
 
+it('Spec 85 F5: auch der veröffentlichte Angebots-Link wird geprüft; Gegenprobe: mit „Preise aktualisieren“ neu veröffentlicht → keine Drift', function () {
+    $comp = app(\Platform\FoodAlchemist\Services\OfferCompositionService::class);
+    $angebot = app(\Platform\FoodAlchemist\Services\AngebotService::class)->create($this->childA, ['name' => 'Gala 2027', 'personen' => 40]);
+    $kap = $comp->addKapitel($this->childA, $angebot->id, ['title' => 'Hauptgang', 'consumer_title' => 'Hauptgang']);
+    $comp->addBlock($this->childA, $kap->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->gericht->id]);
+    $angebotDrift = fn () => array_values(array_filter(app(AusgabeDriftService::class)->abgedriftet($this->childA, null),
+        fn ($d) => $d['doc_type'] === PresentationService::TYPE_ANGEBOT && $d['doc_id'] === (int) $angebot->id));
+
+    $this->pres->publish($this->childA, 'angebot', $angebot->id, ['price_display' => true, 'expires_at' => now()->addDays(30)->toDateString()]);
+    expect($angebotDrift())->toHaveCount(0);
+
+    $this->darr->update(['sales_net' => 140.0]);   // eingefroren 99, live 140
+    expect($angebotDrift())->toHaveCount(1);
+
+    $this->pres->publish($this->childA, 'angebot', $angebot->id, ['price_display' => true, 'price_mode' => 'auto', 'expires_at' => now()->addDays(30)->toDateString()]);
+    expect($angebotDrift())->toHaveCount(0);
+});
+
+it('Spec 85 F5: MCP ausgabe_drift.GET listet die gedrifteten Links (Team, Betrieb), unbekannter Betrieb → NOT_FOUND; vk_snapshots.* gibt es nicht mehr', function () {
+    $this->pres->publish($this->childA, 'speisekarte', $this->karteId, ['price_display' => true, 'expires_at' => now()->addDays(30)->toDateString()]);
+    $tool = $this->registry->get('foodalchemist.ausgabe_drift.GET');
+
+    expect($tool->execute([], $this->kontext)->data['anzahl'])->toBe(0);
+    $this->darr->update(['sales_net' => 140.0]);
+    $res = $tool->execute([], $this->kontext);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['anzahl'])->toBe(1)
+        ->and($res->data['ausgaben'][0]['doc_type'])->toBe('speisekarte')
+        ->and($tool->execute(['outlet_id' => $this->betrieb->id], $this->kontext)->data['anzahl'])->toBe(0)   // Betrieb hat keinen eigenen Link
+        ->and($tool->execute(['outlet_id' => 999999], $this->kontext)->errorCode)->toBe('NOT_FOUND')
+        ->and($this->registry->has('foodalchemist.vk_snapshots.GET'))->toBeFalse()
+        ->and($this->registry->has('foodalchemist.vk_snapshots.RELEASE'))->toBeFalse();
+});
+
 it('Betrieb: die betriebs-scopte Präsentation driftet → Signal in der Betriebs-Lane', function () {
     $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karteId, $this->betrieb->id, ['price_display' => true, 'expires_at' => now()->addDays(30)->toDateString()]);
 

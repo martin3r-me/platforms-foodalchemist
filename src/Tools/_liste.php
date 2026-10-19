@@ -602,8 +602,7 @@ return [
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteReviseTool::class,
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteStatusTool::class,
-    \Platform\FoodAlchemist\Tools\VkSnapshotsGetTool::class,
-    \Platform\FoodAlchemist\Tools\VkSnapshotsReleaseTool::class,
+    \Platform\FoodAlchemist\Tools\AusgabeDriftGetTool::class,   // Spec 85 F5: ersetzt vk_snapshots.GET/.RELEASE
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPostTool::class,
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPutTool::class,
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsReorderTool::class,

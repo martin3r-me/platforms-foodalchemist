@@ -33,9 +33,8 @@ class DataQualityService
 {
     /**
      * `CoverageService` kommt ab Spec 21 · S4b dazu (frame-gestützte Konzept-Checks),
-     * `PairingService` ab S4b-2 (Anker-Graph), `VkSnapshotService` ab S4c-2 (freigegebener
-     * VK vs. live). Kein Container-Zyklus: die Abhängigkeiten aller drei (PlanningFrame/
-     * Concept/Foodbook bzw. keine bzw. TeamSettings) kennen diesen Service nicht — anders
+     * `PairingService` ab S4b-2 (Anker-Graph). Kein Container-Zyklus: die Abhängigkeiten beider (PlanningFrame/
+     * Concept/Foodbook bzw. keine) kennen diesen Service nicht — anders
      * als beim `SignalObjectService`, der genau deshalb ausgelagert wurde.
      *
      * `PriceService` kommt ab Spec 22 · H2b dazu (V-053: die Preis-Aktiv-Bedingung wird
@@ -46,7 +45,6 @@ class DataQualityService
         private SignalService $signals,
         private CoverageService $coverage,
         private PairingService $pairing,
-        private VkSnapshotService $vkSnapshots,
         private PriceService $preise,
     ) {
     }
@@ -1078,10 +1076,10 @@ class DataQualityService
                 'typ' => SignalTyp::FoodbookStale,
                 'dedup' => 'dq-foodbook-stale',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Das Foodbook ist freigegeben oder beim Kunden, aber der aktuell berechnete VK mindestens '
-                    . 'eines Gerichts weicht stärker vom freigegebenen Preis ab, als das Team erlaubt. Das Dokument '
-                    . 'nennt damit einen Preis, den die Kalkulation nicht mehr ergibt. Foodbooks in der Kalkulation '
-                    . 'zählen nicht mit, dort dürfen Preise sich bewegen.',
+                'desc' => 'Das Foodbook ist freigegeben oder beim Kunden, aber mindestens ein Preis im veröffentlichten Link '
+                    . 'weicht stärker vom aktuell berechneten VK ab, als das Team erlaubt. Der Link nennt damit einen Preis, '
+                    . 'den die Kalkulation nicht mehr ergibt — neu veröffentlichen übernimmt die aktuellen Preise. Foodbooks '
+                    . 'in der Kalkulation zählen nicht mit, dort dürfen Preise sich bewegen.',
                 'q' => fn (Team $t) => $this->foodbooksMitPreisDrift($t),
             ],
             // Spec 03 · L2b hat den Fixer nachgeliefert (Kapitel-Textfeld + KI-Knopf je Kapitel),
@@ -1144,38 +1142,20 @@ class DataQualityService
     }
 
     /**
-     * Spec 21 · S4c-2 — die Snapshot-Hälfte von Tranche D.
+     * Spec 21 · S4c-2 — die Snapshot-Hälfte von Tranche D; Spec 85 F5 (Dominique 19.10.): die Quelle ist die
+     * Ausgabe-Drift des veröffentlichten Links ({@see AusgabeDriftService}), nicht mehr eine separate VK-Freigabe.
      *
-     * „Stale" heißt hier **der freigegebene Kundenpreis ist überholt**, und diese Aussage
-     * hat im System genau eine Quelle: {@see VkSnapshotService::pending} vergleicht den
-     * eingefrorenen VK gegen den live gerechneten, mit der Team-Leitplanke als Schwelle.
-     * Dieselbe Liste füttert das Signal `vk_anpassung_empfohlen` — dort je Gericht, hier je
-     * Buch. Zwei Objekte, eine Wahrheit: eine eigene Schwelle im Foodbook-Layer hieße, dass
-     * ein Preis am Gericht schon driftet und am Buch noch nicht.
-     *
-     * Das Buch-Signal ist trotzdem kein Duplikat, sondern die andere Frage: nicht „welcher
-     * Preis muss nachgezogen werden", sondern „welches Dokument steht mit einem falschen
-     * Preis beim Kunden" — nur die zweite Frage hat einen Adressaten außerhalb der Küche.
-     *
-     * Ein Team-weiter `pending()`-Aufruf statt einer Rechnung je Buch: die Kandidaten-Menge
-     * ist klein (nur Gerichte MIT Freigabe) und hängt nicht am Buch.
+     * „Stale" heißt: der beim Veröffentlichen eingefrorene Kundenpreis weicht über die Team-Leitplanke vom live
+     * gerechneten ab. Dieselbe Rechnung füttert das Signal `vk_anpassung_empfohlen` (je Ausgabe) — hier die Frage
+     * „welches Buch steht mit einem falschen Preis beim Kunden". Geprüft wird der Team-Link (Kopf-Snapshot);
+     * Betriebs-Links meldet das Signal je Betrieb.
      */
     private function foodbooksMitPreisDrift(Team $team): \Illuminate\Database\Eloquent\Builder
     {
-        $driftend = array_flip(array_map(
-            static fn (array $p): int => (int) $p['recipe_id'],
-            $this->vkSnapshots->pending($team)
-        ));
-
         $treffer = [];
-        if ($driftend !== []) {
-            foreach ($this->foodbooksFreigegeben($team)->pluck('id') as $id) {
-                foreach ($this->foodbookGerichtIds((int) $id) as $recipeId) {
-                    if (isset($driftend[$recipeId])) {
-                        $treffer[] = (int) $id;
-                        break;
-                    }
-                }
+        foreach (app(AusgabeDriftService::class)->abgedriftet($team) as $d) {
+            if ($d['doc_type'] === PresentationService::TYPE_FOODBOOK) {
+                $treffer[] = (int) $d['doc_id'];
             }
         }
 

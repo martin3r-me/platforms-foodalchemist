@@ -199,8 +199,8 @@
                     <livewire:foodalchemist.controlling.panels.erfolg key="controlling-cockpit--controlling.panels.erfolg" />
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Verkaufspreise freigeben" icon="heroicon-o-check-badge">
-                    <livewire:foodalchemist.controlling.panels.vk-freigabe key="controlling-cockpit--controlling.panels.vk-freigabe" />
+                <x-foodalchemist::modal-section title="Preisänderungen seit Veröffentlichung" icon="heroicon-o-link">
+                    <livewire:foodalchemist.controlling.panels.link-preise key="controlling-cockpit--controlling.panels.link-preise" />
                 </x-foodalchemist::modal-section>
             @endif
 

@@ -2,15 +2,12 @@
 
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Controlling\Panels\Preisvergleich;
-use Platform\FoodAlchemist\Livewire\Controlling\Panels\VkFreigabe;
+use Platform\FoodAlchemist\Livewire\Controlling\Panels\LinkPreise;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
-use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
-use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
-use Platform\FoodAlchemist\Models\FoodAlchemistVkPriceSnapshot;
 use Platform\FoodAlchemist\Services\SimulationService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -21,7 +18,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Spec 32 · C2 — die Hebel der Werkbank.
  *
  * Der Kern der Spec ist, dass Befund und Handlung am selben Ort liegen. Diese Datei prüft
- * die Handlungen: Bezugsquelle umstellen, Verkaufspreise freigeben, Lieferant-Szenario.
+ * die Handlungen: Bezugsquelle umstellen, Link-Preise prüfen (Spec 85 F5), Lieferant-Szenario.
  * Jede geht über einen bestehenden Service — geprüft wird also, dass die Fläche ihn richtig
  * ruft und dass sie nichts anfasst, was ihr nicht gehört.
  */
@@ -115,70 +112,36 @@ it('simuliert einen Preisaufschlag über das ganze Sortiment eines Lieferanten',
     expect($daneben['n_gps'])->toBe(0);
 });
 
-it('gibt Verkaufspreise frei und trennt Erstfall von Abweichung', function () {
-    $gericht = FoodAlchemistRecipe::create([
-        'team_id' => $this->childA->id, 'recipe_key' => 'vk1', 'name' => 'Rührei', 'status' => 'approved',
-        'is_sales_recipe' => true, 'sales_net' => 9.00, 'sales_unit_count' => 1,
-    ]);
-    $d = FoodAlchemistRecipeDarreichung::create([
-        'team_id' => $this->childA->id, 'recipe_id' => $gericht->id,
-        'serving_form_id' => $this->servierform->id, 'sales_net' => 9.00, 'is_standard' => true,
-    ]);
+// Spec 85 F5 (Dominique 19.10.): keine VK-Freigabe mehr — das Panel zeigt die Preise veröffentlichter Links, die von der
+// Kalkulation abweichen (offene Signale vk_anpassung_empfohlen samt Payload), und prüft auf Knopfdruck neu.
+function spec85_link_drift_signal(\Platform\Core\Models\Team $team, string $docType, int $docId, float $maxDelta, ?int $outletId = null): void
+{
+    app(\Platform\FoodAlchemist\Services\SignalService::class)->erzeuge($team, \Platform\FoodAlchemist\Enums\SignalTyp::VkAnpassungEmpfohlen,
+        \Platform\FoodAlchemist\Enums\SignalSeverity::Warnung, "Link {$docType} {$docId}: Preise weichen ab", [
+            'dedup_key' => "test-drift-{$docType}-{$docId}", 'outlet_id' => $outletId, 'ref_type' => $docType, 'ref_id' => $docId,
+            'payload' => ['doc_type' => $docType, 'doc_id' => $docId, 'outlet_id' => $outletId, 'anzahl' => 1, 'max_delta_pct' => $maxDelta,
+                'zeilen' => [['label' => 'Rührei', 'frozen' => 9.0, 'live' => round(9.0 * (1 + $maxDelta / 100), 2), 'delta_pct' => $maxDelta, 'richtung' => 'erhoehen']]],
+        ]);
+}
 
-    // Vor der ersten Freigabe steht die Darreichung im Erstfall, nicht in „weggelaufen".
-    $lw = Livewire::test(VkFreigabe::class)
-        ->assertViewHas('neu', fn ($n) => count($n) === 1 && $n[0]['presentation_id'] === $d->id)
-        ->assertViewHas('abgedriftet', fn ($a) => $a === []);
+it('F5: zeigt je veröffentlichtem Link die abweichenden Preise aus dem Signal, größte Abweichung zuerst, mit Weg in den Editor', function () {
+    spec85_link_drift_signal($this->childA, 'foodbook', 11, 8.0);
+    spec85_link_drift_signal($this->childA, 'angebot', 22, 20.0);
+    spec85_link_drift_signal($this->childB, 'speisekarte', 33, 50.0);   // fremdes Team: nie sichtbar
 
-    $lw->set('auswahl', [$d->id])->call('freigeben')->assertSet('fehler', null);
-
-    expect(FoodAlchemistVkPriceSnapshot::where('presentation_id', $d->id)->count())->toBe(1)
-        ->and((float) FoodAlchemistVkPriceSnapshot::where('presentation_id', $d->id)->value('sales_net'))->toBe(9.0);
-
-    // Danach ist der Erstfall leer — und ohne Preisbewegung meldet auch nichts eine Abweichung.
-    Livewire::test(VkFreigabe::class)
-        ->assertViewHas('neu', fn ($n) => $n === [])
-        ->assertViewHas('abgedriftet', fn ($a) => $a === []);
+    Livewire::test(LinkPreise::class)
+        ->assertViewHas('links', fn ($l) => count($l) === 2
+            && $l[0]['art'] === 'Angebot' && $l[0]['max_delta_pct'] === 20.0
+            && str_contains((string) $l[0]['url'], 'sel=22')
+            && $l[1]['art'] === 'Foodbook' && str_contains((string) $l[1]['url'], 'fb=11')
+            && (float) $l[0]['zeilen'][0]['frozen'] === 9.0)   // aus dem JSON-Payload: 9 statt 9.0
+        ->assertSeeHtml('data-ctrl-link-preise-editor')
+        ->assertDontSeeHtml('freigeben');
 });
 
-it('meldet eine weggelaufene Freigabe, sobald der Live-Preis die Leitplanke reißt', function () {
-    $gericht = FoodAlchemistRecipe::create([
-        'team_id' => $this->childA->id, 'recipe_key' => 'vk2', 'name' => 'Suppe', 'status' => 'approved',
-        'is_sales_recipe' => true, 'sales_net' => 10.00, 'sales_unit_count' => 1,
-    ]);
-    $d = FoodAlchemistRecipeDarreichung::create([
-        'team_id' => $this->childA->id, 'recipe_id' => $gericht->id,
-        'serving_form_id' => $this->servierform->id, 'sales_net' => 10.00, 'is_standard' => true,
-    ]);
+it('F5: ohne Abweichung ein ruhiger Leerzustand; „Jetzt prüfen“ ruft nur die Ausgabe-Drift des Detektors', function () {
+    Livewire::test(LinkPreise::class)->assertViewHas('links', [])->assertSee('Alle veröffentlichten Links tragen aktuelle Preise.');
 
-    Livewire::test(VkFreigabe::class)->set('auswahl', [$d->id])->call('freigeben');
-
-    // Live-Preis zieht kräftig an — der freigegebene Stand bleibt, wo er war.
-    $d->update(['sales_net' => 15.00]);
-
-    Livewire::test(VkFreigabe::class)
-        ->assertViewHas('abgedriftet', fn ($a) => count($a) === 1
-            && $a[0]['richtung'] === 'erhoehen'
-            && abs($a[0]['published_net'] - 10.0) < 0.01)
-        ->assertViewHas('neu', fn ($n) => $n === []);
-
-    // Ohne erneute Freigabe bleibt der veröffentlichte Preis unverändert — das ist der Zweck
-    // der ganzen Trennung: kein stiller Preissprung beim Kunden.
-    expect((float) FoodAlchemistVkPriceSnapshot::where('presentation_id', $d->id)
-        ->orderByDesc('id')->value('sales_net'))->toBe(10.0);
-});
-
-it('gibt keine fremden Darreichungen frei', function () {
-    $fremdesGericht = FoodAlchemistRecipe::create([
-        'team_id' => $this->childB->id, 'recipe_key' => 'vk3', 'name' => 'Fremd', 'status' => 'approved',
-        'is_sales_recipe' => true, 'sales_net' => 5.00, 'sales_unit_count' => 1,
-    ]);
-    $fremd = FoodAlchemistRecipeDarreichung::create([
-        'team_id' => $this->childB->id, 'recipe_id' => $fremdesGericht->id,
-        'serving_form_id' => $this->servierform->id, 'sales_net' => 5.00, 'is_standard' => true,
-    ]);
-
-    Livewire::test(VkFreigabe::class)->set('auswahl', [$fremd->id])->call('freigeben');
-
-    expect(FoodAlchemistVkPriceSnapshot::where('presentation_id', $fremd->id)->count())->toBe(0);
+    $this->mock(\Platform\FoodAlchemist\Services\SignalDetektorService::class, fn ($m) => $m->shouldReceive('ausgabeDriftPruefen')->once()->andReturn(2));
+    Livewire::test(LinkPreise::class)->call('jetztPruefen')->assertSet('hinweis', 'Geprüft: 2 Links zeigen Preise, die von der Kalkulation abweichen.');
 });
