@@ -241,6 +241,16 @@ class GpNamingService
         return ['errors' => $errors, 'warnings' => $warnings];
     }
 
+    /** Zahlen im Namen als sortierte Menge (Dezimalkomma normalisiert); Grundlage des Guards „gleiche Zahl = Dublette“. */
+    private function zahlenTokens(string $name): array
+    {
+        preg_match_all('/\d+(?:[.,]\d+)?/u', $name, $m);
+        $z = array_unique(array_map(fn ($x) => str_replace(',', '.', $x), $m[0]));
+        sort($z);
+
+        return array_values($z);
+    }
+
     /**
      * Anlage-Guard (create_gp Z. 2509, GT-12-10): gp_key-UNIQUE über aktive GPs
      * (approved/tentative) + Jaccard ≥ 0.92 gegen bestehende Namen. Hard-Stop —
@@ -267,8 +277,13 @@ class GpNamingService
                 ->when($ignoriereGpId !== null, fn ($q) => $q->where('id', '!=', $ignoriereGpId))
                 ->select('id', 'name', 'gp_key', 'status', 'team_id')
                 ->orderBy('id')
-                ->chunk(2000, function ($gps) use (&$beste, $query) {
+                ->chunk(2000, function ($gps) use (&$beste, $query, $name) {
+                    $zahlen = $this->zahlenTokens($name);
                     foreach ($gps as $gp) {
+                        // Abweichende Zahl (mm, g, %, Kaliber) = andere Variante, keine Dublette (v3.6.0 §7.2/§7.3): der Tokenizer ignoriert Zahlen.
+                        if ($this->zahlenTokens((string) $gp->name) !== $zahlen) {
+                            continue;
+                        }
                         $c = $this->engine->tokenize($gp->name);
                         if ($c === []) {
                             continue;
