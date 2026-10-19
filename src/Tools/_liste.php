@@ -60,6 +60,7 @@ return [
     \Platform\FoodAlchemist\Tools\ArtikelSearchTool::class,
     \Platform\FoodAlchemist\Tools\AssemblierungApplyTool::class,
     \Platform\FoodAlchemist\Tools\AssemblierungPostTool::class,
+    \Platform\FoodAlchemist\Tools\AusgabeDriftGetTool::class,   // Spec 85 F5: ersetzt vk_snapshots.GET/.RELEASE
     \Platform\FoodAlchemist\Tools\BausteinFassungUebernehmenGetTool::class,
     \Platform\FoodAlchemist\Tools\BausteinFassungUebernehmenPostTool::class,
     \Platform\FoodAlchemist\Tools\BehaelterBedarfGetTool::class,
@@ -604,7 +605,6 @@ return [
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteReviseTool::class,
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
     \Platform\FoodAlchemist\Tools\VerkaufsrezepteStatusTool::class,
-    \Platform\FoodAlchemist\Tools\AusgabeDriftGetTool::class,   // Spec 85 F5: ersetzt vk_snapshots.GET/.RELEASE
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPostTool::class,
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPutTool::class,
     \Platform\FoodAlchemist\Tools\VocabDishMaingroupsReorderTool::class,
