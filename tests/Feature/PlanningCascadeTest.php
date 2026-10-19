@@ -1189,24 +1189,6 @@ it('Freigabe (concept): Konzept → active', function () {
         ->and($step->refresh()->status)->toBe('freigegeben');
 });
 
-it('Bulk-Freigabe hebt alle offenen Entwürfe auf freigegeben, Run done', function () {
-    $r1 = $this->makeRecipe($this->rootTeam, 'A', ['status' => 'draft']);
-    $r2 = $this->makeRecipe($this->rootTeam, 'B', ['status' => 'draft']);
-    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
-    foreach ([$r1, $r2] as $r) {
-        FoodAlchemistCascadeRunStep::create([
-            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
-            'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $r->id,
-        ]);
-    }
-
-    app(PlanningCascadeService::class)->gibRunFrei($this->rootTeam, (int) $run->id);
-
-    expect($run->refresh()->status)->toBe('done')
-        ->and($run->steps()->where('status', 'freigegeben')->count())->toBe(2)
-        ->and($r1->refresh()->status->value)->toBe('approved');
-});
-
 it('Freigabe ist team-gescoped: geerbter Step wird abgewiesen (D1)', function () {
     $recipe = $this->makeRecipe($this->rootTeam, 'Tenancy', ['status' => 'draft']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
@@ -1278,7 +1260,6 @@ it('D1-Slice 3: geerbter (sichtbarer, nicht besessener) Lauf ist für jede Run-B
     Queue::assertNothingPushed();
 })->with([
     'gibStufeFrei'        => [fn ($svc, $team, $id) => $svc->gibStufeFrei($team, $id, 'gericht')],
-    'gibRunFrei'          => [fn ($svc, $team, $id) => $svc->gibRunFrei($team, $id)],
     'verwirfRun'          => [fn ($svc, $team, $id) => $svc->verwirfRun($team, $id)],
     'setzeLaufFort'       => [fn ($svc, $team, $id) => $svc->setzeLaufFort($team, $id)],
     'reapeVerwaisteSteps' => [fn ($svc, $team, $id) => $svc->reapeVerwaisteSteps($team, $id)],

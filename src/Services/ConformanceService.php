@@ -160,25 +160,6 @@ class ConformanceService
     }
 
     /**
-     * Offene Konformitäts-Hinweise eines Artefakts (Leitstelle / MCP-Anzeige) —
-     * hart vor weich, dann nach Konfidenz. Reine Lese-Sicht, kein KI-Call.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public function offeneFuer(Team $team, string $artifactType, int $artifactId): array
-    {
-        return FoodAlchemistConformanceFinding::query()
-            ->where('team_id', $team->id)
-            ->where('artifact_type', $artifactType)
-            ->where('artifact_id', $artifactId)
-            ->where('status', 'offen')
-            ->orderByRaw("CASE schweregrad WHEN 'hart' THEN 0 ELSE 1 END")
-            ->orderByDesc('confidence')
-            ->get(['paragraph', 'schweregrad', 'feld', 'reason', 'vorschlag', 'confidence', 'seen_count'])
-            ->toArray();
-    }
-
-    /**
      * Offene Hinweise für VIELE Artefakte in EINER Abfrage (Cockpit-Liste, kein N+1) —
      * je Artefakt hart vor weich, dann nach Konfidenz.
      *

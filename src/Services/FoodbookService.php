@@ -2386,42 +2386,9 @@ class FoodbookService
         });
     }
 
-    /**
-     * M11-08: Andock-Kontext für die spätere KI-Text-Generierung (Einleitung/Kapitel) —
-     * assembliert NUR die Eingaben, KEIN LLM-Call (Befüllung extern/später, blockiert).
-     * Quelle: Kunde + Briefing (description) + die referenzierten Concepts + Kapitel-Titel.
-     * Der echte Canvas-Wissen-Link folgt mit D10; bis dahin ist `briefing` der lose Text.
-     *
-     * @return array{kunde: ?string, briefing: ?string, personen: ?int, concepts: list<string>, kapitel: list<string>}
-     */
-    public function kiAndockKontext(Team $team, int $foodbookId): array
-    {
-        $fb = $this->detail($team, $foodbookId);
-        if ($fb === null) {
-            return ['customer' => null, 'briefing' => null, 'personen' => null, 'concepts' => [], 'kapitel' => []];
-        }
-
-        $conceptNamen = collect();
-        foreach ($fb->chapters as $k) {
-            foreach ($k->blocks as $b) {
-                if ($b->type === 'concept_ref' && $b->concept) {
-                    $conceptNamen->push($b->concept->name);
-                }
-            }
-        }
-
-        return [
-            'customer' => $fb->crmCompany?->display_name,
-            'briefing' => $fb->description,
-            'personen' => $fb->personen,
-            'concepts' => $conceptNamen->unique()->values()->all(),
-            'kapitel' => $fb->chapters->pluck('title')->values()->all(),
-        ];
-    }
-
     // ── Spec 03 · L2: KI-Kundentext ─────────────────────────────────────────────
     //
-    // Löst den M11-08-Platzhalter oben ab: `kiAndockKontext` sammelte die Eingaben,
+    // Löst den M11-08-Platzhalter ab (kiAndockKontext, gelöscht Spec 85): der sammelte nur die Eingaben,
     // hier läuft der Call. Bewusst NUR Vorschlag — geschrieben wird nichts, auch nicht
     // `description`. Übernehmen ist ein eigener, menschlicher Akt in der Fläche
     // (Backup-Lehre 2026-06-30: ein Generator, der ein handgeschriebenes Kundentext-Feld

@@ -117,12 +117,9 @@ it('Spec 84 B2 · Teller-Rollen übernehmen nur am eigenen Rezept', function () 
         ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $z->id)->value('role_source'))->not->toBe('ki');
 });
 
-it('Spec 84 B2 · Generator-Stubs: fremden Stub nicht löschen, fremden Eltern-Stub nicht auf draft setzen', function () {
+it('Spec 84 B2 · Generator-Stubs: fremden Eltern-Stub nicht auf draft setzen', function () {
     $stub = $this->makeRecipe($this->oben, 'Oberteam-Stub', ['status' => 'stub', 'last_modified_by' => 'generator_stub']);
     $svc = app(RecipeService::class);
-
-    expect(fn () => $svc->deleteGeneratorStub($this->kind, $stub->id))->toThrow(GeerbtNurLesenException::class)
-        ->and(FoodAlchemistRecipe::find($stub->id))->not->toBeNull();
 
     $svc->createSubRecipeStub($this->kind, 'Neue Komponente Spec84', $stub->id);
     expect(FoodAlchemistRecipe::find($stub->id)->status->value)->toBe('stub');
