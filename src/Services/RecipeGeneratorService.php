@@ -232,7 +232,7 @@ class RecipeGeneratorService
         $pref = match ($parameter['frische'] ?? null) {
             'frisch' => 'fresh_first',
             'tk' => 'frozen_first',
-            'konserve' => 'preserved_first',
+            'konserve', 'behandelt' => 'preserved_first',   // behandelt = gepökelt/geräuchert/luftgetrocknet (v3.6 §9)
             default => 'fresh_first',
         };
         // Bio dreiwertig: bio_pref (bio|conventional|neutral) gewinnt — „egal" ⇒ neutral (Adjustment 0),
@@ -1198,7 +1198,7 @@ class RecipeGeneratorService
         // genau der gewollte Sub-Rezept-Fall (frisch gemacht ≠ Rohware-Einkaufsform). $text
         // default '' hält den Bestands-Draw-Aufrufer (ziehtAusBestand, keine Zeilen-Beschreibung
         // verfügbar) unverändert.
-        if (in_array(app(Matching\TokenEngine::class)->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
+        if (in_array(app(Matching\TokenEngine::class)->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert', ...GpNamingService::BEHANDLUNG], true)) {
             return null;
         }
         // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Ein nicht freigegebener
@@ -1390,11 +1390,11 @@ class RecipeGeneratorService
 
     /**
      * Frische-Erlaubnis (L1.5): trägt der GP einen erlaubten Zustand? Vergleicht primär die rohe
-     * `gps.condition` (frisch|TK|trocken|konserviert — §9) gegen die Erlaubnis-Liste; ist die Spalte
+     * `gps.condition` (§9, GpNamingService::ZUSTAND_VOCAB) gegen die Erlaubnis-Liste; ist die Spalte
      * leer, fällt es lenient auf den Namens-Bucket zurück (nur so werden Zustands-lose GPs nicht
      * fälschlich ausgefiltert). trocken/konserviert kollabieren im Bucket-Fallback (beide `preserved`).
      *
-     * @param  list<string>  $erlaubtRaw  rohe Zustands-Werte (frisch|TK|trocken|konserviert)
+     * @param  list<string>  $erlaubtRaw  rohe Zustands-Werte (GpNamingService::ZUSTAND_VOCAB)
      */
     private function gpZustandErlaubt(int $gpId, array $erlaubtRaw): bool
     {
@@ -1408,7 +1408,7 @@ class RecipeGeneratorService
         }
         $raw = trim((string) ($gp->condition ?? ''));
         if ($raw !== '') {
-            return in_array($raw, $erlaubtRaw, true);
+            return in_array($raw, $erlaubtRaw, true) || (in_array('TK', $erlaubtRaw, true) && GpNamingService::istTk($raw, (string) $gp->name));   // v3.6 2b
         }
         // condition unset → Namens-Token-Fallback über produktForm() (4-wertiges §9-Vokabular,
         // trocken ≠ konserviert — anders als der RANKING-Bucket zustandClassResolved(), der
@@ -1420,7 +1420,7 @@ class RecipeGeneratorService
         }
         // Kein eindeutiges §9-Wort im Namen → lenient Bucket-Fallback wie zuvor.
         $erlaubtBuckets = array_map(static fn ($z) => match ($z) {
-            'frisch' => 'fresh', 'TK' => 'frozen', 'trocken', 'konserviert' => 'preserved', default => 'unknown',
+            'frisch' => 'fresh', 'TK' => 'frozen', 'trocken', 'konserviert', 'gepökelt', 'geräuchert', 'luftgetrocknet' => 'preserved', default => 'unknown',
         }, $erlaubtRaw);
         $bucket = $this->heuristik->zustandClassResolved((string) $gp->name, null);
 

@@ -512,7 +512,7 @@ class IngredientMatchService
     }
 
     /**
-     * Ein explizit genannter §9-Zustand (frisch/TK/trocken/konserviert) darf nicht auf eine
+     * Ein explizit genannter §9-Zustand (GpNamingService::ZUSTAND_VOCAB) darf nicht auf eine
      * andere Zustandsklasse fallen — „TK-Erbsen" nicht auf trocken, „Dosentomaten" nicht auf
      * frisch, „getrocknete Tomaten" nicht auf konserviert (vorher fielen trocken UND
      * konserviert in dieselbe Prüfung, siehe {@see TokenEngine::produktForm()}).
@@ -524,7 +524,16 @@ class IngredientMatchService
             return true;   // kein expliziter §9-Zustand im Query ⇒ nichts zu gaten, Score entscheidet
         }
         if (trim((string) $condition) !== '') {
-            return mb_strtolower(trim($condition)) === mb_strtolower($zustand);
+            if (mb_strtolower(trim($condition)) === mb_strtolower($zustand)) {
+                return true;
+            }
+            // Regelwerk GP v3.6.0: gepökelt/geräuchert/luftgetrocknet waren bis dahin Verarbeitung — Bestands-GPs tragen sie im
+            // Namen („Lachs: TK, geraeuchert"), die Spalte noch den alten Zustand. Bis zur Daten-Nachführung zählt dort der Name.
+            if (in_array($zustand, \Platform\FoodAlchemist\Services\GpNamingService::BEHANDLUNG, true)) {
+                return preg_match('/(?<![\p{L}])(?:' . preg_quote($zustand, '/') . '|' . preg_quote(strtr($zustand, ['ö' => 'oe', 'ä' => 'ae', 'ü' => 'ue']), '/') . ')/iu', $name) === 1;
+            }
+
+            return false;
         }
         // condition-Feld leer ⇒ Namens-Token-Fallback: der GP-NAME muss den verlangten
         // Zustand tragen — ein Name ohne eindeutiges §9-Wort lehnt ab (konservativ, wie

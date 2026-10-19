@@ -29,11 +29,16 @@ final class ReglerParams
         }
         try {
             // Frische: rohe condition-Werte → UI-Slugs (Umkehrung FRISCHE_CONDITION).
-            $condToSlug = array_flip(Index::FRISCHE_CONDITION);
-            $frischeSlugs = array_values(array_filter(array_map(
+            $condToSlug = [];
+            foreach (Index::FRISCHE_CONDITION as $slug => $roh) {
+                foreach ((array) $roh as $r) {
+                    $condToSlug[$r] = $slug;   // ein Slug kann mehrere Roh-Zustände tragen (v3.6 „behandelt“)
+                }
+            }
+            $frischeSlugs = array_values(array_unique(array_filter(array_map(
                 static fn ($raw) => $condToSlug[$raw] ?? null,
                 (array) ($p['frische_erlaubt'] ?? []),
-            )));
+            ))));
             $bioPraef = match ($p['bio_pref'] ?? null) {
                 'bio' => 'bio', 'neutral' => 'egal', 'conventional' => 'konventionell', default => null,
             };
@@ -125,7 +130,7 @@ final class ReglerParams
         ));
         unset($p['frische']);   // Roh-Array wird übersetzt, nicht 1:1 durchgereicht
         if ($frischeSlugs !== []) {
-            $p['frische_erlaubt'] = array_map(static fn ($s) => Index::FRISCHE_CONDITION[$s], $frischeSlugs);
+            $p['frische_erlaubt'] = array_values(array_merge(...array_map(static fn ($s) => (array) Index::FRISCHE_CONDITION[$s], $frischeSlugs)));
             // Primärer Pref für den Match-Tiebreak (Generator mappt frisch|tk|konserve→VariantPref;
             // 'trocken' fällt auf fresh_first, egal — der harte Filter erledigt die Zustands-Auswahl).
             $p['frische'] = in_array('frisch', $frischeSlugs, true) ? 'frisch' : $frischeSlugs[0];

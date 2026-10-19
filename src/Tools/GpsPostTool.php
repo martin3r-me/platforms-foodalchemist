@@ -45,7 +45,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (Pflicht) — Basis des Namens + main_ingredient_slug.'],
-                'condition' => ['type' => 'string', 'description' => 'Zustand (§9): frisch|TK|trocken|konserviert.'],
+                'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'processing' => ['type' => 'string', 'description' => 'Verarbeitung/Zuschnitt (z.B. Wuerfel 10 mm).'],
                 'form' => ['type' => 'string', 'description' => 'Form (falls keine processing).'],
                 'portion' => ['type' => 'string', 'description' => 'Portionsgrammatur pro Stück (optional).'],

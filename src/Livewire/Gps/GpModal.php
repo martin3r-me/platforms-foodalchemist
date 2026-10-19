@@ -854,7 +854,7 @@ class GpModal extends Component
             $gesetzt[] = 'Warengruppe '.$wg->codedLabel().($treffer !== null ? ' › '.$treffer : ' (keine passende Unterkategorie)');
         }
         $zustand = $v->werte['condition'] ?? null;
-        if (is_string($zustand) && in_array($zustand, ['frisch', 'TK', 'trocken', 'konserviert'], true)) {
+        if (is_string($zustand) && in_array($zustand, GpNamingService::ZUSTAND_VOCAB, true)) {
             $this->builder['condition'] = $zustand;
             $gesetzt[] = 'Zustand '.$zustand;
         }

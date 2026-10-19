@@ -9,10 +9,9 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 /**
  * M3-09: GL-12 — GP-Naming, Slugs & Anlage-Guard.
  *
- * - slugify(): KANONISCH, byte-identisch zur Rust-Variante (commands.rs:2471) —
- *   ä→a/ö→o/ü→u/ß→s (EIN Zeichen!), NICHT Str::slug() (I6: sonst kollidieren
- *   neue gp_keys mit den 7.774 Seed-GPs). Matcher-Slug (ae/oe/ue/ss) bleibt
- *   getrennt in TokenEngine::normalizeSlug (A3 — nie vereinheitlichen während Migration).
+ * - slugify(): KANONISCH, Umlaute einheitlich ae/oe/ue/ss (seit 19.10., Dominique: GP-Namen mit echten Umlauten; vorher ä→a/ö→o/ü→u/ß→s
+ *   byte-identisch zur Rust-Variante commands.rs:2471). NICHT Str::slug(). Bestandskennungen aus Umlaut-Namen (Seed ü→u) müssen beim
+ *   Daten-Umbau neu gebildet werden, sonst fängt der Anlage-Guard die Dublette nicht. Matcher-Slug: TokenEngine::normalizeSlug (gleiche Regel).
  * - renderGpName()/validateGpName(): gp_naming.rs Z. 31/88; §7.1 Verpackungswörter
  *   = Hard-Error (Wort-Boundary: „Dose" blockt, „Dosentomate" nicht), §9-Zustand
  *   mit Eingangs-Normalisierung tiefgekuehlt→TK (A2/A7: EIN Vokabular).
@@ -21,8 +20,106 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  */
 class GpNamingService
 {
-    /** §9 / DB-CHECK — kanonisches Zustand-Vokabular (A7: EIN Validator-Set). */
-    public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert'];
+    /**
+     * §9 — kanonisches Zustand-Vokabular (A7: EIN Validator-Set; einzige Quelle im Code, Listen und Prompts lesen sie).
+     * Regelwerk GP v3.6.0 (Dominique 19.10.): `gepoekelt`, `geraeuchert`, `luftgetrocknet` sind eigene Zustände
+     * (vorher Verarbeitung). Vorrang bei mehreren Behandlungen (entschieden Dominique 19.10.): luftgetrocknet > geraeuchert >
+     * gepoekelt; TK + Behandlung ⇒ die Behandlung ist der Zustand, „TK“ steht als Zusatz im Namen („Raeucherlachs: geraeuchert,
+     * TK, geschnitten“). {@see zustandAusTreffern()}, {@see istTk()}.
+     */
+    public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert', 'gepökelt', 'geräuchert', 'luftgetrocknet'];   // Kanon mit echten Umlauten (Dominique 19.10.)
+
+    /** §9 v3.6.0: die drei Behandlungs-Zustände (Fleisch/Wurst/Fisch) — für Matching und Lager wie „haltbar gemacht“. */
+    public const BEHANDLUNG = ['gepökelt', 'geräuchert', 'luftgetrocknet'];
+
+    /** §9 v3.6.0: Vorrang bei mehreren Behandlungen (entschieden Dominique 19.10.), stärkste zuerst. */
+    public const BEHANDLUNG_VORRANG = ['luftgetrocknet', 'geräuchert', 'gepökelt'];
+
+    /**
+     * Ein Zustand aus mehreren Treffern im selben Text: einer ⇒ dieser; nur Behandlungen (+ ggf. TK) ⇒ die stärkste Behandlung
+     * (TK ist dann Zusatz); alles andere (z. B. frisch + konserviert, TK + trocken) ist echt widersprüchlich ⇒ null.
+     *
+     * @param  list<string>  $treffer  kanonische Zustände
+     */
+    public static function zustandAusTreffern(array $treffer): ?string
+    {
+        $t = array_values(array_unique($treffer));
+        if (count($t) === 1) {
+            return $t[0];
+        }
+        $behandlung = array_values(array_intersect(self::BEHANDLUNG_VORRANG, $t));
+        $rest = array_diff($t, self::BEHANDLUNG, ['TK']);
+
+        return $behandlung !== [] && $rest === [] ? $behandlung[0] : null;
+    }
+
+    /**
+     * TK-Ware? Der Zustand selbst oder — bei einer Behandlung als Zustand (v3.6.0 2b) — das Wort TK/tiefgekühlt im Namen bzw. in der
+     * Verarbeitung. Überall, wo TK zählt (Lagerzone, TK-Vorzug, Teilfertig-Erkennung), statt nur `condition === 'TK'`.
+     */
+    public static function istTk(?string $condition, ?string $name = null, ?string $processing = null): bool
+    {
+        if (mb_strtoupper(trim((string) $condition)) === 'TK') {
+            return true;
+        }
+        foreach ([$name, $processing] as $text) {
+            if ($text !== null && preg_match('/(?<![\p{L}])(?:TK|tiefgek(?:ue|ü)hlt)(?![\p{L}])/iu', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Schreibweisen, die auf einen kanonischen Zustand normalisiert werden (Eingang, kleingeschrieben). */
+    private const ZUSTAND_ALIAS = [
+        'tiefgekuehlt' => 'TK', 'tiefgekühlt' => 'TK', 'tk' => 'TK',
+        'gepoekelt' => 'gepökelt', 'geraeuchert' => 'geräuchert', 'luftgetrocknet' => 'luftgetrocknet',   // ASCII-Eingabe → Kanon mit Umlaut
+    ];
+
+    /** Zustands-Filter (Lager, Inventur): gleicher Zustand — beim Filter TK auch TK als Zusatz im Namen (v3.6.0 2b). */
+    public static function zustandPasst(?string $zustand, string $name, string $filter): bool
+    {
+        return mb_strtolower(trim((string) $zustand)) === mb_strtolower(trim($filter))
+            || (mb_strtoupper(trim($filter)) === 'TK' && self::istTk($zustand, $name));
+    }
+
+    /**
+     * §9-Vokabular in ASCII-Schreibweise → Kanon mit echten Umlauten (Dominique 19.10.). Nur ganze Wörter in Verarbeitung/Form/Pflichtangabe;
+     * die Hauptzutat stellt der Daten-Umbau (Wortliste Klaus) um, nicht der Code.
+     */
+    private const UMLAUT_KANON = [
+        'wuerfel' => 'Würfel', 'stueck' => 'Stück', 'mittelstueck' => 'Mittelstück', 'roeschen' => 'Röschen', 'pueree' => 'Püree',
+        'geschaelt' => 'geschält', 'pueriert' => 'püriert', 'pulverfoermig' => 'pulverförmig', 'fluessig' => 'flüssig', 'gehaeutet' => 'gehäutet',
+        'geraeuchert' => 'geräuchert', 'gepoekelt' => 'gepökelt', 'tiefgekuehlt' => 'tiefgekühlt', 'gekuehlt' => 'gekühlt', 'haelften' => 'Hälften',
+        'gewuerfelt' => 'gewürfelt', 'gerieben' => 'gerieben', 'gefuellt' => 'gefüllt', 'suess' => 'süß',
+    ];
+
+    /** ASCII-Schreibweisen des Vokabulars in einem Text auf den Umlaut-Kanon setzen (Wortgrenzen, nur bekannte Wörter). */
+    public static function umlautKanon(string $text): string
+    {
+        return (string) preg_replace_callback('/(?<![\p{L}])(\p{L}+)(?![\p{L}])/u', function ($m) {
+            $k = self::UMLAUT_KANON[mb_strtolower($m[1])] ?? null;
+            if ($k === null) {
+                return $m[1];
+            }
+            // Großschreibung des Originals behalten, wenn der Kanon klein ist (Satzanfang) — sonst die Kanon-Schreibung (Nomen groß)
+            return mb_strtolower(mb_substr($k, 0, 1)) === mb_substr($k, 0, 1) && mb_strtoupper(mb_substr($m[1], 0, 1)) === mb_substr($m[1], 0, 1)
+                ? mb_strtoupper(mb_substr($k, 0, 1)) . mb_substr($k, 1) : $k;
+        }, $text);
+    }
+
+    /** Das Vokabular als Text für Prompts, Tool-Beschreibungen und Fehlermeldungen (`frisch|TK|…`). */
+    public static function zustandListe(string $trenner = '|'): string
+    {
+        return implode($trenner, self::ZUSTAND_VOCAB);
+    }
+
+    /** Regex-Alternation aller Zustandswörter samt Schreibweisen (ohne Gruppenklammern), für Wortgrenzen-Suche im Namen. */
+    public static function zustandMuster(): string
+    {
+        return implode('|', array_map(fn (string $w) => preg_quote($w, '/'), array_unique([...self::ZUSTAND_VOCAB, ...array_keys(self::ZUSTAND_ALIAS)])));
+    }
 
     /*
      * §7.1 Verpackungswörter und §10 Platzhalter-Marker („generisch") sind seit Spec 81 Regeln als Daten
@@ -31,18 +128,22 @@ class GpNamingService
      * konkurrierte im Matcher punktgleich mit »Apfel Royal Gala«; Dominique: »generisch darf gar nicht benannt
      * werden« — darum ein harter Fehler beim Namen, nicht erst ein Befund im Critic.
      *
-     * Das Zustands-Vokabular bleibt hier Code: die Datenbank erzwingt es per CHECK, eine Regel könnte es nie ändern.
+     * Das Zustands-Vokabular bleibt hier Code (ZUSTAND_VOCAB): der Validator erzwingt es, eine Regel als Daten könnte es nie ändern.
      */
 
     public function __construct(private TokenEngine $engine)
     {
     }
 
-    /** KANONISCH (gp_key/main_ingredient_slug) — byte-identisch zu commands.rs:2471 (I6). */
+    /**
+     * KANONISCH (gp_key/main_ingredient_slug). Seit 19.10. (Dominique: GP-Namen mit echten Umlauten) EINHEITLICH ü→ue, ö→oe, ä→ae, ß→ss —
+     * vorher ü→u (Rust-Erbe), damit ergaben „Karottenpüree“ und „Karottenpueree“ verschiedene Kennungen und UNIQUE fing die Dublette nicht.
+     * ASCII-Bestandskennungen bleiben unverändert.
+     */
     public function slugify(string $s): string
     {
         $s = mb_strtolower($s);
-        $s = strtr($s, ['ä' => 'a', 'ö' => 'o', 'ü' => 'u', 'ß' => 's']);   // EIN Zeichen — nicht ae/oe/ue/ss!
+        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
         $s = preg_replace('/[^\p{L}\p{N}]+/u', '_', $s);                     // Unicode-Buchstaben (é, è) bleiben
         $s = preg_replace('/_+/', '_', $s);
 
@@ -88,8 +189,17 @@ class GpNamingService
             return null;
         }
         $z = trim($condition);
+        $klein = mb_strtolower($z);
+        if (isset(self::ZUSTAND_ALIAS[$klein])) {
+            return self::ZUSTAND_ALIAS[$klein];
+        }
+        foreach (self::ZUSTAND_VOCAB as $kanon) {
+            if (mb_strtolower($kanon) === $klein) {
+                return $kanon;   // Schreibweise vereinheitlichen (Frisch → frisch, Geräuchert → geräuchert)
+            }
+        }
 
-        return in_array(mb_strtolower($z), ['tiefgekuehlt', 'tiefgekühlt'], true) ? 'TK' : $z;
+        return $z;
     }
 
     /**
@@ -115,10 +225,13 @@ class GpNamingService
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
         $pflicht = [];
+        $tkZusatz = false;
         foreach ($teile as $teil) {
             $zustand = $this->normalisiereZustand($teil);
             if ($out['condition'] === '' && $zustand !== null && in_array($zustand, self::ZUSTAND_VOCAB, true)) {
                 $out['condition'] = $zustand;
+            } elseif ($zustand === 'TK' && in_array($out['condition'], self::BEHANDLUNG, true)) {
+                $tkZusatz = true;   // v3.6.0 2b: „geraeuchert, TK, …“ — TK als Zusatz, steht vorn in der Verarbeitung
             } elseif (mb_strtolower($teil) === 'bio') {
                 $out['bio'] = true;
             } elseif (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
@@ -140,6 +253,11 @@ class GpNamingService
             }
         }
         $out['pflichtangabe'] = implode(', ', $pflicht);
+        if ($tkZusatz) {
+            // renderGpName zeigt processing ODER form — TK muss in den gezeigten Teil, die Form bleibt in ihrer Spalte erhalten
+            $mitte = $out['processing'] !== '' ? $out['processing'] : $out['form'];
+            $out['processing'] = $mitte === '' ? 'TK' : 'TK, ' . $mitte;
+        }
 
         return $out;
     }
@@ -172,13 +290,13 @@ class GpNamingService
         }
         $mid = ($in['processing'] ?? null) ?: ($in['form'] ?? null);       // processing gewinnt (spezifischer)
         if ($mid) {
-            $parts[] = $mid;
+            $parts[] = self::umlautKanon((string) $mid);                  // „Wuerfel 10 mm" → „Würfel 10 mm" (Kanon mit Umlaut)
         }
         if (! empty($in['portion'])) {
             $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stück';        // „660 g pro Stück" (echter Umlaut im GP-Namen; kein „Portion", Leerzeichen vor der Einheit)
         }
         if (! empty($in['pflichtangabe'])) {
-            $parts[] = $in['pflichtangabe'];
+            $parts[] = self::umlautKanon((string) $in['pflichtangabe']);
         }
 
         $hauptzutat = trim($in['hauptzutat'] ?? '');
@@ -210,8 +328,8 @@ class GpNamingService
         if ($this->istNonFood($in)) {
             // Non-Food: eigenes, schlankes Schema (§6.4). Die Lebensmittel-Namensregeln (Zustand, Pflichtangaben) gelten nicht;
             // Lebensmittel-Zustandswörter im Namen sind ein Hinweis (Anti-Pattern), kein Blocker.
-            if (preg_match('/(?<![\p{L}])(frisch|TK|tiefgek(ue|ü)hlt|trocken|konserviert)(?![\p{L}])/u', $name) === 1) {
-                $warnings[] = 'Non-Food braucht keinen Zustand (frisch/TK/trocken/konserviert) — Schema: Produkt: Eigenschaft, Größe.';
+            if (preg_match('/(?<![\p{L}])(' . self::zustandMuster() . ')(?![\p{L}])/u', $name) === 1) {
+                $warnings[] = 'Non-Food braucht keinen Zustand (' . self::zustandListe('/') . ') — Schema: Produkt: Eigenschaft, Größe.';
             }
 
             return ['errors' => $errors, 'warnings' => $warnings];

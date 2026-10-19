@@ -38,6 +38,7 @@ class TokenEngine
         'frisch', 'roh', 'tiefgek', 'gefror', 'konserv', 'getrock', 'trocken', 'eingelegt', 'haltbar',
         'stueckig', 'mini', 'baby', 'gross', 'klein', 'fein', 'grob', 'ganz', 'bio', 'gemischt', 'geschael',
         'gegart', 'gekocht', 'verzehrfertig',
+        'gepoek', 'geraeuch', 'luftgetrock',   // Regelwerk GP v3.6.0 §9 (Tokens sind ae/oe/ue-normalisiert)
     ];
 
     /** rs:181–200 — Tokens als MENGE (dedupe), nur Länge ≥ 2; Akzente bleiben (A-5!). */
@@ -75,8 +76,8 @@ class TokenEngine
 
     /**
      * §9-Zustandswörter aus freiem Text — Wort-Boundary wie GpZustandBackfillCommand::MUSTER
-     * (dieselbe Quelle: Regelwerk_Grundprodukte.md §9 „frisch, tiefgekuehlt (TK), trocken,
-     * konserviert"). Mehrdeutigkeit (mehr als ein Zustand im selben Text) bleibt KONSERVATIV
+     * (dieselbe Quelle: Regelwerk_Grundprodukte.md §9 = GpNamingService::ZUSTAND_VOCAB, seit v3.6.0 mit
+     * gepökelt/geräuchert/luftgetrocknet). Mehrdeutigkeit (mehr als ein Zustand im selben Text) bleibt KONSERVATIV
      * unentschieden statt geraten — dieselbe Politik wie der Backfill.
      */
     private const ZUSTAND_MUSTER = [
@@ -84,6 +85,10 @@ class TokenEngine
         'TK' => '/\btk\b|\btiefgek(?:ue|ü)hlt\w*\b|\bgefroren\w*\b/iu',
         'trocken' => '/\btrocken\w*\b|\bgetrocknet\w*\b/iu',
         'konserviert' => '/\bkonserviert\w*\b/iu',
+        // Regelwerk GP v3.6.0 §9: Behandlungs-Zustände; mehrere ⇒ Vorrang (GpNamingService::zustandAusTreffern)
+        'gepökelt' => '/\bgep(?:oe|ö)kelt\w*\b/iu',            // Schlüssel = Kanon mit Umlaut, Muster nimmt beide Schreibweisen
+        'geräuchert' => '/\bger(?:ae|ä)uchert\w*\b/iu',
+        'luftgetrocknet' => '/\bluftgetrocknet\w*\b/iu',
     ];
 
     /**
@@ -130,9 +135,10 @@ class TokenEngine
                 $zustandTreffer[] = $zustand;
             }
         }
-        // Mehrdeutig (z. B. „TK, getrocknet") ⇒ kein Zustand gesetzt — Raten wäre hier
+        // Widersprüchlich (z. B. „TK, getrocknet") ⇒ kein Zustand gesetzt — Raten wäre hier
         // schlimmer als ungeprüft lassen (identische Politik zu GpZustandBackfillCommand).
-        $zustand = count($zustandTreffer) === 1 ? $zustandTreffer[0] : null;
+        // v3.6.0 (Dominique 19.10.): mehrere Behandlungen ⇒ Vorrang, TK + Behandlung ⇒ Behandlung; echt widersprüchlich ⇒ null
+        $zustand = \Platform\FoodAlchemist\Services\GpNamingService::zustandAusTreffern($zustandTreffer);
 
         $form = null;
         foreach (self::FORM_MUSTER as $kandidat => $muster) {

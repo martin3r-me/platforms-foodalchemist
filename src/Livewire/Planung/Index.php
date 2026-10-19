@@ -381,16 +381,16 @@ class Index extends Component
 
     /**
      * Frische-Erlaubnis-Liste (L1.5, Multi-Select): UI-Slug => Label. Nichts angehakt = egal (kein
-     * Zustands-Filter). Angehakt = harte Erlaubnis auf `gps.condition` (raw-Werte frisch|TK|trocken|
-     * konserviert). Deckt endlich »trocken« ab (§9, 1.301 GPs) — im Gegensatz zum alten 3-Wert-Hook.
+     * Zustands-Filter). Angehakt = harte Erlaubnis auf `gps.condition` (raw-Werte §9, seit v3.6 auch die drei
+     * Behandlungen). Deckt endlich »trocken« ab (§9, 1.301 GPs) — im Gegensatz zum alten 3-Wert-Hook.
      */
     public const FRISCHE_OPTIONEN = [
-        'frisch' => 'Frisch', 'tk' => 'TK', 'trocken' => 'Trocken', 'konserve' => 'Konserve/haltbar',
+        'frisch' => 'Frisch', 'tk' => 'TK', 'trocken' => 'Trocken', 'konserve' => 'Konserve/haltbar', 'behandelt' => 'Gepökelt/geräuchert/luftgetrocknet',
     ];
 
-    /** UI-Slug => roher `gps.condition`-Wert (für den Post-Match-Zustands-Filter, spiegelt §9). */
+    /** UI-Slug => roher `gps.condition`-Wert bzw. Werte (für den Post-Match-Zustands-Filter, spiegelt §9). @var array<string, string|list<string>> */
     public const FRISCHE_CONDITION = [
-        'frisch' => 'frisch', 'tk' => 'TK', 'trocken' => 'trocken', 'konserve' => 'konserviert',
+        'frisch' => 'frisch', 'tk' => 'TK', 'trocken' => 'trocken', 'konserve' => 'konserviert', 'behandelt' => \Platform\FoodAlchemist\Services\GpNamingService::BEHANDLUNG,
     ];
 
     /**

@@ -217,7 +217,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
      * Gerichts — 1 kg Trockentomate entspricht grob 8–14 kg Frischware.
      *
      * Geprüft wird gegen NAME + `processing` + `form`, nicht gegen `condition`: `condition`
-     * trägt nur die vier §9-Zustände (frisch|TK|trocken|konserviert), und „getrocknet" steckt
+     * trägt nur die §9-Zustände (GpNamingService::ZUSTAND_VOCAB), und „getrocknet" steckt
      * in der Verarbeitung. GP 13757 („Tomaten: TK, getrocknet") hat sogar `condition = NULL` —
      * ein zustand-basierter Check wäre dort blind.
      */

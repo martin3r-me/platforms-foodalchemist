@@ -144,7 +144,7 @@ final class ZukaufBasisrezeptService
             return null;
         }
         $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
-        if ($gp === null || mb_strtoupper((string) $gp->condition) !== 'TK'
+        if ($gp === null || ! GpNamingService::istTk($gp->condition, (string) $gp->name, (string) $gp->processing)   // v3.6 2b: TK auch als Zusatz
             || ! in_array((string) $gp->commodity_group_code, ['01', '02'], true)) {
             return null;
         }

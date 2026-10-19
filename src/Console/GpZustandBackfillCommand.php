@@ -40,13 +40,17 @@ class GpZustandBackfillCommand extends Command
 
     /**
      * Erkennung im NAMEN. Wort-Boundary, damit „TKühlung" o. ae. nicht traegt; die
-     * Reihenfolge ist irrelevant, weil MEHRDEUTIGKEIT ohnehin zur Ablehnung fuehrt.
+     * Reihenfolge ist irrelevant: Behandlungen entscheidet der Vorrang, echter Widerspruch fuehrt zur Ablehnung.
      */
     private const MUSTER = [
         'frisch' => '/(?<![\p{L}])frisch(?![\p{L}])/u',
         'TK' => '/(?<![\p{L}])(TK|tiefgek(ue|ü)hlt)(?![\p{L}])/u',
         'trocken' => '/(?<![\p{L}])trocken(?![\p{L}])/u',
         'konserviert' => '/(?<![\p{L}])konserviert(?![\p{L}])/u',
+        // Regelwerk GP v3.6.0 §9 — mehrere Behandlungen ⇒ Vorrang, TK + Behandlung ⇒ Behandlung (zustandAusTreffern)
+        'gepökelt' => '/(?<![\p{L}])gep(oe|ö)kelt(?![\p{L}])/u',
+        'geräuchert' => '/(?<![\p{L}])ger(ae|ä)uchert(?![\p{L}])/u',
+        'luftgetrocknet' => '/(?<![\p{L}])luftgetrocknet(?![\p{L}])/u',
     ];
 
     public function handle(GpNamingService $naming): int
@@ -70,8 +74,9 @@ class GpZustandBackfillCommand extends Command
                 }
             }
             $treffer = array_values(array_unique($treffer));
-            if (count($treffer) === 1 && in_array($treffer[0], GpNamingService::ZUSTAND_VOCAB, true)) {
-                $setzbar[] = [$gp, $treffer[0]];
+            $zustand = GpNamingService::zustandAusTreffern($treffer);   // v3.6.0: Vorrang der Behandlungen, TK als Zusatz
+            if ($zustand !== null && in_array($zustand, GpNamingService::ZUSTAND_VOCAB, true)) {
+                $setzbar[] = [$gp, $zustand];
             } elseif (count($treffer) > 1) {
                 $mehrdeutig[] = [$gp, $treffer];
             }
