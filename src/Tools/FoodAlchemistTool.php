@@ -153,6 +153,7 @@ abstract class FoodAlchemistTool
      * M3: Servierform-Slug/Code/Label → id (team-scoped ∪ global, aktiv). null bei leer,
      * RuntimeException mit Verfügbar-Liste bei unbekanntem Wert.
      */
+    // Spec 84 Stufe 4: Ketten hier von Hand (rohe Abfragen) — ab Schalter 4 gekappt wie der Scope (TeamSicht::ketteFuerTabelle)
     protected function resolveServierformId(Team $team, string $wert): ?int
     {
         $wert = trim($wert);
@@ -160,13 +161,13 @@ abstract class FoodAlchemistTool
             return null;
         }
         $id = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
-            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle('foodalchemist_serving_forms', TeamScope::ancestryIds($team))))
             ->where(fn ($q) => $q->where('code', $wert)->orWhereRaw('LOWER(label) = ?', [mb_strtolower($wert)]))
             ->orderByRaw('team_id IS NULL')->orderByDesc('team_id')   // F2: eigene Kopie vor geerbter/globaler Zeile
             ->value('id');
         if ($id === null) {
             $verf = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
-                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle('foodalchemist_serving_forms', TeamScope::ancestryIds($team))))
                 ->orderBy('code')->pluck('code')->unique()->implode(', ');
             throw new \RuntimeException("Unbekannte Servierform \"{$wert}\". Verfügbar: {$verf}");
         }
@@ -182,11 +183,11 @@ abstract class FoodAlchemistTool
             return null;
         }
         $id = DB::table($tabelle)->whereNull('deleted_at')->where('is_inactive', false)
-            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle($tabelle, TeamScope::ancestryIds($team))))
             ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('id');
         if ($id === null) {
             $verf = DB::table($tabelle)->whereNull('deleted_at')->where('is_inactive', false)
-                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle($tabelle, TeamScope::ancestryIds($team))))
                 ->orderBy('name')->pluck('name')->implode(', ');
             throw new \RuntimeException("Unbekannt: \"{$name}\". Verfügbar: {$verf}");
         }

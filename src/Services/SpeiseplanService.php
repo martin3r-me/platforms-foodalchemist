@@ -2566,7 +2566,8 @@ class SpeiseplanService
         // Warengruppen-Namen in EINER Query auflösen.
         $namen = [];
         if ($wg !== []) {
-            $namen = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::whereIn('id', array_keys($wg))
+            // Spec 84 Stufe 4: gespeicherte Verweise der Gerichte (auch Abo-Gerichte mit Master-HG) — Label wie die Relation ('verweis')
+            $namen = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::ohneTeamSicht('verweis')->whereIn('id', array_keys($wg))
                 ->pluck('label', 'id')->all();
         }
         arsort($wg);

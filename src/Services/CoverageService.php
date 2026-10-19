@@ -641,7 +641,8 @@ class CoverageService
                 if ($ist === null && $slot !== null) {
                     return []; // Saison ist owner-weit — Slot-Ebene nicht sinnvoll
                 }
-                $name = FoodAlchemistSaison::find($rule->ref_id)?->name ?? ('Saison #' . $rule->ref_id);
+                // Spec 84 Stufe 4: Regel eines Abo-Formats/-Konzepts trägt die Master-Saison — Name wie die Relation ('verweis')
+                $name = FoodAlchemistSaison::ohneTeamSicht('verweis')->find($rule->ref_id)?->name ?? ('Saison #' . $rule->ref_id);
                 $drin = in_array((int) $rule->ref_id, $ist['saison_ids'] ?? [], true);
 
                 return [$this->befund('saison', null, 'Saison-Abdeckung', $name, $drin ? 'abgedeckt' : 'fehlt',

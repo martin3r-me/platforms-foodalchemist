@@ -62,7 +62,10 @@ class StandortService
             return null;
         }
 
-        return FoodAlchemistOutlet::whereIn('team_id', $this->rechte->teamKette($team))->where('is_inactive', false)->find($outletId);
+        // Spec 84 Stufe 4: Kette ab Schalter 4 nur bis zur Kundengrenze (nie der Betrieb des Masters beim Mandanten darunter)
+        $kette = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(FoodAlchemistOutlet::class, $this->rechte->teamKette($team));
+
+        return FoodAlchemistOutlet::whereIn('team_id', $kette)->where('is_inactive', false)->find($outletId);
     }
 
     /** Oberteam ordnet einem Unter-Team einen seiner Betriebe zu (null = Standard, erbt komplett). FA-Admin des Oberteams. */

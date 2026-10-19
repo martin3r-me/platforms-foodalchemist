@@ -480,7 +480,7 @@ class PlanningFrameService
 
         return match ($rule->rule_type) {
             'diet_quota' => "Diät-Quote: {$op} {$menge} {$rule->ref_key}",
-            'season_coverage' => 'Saison-Abdeckung: ' . (FoodAlchemistSaison::find($rule->ref_id)?->name ?? "Saison #{$rule->ref_id}"),
+            'season_coverage' => 'Saison-Abdeckung: ' . (FoodAlchemistSaison::ohneTeamSicht('verweis')->find($rule->ref_id)?->name ?? "Saison #{$rule->ref_id}"),
             'nogo_ingredient' => "No-Go ({$rule->severity}): {$rule->value_text}",
             'nogo_allergen' => "No-Go-Allergen ({$rule->severity}): {$rule->ref_key}",
             'allergen_line' => "Allergen-Linie: {$rule->value_text}",
