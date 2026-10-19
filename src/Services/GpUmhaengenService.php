@@ -318,6 +318,9 @@ class GpUmhaengenService
 
                     continue;
                 }
+                if ($a['aktion'] === 'gp_aufloesen') {
+                    continue;   // läuft erst in 2b, nach allen Einzel-Umhängungen
+                }
                 $ziel = match ($a['aktion']) {
                     'umhaengen' => $a['gp_neu'],
                     'neues_gp' => $neueIds[$a['neu_schluessel']] ?? null,
