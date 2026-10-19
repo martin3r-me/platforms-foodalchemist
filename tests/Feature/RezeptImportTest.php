@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
+use Platform\FoodAlchemist\Livewire\Planung\RezeptImport;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
@@ -127,7 +128,7 @@ it('#6: Import mit leerem Namen (Quelle ohne Titel) → Nachfassen statt namenlo
         'preparation' => '', 'komponenten' => [],
     ]);
 
-    Livewire::test(PlanungIndex::class)
+    Livewire::test(RezeptImport::class)
         ->set('importText', '500 g Rindergulasch')
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
@@ -189,10 +190,9 @@ it('Import-Tab: Foto-Upload geht als Bild an die KI, die Vorschau warnt „aus F
         ->andReturn(new AiProposal(['typ' => 'basisrezept', 'name' => 'Pesto vom Foto',
             'zutaten' => [['text' => 'Basilikum', 'quantity' => 50, 'unit' => 'g']], 'preparation' => 'Mixen.', 'komponenten' => []], 0.8, 'Mock', [], 'extract-bild')));
 
-    // Die Tab-Region rendert nur mit aktiver Session (@if($active)) — wie im Layout-Fix-Test oben.
+    // Spec 85 C1 PR-1: der Import ist ein eigenes Kind; die Session kommt als reaktive Prop vom Parent.
     $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Foto-Import', 'brief' => 'x']);
-    Livewire::test(PlanungIndex::class)
-        ->set('sessionId', $session->id)
+    Livewire::test(RezeptImport::class, ['sessionId' => $session->id])
         ->set('importPdf', \Illuminate\Http\UploadedFile::fake()->image('rezeptkarte.jpg', 800, 600))
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
@@ -214,8 +214,7 @@ it('Import-Tab: Scan-PDF ohne Text geht als Datei an die KI (Text-PDF weiter gü
         ."3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n160\n%%EOF\n";
 
     $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Scan-Import', 'brief' => 'x']);
-    Livewire::test(PlanungIndex::class)
-        ->set('sessionId', $session->id)
+    Livewire::test(RezeptImport::class, ['sessionId' => $session->id])
         ->set('importPdf', \Illuminate\Http\UploadedFile::fake()->createWithContent('kochbuch-scan.pdf', $scan))
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
@@ -231,7 +230,7 @@ it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft + Worker-
         'preparation' => 'Mixen.', 'komponenten' => [],
     ]);
 
-    Livewire::test(PlanungIndex::class)
+    Livewire::test(RezeptImport::class)
         ->set('importText', '50 g Basilikum, mixen.')
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
@@ -246,7 +245,7 @@ it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft + Worker-
 });
 
 it('#6 Import-Vorschau rendert die Bezeichnungs-Spalte (Layout-Fix — vorher kollabiert)', function () {
-    // Die Tab-Region rendert nur mit aktiver Session (@if($active)); auf demo IST der User in einer.
+    // Spec 85 C1 PR-1: der Import ist ein eigenes Kind; die Session kommt als reaktive Prop vom Parent.
     $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
         ->create($this->rootTeam, ['title' => 'Import-Test', 'brief' => 'x']);
 
@@ -256,8 +255,7 @@ it('#6 Import-Vorschau rendert die Bezeichnungs-Spalte (Layout-Fix — vorher ko
         'preparation' => '', 'komponenten' => [],
     ]);
 
-    Livewire::test(PlanungIndex::class)
-        ->set('sessionId', $session->id)
+    Livewire::test(RezeptImport::class, ['sessionId' => $session->id])
         ->set('importText', '500 g Rindfleisch aus der Keule')
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
@@ -278,10 +276,60 @@ it('#6: der Extrakt überschreibt NICHT die explizite Typ-Vorauswahl des Users',
         'preparation' => 'Schmoren.', 'komponenten' => [],
     ]);
 
-    Livewire::test(PlanungIndex::class)
+    Livewire::test(RezeptImport::class)
         ->set('importTyp', 'basisrezept')             // explizite Wahl im Eingabe-Schritt
         ->set('importText', '500 g Rindfleisch')
         ->call('importExtrahieren')
         ->assertSet('importStep', 'vorschau')
         ->assertSet('importTyp', 'basisrezept');       // bleibt — kein stiller Switch auf „gericht"
+});
+
+// ── Spec 85 C1 PR-1: Import als eigenes Kind — Übergabe an den Parent ──────────────
+
+it('C1 PR-1: nach der Anlage meldet das Kind planung.import-angelegt (nur mit Session) und recipe-gespeichert', function () {
+    Queue::fake();
+    ($this->mockExtract)([
+        'typ' => 'basisrezept', 'name' => 'Pesto',
+        'zutaten' => [['text' => 'Basilikum', 'quantity' => 50, 'unit' => 'g']],
+        'preparation' => 'Mixen.', 'komponenten' => [],
+    ]);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Import', 'brief' => 'x']);
+
+    Livewire::test(RezeptImport::class, ['sessionId' => $session->id])
+        ->set('importText', '50 g Basilikum, mixen.')
+        ->call('importExtrahieren')
+        ->call('importAnlegen')
+        ->assertSet('importStep', 'fertig')
+        ->assertDispatched('planung.import-angelegt')
+        ->assertDispatched('recipe-gespeichert');
+
+    // Ohne Session gibt es keinen Lauf des Parents nachzuladen.
+    Livewire::test(RezeptImport::class)
+        ->set('importText', '50 g Basilikum, mixen.')
+        ->call('importExtrahieren')
+        ->call('importAnlegen')
+        ->assertSet('importStep', 'fertig')
+        ->assertNotDispatched('planung.import-angelegt');
+});
+
+it('C1 PR-1: der Parent zieht auf planung.import-angelegt den neuen Import-Lauf nach (Worker-Reiter)', function () {
+    Queue::fake();
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Import', 'brief' => 'x']);
+    $recipe = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'imp-c1', 'name' => 'Import: C1', 'status' => 'draft']);
+
+    $parent = Livewire::test(PlanungIndex::class)->set('sessionId', $session->id)->assertSet('laufId', null);
+    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->enrichBestehendesRezept($this->rootTeam, (int) $recipe->id, false, $session->id);
+    $lauf = FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->latest('id')->firstOrFail();
+
+    $parent->dispatch('planung.import-angelegt')->assertSet('laufId', (int) $lauf->id);
+});
+
+it('C1 PR-1: der Parent rendert den Import-Reiter als Kind (kein Import-Zustand mehr im Parent)', function () {
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Import', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)->set('sessionId', $session->id)
+        ->assertSeeLivewire(RezeptImport::class);
+
+    expect(property_exists(PlanungIndex::class, 'importStep'))->toBeFalse()
+        ->and(method_exists(PlanungIndex::class, 'importExtrahieren'))->toBeFalse();
 });
