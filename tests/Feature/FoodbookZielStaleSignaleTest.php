@@ -5,7 +5,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Services\DataQualityService;
 use Platform\FoodAlchemist\Services\PlanningFrameService;
-use Platform\FoodAlchemist\Services\VkSnapshotService;
+use Platform\FoodAlchemist\Services\AusgabeDriftService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -21,8 +21,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  *    Gemeldet wird nur die rote Lage, „3 von 5 da" bleibt Arbeitsstand.
  * 2. **`foodbook_stale` hat eine EIGENE, dritte Arbeitsmenge** — nur freigegebene Bücher.
  *    In der Phase `kalkulation` sollen Preise sich bewegen; dort zu alarmieren wäre genau
- *    das Über-Flaggen aus Spec 21 §9. Die Drift-Schwelle selbst kommt unverändert aus
- *    `VkSnapshotService::pending` (dieselbe Wahrheit wie `vk_anpassung_empfohlen`).
+ *    das Über-Flaggen aus Spec 21 §9. Die Drift selbst kommt aus `AusgabeDriftService` (veröffentlichter Link gegen
+ *    Live-VK, Spec 85 F5) — dieselbe Wahrheit wie `vk_anpassung_empfohlen`.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -30,9 +30,8 @@ beforeEach(function () {
     $this->frames = app(PlanningFrameService::class);
 
     /**
-     * Ein VK-Gericht mit Standard-Darreichung — die Preis-Wahrheit hängt an der
-     * Darreichung, der VK-Snapshot ebenfalls (`presentation_id`). Als gebundene Closure
-     * statt freier Funktion, weil die Fixture-Helfer des Traits protected sind.
+     * Ein VK-Gericht mit Standard-Darreichung (Preis-Wahrheit an der Darreichung). Als gebundene Closure statt freier
+     * Funktion, weil die Fixture-Helfer des Traits protected sind.
      *
      * @return array{0:\Platform\FoodAlchemist\Models\FoodAlchemistRecipe,1:FoodAlchemistRecipeDarreichung}
      */
@@ -144,34 +143,43 @@ it('flaggt eine gerissene Kapitel-Preisspanne, nicht aber eine Anker-Abweichung'
 });
 
 // ── foodbook_stale ──────────────────────────────────────────────────────
+// Spec 85 F5 (Dominique 19.10.): Quelle ist die Ausgabe-Drift des veröffentlichten Links ({@see AusgabeDriftService}); ob ein
+// Link driftet, prüft AusgabeDriftTest end-to-end. Hier: welche Bücher daraus als „überholt" gelten (dritte Arbeitsmenge).
 
-it('flaggt ein freigegebenes Buch, dessen Gericht den freigegebenen VK verlassen hat', function () {
+/** AusgabeDrift liefert für das Team die genannten Ausgaben als gedriftet (doc_type => [ids]). */
+function fzDrift(object $test, array $jeTeam): void
+{
+    $mock = Mockery::mock(AusgabeDriftService::class);
+    app()->instance(AusgabeDriftService::class, $mock);
+    $mock->shouldReceive('abgedriftet')->andReturnUsing(
+        function (\Platform\Core\Models\Team $team) use ($jeTeam) {
+            $out = [];
+            foreach ($jeTeam[(int) $team->id] ?? [] as [$typ, $id]) {
+                $out[] = ['ref_type' => $typ, 'ref_id' => $id, 'doc_type' => $typ, 'doc_id' => $id, 'label' => 'x', 'dedup_key' => "d-{$typ}-{$id}",
+                    'outlet_id' => null, 'zeilen' => [['label' => 'G', 'frozen' => 30.0, 'live' => 36.0, 'delta_pct' => 20.0, 'richtung' => 'erhoehen']], 'max_delta_pct' => 20.0];
+            }
+
+            return $out;
+        });
+    $test->dq = app(DataQualityService::class);
+}
+
+it('flaggt ein freigegebenes Buch, dessen veröffentlichter Link Preise neben der Kalkulation zeigt', function () {
     $fb = $this->makeFoodbook($this->rootTeam, 'Beim Kunden', ['status' => 'versendet']);
-    [$gericht, $darr] = ($this->gerichtMitVk)('Rinderfilet', 30.00);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['sales_recipe_id' => $gericht->id]);
 
-    app(VkSnapshotService::class)->release($this->rootTeam, [$darr->id]);   // 30 € eingefroren
-
-    // Solange live = freigegeben, ist nichts überholt.
+    fzDrift($this, []);   // Link deckungsgleich
     expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(0);
 
-    $darr->update(['sales_net' => 36.00]);                                  // +20 % > Leitplanke 5 %
-
+    fzDrift($this, [$this->rootTeam->id => [['foodbook', $fb->id]]]);
     $m = fzMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'foodbook_stale');
     expect($m['wert'])->toBe(1)
         ->and($m['signal']['typ'])->toBe(SignalTyp::FoodbookStale)
-        ->and(array_column($this->dq->betroffene($this->rootTeam, 'foodbook_stale'), 'name'))
-        ->toBe(['Beim Kunden']);
+        ->and(array_column($this->dq->betroffene($this->rootTeam, 'foodbook_stale'), 'name'))->toBe(['Beim Kunden']);
 });
 
 it('lässt ein Buch in der Kalkulation in Ruhe — dort sollen Preise sich bewegen', function () {
-    // Für `foodbook_kapitel_leer` zählt Phase `kalkulation` als in Gebrauch; für „überholt"
-    // ausdrücklich nicht. Genau das trennt die dritte Arbeitsmenge.
     $fb = $this->makeFoodbook($this->rootTeam, 'In Kalkulation', ['status' => 'draft', 'phase' => 'kalkulation']);
-    [$gericht, $darr] = ($this->gerichtMitVk)('Lachs', 20.00);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['sales_recipe_id' => $gericht->id]);
-    app(VkSnapshotService::class)->release($this->rootTeam, [$darr->id]);
-    $darr->update(['sales_net' => 40.00]);
+    fzDrift($this, [$this->rootTeam->id => [['foodbook', $fb->id]]]);
 
     expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(0);
 
@@ -180,53 +188,16 @@ it('lässt ein Buch in der Kalkulation in Ruhe — dort sollen Preise sich beweg
     expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(1);
 });
 
-it('meldet ohne je erteilte VK-Freigabe nichts — kein Kundenpreis, keine Abweichung', function () {
-    $fb = $this->makeFoodbook($this->rootTeam, 'Nie freigegeben');
-    [$gericht, $darr] = ($this->gerichtMitVk)('Wolfsbarsch', 22.00);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['sales_recipe_id' => $gericht->id]);
-
-    $darr->update(['sales_net' => 44.00]);   // Live springt, aber es gab nie einen Snapshot.
+it('Drift an einer anderen Ausgabe mit derselben ID (Speisekarte, Angebot) trifft das Buch nicht', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Beim Kunden', ['status' => 'versendet']);
+    fzDrift($this, [$this->rootTeam->id => [['speisekarte', $fb->id], ['angebot', $fb->id]]]);
 
     expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(0);
 });
 
-it('sieht auch Gerichte, die nur über einen Konzept-Block im Buch hängen', function () {
-    // Spec-19-Duality: ein Paket bringt seine Gerichte genauso ins Dokument wie ein
-    // recipe_ref — ohne diesen Weg wäre jedes paket-basierte Buch blind für Preis-Drift.
-    $fb = $this->makeFoodbook($this->rootTeam, 'Paket-Buch');
-    $konzept = $this->makeConcept($this->rootTeam, 'Flying Buffet');
-    [$gericht, $darr] = ($this->gerichtMitVk)('Tatar', 9.00);
-    $this->makeConceptSlot($konzept, ['sales_recipe_id' => $gericht->id]);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['type' => 'concept_ref', 'concept_id' => $konzept->id]);
-
-    app(VkSnapshotService::class)->release($this->rootTeam, [$darr->id]);
-    $darr->update(['sales_net' => 12.00]);
-
-    expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(1);
-});
-
-it('zählt einen ausgeschalteten Block nicht mit — er landet nicht im Kundendokument', function () {
-    $fb = $this->makeFoodbook($this->rootTeam, 'Ausgeschaltet');
-    [$gericht, $darr] = ($this->gerichtMitVk)('Wachtel', 15.00);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['sales_recipe_id' => $gericht->id, 'visible' => false]);
-
-    app(VkSnapshotService::class)->release($this->rootTeam, [$darr->id]);
-    $darr->update(['sales_net' => 25.00]);
-
-    expect($this->dq->countFor($this->rootTeam, 'foodbook_stale'))->toBe(0);
-});
-
-it('löst beide neuen Typen am Objekt auf und scopet sie aufs Team', function () {
+it('löst den Typ am Objekt auf und scopet ihn aufs Team', function () {
     $fb = $this->makeFoodbook($this->childA, 'Kind-A-Buch', ['status' => 'versendet']);
-    $sf = FoodAlchemistServierform::firstOrCreate(['code' => 'unbestimmt', 'team_id' => $this->childA->id], ['label' => 'Unbestimmt']);
-    $gericht = $this->makeRecipe($this->childA, 'Bries', ['is_sales_recipe' => true, 'sales_wording_standard' => 'Bries', 'sales_net' => 18.0]);
-    $darr = FoodAlchemistRecipeDarreichung::create([
-        'team_id' => $this->childA->id, 'recipe_id' => $gericht->id, 'serving_form_id' => $sf->id,
-        'is_standard' => true, 'sales_net' => 18.0,
-    ]);
-    $this->makeFoodbookBlock($this->makeChapter($fb), ['sales_recipe_id' => $gericht->id]);
-    app(VkSnapshotService::class)->release($this->childA, [$darr->id]);
-    $darr->update(['sales_net' => 25.0]);
+    fzDrift($this, [$this->childA->id => [['foodbook', $fb->id]]]);
 
     expect($this->dq->trifftObjekt($this->childA, 'foodbook_stale', 'foodbook', $fb->id))->toBeTrue()
         // Der kind muss passen — dieselbe ID als Konzept gelesen darf nie treffen.

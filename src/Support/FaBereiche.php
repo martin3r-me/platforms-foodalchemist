@@ -85,7 +85,7 @@ final class FaBereiche
         ['standort_inhalte', 'controlling'], ['sammlungen', 'rezepte'], ['inhalte', 'rezepte'],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)
         ['einkauf_', 'controlling'], ['sales_', 'controlling'], ['benchmark', 'controlling'], ['menu_engineering', 'controlling'],
-        ['simulation', 'controlling'], ['coverage', 'controlling'],
+        ['simulation', 'controlling'], ['coverage', 'controlling'], ['ausgabe_drift', 'controlling'],
         // Übersicht
         ['signal', 'uebersicht'], ['signale', 'uebersicht'],
         // Einkauf
@@ -107,7 +107,7 @@ final class FaBereiche
         ['concept', 'concepter'], ['composer', 'concepter'], ['format', 'concepter'], ['paket', 'concepter'], ['baustein', 'concepter'],
         ['zielgruppen', 'concepter'], ['portfolio', 'concepter'], ['proportion', 'concepter'],
         // Rezepte (inkl. Gerichte, Kalkulation/VK)
-        ['recipe', 'rezepte'], ['verkaufsrezepte', 'rezepte'], ['dish', 'rezepte'], ['kalkulation', 'rezepte'], ['vk_snapshots', 'rezepte'],
+        ['recipe', 'rezepte'], ['verkaufsrezepte', 'rezepte'], ['dish', 'rezepte'], ['kalkulation', 'rezepte'],
         ['lab_notes', 'rezepte'], ['reife', 'rezepte'], ['surplus', 'rezepte'], ['quality_run', 'rezepte'], ['anreicherung_vorschlag', 'rezepte'],
         ['datenwerk', 'rezepte'], ['substitution', 'rezepte'], ['machbarkeit', 'rezepte'],
         // Wissen & Trendradar

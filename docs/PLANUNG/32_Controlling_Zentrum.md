@@ -133,8 +133,9 @@ Lageraufbau oder eine falsche Rezeptmenge sein. Das entscheidet die Küche, nich
 
 ## 10. Verzahnung
 
-- **Spec 12/R2.5:** die VK-Batch-Freigabe schließt den dort offenen Slice — `VkSnapshotService`
-  konnte das seit Juli, hatte aber keine UI und war damit faktisch tot.
+- **Spec 12/R2.5:** die VK-Batch-Freigabe ist mit Spec 85 F5 (Dominique 19.10.) entfallen — keine Kundenansicht las den
+  freigegebenen Stand. Kundenschutz ist das Einfrieren beim Veröffentlichen eines Links; das Panel heißt jetzt
+  „Preisänderungen seit Veröffentlichung“ (AusgabeDriftService, Signal `vk_anpassung_empfohlen`).
 - **Spec 12/R2.3:** Menu-Engineering war auf die Q2-Format-Spec gegated. Der Mapping-Wizard löst
   das Gate auf: das Format ist jetzt eine Eingabe, keine Annahme.
 - **Spec 17:** die Bestellschiene bleibt der Handlungsort des Einkäufers; Controlling liefert ihr

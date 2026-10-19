@@ -94,8 +94,8 @@ final class SignalCockpit
             . 'Alternative. Die Entscheidung triffst du.',
         'price.plausi' => 'Ausreißer-Preise gegen den Warengruppen-Median einordnen (Tippfehler / Premium / echt). '
             . 'Vorschlag zur Sichtung — kein stiller Fix.',
-        'signal.vk_release_advice' => 'Freigabe-Empfehlung für die abweichende Live-VK erzeugen — du bestätigst bewusst '
-            . '(kein stiller Kunden-Preissprung).',
+        'signal.vk_release_advice' => 'Empfehlung, ob der veröffentlichte Link mit aktuellen Preisen neu veröffentlicht werden soll — '
+            . 'du entscheidest (kein stiller Kunden-Preissprung).',
         'signal.serving_form_suggest' => 'Passende Servierform je Gericht vorschlagen (KI-Klassifikation nach Bauart) — '
             . 'du bestätigst.',
         'signal.recipe_category_suggest' => 'Passende Kategorie je Rezept vorschlagen (Bauart-Logik „wie gebaut", nicht '
@@ -257,8 +257,8 @@ final class SignalCockpit
             . 'verwerfen. Nach dem Kapitel-Go gehört keine unbelegte Skizze mehr ins Buch.',
         'foodbook_ziel_verfehlt' => 'Belegung im Foodbook oder das Kapitel-Ziel im Planungs-Gerüst angleichen — das '
             . 'Soll stammt aus dem Gerüst, nicht aus dem Buch.',
-        'foodbook_stale' => 'Das Foodbook gegen den freigegebenen VK-Stand aktualisieren. Bei einem Buch, das schon '
-            . 'draußen ist, ist das eine bewusste Freigabe — kein stiller Preissprung beim Kunden.',
+        'foodbook_stale' => 'Den Foodbook-Link mit „Preise aktualisieren“ neu veröffentlichen. Bei einem Buch, das schon '
+            . 'draußen ist, ist das eine bewusste Entscheidung — kein stiller Preissprung beim Kunden.',
         'foodbook_kapitel_ohne_text' => 'Hinführung am Kapitel schreiben (Foodbook → Kapitel → Text) — das Kapitel ist '
             . 'druckbar, nur nicht ausformuliert.',
         // Tranche E — Meta-Signal über die Zeitreihe.

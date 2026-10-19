@@ -49,7 +49,7 @@ Rollen sind **aufsteigend**: jede enthält die vorige.
 |---|---|
 | **Lesen** | **alles** sehen — Rezepturen, Allergene, Einkaufspreise, Marge, Kalkulation; drucken, exportieren. Nur nicht schreiben. (Entscheidung F1) |
 | **Kuratieren** | anlegen, bearbeiten **und Rezepte auf aktiv stellen** (Entscheidung Dominique: Kuratieren = Rezepturen anlegen + aktiv stellen) |
-| **Freigeben** | was nach außen wirkt: VK-Freigabe, veröffentlichen (Foodbook/Präsentation), Angebote versenden, Bestellungen senden, Beschaffung freigeben — *Zuschnitt zu bestätigen* |
+| **Freigeben** | was nach außen wirkt: veröffentlichen (friert die Preise ein; VK-Freigabe entfallen, Spec 85 F5) (Foodbook/Präsentation), Angebote versenden, Bestellungen senden, Beschaffung freigeben — *Zuschnitt zu bestätigen* |
 | **FA-Admin** | Einstellungen, Kataloge, Wissen, Preislogik des Teams |
 
 - **Standard für neue Mitglieder: Lesen** (entschieden). Team-Admin hebt bewusst an.
@@ -77,7 +77,7 @@ Status-Namen aus dem Code (Enums). „K“ = ab Kuratieren, „F“ = ab Freigeb
 | Rezepte, Basisrezepte, Gerichte | anlegen, bearbeiten, duplizieren, KI-Generator/Import, alle Status inkl. **`approved` (aktiv)** und `deprecated` | löschen *(F3)* | — |
 | Grundprodukte | anlegen/bearbeiten als `tentative`/`review` | `approved`, `rejected`, Merge | — |
 | Lieferanten, Lieferantenartikel | anlegen, bearbeiten, Allergene pflegen | Status `gesperrt`/`aktiv` | — |
-| Kalkulation, VK | Simulation, VK-Entwürfe, Darreichungen | VK-Freigabe (`VkSnapshotService::release`) | Aufschlagsklassen, Kalkulationsdefaults |
+| Kalkulation, VK | Simulation, VK-Entwürfe, Darreichungen | veröffentlichen mit „Preise aktualisieren“ (VK-Freigabe entfallen, Spec 85 F5) | Aufschlagsklassen, Kalkulationsdefaults |
 | Foodbook, Präsentation, Speisekarte, Speiseplan | Entwurf bearbeiten | `aktiv`, `inaktiv`, `archiviert`; `PresentationService::publish` | — |
 | Konzepte, Angebote, Formate, Pakete, Planung | anlegen, bearbeiten | Angebot versenden, angenommen/abgelehnt setzen | — |
 | Produktion, Tagesplan | planen, Mengen, Aufgaben | Beschaffung freigeben (`procurement_released_at`) | — |
@@ -140,7 +140,7 @@ Der Team-Admin vergibt FA-Rollen in der Plattform-Verwaltung (`/verwaltung` → 
 |---|---|---|
 | R1 | Lesen öffnet Rezept | sieht alles, kein Bearbeiten-/Freigeben-Knopf; Livewire-Aufruf `save` → 403 |
 | R2 | Kuratieren legt Rezept an, setzt `review` | erlaubt; `approved` → 403 / Knopf fehlt |
-| R3 | Freigeben setzt `approved`, VK-Freigabe | erlaubt |
+| R3 | Freigeben setzt `approved` (VK-Freigabe entfallen, Spec 85 F5) | erlaubt |
 | R4 | Kuratieren öffnet Einstellungen | Bereich fehlt, Direkt-URL → 403 |
 | R5 | MCP `recipes.GENERATE` mit Lesen-Benutzer | Fehler „Recht fehlt“, nichts geschrieben |
 | R6 | MCP-Freigabe-Tool mit Kuratieren | verweigert |
@@ -164,7 +164,7 @@ Schritt 1–2 ohne Risiko; ab 3 bereichsweise mit Suite (`fa_test.sh`) und Brows
 ## 9 · Offene Fragen (Dominique)
 
 - ~~F1~~ **entschieden:** Lesen sieht alles (inkl. EK, Marge), schreibt nichts.
-- **F1b** Zuschnitt *Freigeben* (VK-Freigabe, veröffentlichen, versenden, bestellen) richtig — oder reicht Lesen/Kuratieren/Admin?
+- **F1b** Zuschnitt *Freigeben* (veröffentlichen, versenden, bestellen) richtig — oder reicht Lesen/Kuratieren/Admin?
 - **F2** Bestandsmitglieder: alle auf *Kuratieren* migrieren (niemand verliert heute Möglichkeiten), oder auf *Lesen* (strenger, Team-Admins heben an)?
 - **F3** Darf *Kuratieren* löschen (eigene Entwürfe) oder nur *Freigeben*?
 - **F4** Produktionsrollen aus Spec 35 §14 (ansehen/ausführen/planen/freigeben) — in die vier Rollen falten (Vorschlag: ausführen = Kuratieren) oder eigene Achse?

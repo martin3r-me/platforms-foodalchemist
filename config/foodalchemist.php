@@ -2334,9 +2334,10 @@ return [
         ],
         'signal.vk_release_advice' => [
             'klasse' => 'stark',
-            'task' => 'Gib eine kurze Freigabe-Empfehlung fuer die vom freigegebenen Snapshot abweichende '
-                . 'Live-VK: soll die neue VK freigegeben werden? Nenne Chance und Risiko (Kunden-Preissprung). '
-                . 'Kontext im payload. werte = {empfehlung}.',
+            // Spec 85 F5: Schlüssel bleibt (Wissens-Bindungen hängen daran), Inhalt = Link neu veröffentlichen statt VK-Freigabe
+            'task' => 'Ein veröffentlichter Link zeigt Preise, die vom aktuell gerechneten VK abweichen (Zeilen im payload: '
+                . 'eingefroren, aktuell, Abweichung). Gib eine kurze Empfehlung, ob der Link mit aktuellen Preisen neu '
+                . 'veröffentlicht werden soll. Nenne Chance und Risiko (Kunden-Preissprung). werte = {empfehlung}.',
         ],
         'signal.serving_form_suggest' => [
             'klasse' => 'leicht',

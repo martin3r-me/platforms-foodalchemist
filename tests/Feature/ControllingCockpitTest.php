@@ -137,5 +137,5 @@ it('rendert je Tab genau das zugehörige Panel', function () {
 
     Livewire::test(Cockpit::class)->call('setTab', 'erfolg')
         ->assertSeeHtml('data-ctrl-erfolg')
-        ->assertSeeHtml('data-ctrl-vk-freigabe');
+        ->assertSeeHtml('data-ctrl-link-preise');
 });
