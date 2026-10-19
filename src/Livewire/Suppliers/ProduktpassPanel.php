@@ -141,11 +141,15 @@ class ProduktpassPanel extends Component
             return;
         }
         try {
-            $pass = app(ProduktpassService::class)->vorschlagAusQuelle($this->team(), $this->item(), $quelle, [], Auth::id());
+            // Im Hintergrund (Befund io 19.10.: synchron > 60 s FPM-Timeout); das Panel pollt, solange die Version „liest“
+            $pass = app(ProduktpassService::class)->rechercheStarten($this->team(), $this->item(), $quelle, Auth::id());
             $this->angezeigtId = $pass->id;
-            $this->hinweis = 'Vorschlag aus der Websuche angelegt. Übernommen wird erst per Klick.';
+            $this->hinweis = 'Die Web-Recherche läuft. Der Vorschlag erscheint hier; übernommen wird erst per Klick.';
         } catch (FaRechtFehltException|RuntimeException $e) {
             $this->fehler = $e->getMessage();
+        } catch (\Throwable $e) {
+            report($e);
+            $this->fehler = 'Die Web-Recherche konnte nicht gestartet werden.';   // nie ein stiller 500
         }
     }
 
@@ -154,6 +158,14 @@ class ProduktpassPanel extends Component
         $item = $this->item();
         $svc = app(ProduktpassService::class);
         $pass = $this->angezeigtId !== null ? FoodAlchemistProduktpass::where('supplier_item_id', $item->id)->find($this->angezeigtId) : null;
+        // Web-Recherche im Hintergrund: Ergebnis bzw. Fehlermeldung sichtbar machen, sobald der Job fertig ist
+        if ($pass !== null && $pass->quelle === ProduktpassFelder::QUELLE_WEB && $this->hinweis !== null && str_starts_with($this->hinweis, 'Die Web-Recherche läuft')) {
+            if ($pass->status === 'fehler') {
+                [$this->hinweis, $this->fehler] = [null, (string) ($pass->fehler ?: 'Die Web-Recherche ist fehlgeschlagen.')];
+            } elseif ($pass->status === 'gelesen') {
+                $this->hinweis = 'Vorschlag aus der Websuche angelegt. Übernommen wird erst per Klick.';
+            }
+        }
         $stand = $svc->stand($item, $pass);
         $angezeigt = $stand['angezeigt'];
         $laeuft = collect($stand['versionen'])->contains(fn ($v) => in_array($v['status'], ['hochgeladen', 'liest'], true));
@@ -215,6 +227,9 @@ class ProduktpassPanel extends Component
 
     private function webQuelle(): ?ProduktdatenQuelle
     {
+        if (! config('foodalchemist.ai.websuche_aktiv', true)) {
+            return null;   // abgeschaltet (Kosten) — Knopf ausgeblendet
+        }
         try {
             foreach (app()->tagged('produktdaten.quellen') as $q) {
                 if ($q instanceof ProduktdatenQuelle && $q->name() === ProduktpassFelder::QUELLE_WEB) {

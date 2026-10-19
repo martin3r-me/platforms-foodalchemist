@@ -73,7 +73,7 @@ it('der Produktiv-Transport ist der Core-Weg', function () {
     expect(app(WebSucheTransport::class))->toBeInstanceOf(CoreWebSucheTransport::class);
 });
 
-it('★ Quellen vorhanden: nur belegte Angaben kommen durch, nichts wird gespeichert; Aufruf mit include_web_search und Klasse stark', function () {
+it('★ Quellen vorhanden: nur belegte Angaben kommen durch, nichts wird gespeichert; Aufruf mit include_web_search und Klasse leicht', function () {
     $p = ($this->provider)([['url' => $this->quelle, 'title' => "D'Arta", 'start_index' => 0, 'end_index' => 10]]);
     $vorher = ($this->zaehle)();
 
@@ -85,18 +85,19 @@ it('★ Quellen vorhanden: nur belegte Angaben kommen durch, nichts wird gespeic
         ->and(($this->zaehle)())->toBe($vorher)                                    // keine Auto-Speicherung
         ->and($p->optionen)->toHaveCount(1)
         ->and($p->optionen[0]['include_web_search'] ?? null)->toBeTrue()
-        ->and($p->optionen[0]['model'] ?? null)->toBe(KiKlassen::modell(KiKlassen::STARK));
+        ->and($p->optionen[0]['model'] ?? null)->toBe(KiKlassen::modell(KiKlassen::LEICHT))
+        ->and($p->optionen[0])->not->toHaveKey('max_versuche');                                    // Steuer-Option bleibt im Gateway
 
     // Kosten sichtbar: Zahl der Quellen und Suchaufrufe im Call-Log
     $teile = json_decode((string) DB::table('foodalchemist_ai_call_log')->where('feature', 'artikel.web_recherche')->value('prompt_parts'), true);
     expect($teile['websuche'] ?? null)->toBe(['quellen' => 1, 'aufrufe' => 2]);
 });
 
-it('sources = [] (gesucht, nichts gefunden) → „Keine belegbaren Quellen“, keine Werte', function () {
+it('sources = [] (gesucht, nichts gefunden) → „Keine belastbaren Quellen“, keine Werte', function () {
     ($this->provider)([]);
 
     expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))
-        ->toThrow(RuntimeException::class, 'Keine belegbaren Quellen im Web gefunden.');
+        ->toThrow(RuntimeException::class, 'Keine belastbaren Quellen gefunden.');
 });
 
 it('sources fehlt (Core vor #935) → „Websuche nicht verfügbar … Core-Update nötig“, auch wenn das Modell Werte mit URL erfindet', function () {
@@ -141,4 +142,25 @@ it('AiProposal->quellen: ohne Flag und ohne sources null, mit sources die Liste'
 
     ($this->provider)([['url' => $this->quelle, 'title' => 't', 'start_index' => 0, 'end_index' => 1]]);
     expect(app(AiGatewayService::class)->propose('demo.echo')->quellen)->toBe([['url' => $this->quelle, 'title' => 't', 'start_index' => 0, 'end_index' => 1]]);
+});
+
+it('Kosten: Nicht-JSON-Antwort ⇒ EIN Provider-Aufruf (kein ×3), saubere Meldung; ohne_wissen ⇒ kein Kanon/Regel-Block', function () {
+    $p = new class extends FakeAiProvider {
+        public int $aufrufe = 0;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->aufrufe++;
+
+            return ['content' => 'Ich habe leider nichts gefunden.', 'usage' => [], 'model' => 'stub', 'tool_calls' => null, 'sources' => []];
+        }
+    };
+    app()->instance(LLMProviderContract::class, $p);
+
+    expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))
+        ->toThrow(RuntimeException::class, 'Keine belastbaren Quellen gefunden');
+    expect($p->aufrufe)->toBe(1);
+
+    $teile = json_decode((string) DB::table('foodalchemist_ai_call_log')->where('feature', 'artikel.web_recherche')->value('prompt_parts'), true);
+    expect($teile['kanon'] ?? null)->toBe(0)->and($teile['regeln'] ?? null)->toBe(0)->and($teile['versuche'] ?? null)->toBe(1);
 });

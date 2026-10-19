@@ -53,7 +53,7 @@ class ArtikelWebRecherche implements ProduktdatenQuelle
         $roh = $this->transport->suche($this->anweisung(), $this->kontext($la) + ['erlaubte_felder' => ProduktpassFelder::schluessel()]);
         $quellen = $this->quellen($roh['quellen'] ?? []);
         if ($quellen === []) {
-            throw new \RuntimeException('Keine belegbaren Quellen im Web gefunden.');
+            throw new \RuntimeException('Keine belastbaren Quellen gefunden.');
         }
         $erlaubt = array_column($quellen, 'url');
         $antwort = is_array($roh['antwort'] ?? null) ? $roh['antwort'] : [];

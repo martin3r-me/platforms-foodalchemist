@@ -22,7 +22,12 @@ class CoreWebSucheTransport implements WebSucheTransport
 
     public function suche(string $anweisung, array $kontext): array
     {
-        $vorschlag = $this->gateway->propose(self::PROMPT, $kontext, ['include_web_search' => true]);
+        try {
+            // EIN Aufruf (Websuche ist teuer: Suchtreffer zählen als Eingabe-Tokens); keine Re-Rolls bei Nicht-JSON
+            $vorschlag = $this->gateway->propose(self::PROMPT, $kontext, ['include_web_search' => true, 'max_versuche' => 1]);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException) {
+            throw new \RuntimeException('Keine belastbaren Quellen gefunden: die Websuche lieferte keine auswertbare Antwort.');
+        }
         if ($vorschlag->quellen === null) {
             throw new \RuntimeException('Websuche nicht verfügbar: der Core liefert keine Quellen (Core-Update nötig).');
         }
