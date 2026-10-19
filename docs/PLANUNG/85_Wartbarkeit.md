@@ -308,6 +308,7 @@ Startpunkte, kein fertiger Schnittplan: vor dem Schnitt wie in §5 vermessen. C5
 | D-6 | I1-13 Sichtweite BulkProposal | **offen** (entscheidet der Kurator) |
 | D-8 | I1-1 Bearbeitungssperre für MCP | **Entschieden 18.10.:** freier Datensatz → MCP sperrt für die Dauer des Schreibens (Halter „via KI/MCP“); Mensch hat offen → typisierter Fehler „gesperrt“, keine Übernahme. Dazu I1-2 Versionsprüfung. Umsetzung Welle 2 |
 | D-7 | I5-1 Team-Regeln im RegelBuch | **Entschieden 18.10.: ja, jetzt bauen** (Auflösung Zeile > Team > global, Spec 81) — test nach Stufe 4 |
+| D-7a | HACCP-Temperaturen als Regeln | **Entschieden 19.10.:** Kerntemperatur wird Regel (`haccp.*`, Art Schwelle, aus den Hausstandard-/Cook-Chill-Dossiers); Kühlen als zwei Regeln (< 4 °C + Schnellkühlen < 3 °C/90 min); Regenerieren ≥ 72 °C/2 min; Garen nur zerkleinert/zusammengesetzt (> 75 °C/2 min); Mandant darf lockerer nur bis zur belegten Untergrenze (Norm + Wert wörtlich), sonst nur strenger. Textregel-Schwellen nur global, kein Abschalten globaler Regeln, Fond aus Knochen global. **Offen: Untergrenze Heißhalten — Norm + Wert belegen** („DIN ≥ 60 °C“ steht ohne Normnummer; bis zum Beleg nur strenger, danach trägt der Master die Untergrenze als Datenwert ein) — Montagsliste Dominique |
 
 ## §11 · Reihenfolge und Zuständigkeit
 

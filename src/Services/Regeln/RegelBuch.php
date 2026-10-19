@@ -35,6 +35,15 @@ final class RegelBuch
         'basisrezept.5.default_gp',
         'gericht.kleinstmengen',
         'basisrezept.bestand.haus_zuordnung',
+        // HACCP-Temperaturen (D-7 PR 1b, Dominique 19.10.): lockerer nur bis zur belegten Untergrenze der globalen Regel
+        'haccp.heisshalten',
+        'haccp.kuehlen',
+        'haccp.schnellkuehlen',
+        'haccp.kuehlkette',
+        'haccp.abkuehlen',
+        'haccp.standzeit_gefahrenzone',
+        'haccp.garen_zerkleinert',
+        'haccp.regenerieren',
     ];
 
     /** Aktive Regel zum Schlüssel oder null. */
@@ -106,6 +115,25 @@ final class RegelBuch
         return $memo['teams'][$k]['listen'][$lk];
     }
 
+    /** Die globale aktive Regel zum Schlüssel (ohne Team-Abweichung) — Bezug für „lockerer als der Hausstandard“. */
+    public static function global(string $schluessel): ?FoodAlchemistRule
+    {
+        $memo = self::memo();
+        if (! isset($memo['global']) || $memo['global']['bis'] <= time()) {
+            try {
+                $regeln = self::lade(null);
+            } catch (\Throwable $e) {
+                Log::error('Regelbuch nicht lesbar: ' . $e->getMessage());
+                $regeln = [];
+            }
+            $memo = self::memo();
+            $memo['global'] = ['regeln' => $regeln, 'bis' => time() + 600];
+            app()->instance(self::MEMO, $memo);
+        }
+
+        return $memo['global']['regeln'][$schluessel] ?? null;
+    }
+
     /** Herkunft der wirksamen Regel: `global` oder `team:<id>` (für Anzeige/MCP). */
     public static function herkunft(FoodAlchemistRule $regel): string
     {
@@ -143,6 +171,12 @@ final class RegelBuch
             }
             if (! in_array($s, self::UEBERSTEUERBAR, true) || ! isset($regeln[$s])) {
                 self::meldeEinmal('team|' . $r->id, "Team-Regel «{$s}» (Team {$r->team_id}) ignoriert — nicht übersteuerbar oder ohne globale Regel.");
+
+                continue;
+            }
+            // Schwelle: lockerer nur bis zur belegten Untergrenze (Spec 85 D-7) — sonst gilt der globale Wert
+            if ($r->art === 'schwelle' && ! (new Arten\Schwelle)->zulaessig($regeln[$s], $r)) {
+                self::meldeEinmal('grenze|' . $r->id, "Team-Regel «{$s}» (Team {$r->team_id}) ignoriert — jenseits der Untergrenze der globalen Regel.");
 
                 continue;
             }

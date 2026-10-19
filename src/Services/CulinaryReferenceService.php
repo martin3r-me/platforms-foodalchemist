@@ -33,6 +33,9 @@ class CulinaryReferenceService
      *
      * @var list<array<string, mixed>>
      */
+    /** Proteine der Referenztabelle, für die `haccp.garen_zerkleinert` gilt (Hack, Brät — zerkleinert/zusammengesetzt). */
+    private const ZERKLEINERT = ['hackfleisch', 'gefluegel_hack'];
+
     public const KERNTEMPERATUREN = [
         // ── Rind (ganzer Muskel — Oberflächenkeime sterben beim Anbraten) ──
         ['protein' => 'rind', 'label' => 'Rind', 'cut' => 'kurzbraten', 'doneness' => 'bleu', 'doneness_label' => 'bleu / blau',
@@ -179,11 +182,27 @@ class CulinaryReferenceService
             $rows = array_values(array_filter($rows, fn ($r) => $r['protein'] === $p));
         }
 
+        // Spec 85 D-7 PR 1b: wo eine HACCP-Regel greift (zerkleinert/zusammengesetzt), steht sie neben dem Garstufen-Wert — aus dem
+        // RegelBuch des Teams (Kontext), also mit Team-Abweichung. Die Regel geht vor; der Garstufen-Wert bleibt Qualitäts-Information.
+        $regel = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::falls('haccp.garen_zerkleinert');
+
         // Provenienz-/Weichheits-Disclaimer je Zeile mitgeben (nie „hart" ohne Kontext).
-        return array_map(fn ($r) => $r + [
-            'evidence' => 'med',
-            'hinweis' => 'Qualitäts-Zielwert, keine Vorschrift. Sicherheit = Zeit-Temperatur; amtliche/lokale HACCP-Grenzwerte haben Vorrang.',
-        ], $rows);
+        return array_map(function ($r) use ($regel) {
+            $r += [
+                'evidence' => 'med',
+                'hinweis' => 'Qualitäts-Zielwert, keine Vorschrift. Sicherheit = Zeit-Temperatur; amtliche/lokale HACCP-Grenzwerte haben Vorrang.',
+            ];
+            if ($regel !== null && in_array($r['protein'], self::ZERKLEINERT, true)) {
+                $p = (array) $regel->params;
+                $r['sicherheitsregel'] = ['schluessel' => $regel->schluessel, 'soll' => \Platform\FoodAlchemist\Services\Regeln\Arten\Schwelle::text($p),
+                    'herkunft' => \Platform\FoodAlchemist\Services\Regeln\RegelBuch::herkunft($regel), 'geltung' => $p['geltung'] ?? null];
+                if ((float) $r['target_c'] < (float) ($p['wert'] ?? 0)) {
+                    $r['hinweis'] = 'Unter der HACCP-Regel ' . $r['sicherheitsregel']['soll'] . ' — nur mit Zeit-Temperatur-Äquivalent (Nachweis) zulässig; die Regel geht vor.';
+                }
+            }
+
+            return $r;
+        }, $rows);
     }
 
     /** Bekannte Protein-Slugs (für Tool-Enum / Validierung). @return list<string> */
