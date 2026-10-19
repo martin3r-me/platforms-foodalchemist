@@ -265,3 +265,61 @@ it('Namen: wechselt das Zustandswort im neuen Namen (trocken→frisch), zieht `c
 
     expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('condition'))->toBe('trocken');
 });
+
+it('Namen: Form „Pueree“ am Roh-GP wandert in die Hauptzutat (§8.17) — das Formfeld wird geleert, --zurueck stellt es her', function () {
+    $gp = ($this->gp)('Butternusskuerbis: konserviert, Pueree', '02', ['condition' => 'konserviert', 'form' => 'Pueree']);
+    $csv = ($this->namenCsv)([[$gp->id, $gp->name, '§8.17 Pueree', 'Butternusskuerbispueree: konserviert']]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => $csv, '--apply' => true, '--backup-nachweis' => $backup])->assertSuccessful();
+
+    $g = DB::table('foodalchemist_gps')->where('id', $gp->id)->first();
+    expect($g->name)->toBe('Butternusskuerbispueree: konserviert')->and($g->form)->toBeNull();
+
+    ($this->lauf)(['--zurueck' => glob($this->dir . '/*_protokoll.json')[0]])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('form'))->toBe('Pueree');
+});
+
+it('Namen: reine Umlaut-Umschrift gilt auch in WG 15, zieht das Formfeld auf die Umlautform und lässt den Schlüssel stehen', function () {
+    $gp = ($this->gp)('Moehren: frisch, Wuerfel 10 mm', '01', ['form' => 'Wuerfel']);
+    $bier = ($this->gp)('Weissbier: Flasche 0,5 l', '15');
+    $csv = ($this->namenCsv)([
+        [$gp->id, $gp->name, 'Schreibweise: echte Umlaute', 'Möhren: frisch, Würfel 10 mm'],
+        [$bier->id, $bier->name, 'Schreibweise: echte Umlaute', 'Weißbier: Flasche 0,5 l'],
+    ]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+    $keyAlt = $gp->gp_key;
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => $csv, '--apply' => true, '--backup-nachweis' => $backup])->assertSuccessful();
+
+    $g = DB::table('foodalchemist_gps')->where('id', $gp->id)->first();
+    expect($g->name)->toBe('Möhren: frisch, Würfel 10 mm')->and($g->gp_key)->toBe($keyAlt)
+        ->and(DB::table('foodalchemist_gps')->where('id', $bier->id)->value('name'))->toBe('Weißbier: Flasche 0,5 l');
+});
+
+it('Namen: Spalten key_neu/slug_neu korrigieren den Schlüssel auch bei unverändertem Namen (slugify ü→ue), Kollision wird gemeldet, --zurueck stellt her', function () {
+    $gp = ($this->gp)('Erdbeerpüree: konserviert, passiert', '02', ['gp_key' => 'erdbeerp_ree_konserviert_passiert', 'main_ingredient_slug' => 'erdbeerp_ree']);
+    $belegt = ($this->gp)('Andere Ware: frisch', '02', ['gp_key' => 'erdbeerpueree_besetzt']);
+    $zweites = ($this->gp)('Zweites Püree: frisch', '02', ['gp_key' => 'zweites_p_ree_frisch']);
+    $kopf = ['gp_id', 'name', 'rule', 'proposal', 'key_neu', 'slug_neu'];
+    $csv = ($this->csv)('schluessel.csv', $kopf, [
+        [$gp->id, $gp->name, 'Schlüssel', $gp->name, 'erdbeerpueree_konserviert_passiert', 'erdbeerpueree'],
+        [$zweites->id, $zweites->name, 'Schlüssel', $zweites->name, 'erdbeerpueree_besetzt', ''],
+    ]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => $csv, '--apply' => true, '--backup-nachweis' => $backup])->assertSuccessful();
+
+    $g = DB::table('foodalchemist_gps')->where('id', $gp->id)->first();
+    expect($g->gp_key)->toBe('erdbeerpueree_konserviert_passiert')->and($g->main_ingredient_slug)->toBe('erdbeerpueree')->and($g->name)->toBe('Erdbeerpüree: konserviert, passiert')
+        ->and(DB::table('foodalchemist_gps')->where('id', $zweites->id)->value('gp_key'))->toBe('zweites_p_ree_frisch');   // Kollision → nicht angefasst
+    expect(file_get_contents(glob($this->dir . '/*_review_liste.csv')[0]))->toContain('Key-Kollision');
+
+    ($this->lauf)(['--zurueck' => glob($this->dir . '/*_protokoll.json')[0]])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('gp_key'))->toBe('erdbeerp_ree_konserviert_passiert');
+});

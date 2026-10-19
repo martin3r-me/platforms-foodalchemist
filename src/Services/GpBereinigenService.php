@@ -332,12 +332,18 @@ class GpBereinigenService
 
                 continue;
             }
-            if ($neu === trim((string) $gp->name)) {
+            // Optionale Spalten key_neu / slug_neu: Schlüssel-Korrektur (z. B. nach Vanessas slugify ü→ue), auch bei unverändertem Namen.
+            $keyNeuCsv = trim((string) ($zeilen[0]['key_neu'] ?? ''));
+            $slugNeuCsv = trim((string) ($zeilen[0]['slug_neu'] ?? ''));
+            $nameGleich = $neu === trim((string) $gp->name);
+            if ($nameGleich && $keyNeuCsv === '' && $slugNeuCsv === '') {
                 $ohne++;
 
                 continue;
             }
-            if ((string) $gp->commodity_group_code === '15') {
+            // Reine Umlaut-Umschrift (ae→ä …) ändert nichts am Inhalt: für sie gilt weder die WG-15-Sonderphase noch die Altlast-Prüfung.
+            $nurUmlaut = $this->umlautNorm($neu) === $this->umlautNorm((string) $gp->name);
+            if ((string) $gp->commodity_group_code === '15' && ! $nurUmlaut) {
                 $konflikt('WG 15 (Getränke): eigene Phase (Gebinde/Zustandswort), hier nicht');
 
                 continue;
@@ -346,12 +352,21 @@ class GpBereinigenService
             // `condition` mitgezogen. Ohne Zustandswort im neuen Namen bleibt das Feld unangetastet.
             $neuerZustand = $this->naming->felderAusName($neu)['condition'];
             $zustandWechsel = $neuerZustand !== '' && $neuerZustand !== (string) $gp->condition;
-            $pruefung = $this->naming->validateGpName($neu, [
+            $pruefung = $nameGleich ? ['errors' => [], 'warnings' => []] : $this->naming->validateGpName($neu, [
                 'condition' => $zustandWechsel ? $neuerZustand : $gp->condition, 'warengruppe' => $gp->commodity_group_code, 'commodity_group_code' => $gp->commodity_group_code,
                 'form' => $gp->form, 'hauptzutat' => trim((string) strstr($neu . ':', ':', true)),
             ]);
-            if ($pruefung['errors'] !== []) {
-                $konflikt('Neuer Name verletzt Regelwerk: ' . implode('; ', $pruefung['errors']));
+            $fehler = $pruefung['errors'];
+            if ($nurUmlaut && $fehler !== []) {
+                // Altlast des GP-Namens ist nicht Sache der Umlaut-Umschrift: nur NEUE Fehler sperren.
+                $altPruefung = $this->naming->validateGpName((string) $gp->name, [
+                    'condition' => $gp->condition, 'warengruppe' => $gp->commodity_group_code, 'commodity_group_code' => $gp->commodity_group_code,
+                    'form' => $gp->form, 'hauptzutat' => trim((string) strstr($gp->name . ':', ':', true)),
+                ]);
+                $fehler = array_values(array_diff($fehler, $altPruefung['errors']));
+            }
+            if ($fehler !== []) {
+                $konflikt('Neuer Name verletzt Regelwerk: ' . implode('; ', $fehler));
 
                 continue;
             }
@@ -359,14 +374,14 @@ class GpBereinigenService
             // Namens-Kollision: ein anderes aktives GP trägt den neuen Namen schon, oder ein früherer Vorschlag desselben Laufs (auch aus einer
             // anderen CSV) ergibt denselben Namen — beides ist ein Merge-Kandidat, kein Fall für automatisches Umbenennen.
             $nameKey = mb_strtolower(trim($neu));
-            $nameBesetzt = DB::table('foodalchemist_gps')->where('team_id', $teamId)->whereNull('deleted_at')->whereIn('status', self::AKTIV)
+            $nameBesetzt = $nameGleich ? null : DB::table('foodalchemist_gps')->where('team_id', $teamId)->whereNull('deleted_at')->whereIn('status', self::AKTIV)
                 ->where('name', $neu)->where('id', '!=', $gp->id)->first();
             if ($nameBesetzt !== null) {
                 $konflikt("Namens-Kollision: »{$neu}« trägt schon #{$nameBesetzt->id} ({$nameBesetzt->status}) — Merge-Kandidat?");
 
                 continue;
             }
-            if (isset($neueNamen[$nameKey])) {
+            if (! $nameGleich && isset($neueNamen[$nameKey])) {
                 $konflikt("Namens-Kollision im selben Lauf mit #{$neueNamen[$nameKey]} (»{$neu}«) — Merge-Kandidat?");
 
                 continue;
@@ -389,6 +404,12 @@ class GpBereinigenService
             if (trim((string) $gp->main_ingredient_display) === $alterKopf) {
                 $neueAnzeige = $neuerKopf;
             }
+            if ($keyNeuCsv !== '') {
+                $neuerKey = $keyNeuCsv;
+            }
+            if ($slugNeuCsv !== '') {
+                $neuerSlug = $slugNeuCsv;
+            }
             if ($neuerKey !== $gp->gp_key) {
                 // UNIQUE (team_id, gp_key) gilt für ALLE Zeilen (auch merged/soft-gelöscht) — mit-prüfen.
                 $kollision = DB::table('foodalchemist_gps')->where('team_id', $teamId)->where('gp_key', $neuerKey)->where('id', '!=', $gp->id)->first();
@@ -405,13 +426,39 @@ class GpBereinigenService
                 $neueKeys[$neuerKey] = $gp->id;
             }
             $neueNamen[$nameKey] = $gp->id;
+            // Felder folgen dem Namen: ist der Wert von Verarbeitung/Form im neuen Namen nicht mehr enthalten (z. B. Form »Pueree« nach
+            // Regelwerk §8.17 in die Hauptzutat gewandert), wird das Feld geleert — sonst bliebe der Name vom Render der Felder abweichend (Drift I4).
+            $feldWechsel = ['alt' => [], 'neu' => []];
+            foreach (['processing', 'form'] as $feld) {
+                $wert = trim((string) ($gp->{$feld} ?? ''));
+                // Nur die Attribute hinter dem Doppelpunkt zählen (die Hauptzutat »Karottenpueree« enthält »Pueree« als Wortteil).
+                $neuAttr = str_contains($neu, ':') ? (string) substr($neu, strpos($neu, ':') + 1) : '';
+                $altAttr = str_contains((string) $gp->name, ':') ? (string) substr((string) $gp->name, strpos((string) $gp->name, ':') + 1) : '';
+                if ($wert !== '' && mb_stripos($neuAttr, $wert) === false && mb_stripos($altAttr, $wert) !== false) {
+                    $feldWechsel['alt'][$feld] = $gp->{$feld};
+                    $feldWechsel['neu'][$feld] = null;
+                    if ($nurUmlaut) {
+                        // Umlaut-Umschrift: der Feldwert zieht auf die Umlautform des passenden Attributs (Wuerfel → Würfel), er wird nicht geleert.
+                        foreach (array_map('trim', explode(',', $neuAttr)) as $teil) {
+                            if ($teil !== '' && $this->umlautNorm($teil) === $this->umlautNorm($wert)) {
+                                $feldWechsel['neu'][$feld] = $teil;
+                                break;
+                            }
+                        }
+                        if ($feldWechsel['neu'][$feld] === null) {
+                            unset($feldWechsel['alt'][$feld], $feldWechsel['neu'][$feld]);
+                        }
+                    }
+                }
+            }
             $aenderungen[] = [
                 'gp_id' => $gp->id, 'wg' => $gp->commodity_group_code, 'regeln' => array_keys($regeln),
                 'alt' => ['name' => $gp->name, 'gp_key' => $gp->gp_key, 'main_ingredient_slug' => $gp->main_ingredient_slug, 'main_ingredient_display' => $gp->main_ingredient_display]
-                    + ($zustandWechsel ? ['condition' => $gp->condition, 'condition_source' => $gp->condition_source] : []),
+                    + ($zustandWechsel ? ['condition' => $gp->condition, 'condition_source' => $gp->condition_source] : []) + $feldWechsel['alt'],
                 'neu' => ['name' => $neu, 'gp_key' => $neuerKey, 'main_ingredient_slug' => $neuerSlug, 'main_ingredient_display' => $neueAnzeige]
-                    + ($zustandWechsel ? ['condition' => $neuerZustand, 'condition_source' => 'manual'] : []),
+                    + ($zustandWechsel ? ['condition' => $neuerZustand, 'condition_source' => 'manual'] : []) + $feldWechsel['neu'],
                 'zustand_wechsel' => $zustandWechsel,
+                'felder_geleert' => array_keys($feldWechsel['neu']),
                 'key_wechsel' => $neuerKey !== $gp->gp_key,
                 'key_nicht_ableitbar' => ! $keyAbleitbar,
                 'warnungen' => $pruefung['warnings'],
@@ -419,6 +466,12 @@ class GpBereinigenService
         }
 
         return ['aenderungen' => $aenderungen, 'konflikte' => $konflikte, 'ohne_aenderung' => $ohne];
+    }
+
+    /** Vergleichsform ohne Umlaute (ä→ae, ö→oe, ü→ue, ß→ss), klein. */
+    private function umlautNorm(string $s): string
+    {
+        return mb_strtolower(strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', 'Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue']));
     }
 
     // ── Ausführen ───────────────────────────────────────────────────────────────────────────────────
