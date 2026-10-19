@@ -755,6 +755,11 @@ return [
             'A' => env('FOODALCHEMIST_AI_TIER_A'), 'B' => env('FOODALCHEMIST_AI_TIER_B'), 'C' => env('FOODALCHEMIST_AI_TIER_C'), 'D' => env('FOODALCHEMIST_AI_TIER_D'),
         ],
 
+        // Web-Recherche am Lieferantenartikel (Produktpass „Im Web recherchieren“). Dominique 19.10.: nicht nötig ⇒ Standard AUS (kein Knopf,
+        // kein Job). Der Weg bleibt sauber gebaut (Job, Meldungen, Klasse leicht, ein Versuch) und lässt sich mit FOODALCHEMIST_WEBSUCHE_AKTIV=true
+        // einschalten — Kostenziel ≈ 0,05 € je Klick.
+        'websuche_aktiv' => (bool) env('FOODALCHEMIST_WEBSUCHE_AKTIV', false),
+
         // Spec 54 (1): der Voice-Loop ist KEIN Prompt-Key (eigener Tool-Loop) und hat darum keine `klasse`. Eigene, unabhängige Einstellung: `null` = Modell der
         // Klasse STARK, gesetzt = NUR VoiceCommandService übersteuert sein `model` explizit.
         'voice_model' => env('FOODALCHEMIST_AI_VOICE_MODEL'),
@@ -1181,7 +1186,7 @@ return [
         // M3-09/10: GP-Modal (Naming-Builder + KI-Felder). Antwort-Schema immer
         // {"werte": {…}, "confidence": 0-1, "reasoning": "…"} (GL-07).
         'gp.suggest' => [
-            'klasse' => 'stark',
+            'klasse' => 'mittel',   // Dominique 19.10.: Feld-Ableitung braucht nicht die starke Klasse (io ≈ 2 Cent je Aufruf auf STARK)
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
                 . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
                 . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe, '
@@ -1193,6 +1198,8 @@ return [
                 . 'erfinde aber keine nicht belegten Eigenschaften. Artikelnummer, Lieferant, Gebinde, '
                 . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur nach §5-Tiebreaker). '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1). '
+                . 'Zugekaufte Pürees, Mus und Mark sind ein eigenes Produkt (§8.17): hauptzutat = das Püree, nie Roh-Zutat + form „Püree“ — '
+                . 'z. B. „Karottenpüree 2 kg“ → hauptzutat „Karottenpüree“, processing und form leer. '
                 . 'UNBEKANNT BLEIBT LEER: Ist processing, form oder pflichtangabe nicht belegt, gib "" zurück, '
                 . 'niemals "unbekannt", "n/a" oder Ähnliches; solche Wörter dürfen weder im Namen noch in der Kennung stehen. '
                 . 'Nutze den vollen Artikel-Kontext: regulierter Name, Marketingname, Zutatenangabe, gebinde_hinweis (nur zur Einordnung, nie im Namen), '
@@ -1210,14 +1217,18 @@ return [
         ],
         // Web-Recherche zu einem Lieferantenartikel (nur auf Knopfdruck; ArtikelWebRecherche). Antwort-Schema siehe Dienst.
         'artikel.web_recherche' => [
-            'klasse' => 'stark',
-            'max_tokens' => 2500,
+            // Kosten (Dominique 19.10., Ziel ≤ 0,05 € je Klick): kleine Klasse, kein Kanon/Regel-Block, EIN Versuch (CoreWebSucheTransport).
+            // max_tokens mit Luft für Reasoning — sonst wird das JSON abgeschnitten (Befund io 19.10.: „kein valides JSON“ nach 3 Versuchen).
+            'klasse' => 'leicht',
+            'ohne_wissen' => true,
+            'max_tokens' => 6000,
             'task' => 'Recherchiere im Web zu genau diesem Lieferantenartikel (Bezeichnung, EAN, Marke, Lieferant im Kontext). '
                 . 'Antworte als JSON {"felder": {key: {wert, konfidenz, url, zitat?, einheit?}} (key nur aus erlaubte_felder im Kontext), "allergene": {key: {wert: enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}}, '
                 . '"deutung": {produkttyp, hauptzutat, warengruppe, unterkategorie, marke_fantasiename, zustand, form: {wert, url}}}. '
                 . 'Jede Angabe braucht die url der Seite, auf der du sie gefunden hast. Fehlt ein Wert, lass den Schlüssel WEG, rate nie. '
                 . '„nicht_enthalten" nur mit wörtlichem zitat der Quelle, sonst weglassen. Bestimme in deutung, was der Artikel fachlich IST '
-                . '(z. B. Nudelsalat statt Salat); Marken- und Fantasienamen gehören nicht in die Hauptzutat. Prüfe, dass die Quelle wirklich zu diesem Artikel passt (EAN, Marke, Produktname).',
+                . '(z. B. Nudelsalat statt Salat); Marken- und Fantasienamen gehören nicht in die Hauptzutat. Prüfe, dass die Quelle wirklich zu diesem Artikel passt (EAN, Marke, Produktname). '
+                . 'Antworte NUR mit diesem JSON-Objekt — kein Text, keine Quellenliste davor oder danach. Findest du nichts Belastbares, antworte {}.',
         ],
         // Non-Food-Erkennung am Lieferantenartikel (Stufe 2 nach der Regel): Klassifikator in Stapeln, nur für „unklar“.
         'la.nonfood' => [

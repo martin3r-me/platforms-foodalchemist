@@ -18,8 +18,7 @@ uses(TestCase::class);
  */
 const REGISTRY_KLASSEN = [
     'stark' => [
-        'gp.suggest',
-        'planung.leitplanken', 'artikel.web_recherche', 'component.replacement_suggest', 'recipe.komponenten_plan', 'recipe.generator',
+        'planung.leitplanken', 'component.replacement_suggest', 'recipe.komponenten_plan', 'recipe.generator',
         'recipe.description', 'vk.generator', 'gp.allergene', 'gp.naehrwerte', 'anker.wissen_auslese', 'recipe.steps', 'recipe.review',
         'conformance.check', 'gp.conformance_revise', 'recipe.ueberarbeiten', 'recipe.extract', 'produktpass.extract', 'vk.plating',
         'vk.marketing', 'vk.wording', 'concept.brief_geruest', 'foodbook.grundgeruest', 'format.grundgeruest', 'concept.plan',
@@ -28,12 +27,14 @@ const REGISTRY_KLASSEN = [
         'signal.margin_levers', 'signal.vk_release_advice',
     ],
     'mittel' => [
+        'gp.suggest',   // Dominique 19.10. (vorher stark)
         'recipe.geschmack', 'gp.domain',
         'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',
         'gp.zaehl_einheiten', 'recipe.verpackungsmasse', 'gp.la_suggest', 'gp.term_la_rank', 'recipe.eigenschaften', 'recipe.sensorik',
         'recipe.regeneration', 'vk.regeneration',
     ],
     'leicht' => [
+        'artikel.web_recherche',   // Kostenziel ≤ 0,05 € je Klick (Dominique 19.10., vorher stark)
         'la.nonfood', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 
         'gp.anker', 'recipe.sektor', 'recipe.level', 'recipe.production_depth', 'recipe.bauart', 'recipe.equipment',
         'vk.titel_vorschlag', 'recipe.dichteklasse', 'vk.servier_vehikel', 'gp.tags', 'signal.serving_form_suggest',
@@ -95,8 +96,9 @@ it('Non-Food-Erkennung und Titelvorschläge sind LEICHT, Mengen-Schätzungen MIT
     }
 });
 
-it('Entscheid Dominique 16.10.: gp.suggest ist STARK, recipe.geschmack und gp.domain sind MITTEL', function () {
-    expect(config('foodalchemist.prompts')['gp.suggest']['klasse'])->toBe('stark')
+it('Entscheid Dominique 19.10.: gp.suggest ist MITTEL (vorher 16.10. STARK), recipe.geschmack und gp.domain sind MITTEL', function () {
+    expect(config('foodalchemist.prompts')['gp.suggest']['klasse'])->toBe('mittel')
+        ->and(config('foodalchemist.prompts')['gp.suggest']['task'])->toContain('§8.17')->toContain('Karottenpüree')
         ->and(config('foodalchemist.prompts')['recipe.geschmack']['klasse'])->toBe('mittel')
         ->and(config('foodalchemist.prompts')['gp.domain']['klasse'])->toBe('mittel');
 });

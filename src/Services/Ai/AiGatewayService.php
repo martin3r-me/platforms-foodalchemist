@@ -179,7 +179,9 @@ class AiGatewayService
 
         $kanonSlugs = [];
         $kanonBlock = null;
-        if ($team !== null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')) {
+        // `ohne_wissen` (Registry): reine Werkzeug-Aufrufe ohne Kanon/Regel-Block (Websuche: jede Eingabe-Zeile kostet zusätzlich zu den Suchtreffern)
+        $ohneWissen = (bool) ($prompt['ohne_wissen'] ?? false);
+        if ($team !== null && ! $ohneWissen && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')) {
             [$kBlocks, $kanonSlugs, $kanonVerworfen] = $this->selectKanon(
                 app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team),
                 is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
@@ -326,8 +328,8 @@ class AiGatewayService
             // ($kanonKey, z. B. recipe.generator) — er braucht dieselben Regeln, sonst meldet er nach Teil E
             // gültige Typen als Verstoß oder übersieht erfundene.
             $regelPromptBlock = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class);
-            $regelBlock = $regelPromptBlock->fuerPromptKey($promptKey)
-                ?? ($kanonKey !== $promptKey ? $regelPromptBlock->fuerPromptKey($kanonKey) : null);
+            $regelBlock = $ohneWissen ? null : ($regelPromptBlock->fuerPromptKey($promptKey)
+                ?? ($kanonKey !== $promptKey ? $regelPromptBlock->fuerPromptKey($kanonKey) : null));
             static $gewarnt = [];
             if ($regelBlock !== null && mb_strlen($regelBlock) > 8000 && ! isset($gewarnt[$promptKey])) {
                 $gewarnt[$promptKey] = true;   // einmal je Prozess und Prompt-Key, nicht bei jedem Call
@@ -407,6 +409,9 @@ class AiGatewayService
         // unbrauchbar (z. B. leeres Pflicht-Array) → Re-Roll
         $isUsable = $options['structural_retry'] ?? null;
         unset($options['structural_retry']);
+        // Teure Aufrufe (Websuche) begrenzen die Re-Rolls: max_versuche = 1 heißt EIN Provider-Aufruf, kein ×3 bei Nicht-JSON
+        $maxVersuche = max(1, (int) ($options['max_versuche'] ?? 3));
+        unset($options['max_versuche']);
 
         // ── 06_KI §5 Pflicht 1+2: VOR Rückgabe loggen, auch im Fehlerpfad ──
         // M7-03 §3.1–3.3: Backoff-Treppe (transiente Provider-Fehler) +
@@ -417,7 +422,7 @@ class AiGatewayService
         $parsed = null;
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
-        $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
+        $tempTreppe = array_slice([(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7], 0, $maxVersuche);   // §3.3
         // Dominique §9: „Wie oft greift der strukturelle Retry?" war bisher nicht messbar —
         // schreibeCallLog() schreibt genau EINE Zeile, tokens_in/out summieren über alle
         // (auch verworfenen) Versuche, ein erfolgreicher Re-Roll hinterlässt sonst keine Spur.

@@ -157,6 +157,42 @@ class ProduktpassService
      * Vorschlag aus einer beliebigen {@see ProduktdatenQuelle} (z. B. Websuche) anlegen — ohne Datei, ohne Schreiben am Artikel.
      * Alles Weitere (Übernehmen, Allergene bestätigen) läuft über dieselben Methoden wie beim Produktpass.
      */
+    /**
+     * Web-Recherche im Hintergrund (Befund io 19.10.: der Aufruf dauert länger als das FPM-Timeout von 60 s — der Request starb still).
+     * Legt eine Version im Status `liest` an und stellt {@see \Platform\FoodAlchemist\Jobs\ProduktpassRechercheJob} auf die interaktive
+     * Schlange; das Panel pollt wie beim Hochladen. Das Recht wird hier geprüft, nicht erst im Job.
+     */
+    public function rechercheStarten(Team $team, FoodAlchemistSupplierItem $item, ProduktdatenQuelle $quelle, ?int $userId = null): FoodAlchemistProduktpass
+    {
+        $this->pruefeSchreiben($team, $item, $userId, FaRolle::Kuratieren, 'Vorschlag recherchieren');
+        $pass = FoodAlchemistProduktpass::create([
+            'team_id' => $this->besitzerTeamId($team, $item), 'supplier_item_id' => $item->id, 'version' => $this->naechsteVersion($item),
+            'status' => 'liest', 'quelle' => $quelle->name(), 'hochgeladen_von' => $userId,
+        ]);
+        \Platform\FoodAlchemist\Jobs\ProduktpassRechercheJob::dispatch((int) $pass->id, $quelle->name())->onQueue(Warteschlange::interaktiv());
+
+        return $pass->refresh();
+    }
+
+    /** Job-Rumpf der Web-Recherche: Vorschlag schreiben oder Status `fehler` mit lesbarer Meldung — nie eine Ausnahme nach außen. */
+    public function rechercheAusfuehren(FoodAlchemistProduktpass $pass, ProduktdatenQuelle $quelle): void
+    {
+        if ($pass->status !== 'liest') {
+            return;   // verworfen oder schon fertig (doppelter Dispatch)
+        }
+        try {
+            $roh = $quelle->liefere($pass->item()->firstOrFail());
+            $extrakt = ProduktpassNormalisierer::normalisiere($roh, $quelle->name());
+            $pass->update(['status' => 'gelesen', 'extrakt' => $extrakt, 'gelesen_at' => now(), 'fehler' => null,
+                'allergene_status' => $this->hatKennzeichnung($extrakt) ? 'vorschlag' : 'keine',
+                'ki_modell' => is_string($roh['modell'] ?? null) ? $roh['modell'] : null]);
+        } catch (Throwable $e) {
+            $meldung = $e instanceof \RuntimeException ? $e->getMessage() : 'Die Web-Recherche ist fehlgeschlagen.';
+            $pass->update(['status' => 'fehler', 'fehler' => mb_substr($meldung, 0, 500)]);
+            Log::warning('Produktpass Web-Recherche fehlgeschlagen', ['produktpass_id' => $pass->id, 'fehler' => $e->getMessage(), 'klasse' => $e::class]);
+        }
+    }
+
     public function vorschlagAusQuelle(Team $team, FoodAlchemistSupplierItem $item, ProduktdatenQuelle $quelle, array $optionen = [], ?int $userId = null): FoodAlchemistProduktpass
     {
         $this->pruefeSchreiben($team, $item, $userId, FaRolle::Kuratieren, 'Vorschlag recherchieren');

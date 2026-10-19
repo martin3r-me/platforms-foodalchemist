@@ -87,7 +87,7 @@ it('★ speichert nichts: weder Artikel noch Allergene, keine DB-Schreibzugriffe
 
 it('★ ohne Quellen oder ohne Belegbares: klare Meldung statt Erfindung', function () {
     ($this->mitTransport)(['felder' => ['herkunft' => ['wert' => 'Belgien', 'url' => 'https://shop.example/caprese']]], []);
-    expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'Keine belegbaren Quellen');
+    expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'Keine belastbaren Quellen');
 
     ($this->mitTransport)(['felder' => ['herkunft' => ['wert' => 'Belgien']]], $this->quellen);       // keine einzige belegte Angabe
     expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'nichts Belegbares');
@@ -102,11 +102,12 @@ it('Standard-Transport ohne Quellen vom Provider (Fake-Provider, Core vor #935):
 it('Prompt artikel.web_recherche: url-Pflicht, nie raten, nicht_enthalten nur mit Zitat', function () {
     $p = config('foodalchemist.prompts')['artikel.web_recherche'];
     // Seit #447 (KI-Klassen STARK/MITTEL/LEICHT statt Stufen A–D) trägt jeder Prompt `klasse` statt `tier` (vgl. #471).
-    // Produktdaten und Allergene sind Sicherheit und Fakten → starke Klasse.
-    expect($p['task'])->toContain('url')->toContain('rate nie')->toContain('wörtlichem zitat')
+    // Kostenziel ≤ 0,05 € je Klick (Dominique 19.10.): kleine Klasse, kein Wissens-Block — die Vorschläge sind ohnehin nur Vorschläge
+    // mit Quellen-URL, Allergene nie ohne Bestätigung.
+    expect($p['task'])->toContain('url')->toContain('rate nie')->toContain('wörtlichem zitat')->toContain('NUR mit diesem JSON-Objekt')
         ->and($p)->not->toHaveKey('tier')
-        ->and(\Platform\FoodAlchemist\Support\KiKlassen::von($p))->toBe(\Platform\FoodAlchemist\Support\KiKlassen::STARK)
-        ->and($p['klasse'] ?? null)->toBe('stark');
+        ->and(\Platform\FoodAlchemist\Support\KiKlassen::von($p))->toBe(\Platform\FoodAlchemist\Support\KiKlassen::LEICHT)
+        ->and($p['ohne_wissen'] ?? false)->toBeTrue();
 });
 
 it('★ hängt als Produktdaten-Quelle websuche im Container-Tag; erlaubte Schlüssel = Produktpass-Schlüssel', function () {
