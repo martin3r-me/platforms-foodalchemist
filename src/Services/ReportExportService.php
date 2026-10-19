@@ -849,6 +849,7 @@ class ReportExportService
         $zeilenKosten = $this->zeilenKosten($recipe);
         // Spec 85 D-1: VK aus der Standard-Darreichung (Preisleiter), nicht aus recipes.sales_net.
         $vkNetto = app(DarreichungResolver::class)->vkNetto($recipe);
+        $ekPortion = app(DarreichungResolver::class)->ekProPortion($recipe);   // Spec 85: EK je Portion, wie der VK
 
         return [
             'id' => (int) $recipe->id,
@@ -873,8 +874,9 @@ class ReportExportService
             'ek_total_eur' => $this->skaliere($recipe->ek_total_eur, $optionen),
             'ek_per_kg_eur' => $recipe->ek_per_kg_eur,
             'sales_net' => $vkNetto,
-            'food_cost_percent' => ((float) ($vkNetto ?? 0) > 0 && $recipe->ek_total_eur !== null)
-                ? round(((float) $recipe->ek_total_eur / (float) $vkNetto) * 100, 2)
+            // Spec 85: EK EINER Portion gegen den Portions-VK (vorher Ansatz-EK ÷ Portions-VK).
+            'food_cost_percent' => ((float) ($vkNetto ?? 0) > 0 && $ekPortion !== null)
+                ? round(($ekPortion / (float) $vkNetto) * 100, 2)
                 : null,
             'sales_wording_standard' => $recipe->sales_wording_standard,
             'plating_text' => $recipe->plating_text,

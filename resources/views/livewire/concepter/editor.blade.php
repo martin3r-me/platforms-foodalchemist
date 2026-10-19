@@ -1350,7 +1350,7 @@
                                             $yieldG = (float) ($pg->dish?->yield_kg ?? 0) * 1000;
                                             $postenEk = $istBasis
                                                 ? (($pg->dish?->ek_total_eur !== null && $yieldG > 0 && $pg->quantity !== null) ? (float) $pg->dish->ek_total_eur * ((float) $pg->quantity / $yieldG) : null)
-                                                : ($pg->dish?->ek_total_eur !== null ? (float) $pg->dish->ek_total_eur * $faktor : null);
+                                                : ($pg->dish?->ek_pro_portion !== null ? $pg->dish->ek_pro_portion * $faktor : null);   // Spec 85: EK je Portion
                                         @endphp
                                         <tr>
                                             <td class="min-w-[12rem]">{{ $pg->dish?->name ?? 'Gericht fehlt' }}</td>

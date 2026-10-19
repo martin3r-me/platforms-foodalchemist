@@ -69,8 +69,8 @@ class ConceptService
                 'slots.package.dishes.dish:id,name,sales_wording_standard',
                 // Kaskade: eingebettetes Paket = kind=paket-Concept (Preis + Posten für Anzeige)
                 'slots.embeddedConcept:id,name,kind,class,price_per_person_cache,ek_per_person_cache',
-                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard,ek_total_eur,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net', 'slots.embeddedConcept.slots.dish.standardPresentation',
-                'slots.dish:id,name,sales_wording_standard,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net', 'slots.dish.standardPresentation',
+                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard,ek_total_eur,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net,sales_unit_count', 'slots.embeddedConcept.slots.dish.standardPresentation',
+                'slots.dish:id,name,sales_wording_standard,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net,sales_unit_count', 'slots.dish.standardPresentation',
                 'slots.dish.dishClass:id,label',
                 'slots.unit:id,slug,display_de',
                 'vorlageQuelle:id,name',

@@ -398,7 +398,7 @@ class LeitstelleService
         $mit = [
             'chapters' => fn ($q) => $q->orderBy('position'),
             'chapters.blocks' => fn ($q) => $q->orderBy('position'),
-            'chapters.blocks.dish:id,name,sales_net', 'chapters.blocks.dish.standardPresentation',
+            'chapters.blocks.dish:id,name,sales_net,ek_total_eur,sales_unit_count', 'chapters.blocks.dish.standardPresentation',   // Spec 85: EK je Portion (blockPreis)
             'chapters.targetGroups:id',
             'targetGroups:id',
         ];

@@ -97,6 +97,7 @@ Quelle: **V** = Vanessa (Code-Durchsicht/Session), **T** = Session „test“ (N
 | I3-13 | `PairingService:1417` (`$vorschlaegeProAnker` ignoriert), `ZukaufBasisrezeptService:228` (`$zeilen` ungenutzt), `KnowledgeContextService:67` (`ALWAYS_LOAD_CROSS_CUTTING` Legacy-Default), `:1476`/`KnowledgeSearchService:140` (Discovery-Übergang), `Pairing/AnkerGraph:45` (Übergangs-Gewichte) | Übergangs-Signaturen | niedrig | V | Pfadfinder | beim Eingriff bereinigen | V |
 | I3-14 | `WarengruppeSubkategorie` | hängt per Text-Code statt Fremdschlüssel an der Warengruppe | niedrig | T24 | Pfadfinder | FK auf die WG-ID | T24 |
 | I3-15 | `FoodAlchemistTargetGroup:16` | Freitext `concepts.target_group` neben dem Pivot | niedrig | V | Pfadfinder | migrieren | V |
+| I3-16 | Wareneinsatz-Maßstab: Benchmark Ø-W%, Rezept-Bericht `food_cost_percent`, VK-Cockpit-Rückfall, Verkaufs-Browser W%-Spalte, `blockPreis` (Foodbook/Angebot, speist die Kapitel-Ampeln), `SpeisekarteService::positionEkVk`, Concepter Paket-Posten-EK | EK des **ganzen Ansatzes** gegen den VK **einer Portion** — bei 4 Portionen das Vierfache (Beispiel 8 € / 4 P / VK 5 € → 160 % statt 40 %); Leitstellen-Board lud den EK gar nicht (immer 0) | **hoch** | D-1-Kartierung 19.10., Kurator | Vanessa | **behoben (PR „Wareneinsatz je Portion“):** `DarreichungResolver::ekProPortion()` (ek_portion der Standard-Darreichung, sonst Ansatz ÷ Portionen) + Accessor `ek_pro_portion` | V |
 
 ### I4 · Toter Code
 
@@ -135,6 +136,7 @@ Methode: Token-Zählung über `src`, `resources`, `routes`, `config` ohne Kommen
 | I6-2 | `supplierDaten` | lädt den ganzen Lieferanten in den Speicher (117.000 Artikel > 512 MB) | mittel | T10 | test | in Blöcken laden bzw. streamen | T10 |
 | I6-3 | `catalogPrice` | 1–2 `exists()` je Darreichung | niedrig | T11 | test | je Request und Team cachen | T11 |
 | I6-4 | Query-Builder-Massen-Schreibzugriffe (~210 `DB::table(…)->update/insert/delete`, ~470 `->update([…])` auf Buildern) | feuern keine Modell-Ereignisse → B4-Protokoll blind | mittel | grober grep | test | Liste je Bereich; schreibende Wege über Modelle oder `FremdSchreiben::erlaubt` mit Grund | K |
+| I6-6 | `CoverageService::gerichtZeile` | Gerichte ohne Eager-Load (dish, ingredients); seit D-1 PR-A liest die Preisleiter je Gericht die Standard-Darreichung nach | niedrig | D-1 PR-A | Pfadfinder | beim nächsten Eingriff eager laden | V |
 | I6-5 | Spec 84 E-1/E-3/E-6 | Messwoche, Indizes, Redis | – | – | – | Querverweis Spec 84 | S |
 
 ### I7 · Daten und Modell
@@ -330,6 +332,7 @@ Korrektur (D-2-Prüfung 18.10.): `FaRechte::pruefeKontingent` ruft die **Host-Ap
 
 ## Changelog
 
+- 2026-10-19 · I3-16 Wareneinsatz-Maßstab (hoch, behoben) und I6-6 Coverage ohne Eager-Load (niedrig) aufgenommen.
 - 2026-10-18 · v1.3: D-8 / I1-1 entschieden (MCP sperrt freie Datensätze für die Dauer des Schreibens, sonst typisierter Fehler „gesperrt“; I1-2 Versionsprüfung). D-2-Korrektur: `formatPreisModus` kommt **zurück** (Auswahl additiv/Alternativen im Format-Kapitel + MCP-Schreibweg). Lösch-PR Concepter/Pakete.
 - 2026-10-18 · v1.2: D-2 entschieden (Liste §4: löschen / zurück / F1–F5), D-1-Plan freigegeben (drei PRs, Klasse = Standard-Darreichung, Invariante genau ein Standard, Spiegel-Schlüssel MCP entfällt), I3-1b zweite Welle (niedrig); Anhang A korrigiert (pruefeKontingent = Host, pruefeOderAbbrechen = Migration). Erster Lösch-PR: Angebote.
 - 2026-10-18 · v1.1: Entscheidungen Dominique eingetragen — D-1 VK-Altspalten vor dem Rezept-Import abbauen, D-2 erst Liste, D-3 Spec 65 B–E geschlossen, D-4 Kalkulation/OrderTemplate dauerhaft nur Team, D-7 Team-Regeln bauen (test); D-5/D-6 beim Kurator. C-b umgesetzt.

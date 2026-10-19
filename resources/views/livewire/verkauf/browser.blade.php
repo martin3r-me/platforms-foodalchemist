@@ -157,7 +157,7 @@
                                 // Ebene 2: mit Betriebsbrille zeigt die VK-Spalte den betriebsscharfen VK ($vkDisplay), sonst die Baseline (sales_net); WE folgt demselben VK.
                                 $betriebsVk = ($vkDisplay[$r->id] ?? null) !== null;
                                 $vkR = $betriebsVk ? (float) $vkDisplay[$r->id] : $r->vk_netto;   // Spec 85 D-1: Baseline = Standard-Darreichung
-                                $weR = ($vkR !== null && $vkR > 0 && $r->ek_total_eur !== null) ? (float) $r->ek_total_eur / $vkR * 100 : null;
+                                $weR = ($vkR !== null && $vkR > 0 && $r->ek_pro_portion !== null) ? $r->ek_pro_portion / $vkR * 100 : null;   // Spec 85: EK je Portion
                                 $weFarbe = $weR === null ? 'text-[var(--fa-ink-3)]' : ($weR > 35 ? 'text-[var(--fa-crit)] font-semibold' : ($weR > 30 ? 'text-[var(--fa-warn)] font-medium' : 'text-[var(--fa-ink)]'));
                             @endphp
                             <x-foodalchemist::table-row :active="$recipeId === $r->id" wire:key="vk-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"

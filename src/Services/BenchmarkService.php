@@ -52,15 +52,22 @@ class BenchmarkService
         // Unterabfrage statt Join: die Basis filtert mit unqualifizierten Spalten (team_id, deleted_at).
         $vkSql = 'COALESCE((SELECT std.sales_net FROM foodalchemist_recipe_presentations std WHERE std.recipe_id = foodalchemist_recipes.id'
             . ' AND std.is_standard = 1 AND std.deleted_at IS NULL ORDER BY std.id LIMIT 1), foodalchemist_recipes.sales_net)';
+        $ekPortionSql = '(SELECT std.ek_portion FROM foodalchemist_recipe_presentations std WHERE std.recipe_id = foodalchemist_recipes.id'
+            . ' AND std.is_standard = 1 AND std.deleted_at IS NULL ORDER BY std.id LIMIT 1)';
         $preiszeilen = (clone $base)
             ->whereRaw($vkSql . ' > 0')->where('ek_total_eur', '>', 0)
-            ->selectRaw('ek_total_eur, ' . $vkSql . ' as sales_net')
+            ->selectRaw('ek_total_eur, sales_unit_count, ' . $ekPortionSql . ' as ek_portion, ' . $vkSql . ' as sales_net')
             ->get();
         $wPct = null;
         if ($preiszeilen->isNotEmpty()) {
             $summe = 0.0;
             foreach ($preiszeilen as $z) {
-                $summe += (float) $z->ek_total_eur / (float) $z->sales_net * 100;
+                // Spec 85: EK EINER Portion gegen den Portions-VK (ek_portion, sonst Ansatz ÷ Portionen) —
+                // vorher Ansatz-EK ÷ Portions-VK, bei 4 Portionen also das Vierfache.
+                $ekPortion = $z->ek_portion !== null
+                    ? (float) $z->ek_portion
+                    : (float) $z->ek_total_eur / max(1, (int) ($z->sales_unit_count ?? 1));
+                $summe += $ekPortion / (float) $z->sales_net * 100;
             }
             $wPct = $summe / $preiszeilen->count();
         }
