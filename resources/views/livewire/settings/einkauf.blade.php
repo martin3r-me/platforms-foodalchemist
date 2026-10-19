@@ -88,6 +88,16 @@
                 <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Im Grundprodukt sichtbar: welcher Artikel übernimmt, wenn der aktuelle ausfällt.</span>
             </span>
         </label>
+        {{-- Spec 85 PR-B (Dominique 19.10.): nur am Kunden-Hauptteam --}}
+        @if($istHauptteam)
+            <label class="flex items-start gap-2 pt-3 cursor-pointer" data-standorte-uebernehmen>
+                <input type="checkbox" wire:model="standorteUebernehmen" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+                <span class="min-w-0">
+                    <span class="block text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Standorte übernehmen unsere Leitartikel</span>
+                    <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Eure bevorzugten Artikel und Sperren gelten auch an den Standorten — außer ein Standort legt selbst einen fest.</span>
+                </span>
+            </label>
+        @endif
     </x-fa::section>
 
     {{-- Spec 63: Bestellversand per Mail --}}

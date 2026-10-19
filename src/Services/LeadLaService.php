@@ -51,9 +51,9 @@ class LeadLaService
      *
      * @return Collection<int, FoodAlchemistSupplierItem>
      */
-    public function rangliste(FoodAlchemistGp $gp, Team $team, ?LeadLaStrategie $strategieOverride = null): Collection
+    public function rangliste(FoodAlchemistGp $gp, Team $team, ?LeadLaStrategie $strategieOverride = null, bool $teamPreise = false): Collection
     {
-        $kandidaten = $this->kandidaten($gp);
+        $kandidaten = $this->kandidaten($gp, $teamPreise ? $team : null);
         if ($kandidaten->isEmpty()) {
             return $kandidaten;
         }
@@ -61,8 +61,7 @@ class LeadLaService
         $strategie = $strategieOverride ?? $this->settings->leadLaStrategie($team, $gp->commodity_group_code); // E3-Override vor Phase-3-WG vor Global
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $stammIds = array_map('intval', $this->stamm->stammSupplierIdsFor($team, $gp->commodity_group_code));
-        $overlay = FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
-            ->get()->keyBy('supplier_item_id');
+        $overlay = collect(\Platform\FoodAlchemist\Support\LeadOverlay::fuer($team, [(int) $gp->id])[(int) $gp->id] ?? []);   // Spec 85 PR-B: inkl. Übernahme vom Hauptteam
 
         return $this->sortiere($kandidaten, $strategie, $prioritaeten, $stammIds, $overlay);
     }
@@ -76,16 +75,15 @@ class LeadLaService
      * @param  Collection<int, FoodAlchemistGp>  $gps
      * @return array<int, Collection<int, FoodAlchemistSupplierItem>>  gp_id ⇒ Rangliste
      */
-    public function ranglisteBulk(Collection $gps, Team $team): array
+    public function ranglisteBulk(Collection $gps, Team $team, bool $teamPreise = false): array
     {
         $gpIds = $gps->map(fn ($g) => (int) $g->id)->values()->all();
         if ($gpIds === []) {
             return [];
         }
 
-        $kandidatenByGp = $this->kandidatenBulk($gpIds);
-        $overlayByGp = FoodAlchemistGpLaPreference::where('team_id', $team->id)->whereIn('gp_id', $gpIds)
-            ->get()->groupBy('gp_id');
+        $kandidatenByGp = $this->kandidatenBulk($gpIds, $teamPreise ? $team : null);
+        $overlayByGp = \Platform\FoodAlchemist\Support\LeadOverlay::fuer($team, $gpIds);   // Spec 85 PR-B: inkl. Übernahme vom Hauptteam
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $strategieByWg = [];
         $stammByWg = [];
@@ -100,7 +98,7 @@ class LeadLaService
                 $out[(int) $gp->id] = $kandidaten;
                 continue;
             }
-            $overlay = ($overlayByGp[$gp->id] ?? collect())->keyBy('supplier_item_id');
+            $overlay = collect($overlayByGp[(int) $gp->id] ?? []);
             $out[(int) $gp->id] = $this->sortiere($kandidaten, $strategieByWg[$wg], $prioritaeten, $stammByWg[$wg], $overlay);
         }
 
@@ -115,7 +113,7 @@ class LeadLaService
      * @param  Collection<int, FoodAlchemistSupplierItem>  $kandidaten
      * @param  array<int, int>  $prioritaeten
      * @param  array<int, int>  $stammIds
-     * @param  Collection  $overlay  supplier_item_id ⇒ Preference
+     * @param  Collection  $overlay  supplier_item_id ⇒ ['gepinnt' => bool, 'locked' => bool] ({@see \Platform\FoodAlchemist\Support\LeadOverlay})
      * @return Collection<int, FoodAlchemistSupplierItem>
      */
     private function sortiere(Collection $kandidaten, LeadLaStrategie $strategie, array $prioritaeten, array $stammIds, Collection $overlay): Collection
@@ -124,8 +122,8 @@ class LeadLaService
             ->each(function ($la) use ($overlay, $stammIds) {
                 $pref = $overlay->get($la->id);
                 $la->setAttribute('ist_stamm', in_array((int) $la->supplier_id, $stammIds, true));
-                $la->setAttribute('locked', (bool) ($pref?->locked ?? false));
-                $la->setAttribute('gepinnt', (bool) ($pref?->gepinnt ?? false));
+                $la->setAttribute('locked', (bool) ($pref['locked'] ?? false));
+                $la->setAttribute('gepinnt', (bool) ($pref['gepinnt'] ?? false));
             })
             ->sortBy(fn ($la) => [
                 match ($strategie) {                                       // Stufe 0 (V-27-Strategie)
@@ -428,6 +426,29 @@ class LeadLaService
         app(KostenCacheService::class)->nachPinAenderung((int) $gp->id, $team);   // Spec 82 3b: Auslöser Pin/Lock
     }
 
+    /**
+     * Spec 85 PR-B (Dominique 19.10.): „Bezugsquelle setzen“ aus dem Controlling. Wer den globalen Lead setzen darf
+     * ({@see darfGlobalenLead}: Besitzer, bei globalen GPs der Master), setzt ihn für alle; jedes andere Team legt seinen
+     * Leitartikel als Pin fest — nur einen für das Team sichtbaren Artikel, Rolle Kuratieren. Ohne Pin gilt der Plattform-Lead.
+     *
+     * @return 'global'|'pin'
+     */
+    public function setzeLeitartikel(Team $team, FoodAlchemistGp $gp, int $laId, ?string $reason = null, bool $recompute = true): string
+    {
+        if (self::darfGlobalenLead($team, $gp)) {
+            $this->setLeadLa($team, $gp, $laId, $reason, $recompute);
+
+            return 'global';
+        }
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Leitartikel festlegen');
+        if (! FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($laId)->exists()) {
+            throw new \RuntimeException('Diesen Artikel kann euer Team nicht beziehen (Lieferant nicht freigeschaltet).');
+        }
+        $this->pinnen($team, $gp, $laId);
+
+        return 'pin';
+    }
+
     /** Team-Pin (V-27): fixiert den effektiven Lead, überlebt Bulk-Neuwahl. NULL = Pin lösen. */
     public function pinnen(Team $team, FoodAlchemistGp $gp, ?int $laId): void
     {
@@ -636,15 +657,20 @@ class LeadLaService
      * ohne Team). Mandantenpreise beeinflussen die Lead-Wahl nicht; ein Team weicht über Pins
      * ab (Spec 77). Ein Lead je Team nach eigenem Preis ist Stufe 3b — kein Fehler.
      */
-    private function kandidaten(FoodAlchemistGp $gp): Collection
+    /**
+     * @param  ?Team  $sicht  Spec 85 PR-B: Leitartikel eines Teams — nur für das Team sichtbare Artikel (Stamm-Paket-Regel) zu SEINEN
+     *                        Preisen (`preisSichtFuer` bleibt Riegel). Ohne Team wie bisher: alle verknüpften Artikel zum Listenpreis
+     *                        (Wahl des globalen Leads durch den Besitzer).
+     */
+    private function kandidaten(FoodAlchemistGp $gp, ?Team $sicht = null): Collection
     {
-        $las = FoodAlchemistSupplierItem::query()
+        $las = ($sicht !== null ? FoodAlchemistSupplierItem::visibleToTeam($sicht) : FoodAlchemistSupplierItem::query())
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->where('s.gp_id', $gp->id)
             ->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
-            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
             ->get();
 
         return $las->each(function ($la) {
@@ -664,15 +690,15 @@ class LeadLaService
      * @param  list<int>  $gpIds
      * @return array<int, Collection<int, FoodAlchemistSupplierItem>>
      */
-    private function kandidatenBulk(array $gpIds): array
+    private function kandidatenBulk(array $gpIds, ?Team $sicht = null): array
     {
-        $las = FoodAlchemistSupplierItem::query()
+        $las = ($sicht !== null ? FoodAlchemistSupplierItem::visibleToTeam($sicht) : FoodAlchemistSupplierItem::query())
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereIn('s.gp_id', $gpIds)
             ->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', 's.gp_id AS _gp_id')
-            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
             ->get();
 
         $las->each(function ($la) {

@@ -360,9 +360,25 @@ class TeamSettingsService
         app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Einstellungen ändern');
 
         $settings = $this->for($team);
+        $vorher = $settings->standorte_uebernehmen_leitartikel;
         $settings->fill($attributes)->save();
+        if (array_key_exists('standorte_uebernehmen_leitartikel', $attributes) && $vorher !== $settings->standorte_uebernehmen_leitartikel) {
+            // Spec 85 PR-B: Übernahme der Leitartikel geändert → Team-Kosten der Unter-Teams veraltet, Ketten-Memo leeren
+            \Platform\FoodAlchemist\Support\LeadOverlay::vergessen();
+            \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_team_kosten')
+                ->whereIn('team_id', \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $team->id))->update(['veraltet' => true]);
+        }
 
         return $settings;
+    }
+
+    /**
+     * Spec 85 Controlling PR-B (Dominique 19.10.): übernehmen die Standorte (Unter-Teams) die Leitartikel (Pins) des Kunden-Hauptteams?
+     * Einstellung am Hauptteam, Standard AN (NULL = nie gesetzt). Wirkt über {@see \Platform\FoodAlchemist\Support\LeadOverlay}.
+     */
+    public function standorteUebernehmenLeitartikel(Team $hauptteam): bool
+    {
+        return (bool) ($this->for($hauptteam)->standorte_uebernehmen_leitartikel ?? true);
     }
 
     /**

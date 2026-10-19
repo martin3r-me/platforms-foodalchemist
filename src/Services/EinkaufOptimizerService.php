@@ -69,7 +69,7 @@ class EinkaufOptimizerService
 
                 continue;
             }
-            $kette = $this->lead->rangliste($gp, $team);
+            $kette = $this->lead->rangliste($gp, $team, teamPreise: true);   // Spec 85 PR-B: Artikel und Preise des Teams
             $this->rebate->enrichRangliste($team, $kette, $gp->commodity_group_code);
 
             $cand = $kette->filter(fn ($la) => $la->vergleichspreis_wert !== null
