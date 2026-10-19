@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Exceptions\NectaPruefallException;
 use Platform\FoodAlchemist\Services\Necta\NectaPruefallService;
+use Platform\FoodAlchemist\Support\FaShell;
 use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
@@ -139,7 +140,7 @@ class NectaPruefaelle extends Component
             'arten' => self::ARTEN,
             'aktionLabel' => self::AKTION_LABEL,
             'sammelErlaubt' => $this->art !== '' && $this->lieferant !== null && $this->status === 'offen',
-        ]);
+        ])->layout(FaShell::layout());
     }
 
     private function team()
