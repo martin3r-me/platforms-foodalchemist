@@ -65,6 +65,12 @@ it('Rangliste mit Team-Preisen: nur die Artikel des Mandanten zu seinen Preisen;
     expect($team->pluck('id')->map(fn ($i) => (int) $i)->all())->toBe([(int) $this->laA->id])
         ->and((float) $team->first()->aktiver_preis)->toBe(8.0)
         ->and($liste->pluck('id')->count())->toBe(2);
+
+    // Einzel-Pfad (Einkaufs-Optimierer) rechnet genauso
+    $einzel = $svc->rangliste($this->gp, $this->rootTeam, teamPreise: true);
+    expect($einzel->pluck('id')->map(fn ($i) => (int) $i)->all())->toBe([(int) $this->laA->id])
+        ->and((float) $einzel->first()->aktiver_preis)->toBe(8.0)
+        ->and($svc->rangliste($this->gp, $this->rootTeam)->count())->toBe(2);
 });
 
 it('Mandant setzt im Preisvergleich seinen Leitartikel (Pin); der Plattform-Lead bleibt; Anzeige „euer Leitartikel“', function () {
