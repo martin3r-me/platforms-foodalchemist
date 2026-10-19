@@ -45,13 +45,15 @@
         @endphp
         <div class="relative" x-data="{ tip: null, mx: 0, my: 0 }" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); grid-template-rows: {{ $diagramm['hoehe'] }}px 1.5rem; column-gap: 0.25rem; margin-top: 1.25rem;" data-preisverlauf-flaeche role="img"
              aria-label="Preisverlauf in {{ $diagramm['einheit'] }}">
-            <div class="relative" data-preisverlauf-achse-y>
+            {{-- Jedes Kind explizit platziert: ein einzelnes explizit platziertes Kind (Marker-Labels, #427) drängte das SVG per
+                 Auto-Placement in Zeile 2 / Spalte 1 (56 × 24 px, io 19.10.). --}}
+            <div class="relative" style="grid-column: 1; grid-row: 1;" data-preisverlauf-achse-y>
                 <span style="position: absolute; top: -1.15rem; right: 0; {{ $schrift }}" data-preisverlauf-einheit>{{ $diagramm['einheit'] }}</span>
                 @foreach($diagramm['achse_y'] as $a)
                     <span style="position: absolute; right: 0; top: {{ $a['y'] / 10 }}%; transform: translateY(-50%); {{ $schrift }}" class="tabular-nums">{{ $a['label'] }}</span>
                 @endforeach
             </div>
-            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" data-preisverlauf-svg>
+            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" style="grid-column: 2; grid-row: 1; width: 100%; height: 100%;" data-preisverlauf-svg>
                 @foreach($diagramm['achse_y'] as $a)
                     <line x1="0" x2="1000" y1="{{ $a['y'] }}" y2="{{ $a['y'] }}" stroke="var(--fa-line)" stroke-width="1" vector-effect="non-scaling-stroke" />
                 @endforeach
@@ -94,8 +96,8 @@
             <div x-show="tip" x-cloak x-text="tip" role="tooltip" data-preisverlauf-tooltip
                  x-bind:style="'left: ' + Math.max(0, Math.min(mx + 14, $root.clientWidth - $el.offsetWidth)) + 'px; top: ' + Math.max(0, my - 48) + 'px'"
                  class="pointer-events-none absolute z-10 max-w-xs rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
-            <div></div>
-            <div class="relative" data-preisverlauf-achse-x>
+            <div style="grid-column: 1; grid-row: 2;"></div>
+            <div class="relative" style="grid-column: 2; grid-row: 2;" data-preisverlauf-achse-x>
                 @foreach($diagramm['achse_x'] as $a)
                     <span style="position: absolute; top: 0.4rem; left: {{ $a['x'] / 10 }}%; transform: translateX(-50%); white-space: nowrap; {{ $schrift }}">{{ $a['label'] }}</span>
                 @endforeach
