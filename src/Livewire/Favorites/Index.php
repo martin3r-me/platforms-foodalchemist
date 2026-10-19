@@ -27,13 +27,13 @@ class Index extends Component
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp === null || ! $gp->isOwnedBy($team)) {
-            $this->errorToast('GP nicht editierbar (global/Master ist read-only).');
+        if ($gp === null) {   // Spec 85 FAV-1: eigene Liste je Team — jeder sichtbare GP darf Favorit sein
+            $this->errorToast('GP nicht gefunden.');
 
             return;
         }
         try {
-            app(FavoriteGpService::class)->pin($gp, $rank);
+            app(FavoriteGpService::class)->pin($team, $gp, $rank);
             $this->savedToast('Favorit gepinnt');
         } catch (\RuntimeException $e) {
             $this->errorToast($e->getMessage());
@@ -44,21 +44,29 @@ class Index extends Component
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp === null || ! $gp->isOwnedBy($team)) {
-            $this->errorToast('GP nicht editierbar.');
+        if ($gp === null) {
+            $this->errorToast('GP nicht gefunden.');
 
             return;
         }
-        app(FavoriteGpService::class)->exclude($gp);
-        $this->savedToast('Favorit ausgeschlossen');
+        try {
+            app(FavoriteGpService::class)->exclude($team, $gp);
+            $this->savedToast('Favorit ausgeschlossen');
+        } catch (\RuntimeException $e) {
+            $this->errorToast($e->getMessage());
+        }
     }
 
     public function setRank(int $gpId, ?int $rank): void
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp !== null && $gp->isOwnedBy($team) && $gp->is_favorite) {
-            app(FavoriteGpService::class)->reorder([$gpId => (int) $rank]);
+        if ($gp !== null) {
+            try {
+                app(FavoriteGpService::class)->reorder($team, [$gpId => (int) $rank]);
+            } catch (\RuntimeException $e) {
+                $this->errorToast($e->getMessage());
+            }
         }
     }
 

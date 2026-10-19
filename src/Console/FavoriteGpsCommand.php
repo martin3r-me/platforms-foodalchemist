@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Services\FavoriteGpService;
 class FavoriteGpsCommand extends Command
 {
     protected $signature = 'foodalchemist:favorites
-        {--team= : Team-ID (default: alle sichtbar)}
+        {--team= : Team-ID (Pflicht für --pin/--exclude: Favoriten sind je Team, Spec 85)}
         {--suggest : Auto-Score-Rangliste anzeigen (Report)}
         {--pin= : GP-ID als Favorit pinnen}
         {--exclude= : GP-ID aus den Favoriten nehmen}
@@ -40,6 +40,11 @@ class FavoriteGpsCommand extends Command
         }
 
         // Aktionen
+        if (($this->option('pin') !== null || $this->option('exclude') !== null) && $team === null) {
+            $this->error('Favoriten sind je Team (Spec 85) — --team=<id> angeben.');
+
+            return self::FAILURE;
+        }
         if ($this->option('pin') !== null) {
             $gp = FoodAlchemistGp::find((int) $this->option('pin'));
             if ($gp === null) {
@@ -48,7 +53,7 @@ class FavoriteGpsCommand extends Command
                 return self::FAILURE;
             }
             try {
-                $svc->pin($gp, $this->option('rank') !== null ? (int) $this->option('rank') : null);
+                $svc->pin($team, $gp, $this->option('rank') !== null ? (int) $this->option('rank') : null);
             } catch (\RuntimeException $e) {
                 $this->error($e->getMessage());
 
@@ -66,7 +71,13 @@ class FavoriteGpsCommand extends Command
 
                 return self::FAILURE;
             }
-            $svc->exclude($gp);
+            try {
+                $svc->exclude($team, $gp);
+            } catch (\RuntimeException $e) {
+                $this->error($e->getMessage());
+
+                return self::FAILURE;
+            }
             $this->info("GP {$gp->id} ({$gp->name}) aus den Favoriten genommen.");
 
             return self::SUCCESS;

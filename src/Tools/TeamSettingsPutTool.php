@@ -25,7 +25,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'standorte_uebernehmen_leitartikel', 'trend_dataforseo_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'standorte_uebernehmen_leitartikel', 'standorte_uebernehmen_favoriten', 'trend_dataforseo_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
@@ -91,6 +91,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'default_markup_class_id' => ['type' => 'integer', 'description' => 'ID der Standard-Aufschlagsklasse (team-scoped geprüft).'],
                 'gerichte_station_id' => ['description' => 'Ganzzahl oder null (null hebt auf) — Posten für Gerichte (Pass): Auftragszeilen von Gerichten ohne Rezept-Posten bekommen ihn. ID aus production_stations.GET, für das Team sichtbar und aktiv. 0, null oder leer löscht die Vorgabe. Ohne type im Schema, damit null den Core-Executor passiert (Spec 83 L2).'],
                         'show_fallback_chain' => ['type' => 'boolean', 'description' => 'Ausweich-Kette (Lead-LA) anzeigen.'],
+                        'standorte_uebernehmen_favoriten' => ['type' => 'boolean', 'description' => 'Am Kunden-Hauptteam: Standorte übernehmen unsere Favoriten; eigene Favoriten/Ausschlüsse eines Standorts gehen vor. Standard AN.'],
                         'standorte_uebernehmen_leitartikel' => ['type' => 'boolean', 'description' => 'Am Kunden-Hauptteam: Standorte (Unter-Teams) übernehmen unsere Leitartikel (Pins) und Sperren; eigener Pin eines Standorts gewinnt. Standard AN.'],
                         'trend_dataforseo_enabled' => ['type' => 'boolean', 'description' => 'Spec 79: wöchentliche Google-Trends-Messung über DataForSEO an/aus (kostet je Abfrage).'],
                         'trend_dataforseo_budget_usd' => ['type' => 'number', 'description' => 'Spec 79: Monatsbudget Google Trends in USD (Standard 5).'],

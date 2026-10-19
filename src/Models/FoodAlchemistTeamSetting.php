@@ -32,6 +32,7 @@ class FoodAlchemistTeamSetting extends Model
         'lead_la_prioritaeten' => 'array',
         'show_fallback_chain' => 'boolean',
         'standorte_uebernehmen_leitartikel' => 'boolean',   // Spec 85 PR-B: NULL = AN (Standard), am Kunden-Hauptteam
+        'standorte_uebernehmen_favoriten' => 'boolean',     // Spec 85 FAV-1: NULL = AN (Standard), am Kunden-Hauptteam
         'iodized_hint_active' => 'boolean',   // NULL bleibt NULL = erben
         'trend_dataforseo_enabled' => 'boolean',
         'trend_dataforseo_budget_usd' => 'decimal:2',

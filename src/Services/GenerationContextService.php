@@ -212,7 +212,7 @@ class GenerationContextService
     {
         $treffer = FoodAlchemistGp::query()
             ->visibleToTeam($team)
-            ->favorites()
+            ->favoritenFuer($team)   // Spec 85 FAV-1: Liste des aktuellen Teams
             ->when($convenienceOnly, fn ($q) => $q->where('tag_is_convenience', true))
             ->limit(self::FAVORITES_MAX)
             ->get(['id', 'name'])

@@ -471,16 +471,16 @@
                 <x-fa::section title="Favorit" icon="heroicon-o-star">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <p class="{{ $leise }} min-w-0">
-                            @if($gp->is_favorite)
-                                In deinen Favoriten{{ $gp->favorite_rank !== null ? ', Rang ' . $gp->favorite_rank : '' }}.
+                            @if($favorit !== null)
+                                In euren Favoriten{{ $favorit['rang'] !== null ? ', Rang ' . $favorit['rang'] : '' }}{{ $favorit['eigen'] ? '' : ' (vom Hauptteam übernommen)' }}.
                             @else
                                 Favoriten nutzt der Generator, wenn „Auf Basis meiner Favoriten bauen" eingeschaltet ist.
                             @endif
                         </p>
-                        @if($kannKuratieren)
-                            <x-fa::button size="sm" :variant="$gp->is_favorite ? 'ghost' : 'secondary'" :icon="$gp->is_favorite ? 'heroicon-s-star' : 'heroicon-o-star'"
-                                wire:click="favoriteToggle" data-gp-favoriten-toggle>{{ $gp->is_favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen' }}</x-fa::button>
-                        @elseif($gp->is_favorite)
+                        @if($darfFavoriten)
+                            <x-fa::button size="sm" :variant="$favorit !== null ? 'ghost' : 'secondary'" :icon="$favorit !== null ? 'heroicon-s-star' : 'heroicon-o-star'"
+                                wire:click="favoriteToggle" data-gp-favoriten-toggle>{{ $favorit !== null ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen' }}</x-fa::button>
+                        @elseif($favorit !== null)
                             <x-fa::badge tone="accent" icon="heroicon-s-star" title="Favorit (nur lesen)">Favorit</x-fa::badge>
                         @endif
                     </div>

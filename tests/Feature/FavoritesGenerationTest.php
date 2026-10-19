@@ -17,7 +17,7 @@ beforeEach(function () {
 
     $gp = $this->makeGp($this->rootTeam, 'TK-Blätterteig');
     $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
-    app(FavoriteGpService::class)->pin($gp, 1);
+    app(FavoriteGpService::class)->pin($this->rootTeam, $gp, 1);   // Spec 85 FAV-1: Liste des Teams
 
     $this->ctx = app(GenerationContextService::class);
 });
@@ -42,7 +42,7 @@ it('opt-in spielt die Liste auch ohne Leit-Tokens ein', function () {
 
 it('opt-in ohne gepinnte Favoriten → kein Block', function () {
     app(FavoriteGpService::class)->exclude(
-        \Platform\FoodAlchemist\Models\FoodAlchemistGp::where('name', 'TK-Blätterteig')->first()
+        $this->rootTeam, \Platform\FoodAlchemist\Models\FoodAlchemistGp::where('name', 'TK-Blätterteig')->first()
     );
     $out = $this->ctx->forGeneration($this->rootTeam, 'Blätterteig-Tarte', false, true);
     expect($out)->not->toHaveKey('favorites');
@@ -52,7 +52,7 @@ it('H4b: convenienceOnly verengt den Favoriten-Block auf Convenience-getaggte GP
     // zusätzlich ein nicht-Convenience-Favorit
     $roh = $this->makeGp($this->rootTeam, 'Frische Möhre');
     $roh->update(['status' => 'approved', 'tag_is_convenience' => false]);
-    app(FavoriteGpService::class)->pin($roh, 2);
+    app(FavoriteGpService::class)->pin($this->rootTeam, $roh, 2);
 
     // ohne Filter: beide Favoriten im Block
     $alle = $this->ctx->forGeneration($this->rootTeam, 'xy', false, true, false);

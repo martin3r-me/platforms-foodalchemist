@@ -6,6 +6,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamFavorit;
+use Platform\FoodAlchemist\Support\FavoritenOverlay;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -20,6 +22,10 @@ use Platform\FoodAlchemist\Support\TeamScope;
  * Auto-Score je GP (Spec §5): Verwendungshäufigkeit × Lieferanten-Priorität
  * (Lead-LA-Supplier in der Prioritätskette) × Lead-LA-Vollständigkeit.
  * Gewichte bewusst konservativ; am realen Bestand nachkalibrierbar.
+ *
+ * Spec 85 FAV-1 (Dominique 19.10.): Favoriten sind je TEAM (Overlay `foodalchemist_team_favoriten`, wirksam über FavoritenOverlay mit
+ * Übernahme vom Hauptteam) — nicht mehr die globalen Spalten am GP. Schreiben: eigenes Team, Rolle Kuratieren, GP für das Team sichtbar;
+ * kein Besitz am GP nötig. Ohne Team (Konsole ohne --team) gibt es keine Favoriten.
  */
 class FavoriteGpService
 {
@@ -48,12 +54,12 @@ class FavoriteGpService
         $prioPos = array_flip(array_values(array_map('intval', $prioritaeten))); // supplier_id => index
 
         $suche = $search !== null ? trim($search) : '';
+        $fav = $team !== null ? FavoritenOverlay::fuer($team) : [];   // Spec 85 FAV-1: Favoriten des Teams
         $rows = $this->favoritesBaseQuery($team)
             ->when($suche !== '', fn ($q) => $q->where('g.name', 'like', '%' . $suche . '%'))
-            // gepinnt IMMER mitnehmen (auch bei Suche/Score-Cap) — via OR-Gruppe
-            ->when($pinnedOnly, fn ($q) => $q->where('g.is_favorite', true))
+            ->when($pinnedOnly, fn ($q) => $q->whereIn('g.id', array_keys($fav) ?: [0]))
             ->select([
-                'g.id', 'g.name', 'g.lead_la_supplier_item_id', 'g.is_favorite', 'g.favorite_rank', 'g.tag_is_convenience',
+                'g.id', 'g.name', 'g.lead_la_supplier_item_id', 'g.tag_is_convenience',
             ])
             ->selectSub(
                 DB::table('foodalchemist_recipe_ingredients')
@@ -76,7 +82,7 @@ class FavoriteGpService
             )
             ->get();
 
-        $mapped = $rows->map(function ($r) use ($prioPos) {
+        $mapped = $rows->map(function ($r) use ($prioPos, $fav) {
             $usage = (int) $r->usage;
             $hasLead = $r->lead_la_supplier_item_id !== null;
             $hasPrice = ((int) $r->price_rows) > 0;
@@ -101,9 +107,9 @@ class FavoriteGpService
                 'has_price' => $hasPrice,
                 'priority_pos' => $priorityPos,
                 'score' => round($score, 2),
-                'is_favorite' => (bool) $r->is_favorite,
+                'is_favorite' => isset($fav[(int) $r->id]),
                 'is_convenience' => (bool) $r->tag_is_convenience,
-                'favorite_rank' => $r->favorite_rank !== null ? (int) $r->favorite_rank : null,
+                'favorite_rank' => $fav[(int) $r->id]['rang'] ?? null,
             ];
         });
 
@@ -141,8 +147,9 @@ class FavoriteGpService
         if ($team !== null) {
             TeamScope::applyVisible($q, 'g.team_id', $team); // NULL (global) ∪ Ancestry — wie favoritesBaseQuery
         }
+        $fav = $team !== null ? FavoritenOverlay::fuer($team) : [];   // Spec 85 FAV-1
         $rows = $q
-            ->select(['g.id', 'g.is_favorite', 'g.lead_la_supplier_item_id'])
+            ->select(['g.id', 'g.lead_la_supplier_item_id'])
             ->selectSub(
                 DB::table('foodalchemist_supplier_items AS li')
                     ->whereColumn('li.id', 'g.lead_la_supplier_item_id')->whereNull('li.deleted_at')
@@ -160,7 +167,7 @@ class FavoriteGpService
 
         $out = [];
         foreach ($rows as $r) {
-            $isFav = (bool) $r->is_favorite;
+            $isFav = isset($fav[(int) $r->id]);
             $hasLead = $r->lead_la_supplier_item_id !== null;
             $hasPrice = ((int) $r->price_rows) > 0;
             $priorityPos = ($r->lead_supplier_id !== null && isset($prioPos[(int) $r->lead_supplier_id]))
@@ -176,33 +183,48 @@ class FavoriteGpService
         return $out;
     }
 
-    /** Aktuell gepinnte Favoriten (nach Rang), team-sichtbar. */
+    /** Wirksame Favoriten des Teams (nach Rang), nur für das Team sichtbare GPs. `favorite_rank` = Rang im Team. */
     public function current(?Team $team): Collection
     {
-        return $this->scopeVisible($team, FoodAlchemistGp::query())
-            ->favorites()
-            ->get(['id', 'name', 'favorite_rank', 'tag_is_convenience']);
+        if ($team === null) {
+            return collect();
+        }
+        $fav = FavoritenOverlay::fuer($team);
+        $gps = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', array_keys($fav) ?: [0])
+            ->get(['id', 'name', 'tag_is_convenience'])->keyBy('id');
+
+        return collect(array_keys($fav))->map(fn ($id) => $gps->get($id)?->setAttribute('favorite_rank', $fav[$id]['rang']))
+            ->filter()->values();
     }
 
     /**
      * GP als Favorit pinnen (idempotent). JEDER approved GP ist pinbar
      * (§4-Convenience-Zwang 2026-07-20 fallengelassen — Dominique).
      */
-    public function pin(FoodAlchemistGp $gp, ?int $rank = null): void
+    public function pin(Team $team, FoodAlchemistGp $gp, ?int $rank = null): void
     {
-        $gp->forceFill([
-            'is_favorite' => true,
-            'favorite_rank' => $rank,
-        ])->save();
+        $this->pruefeSchreiben($team, $gp);
+        FoodAlchemistTeamFavorit::updateOrCreate(['team_id' => $team->id, 'gp_id' => $gp->id], ['rang' => $rank, 'ausgeschlossen' => false]);
     }
 
-    /** GP aus den Favoriten nehmen. */
-    public function exclude(FoodAlchemistGp $gp): void
+    /**
+     * GP aus den Favoriten des Teams nehmen. Eigener Eintrag weg; ist er danach noch Favorit (vom Hauptteam übernommen), wird er
+     * für dieses Team ausgeschlossen.
+     */
+    public function exclude(Team $team, FoodAlchemistGp $gp): void
     {
-        $gp->forceFill([
-            'is_favorite' => false,
-            'favorite_rank' => null,
-        ])->save();
+        $this->pruefeSchreiben($team, $gp);
+        FoodAlchemistTeamFavorit::where('team_id', $team->id)->where('gp_id', $gp->id)->delete();
+        if (isset(FavoritenOverlay::fuer($team)[(int) $gp->id])) {
+            FoodAlchemistTeamFavorit::create(['team_id' => $team->id, 'gp_id' => $gp->id, 'rang' => null, 'ausgeschlossen' => true]);
+        }
+    }
+
+    /** Eigenen Eintrag (Favorit oder Ausschluss) entfernen — danach gilt wieder die Übernahme vom Hauptteam. */
+    public function entfernen(Team $team, FoodAlchemistGp $gp): void
+    {
+        $this->pruefeSchreiben($team, $gp);
+        FoodAlchemistTeamFavorit::where('team_id', $team->id)->where('gp_id', $gp->id)->delete();
     }
 
     /**
@@ -210,19 +232,27 @@ class FavoriteGpService
      *
      * @param  array<int,int>  $gpIdToRank
      */
-    public function reorder(array $gpIdToRank): int
+    public function reorder(Team $team, array $gpIdToRank): int
     {
+        app(FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Favoriten pflegen');
         $n = 0;
-        DB::transaction(function () use ($gpIdToRank, &$n) {
+        DB::transaction(function () use ($team, $gpIdToRank, &$n) {
             foreach ($gpIdToRank as $gpId => $rank) {
-                $n += DB::table('foodalchemist_gps')
-                    ->where('id', (int) $gpId)
-                    ->where('is_favorite', true)
-                    ->update(['favorite_rank' => (int) $rank, 'updated_at' => now()]);
+                $n += FoodAlchemistTeamFavorit::where('team_id', $team->id)->where('gp_id', (int) $gpId)->where('ausgeschlossen', false)
+                    ->update(['rang' => (int) $rank, 'updated_at' => now()]);
             }
         });
 
         return $n;
+    }
+
+    /** Spec 85 FAV-1: eigene Liste pflegt, wer im Team kuratieren darf — für jeden GP, den das Team sieht (kein Besitz am GP nötig). */
+    private function pruefeSchreiben(Team $team, FoodAlchemistGp $gp): void
+    {
+        app(FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Favoriten pflegen');
+        if (! FoodAlchemistGp::visibleToTeam($team)->whereKey($gp->id)->exists()) {
+            throw new \RuntimeException('Dieses Grundprodukt sieht euer Team nicht.');
+        }
     }
 
     /** Basis-Query: approved, echte (kein Platzhalter) GPs, team-sichtbar, Alias g. */
@@ -240,13 +270,4 @@ class FavoriteGpService
         return $q;
     }
 
-    /** @return \Illuminate\Database\Eloquent\Builder */
-    private function scopeVisible(?Team $team, $query)
-    {
-        if ($team === null) {
-            return $query;
-        }
-
-        return $query->visibleToTeam($team);
-    }
 }

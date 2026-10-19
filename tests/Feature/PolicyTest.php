@@ -224,6 +224,15 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - kein HasUuidV7/LogsActivity: nie extern adressiert; der Audit läuft über `uebernommen` der Version (alter Wert festgehalten).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistTeamFavorit') {
+            // Spec 85 FAV-1: Favoriten-Zeile je (Team, GP) — ein Overlay wie gp_la_preferences, kein kuratierter Katalog-Datensatz.
+            //  - kein BelongsToTeamHierarchy: gelesen wird nur über die EinkaufsKette (eigenes Team > Hauptteam, nie der Master, mit
+            //    eigenem Schalter). scopeVisibleToTeam würde die Zeilen der Eltern pauschal einmischen — die Vererbungsregel ist eine andere.
+            //  - kein SoftDeletes: unique(team_id, gp_id) + updateOrCreate — eine trashed Zeile wäre unsichtbar und kollidierte am Unique
+            //    (dieselbe Falle wie bei ActiveOutlet). Ausschluss ist eine eigene Spalte (`ausgeschlossen`), kein Löschen.
+            //  - LogsActivity + HasUuidV7 trägt das Model.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).

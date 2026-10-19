@@ -254,12 +254,12 @@ it('favoriteToggle pinnt einen Convenience-GP und nimmt ihn wieder heraus', func
         ->call('favoriteToggle')
         ->assertSet('fehler', null)
         ->assertDispatched('gp-gespeichert');
-    expect($gp->refresh()->is_favorite)->toBeTrue();
+    expect(isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($this->rootTeam)[$gp->id]))->toBeTrue();   // Spec 85 FAV-1: Liste des Teams
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
         ->call('favoriteToggle');
-    expect($gp->refresh()->is_favorite)->toBeFalse();
+    expect(isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($this->rootTeam)[$gp->id]))->toBeFalse();
 });
 
 it('favoriteToggle pinnt AUCH nicht-Convenience-GPs (kein §4-Zwang mehr)', function () {
@@ -271,11 +271,11 @@ it('favoriteToggle pinnt AUCH nicht-Convenience-GPs (kein §4-Zwang mehr)', func
         ->call('favoriteToggle')
         ->assertSet('fehler', null);
 
-    expect($gp->refresh()->is_favorite)->toBeTrue();
+    expect(isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($this->rootTeam)[$gp->id]))->toBeTrue();
 });
 
-it('favoriteToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', function () {
-    // GP gehört dem Root; aktiver User sitzt im Kind-Team → read-only.
+it('favoriteToggle an einem geerbten GP: das Kind-Team pflegt seine EIGENE Liste, das Oberteam bleibt unberührt (Spec 85 FAV-1)', function () {
+    // GP gehört dem Root; aktiver User sitzt im Kind-Team — früher D1-Sperre, jetzt Favoriten je Team
     $gp = $this->makeGp($this->rootTeam, 'TK-Erbsen');
     $gp->update(['status' => 'approved', 'tag_is_convenience' => true]);
     $this->actingAs($this->makeUser($this->childA, 'Kind User'));
@@ -283,7 +283,9 @@ it('favoriteToggle blockt geerbte Katalog-GPs (D1: nur Besitzer-Team)', function
     Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
         ->call('favoriteToggle')
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'D1'));
+        ->assertSet('fehler', null);
 
-    expect($gp->refresh()->is_favorite)->toBeFalse();
+    \Platform\FoodAlchemist\Support\EinkaufsKette::vergessen();
+    expect(isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($this->childA)[$gp->id]))->toBeTrue()
+        ->and(isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($this->rootTeam)[$gp->id]))->toBeFalse();
 });

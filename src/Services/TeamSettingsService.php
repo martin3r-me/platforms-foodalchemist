@@ -362,6 +362,9 @@ class TeamSettingsService
         $settings = $this->for($team);
         $vorher = $settings->standorte_uebernehmen_leitartikel;
         $settings->fill($attributes)->save();
+        if (array_key_exists('standorte_uebernehmen_favoriten', $attributes)) {
+            \Platform\FoodAlchemist\Support\EinkaufsKette::vergessen();   // Spec 85 FAV-1: Favoriten-Kette neu lesen
+        }
         if (array_key_exists('standorte_uebernehmen_leitartikel', $attributes) && $vorher !== $settings->standorte_uebernehmen_leitartikel) {
             // Spec 85 PR-B: Übernahme der Leitartikel geändert → Team-Kosten der Unter-Teams veraltet, Ketten-Memo leeren
             \Platform\FoodAlchemist\Support\LeadOverlay::vergessen();
@@ -379,6 +382,12 @@ class TeamSettingsService
     public function standorteUebernehmenLeitartikel(Team $hauptteam): bool
     {
         return (bool) ($this->for($hauptteam)->standorte_uebernehmen_leitartikel ?? true);
+    }
+
+    /** Spec 85 FAV-1 (Dominique 19.10.): übernehmen die Standorte die Favoriten des Kunden-Hauptteams? Standard AN. */
+    public function standorteUebernehmenFavoriten(Team $hauptteam): bool
+    {
+        return (bool) ($this->for($hauptteam)->standorte_uebernehmen_favoriten ?? true);
     }
 
     /**

@@ -22,7 +22,7 @@ beforeEach(function () {
     // ein gepinnter Favorit (hier convenience-getaggt) + ein nicht gepinnter GP
     $this->conv = $this->makeGp($this->rootTeam, 'TK-Spätzle');
     $this->conv->update(['status' => 'approved', 'tag_is_convenience' => true]);
-    app(FavoriteGpService::class)->pin($this->conv, 1);
+    app(FavoriteGpService::class)->pin($this->rootTeam, $this->conv, 1);   // Spec 85 FAV-1: Liste des Teams
 
     $this->normal = $this->makeGp($this->rootTeam, 'Frischer Spinat');
     $this->normal->update(['status' => 'approved']);

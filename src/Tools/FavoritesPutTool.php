@@ -24,7 +24,8 @@ class FavoritesPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
     public function getDescription(): string
     {
         return 'Pinnt (action=pin, optional rank) oder entfernt (action=exclude) ein GP in/aus der '
-            . 'kuratierten Favoriten-Liste (Lieblings-GPs). Jeder approved GP ist pinbar.';
+            . 'Favoriten-Liste DIESES Teams (Lieblings-GPs, Spec 85: je Team, Standorte übernehmen die Liste des Hauptteams). '
+            . 'Jeder für das Team sichtbare GP ist pinbar; Rolle Kuratieren. exclude an einem übernommenen Favoriten schließt ihn für das Team aus.';
     }
 
     public function getSchema(): array
@@ -51,19 +52,18 @@ class FavoritesPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
         if ($gp === null) {
             return ToolResult::error('GP nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if (! $gp->isOwnedBy($team)) {
-            return ToolResult::error('GP gehört nicht dem aktiven Team (global/Master ist read-only).', 'ACCESS_DENIED');
-        }
 
         $svc = app(FavoriteGpService::class);
         $action = (string) $arguments['action'];
 
         try {
             if ($action === 'pin') {
-                $svc->pin($gp, isset($arguments['rank']) ? (int) $arguments['rank'] : null);
+                $svc->pin($team, $gp, isset($arguments['rank']) ? (int) $arguments['rank'] : null);
             } else {
-                $svc->exclude($gp);
+                $svc->exclude($team, $gp);
             }
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
+            return ToolResult::error($e->getMessage(), 'FORBIDDEN');
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -71,8 +71,9 @@ class FavoritesPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return ToolResult::success([
             'gp_id' => $gp->id,
             'action' => $action,
-            'is_favorite' => (bool) $gp->refresh()->is_favorite,
-            'favorite_rank' => $gp->favorite_rank,
+            // Spec 85 FAV-1: Stand in der Liste DIESES Teams
+            'is_favorite' => isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team)[(int) $gp->id]),
+            'favorite_rank' => \Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team)[(int) $gp->id]['rang'] ?? null,
         ]);
     }
 

@@ -613,9 +613,8 @@ class GpModal extends Component
         }
     }
 
-    // ── 06·H4b: Favorit direkt am GP pinnen (zweiter Andockpunkt neben dem
-    //           Favoriten-Screen — landet in derselben Liste, Feld is_favorite).
-    //           D1-Gate; jeder approved GP ist favoritisierbar (kein §4-Zwang). ──
+    // ── 06·H4b: Favorit direkt am GP pinnen (zweiter Andockpunkt neben dem Favoriten-Screen — dieselbe Liste).
+    //           Spec 85 FAV-1: Liste des aktuellen Teams (Kuratieren), kein Besitz am GP nötig. ──
 
     public function favoriteToggle(): void
     {
@@ -624,13 +623,18 @@ class GpModal extends Component
         if ($gp === null) {
             return;
         }
-        if (! Curate::canCurate(Auth::user(), $gp)) {
-            $this->fehler = 'Favorit ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
-
+        $team = $this->team();
+        if ($team === null) {
             return;
         }
         $svc = app(FavoriteGpService::class);
-        $gp->is_favorite ? $svc->exclude($gp) : $svc->pin($gp);
+        try {
+            isset(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team)[(int) $gp->id]) ? $svc->exclude($team, $gp) : $svc->pin($team, $gp);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->dispatch('gp-gespeichert');               // Screen/Browser können reagieren
     }
 
@@ -1221,6 +1225,10 @@ class GpModal extends Component
                 : [],
             'sperr' => $this->sperrZustand(),   // Spec 65
             'gp' => $gp,
+            // Spec 85 FAV-1: Favorit des aktuellen Teams (Rang) und ob es seine Liste pflegen darf (Kuratieren)
+            'favorit' => $gp !== null && $team !== null ? (\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team)[(int) $gp->id] ?? null) : null,
+            'darfFavoriten' => $team !== null && Auth::user() !== null
+                && app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf(Auth::user(), $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
             'neu' => $this->gpId === null,
             'leadLa' => $leadLa,
             'leadPreis' => $leadPreis,
