@@ -330,6 +330,41 @@ it('Ansicht: feste Höhe, Beschriftung als HTML in FA-Typografie (nicht im skali
         ->not->toContain('<title>');
 });
 
+it('Ansicht: jedes Kind der Diagramm-Fläche ist explizit im Grid platziert — das SVG sitzt in Zeile 1 / Spalte 2 (io 19.10.: 56 × 24 px unten links)', function () {
+    // Ein einzelnes explizit platziertes Kind (Marker-Labels, #427) drängte das nicht platzierte SVG per Auto-Placement in
+    // Zeile 2 / Spalte 1. Darum: alle Kinder im Fluss tragen grid-column + grid-row, keine zwei teilen eine Zelle außer
+    // SVG + Marker-Labels (bewusst übereinander).
+    $la = ($this->la)('Hanos', 2.0, 'kg');
+    ($this->preis)($la, 8.0, '2026-01-01', '2026-04-01');
+    ($this->preis)($la, 10.0, '2026-04-01');
+    $html = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $la->id])->set('zeitraum', 'alles')->html();
+
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8">' . $html);
+    $flaeche = (new DOMXPath($dom))->query('//*[@data-preisverlauf-flaeche]')->item(0);
+    expect($flaeche)->not->toBeNull();
+
+    $zellen = [];
+    foreach ($flaeche->childNodes as $kind) {
+        if (! $kind instanceof DOMElement) {
+            continue;
+        }
+        $style = preg_replace('/\s+/', '', (string) $kind->getAttribute('style'));
+        if (str_contains($style, 'position:absolute') || str_contains((string) $kind->getAttribute('class'), 'absolute')) {
+            continue;   // Tooltip: außerhalb des Grid-Flusses
+        }
+        preg_match('/grid-column:(\d+);grid-row:(\d+)/', $style, $m);
+        $name = $kind->tagName . '[' . implode(',', array_filter(array_map(fn ($a) => str_starts_with($a->name, 'data-') ? $a->name : null, iterator_to_array($kind->attributes)))) . ']';
+        expect($m)->not->toBe([], "{$name} ohne explizite Platzierung");
+        $zellen[$name] = $m[2] . '/' . $m[1];
+    }
+
+    expect($zellen['svg[data-preisverlauf-svg]'])->toBe('1/2')
+        ->and($zellen['div[data-preisverlauf-achse-y]'])->toBe('1/1')
+        ->and($zellen['div[data-preisverlauf-achse-x]'])->toBe('2/2')
+        ->and(array_count_values($zellen))->toBe(['1/1' => 1, '1/2' => 2, '2/1' => 1, '2/2' => 1]);
+});
+
 it('Komponente: LA-Modal zeigt eine Linie, GP zeigt je LA eine Linie mit Legende, Zeitraum-Umschalter und Hinweis auf weggelassene Artikel', function () {
     $gp = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'pv|ui', 'name' => 'Butter']);
     $a = ($this->la)('Hanos');
