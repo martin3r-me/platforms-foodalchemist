@@ -320,7 +320,7 @@ class DataQualityService
             ->count();
 
         // Allergen-Metadaten nie aggregiert (allergens_confidence NULL)
-        $allergenKonfidenzFehlt = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()   // Non-Food hat keine Allergene (Regelwerk §8.13)
+        $allergenKonfidenzFehlt = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()   // Non-Food hat keine Allergene (Regelwerk §8.18)
             ->where('status', 'approved')->whereNull('allergens_confidence')->count();
 
         // genutzte approved-GPs ohne Anker (Flavor-Graph-Erdung)

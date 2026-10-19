@@ -237,7 +237,7 @@ class GpModal extends Component
         }
     }
 
-    /** Größe aus den eingegebenen Maßen in den Namen übernehmen (Regelwerk §6.4: Produkt: Eigenschaft, Größe) — überschreibt die Größe-Angabe. */
+    /** Größe aus den eingegebenen Maßen in den Namen übernehmen (Regelwerk §6.5: Produkt: Eigenschaft, Größe) — überschreibt die Größe-Angabe. */
     public function masseInNamen(): void
     {
         $groesse = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->groesseAusEingabe($this->defaults);

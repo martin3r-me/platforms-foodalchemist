@@ -354,7 +354,7 @@
                     </x-fa::field>
                 </div>
 
-                {{-- Non-Food (Warengruppe 16): Maße in cm bzw. ml wie im Betrieb gesagt (gespeichert in mm); die Größe geht in den Namen (Regelwerk §6.4) --}}
+                {{-- Non-Food (Warengruppe 16): Maße in cm bzw. ml wie im Betrieb gesagt (gespeichert in mm); die Größe geht in den Namen (Regelwerk §6.5) --}}
                 @if(($builder['commodity_group_code'] ?? '') === '16')
                     <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-2" data-gp-masse>
                         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Maße, falls das Produkt eine Größe hat. Die Größe im Namen kommt aus Ø, sonst Länge x Breite x Höhe, sonst Volumen.</p>

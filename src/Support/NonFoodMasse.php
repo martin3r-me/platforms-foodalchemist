@@ -6,7 +6,7 @@ namespace Platform\FoodAlchemist\Support;
  * Maße eines Non-Food-Grundprodukts (Warengruppe 16): gespeichert in mm bzw. ml, gesagt und im Namen geschrieben wird, was man im Betrieb sagt —
  * Ø und L×B×H in cm mit Dezimalkomma („Ø 27 cm“, „30 x 20 x 5 cm“, „Ø 7,5 cm“), Volumen in ml bzw. ab 1000 in l („212 ml“, „1,5 l“).
  *
- * Bei mehreren Maßen gilt für die EINE Größe im Namen die Reihenfolge Ø, dann L×B×H, dann Volumen (Regelwerk §6.4: `Produkt: Eigenschaft, Größe`);
+ * Bei mehreren Maßen gilt für die EINE Größe im Namen die Reihenfolge Ø, dann L×B×H, dann Volumen (Regelwerk §6.5: `Produkt: Eigenschaft, Größe`);
  * alle Maße bleiben als Felder erhalten.
  */
 final class NonFoodMasse

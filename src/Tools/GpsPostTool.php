@@ -86,7 +86,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
 
         $in = array_intersect_key($arguments, array_flip(self::IN_KEYS));
         $masse = array_intersect_key($arguments, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE);
-        // Non-Food (WG 16): ohne eigene Größe-Angabe kommt sie aus den Maßen (Ø 27 cm, 30 x 20 x 5 cm, 212 ml) — Regelwerk §6.4
+        // Non-Food (WG 16): ohne eigene Größe-Angabe kommt sie aus den Maßen (Ø 27 cm, 30 x 20 x 5 cm, 212 ml) — Regelwerk §6.5
         if ($masse !== [] && ($in['commodity_group_code'] ?? '') === \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE && trim((string) ($in['pflichtangabe'] ?? '')) === '') {
             $groesse = app(\Platform\FoodAlchemist\Services\GpMasseService::class)->groesseAusEingabe($masse);
             if ($groesse !== null) {
