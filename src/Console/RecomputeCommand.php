@@ -29,7 +29,9 @@ class RecomputeCommand extends Command
 
     public function handle(RecipeRecomputeService $svc): int
     {
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
 
         $apply = (bool) $this->option('apply');
         $recipeId = $this->option('recipe') !== null ? (int) $this->option('recipe') : null;

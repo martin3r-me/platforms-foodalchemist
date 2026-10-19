@@ -32,7 +32,9 @@ class StepsBackfillCommand extends Command
 
     public function handle(RecipeStepService $svc): int
     {
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
 
         $team = null;
         if ($this->option('team') !== null) {

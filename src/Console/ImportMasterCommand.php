@@ -50,7 +50,9 @@ class ImportMasterCommand extends Command
     {
         // Die id→id-Maps entfallen (PKs verbatim), aber der Stream über 264k Zeilen
         // + Chunk-Puffer brauchen etwas Headroom.
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
 
         $source = (string) $this->option('source');
         if ($source === '' || ! is_readable($source)) {

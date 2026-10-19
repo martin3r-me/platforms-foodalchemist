@@ -38,7 +38,9 @@ class GpBereinigenCommand extends Command
 
     public function handle(GpBereinigenService $svc): int
     {
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
 
         if ($this->option('zurueck') !== null) {
             return $this->zurueck($svc, (string) $this->option('zurueck'));

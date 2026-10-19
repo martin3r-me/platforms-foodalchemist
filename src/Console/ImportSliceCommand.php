@@ -36,7 +36,9 @@ class ImportSliceCommand extends Command
     public function handle(): int
     {
         // Importer-Pattern: die legacy_id→id-Maps der großen Tabellen (264k Artikel) brauchen Headroom.
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
 
         $source = (string) $this->option('source');
         if ($source === '' || ! is_readable($source)) {

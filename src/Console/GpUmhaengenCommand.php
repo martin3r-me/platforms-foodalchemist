@@ -33,7 +33,9 @@ class GpUmhaengenCommand extends Command
 
     public function handle(GpUmhaengenService $svc, GpBereinigenService $csvSvc): int
     {
-        ini_set('memory_limit', '1024M');
+        if (($hinweis = \Platform\FoodAlchemist\Support\Speicher::anheben('1024M')) !== null) {   // PHP 8.5: nie über max_memory_limit
+            $this->warn($hinweis);
+        }
         $bericht = (string) ($this->option('bericht') ?: storage_path('app/fa-gp-umhaengen'));
         File::ensureDirectoryExists($bericht);
         $stempel = now()->format('Ymd_His');
