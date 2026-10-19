@@ -46,6 +46,12 @@ class DarreichungService
             // Darreichung = Verkaufsform. Ein Basisrezept wird über ein Gericht verkauft, das es als Komponente trägt.
             throw new \RuntimeException('„' . $recipe->name . '" ist ein Basisrezept — Darreichungen gibt es nur an Gerichten.');
         }
+        // Spec 85: Fremdschlüssel team-autorisieren (Sichtbarkeit, wie TeamScope::referenz) — sonst hängt ein MCP-Aufruf eine
+        // fremde Form/Klasse (z. B. die des Masters) an die eigene Darreichung: Etikett leckt, Daten falsch.
+        if (! \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)->whereKey($servierformId)->exists()) {
+            throw new \RuntimeException('Unbekannte Servierform.');
+        }
+        $attrs = [...$attrs, ...$this->referenzenPruefen($team, $attrs)];
         if ($recipe->presentations()->where('serving_form_id', $servierformId)->exists()) {
             throw new \RuntimeException('Diese Servierform existiert schon an diesem Gericht.');
         }
@@ -143,6 +149,49 @@ class DarreichungService
         'vessel_gp_id',      // Gefäß der Form: Non-Food-GP (WG 16); der Servier-Typ kommt daraus
     ];
 
+    /** Spec 85: Fremdschlüssel der Darreichung → Vokabular (Model-Klasse oder Tabelle ohne Model). Sichtbar heißt erlaubt. */
+    private const REFERENZEN = [
+        'markup_class_id' => [\Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class, 'Aufschlagsklasse'],
+        'unit_vocab_id' => [\Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::class, 'Einheit'],
+        'container_warm_vocab_id' => [\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::class, 'Behälter warm'],
+        'container_cold_vocab_id' => [\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::class, 'Behälter kalt'],
+        'serving_vehicle_vocab_id' => ['foodalchemist_vocab_serving_vehicles', 'Servier-Vehikel'],
+    ];
+
+    /**
+     * Gesetzte Fremdschlüssel aus {@see self::REFERENZEN} gegen die Team-Sicht prüfen (eigene, geerbte, globale Zeilen).
+     * Ein UNVERÄNDERTER Bestandswert bleibt erlaubt (wie updateVk) — sonst bricht das Speichern anderer Felder.
+     *
+     * @return array<string, ?int> die geprüften Werte (als int), nur für die übergebenen Schlüssel
+     */
+    private function referenzenPruefen(Team $team, array $werte, ?FoodAlchemistRecipeDarreichung $bestand = null): array
+    {
+        $geprueft = [];
+        foreach (self::REFERENZEN as $feld => [$ziel, $bezeichnung]) {
+            if (! array_key_exists($feld, $werte)
+                || ($bestand?->{$feld} !== null && is_numeric($werte[$feld]) && (int) $werte[$feld] === (int) $bestand->{$feld})) {
+                continue;
+            }
+            if (class_exists($ziel)) {
+                $geprueft[$feld] = \Platform\FoodAlchemist\Support\TeamScope::referenz($ziel, $werte[$feld], $team, $bezeichnung);
+
+                continue;
+            }
+            $id = $werte[$feld];
+            if ($id === null || $id === '' || (int) $id === 0) {
+                $geprueft[$feld] = null;
+
+                continue;
+            }
+            if (! \Platform\FoodAlchemist\Support\TeamScope::applyVisible(DB::table($ziel)->whereNull('deleted_at'), 'team_id', $team)->where('id', (int) $id)->exists()) {
+                throw new \RuntimeException("{$bezeichnung}: die gewählte Zuordnung ist in diesem Team nicht verfügbar.");
+            }
+            $geprueft[$feld] = (int) $id;
+        }
+
+        return $geprueft;
+    }
+
     private const DEZIMAL_FELDER = [
         'quantity_per_unit_g' => 'Grammatur',
         'unit_count' => 'Anzahl',
@@ -181,6 +230,7 @@ class DarreichungService
                 throw new \RuntimeException('Unbekannter Preismodus.');
             }
         }
+        $update = [...$update, ...$this->referenzenPruefen($team, $update, $darreichung)];
         // Gefäß: nur ein sichtbares Non-Food-GP (WG 16)
         if (array_key_exists('vessel_gp_id', $update) && $update['vessel_gp_id'] !== null) {
             $gefaess = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find((int) $update['vessel_gp_id']);
