@@ -210,7 +210,7 @@ class RecipeReviseService
             'darreichungen' => $r->darreichungen->map(fn ($d) => $d->servingForm?->label)->filter()->values()->all(),
             'verkaufseinheit' => trim(($r->sales_unit_count !== null ? $r->sales_unit_count . ' × ' : '') . ($r->salesUnit?->display_de ?? '')) ?: null,
             'portion_g' => $r->sales_quantity_per_unit_g,
-            'aufschlagsklasse' => $r->markupClass?->code,
+            'aufschlagsklasse' => $r->vk_klasse?->code,   // Spec 85 D-1 PR-B: Klasse der Standard-Darreichung
         ];
 
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)

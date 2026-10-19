@@ -148,6 +148,12 @@ class FoodAlchemistRecipe extends Model
         return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->ekProPortion($this);
     }
 
+    /** Spec 85 D-1 PR-B: Aufschlagsklasse für Anzeigen (`$rezept->vk_klasse`) — die der Standard-Darreichung. */
+    public function getVkKlasseAttribute(): ?FoodAlchemistMarkupClass
+    {
+        return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->klasseFuer($this);
+    }
+
     /** Basisrezepte, die diese Teller-Rolle tragen können (Dominique 11.10.). */
     public function scopeMitRolle(Builder $q, string $rolle): Builder
     {

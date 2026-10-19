@@ -905,7 +905,7 @@ class RecipeOneShotService
             // füllt nur, wenn auch dort nichts steht.
             $gepflegt = $recipe->standardPresentation()->first()?->markup_class_id;
             $ak = $gepflegt !== null ? (int) $gepflegt : $this->markupKaskade($team, $recipe)['id'];
-            if ($recipe->markup_class_id === null && $ak !== null) {
+            if ($recipe->markup_class_id === null && $ak !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C (Spiegel in die Rezeptspalte)
                 $this->sales->updateVk($team, $recipe->id, ['markup_class_id' => $ak]);
                 // `updateVk` stempelt `last_modified_by='vk_editor'` — das ist die
                 // Provenienz der Editor-Fläche. Hier hat kein Mensch editiert, also
@@ -1001,7 +1001,7 @@ class RecipeOneShotService
                 'ziel_pct' => $ziel,
                 'ampel' => $this->weAmpel($we, $ziel),
                 'portion_g' => $portion,
-                'aufschlagsklasse' => $recipe->markupClass?->code ?? $kaskade['code'],
+                'aufschlagsklasse' => app(DarreichungResolver::class)->klasseFuer($recipe)?->code ?? $kaskade['code'],
                 // Neu gegenüber dem Schreib-Pfad: WOHER die Klasse kommt. Der Schreiber
                 // verwischt das, weil er sie festschreibt; für einen Reife-Report ist der
                 // Unterschied zwischen „am Gericht gesetzt" und „nur aus dem Default
@@ -1036,8 +1036,9 @@ class RecipeOneShotService
      */
     private function markupKaskade(Team $team, FoodAlchemistRecipe $recipe): array
     {
-        if ($recipe->markup_class_id !== null) {
-            return ['id' => (int) $recipe->markup_class_id, 'code' => $recipe->markupClass?->code, 'quelle' => 'gesetzt'];
+        // Spec 85 D-1 PR-B: „gesetzt“ = Klasse der Standard-Darreichung (Rückfall Rezeptspalte bis PR-C).
+        if (($gesetzt = app(DarreichungResolver::class)->klasseFuer($recipe)) !== null) {
+            return ['id' => (int) $gesetzt->id, 'code' => $gesetzt->code, 'quelle' => 'gesetzt'];
         }
         // Code über die ID auflösen statt über eine Relation: `FoodAlchemistDishMainGroup`
         // hat kein `defaultMarkupClass()`, und ein `?->` darauf liefert kommentarlos null —

@@ -229,6 +229,22 @@ class DarreichungResolver
         return null;
     }
 
+    /**
+     * Spec 85 D-1 PR-B: Aufschlagsklasse eines Gerichts = Klasse seiner Standard-Darreichung. Für Listen
+     * `standardPresentation.markupClass` eager laden.
+     */
+    public function klasseFuer(FoodAlchemistRecipe $recipe): ?\Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass
+    {
+        $standard = $recipe->relationLoaded('standardPresentation')
+            ? $recipe->standardPresentation
+            : $this->standardFuer($recipe);
+        if ($standard?->markup_class_id !== null) {
+            return $standard->markupClass;
+        }
+
+        return $recipe->markup_class_id !== null ? $recipe->markupClass : null;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+    }
+
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
     public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot, ?FoodAlchemistOutlet $outlet = null): ?float
     {
