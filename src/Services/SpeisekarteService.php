@@ -85,7 +85,7 @@ class SpeisekarteService
             ->with([
                 'sections' => fn ($q) => $q->orderBy('position'),
                 'sections.items' => fn ($q) => $q->orderBy('position'),
-                'sections.items.dish:id,name,ek_total_eur,sales_net', 'sections.items.dish.standardPresentation',
+                'sections.items.dish:id,name,ek_total_eur,sales_net,sales_unit_count', 'sections.items.dish.standardPresentation',
                 'sections.items.concept:id,name,price_per_person_cache',
                 'outlet', 'crmCompany', 'crmContact',
             ])
@@ -619,8 +619,8 @@ class SpeisekarteService
 
         if ($pos->type === 'gericht_ref') {
             $dish = $pos->relationLoaded('dish') ? $pos->dish : $pos->dish()->first();
-            if ($dish?->ek_total_eur !== null) {
-                $ek = (float) $dish->ek_total_eur;
+            if ($dish !== null) {
+                $ek = app(DarreichungResolver::class)->ekProPortion($dish);   // Spec 85: EK je Portion (vorher der ganze Ansatz)
             }
         } elseif ($pos->type === 'menue_ref') {
             $concept = $pos->relationLoaded('concept') ? $pos->concept : $pos->concept()->first();

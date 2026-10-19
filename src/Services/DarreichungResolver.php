@@ -170,6 +170,65 @@ class DarreichungResolver
         return $this->vkNettoMitQuelle($recipe, $outlet)['vk'];
     }
 
+    /**
+     * EK EINER Portion — Gegenstück zu {@see vkNetto()}, damit Wareneinsatz % = EK/Portion ÷ VK/Portion auf
+     * derselben Menge rechnet (Spec 85, Wareneinsatz-Maßstab): `ek_portion` der Standard-Darreichung (inkl.
+     * Beigaben), sonst `ek_total_eur` (ganzer Ansatz) ÷ Portionen. `sales_unit_count` muss geladen sein:
+     * fehlt die Spalte, wirft die Methode in Tests (Lücke finden), in Produktion lädt sie den Wert nach und
+     * schreibt eine Warnung mit Aufrufstelle in `fa-langsam` (Kurator 19.10.: kein 500 für Nutzer, kein stilles ÷ 1).
+     * Steuerbar über `foodalchemist.leistung.ek_pro_portion_streng` (Standard: läuft unter Tests).
+     */
+    public function ekProPortion(FoodAlchemistRecipe $recipe): ?float
+    {
+        $standard = $recipe->relationLoaded('standardPresentation')
+            ? $recipe->standardPresentation
+            : $this->standardFuer($recipe);
+        if ($standard?->ek_portion !== null) {
+            return (float) $standard->ek_portion;
+        }
+        if ($recipe->ek_total_eur === null) {
+            return null;
+        }
+        $anzahl = array_key_exists('sales_unit_count', $recipe->getAttributes())
+            ? $recipe->sales_unit_count
+            : $this->portionenNachladen($recipe);
+
+        return (float) $recipe->ek_total_eur / max(1, (int) ($anzahl ?? 1));
+    }
+
+    /** Fehlende Spalte `sales_unit_count`: in Tests werfen, in Produktion nachladen + warnen (s. {@see ekProPortion()}). */
+    private function portionenNachladen(FoodAlchemistRecipe $recipe): mixed
+    {
+        $meldung = 'ekProPortion braucht sales_unit_count am Rezept ' . $recipe->id . ' (im Select ergänzen).';
+        if (config('foodalchemist.leistung.ek_pro_portion_streng') ?? app()->runningUnitTests()) {
+            throw new \LogicException($meldung);
+        }
+        // Dasselbe, schon geladene Rezept — nur die fehlende Spalte; bewusst ohne Sicht-Scope (die Zeile ist bereits gelesen).
+        $anzahl = \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')->where('id', $recipe->id)->value('sales_unit_count');
+        \Illuminate\Support\Facades\Log::channel(\Platform\FoodAlchemist\Support\LangsameAbfragen::KANAL)->warning('Spec 85: ' . $meldung . ' Nachgeladen.', [
+            'art' => 'ek_pro_portion_nachgeladen',
+            'recipe_id' => (int) $recipe->id,
+            'aufrufer' => $this->aufrufer(),
+        ]);
+
+        return $anzahl;
+    }
+
+    /** Erster Frame aus dem Modul-`src/` außerhalb dieser Klasse und des Rezept-Modells: Datei relativ zu src/ + Zeile. */
+    private function aufrufer(): ?string
+    {
+        $src = dirname(__DIR__) . DIRECTORY_SEPARATOR;
+        $aus = [__FILE__, $src . 'Models' . DIRECTORY_SEPARATOR . 'FoodAlchemistRecipe.php'];
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 40) as $f) {
+            $datei = $f['file'] ?? '';
+            if ($datei !== '' && str_starts_with($datei, $src) && ! in_array($datei, $aus, true)) {
+                return substr($datei, strlen($src)) . ':' . ($f['line'] ?? 0);
+            }
+        }
+
+        return null;
+    }
+
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
     public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot, ?FoodAlchemistOutlet $outlet = null): ?float
     {

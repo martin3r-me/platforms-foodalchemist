@@ -74,7 +74,7 @@ class PaketService
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
-                'dishes.dish:id,name,ek_total_eur,is_sales_recipe,yield_kg,sales_net', 'dishes.dish.standardPresentation',
+                'dishes.dish:id,name,ek_total_eur,is_sales_recipe,yield_kg,sales_net,sales_unit_count', 'dishes.dish.standardPresentation',
                 'dishes.unit:id,slug,display_de'])
             ->find($id);
 

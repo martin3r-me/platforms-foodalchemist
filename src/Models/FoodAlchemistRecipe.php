@@ -142,6 +142,12 @@ class FoodAlchemistRecipe extends Model
         return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->vkNetto($this);
     }
 
+    /** Spec 85: EK EINER Portion für Anzeigen (`$rezept->ek_pro_portion`) — {@see \Platform\FoodAlchemist\Services\DarreichungResolver::ekProPortion()}. */
+    public function getEkProPortionAttribute(): ?float
+    {
+        return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->ekProPortion($this);
+    }
+
     /** Basisrezepte, die diese Teller-Rolle tragen können (Dominique 11.10.). */
     public function scopeMitRolle(Builder $q, string $rolle): Builder
     {
