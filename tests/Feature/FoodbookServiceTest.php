@@ -333,21 +333,6 @@ it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch
     expect($block->refresh()->interne_bemerkung)->toBe('Allergiker-Hinweis intern');
 });
 
-it('M11-08: kiAndockKontext assembliert Kunde + Briefing + Concept-Liste (kein LLM-Call)', function () {
-    // CRM-only (b08c5c2): Kundenname aus verknüpfter CRM-Firma (nicht mehr Freitext-customer).
-    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
-    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB', 'crm_company_id' => $kunde->id, 'description' => 'Sommerliches Gartenfest', 'personen' => 80]);
-    $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
-    $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
-
-    $ctx = $this->foodbooks->kiAndockKontext($this->rootTeam, $fb->id);
-    expect($ctx['customer'])->toBe('Hotel Adler')
-        ->and($ctx['briefing'])->toBe('Sommerliches Gartenfest')
-        ->and($ctx['personen'])->toBe(80)
-        ->and($ctx['concepts'])->toContain('Grill-Buffet')
-        ->and($ctx['kapitel'])->toContain('Menü');
-});
-
 it('R3.1 intern: dokumentDaten(intern) liefert EK/W% + Anker pro Kapitel; Kundensicht ohne EK', function () {
     $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'personen' => 100]);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);

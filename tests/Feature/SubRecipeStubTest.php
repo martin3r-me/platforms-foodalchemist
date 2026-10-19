@@ -40,46 +40,6 @@ it('Eltern-Stub wird bei Stub-Anlage auf draft gehoben', function () {
     expect($eltern->fresh()->status->value)->toBe('draft');
 });
 
-it('deleteGeneratorStub: Guards blocken Nicht-Stub, Nicht-Generator, Zutaten und Referenzen', function () {
-    $stub = $this->svc->createSubRecipeStub($this->rootTeam, 'Phantom-Fond')['recipe'];
-
-    // Referenz blockt
-    $parent = $this->svc->create($this->rootTeam, ['name' => 'Suppe: Klar']);
-    $ref = FoodAlchemistRecipeIngredient::create([
-        'team_id' => $this->rootTeam->id, 'recipe_id' => $parent->id, 'position' => 1,
-        'raw_text' => 'Fond', 'quantity' => 100, 'unit_vocab_id' => $this->g->id,
-        'referenced_recipe_id' => $stub->id, 'match_method' => 'recipe_ref',
-    ]);
-    expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
-        ->toThrow(RuntimeException::class, 'referenziert');
-    $ref->forceDelete();
-
-    // Zutaten blocken
-    $zutat = FoodAlchemistRecipeIngredient::create([
-        'team_id' => $this->rootTeam->id, 'recipe_id' => $stub->id, 'position' => 1,
-        'raw_text' => 'Wasser', 'quantity' => 1000, 'unit_vocab_id' => $this->g->id, 'match_method' => 'manual',
-    ]);
-    expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
-        ->toThrow(RuntimeException::class, 'Zutaten');
-    $zutat->forceDelete();
-
-    // Nicht-Generator blockt
-    $stub->update(['last_modified_by' => 'editor']);
-    expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
-        ->toThrow(RuntimeException::class, 'generator');
-    $stub->update(['last_modified_by' => 'generator_stub']);
-
-    // Nicht-Stub blockt
-    $stub->update(['status' => 'draft']);
-    expect(fn () => $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id))
-        ->toThrow(RuntimeException::class, 'Kein Stub');
-    $stub->update(['status' => 'stub']);
-
-    // sauberer Stub geht
-    $this->svc->deleteGeneratorStub($this->rootTeam, $stub->id);
-    expect(FoodAlchemistRecipe::find($stub->id))->toBeNull();
-});
-
 it('getParents liefert die ↑-Navigation (DoD: Rekursion sichtbar)', function () {
     $sub = $this->svc->create($this->rootTeam, ['name' => 'Fond: Basis']);
     $a = $this->svc->create($this->rootTeam, ['name' => 'Suppe: A']);

@@ -684,28 +684,6 @@ class RecipeService
         return ['reif' => $luecken === [], 'luecken' => $luecken];
     }
 
-    /**
-     * Guard-Löschung (F4.1): NUR stub + generator-markiert + 0 Zutaten + 0 Referenzen.
-     */
-    public function deleteGeneratorStub(Team $team, int $id): void
-    {
-        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
-        \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2
-        if ($recipe->status->value !== 'stub') {
-            throw new \RuntimeException('Kein Stub — normales Löschen verwenden (delete()).');
-        }
-        if ($recipe->last_modified_by !== 'generator_stub') {
-            throw new \RuntimeException('Stub ist nicht generator-markiert — manuell prüfen.');
-        }
-        if ($recipe->ingredients()->whereNull('deleted_at')->exists()) {
-            throw new \RuntimeException('Stub hat bereits Zutaten — kein automatisches Löschen.');
-        }
-        if ($recipe->parentIngredients()->whereNull('deleted_at')->exists()) {
-            throw new \RuntimeException('Stub wird referenziert — erst bei den Eltern lösen.');
-        }
-        $recipe->delete();
-    }
-
     /** ↑-Navigation: Rezepte, die dieses als Sub referenzieren (fürs Panel „Verwendet in"). */
     public function getParents(Team $team, int $id): Collection
     {

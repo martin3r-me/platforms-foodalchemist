@@ -2006,7 +2006,7 @@ class PlanningCascadeService
      * Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill), ohne seinen `failed()`-Haken zu feuern,
      * bleibt sein Step ewig `queued`/`running`; der Run verharrt in `running` ({@see recomputeRunStatus}),
      * der Cockpit-Spinner löst nie auf, und WEDER {@see verwirfStep}/{@see verwirfRun} (setzen `done`/
-     * `failed` voraus) NOCH {@see gibRunFrei} greifen — der Lauf ist eine Sackgasse.
+     * `failed` voraus) NOCH die Freigabe ({@see gibStufeFrei}) greifen — der Lauf ist eine Sackgasse.
      *
      * Dieser Reaper markiert die VERWAISTEN in-flight Steps (älter als {@see VERWAIST_NACH_MINUTEN})
      * als `failed` — über {@see markStepFailed}, damit der Run neu bewertet wird (raus aus dem ewigen
@@ -3148,19 +3148,6 @@ class PlanningCascadeService
         $this->recomputeRunStatus((int) $run->id);
 
         return $step;
-    }
-
-    /** Bulk-Freigabe aller noch offenen (done) Steps eines Laufs. */
-    public function gibRunFrei(Team $team, int $runId): void
-    {
-        $run = $this->lauf($team, $runId);
-        // D1-Slice 3: sichtbarer, nicht besessener Lauf → sauberer No-op (siehe gibStufeFrei).
-        if ($run === null || ! $run->isOwnedBy($team)) {
-            return;
-        }
-        foreach ($run->steps->where('status', 'done') as $s) {
-            $this->gibStepFrei($team, (int) $s->id);
-        }
     }
 
     /**

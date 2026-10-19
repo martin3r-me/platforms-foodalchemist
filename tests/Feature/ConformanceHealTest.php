@@ -94,17 +94,19 @@ it('Selbstheil-Loop: Verstoß bleibt nach Runde → als Hinweis persistiert (kei
     expect($row->artifact_type)->toBe('recipe');
 });
 
-it('ConformanceCheckJob: fährt die Selbstheil-Prüfung best-effort und legt Hinweise ab (offeneFuer)', function () use ($befund) {
+it('ConformanceCheckJob: fährt die Selbstheil-Prüfung best-effort und legt Hinweise ab', function () use ($befund) {
     ConformanceHealStub::bind([[$befund()], [$befund()]]);   // Verstoß bleibt → persistiert
 
     (new \Platform\FoodAlchemist\Jobs\ConformanceCheckJob(
         $this->rootTeam->id, (int) auth()->id(), 'basisrezept', $this->rezept->id,
     ))->handle(app(ConformanceService::class));
 
-    $offen = app(ConformanceService::class)->offeneFuer($this->rootTeam, 'recipe', $this->rezept->id);
+    $offen = FoodAlchemistConformanceFinding::query()
+        ->where('team_id', $this->rootTeam->id)->where('artifact_type', 'recipe')
+        ->where('artifact_id', $this->rezept->id)->where('status', 'offen')->get();
     expect($offen)->toHaveCount(1);
-    expect($offen[0]['schweregrad'])->toBe('hart');
-    expect($offen[0]['paragraph'])->toBe('§6.1');
+    expect($offen[0]->schweregrad)->toBe('hart');
+    expect($offen[0]->paragraph)->toBe('§6.1');
 });
 
 it('Ablage: wertfreier Fingerprint dedupliziert (seen_count↑), verworfen bleibt, weg=verschwunden', function () use ($befund) {
