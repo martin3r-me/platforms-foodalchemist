@@ -72,10 +72,7 @@ class FoodAlchemistGp extends Model
         'tag_is_convenience' => 'boolean',
         'tag_is_lactose_free' => 'boolean',
         'tag_is_gluten_free' => 'boolean',
-        // 06·H1 Convenience-Highlights (kuratierte Haus-Standard-Liste)
-        'is_favorite' => 'boolean',
         'diameter_mm' => 'decimal:1', 'length_mm' => 'decimal:1', 'width_mm' => 'decimal:1', 'height_mm' => 'decimal:1', 'volume_ml' => 'decimal:1',   // Maße, nur WG 16
-        'favorite_rank' => 'integer',
     ];
 
     /** Non-Food-Grundprodukt (Warengruppe 16): keine Allergene, Nährwerte, Zustände; als Zutat gesperrt, am Rezept nur als Zubehör & Verpackung. */
@@ -104,7 +101,7 @@ class FoodAlchemistGp extends Model
 
     /**
      * Spec 85 FAV-1: die wirksamen Favoriten EINES Teams (Overlay mit Übernahme vom Hauptteam, nie vom Master), nach Rang.
-     * Ersetzt das frühere `scopeFavorites` (globale Spalte `is_favorite` — die liest niemand mehr).
+     * Ersetzt das frühere `scopeFavorites` (globale Spalte `is_favorite`, entfernt in FAV-3).
      */
     public function scopeFavoritenFuer(\Illuminate\Database\Eloquent\Builder $query, \Platform\Core\Models\Team $team): \Illuminate\Database\Eloquent\Builder
     {
