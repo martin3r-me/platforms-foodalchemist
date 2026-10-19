@@ -250,7 +250,7 @@ it('Zwei verschiedene Vorschläge für dasselbe GP aus zwei CSVs → Konflikt, k
 });
 
 it('Namen: wechselt das Zustandswort im neuen Namen, zieht `condition` mit (inkl. neuer Wörter) — und --zurueck stellt es her', function () {
-    $gp = ($this->gp)('Kochschinken: frisch, in Scheiben', '04');
+    $gp = ($this->gp)('Kochschinken: frisch, in Scheiben', '02');
     $gp->update(['condition' => 'frisch']);
     $csv = ($this->namenCsv)([[$gp->id, $gp->name, '§9 Zustand', 'Kochschinken: gepoekelt, in Scheiben']]);
     $backup = $this->dir . '/b.sql';
