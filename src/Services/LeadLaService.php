@@ -61,8 +61,7 @@ class LeadLaService
         $strategie = $strategieOverride ?? $this->settings->leadLaStrategie($team, $gp->commodity_group_code); // E3-Override vor Phase-3-WG vor Global
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $stammIds = array_map('intval', $this->stamm->stammSupplierIdsFor($team, $gp->commodity_group_code));
-        $overlay = FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
-            ->get()->keyBy('supplier_item_id');
+        $overlay = collect(\Platform\FoodAlchemist\Support\LeadOverlay::fuer($team, [(int) $gp->id])[(int) $gp->id] ?? []);   // Spec 85 PR-B: inkl. Übernahme vom Hauptteam
 
         return $this->sortiere($kandidaten, $strategie, $prioritaeten, $stammIds, $overlay);
     }
@@ -84,8 +83,7 @@ class LeadLaService
         }
 
         $kandidatenByGp = $this->kandidatenBulk($gpIds, $teamPreise ? $team : null);
-        $overlayByGp = FoodAlchemistGpLaPreference::where('team_id', $team->id)->whereIn('gp_id', $gpIds)
-            ->get()->groupBy('gp_id');
+        $overlayByGp = \Platform\FoodAlchemist\Support\LeadOverlay::fuer($team, $gpIds);   // Spec 85 PR-B: inkl. Übernahme vom Hauptteam
         $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
         $strategieByWg = [];
         $stammByWg = [];
@@ -100,7 +98,7 @@ class LeadLaService
                 $out[(int) $gp->id] = $kandidaten;
                 continue;
             }
-            $overlay = ($overlayByGp[$gp->id] ?? collect())->keyBy('supplier_item_id');
+            $overlay = collect($overlayByGp[(int) $gp->id] ?? []);
             $out[(int) $gp->id] = $this->sortiere($kandidaten, $strategieByWg[$wg], $prioritaeten, $stammByWg[$wg], $overlay);
         }
 
@@ -115,7 +113,7 @@ class LeadLaService
      * @param  Collection<int, FoodAlchemistSupplierItem>  $kandidaten
      * @param  array<int, int>  $prioritaeten
      * @param  array<int, int>  $stammIds
-     * @param  Collection  $overlay  supplier_item_id ⇒ Preference
+     * @param  Collection  $overlay  supplier_item_id ⇒ ['gepinnt' => bool, 'locked' => bool] ({@see \Platform\FoodAlchemist\Support\LeadOverlay})
      * @return Collection<int, FoodAlchemistSupplierItem>
      */
     private function sortiere(Collection $kandidaten, LeadLaStrategie $strategie, array $prioritaeten, array $stammIds, Collection $overlay): Collection
@@ -124,8 +122,8 @@ class LeadLaService
             ->each(function ($la) use ($overlay, $stammIds) {
                 $pref = $overlay->get($la->id);
                 $la->setAttribute('ist_stamm', in_array((int) $la->supplier_id, $stammIds, true));
-                $la->setAttribute('locked', (bool) ($pref?->locked ?? false));
-                $la->setAttribute('gepinnt', (bool) ($pref?->gepinnt ?? false));
+                $la->setAttribute('locked', (bool) ($pref['locked'] ?? false));
+                $la->setAttribute('gepinnt', (bool) ($pref['gepinnt'] ?? false));
             })
             ->sortBy(fn ($la) => [
                 match ($strategie) {                                       // Stufe 0 (V-27-Strategie)

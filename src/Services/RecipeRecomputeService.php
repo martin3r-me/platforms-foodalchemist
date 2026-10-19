@@ -10,7 +10,6 @@ use Platform\FoodAlchemist\Enums\AllergenValue;
 use Platform\FoodAlchemist\Enums\EkPriceBasis;
 use Platform\FoodAlchemist\Enums\MatchMethod;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
@@ -1307,16 +1306,9 @@ class RecipeRecomputeService
         }
 
         if ($team !== null) {
-            $prefs = FoodAlchemistGpLaPreference::query()
-                ->where('team_id', $team->id)->whereIn('gp_id', $gpIds)
-                ->get(['gp_id', 'supplier_item_id', 'gepinnt', 'locked'])
-                ->groupBy('gp_id');
+            $prefs = \Platform\FoodAlchemist\Support\LeadOverlay::fuer($team, $gpIds);   // Spec 85 PR-B: dieselbe Kette wie der Einzelpfad
             foreach ($gpIds as $gpId) {
-                $this->leadPrefCache[$team->id.':'.$gpId] = $prefs->get($gpId, collect())
-                    ->mapWithKeys(fn ($r) => [(int) $r->supplier_item_id => [
-                        'gepinnt' => (bool) $r->gepinnt,
-                        'locked' => (bool) $r->locked,
-                    ]])->all();
+                $this->leadPrefCache[$team->id.':'.$gpId] = $prefs[(int) $gpId] ?? [];
             }
         }
 
@@ -1520,7 +1512,7 @@ class RecipeRecomputeService
      * @return array<int, array{gepinnt: bool, locked: bool}>
      */
     /**
-     * Es zählen die Pins des Recompute-Teams. Im gespeicherten Rezept-EK (ek_total_eur) ist das der Besitzer; die Team-Kosten
+     * Es zählen die Pins des Recompute-Teams (und mit Übernahme die des Hauptteams). Im gespeicherten Rezept-EK ist das der Besitzer; die Team-Kosten
      * (KostenCacheService::fuer → kostenFuerTeam) rechnen mit dem BETRACHTENDEN Team — dort wirkt der Leitartikel (Pin) eines
      * Mandanten auch auf geerbte/Abo-Rezepte (Spec 82 3b, Spec 85 PR-B).
      */
@@ -1531,15 +1523,8 @@ class RecipeRecomputeService
         }
         $key = $this->recomputeTeam->id.':'.$gp->id;
 
-        return $this->leadPrefCache[$key] ??= FoodAlchemistGpLaPreference::query()
-            ->where('team_id', $this->recomputeTeam->id)
-            ->where('gp_id', $gp->id)
-            ->get(['supplier_item_id', 'gepinnt', 'locked'])
-            ->mapWithKeys(fn ($r) => [(int) $r->supplier_item_id => [
-                'gepinnt' => (bool) $r->gepinnt,
-                'locked' => (bool) $r->locked,
-            ]])
-            ->all();
+        // Spec 85 PR-B: Pin/Sperre inkl. Übernahme vom Kunden-Hauptteam („Standorte übernehmen unsere Leitartikel“)
+        return $this->leadPrefCache[$key] ??= \Platform\FoodAlchemist\Support\LeadOverlay::fuer($this->recomputeTeam, [(int) $gp->id])[(int) $gp->id] ?? [];
     }
 
     private function alleAktivenLas(FoodAlchemistGp $gp): Collection

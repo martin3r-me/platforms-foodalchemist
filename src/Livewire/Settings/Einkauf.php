@@ -45,6 +45,9 @@ class Einkauf extends Component
 
     public bool $ausweichKette = false;
 
+    /** Spec 85 PR-B: am Kunden-Hauptteam — Standorte übernehmen unsere Leitartikel (Standard AN). */
+    public bool $standorteUebernehmen = true;
+
     public string $neuerPrioLieferant = '';
 
     public ?string $meldung = null;
@@ -104,6 +107,7 @@ class Einkauf extends Component
         $this->strategie = ($settings->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis)->value;
         $this->prioritaeten = $settings->lead_la_prioritaeten ?? [];
         $this->ausweichKette = (bool) ($settings->show_fallback_chain ?? false);
+        $this->standorteUebernehmen = (bool) ($settings->standorte_uebernehmen_leitartikel ?? true);
         $this->strategiePerWg = is_array($settings->lead_la_strategie_per_wg ?? null) ? $settings->lead_la_strategie_per_wg : [];
         $this->ladeLagerForm();
     }
@@ -121,7 +125,7 @@ class Einkauf extends Component
             'lead_la_strategie_per_wg' => $perWg ?: null,
             'lead_la_prioritaeten' => array_values(array_map('intval', $this->prioritaeten)),
             'show_fallback_chain' => $this->ausweichKette,
-        ]);
+        ] + ($this->istHauptteam() ? ['standorte_uebernehmen_leitartikel' => $this->standorteUebernehmen] : []));
         $this->meldung = 'Gespeichert. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
     }
 
@@ -366,6 +370,7 @@ class Einkauf extends Component
             ->get();
 
         return view('foodalchemist::livewire.settings.einkauf', [
+            'istHauptteam' => $this->istHauptteam(),   // Spec 85 PR-B: Übernahme-Einstellung nur am Kunden-Hauptteam
             'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'strategien' => LeadLaStrategie::cases(),
@@ -376,6 +381,13 @@ class Einkauf extends Component
             'lagerorte' => $lagerorte,
             'lagerTypen' => $this->lagerTypen(),
         ]);
+    }
+
+    /** Kunden-Hauptteam (nur dort steht die Übernahme-Einstellung): kein Oberteam unterhalb der Kundengrenze. */
+    private function istHauptteam(): bool
+    {
+        return (int) app(\Platform\FoodAlchemist\Services\FaRechte::class)->kundenHauptTeam($this->team())->id === (int) $this->team()->id
+            && ! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($this->team());
     }
 
     private function team()
