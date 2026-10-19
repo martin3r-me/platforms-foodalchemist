@@ -455,6 +455,7 @@ return [
     \Platform\FoodAlchemist\Tools\ReferenceGetTool::class,
     \Platform\FoodAlchemist\Tools\RegelwerkGetTool::class,
     \Platform\FoodAlchemist\Tools\ReifeGetTool::class,
+    \Platform\FoodAlchemist\Tools\RulesDeleteTool::class,
     \Platform\FoodAlchemist\Tools\RulesGetTool::class,
     \Platform\FoodAlchemist\Tools\RulesPreviewTool::class,
     \Platform\FoodAlchemist\Tools\RulesPutTool::class,

@@ -111,6 +111,8 @@ class Index extends Component
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
         'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design; Hinweis „mit Jodsalz hergestellt“'],
+        // Spec 85 D-7 PR 2: Team-Abweichungen von übersteuerbaren Regeln (Default-GP, Kleinstmengen, HACCP-Temperaturen) — FA-Admin des Teams.
+        'hausstandards' => ['label' => 'Hausstandards', 'hint' => 'Wo euer Haus vom Plattform-Standard abweicht: Standard-Grundprodukte, Kleinstmengen, Hygiene-Temperaturen (lockerer nur bis zur belegten Untergrenze)'],
         'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe, Standardwerte mindestens und höchstens'],
     ];
 
@@ -123,7 +125,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'plan-nutzung', 'mandanten', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
+        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'plan-nutzung', 'mandanten', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil', 'hausstandards']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'dna-felder', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],

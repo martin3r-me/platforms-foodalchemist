@@ -25,7 +25,10 @@ class RulesGetTool extends FoodAlchemistTool implements ToolContract, ToolMetada
     {
         return 'Liest die mechanischen Regelwerk-Regeln, die der Code beim Anlegen, Prüfen und Matching durchsetzt '
             . '(Vokabular, Ersetzung, Pflichtangabe, Verbot, Zuordnung, Schwelle). Ohne schluessel: Liste mit Filtern. '
-            . 'Mit schluessel: Regel mit params, beispiele, aktiv und den letzten Versionen. Global, alle Teams lesen.';
+            . 'Mit schluessel: Regel mit params, beispiele, aktiv und den letzten Versionen. Global, alle Teams lesen. '
+            . 'ebene=team (Spec 85 D-7): die Hausstandards des Teams — je übersteuerbarer Regel globaler und wirksamer Wert, Herkunft '
+            . '(global/Oberteam/eigen) und die Untergrenze mit Quelle bzw. nur_strenger. Lesen darf jedes Team-Mitglied; '
+            . 'ändern nur ein Mensch mit FA-Admin (rules.PUT ebene=team) — die KI schlägt Werte vor, speichert sie nicht.';
     }
 
     public function getSchema(): array
@@ -37,6 +40,7 @@ class RulesGetTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 'regelwerk' => ['type' => 'string', 'description' => 'gp|basisrezept|la|vk|ernaehrung|matching'],
                 'art' => ['type' => 'string', 'enum' => FoodAlchemistRule::ARTEN],
                 'nur_aktive' => ['type' => 'boolean'],
+                'ebene' => ['type' => 'string', 'enum' => ['global', 'team'], 'description' => 'team = Hausstandards des Teams (übersteuerbare Regeln mit wirksamem Wert)'],
             ],
         ];
     }
@@ -45,6 +49,12 @@ class RulesGetTool extends FoodAlchemistTool implements ToolContract, ToolMetada
     {
         if ($this->team($context) === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if (($arguments['ebene'] ?? 'global') === 'team') {
+            return ToolResult::success(['ebene' => 'team', 'team_id' => (int) $this->team($context)->id,
+                'hausstandards' => \Platform\FoodAlchemist\Support\HausstandardSicht::zeilen($this->team($context)),
+                'aendern' => RegelService::darfTeam($context->user, $this->team($context))
+                    ? 'rules.PUT ebene=team (params, notiz) / rules.DELETE ebene=team' : 'nur FA-Admin (Mensch); die KI schlägt vor']);
         }
         if (! RegelService::darf($context->user)) {
             return ToolResult::error('Regeln pflegt und liest nur der Plattform-Administrator.', 'FORBIDDEN');
