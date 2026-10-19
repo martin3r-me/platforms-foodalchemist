@@ -6,15 +6,12 @@ namespace Platform\FoodAlchemist\Services\Websuche;
  * Austauschbarer Transport der Web-Recherche. Der Transport führt EINE Websuche-Anfrage über den Core-Contract aus
  * (kein eigener HTTP-Client) und liefert die geparste Modellantwort plus die TATSÄCHLICH gefundenen Quellen.
  *
- * Warum getrennt: Der Core wertet `include_web_search` heute nur im Streaming aus und gibt keine Quellen zurück
- * (siehe 00_INBOX/_Core_Wunsch_WebSearch_chat.md). Bis der Core `chat()` kann, ist der Standard-Transport
- * {@see NichtVerfuegbarTransport}; danach genügt ein Transport, der `AiGatewayService::propose` mit
- * `include_web_search` aufruft und `sources` des Providers zurückgibt.
+ * Produktiv: {@see CoreWebSucheTransport} (Spec 85 I5-8, Core #935). Getrennt, damit Tests den Transport ersetzen können.
  */
 interface WebSucheTransport
 {
     /**
-     * @param  string  $anweisung  Aufgabe für das Modell (Rechercheauftrag)
+     * @param  string  $anweisung  Aufgabe für das Modell (der Core-Transport nimmt sie aus der Prompt-Registry)
      * @param  array   $kontext    Artikel-Kontext (Bezeichnung, EAN, Marke …)
      * @return array{antwort: array, quellen: list<array{url: string, title?: string}>}
      *

@@ -122,7 +122,7 @@ Methode: Token-Zählung über `src`, `resources`, `routes`, `config` ohne Kommen
 | I5-5 | MCP-Lockstep | `order_mails.GET` (Spec 63) und `supplier_crm_links` (Spec 64) fehlen | niedrig | kein Tool | Vanessa | mit dem jeweiligen Feature nachziehen | S |
 | I5-6 | `SignalDetektorService.php:17–18` | „Skelett (TODO)“: veraltete Preise, Preis-Anomalie, Marge unter Ziel | niedrig | Kommentar | Pfadfinder | prüfen, ob durch Signal-Kaskade erledigt, sonst Kommentar korrigieren | V |
 | I5-7 | `FoodbookService:299/320/2390` | Kapitel-Overrides „vorerst Foodbook-Default“; `kiAndockKontext` „blockiert“ und ohne Aufrufer | niedrig | V | Pfadfinder | entscheiden oder entfernen | V |
-| I5-8 | `Services/Websuche/NichtVerfuegbarTransport` | Web-Recherche zu Artikeln hängt am Platzhalter, bis der Core Websuche mit Quellen liefert; KI-Klasse später (#490) | mittel | Provider:408 | Martin (Core) | Core-Websuche, dann Transport binden | K, V |
+| I5-8 | `Services/Websuche/NichtVerfuegbarTransport` | Web-Recherche zu Artikeln hängt am Platzhalter, bis der Core Websuche mit Quellen liefert; KI-Klasse später (#490) | mittel | Provider:408 | Martin (Core) | **erledigt 19.10.:** Core #935 (`chat()` liefert `sources`); FA-Transport `Websuche/CoreWebSucheTransport` über `AiGatewayService::propose` (`include_web_search`, Klasse stark), `AiProposal::$quellen` (null = Provider meldet keine, [] = keine gefunden), kein Aufruf ohne suchfähigen Provider, Kosten im Call-Log (`prompt_parts.websuche`) | K, V |
 | I5-9 | Spec 55 | Scope „Format“ ohne Regler-Struktur und Pflicht-Leitplanken; Agent-Panel auf Ausgabe-Tabs | niedrig | `Planung/Index:390` | Kurator | eigenes Vorhaben | S |
 | I5-10 | Spec 80 D9a/F6/G6 | Kosten je Stufe, Struktur-Elemente im Angebot, Regelwerk-Präfix im Befund-Label | niedrig | S | Kurator | eigenes Vorhaben | S |
 | I5-11 | `layouts/standalone.blade.php:6/73` | Login/Teams/Terminal „vorerst aus platform-core“ | niedrig | V | Spur 2 | bewusst geplante Herauslösung | V |
@@ -332,6 +332,7 @@ Korrektur (D-2-Prüfung 18.10.): `FaRechte::pruefeKontingent` ruft die **Host-Ap
 
 ## Changelog
 
+- 2026-10-19 · I5-8 Websuche erledigt (Core-Transport, Meldungen statt Erfindung).
 - 2026-10-19 · I3-16 Wareneinsatz-Maßstab (hoch, behoben) und I6-6 Coverage ohne Eager-Load (niedrig) aufgenommen.
 - 2026-10-18 · v1.3: D-8 / I1-1 entschieden (MCP sperrt freie Datensätze für die Dauer des Schreibens, sonst typisierter Fehler „gesperrt“; I1-2 Versionsprüfung). D-2-Korrektur: `formatPreisModus` kommt **zurück** (Auswahl additiv/Alternativen im Format-Kapitel + MCP-Schreibweg). Lösch-PR Concepter/Pakete.
 - 2026-10-18 · v1.2: D-2 entschieden (Liste §4: löschen / zurück / F1–F5), D-1-Plan freigegeben (drei PRs, Klasse = Standard-Darreichung, Invariante genau ein Standard, Spiegel-Schlüssel MCP entfällt), I3-1b zweite Welle (niedrig); Anhang A korrigiert (pruefeKontingent = Host, pruefeOderAbbrechen = Migration). Erster Lösch-PR: Angebote.

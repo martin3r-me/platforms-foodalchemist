@@ -18,6 +18,8 @@ final readonly class AiProposal
         public ?string $model = null,
         public int $elapsedMs = 0,
         public ?int $callLogId = null,
+        /** @var list<array{url: string, title?: string}>|null Quellen der Websuche: null = Provider meldet keine, [] = keine gefunden */
+        public ?array $quellen = null,
     ) {
     }
 }

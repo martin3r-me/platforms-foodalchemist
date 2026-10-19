@@ -12,7 +12,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * ArtikelWebRecherche: nur Vorschläge, jede Angabe mit Quellen-URL aus den tatsächlich gefundenen Quellen, keine Auto-Speicherung,
- * Allergene nie abgeleitet. Fake-Transport statt echter Websuche (Core liefert sie noch nicht in chat()).
+ * Allergene nie abgeleitet. Fake-Transport statt echter Websuche; den Core-Transport prüft Spec85WebsucheTransportTest.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -93,8 +93,9 @@ it('★ ohne Quellen oder ohne Belegbares: klare Meldung statt Erfindung', funct
     expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'nichts Belegbares');
 });
 
-it('Standard-Transport: bis der Core Websuche mit Quellen liefert, kommt eine lesbare Meldung', function () {
-    expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'noch nicht freigeschaltet');
+it('Standard-Transport ohne Quellen vom Provider (Fake-Provider, Core vor #935): lesbare Meldung statt Werten', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    expect(fn () => app(ArtikelWebRecherche::class)->liefere($this->la))->toThrow(RuntimeException::class, 'Websuche nicht verfügbar');
     expect(app(ArtikelWebRecherche::class)->name())->toBe('websuche');
 });
 

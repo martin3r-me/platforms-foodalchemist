@@ -404,8 +404,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
 
         // Spec 79: Google Trends für den Trendradar — produktiv über DataForSEO (Integrations-Modul)
         $this->app->bind(\Platform\FoodAlchemist\Services\Trends\GoogleTrendsQuelle::class, \Platform\FoodAlchemist\Services\Trends\DataForSeoGoogleTrends::class);
-        // Web-Recherche zu Lieferantenartikeln: Transport austauschbar; Standard = klare Meldung, bis der Core Websuche mit Quellen in chat() liefert
-        $this->app->bind(\Platform\FoodAlchemist\Services\Websuche\WebSucheTransport::class, \Platform\FoodAlchemist\Services\Websuche\NichtVerfuegbarTransport::class);
+        // Web-Recherche zu Lieferantenartikeln (Spec 85 I5-8): Websuche über den Core-Contract (include_web_search, Core #935)
+        $this->app->bind(\Platform\FoodAlchemist\Services\Websuche\WebSucheTransport::class, \Platform\FoodAlchemist\Services\Websuche\CoreWebSucheTransport::class);
         // Produktdaten-Quellen fuer den Produktpass-Panel: die Websuche haengt als Quelle websuche im Tag (Knopf Im Web recherchieren)
         $this->app->tag([\Platform\FoodAlchemist\Services\ArtikelWebRecherche::class], 'produktdaten.quellen');
 
