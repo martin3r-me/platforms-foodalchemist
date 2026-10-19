@@ -74,7 +74,7 @@ class PaketService
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
-                'dishes.dish:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
+                'dishes.dish:id,name,ek_total_eur,is_sales_recipe,yield_kg,sales_net', 'dishes.dish.standardPresentation',
                 'dishes.unit:id,slug,display_de'])
             ->find($id);
 
@@ -315,7 +315,7 @@ class PaketService
         $expired = $paket->price_override_expires_at?->isPast() ?? false;
         $auto = $paket->price_mode === 'auto' || $expired;
         $gerichte = $paket->dishes()->with([
-            'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
+            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg,sales_net',
             'unit:id,slug,dimension,default_in_g',
         ])->get();
 
@@ -347,7 +347,7 @@ class PaketService
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
             $anzahl = max(1, (int) ($g->dish->sales_unit_count ?? 1));
-            $vkSum += (float) ($dar?->sales_net ?? $g->dish->sales_net ?? 0) * $pae;
+            $vkSum += (float) ($dar?->sales_net ?? app(DarreichungResolver::class)->vkNetto($g->dish) ?? 0) * $pae;   // Spec 85 D-1
             $ekSum += ($dar?->ek_portion !== null
                 ? (float) $dar->ek_portion * $pae
                 : (float) ($g->dish->ek_total_eur ?? 0) / $anzahl * $pae);
@@ -450,7 +450,7 @@ class PaketService
         }
 
         $gerichte = $paket->dishes()->with([
-            'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
+            'gericht:id,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg,sales_net',
             'unit:id,slug,dimension,default_in_g',
         ])->get();
 
@@ -471,11 +471,11 @@ class PaketService
             if ($pae === null) {
                 continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
             }
-            // Gericht-VK im Betriebs-Kontext; Fallback = gespeicherter sales_net (Team-Baseline).
+            // Gericht-VK im Betriebs-Kontext; Fallback = Baseline-VK der Darreichung bzw. Preisleiter (Spec 85 D-1).
             $vkStd = $dar !== null
                 ? app(CatalogPricingService::class)->salesNetFor($team, $dar, $outlet)
                 : null;
-            $vkStd ??= (float) ($dar?->sales_net ?? $g->dish->sales_net ?? 0);
+            $vkStd ??= (float) ($dar?->sales_net ?? app(DarreichungResolver::class)->vkNetto($g->dish) ?? 0);
             $vkSum += $vkStd * $pae;
         }
 
@@ -544,7 +544,7 @@ class PaketService
             ->when(($filter['diet_form'] ?? '') !== '', fn ($q) => $q
                 ->whereIn('dish_class_id', FoodAlchemistDishClass::where('diet_form', $filter['diet_form'])->pluck('id')))
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'sales_net']);
+            ->select(['id', 'name', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     /** Pakete als Concept-Position (linke Liste, Umschalter) — Suche über Name/Rolle + Klasse-Filter. */

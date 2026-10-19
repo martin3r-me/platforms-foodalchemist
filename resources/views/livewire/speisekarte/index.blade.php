@@ -582,7 +582,7 @@
                                     @endif
                                     <div class="flex-1 overflow-y-auto flex flex-col gap-0.5">
                                         @forelse($pickerErgebnisse as $g)
-                                            <x-foodalchemist::katalog-row wire:key="skpk-{{ $g->id }}" :disabled="$pickerRubrikTitel === null" wire:click="{{ $istMenuePicker ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" :title="$g->name" :price="isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : null">{{ $g->name }}</x-foodalchemist::katalog-row>
+                                            <x-foodalchemist::katalog-row wire:key="skpk-{{ $g->id }}" :disabled="$pickerRubrikTitel === null" wire:click="{{ $istMenuePicker ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" :title="$g->name" :price="isset($g->vk_netto) && $g->vk_netto !== null ? number_format((float) $g->vk_netto, 2, ',', '.') . ' €' : null">{{ $g->name }}</x-foodalchemist::katalog-row>
                                         @empty
                                             <x-fa::empty compact icon="heroicon-o-magnifying-glass" :title="$leerText" />
                                         @endforelse

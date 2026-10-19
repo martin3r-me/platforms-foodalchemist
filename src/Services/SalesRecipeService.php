@@ -34,7 +34,7 @@ class SalesRecipeService
             // #6 N+1-Fix: kanonische Relation-Namen — die Browser-Blade liest `dishClass`/`dishMainGroup`.
             // Vorher lief das Eager-Load unter den deprecated Aliassen `speisenKlasse`/`speisenHauptgruppe`,
             // sodass `relationLoaded('dishClass')` false war → 1 Lazy-Query pro Zeile (bei perPage bis 500).
-            ->with(['dishClass:id,label,diet_form', 'dishMainGroup:id,code,label'])
+            ->with(['dishClass:id,label,diet_form', 'dishMainGroup:id,code,label', 'standardPresentation'])   // Spec 85 D-1: vk_netto ohne N+1
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -874,7 +874,7 @@ class SalesRecipeService
         ] : null;
 
         $formelFehlt = false;
-        $vk = ['sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null, 'source' => 'leer', 'vorschlag' => null];
+        $vk = ['sales_net' => app(DarreichungResolver::class)->vkNetto($r), 'source' => 'leer', 'vorschlag' => null];   // Spec 85 D-1
         $mwst = $team !== null ? (float) app(TeamSettingsService::class)->mwst($team)['ermaessigt'] : 0.0;
         $standard = $r->standardPresentation()->first();
         if ($team !== null && $standard !== null) {

@@ -527,9 +527,9 @@ class OfferCompositionService
                 $vkFehlt = $vkInfo['vk'] === null;
                 $baseVk = (float) ($vkInfo['vk'] ?? 0);
             } else {
-                $baseVk = $outlet !== null
-                    ? (app(DarreichungResolver::class)->vkNettoMitQuelle($block->dish, $outlet)['vk'] ?? (float) ($block->dish->sales_net ?? 0))
-                    : (float) ($block->dish->sales_net ?? 0);
+                // Spec 85 D-1: Preisleiter (Standard-Darreichung); im Betrieb dessen VK, sonst die Baseline.
+                $resolver = app(DarreichungResolver::class);
+                $baseVk = (float) (($outlet !== null ? $resolver->vkNetto($block->dish, $outlet) : null) ?? $resolver->vkNetto($block->dish) ?? 0);
             }
             $vk = round($baseVk * $faktor, 2);
             if ($team !== null) {
@@ -603,7 +603,7 @@ class OfferCompositionService
         }
 
         $relationen = ['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur'];
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,ek_total_eur,sales_net', 'blocks.dish.standardPresentation'];
         if ($mitKindkapiteln) {
             $relationen[] = 'children';
         }
@@ -653,11 +653,11 @@ class OfferCompositionService
         $alle = FoodAlchemistOfferChapter::visibleToTeam($team)->where('offer_id', $angebot->id)
             ->with([
                 'blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
-                'blocks.concept.slots.dish:id,name,sales_wording_standard,sales_net,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence',
+                'blocks.concept.slots.dish:id,name,sales_wording_standard,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence,sales_net', 'blocks.concept.slots.dish.standardPresentation',
                 'blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
                 'blocks.concept.slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
                 'blocks.concept.images',
-                'blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
+                'blocks.dish:id,name,sales_wording_standard,ek_total_eur,sales_net', 'blocks.dish.standardPresentation',
                 'format.slots' => fn ($q) => $q->orderBy('position'),
                 'format.slots.concept.slots.dish:id,name,sales_wording_standard',
                 'format.images',
@@ -902,7 +902,7 @@ class OfferCompositionService
         $ekExtraVoll = true;   // Spec 82 3b: false = mindestens ein Gericht mit EK-Teilsumme
         $alle = FoodAlchemistOfferChapter::visibleToTeam($team)->where('offer_id', $angebot->id)
             ->with(['blocks' => fn ($q) => $q->where('visible', true),
-                'blocks.concept', 'blocks.dish:id,sales_net,ek_total_eur',
+                'blocks.concept', 'blocks.dish:id,ek_total_eur,sales_net', 'blocks.dish.standardPresentation',
                 'format.slots.concept'])->get();
 
         $angebotPax = max(0, (int) ($angebot->personen ?? 0));

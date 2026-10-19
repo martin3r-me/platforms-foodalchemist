@@ -342,7 +342,7 @@
                                     @forelse($gerichtListe as $gr)
                                         <div wire:key="kgr-{{ $gr->id }}" draggable="true" @dragstart="dragTyp = 'gericht'; dragId = {{ $gr->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="{{ $listeZeile }}">
                                             <span class="min-w-0 flex-1 break-words leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $gr->name }}">{{ $gr->name }}</span>
-                                            <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">{{ $euro($gr->sales_net) ?? 'kein Preis' }}</span>
+                                            <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">{{ $euro($gr->vk_netto) ?? 'kein Preis' }}</span>
                                             <x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" />
                                             <x-fa::icon-button icon="heroicon-m-plus" label="Als Position einfügen" size="sm" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" />
                                         </div>
@@ -804,7 +804,7 @@
                                                                         @if($eps->type === 'basisrezept')<x-fa::badge style="{{ $typStyle('basisrezept') }}">Basisrezept</x-fa::badge>@endif
                                                                         <span class="flex-1 min-w-0 break-words leading-snug text-[var(--fa-ink)]">{{ $eps->dish?->name ?? 'Gericht fehlt' }}</span>
                                                                         @if($eps->quantity !== null)<span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums">{{ $menge($eps->quantity) }} ×</span>@endif
-                                                                        <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($eps->dish?->sales_net) }}</span>
+                                                                        <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($eps->dish?->vk_netto) }}</span>
                                                                         @if($eps->sales_recipe_id)<x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $eps->sales_recipe_id }} })" />@endif
                                                                     </div>
                                                                 @empty
@@ -815,7 +815,7 @@
                                                                     <div wire:key="epaketg-{{ $slot->id }}-{{ $pg->id }}" class="flex items-center gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)]">
                                                                         <span class="flex-1 min-w-0 break-words leading-snug text-[var(--fa-ink)]">{{ $pg->dish?->name ?? 'Gericht fehlt' }}</span>
                                                                         @if($pg->quantity !== null)<span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums">{{ $menge($pg->quantity) }} ×</span>@endif
-                                                                        <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($pg->dish?->sales_net) }}</span>
+                                                                        <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($pg->dish?->vk_netto) }}</span>
                                                                         @if($pg->sales_recipe_id)<x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" />@endif
                                                                     </div>
                                                                 @empty
@@ -914,7 +914,7 @@
                                                                         @foreach($kandidaten as $kand)
                                                                             <button type="button" wire:key="ek-{{ $slot->id }}-{{ $kand->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $kand->id }}, '{{ $pickTyp }}')" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
                                                                                 <span class="min-w-0 break-words">{{ $kand->name }}</span>
-                                                                                <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums shrink-0">@if($pickTyp === 'gericht'){{ $euro($kand->sales_net) ?? 'kein Preis' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . $euro($kand->ek_total_eur) : 'kein EK' }}@endif</span>
+                                                                                <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums shrink-0">@if($pickTyp === 'gericht'){{ $euro($kand->vk_netto) ?? 'kein Preis' }}@else{{ $kand->ek_total_eur !== null ? 'EK ' . $euro($kand->ek_total_eur) : 'kein EK' }}@endif</span>
                                                                             </button>
                                                                         @endforeach
                                                                     </div>
@@ -966,7 +966,7 @@
                                             @foreach($paketKandidaten as $kand)
                                                 <div wire:key="epk-{{ $paketQuelle }}-{{ $kand->id }}" class="flex items-center gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-hover)]">
                                                     <span class="min-w-0 flex-1 break-words leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $kand->name }}">{{ $kand->name }}</span>
-                                                    <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . $euro($kand->ek_total_eur) : 'kein EK' }}@else{{ $euro($kand->sales_net) ?? 'kein Preis' }}@endif</span>
+                                                    <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . $euro($kand->ek_total_eur) : 'kein EK' }}@else{{ $euro($kand->vk_netto) ?? 'kein Preis' }}@endif</span>
                                                     <x-fa::icon-button icon="heroicon-m-plus" label="Vormerken" size="sm" x-on:click="park({{ $kand->id }}, {{ \Illuminate\Support\Js::from($kand->name) }})" />
                                                 </div>
                                             @endforeach
@@ -1024,7 +1024,7 @@
                                         @elseif(! $istBasis && isset($paketPosten[$pg->id]['label']))
                                             <span class="{{ $klein }} text-[var(--fa-ink-3)]" data-paket-form>{{ $paketPosten[$pg->id]['label'] }}{{ ($paketPosten[$pg->id]['gramm'] ?? null) !== null ? ' · ' . $paketPosten[$pg->id]['gramm'] . ' g' : '' }}</span>
                                         @endif
-                                        <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-24 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . $euro($pg->dish->ek_total_eur) : 'kein EK' }}@else{{ $euro($paketPosten[$pg->id]['vk'] ?? $pg->dish?->sales_net) ?? 'kein Preis' }}@endif</span>
+                                        <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-24 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . $euro($pg->dish->ek_total_eur) : 'kein EK' }}@else{{ $euro($paketPosten[$pg->id]['vk'] ?? $pg->dish?->vk_netto) ?? 'kein Preis' }}@endif</span>
                                         <x-fa::icon-button icon="heroicon-m-x-mark" label="Posten entfernen" size="sm" tone="danger" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" />
                                     </div>
                                 @empty
@@ -1356,7 +1356,7 @@
                                             <td class="min-w-[12rem]">{{ $pg->dish?->name ?? 'Gericht fehlt' }}</td>
                                             <td class="num text-[var(--fa-ink-2)]">{{ $pg->quantity !== null ? ($menge($faktor) . ($istBasis ? ' g' : '')) : ($istBasis ? 'Gramm fehlt' : '1') }}</td>
                                             <td class="num">@if($postenEk !== null){{ $euro($postenEk) }}@else<span class="text-[var(--fa-ink-3)]">offen</span>@endif</td>
-                                            <td class="num text-[var(--fa-ink-2)]">@if($istBasis)<span class="text-[var(--fa-ink-3)]">kein VK</span>@else{{ $pg->dish?->sales_net !== null ? $euro((float) $pg->dish->sales_net * $faktor) : 'offen' }}@endif</td>
+                                            <td class="num text-[var(--fa-ink-2)]">@if($istBasis)<span class="text-[var(--fa-ink-3)]">kein VK</span>@else{{ $pg->dish?->vk_netto !== null ? $euro((float) $pg->dish->vk_netto * $faktor) : 'offen' }}@endif</td>
                                         </tr>
                                     @empty
                                         <tr><td colspan="4" class="text-center text-[var(--fa-ink-3)]">Noch keine Posten.</td></tr>

@@ -58,8 +58,8 @@ class VerkaufsrezepteGetTool extends FoodAlchemistTool implements ToolContract, 
             'marketing_text' => $r->marketing_text,
             'description' => $r->description,
             'plating_text' => $r->plating_text,
-            // Preis-Wahrheit liegt in den Darreichungen; sales_net ist nur Standard-Form-Spiegel.
-            'sales_net_standard_mirror' => $r->sales_net !== null ? (float) $r->sales_net : null,
+            // Preis-Wahrheit liegt in den Darreichungen (presentations). Der frühere Schlüssel
+            // sales_net_standard_mirror entfällt mit Spec 85 D-1 (Kurator 19.10.: keine externen Nutzer).
             // Freiwillige Angaben (Jod), getrennt von der Pflicht-Kennzeichnung (ALL-MAXIMAL über die Zutaten)
             'freiwillig' => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::freiwilligFuerMcp(fn ($f) => $r->{"additive_{$f}"}),
             'presentations' => $this->darreichungenSummary($r),

@@ -85,7 +85,7 @@ class SpeisekarteService
             ->with([
                 'sections' => fn ($q) => $q->orderBy('position'),
                 'sections.items' => fn ($q) => $q->orderBy('position'),
-                'sections.items.dish:id,name,sales_net,ek_total_eur',
+                'sections.items.dish:id,name,ek_total_eur,sales_net', 'sections.items.dish.standardPresentation',
                 'sections.items.concept:id,name,price_per_person_cache',
                 'outlet', 'crmCompany', 'crmContact',
             ])
@@ -705,9 +705,10 @@ class SpeisekarteService
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             // Werkstrang M Phase B: dish_class_id + diet_form additiv mitgeben (Picker-Diät-Label);
-            // andere Aufrufer lesen weiter nur id/name/sales_net.
+            // andere Aufrufer lesen weiter nur id/name/vk_netto (Spec 85 D-1: VK aus der Standard-Darreichung).
             ->with(['dishClass:id,diet_form'])
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
+            ->orderBy('name')->limit($limit)
+            ->select(['id', 'name', 'dish_class_id', 'sales_net'])->mitStandardVk()->get();
     }
 
     /**

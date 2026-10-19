@@ -149,15 +149,14 @@ class MenuEngineeringService
         $rezepte = FoodAlchemistRecipe::visibleToTeam($team)
             ->where('is_sales_recipe', true)
             ->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard'])
-            ->get(['foodalchemist_recipes.id', 'name', 'sales_net', 'ek_total_eur', 'sales_unit_count']);
+            ->get(['foodalchemist_recipes.id', 'name', 'ek_total_eur', 'sales_unit_count', 'sales_net']);   // Spec 85 D-1: Rückfall Altspalte bis PR-C
 
         $out = [];
         foreach ($rezepte as $r) {
             $std = $r->standardPresentation;
             $anzahl = max(1, (int) ($r->sales_unit_count ?? 1));
 
-            $vk = $std?->sales_net !== null ? (float) $std->sales_net
-                : ($r->sales_net !== null ? (float) $r->sales_net : null);
+            $vk = app(DarreichungResolver::class)->vkNetto($r);   // Spec 85 D-1: Preisleiter (Standard-Darreichung)
             $ek = $std?->ek_portion !== null ? (float) $std->ek_portion
                 : ($r->ek_total_eur !== null ? (float) $r->ek_total_eur / $anzahl : null);
 

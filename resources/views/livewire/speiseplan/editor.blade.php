@@ -385,8 +385,8 @@
                                                     <span class="min-w-0 truncate text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $k->name }}">{{ $k->name }}</span>
                                                     <span class="flex items-center gap-2 shrink-0 {{ $leise }} tabular-nums">
                                                         @if($pickerTyp === 'gericht' && ($k->dishClass?->diet_form))<span>{{ ucfirst($k->dishClass->diet_form) }}</span>@endif
-                                                        @if($pickerTyp === 'gericht' && $k->sales_net)
-                                                            <span>{{ $zahl($k->sales_net, 2) }} €</span>
+                                                        @if($pickerTyp === 'gericht' && $k->vk_netto)
+                                                            <span>{{ $zahl($k->vk_netto, 2) }} €</span>
                                                         @elseif($pickerTyp === 'concept' && ($k->price_per_person_cache ?? null))
                                                             <span>{{ $zahl($k->price_per_person_cache, 2) }} € je Person</span>
                                                         @endif

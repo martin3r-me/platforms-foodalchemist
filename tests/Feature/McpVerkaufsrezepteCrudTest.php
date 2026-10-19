@@ -40,7 +40,8 @@ it('POST (leer) legt VK an, GET liefert Detail (Darreichungen + Cockpit + Taxono
     $get = ($this->run)('foodalchemist.verkaufsrezepte.GET', ['id' => $leer->data['id']]);
     expect($get->success)->toBeTrue()
         ->and($get->data['name'])->toBe('HG: Leer')
-        ->and($get->data)->toHaveKeys(['presentations', 'cockpit', 'dish_main_group_id', 'sales_net_standard_mirror']);
+        ->and($get->data)->toHaveKeys(['presentations', 'cockpit', 'dish_main_group_id'])
+        ->and($get->data)->not->toHaveKey('sales_net_standard_mirror');   // Spec 85 D-1: Spiegel-Schlüssel entfällt
 });
 
 it('POST mit fremd-sichtbarer/unbekannter basis_recipe_id → NOT_FOUND', function () {

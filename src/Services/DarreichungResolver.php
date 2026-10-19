@@ -153,11 +153,21 @@ class DarreichungResolver
             }
         }
 
-        if ($recipe->sales_net !== null) {
+        if ($recipe->sales_net !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
             return ['vk' => (float) $recipe->sales_net, 'quelle' => 'legacy'];
         }
 
         return ['vk' => null, 'quelle' => 'keine'];
+    }
+
+    /**
+     * VK netto eines Gerichts als Zahl — {@see vkNettoMitQuelle()} ohne die Quelle. Spec 85 D-1 PR-A: die
+     * Leser lesen den VK nur noch hier (bzw. per SQL an der Standard-Darreichung), nie direkt aus
+     * `recipes.sales_net`. Für Listen vorher `standardPresentation` eager laden (sonst eine Query je Gericht).
+     */
+    public function vkNetto(FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): ?float
+    {
+        return $this->vkNettoMitQuelle($recipe, $outlet)['vk'];
     }
 
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
@@ -174,6 +184,6 @@ class DarreichungResolver
             }
         }
 
-        return $slot->dish?->sales_net !== null ? (float) $slot->dish->sales_net : null;
+        return $slot->dish?->sales_net !== null ? (float) $slot->dish->sales_net : null;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
     }
 }

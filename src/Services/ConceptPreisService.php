@@ -268,7 +268,7 @@ class ConceptPreisService
         // eigenes Gericht (Arbeitszeile des Besitzers): gespeicherte Werte wie ConceptService::preisCockpit
         $stueck = ConcepterAggregateService::stueckModus($slot->unit, $dish);
         $anzahl = $stueck ? (float) $dish->yield_pieces : max(1, (int) ($dish->sales_unit_count ?? 1));
-        $vkStd = $dar?->sales_net !== null ? (float) $dar->sales_net : (float) ($dish->sales_net ?? 0);
+        $vkStd = $dar?->sales_net !== null ? (float) $dar->sales_net : (float) (app(DarreichungResolver::class)->vkNetto($dish) ?? 0);   // Spec 85 D-1
         $ek = ($dar?->ek_portion !== null && ! $stueck) ? (float) $dar->ek_portion * $pae : (float) ($dish->ek_total_eur ?? 0) / $anzahl * $pae;
 
         return $this->ergebnis($kopf, $vkStd * $pae, $ek, null);

@@ -292,9 +292,11 @@ class SignalDetektorService
             }
             $affected = $this->betroffeneRezeptBaum($direkt);
 
-            $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $affected)->get();
+            $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $affected)->with('standardPresentation')->get();
             $nRecipes = $recipes->count();
-            $gerichte = $recipes->filter(fn ($r) => $r->is_sales_recipe && $r->sales_net !== null && (float) $r->sales_net > 0)->values();
+            // Spec 85 D-1: VK aus der Standard-Darreichung (Preisleiter), nicht aus recipes.sales_net.
+            $vkJe = $recipes->mapWithKeys(fn ($r) => [(int) $r->id => $r->is_sales_recipe ? app(DarreichungResolver::class)->vkNetto($r) : null]);
+            $gerichte = $recipes->filter(fn ($r) => ($vkJe[(int) $r->id] ?? 0) > 0)->values();
             $nGerichte = $gerichte->count();
 
             $sumMargeDelta = 0.0;
@@ -317,7 +319,7 @@ class SignalDetektorService
                 }
                 $ekDelta = $exposure * (1 - 1 / $ratio);   // >0 = teurer geworden
                 $oldEk = $newEk - $ekDelta;
-                $vk = (float) $rec->sales_net;
+                $vk = (float) $vkJe[(int) $rec->id];
                 $mNeu = $margeSvc->marge($vk, $newEk);
                 $mAlt = $margeSvc->marge($vk, $oldEk);
                 if ($mNeu === null || $mAlt === null) {
@@ -749,8 +751,11 @@ class SignalDetektorService
     public function margeUnterZiel(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
         $kalk = app(KalkulationService::class);
+        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung; Rückfall Altspalte bis PR-C.
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
+            ->where(fn ($q) => $q->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
+                ->orWhere('sales_net', '>', 0))
+            ->with('standardPresentation')->get();
 
         $n = 0;
         $keys = [];
@@ -774,7 +779,7 @@ class SignalDetektorService
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
                     'description' => 'Der Deckungsbeitrag liegt unter der Zielmarge. Verkaufspreis erhöhen oder Wareneinsatz und Kosten senken.',
-                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net, 'outlet_id' => $outlet?->id],
+                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) ($hk['sales_net'] ?? 0), 'outlet_id' => $outlet?->id],
                 ]
             );
             $keys[] = 'marge-recipe-' . $r->id;
@@ -798,8 +803,11 @@ class SignalDetektorService
         if ($ziel <= 0) {
             return 0;
         }
+        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung; Rückfall Altspalte bis PR-C.
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
+            ->where(fn ($q) => $q->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
+                ->orWhere('sales_net', '>', 0))
+            ->with('standardPresentation')->get();
 
         $n = 0;
         $keys = [];
@@ -854,7 +862,7 @@ class SignalDetektorService
                 'ref_type' => 'recipe',
                 'ref_id' => $r->id,
                 'description' => 'Der Wareneinsatz liegt über dem Ziel. Günstigeren Hauptartikel prüfen, Rezeptur oder Portion anpassen oder Verkaufspreis erhöhen.',
-                'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null, 'outlet_id' => $outlet?->id],
+                'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => app(DarreichungResolver::class)->vkNetto($r), 'outlet_id' => $outlet?->id],
             ]
         );
 

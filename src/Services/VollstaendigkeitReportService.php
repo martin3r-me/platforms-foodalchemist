@@ -147,19 +147,21 @@ class VollstaendigkeitReportService
                 ->where('f.code', 'unbestimmt'))
             ->count();
 
+        // Spec 85 D-1: „ohne VK“ = keine Standard-Darreichung mit VK > 0; Rückfall Altspalte bis PR-C.
         $ohneVk = (clone $this->gerichte($team))
+            ->whereDoesntHave('standardPresentation', fn ($q) => $q->where('sales_net', '>', 0))
             ->where(fn ($q) => $q->whereNull('sales_net')->orWhere('sales_net', '<=', 0))
             ->count();
 
         $beispiele = (clone $this->gerichte($team))
             ->whereNull('markup_class_id')
             ->orderBy('id')->limit($limit)
-            ->get(['id', 'name', 'markup_class_id', 'sales_quantity_per_unit_g', 'sales_net'])
+            ->select(['id', 'name', 'markup_class_id', 'sales_quantity_per_unit_g', 'sales_net'])->mitStandardVk()->get()
             ->map(fn ($r) => [
                 'recipe_id' => (int) $r->id,
                 'name' => (string) $r->name,
                 'portion_g' => $r->sales_quantity_per_unit_g !== null ? (float) $r->sales_quantity_per_unit_g : null,
-                'vk_netto_eur' => $r->sales_net !== null ? (float) $r->sales_net : null,
+                'vk_netto_eur' => $r->vk_netto,
             ])->all();
 
         return [
