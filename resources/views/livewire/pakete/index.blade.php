@@ -44,8 +44,8 @@
             @if($selected)
                 @php
                     $nGerichte = $selected->dishes->count();
-                    $nOhneVk = $selected->dishes->filter(fn ($g) => $g->dish === null || $g->dish->sales_net === null)->count();
-                    $sumVk = $selected->dishes->sum(fn ($g) => (float) ($g->dish?->sales_net ?? 0));
+                    $nOhneVk = $selected->dishes->filter(fn ($g) => $g->dish === null || $g->dish->vk_netto === null)->count();
+                    $sumVk = $selected->dishes->sum(fn ($g) => (float) ($g->dish?->vk_netto ?? 0));
                     $istAuto = $form['price_mode'] === 'auto';
 
                     // Kennzahlen (höchstens 3): Paketpreis ist die Hauptzahl; die Zahl der Gerichte steht am Abschnitt „Gerichte im Paket".
@@ -125,7 +125,7 @@
                                         <x-fa::input size="sm" numeric type="number" step="1" min="0" wire:model.blur="mengeForm.{{ $g->id }}" wire:change="gerichtMengeSpeichern({{ $g->id }})"
                                             class="w-20" placeholder="g/P" title="Menge pro Person in Gramm" aria-label="Menge pro Person" />
                                         @if($g->dish)
-                                            <x-fa::money :value="$g->dish->sales_net" class="shrink-0 w-20 text-right text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                            <x-fa::money :value="$g->dish->vk_netto" class="shrink-0 w-20 text-right text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
                                         @endif
                                         <x-fa::icon-button size="sm" icon="heroicon-m-x-mark" tone="danger" label="Aus dem Paket entfernen" wire:click="gerichtRaus({{ $g->sales_recipe_id }})" />
                                     </div>
@@ -143,7 +143,7 @@
                                         <button type="button" wire:key="kand-{{ $k->id }}" wire:click="gerichtHinzu({{ $k->id }})"
                                                 class="flex w-full items-center justify-between gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
                                             <span class="inline-flex min-w-0 items-center gap-1.5">@svg('heroicon-m-plus', 'w-4 h-4 shrink-0 text-[var(--fa-accent)]')<span class="truncate" title="{{ $k->name }}">{{ $k->name }}</span></span>
-                                            <x-fa::money :value="$k->sales_net" class="shrink-0 text-[var(--fa-ink-2)]" />
+                                            <x-fa::money :value="$k->vk_netto" class="shrink-0 text-[var(--fa-ink-2)]" />
                                         </button>
                                     @endforeach
                                 </div>

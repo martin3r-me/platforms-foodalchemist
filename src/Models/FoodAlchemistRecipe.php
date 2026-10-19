@@ -107,6 +107,41 @@ class FoodAlchemistRecipe extends Model
         return $q->where('is_sales_recipe', true);
     }
 
+    /**
+     * Spec 85 D-1: VK netto der Standard-Darreichung als Spalte `vk_netto` mitselektieren (eine Unterabfrage,
+     * kein N+1) — für Listen und Picker, die früher `recipes.sales_net` lasen. Vorher die gewünschten
+     * Rezept-Spalten per `select()` setzen, sonst lädt `addSelect` alle Spalten.
+     */
+    public function scopeMitStandardVk(Builder $q): Builder
+    {
+        return $q->addSelect(['vk_netto' => FoodAlchemistRecipeDarreichung::query()
+            ->select('sales_net')
+            ->whereColumn('recipe_id', $this->getTable() . '.id')
+            ->where('is_standard', true)
+            ->orderBy('id')
+            ->limit(1)]);
+    }
+
+    /**
+     * Spec 85 D-1: VK netto für Anzeigen (`$rezept->vk_netto`). Kommt die Spalte aus {@see scopeMitStandardVk()},
+     * gilt sie; sonst liest die Preisleiter die Standard-Darreichung ({@see \Platform\FoodAlchemist\Services\DarreichungResolver::vkNetto()}).
+     * Für Listen `standardPresentation` vorher eager laden, sonst eine Query je Gericht.
+     */
+    public function getVkNettoAttribute($value): ?float
+    {
+        if (array_key_exists('vk_netto', $this->attributes)) {
+            if ($value !== null) {
+                return (float) $value;
+            }
+            // Spec 85 D-1: Rückfall Altspalte bis PR-C (wie die Preisleiter; nur wenn die Spalte mitselektiert ist).
+            $alt = $this->attributes['sales_net'] ?? null;
+
+            return $alt !== null ? (float) $alt : null;
+        }
+
+        return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->vkNetto($this);
+    }
+
     /** Basisrezepte, die diese Teller-Rolle tragen können (Dominique 11.10.). */
     public function scopeMitRolle(Builder $q, string $rolle): Builder
     {

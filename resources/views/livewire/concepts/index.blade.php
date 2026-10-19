@@ -383,7 +383,7 @@
                                 @elseif($slot->sales_recipe_id && $slot->dish)
                                     <x-fa::badge>Festes Gericht</x-fa::badge>
                                     <span class="font-medium text-[var(--fa-ink)]">{{ $slot->dish->name }}</span>
-                                    <x-fa::money :value="$slot->dish->sales_net" class="text-[var(--fa-ink-2)]" />
+                                    <x-fa::money :value="$slot->dish->vk_netto" class="text-[var(--fa-ink-2)]" />
                                 @else
                                     <x-fa::signal tone="warn">Noch leer: Paket wählen oder festes Gericht setzen.</x-fa::signal>
                                 @endif
@@ -413,7 +413,7 @@
                                                 <button type="button" wire:key="k-{{ $slot->id }}-{{ $k->id }}" wire:click="fuelleGericht({{ $slot->id }}, {{ $k->id }})"
                                                         class="flex w-full items-center justify-between gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
                                                     <span class="min-w-0 truncate" title="{{ $k->name }}">{{ $k->name }}</span>
-                                                    <x-fa::money :value="$k->sales_net" class="shrink-0 text-[var(--fa-ink-2)]" />
+                                                    <x-fa::money :value="$k->vk_netto" class="shrink-0 text-[var(--fa-ink-2)]" />
                                                 </button>
                                             @endforeach
                                         </div>

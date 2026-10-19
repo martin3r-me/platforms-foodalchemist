@@ -657,7 +657,8 @@ class SpeiseplanService
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             ->with(['dishClass:id,diet_form'])
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
+            ->orderBy('name')->limit($limit)
+            ->select(['id', 'name', 'dish_class_id', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     /** Concepts (Fix-Menüs) für den Zell-Picker. */
@@ -1339,9 +1340,8 @@ class SpeiseplanService
                     ? app(CatalogPricingService::class)->salesNetFor(Team::find($outlet->team_id), $dar, $outlet)
                     : ($dar->sales_net !== null ? (float) $dar->sales_net : null);
             }
-            $vk ??= $outlet !== null
-                ? (app(DarreichungResolver::class)->vkNettoMitQuelle($e->dish, $outlet)['vk'] ?? (float) ($e->dish->sales_net ?? 0))
-                : (float) ($e->dish->sales_net ?? 0);
+            $resolver = app(DarreichungResolver::class);   // Spec 85 D-1: Preisleiter; im Betrieb dessen VK, sonst die Baseline
+            $vk ??= (float) (($outlet !== null ? $resolver->vkNetto($e->dish, $outlet) : null) ?? $resolver->vkNetto($e->dish) ?? 0);
 
             // EK JE PORTION: ek_portion der geltenden Darreichung. `ek_total_eur` ist der Ansatz
             // (alle Portionen) — bis 2026-10-07 stand er hier ungeteilt und blähte WE-% und EK/Gast auf.

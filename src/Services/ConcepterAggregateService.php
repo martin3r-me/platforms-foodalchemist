@@ -41,7 +41,8 @@ class ConcepterAggregateService
     {
         return [
             'id', 'name', 'sales_wording_standard',             // Wording-Kette (Menü-Ansicht) — load() hier überschreibt sonst detail()
-            'sales_net', 'ek_total_eur', 'work_time_min', 'sales_unit_count', 'sales_quantity_per_unit_g',
+            'ek_total_eur', 'work_time_min', 'sales_unit_count', 'sales_quantity_per_unit_g',
+            'sales_net',   // Spec 85 D-1: Rückfall Altspalte bis PR-C
             'is_sales_recipe',                            // Basis vs. VK — Paket-Posten-Badge + g/P-EK-Zweig
             'yield_kg', 'yield_pieces',                     // Stück-Modus (kg↔Stück): Teiler/Gramm aus Ertrag+Yield
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',
@@ -250,7 +251,7 @@ class ConcepterAggregateService
             } else {
                 $ek += (float) ($r['gericht']->ek_total_eur ?? 0) / $anzahl * $pae;
             }
-            $vk += (float) ($dar?->sales_net ?? $r['gericht']->sales_net ?? 0) * $pae;
+            $vk += (float) ($dar?->sales_net ?? app(DarreichungResolver::class)->vkNetto($r['gericht']) ?? 0) * $pae;   // Spec 85 D-1
             // Gewicht/Person = Portions-Äquivalent × Gramm je Einheit. Stück-Modus: yield_g / yield_pieces;
             // sonst Portionsgramm. Fehlt die Basis → Gewicht unvollständig (ehrlich).
             if ($stueck) {

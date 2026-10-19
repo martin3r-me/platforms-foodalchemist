@@ -508,8 +508,8 @@
                                                     <x-fa::badge tone="info">Gericht</x-fa::badge>
                                                     <span class="min-w-0 break-words text-[var(--fa-ink)]">{{ $block->dish?->name ?? '–' }}</span>
                                                     @if($block->dish !== null)
-                                                        <x-fa::money :value="$block->dish->sales_net" :per="$block->price_basis === 'pauschal' ? null : 'Position'" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
-                                                        @if($block->price_basis === 'pauschal' && $block->dish->sales_net !== null)<span class="{{ $hinweis }}">pauschal</span>@endif
+                                                        <x-fa::money :value="$block->dish->vk_netto" :per="$block->price_basis === 'pauschal' ? null : 'Position'" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                        @if($block->price_basis === 'pauschal' && $block->dish->vk_netto !== null)<span class="{{ $hinweis }}">pauschal</span>@endif
                                                     @endif
                                                     @if(trim((string) $block->wording) !== '')<span class="italic text-[var(--fa-accent)]">„{{ $block->wording }}“</span>@endif
                                                     @break
@@ -824,7 +824,7 @@
                             </div>
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($gerichtKandidaten ?? [] as $gk)
-                                    <x-foodalchemist::katalog-row wire:key="agk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? $euro($gk->sales_net) : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="agk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->vk_netto !== null ? $euro($gk->vk_netto) : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
                                 @empty
                                     <p class="px-2 py-2 {{ $hinweis }}">{{ ($gerichtSuche ?? '') !== '' ? 'Keine Gerichte für diese Auswahl.' : 'Gericht suchen oder Hauptgruppe wählen.' }}</p>
                                 @endforelse

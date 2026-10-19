@@ -263,10 +263,10 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'is_sales_recipe' => (bool) $recipe->is_sales_recipe,
                 'yield_kg' => $recipe->yield_kg,
                 'ek_total_eur' => $recipe->ek_total_eur,
-                // 03·L8: der VK ist Anzeige-Cache der Standard-Darreichung; mit
+                // 03·L8 / Spec 85 D-1: der VK der Standard-Darreichung (Preisleiter); mit
                 // voll_anreichern=true hat ihn das Wirtschaftlichkeits-Glied gerade
                 // gerechnet (Details inkl. W%-Ampel in anreicherung.wirtschaftlichkeit).
-                'sales_net' => $recipe->sales_net,
+                'sales_net' => app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->vkNetto($recipe),
                 'n_ingredients_total' => $recipe->n_ingredients_total,
                 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],

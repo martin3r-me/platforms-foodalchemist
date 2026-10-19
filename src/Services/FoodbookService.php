@@ -84,7 +84,7 @@ class FoodbookService
             ->with(['chapters' => fn ($q) => $q->orderBy('position'),
                 'chapters.blocks' => fn ($q) => $q->orderBy('position'),
                 'chapters.blocks.concept:id,name,price_per_person_cache,price_display',   // price_display → Editor-Chip istEinzelpreis
-                'chapters.blocks.dish:id,name,sales_net',
+                'chapters.blocks.dish:id,name,sales_net', 'chapters.blocks.dish.standardPresentation',
                 'crmCompany', 'crmContact',   // #369: CRM-Kunde-Link
                 'serviceMoments', 'targetGroups', 'defaultEventType', 'defaultServingForm']) // Spec 19 E3.3: Bedarf-Defaults
             ->find($id);
@@ -1331,9 +1331,8 @@ class FoodbookService
         }
         if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
-            $baseVk = $outlet !== null
-                ? (app(DarreichungResolver::class)->vkNettoMitQuelle($block->dish, $outlet)['vk'] ?? (float) ($block->dish->sales_net ?? 0))
-                : (float) ($block->dish->sales_net ?? 0);
+            $resolver = app(DarreichungResolver::class);   // Spec 85 D-1: Preisleiter; im Betrieb dessen VK, sonst die Baseline
+            $baseVk = (float) (($outlet !== null ? $resolver->vkNetto($block->dish, $outlet) : null) ?? $resolver->vkNetto($block->dish) ?? 0);
             $vk = round($baseVk * $faktor, 2);
             $ek = round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2);
 
@@ -1382,7 +1381,7 @@ class FoodbookService
     public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur',
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,ek_total_eur,sales_net', 'blocks.dish.standardPresentation',
             'blocks.staffel', 'children']);
 
         $vk = 0.0;
@@ -1575,7 +1574,7 @@ class FoodbookService
             'chapters.blocks.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
             'chapters.blocks.concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
-            'chapters.blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
+            'chapters.blocks.dish:id,name,sales_wording_standard,ek_total_eur,sales_net', 'chapters.blocks.dish.standardPresentation',
             // B (2026-08-31): LEBENDES Format-Kapitel — Identität + Editionen live aus dem Format. Editionen =
             // format_slots (type=concept) → Concept; die Wording-Kette der Editions-Concepte wie bei chapters.blocks.
             'chapters.format', 'chapters.format.images',
@@ -1967,7 +1966,8 @@ class FoodbookService
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
+            ->orderBy('name')->limit($limit)
+            ->select(['id', 'name', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     // ── Format buchen (F5) — WIE EIN CONCEPT, kein Live-Format-Sonderweg ──────────

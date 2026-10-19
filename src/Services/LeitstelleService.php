@@ -398,7 +398,7 @@ class LeitstelleService
         $mit = [
             'chapters' => fn ($q) => $q->orderBy('position'),
             'chapters.blocks' => fn ($q) => $q->orderBy('position'),
-            'chapters.blocks.dish:id,name,sales_net',
+            'chapters.blocks.dish:id,name,sales_net', 'chapters.blocks.dish.standardPresentation',
             'chapters.targetGroups:id',
             'targetGroups:id',
         ];

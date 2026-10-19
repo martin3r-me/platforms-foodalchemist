@@ -151,7 +151,7 @@ class CoverageService
 
     /**
      * Gericht-Zeile fürs Coverage-Ist: id, name, diet_form (aus dish_class, sonst
-     * spec-Flags als Fallback vegan/vegi), sales_net, Allergen-Werte, Begriffs-Korpus.
+     * spec-Flags als Fallback vegan/vegi), sales_net (VK der Standard-Darreichung, Spec 85 D-1), Allergen-Werte, Begriffs-Korpus.
      */
     private function gerichtZeile(FoodAlchemistRecipe $r): array
     {
@@ -176,7 +176,7 @@ class CoverageService
         return [
             'id' => $r->id, 'name' => $r->name,
             'diet_form' => $diet,
-            'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null,
+            'sales_net' => app(DarreichungResolver::class)->vkNetto($r),
             'allergene' => $allergene,
             'begriffe' => $begriffe,
         ];

@@ -142,8 +142,10 @@ class MargeImpactService
         if ($affected === []) {
             return $leer;
         }
-        $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $affected)->get();
-        $gerichte = $recipes->filter(fn ($r) => $r->is_sales_recipe && $r->sales_net !== null && (float) $r->sales_net > 0)->values();
+        $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $affected)->with('standardPresentation')->get();
+        // Spec 85 D-1: VK aus der Standard-Darreichung (Preisleiter), nicht aus recipes.sales_net.
+        $vkJe = $recipes->mapWithKeys(fn ($r) => [(int) $r->id => $r->is_sales_recipe ? app(DarreichungResolver::class)->vkNetto($r) : null]);
+        $gerichte = $recipes->filter(fn ($r) => ($vkJe[(int) $r->id] ?? 0) > 0)->values();
 
         $sumMargeDelta = 0.0;
         $rows = [];
@@ -166,7 +168,7 @@ class MargeImpactService
             $anzahl = max(1, (int) ($rec->sales_unit_count ?? 1));
             $istEkPortion = $istEk / $anzahl;
             $hypoEkPortion = $istEkPortion + ($exposure / $anzahl) * ($ratio - 1);
-            $vk = (float) $rec->sales_net;
+            $vk = (float) $vkJe[(int) $rec->id];
             $mIst = $this->marge->marge($vk, $istEkPortion);
             $mHypo = $this->marge->marge($vk, $hypoEkPortion);
             if ($mIst === null || $mHypo === null) {

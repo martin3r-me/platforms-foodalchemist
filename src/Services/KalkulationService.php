@@ -142,10 +142,8 @@ class KalkulationService
         $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl, $outlet);
         $hk1Pp = round($hk1Total / $anzahl, 4);
         $hk2Pp = $r['hk2'];
-        // M2: VK-Wahrheit liegt an der Standard-Darreichung (Resolver), recipes.sales_net nur Fallback.
-        $standard = $this->resolver->standardFuer($recipe);
-        $vk = $standard?->sales_net !== null ? (float) $standard->sales_net
-            : ($recipe->sales_net !== null ? (float) $recipe->sales_net : null);
+        // M2 / Spec 85 D-1: VK-Wahrheit liegt an der Standard-Darreichung — die Preisleiter liest sie (ein Ort).
+        $vk = $this->resolver->vkNetto($recipe);
         if ($recipe->ist_fassung) {   // Spec 82 §12 C: Abo-Fassung — VK = Team-EK × Kalkulationsfaktor DES TEAMS
             $vk = app(TeamVkService::class)->fuer($recipe, $team, $outlet)['vk'];
         }

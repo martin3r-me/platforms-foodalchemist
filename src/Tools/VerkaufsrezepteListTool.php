@@ -58,7 +58,7 @@ class VerkaufsrezepteListTool extends FoodAlchemistTool implements ToolContract,
             'last_page' => $treffer->lastPage(),
             'per_page' => $treffer->perPage(),
             'verkaufsrezepte' => collect($treffer->items())->map(fn ($r) => [
-                'id' => $r->id, 'name' => $r->name, 'sales_net' => $r->sales_net,
+                'id' => $r->id, 'name' => $r->name, 'sales_net' => $r->vk_netto,   // Spec 85 D-1: Standard-Darreichung
                 'ek_total_eur' => $r->ek_total_eur,
                 'speisen_klasse' => $r->dishClass?->label,
                 'dish_main_group_id' => $r->dish_main_group_id !== null ? (int) $r->dish_main_group_id : null,   // Taxonomie-Neutralisierung

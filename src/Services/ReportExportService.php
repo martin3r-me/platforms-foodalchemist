@@ -566,7 +566,7 @@ class ReportExportService
                 'commodity_group',
                 'leadLa.supplier:id,name',
                 'structures.item.supplier:id,name',
-                'recipeIngredients.recipe:id,name,is_sales_recipe,ek_total_eur,sales_net',
+                'recipeIngredients.recipe:id,name,is_sales_recipe,ek_total_eur',
             ])
             ->findOrFail($id);
 
@@ -847,6 +847,8 @@ class ReportExportService
         // UNGERUNDET (zeilenKostenUndMassen), weil der abgeleitete €/kg-Preis sonst bei
         // Amuse-Mengen auf 0 zusammenfällt: 0,008 kg × 0,18 €/kg = 0,0014 € → gerundet 0,00.
         $zeilenKosten = $this->zeilenKosten($recipe);
+        // Spec 85 D-1: VK aus der Standard-Darreichung (Preisleiter), nicht aus recipes.sales_net.
+        $vkNetto = app(DarreichungResolver::class)->vkNetto($recipe);
 
         return [
             'id' => (int) $recipe->id,
@@ -870,9 +872,9 @@ class ReportExportService
             'yield_pieces' => $this->skaliere($recipe->yield_pieces, $optionen),
             'ek_total_eur' => $this->skaliere($recipe->ek_total_eur, $optionen),
             'ek_per_kg_eur' => $recipe->ek_per_kg_eur,
-            'sales_net' => $recipe->sales_net,
-            'food_cost_percent' => ((float) ($recipe->sales_net ?? 0) > 0 && $recipe->ek_total_eur !== null)
-                ? round(((float) $recipe->ek_total_eur / (float) $recipe->sales_net) * 100, 2)
+            'sales_net' => $vkNetto,
+            'food_cost_percent' => ((float) ($vkNetto ?? 0) > 0 && $recipe->ek_total_eur !== null)
+                ? round(((float) $recipe->ek_total_eur / (float) $vkNetto) * 100, 2)
                 : null,
             'sales_wording_standard' => $recipe->sales_wording_standard,
             'plating_text' => $recipe->plating_text,

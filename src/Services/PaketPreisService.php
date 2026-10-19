@@ -186,7 +186,7 @@ class PaketPreisService
         $anzahl = max(1, (int) ($rezept->sales_unit_count ?? 1));
 
         return [
-            'vk' => (float) ($dar?->sales_net ?? $rezept->sales_net ?? 0) * $pae,
+            'vk' => (float) ($dar?->sales_net ?? app(DarreichungResolver::class)->vkNetto($rezept) ?? 0) * $pae,   // Spec 85 D-1
             'ek' => $dar?->ek_portion !== null ? (float) $dar->ek_portion * $pae : (float) ($rezept->ek_total_eur ?? 0) / $anzahl * $pae,
             'grund' => null,
         ];
