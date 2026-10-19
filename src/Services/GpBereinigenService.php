@@ -405,13 +405,27 @@ class GpBereinigenService
                 $neueKeys[$neuerKey] = $gp->id;
             }
             $neueNamen[$nameKey] = $gp->id;
+            // Felder folgen dem Namen: ist der Wert von Verarbeitung/Form im neuen Namen nicht mehr enthalten (z. B. Form »Pueree« nach
+            // Regelwerk §8.17 in die Hauptzutat gewandert), wird das Feld geleert — sonst bliebe der Name vom Render der Felder abweichend (Drift I4).
+            $feldWechsel = ['alt' => [], 'neu' => []];
+            foreach (['processing', 'form'] as $feld) {
+                $wert = trim((string) ($gp->{$feld} ?? ''));
+                // Nur die Attribute hinter dem Doppelpunkt zählen (die Hauptzutat »Karottenpueree« enthält »Pueree« als Wortteil).
+                $neuAttr = str_contains($neu, ':') ? (string) substr($neu, strpos($neu, ':') + 1) : '';
+                $altAttr = str_contains((string) $gp->name, ':') ? (string) substr((string) $gp->name, strpos((string) $gp->name, ':') + 1) : '';
+                if ($wert !== '' && mb_stripos($neuAttr, $wert) === false && mb_stripos($altAttr, $wert) !== false) {
+                    $feldWechsel['alt'][$feld] = $gp->{$feld};
+                    $feldWechsel['neu'][$feld] = null;
+                }
+            }
             $aenderungen[] = [
                 'gp_id' => $gp->id, 'wg' => $gp->commodity_group_code, 'regeln' => array_keys($regeln),
                 'alt' => ['name' => $gp->name, 'gp_key' => $gp->gp_key, 'main_ingredient_slug' => $gp->main_ingredient_slug, 'main_ingredient_display' => $gp->main_ingredient_display]
-                    + ($zustandWechsel ? ['condition' => $gp->condition, 'condition_source' => $gp->condition_source] : []),
+                    + ($zustandWechsel ? ['condition' => $gp->condition, 'condition_source' => $gp->condition_source] : []) + $feldWechsel['alt'],
                 'neu' => ['name' => $neu, 'gp_key' => $neuerKey, 'main_ingredient_slug' => $neuerSlug, 'main_ingredient_display' => $neueAnzeige]
-                    + ($zustandWechsel ? ['condition' => $neuerZustand, 'condition_source' => 'manual'] : []),
+                    + ($zustandWechsel ? ['condition' => $neuerZustand, 'condition_source' => 'manual'] : []) + $feldWechsel['neu'],
                 'zustand_wechsel' => $zustandWechsel,
+                'felder_geleert' => array_keys($feldWechsel['neu']),
                 'key_wechsel' => $neuerKey !== $gp->gp_key,
                 'key_nicht_ableitbar' => ! $keyAbleitbar,
                 'warnungen' => $pruefung['warnings'],

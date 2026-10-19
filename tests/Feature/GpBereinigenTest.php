@@ -265,3 +265,19 @@ it('Namen: wechselt das Zustandswort im neuen Namen (trocken→frisch), zieht `c
 
     expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('condition'))->toBe('trocken');
 });
+
+it('Namen: Form „Pueree“ am Roh-GP wandert in die Hauptzutat (§8.17) — das Formfeld wird geleert, --zurueck stellt es her', function () {
+    $gp = ($this->gp)('Butternusskuerbis: konserviert, Pueree', '02', ['condition' => 'konserviert', 'form' => 'Pueree']);
+    $csv = ($this->namenCsv)([[$gp->id, $gp->name, '§8.17 Pueree', 'Butternusskuerbispueree: konserviert']]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => $csv, '--apply' => true, '--backup-nachweis' => $backup])->assertSuccessful();
+
+    $g = DB::table('foodalchemist_gps')->where('id', $gp->id)->first();
+    expect($g->name)->toBe('Butternusskuerbispueree: konserviert')->and($g->form)->toBeNull();
+
+    ($this->lauf)(['--zurueck' => glob($this->dir . '/*_protokoll.json')[0]])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('form'))->toBe('Pueree');
+});
