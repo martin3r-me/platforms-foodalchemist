@@ -166,6 +166,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
                 \Platform\FoodAlchemist\Console\VollstaendigkeitReportCommand::class,
                 \Platform\FoodAlchemist\Console\AllergenLaVorrangCommand::class,
+                \Platform\FoodAlchemist\Console\AllergeneNurPositivCommand::class,   // Spec 85
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79

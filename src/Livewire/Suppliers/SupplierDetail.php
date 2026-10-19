@@ -254,6 +254,9 @@ class SupplierDetail extends Component
 
         return view('foodalchemist::livewire.suppliers.supplier-detail', [
             'stammblatt' => $stammblatt,
+            // Spec 85: Merkmal „liefert nur Positivangaben“ — nur Anzeige, gepflegt per foodalchemist:allergene-nur-positiv
+            'allergenNurPositiv' => $stammblatt !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::query()
+                ->where('allergene_nur_positiv', true)->find($this->supplierId, ['allergene_nur_positiv_grund', 'allergene_nur_positiv_seit']) : null,
             'gruppen' => $team !== null ? app(\Platform\FoodAlchemist\Services\SupplierGroupService::class)->liste($team) : collect(),
             'darfEdit' => (bool) ($stammblatt['is_owned'] ?? false),
             // R9.2 (E6): Bündelungs-Ranking über alle sichtbaren Lieferanten (Nutzungs-Proxy, ehrlich markiert).

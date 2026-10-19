@@ -425,6 +425,9 @@ class ItemModal extends Component
             'deklarationQuelle' => $item?->declarations?->source,
             'haltbarkeitAusPass' => $item !== null ? $this->haltbarkeitAusPass($item) : [],
             'allergenQuelle' => $item?->allergens?->source,
+            // Spec 85: Positiv-Lieferant — leere Felder gelten als angenommen nicht enthalten (nur Anzeige; das Formular bleibt roh)
+            'allergenAngenommen' => $item !== null ? array_keys(array_filter(\Platform\FoodAlchemist\Support\AllergenAnnahme::zeile(
+                $item->allergens, $item->supplier_id !== null ? (int) $item->supplier_id : null), fn ($f) => $f['angenommen'])) : [],
             'aktiverPreis' => $aktiv,
             'aktion' => $item !== null ? app(\Platform\FoodAlchemist\Services\AktionspreisService::class)->aktivFuer($team, $item) : null,
             'vergleichspreis' => $item !== null && $aktiv !== null

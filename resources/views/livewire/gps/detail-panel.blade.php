@@ -194,10 +194,14 @@
                     $spuren = collect($allergene)->filter(fn ($a) => $a['value']->value === 'spuren');
                     $unbekannt = collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt');
                     $freiAnzahl = collect($allergene)->filter(fn ($a) => $a['value']->value === 'nicht_enthalten')->count();
+                    // Spec 85: Positiv-Lieferant — „nicht enthalten“ nur angenommen (Lieferant liefert nur Positivangaben)
+                    $angenommenAnzahl = collect($allergene)->filter(fn ($a) => $a['source'] === \Platform\FoodAlchemist\Support\AllergenAnnahme::QUELLE)->count();
+                    $angenommenSatz = $angenommenAnzahl > 0 ? 'davon ' . $angenommenAnzahl . ' ' . \Platform\FoodAlchemist\Support\AllergenAnnahme::HINWEIS : null;
                 @endphp
                 @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
                     <p class="flex flex-wrap items-center gap-2" data-allergene-frei>
                         <x-fa::signal tone="ok">Keines der 14 Hauptallergene deklariert</x-fa::signal>
+                        @if($angenommenSatz !== null)<span class="{{ $leise }}" data-allergene-angenommen>{{ $angenommenSatz }}</span>@endif
                         @if($nurKiOverride)<x-fa::signal tone="info" icon="heroicon-m-sparkles" title="Schätzung ohne Beleg durch Lieferantenartikel. Für die Deklaration Artikeldaten ergänzen.">KI-geschätzt, nicht belegt</x-fa::signal>@endif
                     </p>
                 @else
@@ -215,7 +219,7 @@
                         @if($unbekannt->isNotEmpty())
                             <x-fa::signal tone="warn" data-allergene-unbekannt title="Ohne Angabe im Artikel. Unbekannt heißt nicht frei von.">{{ $unbekannt->count() }} von 14 ohne Angabe (unbekannt)</x-fa::signal>
                         @endif
-                        @if($freiAnzahl > 0)<p class="{{ $leise }}">Frei von den übrigen {{ $freiAnzahl }} {{ $freiAnzahl === 1 ? 'Hauptallergen' : 'Hauptallergenen' }}</p>@endif
+                        @if($freiAnzahl > 0)<p class="{{ $leise }}">Frei von den übrigen {{ $freiAnzahl }} {{ $freiAnzahl === 1 ? 'Hauptallergen' : 'Hauptallergenen' }}@if($angenommenSatz !== null)<span data-allergene-angenommen>, {{ $angenommenSatz }}</span>@endif</p>@endif
                     </div>
                 @endif
             @endif
