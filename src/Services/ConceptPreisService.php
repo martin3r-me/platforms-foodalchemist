@@ -259,6 +259,13 @@ class ConceptPreisService
         if ($pae === null) {   // Gramm-Position ohne Portionsgewicht → ehrlich unbekannt
             return ['zeile' => $kopf + ['price' => null, 'ek' => null, 'ek_fehlt' => true], 'vk' => 0.0, 'ek' => 0.0, 'grund' => 'keine_grammatur', 'leer' => false];
         }
+        // eingefrorenes Angebot (Spec 82 §12 B3): fester VK je Form und der eingefrorene EK je Portion; ohne VK eingefroren ⇒ Lücke, kein Rückfall
+        $fp = app(\Platform\FoodAlchemist\Support\AngebotFestpreise::class)->gericht((int) $dish->id, $dar?->id);
+        if ($fp !== null) {
+            $ekF = $fp['ek_summe'] !== null ? (float) $fp['ek_summe'] / max(1, (int) ($dish->sales_unit_count ?? 1)) : null;
+
+            return $this->ergebnis($kopf, $fp['vk'] !== null ? $fp['vk'] * $pae : null, $ekF !== null ? $ekF * $pae : null, $fp['vk'] === null ? 'eingefroren_ohne_vk' : null);
+        }
         if ($dish->ist_fassung) {
             $r = $this->teamVk->fuer($dish, $team, $outlet, $dar);
 

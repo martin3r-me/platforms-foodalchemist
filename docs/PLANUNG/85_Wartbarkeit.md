@@ -98,6 +98,7 @@ Quelle: **V** = Vanessa (Code-Durchsicht/Session), **T** = Session „test“ (N
 | I3-14 | `WarengruppeSubkategorie` | hängt per Text-Code statt Fremdschlüssel an der Warengruppe | niedrig | T24 | Pfadfinder | FK auf die WG-ID | T24 |
 | I3-15 | `FoodAlchemistTargetGroup:16` | Freitext `concepts.target_group` neben dem Pivot | niedrig | V | Pfadfinder | migrieren | V |
 | I3-16 | Wareneinsatz-Maßstab: Benchmark Ø-W%, Rezept-Bericht `food_cost_percent`, VK-Cockpit-Rückfall, Verkaufs-Browser W%-Spalte, `blockPreis` (Foodbook/Angebot, speist die Kapitel-Ampeln), `SpeisekarteService::positionEkVk`, Concepter Paket-Posten-EK | EK des **ganzen Ansatzes** gegen den VK **einer Portion** — bei 4 Portionen das Vierfache (Beispiel 8 € / 4 P / VK 5 € → 160 % statt 40 %); Leitstellen-Board lud den EK gar nicht (immer 0) | **hoch** | D-1-Kartierung 19.10., Kurator | Vanessa | **behoben (PR „Wareneinsatz je Portion“):** `DarreichungResolver::ekProPortion()` (ek_portion der Standard-Darreichung, sonst Ansatz ÷ Portionen) + Accessor `ek_pro_portion` | V |
+| I3-17 | Eingefrorenes Angebot (Spec 82 §12 B3) | die Einfrierung hielt den VK fest, aber kein Preisweg las ihn (`OfferCompositionService::blockPreis`, Paket-Cockpit) — ein eingefrorenes Angebot zeigte weiter Live-Preise; eingefroren wurden zudem nur Abo-Gerichte | **hoch** | F5-Prüfung 19.10. | Vanessa | **behoben (PR „Angebot Festpreise“):** alle Gerichte beim Versand eingefroren (VK je Form, EK, Aufschlagsklasse; Migration `2026_11_13_300000`), Festpreis-Kontext `Support/AngebotFestpreise` in blockPreis, `ConceptService::preisCockpit`, `ConceptPreisService`; ohne VK eingefroren = Lücke (vk_fehlt), nach Verwerfen wieder live (Dominique 19.10.) | V |
 
 ### I4 · Toter Code
 
@@ -334,6 +335,7 @@ Korrektur (D-2-Prüfung 18.10.): `FaRechte::pruefeKontingent` ruft die **Host-Ap
 
 ## Changelog
 
+- 2026-10-19 · I3-17 eingefrorenes Angebot mit festen Preisen (hoch, behoben).
 - 2026-10-19 · D-9 / F5: VK-Freigabe entfällt, Link-Einfrieren ist der Kundenschutz (Dominique (b)); Umsetzung als eigener PR nach PR-C.
 - 2026-10-19 · I5-8 Websuche erledigt (Core-Transport, Meldungen statt Erfindung).
 - 2026-10-19 · I3-16 Wareneinsatz-Maßstab (hoch, behoben) und I6-6 Coverage ohne Eager-Load (niedrig) aufgenommen.

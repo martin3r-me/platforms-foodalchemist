@@ -18,9 +18,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 /**
  * Spec 82 §12 B3 · Eingefrorenes Angebot (Durchstich Schritt 4a).
  *
- * Beim Wechsel auf „angebot“ (Freigabe, Entscheidung Dominique 13.10.) hält ein Snapshot je GERICHT MIT ABO-FASSUNG im Baum fest, was es war:
- * Fassungs-IDs, EK mit Status (vollständig/unvollständig, nie 0 € als Preis), VK, Allergenbild. Eigene Gerichte ohne Fassung bleiben wie heute
- * (Entscheidung Kurator D3). `sales_recipe_id` bleibt unberührt. Eine neue Master-Fassung ändert den Snapshot nie; sie wird als „neuere
+ * Beim Wechsel auf „angebot“ (Freigabe, Entscheidung Dominique 13.10.) hält ein Snapshot je GERICHT im Baum fest, was es war:
+ * Fassungs-IDs (bei Abo-Gerichten), EK mit Status (vollständig/unvollständig, nie 0 € als Preis), VK je Darreichung/Form, Aufschlagsklasse,
+ * Allergenbild. Seit 19.10. (Dominique) ALLE Gerichte, auch eigene: ein eingefrorenes Angebot hat feste Preise — die Preiswege lesen sie über
+ * {@see \Platform\FoodAlchemist\Support\AngebotFestpreise} (vorher galt Kurator-Entscheid D3: nur Abo-Gerichte). `sales_recipe_id` bleibt unberührt. Eine neue Master-Fassung ändert den Snapshot nie; sie wird als „neuere
  * Fassung verfügbar“ mit Allergen-Diff angezeigt ({@see veraltet}), das Übernehmen mit Bestätigung folgt in 4b.
  *
  * Zurück auf „anfrage“/„in_arbeit“ verwirft den Snapshot (nach Bestätigung): das Angebot folgt dann wieder der neuesten Fassung.
@@ -60,19 +61,7 @@ class AngebotEinfrierService
         $eigentuemer = Team::find($angebot->team_id) ?? $team;
         $zeilen = [];
         foreach ($this->positionsGerichte($angebot) as $gericht) {
-            $fassungen = $this->fassungenImBaum($gericht);
-            if ($fassungen === []) {
-                continue;   // eigenes Gericht ohne Fassung: bleibt wie heute
-            }
-            $k = $this->kosten->fuer($gericht, $eigentuemer);
-            $zeilen[] = [
-                'team_id' => $angebot->team_id, 'recipe_id' => $gericht->id, 'name' => (string) $gericht->name,
-                'fassungen' => array_map(fn ($f) => ['fassung_id' => (int) $f->id, 'fassung_von_id' => (int) $f->fassung_von_id, 'fassung_nr' => (int) $f->fassung_nr,
-                    'allergene' => $this->vergleich->allergenBild($f)], $fassungen),
-                'ek_summe' => $k['ek_summe'], 'ek_per_kg' => $k['ek_per_kg'], 'n_priced' => $k['n_priced'], 'n_total' => $k['n_total'],
-                'vollstaendig' => $k['vollstaendig'], 'grund' => $k['vollstaendig'] ? null : ($k['grund'] ?? 'unvollstaendig'), 'fehlende' => $k['fehlende'],
-                'vk' => $k['vollstaendig'] ? $k['vk'] : null, 'allergene' => $this->vergleich->allergenBild($gericht), 'kosten_stand_at' => $k['berechnet_at'],
-            ];
+            $zeilen[] = ['team_id' => $angebot->team_id, 'recipe_id' => $gericht->id, 'name' => (string) $gericht->name] + $this->zeilenStand($gericht, $eigentuemer);
         }
         if ($zeilen === []) {
             return null;
@@ -396,20 +385,65 @@ class AngebotEinfrierService
     /** Die Zeile des Snapshots auf den jetzigen Stand des Gerichts ziehen (nach dem Übernehmen). */
     private function zeileNeuEinfrieren(FoodAlchemistAngebotEinfrierZeile $zeile, FoodAlchemistRecipe $gericht, Team $eigentuemer): void
     {
+        $zeile->update($this->zeilenStand($gericht, $eigentuemer));
+    }
+
+    /**
+     * Der eingefrorene Stand eines Gerichts: Fassungen (Abo), EK-Status, VK der Standard-Form, VK je Darreichung/Form, Aufschlagsklasse,
+     * Allergene. Ohne vollständigen EK nie ein VK (Auflage 4) — auch nicht je Form.
+     *
+     * @return array<string, mixed>
+     */
+    private function zeilenStand(FoodAlchemistRecipe $gericht, Team $eigentuemer): array
+    {
         $fassungen = $this->fassungenImBaum($gericht);
         $k = $this->kosten->fuer($gericht, $eigentuemer);
-        $zeile->update([
+        $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::query()->where('recipe_id', $gericht->id)
+            ->orderByDesc('is_standard')->orderBy('id')->get();
+        $standard = $formen->firstWhere('is_standard', true);
+        $jeForm = [];
+        foreach ($formen as $d) {
+            // wie die Live-Wege: Abo-Fassung über TeamVkService je Form, eigenes Gericht über den VK der Form (sonst Preisleiter)
+            $vk = $gericht->ist_fassung
+                ? app(TeamVkService::class)->fuer($gericht, $eigentuemer, null, $d)['vk']
+                : ($d->sales_net !== null ? (float) $d->sales_net : app(DarreichungResolver::class)->vkNetto($gericht));
+            $jeForm[(int) $d->id] = $k['vollstaendig'] && $vk !== null ? round((float) $vk, 2) : null;
+        }
+
+        return [
             'fassungen' => array_map(fn ($f) => ['fassung_id' => (int) $f->id, 'fassung_von_id' => (int) $f->fassung_von_id, 'fassung_nr' => (int) $f->fassung_nr,
                 'allergene' => $this->vergleich->allergenBild($f)], $fassungen),
             'ek_summe' => $k['ek_summe'], 'ek_per_kg' => $k['ek_per_kg'], 'n_priced' => $k['n_priced'], 'n_total' => $k['n_total'],
             'vollstaendig' => $k['vollstaendig'], 'grund' => $k['vollstaendig'] ? null : ($k['grund'] ?? 'unvollstaendig'), 'fehlende' => $k['fehlende'],
             'vk' => $k['vollstaendig'] ? $k['vk'] : null, 'allergene' => $this->vergleich->allergenBild($gericht), 'kosten_stand_at' => $k['berechnet_at'],
-        ]);
+            'presentation_id' => $standard?->id, 'markup_class_id' => $standard?->markup_class_id, 'vk_je_form' => $jeForm,
+        ];
+    }
+
+    /**
+     * Festpreise eines eingefrorenen Angebots: recipe_id → {vk, ek_summe, vollstaendig, je_form}; null = nicht eingefroren (live rechnen).
+     *
+     * @return array<int, array{vk: ?float, ek_summe: ?float, vollstaendig: bool, je_form: array<int, ?float>}>|null
+     */
+    public function festpreiseFuer(int $angebotId): ?array
+    {
+        $e = FoodAlchemistAngebotEinfrierung::where('angebot_id', $angebotId)->whereNull('verworfen_at')->latest('id')->first();
+        if ($e === null) {
+            return null;
+        }
+        $map = [];
+        foreach (FoodAlchemistAngebotEinfrierZeile::where('einfrierung_id', $e->id)->get() as $z) {
+            $map[(int) $z->recipe_id] = ['vk' => $z->vk, 'ek_summe' => $z->ek_summe, 'vollstaendig' => (bool) $z->vollstaendig,
+                'je_form' => array_map(fn ($v) => $v === null ? null : (float) $v, array_combine(array_map('intval', array_keys((array) $z->vk_je_form)), array_values((array) $z->vk_je_form)) ?: [])];
+        }
+
+        return $map;
     }
 
     /** Aktions-Signale „Neuere Fassung verfügbar“ nach Einfrieren, Verwerfen oder Übernehmen nachführen (anlegen, aktualisieren, schließen). Nie ein Grund zu scheitern. */
     private function signaleNachfuehren(FoodAlchemistAngebot $angebot, ?FoodAlchemistAngebotEinfrierung $einfrierung = null): void
     {
+        app(\Platform\FoodAlchemist\Support\AngebotFestpreise::class)->vergessen((int) $angebot->id);   // Festpreise im selben Request neu lesen
         try {
             app(FassungSignalService::class)->nachAngebotsAenderung($angebot, $einfrierung);
         } catch (\Throwable $e) {
