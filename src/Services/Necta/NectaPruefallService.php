@@ -87,7 +87,7 @@ class NectaPruefallService
      * Was eine Entscheidung träfe — Grundlage des Bestätigungs-Dialogs. Der Schlüssel bindet die Ausführung an GENAU diese Fälle.
      *
      * @param  list<int>|null  $ids  null = alle offenen Fälle unter $filter
-     * @return array{anzahl:int, schluessel:string, je_art:array<string,int>, je_lieferant:array<string,int>, allergene:list<array{feld:string, label:string, von:?string, nach:?string, n:int, artikel:list<string>}>, admin_noetig:bool}
+     * @return array{anzahl:int, schluessel:string, je_art:array<string,int>, je_lieferant:array<string,int>, allergene:list<array{feld:string, label:string, von:?string, nach:?string, von_text:?string, nach_text:?string, n:int, artikel:list<string>}>, admin_noetig:bool}
      */
     public function vorschau(Team $team, ?array $ids, array $filter, string $aktion): array
     {
@@ -101,7 +101,8 @@ class NectaPruefallService
             }
             $k = $z->feld.'|'.$z->fa_wert.'|'.$z->necta_wert;
             $allergene[$k] ??= ['feld' => (string) $z->feld, 'label' => ProduktpassAbweichungService::label($z->objekt, (string) $z->feld),
-                'von' => $z->fa_wert, 'nach' => $z->necta_wert, 'n' => 0, 'artikel' => []];
+                'von' => $z->fa_wert, 'nach' => $z->necta_wert, 'von_text' => self::wertText((string) $z->objekt, $z->fa_wert),
+                'nach_text' => self::wertText((string) $z->objekt, $z->necta_wert), 'n' => 0, 'artikel' => []];
             $allergene[$k]['n']++;
             if (count($allergene[$k]['artikel']) < 20) {
                 $allergene[$k]['artikel'][] = (string) ($z->artikel ?? $z->legacy_id);
@@ -140,6 +141,67 @@ class NectaPruefallService
         $this->rechte->pruefeId($userId, $team, $rolle, $rolle === FaRolle::Admin
             ? 'Necta-Werte an Allergenen/Deklarationen gesammelt übernehmen' : 'Necta-Prüffälle entscheiden');
 
+        // Sammel (Kurator 19.10.): jede Entscheidung trägt den Lauf; viele Fälle gehen in Teilmengen in den Hintergrund
+        // (io CLI/FPM-Speicher) — der Stand steht unter sammelStand($lauf), am Ende eine Fertig-Meldung.
+        $lauf = $ids === null || $zeilen->count() > 1 ? (string) \Illuminate\Support\Str::uuid() : null;
+        if ($lauf !== null && $zeilen->count() > self::SAMMEL_SOFORT_MAX) {
+            $alle = $zeilen->pluck('id')->map(fn ($i) => (int) $i)->all();
+            \Illuminate\Support\Facades\Cache::put(self::STAND_KEY.$lauf, ['gesamt' => count($alle), 'erledigt' => 0, 'uebersprungen' => 0,
+                'rezepte_nachgerechnet' => 0, 'fertig' => false, 'aktion' => $aktion], now()->addDay());
+            \Platform\FoodAlchemist\Jobs\NectaPruefallSammelJob::dispatch((int) $team->id, $userId, $aktion, $alle, $lauf, $rolle->value);
+
+            return ['erledigt' => 0, 'uebersprungen' => [], 'rezepte_nachgerechnet' => 0, 'lauf' => $lauf, 'im_hintergrund' => true, 'gesamt' => count($alle)];
+        }
+
+        return $this->verarbeite($team, $zeilen, $aktion, $userId, $rolle, $lauf) + ($lauf !== null ? ['lauf' => $lauf] : []);
+    }
+
+    /** Ab dieser Zahl läuft eine Sammel-Entscheidung als Job in Teilmengen ({@see self::SAMMEL_TEIL}). */
+    public const SAMMEL_SOFORT_MAX = 300;
+
+    public const SAMMEL_TEIL = 200;
+
+    private const STAND_KEY = 'fa:necta_sammel:';
+
+    /** @return array{gesamt:int, erledigt:int, uebersprungen:int, rezepte_nachgerechnet:int, fertig:bool, aktion:string}|null */
+    public static function sammelStand(string $lauf): ?array
+    {
+        $s = \Illuminate\Support\Facades\Cache::get(self::STAND_KEY.$lauf);
+
+        return is_array($s) ? $s : null;
+    }
+
+    /** Hintergrund-Lauf abgebrochen: als fertig markieren, mit Grund (bis dahin Erledigtes bleibt erledigt). */
+    public static function sammelAbbruch(string $lauf, string $grund): void
+    {
+        $stand = self::sammelStand($lauf) ?? ['gesamt' => 0, 'erledigt' => 0, 'uebersprungen' => 0, 'rezepte_nachgerechnet' => 0, 'aktion' => ''];
+        \Illuminate\Support\Facades\Cache::put(self::STAND_KEY.$lauf, ['fertig' => true, 'fehler' => $grund] + $stand, now()->addDay());
+    }
+
+    /**
+     * Eine Teilmenge eines Hintergrund-Laufs (NectaPruefallSammelJob): Rechte erneut prüfen, entscheiden, Stand fortschreiben.
+     * Nicht mehr offene Fälle (zwischenzeitlich entschieden) fallen über offeneFaelle() still heraus.
+     *
+     * @param  list<int>  $ids
+     */
+    public function sammelTeil(Team $team, array $ids, string $aktion, ?int $userId, FaRolle $rolle, string $lauf, bool $letzter): void
+    {
+        $this->rechte->pruefeId($userId, $team, $rolle, 'Necta-Prüffälle gesammelt entscheiden');
+        $r = $this->verarbeite($team, $this->offeneFaelle($ids, []), $aktion, $userId, $rolle, $lauf);
+        $stand = self::sammelStand($lauf) ?? ['gesamt' => count($ids), 'erledigt' => 0, 'uebersprungen' => 0, 'rezepte_nachgerechnet' => 0, 'aktion' => $aktion];
+        $stand['erledigt'] += $r['erledigt'];
+        $stand['uebersprungen'] += count($r['uebersprungen']);
+        $stand['rezepte_nachgerechnet'] += $r['rezepte_nachgerechnet'];
+        $stand['fertig'] = $letzter;
+        \Illuminate\Support\Facades\Cache::put(self::STAND_KEY.$lauf, $stand, now()->addDay());
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $zeilen
+     * @return array{erledigt:int, uebersprungen: array<int,string>, rezepte_nachgerechnet:int}
+     */
+    private function verarbeite(Team $team, \Illuminate\Support\Collection $zeilen, string $aktion, ?int $userId, FaRolle $rolle, ?string $lauf): array
+    {
         $raus = ['erledigt' => 0, 'uebersprungen' => [], 'rezepte_nachgerechnet' => 0];
         $kennzeichnung = [];
         foreach ($zeilen as $fall) {
@@ -149,6 +211,9 @@ class NectaPruefallService
                     $kennzeichnung[$artikelId] = true;
                 }
                 $raus['erledigt']++;
+                if ($lauf !== null) {
+                    DB::table('foodalchemist_necta_pruefaelle')->where('id', $fall->id)->update(['sammel_lauf' => $lauf]);   // wer/wann steht schon am Fall
+                }
             } catch (NectaPruefallUebersprungen $e) {
                 $raus['uebersprungen'][(int) $fall->id] = $e->getMessage();
             }
@@ -420,6 +485,9 @@ class NectaPruefallService
                 'id' => (int) $z->id, 'art' => $z->art, 'objekt' => $z->objekt, 'feld' => $feld,
                 'feld_label' => $feld !== '' && $z->objekt !== 'price' ? ProduktpassAbweichungService::label($z->objekt, $feld) : $feld,
                 'fa_damals' => $z->fa_wert, 'fa_jetzt' => $faJetzt === null ? null : (string) $faJetzt, 'necta' => $z->necta_wert,
+                // Kurator 19.10.: Kennzeichnungs-Werte in Worten (der Code bleibt daneben)
+                'fa_damals_text' => self::wertText((string) $z->objekt, $z->fa_wert), 'fa_jetzt_text' => self::wertText((string) $z->objekt, $faJetzt),
+                'necta_text' => self::wertText((string) $z->objekt, $z->necta_wert),
                 'veraltet' => isset($jetzt[$z->objekt]) && $aid !== null && NectaAbgleichService::norm($faJetzt) !== NectaAbgleichService::norm($z->fa_wert)
                     && in_array($z->art, self::UEBERNEHMBAR, true),
                 'status' => $z->status, 'artikel_id' => $aid, 'artikel' => $z->artikel, 'legacy_id' => (int) $z->legacy_id,
@@ -430,6 +498,23 @@ class NectaPruefallService
                 'erledigt_von' => $z->erledigt_von !== null ? (int) $z->erledigt_von : null, 'erledigt_at' => $z->erledigt_at,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Kennzeichnungs-Wert in Worten: Deklaration (Necta-Code) 3 = „ja (enthalten)“, 1 = „nein“, 0/leer = „k. A.“; Allergen
+     * enthalten/spuren/nicht_enthalten. Andere Objekte (Preis, Stammdaten, Nährwerte) behalten ihren Wert.
+     */
+    public static function wertText(string $objekt, mixed $wert): ?string
+    {
+        $w = $wert === null ? '' : trim((string) $wert);
+        if ($objekt === 'item_declaration') {
+            return match ($w) { '3' => 'ja (enthalten)', '1' => 'nein', '', '0' => 'k. A.', default => $w };
+        }
+        if ($objekt === 'item_allergen') {
+            return match (mb_strtolower($w)) { 'enthalten', '3' => 'enthalten', 'spuren', '2' => 'Spuren', 'nicht_enthalten', '1' => 'nicht enthalten', '', '0' => 'k. A.', default => $w };
+        }
+
+        return $wert === null ? null : (string) $wert;
     }
 
     /**

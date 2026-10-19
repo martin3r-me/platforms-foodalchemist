@@ -23,7 +23,7 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
-        <div class="flex flex-col gap-4" data-necta-pruefaelle>
+        <div class="flex flex-col gap-4" data-necta-pruefaelle @if($sammelLauf) wire:poll.3s="sammelStand" @endif>
             <x-fa::page-header title="Necta-Prüffälle" :subtitle="number_format($liste['gesamt'], 0, ',', '.') . ' Fälle in der Auswahl'" />
 
             @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
@@ -67,17 +67,24 @@
                     @endforeach
                 </div>
             @elseif($status === 'offen')
-                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Für eine Sammel-Entscheidung Art und Lieferant wählen.</p>
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Für eine Sammel-Entscheidung eine Art wählen (Lieferant und Suche schränken optional ein).</p>
             @endif
 
             @if($sammelAktion !== null)
                 <x-fa::notice tone="{{ ($sammelVorschau['allergene'] ?? []) !== [] && $sammelAktion === 'necta_uebernehmen' ? 'crit' : 'info' }}" data-sammel-bestaetigung>
-                    <p class="font-medium">{{ $aktionLabel[$sammelAktion] }} für {{ number_format($sammelVorschau['anzahl'] ?? 0, 0, ',', '.') }} Prüffälle?</p>
+                    @php $jeLief = $sammelVorschau['je_lieferant'] ?? []; arsort($jeLief); @endphp
+                    <p class="font-medium" data-sammel-frage>{{ number_format($sammelVorschau['anzahl'] ?? 0, 0, ',', '.') }} Prüffälle bei {{ count($jeLief) }} {{ count($jeLief) === 1 ? 'Lieferant' : 'Lieferanten' }}: {{ $aktionLabel[$sammelAktion] }}?</p>
+                    <p class="mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-sammel-lieferanten>
+                        {{ collect($jeLief)->take(8)->map(fn ($n, $l) => $l.' '.number_format($n, 0, ',', '.'))->implode(' · ') }}{{ count($jeLief) > 8 ? ' · …' : '' }}
+                    </p>
+                    @if(($sammelVorschau['anzahl'] ?? 0) > \Platform\FoodAlchemist\Services\Necta\NectaPruefallService::SAMMEL_SOFORT_MAX)
+                        <p class="mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Läuft im Hintergrund in Teilmengen; der Fortschritt erscheint hier.</p>
+                    @endif
                     @if(($sammelVorschau['allergene'] ?? []) !== [] && $sammelAktion === 'necta_uebernehmen')
                         <p class="mt-2">Betroffene Allergene und Deklarationen (wird gelockert):</p>
                         <ul class="mt-1 list-disc pl-5" data-sammel-allergene>
                             @foreach($sammelVorschau['allergene'] as $al)
-                                <li>{{ $al['label'] }}: {{ $al['von'] ?? 'unbekannt' }} → {{ $al['nach'] ?? 'unbekannt' }} · {{ $al['n'] }} Artikel
+                                <li>{{ $al['label'] }}: {{ $al['von_text'] ?? 'unbekannt' }} → {{ $al['nach_text'] ?? 'unbekannt' }} · {{ $al['n'] }} Artikel
                                     <span class="text-[var(--fa-ink-3)]">({{ implode(', ', array_slice($al['artikel'], 0, 5)) }}{{ count($al['artikel']) > 5 ? ' …' : '' }})</span></li>
                             @endforeach
                         </ul>
@@ -121,12 +128,12 @@
                                             @if($f['kritisch'])<x-fa::badge tone="crit">Allergen</x-fa::badge>@endif
                                             @if($f['produktpass'])<x-fa::badge tone="info" title="Wert stammt aus dem Produktpass">Produktpass</x-fa::badge>@endif
                                         </td>
-                                        <td>{{ $f['fa_damals'] ?? '—' }}</td>
+                                        <td>{{ $f['fa_damals_text'] ?? '—' }}</td>
                                         <td>
-                                            {{ $f['fa_jetzt'] ?? '—' }}
+                                            {{ $f['fa_jetzt_text'] ?? '—' }}
                                             @if($f['veraltet'])<x-fa::badge tone="warn" title="Der FA-Wert hat sich seit dem Prüffall geändert">geändert</x-fa::badge>@endif
                                         </td>
-                                        <td class="{{ $f['kritisch'] ? 'text-[var(--fa-crit)]' : '' }}">{{ $f['necta'] ?? '—' }}</td>
+                                        <td class="{{ $f['kritisch'] ? 'text-[var(--fa-crit)]' : '' }}">{{ $f['necta_text'] ?? '—' }}</td>
                                         @if($art === 'eingestellt_widerspruch')<td class="tabular-nums">{{ $f['letzter_normalpreis'] ? substr($f['letzter_normalpreis'], 0, 10) : '—' }}</td>@endif
                                         <td class="whitespace-nowrap">
                                             @if($f['status'] === 'offen')
