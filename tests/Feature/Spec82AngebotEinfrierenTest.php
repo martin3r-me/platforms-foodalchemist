@@ -26,8 +26,8 @@ use Platform\FoodAlchemist\Tools\AngeboteUebernehmenPostTool;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Spec 82 §12 B3 · Durchstich Schritt 4a: eingefrorenes Angebot. Snapshot je Gericht mit Abo-Fassung im Baum (Fassungs-IDs, EK mit Status,
- * Allergene), Auslöser = Status „angebot“, Rückweg verwirft nach Bestätigung, neue Master-Fassung ändert den Stand nie.
+ * Spec 82 §12 B3 · Durchstich Schritt 4a: eingefrorenes Angebot. Snapshot je Gericht im Baum (seit 19.10. alle, Abo-Gerichte mit Fassungs-IDs;
+ * EK mit Status, VK je Form, Allergene), Auslöser = Status „angebot“, Rückweg verwirft nach Bestätigung, neue Master-Fassung ändert den Stand nie.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -85,14 +85,15 @@ beforeEach(function () {
     };
 });
 
-it('Einfrieren: nur das Gericht mit Abo-Fassung im Baum wird gespeichert (Fassungs-ID, Allergene, EK-Status), eigene Gerichte bleiben wie heute', function () {
+it('Einfrieren: jedes Gericht wird gespeichert (Dominique 19.10.) — das Abo-Gericht mit Fassungs-ID, Allergenen, EK-Status, das eigene ohne Fassung', function () {
     ($this->block)($this->lamm);
     ($this->block)($this->salat);
 
     $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
 
-    expect($e->zeilen)->toHaveCount(1);
-    $z = $e->zeilen->first();
+    expect($e->zeilen)->toHaveCount(2)
+        ->and($e->zeilen->firstWhere('recipe_id', (int) $this->salat->id)->fassungen)->toBe([]);
+    $z = $e->zeilen->firstWhere('recipe_id', (int) $this->lamm->id);
     expect($z->recipe_id)->toBe((int) $this->lamm->id)->and($z->name)->toBe('Lamm mit Jus')
         ->and($z->fassungen)->toHaveCount(1)->and($z->fassungen[0]['fassung_id'])->toBe((int) ($this->fassung)(1)->id)
         ->and($z->fassungen[0]['fassung_von_id'])->toBe((int) $this->jus->id)->and($z->fassungen[0]['fassung_nr'])->toBe(1)
@@ -102,11 +103,13 @@ it('Einfrieren: nur das Gericht mit Abo-Fassung im Baum wird gespeichert (Fassun
     expect($this->svc->einfrieren($this->broich, $this->koch, $this->angebot)->id)->toBe($e->id);   // schon eingefroren: bleibt, kein Überschreiben
 });
 
-it('Angebot ohne Gericht mit Abo-Fassung: nichts zu frieren', function () {
-    ($this->block)($this->salat);
+it('Angebot nur mit eigenem Gericht: wird ebenfalls eingefroren (feste Preise); ohne jedes Gericht nichts', function () {
+    expect($this->svc->einfrieren($this->broich, $this->koch, $this->angebot))->toBeNull();
 
-    expect($this->svc->einfrieren($this->broich, $this->koch, $this->angebot))->toBeNull()
-        ->and($this->svc->aktive($this->angebot))->toBeNull();
+    ($this->block)($this->salat);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+
+    expect($e->zeilen->pluck('recipe_id')->all())->toBe([(int) $this->salat->id])->and($e->zeilen->first()->fassungen)->toBe([]);
 });
 
 it('Gerichte aus Concepts (Slot) werden gefunden', function () {

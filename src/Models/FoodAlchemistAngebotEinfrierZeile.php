@@ -23,7 +23,7 @@ class FoodAlchemistAngebotEinfrierZeile extends Model
 
     protected $casts = [
         'uuid' => 'string', 'fassungen' => 'array', 'fehlende' => 'array', 'allergene' => 'array', 'vollstaendig' => 'boolean',
-        'kosten_stand_at' => 'datetime', 'ek_summe' => 'float', 'ek_per_kg' => 'float', 'vk' => 'float',
+        'kosten_stand_at' => 'datetime', 'ek_summe' => 'float', 'ek_per_kg' => 'float', 'vk' => 'float', 'vk_je_form' => 'array',
     ];
 
     public function einfrierung(): BelongsTo

@@ -763,12 +763,12 @@ class ConceptService
                 $anzahl = $stueck
                     ? (float) $slot->dish->yield_pieces
                     : max(1, (int) ($slot->dish->sales_unit_count ?? 1));
-                // Ebene 2: Gericht-Slot im Betriebs-Kontext on-the-fly; Paket-/Embedded-Caches
-                // bleiben Team-Baseline (kein Fan-out). outlet=null ⇒ identisch zu heute.
+                // Ebene 2: Gericht-Slot im Betriebs-Kontext on-the-fly; Paket-/Embedded-Caches bleiben Team-Baseline (kein Fan-out). outlet=null ⇒ wie heute.
                 $vkStd = $dar !== null && $outlet !== null
                     ? app(CatalogPricingService::class)->salesNetFor(\Platform\Core\Models\Team::find($outlet->team_id), $dar, $outlet)
                     : ($dar?->sales_net !== null ? (float) $dar->sales_net : null);
                 $vkStd ??= (float) (app(DarreichungResolver::class)->vkNetto($slot->dish) ?? 0.0);   // Spec 85 D-1
+                if (($fp = app(\Platform\FoodAlchemist\Support\AngebotFestpreise::class)->gericht((int) $slot->dish->id, $dar?->id)) !== null) { $vkStd = $fp['vk'] ?? 0.0; $ekFehlt = $ekFehlt || $fp['vk'] === null; }   // eingefrorenes Angebot: fester VK je Form, ohne VK = Lücke
                 $vk = $ekFehlt ? 0.0 : $vkStd * $pae;
                 $ek = $ekFehlt ? 0.0
                     : (($dar?->ek_portion !== null && ! $stueck)

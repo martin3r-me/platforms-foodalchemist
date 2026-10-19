@@ -513,14 +513,28 @@ class OfferCompositionService
      */
     public function blockPreis(FoodAlchemistOfferBlock $block, ?FoodAlchemistOutlet $outlet = null, ?Team $team = null): array
     {
+        // Eingefrorenes Angebot = feste Preise (Spec 82 §12 B3, Dominique 19.10.): VK je Gericht/Form aus der Einfrierung, sonst live
+        $fest = app(\Platform\FoodAlchemist\Support\AngebotFestpreise::class);
+        $festpreise = $fest->fuerKapitel($block->chapter_id !== null ? (int) $block->chapter_id : null);
         if ($block->type === 'concept_ref' && $block->concept) {
-            $cockpit = $this->concepts->preisCockpit($block->concept, $outlet, $team);
+            $cockpit = $fest->mit($festpreise, fn () => $this->concepts->preisCockpit($block->concept, $outlet, $team));
 
             return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0, 'ek_vollstaendig' => true];
         }
         if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
             $vkFehlt = false;
+            if (($fp = $fest->gericht((int) $block->dish->id, null, $festpreise)) !== null) {
+                // eingefroren: fester VK (fehlt er, weil der EK beim Einfrieren unvollständig war, bleibt er eine sichtbare Lücke)
+                $vk = round((float) ($fp['vk'] ?? 0) * $faktor, 2);
+                $ek = round((float) ($fp['ek_summe'] ?? 0) / max(1, (int) ($block->dish->sales_unit_count ?? 1)) * $faktor, 2);
+                $vkFehlt = $fp['vk'] === null;
+                if ($block->price_basis === 'pauschal') {
+                    return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $vk, 'ek_vollstaendig' => $fp['vollstaendig'], 'vk_fehlt' => $vkFehlt, 'eingefroren' => true];
+                }
+
+                return ['vk_pp' => $vk, 'ek_pp' => $ek, 'pauschal' => 0.0, 'ek_vollstaendig' => $fp['vollstaendig'], 'vk_fehlt' => $vkFehlt, 'eingefroren' => true];
+            }
             if ($team !== null) {
                 // Spec 82 §12 C: VK aus Sicht des Teams — Abo-Fassung: Team-EK × eigener Kalkulationsfaktor; sonst Preis-Leiter
                 $vkInfo = app(TeamVkService::class)->fuer($block->dish, $team, $outlet);
