@@ -20,7 +20,7 @@ class GpUmhaengenCommand extends Command
 {
     protected $signature = 'foodalchemist:gp-umhaengen
         {--team= : Team, dem die GPs gehören (Standard: konfiguriertes Master-Team)}
-        {--plan=* : Plan-CSV (strikt; Spalten aktion;supplier_item_id;gp_id_quelle;ziel_gp_id;neu_name;neu_wg;neu_sub;neu_status;notiz) — mehrfach angebbar}
+        {--plan=* : Plan-CSV (strikt; Spalten aktion;supplier_item_id;gp_id_quelle;ziel_gp_id;neu_name;neu_wg;neu_sub;neu_status;notiz; aktion auch gp_aufloesen mit gp_id_quelle+ziel_gp_id) — mehrfach angebbar}
         {--entwurf-aus-review=* : Review-CSV → schreibt nur einen ENTWURF der Plan-CSV (ändert nichts)}
         {--wg= : nur Quell-GPs dieser Warengruppe (Code)}
         {--bericht= : Ordner für Entwurf, Konfliktliste und Protokoll (Standard: storage/app/fa-gp-umhaengen)}
@@ -154,7 +154,7 @@ class GpUmhaengenCommand extends Command
         $je = collect($plan['aktionen'])->countBy('aktion');
         $this->newLine();
         $this->table(['Aktion', 'ausführbar'], [
-            ['umhängen', $je['umhaengen'] ?? 0], ['neues GP (Artikel-Zeilen)', $je['neues_gp'] ?? 0], ['lösen', $je['loesen'] ?? 0], ['Warengruppe setzen', $je['wg_setzen'] ?? 0],
+            ['umhängen', $je['umhaengen'] ?? 0], ['neues GP (Artikel-Zeilen)', $je['neues_gp'] ?? 0], ['lösen', $je['loesen'] ?? 0], ['Warengruppe setzen', $je['wg_setzen'] ?? 0], ['GP auflösen (Rest → Ziel-GP)', $je['gp_aufloesen'] ?? 0],
             ['→ neue GPs (eindeutig)', count($plan['neue_gps'])], ['Konflikte', count($plan['konflikte'])],
         ]);
         if ($plan['neue_gps'] !== []) {

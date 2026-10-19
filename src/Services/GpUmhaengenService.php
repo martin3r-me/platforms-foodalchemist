@@ -19,7 +19,7 @@ use Platform\Core\Models\Team;
  */
 class GpUmhaengenService
 {
-    public const AKTIONEN = ['umhaengen', 'neues_gp', 'loesen', 'wg_setzen'];
+    public const AKTIONEN = ['umhaengen', 'neues_gp', 'loesen', 'wg_setzen', 'gp_aufloesen'];
 
     public const PLAN_KOPF = ['aktion', 'supplier_item_id', 'gp_id_quelle', 'ziel_gp_id', 'neu_name', 'neu_wg', 'neu_sub', 'neu_status', 'notiz'];
 
@@ -104,6 +104,7 @@ class GpUmhaengenService
         $neueGps = [];
         $konflikte = [];
         $gesehen = [];
+        $aufgeloest = [];
 
         foreach ($zeilen as $nr => $z) {
             $aktion = trim((string) ($z['aktion'] ?? ''));
@@ -141,6 +142,36 @@ class GpUmhaengenService
                     continue;
                 }
                 $aktionen[] = ['aktion' => 'wg_setzen', 'gp_id' => (int) $gp->id, 'wg_alt' => $gp->commodity_group_code, 'sub_alt' => $gp->sub_category, 'wg_neu' => $neuWg, 'sub_neu' => $sub !== '' ? $sub : null];
+
+                continue;
+            }
+
+            if ($aktion === 'gp_aufloesen') {
+                // GP auflösen: alles, was nach den übrigen Plan-Zeilen noch am GP hängt (Artikel, Rezept-Zutaten, Äquivalente …), geht auf das
+                // Ziel-GP; das Quell-GP wird `merged` (wie ein Merge, voll protokolliert, umkehrbar).
+                $quellGp = DB::table('foodalchemist_gps')->where('id', $quelleGp)->first();
+                $zielId = (int) ($z['ziel_gp_id'] ?? 0);
+                $ziel = DB::table('foodalchemist_gps')->where('id', $zielId)->first();
+                if ($quellGp === null || $quellGp->deleted_at !== null || (int) $quellGp->team_id !== $teamId || ! in_array($quellGp->status, self::ZIEL_STATUS, true)) {
+                    $fehler('Quell-GP existiert nicht, gehört nicht dem Team oder ist nicht aktiv');
+
+                    continue;
+                }
+                if ($ziel === null || $ziel->deleted_at !== null || (int) $ziel->team_id !== $teamId || ! in_array($ziel->status, self::ZIEL_STATUS, true) || $zielId === $quelleGp) {
+                    $fehler("Ziel-GP {$zielId} fehlt, ist nicht aktiv oder gleich dem Quell-GP");
+
+                    continue;
+                }
+                if ($wg !== null && (string) $quellGp->commodity_group_code !== $wg) {
+                    continue;
+                }
+                if (isset($aufgeloest[$quelleGp])) {
+                    $fehler('GP steht mehrfach als Quelle im Plan');
+
+                    continue;
+                }
+                $aufgeloest[$quelleGp] = $zielId;
+                $aktionen[] = ['aktion' => 'gp_aufloesen', 'gp_id' => $quelleGp, 'ziel_gp_id' => $zielId];
 
                 continue;
             }
@@ -301,6 +332,19 @@ class GpUmhaengenService
                 }
             }
 
+            // 2b) GPs auflösen (nach allen Einzel-Umhängungen): Rest → Ziel-GP, Quelle `merged`
+            foreach ($plan['aktionen'] as $a) {
+                if ($a['aktion'] !== 'gp_aufloesen') {
+                    continue;
+                }
+                $verlierer = DB::table('foodalchemist_gps')->where('id', $a['gp_id'])->first();
+                $sieger = DB::table('foodalchemist_gps')->where('id', $a['ziel_gp_id'])->first();
+                $protokoll['aufloesen'] ??= [];
+                $this->csv->merge($sieger, $verlierer, $protokoll['aufloesen']);
+                $betroffen[(int) $a['gp_id']] = true;
+                $betroffen[(int) $a['ziel_gp_id']] = true;
+            }
+
             // 3) Zähler + Lead
             foreach (array_keys($betroffen) as $gpId) {
                 $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($gpId);
@@ -353,6 +397,11 @@ class GpUmhaengenService
         $skip = 0;
         $behalten = [];
         DB::transaction(function () use ($p, &$zurueck, &$skip, &$behalten) {
+            if (! empty($p['aufloesen'])) {
+                $r = $this->csv->zuruecknehmen($p['aufloesen']);
+                $zurueck += $r['zurueck'];
+                $skip += $r['uebersprungen'];
+            }
             foreach (array_reverse($p['lead'] ?? []) as $l) {
                 $ist = DB::table('foodalchemist_gps')->where('id', $l['gp_id'])->first();
                 if ($ist !== null && ($ist->lead_la_supplier_item_id === null ? null : (int) $ist->lead_la_supplier_item_id) === $l['neu']) {

@@ -177,3 +177,37 @@ it('Konflikte werden gelistet und NICHT ausgeführt: Drift, fehlendes/gemergtes 
     $liste = file_get_contents(glob($this->dir . '/*_umhaengen_konflikte.csv')[0]);
     expect($liste)->toContain('inzwischen an GP')->toContain('Status merged')->toContain('existiert nicht')->toContain('Warengruppe »99«')->toContain('GP gibt es schon');
 });
+
+it('GP auflösen: Einzel-Umhängungen laufen zuerst, der Rest geht auf das Ziel-GP, die Quelle wird merged — und --zurueck stellt alles her', function () {
+    $quelle = ($this->gp)('q|', 'Kresse: frisch');
+    $ziel = ($this->gp)('z|', 'Gartenkresse: frisch');
+    $anders = ($this->gp)('d|', 'Honigkresse: frisch');
+    $s1 = ($this->la)($quelle, 'Kresse A');
+    $s2 = ($this->la)($quelle, 'Kresse B');
+    $quelle->update(['n_las_total' => 2]);
+    $plan = ($this->plan)([
+        ['umhaengen', $s1->supplier_item_id, $quelle->id, $anders->id, '', '', '', '', ''],
+        ['gp_aufloesen', '', $quelle->id, $ziel->id, '', '', '', '', 'Rest'],
+    ]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_supplier_item_structures')->where('id', $s1->id)->value('gp_id'))->toBe($anders->id)
+        ->and(DB::table('foodalchemist_supplier_item_structures')->where('id', $s2->id)->value('gp_id'))->toBe($ziel->id)
+        ->and(DB::table('foodalchemist_gps')->where('id', $quelle->id)->value('status'))->toBe('merged')
+        ->and((int) DB::table('foodalchemist_gps')->where('id', $ziel->id)->value('n_las_total'))->toBe(1);
+
+    ($this->lauf)(['--zurueck' => glob($this->dir . '/*_umhaengen_protokoll.json')[0]])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_supplier_item_structures')->where('id', $s2->id)->value('gp_id'))->toBe($quelle->id)
+        ->and(DB::table('foodalchemist_supplier_item_structures')->where('id', $s1->id)->value('gp_id'))->toBe($quelle->id)
+        ->and(DB::table('foodalchemist_gps')->where('id', $quelle->id)->value('status'))->toBe('approved');
+});
+
+it('GP auflösen: Ziel gleich Quelle oder inaktiv ist ein Konflikt', function () {
+    $quelle = ($this->gp)('q|', 'Kresse: frisch');
+    $tot = ($this->gp)('t|', 'Alte Kresse: frisch', '03', ['status' => 'merged']);
+    $plan = ($this->plan)([['gp_aufloesen', '', $quelle->id, $quelle->id, '', '', '', '', ''], ['gp_aufloesen', '', $quelle->id, $tot->id, '', '', '', '', '']]);
+
+    ($this->lauf)(['--plan' => [$plan]])->assertSuccessful()->expectsOutputToContain('Konflikte: 2');
+});

@@ -342,8 +342,12 @@ class GpBereinigenService
 
                 continue;
             }
+            // Zustandsfeld folgt dem Namen: steht im neuen Namen ein anderes Zustandswort (frisch↔trocken, neue Wörter wie gepoekelt), wird
+            // `condition` mitgezogen. Ohne Zustandswort im neuen Namen bleibt das Feld unangetastet.
+            $neuerZustand = $this->naming->felderAusName($neu)['condition'];
+            $zustandWechsel = $neuerZustand !== '' && $neuerZustand !== (string) $gp->condition;
             $pruefung = $this->naming->validateGpName($neu, [
-                'condition' => $gp->condition, 'warengruppe' => $gp->commodity_group_code, 'commodity_group_code' => $gp->commodity_group_code,
+                'condition' => $zustandWechsel ? $neuerZustand : $gp->condition, 'warengruppe' => $gp->commodity_group_code, 'commodity_group_code' => $gp->commodity_group_code,
                 'form' => $gp->form, 'hauptzutat' => trim((string) strstr($neu . ':', ':', true)),
             ]);
             if ($pruefung['errors'] !== []) {
@@ -403,8 +407,11 @@ class GpBereinigenService
             $neueNamen[$nameKey] = $gp->id;
             $aenderungen[] = [
                 'gp_id' => $gp->id, 'wg' => $gp->commodity_group_code, 'regeln' => array_keys($regeln),
-                'alt' => ['name' => $gp->name, 'gp_key' => $gp->gp_key, 'main_ingredient_slug' => $gp->main_ingredient_slug, 'main_ingredient_display' => $gp->main_ingredient_display],
-                'neu' => ['name' => $neu, 'gp_key' => $neuerKey, 'main_ingredient_slug' => $neuerSlug, 'main_ingredient_display' => $neueAnzeige],
+                'alt' => ['name' => $gp->name, 'gp_key' => $gp->gp_key, 'main_ingredient_slug' => $gp->main_ingredient_slug, 'main_ingredient_display' => $gp->main_ingredient_display]
+                    + ($zustandWechsel ? ['condition' => $gp->condition, 'condition_source' => $gp->condition_source] : []),
+                'neu' => ['name' => $neu, 'gp_key' => $neuerKey, 'main_ingredient_slug' => $neuerSlug, 'main_ingredient_display' => $neueAnzeige]
+                    + ($zustandWechsel ? ['condition' => $neuerZustand, 'condition_source' => 'manual'] : []),
+                'zustand_wechsel' => $zustandWechsel,
                 'key_wechsel' => $neuerKey !== $gp->gp_key,
                 'key_nicht_ableitbar' => ! $keyAbleitbar,
                 'warnungen' => $pruefung['warnings'],

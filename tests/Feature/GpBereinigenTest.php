@@ -248,3 +248,20 @@ it('Zwei verschiedene Vorschläge für dasselbe GP aus zwei CSVs → Konflikt, k
 
     expect(file_get_contents(glob($this->dir . '/*_review_liste.csv')[0]))->toContain('Mehrere verschiedene Vorschläge');
 });
+
+it('Namen: wechselt das Zustandswort im neuen Namen, zieht `condition` mit (inkl. neuer Wörter) — und --zurueck stellt es her', function () {
+    $gp = ($this->gp)('Kochschinken: frisch, in Scheiben', '04');
+    $gp->update(['condition' => 'frisch']);
+    $csv = ($this->namenCsv)([[$gp->id, $gp->name, '§9 Zustand', 'Kochschinken: gepoekelt, in Scheiben']]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => $csv, '--apply' => true, '--backup-nachweis' => $backup])->assertSuccessful();
+
+    $g = DB::table('foodalchemist_gps')->where('id', $gp->id)->first();
+    expect($g->name)->toBe('Kochschinken: gepoekelt, in Scheiben')->and($g->condition)->toBe('gepoekelt');
+
+    ($this->lauf)(['--zurueck' => glob($this->dir . '/*_protokoll.json')[0]])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $gp->id)->value('condition'))->toBe('frisch');
+});
