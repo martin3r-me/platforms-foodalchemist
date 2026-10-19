@@ -270,11 +270,15 @@ class GpBereinigenService
      *
      * @return array{aenderungen: list<array<string,mixed>>, konflikte: list<array<string,mixed>>, ohne_aenderung: int}
      */
-    public function planNamen(int $teamId, string $csv, ?string $wg = null, bool $keyFolgtName = false): array
+    public function planNamen(int $teamId, string|array $csv, ?string $wg = null, bool $keyFolgtName = false): array
     {
+        // Mehrere Pläne (z. B. Regelverstöße + Marke/Gebinde) werden je GP zusammengeführt: zwei VERSCHIEDENE Vorschläge für dasselbe GP
+        // sind ein Konflikt (manuell), derselbe Vorschlag aus zwei Dateien zählt einmal.
         $je = [];
-        foreach ($this->leseCsv($csv) as $z) {
-            $je[(int) $z['gp_id']][] = $z;
+        foreach ((array) $csv as $datei) {
+            foreach ($this->leseCsv((string) $datei) as $z) {
+                $je[(int) $z['gp_id']][] = $z;
+            }
         }
         $gps = DB::table('foodalchemist_gps')->whereIn('id', array_keys($je))->get()->keyBy('id');
 
@@ -282,6 +286,7 @@ class GpBereinigenService
         $konflikte = [];
         $ohne = 0;
         $neueKeys = [];
+        $neueNamen = [];
         foreach ($je as $gpId => $zeilen) {
             $gp = $gps->get($gpId);
             $konflikt = function (string $grund) use (&$konflikte, $gp, $gpId, $zeilen) {
@@ -347,6 +352,22 @@ class GpBereinigenService
                 continue;
             }
 
+            // Namens-Kollision: ein anderes aktives GP trägt den neuen Namen schon, oder ein früherer Vorschlag desselben Laufs (auch aus einer
+            // anderen CSV) ergibt denselben Namen — beides ist ein Merge-Kandidat, kein Fall für automatisches Umbenennen.
+            $nameKey = mb_strtolower(trim($neu));
+            $nameBesetzt = DB::table('foodalchemist_gps')->where('team_id', $teamId)->whereNull('deleted_at')->whereIn('status', self::AKTIV)
+                ->where('name', $neu)->where('id', '!=', $gp->id)->first();
+            if ($nameBesetzt !== null) {
+                $konflikt("Namens-Kollision: »{$neu}« trägt schon #{$nameBesetzt->id} ({$nameBesetzt->status}) — Merge-Kandidat?");
+
+                continue;
+            }
+            if (isset($neueNamen[$nameKey])) {
+                $konflikt("Namens-Kollision im selben Lauf mit #{$neueNamen[$nameKey]} (»{$neu}«) — Merge-Kandidat?");
+
+                continue;
+            }
+
             $nurPlural = array_keys($regeln) !== [] && count(array_filter(array_keys($regeln), fn ($r) => ! str_contains($r, '§6.1 Plural'))) === 0;
             $neuerKopf = trim((string) strstr($neu . ':', ':', true));
             $alterKopf = trim((string) strstr($gp->name . ':', ':', true));
@@ -379,6 +400,7 @@ class GpBereinigenService
                 }
                 $neueKeys[$neuerKey] = $gp->id;
             }
+            $neueNamen[$nameKey] = $gp->id;
             $aenderungen[] = [
                 'gp_id' => $gp->id, 'wg' => $gp->commodity_group_code, 'regeln' => array_keys($regeln),
                 'alt' => ['name' => $gp->name, 'gp_key' => $gp->gp_key, 'main_ingredient_slug' => $gp->main_ingredient_slug, 'main_ingredient_display' => $gp->main_ingredient_display],

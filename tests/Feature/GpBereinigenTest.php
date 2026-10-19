@@ -193,3 +193,58 @@ it('Verweis-Erkennung: findet gp_id-Tabellen der EIGENEN Datenbank (nie schema-q
         expect($tabelle)->not->toContain('.')->and($tabelle)->not->toBe('foodalchemist_gps');
     }
 });
+
+it('Mehrere --plan-namen: beide CSVs werden angewandt, derselbe Vorschlag aus zwei Dateien zählt einmal', function () {
+    $a = ($this->gp)('Kartoffeln: festkochend, frisch', '01');
+    $b = ($this->gp)('Ananaspueree: konserviert, Boiron 1 kg', '02');
+    $csv1 = ($this->csv)('regeln.csv', ['gp_id', 'name', 'rule', 'proposal'], [[$a->id, $a->name, '§6.1 Plural statt Singular', 'Kartoffel: festkochend, frisch']]);
+    $csv2 = ($this->csv)('marke.csv', ['gp_id', 'name', 'rule', 'proposal'], [
+        [$b->id, $b->name, 'Marke/Gebinde im GP-Namen', 'Ananaspueree: konserviert'],
+        [$a->id, $a->name, '§6.1 Plural statt Singular', 'Kartoffel: festkochend, frisch'],   // dasselbe nochmal
+    ]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => [$csv1, $csv2], '--apply' => true, '--backup-nachweis' => $backup])
+        ->assertSuccessful()->expectsOutputToContain('2 Umbenennung(en) ausführbar');
+
+    expect(DB::table('foodalchemist_gps')->where('id', $a->id)->value('name'))->toBe('Kartoffel: festkochend, frisch')
+        ->and(DB::table('foodalchemist_gps')->where('id', $b->id)->value('name'))->toBe('Ananaspueree: konserviert');
+});
+
+it('Namens-Kollision über zwei CSVs: zwei GPs würden denselben Namen bekommen → nur das erste wird umbenannt, das zweite ist ein Konflikt', function () {
+    $a = ($this->gp)('Brombeerpuerree: konserviert', '02');
+    $b = ($this->gp)('Brombeerpueree: konserviert, Boiron 1 kg', '02');
+    $csv1 = ($this->csv)('regeln.csv', ['gp_id', 'name', 'rule', 'proposal'], [[$a->id, $a->name, '§9 Tippfehler', 'Brombeerpueree: konserviert']]);
+    $csv2 = ($this->csv)('marke.csv', ['gp_id', 'name', 'rule', 'proposal'], [[$b->id, $b->name, 'Marke/Gebinde im GP-Namen', 'Brombeerpueree: konserviert']]);
+    $backup = $this->dir . '/b.sql';
+    file_put_contents($backup, str_repeat('x', 2048));
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => [$csv1, $csv2], '--apply' => true, '--backup-nachweis' => $backup])
+        ->assertSuccessful()->expectsOutputToContain('1 Umbenennung(en) ausführbar');
+
+    $namen = DB::table('foodalchemist_gps')->whereIn('id', [$a->id, $b->id])->pluck('name', 'id');
+    expect($namen[$a->id])->toBe('Brombeerpueree: konserviert')                       // erster Vorschlag gewinnt
+        ->and($namen[$b->id])->toBe('Brombeerpueree: konserviert, Boiron 1 kg');      // zweiter unverändert, Merge-Kandidat
+    expect(file_get_contents(glob($this->dir . '/*_review_liste.csv')[0]))->toContain('Namens-Kollision im selben Lauf');
+});
+
+it('Namens-Kollision mit einem bestehenden aktiven GP wird gemeldet statt umbenannt (Merge-Kandidat)', function () {
+    $ziel = ($this->gp)('Granatapfel: frisch, ganz', '02');
+    $gp = ($this->gp)('Granataepfel: frisch, ganz', '02');
+    $csv = ($this->namenCsv)([[$gp->id, $gp->name, '§6.1 Plural statt Singular', 'Granatapfel: frisch, ganz']]);
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => [$csv]])->assertSuccessful()->expectsOutputToContain('0 Umbenennung(en) ausführbar');
+
+    expect(file_get_contents(glob($this->dir . '/*_review_liste.csv')[0]))->toContain('Namens-Kollision')->toContain('#' . $ziel->id);
+});
+
+it('Zwei verschiedene Vorschläge für dasselbe GP aus zwei CSVs → Konflikt, keine Umbenennung', function () {
+    $gp = ($this->gp)('Kartoffeln: gegart, Wuerfel 15x15 mm', '01');
+    $csv1 = ($this->csv)('a.csv', ['gp_id', 'name', 'rule', 'proposal'], [[$gp->id, $gp->name, '§9 Zustand fehlt im Namen', 'Kartoffeln: frisch, gegart, Wuerfel 15x15 mm']]);
+    $csv2 = ($this->csv)('b.csv', ['gp_id', 'name', 'rule', 'proposal'], [[$gp->id, $gp->name, '§9 Maßangabe nicht kanonisch', 'Kartoffeln: gegart, Wuerfel 15 mm']]);
+
+    ($this->lauf)(['--phase' => 'namen', '--plan-namen' => [$csv1, $csv2]])->assertSuccessful()->expectsOutputToContain('0 Umbenennung(en) ausführbar');
+
+    expect(file_get_contents(glob($this->dir . '/*_review_liste.csv')[0]))->toContain('Mehrere verschiedene Vorschläge');
+});

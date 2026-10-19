@@ -24,7 +24,7 @@ class GpBereinigenCommand extends Command
         {--team= : Team, dem die GPs gehören (Standard: konfiguriertes Master-Team)}
         {--phase=dubletten,namen : Komma-Liste: dubletten, namen}
         {--plan-dubletten= : Sichtungs-CSV dubletten_fa.csv}
-        {--plan-namen= : Sichtungs-CSV benennung_fa.csv}
+        {--plan-namen=* : Sichtungs-CSV benennung_fa.csv; mehrfach angebbar (z. B. zusätzlich benennung_marke_gebinde.csv)}
         {--review-dir= : Ordner mit <WG>_artikel.csv (merge_hinweis „kein Merge" wird respektiert)}
         {--wg= : nur diese Warengruppe (Code, z. B. 03)}
         {--key-folgt-name : gp_key/Slug bei JEDEM Namensfix mitziehen (Standard: nur bei Plural→Singular)}
@@ -90,9 +90,9 @@ class GpBereinigenCommand extends Command
         }
 
         if (in_array('namen', $phasen, true)) {
-            $csv = (string) $this->option('plan-namen');
-            if ($csv === '') {
-                $this->error('--plan-namen fehlt.');
+            $csv = array_values(array_filter((array) $this->option('plan-namen'), fn ($c) => (string) $c !== ''));
+            if ($csv === []) {
+                $this->error('--plan-namen fehlt (mehrfach angebbar).');
 
                 return self::FAILURE;
             }
