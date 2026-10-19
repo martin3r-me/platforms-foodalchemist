@@ -147,23 +147,24 @@
                 </p>
             @endif
 
+            @php $vkKlasse = $rezept->vk_klasse; @endphp {{-- Spec 85 D-1 PR-B: Klasse der Standard-Darreichung --}}
             {{-- Formel-Klartext: wie der VK zustande kommt --}}
-            @if($rezept->markupClass !== null && ! $cockpit['formel_fehlt'] && $cockpit['vk']['vorschlag'] !== null)
-                <p class="{{ $leise }}" data-formel-klartext><span class="font-mono">{{ $rezept->markupClass->code }}</span> · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+            @if($vkKlasse !== null && ! $cockpit['formel_fehlt'] && $cockpit['vk']['vorschlag'] !== null)
+                <p class="{{ $leise }}" data-formel-klartext><span class="font-mono">{{ $vkKlasse->code }}</span> · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
             @endif
         </div>
 
         {{-- 3 · Offene Punkte: warum (noch) kein VK-Vorschlag, fehlende Einordnung, KI-Vorschlag zur Klasse --}}
-        @if($kiFehler !== null || $cockpit['formel_fehlt'] || $rezept->ek_total_eur === null || $rezept->markupClass === null || $rezept->dishClass === null || $nichtZugeordnet > 0 || $klasseVorschlag !== null)
+        @if($kiFehler !== null || $cockpit['formel_fehlt'] || $rezept->ek_total_eur === null || $vkKlasse === null || $rezept->dishClass === null || $nichtZugeordnet > 0 || $klasseVorschlag !== null)
             <div class="flex flex-col gap-2" data-vk-offen>
                 @if($kiFehler !== null)
                     <x-fa::notice tone="crit" data-ki-fehler>{{ $kiFehler }}</x-fa::notice>
                 @endif
                 @if($cockpit['formel_fehlt'])
-                    <x-fa::signal tone="warn" data-formel-fehlt>Für die Aufschlagsklasse {{ $rezept->markupClass?->code }} ist die Deckungsbeitrags-Formel noch nicht festgelegt. Den VK bitte von Hand setzen.</x-fa::signal>
+                    <x-fa::signal tone="warn" data-formel-fehlt>Für die Aufschlagsklasse {{ $vkKlasse?->code }} ist die Deckungsbeitrags-Formel noch nicht festgelegt. Den VK bitte von Hand setzen.</x-fa::signal>
                 @elseif($rezept->ek_total_eur === null)
                     <x-fa::signal tone="warn" data-cockpit-leer>Noch kein Einkaufspreis. Komponenten ergänzen oder Lieferantenartikel zuordnen.</x-fa::signal>
-                @elseif($rezept->markupClass === null)
+                @elseif($vkKlasse === null)
                     <x-fa::signal tone="warn" data-cockpit-leer>Keine Aufschlagsklasse gesetzt. Einen VK-Vorschlag gibt es erst, wenn das Gericht eingeordnet ist.</x-fa::signal>
                 @endif
                 @if($nichtZugeordnet > 0)

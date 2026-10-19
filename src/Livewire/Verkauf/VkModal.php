@@ -165,7 +165,7 @@ class VkModal extends Component
                 // Kompatibilitaets-Cache und darf im Kalkulations-Tab keine abweichende
                 // Preisklasse anzeigen.
                 'markup_class_id' => $standardPresentation?->markup_class_id
-                    ?? $r->markup_class_id ?? $defaultMarkupClassId,
+                    ?? $r->markup_class_id ?? $defaultMarkupClassId,   // Spec 85 D-1: Rückfall Altspalte bis PR-C
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -234,7 +234,7 @@ class VkModal extends Component
                 'quantity_per_unit_g' => $d->quantity_per_unit_g,
                 'unit_count' => $d->unit_count,
                 'unit_vocab_id' => $d->unit_vocab_id,
-                'markup_class_id' => $d->markup_class_id ?? $d->recipe?->markup_class_id ?? $defaultMarkupClassId,
+                'markup_class_id' => $d->markup_class_id ?? $d->recipe?->markup_class_id ?? $defaultMarkupClassId,   // Spec 85 D-1: Rückfall Altspalte bis PR-C
                 'price_mode' => $d->price_mode,
                 'sales_net' => $d->sales_net,
                 'vat_profile_key' => $d->vat_profile_key,
@@ -954,7 +954,7 @@ class VkModal extends Component
             'verkaufseinheit' => trim(($r->sales_unit_count !== null ? $r->sales_unit_count . ' × ' : '')
                 . ($r->salesUnit?->display_de ?? '')) ?: null,
             'portion_g' => $r->sales_quantity_per_unit_g,
-            'aufschlagsklasse' => $r->markupClass?->code,
+            'aufschlagsklasse' => $r->vk_klasse?->code,   // Spec 85 D-1 PR-B
         ];
     }
 

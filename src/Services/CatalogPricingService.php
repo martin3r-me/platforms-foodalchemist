@@ -91,7 +91,7 @@ class CatalogPricingService
         $sichtbar = fn ($klasse) => $klasse !== null && FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($klasse->id)->exists() ? $klasse : null;
         $class = $sichtbar($presentation->markupClass);
         $classSource = $class !== null ? 'darreichung' : null;
-        if ($class === null && ($gerichtKlasse = $sichtbar($presentation->recipe?->markupClass)) !== null) {
+        if ($class === null && ($gerichtKlasse = $sichtbar($presentation->recipe?->markupClass)) !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
             $class = $gerichtKlasse;
             $classSource = 'gericht';
         }

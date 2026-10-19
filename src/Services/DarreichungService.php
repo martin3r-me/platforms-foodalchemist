@@ -74,7 +74,7 @@ class DarreichungService
             'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
             'unit_count' => $attrs['unit_count'] ?? $standard?->unit_count,
             'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id
-                ?? $recipe->markup_class_id ?? $this->settings->defaultMarkupClassId($team),
+                ?? $this->vorbelegteKlasseId($team, $recipe),
             'price_mode' => $attrs['price_mode'] ?? 'auto',
             'sales_net' => $attrs['sales_net'] ?? null,
             'note' => $attrs['note'] ?? null,
@@ -131,8 +131,26 @@ class DarreichungService
             // Yield/Anzahl), nicht die Zahl verkaufter Einheiten IN einer Darreichung.
             // Der Standard repräsentiert genau eine Verkaufseinheit.
             'unit_count' => 1,
-            'markup_class_id' => $recipe->markup_class_id,
+            'markup_class_id' => $this->vorbelegteKlasseId($team, $recipe),
         ], $createdVia);
+    }
+
+    /**
+     * Spec 85 D-1 PR-B: Vorbelegung der Aufschlagsklasse für eine neue Darreichung — Speisen-Klasse → Hauptgruppe →
+     * Team-Standard (Defaults zählen nur, wenn die Klasse für das Team sichtbar ist, wie RecipeOneShotService::markupKaskade).
+     * Die Klasse des Gerichts IST danach die seiner Standard-Darreichung.
+     */
+    public function vorbelegteKlasseId(Team $team, FoodAlchemistRecipe $recipe): ?int
+    {
+        if ($recipe->markup_class_id !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+            return (int) $recipe->markup_class_id;   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+        }
+        $sichtbar = fn (?int $id) => $id !== null
+            && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->exists() ? $id : null;
+
+        return $sichtbar($recipe->dishClass?->default_markup_class_id)
+            ?? $sichtbar($recipe->dishMainGroup?->default_markup_class_id)
+            ?? $this->settings->defaultMarkupClassId($team);
     }
 
     private const FELDER = [

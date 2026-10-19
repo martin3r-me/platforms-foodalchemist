@@ -883,7 +883,7 @@ class ReportExportService
             'category' => $recipe->category?->label,
             'dish_class' => $recipe->dishClass?->label,
             'dish_main_group' => $recipe->dishMainGroup?->label,
-            'markup_class' => $recipe->markupClass?->label ?? $recipe->markupClass?->code,
+            'markup_class' => ($k = app(DarreichungResolver::class)->klasseFuer($recipe))?->label ?? $k?->code,   // Spec 85 D-1 PR-B
             'sales_unit' => $recipe->salesUnit?->display_de ?? $recipe->salesUnit?->slug,
             'produktion' => [
                 'production_depth' => $recipe->production_depth,
