@@ -102,7 +102,7 @@ it('GL-01 §4.5: identische LA-Profile ⇒ HIGH; nur unbekannt-vs-konkret ⇒ HI
     ($this->mkLa)([]); // LA ohne Allergen-Zeile — kein Profil-Beitrag
 
     expect($this->svc->allergenKonfidenz($this->gp))
-        ->toBe(['confidence' => 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 2]);
+        ->toBe(['confidence' => 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 2, 'angenommen_felder' => []]);   // Spec 85: angenommen_felder (Positiv-Lieferanten)
 
     ($this->mkLa)(['allergen_soy' => 'nicht_enthalten']); // milch=NULL hier: unbekannt vs. konkret ⇒ bleibt HIGH
     expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('high');

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\AllergenValue;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Support\AllergenAnnahme;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
 
@@ -39,7 +40,7 @@ class GpAggregateService
      */
     public function allergene(FoodAlchemistGp $gp): array
     {
-        $laMax = $this->laMaxWerte($gp->id);
+        [$laMax, $angenommen] = $this->laMax($this->laProfile($gp->id));
         $mutterMax = null; // lazy — nur wenn ein Derivat-Feld ohne Override sie braucht
 
         $out = [];
@@ -65,7 +66,7 @@ class GpAggregateService
             $wert = $laMax[$feld] ?? null;                         // Prio 3: MAX über alle LAs
             $out[$feld] = [
                 'value' => $wert ?? AllergenValue::Unbekannt,       // leere Menge ⇒ unbekannt (§4.2)
-                'source' => $wert !== null ? 'la' : 'keine',
+                'source' => $wert === null ? 'keine' : (isset($angenommen[$feld]) ? AllergenAnnahme::QUELLE : 'la'),   // Spec 85
             ];
         }
 
@@ -123,8 +124,12 @@ class GpAggregateService
             }
         }
 
+        // Spec 85: angenommene Werte (Positiv-Lieferant, leer = nicht enthalten) zählen als bekannt, aber nicht in der Konflikt-Prüfung
+        // (oben nur ausdrückliche Werte) — und ein nur angenommenes Feld deckelt die Sicherheit auf MED.
+        $angenommen = array_keys($this->laMax($profile)[1]);
+        $konkret = $konkret || $angenommen !== [];
         if ($konflikt !== []) {
-            return ['confidence' => 'low', 'needs_review' => true, 'konflikt_felder' => $konflikt, 'n_las_mit_daten' => $profile->count()];
+            return ['confidence' => 'low', 'needs_review' => true, 'konflikt_felder' => $konflikt, 'n_las_mit_daten' => $profile->count(), 'angenommen_felder' => $angenommen];
         }
 
         // Allergen-Zeilen vorhanden, aber alle 14 Werte NULL/unbekannt: das ist kein Profil, sondern eine
@@ -134,7 +139,8 @@ class GpAggregateService
             return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
         }
 
-        return ['confidence' => $differenz ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => $profile->count()];
+        return ['confidence' => ($differenz || $angenommen !== []) ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [],
+            'n_las_mit_daten' => $profile->count(), 'angenommen_felder' => $angenommen];
     }
 
     /**
@@ -309,11 +315,13 @@ class GpAggregateService
 
         $selects = ['s.gp_id'];
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
-            $selects[] = "MAX(CASE a.allergen_{$feld} WHEN 'enthalten' THEN 3 WHEN 'spuren' THEN 2 WHEN 'nicht_enthalten' THEN 1 ELSE 0 END) AS {$feld}";
+            $selects[] = 'MAX(CASE ' . AllergenAnnahme::sqlWert('a', $feld, 'l') . " WHEN 'enthalten' THEN 3 WHEN 'spuren' THEN 2 WHEN 'nicht_enthalten' THEN 1 ELSE 0 END) AS {$feld}";
         }
 
         return DB::table('foodalchemist_item_allergens AS a')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'a.supplier_item_id')
+            ->leftJoin('foodalchemist_supplier_items AS i', 'i.id', '=', 'a.supplier_item_id')   // Spec 85: Lieferant für die Annahme
+            ->leftJoin('foodalchemist_suppliers AS l', 'l.id', '=', 'i.supplier_id')
             ->whereIn('s.gp_id', $gpIds)
             ->whereNull('a.deleted_at')->whereNull('s.deleted_at')
             ->groupBy('s.gp_id')
@@ -334,7 +342,7 @@ class GpAggregateService
      */
     private function aufgeloesteWerte(FoodAlchemistGp $gp): array
     {
-        $laMax = $this->laMaxWerte($gp->id);
+        $laMax = $this->laMax($this->laProfile($gp->id))[0];
 
         $out = [];
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
@@ -349,24 +357,39 @@ class GpAggregateService
      * MAX-Rang je Allergen über ALLE LAs des GP (GL-01 §4.3 Prio 3 — bewusst ohne
      * is_discontinued-Filter: für Allergene ist „alle LAs" die konservative Wahl, §6).
      *
-     * @return array<string, AllergenValue> nur Felder mit mindestens einem konkreten Beitrag
+     * Spec 85: NULL am LA eines Positiv-Lieferanten trägt `nicht_enthalten` bei ({@see AllergenAnnahme}) — aber nur, wo kein
+     * ausdrücklicher Wert höher rangiert; ein ausdrücklicher Wert gewinnt immer. `angenommen` = Felder, deren Wert NUR aus der Annahme kommt.
+     *
+     * @return array{0: array<string, AllergenValue>, 1: array<string, true>} [Werte (nur Felder mit Beitrag), angenommen]
      */
-    private function laMaxWerte(int $gpId): array
+    private function laMax(\Illuminate\Support\Collection $profile): array
     {
         $out = [];
-        foreach ($this->laProfile($gpId) as $la) {
+        $annahme = [];
+        foreach ($profile as $la) {
+            $merkmal = AllergenAnnahme::giltFuer($la->lieferant_id !== null ? (int) $la->lieferant_id : null);
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
-                $wert = AllergenValue::tryFrom((string) $la->getAttribute("allergen_{$feld}"));
+                $roh = $la->getAttribute("allergen_{$feld}");
+                $wert = AllergenValue::tryFrom((string) $roh);
                 if ($wert === null) {
-                    continue;                                      // NULL = kein Beitrag (von MAX ignoriert)
+                    $annahme[$feld] = ($annahme[$feld] ?? false) || ($roh === null && $merkmal);   // NULL = kein Beitrag, außer beim Positiv-Lieferanten
+
+                    continue;
                 }
                 if (! isset($out[$feld]) || $wert->rank() > $out[$feld]->rank()) {
                     $out[$feld] = $wert;
                 }
             }
         }
+        $angenommen = [];
+        foreach (array_keys(array_filter($annahme)) as $feld) {
+            if (! isset($out[$feld]) || $out[$feld]->rank() < AllergenValue::NichtEnthalten->rank()) {
+                $out[$feld] = AllergenValue::NichtEnthalten;
+                $angenommen[$feld] = true;
+            }
+        }
 
-        return $out;
+        return [$out, $angenommen];
     }
 
     /** Alle LA-Allergen-Zeilen des GP (über die Struktur-Brücke). */
@@ -394,6 +417,9 @@ class GpAggregateService
     public function hatLaAllergenProfil(FoodAlchemistGp $gp): bool
     {
         foreach ($this->laProfile((int) $gp->id) as $la) {
+            if (AllergenAnnahme::giltFuer($la->lieferant_id !== null ? (int) $la->lieferant_id : null)) {
+                return true;   // Spec 85: die Zeile eines Positiv-Lieferanten IST ein Profil (leer = angenommen nicht enthalten)
+            }
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
                 if ($la->getAttribute("allergen_{$feld}") !== null) {
                     return true;
@@ -408,9 +434,10 @@ class GpAggregateService
     {
         return FoodAlchemistItemAllergen::query()
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_item_allergens.supplier_item_id')
+            ->leftJoin('foodalchemist_supplier_items AS i', 'i.id', '=', 'foodalchemist_item_allergens.supplier_item_id')
             ->where('s.gp_id', $gpId)
             ->whereNull('s.deleted_at')
-            ->select('foodalchemist_item_allergens.*')
+            ->select('foodalchemist_item_allergens.*', 'i.supplier_id AS lieferant_id')   // Spec 85: Lieferant für AllergenAnnahme
             ->get();
     }
 }

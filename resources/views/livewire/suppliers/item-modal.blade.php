@@ -15,6 +15,10 @@
     $allergenGesamt = count($allergenLabels);
     $allergenGepflegt = collect($allergenLabels)->keys()
         ->filter(fn ($k) => ($allergene[$k] ?? 'unbekannt') !== 'unbekannt')->count();
+    // Spec 85: Positiv-Lieferant — leere Felder zählen als bewertet (angenommen nicht enthalten)
+    $allergenAngenommenZahl = collect($allergenAngenommen ?? [])->filter(fn ($k) => ($allergene[$k] ?? 'unbekannt') === 'unbekannt')->count();
+    $allergenGepflegt += $allergenAngenommenZahl;
+    $allergenBewertetText = $allergenGepflegt . ' von ' . $allergenGesamt . ($allergenAngenommenZahl > 0 ? ' (' . $allergenAngenommenZahl . ' angenommen)' : '');
     $einheitKurz = fn (?string $u) => $u !== null ? ltrim(str_replace('€/', '', $u)) : null;
 
     // Herkunft der Deklaration (GL-07): NULL = Lieferanten-Import, manual = hier gepflegt, datei = Datei-Import.
@@ -94,7 +98,7 @@
                     ['kpi' => 'allergene', 'label' => 'Allergene bewertet',
                      'tone' => $allergenGepflegt >= $allergenGesamt ? 'good' : 'warn',
                      'title' => 'Bewertet von 14 Pflichtangaben. Ohne Angabe zählt als unbekannt.',
-                     'value' => $allergenGepflegt . ' von ' . $allergenGesamt],
+                     'value' => $allergenBewertetText],
                     ['kpi' => 'lieferant', 'label' => 'Lieferant',
                      'title' => $item->supplier?->name ?? 'Lieferant unbekannt',
                      'value' => $item->supplier?->name ?? 'unbekannt'],
@@ -351,15 +355,20 @@
 
                     {{-- Allergene: 14 EU-Pflichtangaben, 4-Wert-Modell (GL-01). Erneuter Klick auf den aktiven
                          Wert setzt zurück auf «ohne Angabe». Ein Binding aufs Array, kein Roundtrip je Klick. --}}
-                    <x-fa::section title="Allergene" icon="heroicon-o-shield-exclamation" :meta="$allergenGepflegt . ' von ' . $allergenGesamt . ' bewertet'">
+                    <x-fa::section title="Allergene" icon="heroicon-o-shield-exclamation" :meta="$allergenBewertetText . ' bewertet'" data-allergen-bewertet="{{ $allergenBewertetText }}">
                         <div class="flex flex-wrap items-center gap-2" data-allergen-kopf>
                             <x-fa::badge :tone="$allergenQuelle === 'manual' ? 'ok' : 'neutral'">{{ $quelleText($allergenQuelle) }}</x-fa::badge>
-                            <span class="{{ $leise }}">Ohne Angabe heißt unbekannt, nicht frei von.</span>
+                            @if(($allergenAngenommen ?? []) !== [])
+                                <span class="{{ $leise }}" data-allergen-annahme>Lieferant liefert nur Positivangaben: ohne Angabe gilt als nicht enthalten (angenommen).</span>
+                            @else
+                                <span class="{{ $leise }}">Ohne Angabe heißt unbekannt, nicht frei von.</span>
+                            @endif
                         </div>
                         <div class="flex flex-col divide-y divide-[var(--fa-line)]" x-data="{ werte: $wire.entangle('allergene') }" data-tri-state>
                             @foreach($allergenLabels as $key => $lbl)
                                 <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5" data-tri-row="{{ $key }}">
-                                    <span class="{{ $zeilenLabel }}">{{ $lbl }}</span>
+                                    <span class="{{ $zeilenLabel }}">{{ $lbl }}@if(in_array($key, $allergenAngenommen ?? [], true))
+                                        <span class="{{ $leise }}" x-show="(werte['{{ $key }}'] ?? 'unbekannt') === 'unbekannt'" data-angenommen="{{ $key }}">· angenommen nicht enthalten</span>@endif</span>
                                     <div class="inline-flex shrink-0 overflow-hidden rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] divide-x divide-[var(--fa-line-strong)]" role="group" aria-label="{{ $lbl }}">
                                         @foreach($allergenKnoepfe as $wert => [$text, $titel, $an])
                                             <button type="button" title="{{ $titel }}" @disabled(! $darfEdit)

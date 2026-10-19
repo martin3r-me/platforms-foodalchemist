@@ -33,6 +33,8 @@ class FoodAlchemistSupplier extends Model
         'min_order_value' => 'decimal:2',
         'free_shipping_threshold' => 'decimal:2',
         'order_lead_days' => 'integer',
+        'allergene_nur_positiv' => 'boolean',   // Spec 85: leer = angenommen nicht enthalten
+        'allergene_nur_positiv_seit' => 'date',
     ];
 
     /** Hauptgruppe (Taxonomie); `branch` bleibt der Necta-Rohwert. */

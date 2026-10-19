@@ -182,6 +182,10 @@
                                 @endforeach
                             </dl>
                         @endif
+                        @if($allergenNurPositiv ?? null)
+                            <p class="mt-3 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-allergene-nur-positiv
+                               title="{{ $allergenNurPositiv->allergene_nur_positiv_grund }}">Liefert nur Positivangaben bei Allergenen: ohne Angabe gilt als nicht enthalten (angenommen){{ $allergenNurPositiv->allergene_nur_positiv_seit ? ' · seit ' . $allergenNurPositiv->allergene_nur_positiv_seit->format('d.m.Y') : '' }}.</p>
+                        @endif
                     </x-fa::section>
 
                     <x-fa::section title="Stamm-Lieferant für Warengruppen" icon="heroicon-o-squares-2x2"

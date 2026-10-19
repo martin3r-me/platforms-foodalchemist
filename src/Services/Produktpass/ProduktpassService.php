@@ -384,9 +384,11 @@ class ProduktpassService
         $allergene = [];
         if ($pass !== null) {
             $row = $item->allergens;
+            $annahme = \Platform\FoodAlchemist\Support\AllergenAnnahme::zeile($row, $item->supplier_id !== null ? (int) $item->supplier_id : null);   // Spec 85
             foreach ((array) ($pass->extrakt['allergene'] ?? []) as $key => $e) {
                 $allergene[] = ['key' => $key, 'label' => FoodAlchemistItemAllergen::ALLERGENE[$key] ?? $key, 'vorschlag' => $e['wert'],
-                    'konfidenz' => $e['konfidenz'] ?? 0.0, 'aktuell' => $row?->{"allergen_{$key}"} ?? 'unbekannt', 'url' => $e['url'] ?? null, 'zitat' => $e['zitat'] ?? null];
+                    'konfidenz' => $e['konfidenz'] ?? 0.0, 'aktuell' => $row?->{"allergen_{$key}"} ?? 'unbekannt',
+                    'aktuell_angenommen' => $annahme[$key]['angenommen'] ?? false, 'url' => $e['url'] ?? null, 'zitat' => $e['zitat'] ?? null];
             }
         }
 
