@@ -49,7 +49,8 @@ class ArtikelWebRecherche implements ProduktdatenQuelle
      */
     public function liefere(FoodAlchemistSupplierItem $la, array $optionen = []): array
     {
-        $roh = $this->transport->suche($this->anweisung(), $this->kontext($la));
+        // Die erlaubten Feldschlüssel stehen auch im Kontext: der Core-Transport nimmt die Anweisung aus der Prompt-Registry
+        $roh = $this->transport->suche($this->anweisung(), $this->kontext($la) + ['erlaubte_felder' => ProduktpassFelder::schluessel()]);
         $quellen = $this->quellen($roh['quellen'] ?? []);
         if ($quellen === []) {
             throw new \RuntimeException('Keine belegbaren Quellen im Web gefunden.');

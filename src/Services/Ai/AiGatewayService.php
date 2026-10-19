@@ -352,6 +352,11 @@ class AiGatewayService
         // (OpenAiService::normalizeContentPartsForResponses). Der Text-Weg bleibt unverändert.
         $bilder = is_array($options['bilder'] ?? null) ? array_values(array_filter($options['bilder'], 'is_array')) : [];
         unset($options['bilder']);
+        // Spec 85 I5-8: Websuche nur über einen Provider, der im Web sucht — sonst kein Aufruf (keine Kosten, keine erfundenen Werte)
+        $websuche = ($options['include_web_search'] ?? false) === true;
+        if ($websuche) {
+            $this->pruefeWebsucheWeg();
+        }
         if ($bilder !== []) {
             $this->pruefeBildWeg();
             $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userContent], ...self::bildTeile($bilder)]];
@@ -452,6 +457,9 @@ class AiGatewayService
         }
 
         $promptParts['versuche'] = $versucheGemacht;
+        if ($websuche && $antwort !== null) {   // Spec 85 I5-8: Kosten der Websuche sichtbar (je Suchaufruf berechnet der Provider extra)
+            $promptParts['websuche'] = ['quellen' => count((array) ($antwort['sources'] ?? [])), 'aufrufe' => count((array) ($antwort['web_search_calls'] ?? []))];
+        }
         if ($versucheGemacht > 1) {
             $promptParts['reroll_grund'] = $letzterRerollGrund;
         }
@@ -481,6 +489,8 @@ class AiGatewayService
             model: $antwort['model'] ?? null,
             elapsedMs: $elapsedMs,
             callLogId: $callLogId,
+            // Spec 85 I5-8: null = der Provider meldet keine Quellen (Core vor #935), [] = gesucht, nichts gefunden
+            quellen: is_array($antwort) && array_key_exists('sources', $antwort) ? array_values((array) $antwort['sources']) : null,
         );
     }
 
@@ -991,6 +1001,16 @@ class AiGatewayService
      * Der Anthropic-Weg im Core macht aus allem Text — ein Bild ginge dort still verloren. Darum ein
      * klarer Fehler statt eines leeren Ergebnisses (Befund 2026-10-09, Core-Fix #925 vorausgesetzt).
      */
+    /** Spec 85 I5-8: die Websuche liefert im Core heute nur der OpenAI-Weg (Anthropic gibt `sources = []` und sucht nicht). */
+    private function pruefeWebsucheWeg(): void
+    {
+        $provider = $this->provider();
+        if ($provider instanceof FakeAiProvider || str_contains(strtolower($provider::class), 'openai')) {
+            return;
+        }
+        throw new RuntimeException('Websuche nicht verfügbar: der aktive KI-Provider ('.class_basename($provider::class).') sucht nicht im Web.');
+    }
+
     private function pruefeBildWeg(): void
     {
         $provider = $this->provider();

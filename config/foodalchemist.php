@@ -1213,7 +1213,7 @@ return [
             'klasse' => 'stark',
             'max_tokens' => 2500,
             'task' => 'Recherchiere im Web zu genau diesem Lieferantenartikel (Bezeichnung, EAN, Marke, Lieferant im Kontext). '
-                . 'Antworte als JSON {"felder": {key: {wert, konfidenz, url, zitat?, einheit?}}, "allergene": {key: {wert: enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}}, '
+                . 'Antworte als JSON {"felder": {key: {wert, konfidenz, url, zitat?, einheit?}} (key nur aus erlaubte_felder im Kontext), "allergene": {key: {wert: enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}}, '
                 . '"deutung": {produkttyp, hauptzutat, warengruppe, unterkategorie, marke_fantasiename, zustand, form: {wert, url}}}. '
                 . 'Jede Angabe braucht die url der Seite, auf der du sie gefunden hast. Fehlt ein Wert, lass den Schlüssel WEG, rate nie. '
                 . '„nicht_enthalten" nur mit wörtlichem zitat der Quelle, sonst weglassen. Bestimme in deutung, was der Artikel fachlich IST '
