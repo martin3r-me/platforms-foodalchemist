@@ -35,6 +35,7 @@
         @if($aEnth->isEmpty() && $aSpur->isEmpty() && $aOffen->isEmpty())
             <tr><td colspan="2" class="muted">Frei von allen 14 EU-Allergenen.</td></tr>
         @endif
+        @if(! empty($dek['allergene_hinweis']))<tr><td colspan="2" class="muted" data-allergene-hinweis>{{ $dek['allergene_hinweis'] }}</td></tr>@endif
     </tbody>
 </table>
 

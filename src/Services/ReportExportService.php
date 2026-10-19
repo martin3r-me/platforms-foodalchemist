@@ -1182,9 +1182,21 @@ class ReportExportService
     /** @return array<string, mixed> */
     private function gpDeklaration(FoodAlchemistGp $gp): array
     {
+        // Spec 85: dieselbe Auflösung wie die GP-Anzeige (Override > Derivat-Mutter > LA-MAX inkl. Annahme bei Positiv-Lieferanten) —
+        // vorher nur die Override-Spalten, also „ohne Angabe“ für jeden GP, dessen Werte aus den Lieferantenartikeln kommen.
+        $agg = app(\Platform\FoodAlchemist\Services\GpAggregateService::class);
+        $aufgeloest = $agg->allergene($gp);
         $allergene = [];
         foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $label) {
-            $allergene[] = ['key' => $feld, 'label' => $label, 'wert' => $gp->{"allergen_{$feld}"} ?? 'unbekannt'];
+            $allergene[] = ['key' => $feld, 'label' => $label, 'wert' => ($aufgeloest[$feld]['value'] ?? null)?->value ?? 'unbekannt',
+                'quelle' => $aufgeloest[$feld]['source'] ?? 'keine'];
+        }
+        $angenommen = collect($allergene)->where('quelle', \Platform\FoodAlchemist\Support\AllergenAnnahme::QUELLE)->count();
+        $konfidenz = $agg->allergenKonfidenz($gp)['confidence'];
+        $zusatzstoffe = [];
+        foreach ($agg->zusatzstoffe($gp) as $feld => $wert) {   // GL-09: 3 = ja, 1 = nein, 0/NULL = keine Angabe
+            $zusatzstoffe[] = ['key' => $feld, 'label' => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE[$feld] ?? $feld,
+                'wert' => in_array($wert, [1, 3], true) ? $wert : null];
         }
 
         return [
@@ -1198,8 +1210,9 @@ class ReportExportService
                 'Enthält Rind' => $gp->tag_contains_beef,
             ],
             'allergene' => $allergene,
-            'allergens_confidence' => $gp->allergens_confidence,
-            'zusatzstoffe' => [],
+            'allergens_confidence' => $konfidenz === 'none' ? 'unknown' : $konfidenz,
+            'allergene_hinweis' => $angenommen > 0 ? $angenommen . ' Angaben ' . \Platform\FoodAlchemist\Support\AllergenAnnahme::HINWEIS : null,
+            'zusatzstoffe' => $zusatzstoffe,
         ];
     }
 
