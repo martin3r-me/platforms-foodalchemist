@@ -508,8 +508,11 @@ Ein PR je Paket, gestapelt wie Spec 80.
 - **Mandanten-Abweichungen (Merkposten Dominique 10.10., nicht jetzt bauen).** Default-GPs und Hausstandards
   (Rapsöl für „Öl“, Salz unjodiert, Fond aus Knochen/Parüren) sind heute globale Regeln; Mandanten brauchen später
   eigene Werte.
-  - Auflösung: Zeile explizit > Team-Regel (gleicher `schluessel`, `team_id`) > global. `RegelBuch` liest heute nur
-    globale aktive Regeln.
+  - Auflösung: Zeile explizit > Team-Regel (gleicher `schluessel`, `team_id`) > global. **Lesepfad gebaut (Spec 85 D-7, PR 1,
+    19.10.2026):** `RegelBuch` löst je Schlüssel eigenes Team > Oberteam > global auf, Kette gekappt an der Kundengrenze (nie
+    eine Team-Regel des Masters beim Mandanten), Team = Kontext oder ausdrücklich, ohne Team nur global. Übersteuerbar nur
+    `RegelBuch::UEBERSTEUERBAR` (Default-GP, Kleinstmengen, Haus-Zuordnung) — andere Team-Zeilen ignoriert + Log.
+    Inaktive Team-Zeile = keine Abweichung (kein Abschalten). Pflege (UI/MCP) folgt in PR 2.
   - Pflege: Team-Admin nur für die Arten `zuordnung`/`schwelle` der Bereiche Default-GP und Hausstandard, nie
     Naming/Matching — sonst zerlegt ein Mandant das Vokabular.
   - Kunde ≠ Team: Kundenstandards („Bio-Butter für Kunde X“) sind Leitplanken an Projekt/Planungs-Session, keine
