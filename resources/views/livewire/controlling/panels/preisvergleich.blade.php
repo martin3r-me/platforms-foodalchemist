@@ -101,6 +101,10 @@
                                 @else
                                     <x-fa::badge tone="warn" title="Es wird nicht vom günstigsten Lieferanten bezogen">{{ $z['lead_supplier'] }}</x-fa::badge>
                                 @endif
+                                {{-- Spec 85 PR-B: euer Leitartikel (Pin) oder der Plattform-Lead --}}
+                                @if($z['lead_supplier'] !== null)
+                                    <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-leitartikel="{{ ($z['lead_eigen'] ?? false) ? 'eigen' : 'plattform' }}">{{ ($z['lead_eigen'] ?? false) ? 'euer Leitartikel' : 'Plattform-Lead' }}</span>
+                                @endif
                             </td>
                             @if($supplierId)
                                 <td class="num {{ $z['filter_supplier_ist_guenstigster'] ? 'text-[var(--fa-ok)] font-semibold' : '' }}">

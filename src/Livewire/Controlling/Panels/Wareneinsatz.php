@@ -159,7 +159,7 @@ class Wareneinsatz extends Component
 
         $gesetzt = [];
         $fehlgeschlagen = 0;
-        $fremd = 0;   // Spec 85 PR-A: GP gehört nicht diesem Team — Bezugsquelle für alle setzt nur der Besitzer
+        $gepinnt = 0;   // Spec 85 PR-B: eigene Leitartikel (Pin)
         foreach ($zeilen as $z) {
             $gp = FoodAlchemistGp::visibleToTeam($team)->whereKey($z['gp_id'])->first();
             if ($gp === null) {
@@ -169,11 +169,14 @@ class Wareneinsatz extends Component
             }
             try {
                 // recompute: false — die Kaskade läuft gleich EINMAL über die ganze Menge.
-                $lead->setLeadLa($team, $gp, (int) $z['cheapest_rebate_la_id'],
+                // Spec 85 PR-B: Besitzer stellt den Lead für alle um, jedes andere Team setzt seinen Leitartikel (Pin)
+                $art = $lead->setzeLeitartikel($team, $gp, (int) $z['cheapest_rebate_la_id'],
                     'Controlling · Wareneinsatz-Batch', recompute: false);
-                $gesetzt[] = (int) $gp->id;
-            } catch (\Platform\FoodAlchemist\Exceptions\LeadNurBesitzerException) {
-                $fremd++;
+                if ($art === 'global') {
+                    $gesetzt[] = (int) $gp->id;   // nur der globale Lead braucht die Kaskade; Pins markieren die Team-Kosten selbst veraltet
+                } else {
+                    $gepinnt++;
+                }
             } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
                 $this->fehler = $e->getMessage();   // Rolle fehlt — für alle Zeilen gleich, also abbrechen
 
@@ -192,11 +195,11 @@ class Wareneinsatz extends Component
         $this->laufCache = null;
         $this->auswahl = [];
         $this->vorschau = null;
-        $nGesetzt = count($gesetzt);
+        $nGesetzt = count($gesetzt) + $gepinnt;
         $this->hinweis = $nGesetzt . ($nGesetzt === 1 ? ' Bezugsquelle' : ' Bezugsquellen') . ' umgestellt, '
             . $nRezepte . ($nRezepte === 1 ? ' Rezept' : ' Rezepte') . ' nachgerechnet.'
             . ($fehlgeschlagen > 0 ? ' ' . $fehlgeschlagen . ($fehlgeschlagen === 1 ? ' Position' : ' Positionen') . ' übersprungen.' : '')
-            . ($fremd > 0 ? ' ' . $fremd . ($fremd === 1 ? ' Grundprodukt gehört' : ' Grundprodukte gehören') . ' nicht eurem Team — deren Bezugsquelle für alle setzt nur der Besitzer.' : '');
+            . ($gepinnt > 0 ? ' Davon ' . $gepinnt . ' als euer Leitartikel (gilt nur für euer Team).' : '');
     }
 
     /**

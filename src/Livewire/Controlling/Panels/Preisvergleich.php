@@ -107,8 +107,11 @@ class Preisvergleich extends Component
         }
 
         try {
-            $lead->setLeadLa($team, $gp, $laId, 'Controlling · Preisvergleich', recompute: true);
-            $this->hinweis = 'Bezugsquelle für „' . $gp->name . '" umgestellt. Der Einkaufspreis ist in allen Rezepten nachgerechnet.';
+            // Spec 85 PR-B: Besitzer setzt den Lead für alle, jedes andere Team seinen eigenen Leitartikel (Pin)
+            $art = $lead->setzeLeitartikel($team, $gp, $laId, 'Controlling · Preisvergleich', recompute: true);
+            $this->hinweis = $art === 'global'
+                ? 'Bezugsquelle für „' . $gp->name . '" umgestellt. Der Einkaufspreis ist in allen Rezepten nachgerechnet.'
+                : 'Euer Leitartikel für „' . $gp->name . '" ist festgelegt — eure Kosten rechnen ab jetzt mit ihm.';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -134,7 +137,7 @@ class Preisvergleich extends Component
             $gekappt = $gps->count() > self::MAX;
             // #6.3 N+1: EIN Batch statt je GP ein rangliste()-Aufruf (~3 Queries/GP → ~180 bei 60 GPs).
             $anzeigeGps = $gps->take(self::MAX)->values();
-            $ketten = $lead->ranglisteBulk($anzeigeGps, $team);
+            $ketten = $lead->ranglisteBulk($anzeigeGps, $team, teamPreise: true);   // Spec 85 PR-B: eure Artikel zu euren Preisen
             foreach ($anzeigeGps as $gp) {
                 $kette = $ketten[(int) $gp->id] ?? collect();
                 if ($this->mitRabatt) {
@@ -207,6 +210,7 @@ class Preisvergleich extends Component
             'n' => $bepreist->count(),
             'guenstigster_la_id' => (int) $guenstigster->id,
             'lead_supplier' => $lead?->supplier_name,
+            'lead_eigen' => (bool) ($lead?->gepinnt ?? false),   // Spec 85 PR-B: euer Leitartikel (Pin) statt Plattform-Lead
             'lead_ist_guenstigster' => $lead !== null && (int) $lead->id === (int) $guenstigster->id,
             'guenstigster_supplier' => $guenstigster->supplier_name,
             'guenstigster_preis' => $minP,

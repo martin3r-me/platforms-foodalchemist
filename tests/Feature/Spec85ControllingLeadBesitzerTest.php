@@ -43,13 +43,14 @@ beforeEach(function () {
     $this->lead = fn () => (int) $this->gp->fresh()->lead_la_supplier_item_id;
 });
 
-it('Preisvergleich: das Unter-Team stellt die Bezugsquelle eines geerbten GP nicht für alle um — mit Erklärung', function () {
+it('Preisvergleich: das Unter-Team stellt die Bezugsquelle eines geerbten GP nicht für alle um — es setzt seinen Leitartikel (PR-B)', function () {
     $this->actingAs($this->unterteam);
     Livewire::test(Preisvergleich::class)->call('bezugsquelleSetzen', $this->gp->id, $this->laB->id)
-        ->assertSet('hinweis', null)
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'nur das Team, dem das Grundprodukt gehört'));
+        ->assertSet('fehler', null)->assertSet('hinweis', fn ($h) => str_contains((string) $h, 'Euer Leitartikel'));
 
-    expect(($this->lead)())->toBe((int) $this->laA->id);
+    expect(($this->lead)())->toBe((int) $this->laA->id)   // globaler Lead unverändert
+        ->and((int) \Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference::where('team_id', $this->childA->id)->where('gp_id', $this->gp->id)
+            ->where('gepinnt', true)->value('supplier_item_id'))->toBe((int) $this->laB->id);
 });
 
 it('Preisvergleich: der Besitzer (Mandant, Kuratieren) stellt um', function () {

@@ -1520,9 +1520,9 @@ class RecipeRecomputeService
      * @return array<int, array{gepinnt: bool, locked: bool}>
      */
     /**
-     * Bekannte Lücke (Spec 82 §3 Z. 122, schließt Stufe 3b): es zählen nur die Pins des
-     * Rezept-Besitzers (recomputeTeam). Pins eines Unter-Teams wirken nicht auf geerbte Rezepte;
-     * ebenso rechnet ek_total_eur EINMAL mit den Preisen des Besitzer-Teams.
+     * Es zählen die Pins des Recompute-Teams. Im gespeicherten Rezept-EK (ek_total_eur) ist das der Besitzer; die Team-Kosten
+     * (KostenCacheService::fuer → kostenFuerTeam) rechnen mit dem BETRACHTENDEN Team — dort wirkt der Leitartikel (Pin) eines
+     * Mandanten auch auf geerbte/Abo-Rezepte (Spec 82 3b, Spec 85 PR-B).
      */
     private function leadPrefs(FoodAlchemistGp $gp): array
     {
