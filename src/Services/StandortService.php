@@ -114,7 +114,14 @@ class StandortService
         return ['modus' => $wert['modus'], 'team_id' => $wert['modus'] === 'team' ? (int) $wert['team_id'] : null];
     }
 
-    /** Team-Brille setzen (eigen | alle | team mit Unter-Team-ID). Nur Ansicht — keine Rollenprüfung nötig. */
+    /**
+     * Team-Brille setzen (eigen | alle | team mit Unter-Team-ID). Nur Ansicht — keine Rollenprüfung nötig.
+     *
+     * Kopplung (Dominique/Kurator 19.10.): ÄNDERT sich die Brille, folgt das Kalkulationsprofil ({@see ActiveOutletContext}) —
+     * Brille „Unter-Team X“ → der X zugeordnete Betrieb (das Hauptteam sieht die Preise wie X), „eigen“/„alle“ oder X ohne
+     * Zuordnung → Team-Standard. Danach bleibt das Profil frei wählbar, bis zum nächsten echten Brillenwechsel. Gehört der
+     * Betrieb von X nicht dem betrachtenden Team (Enkel-Team, Zuordnung durch ein Zwischen-Team), verwirft set() ihn → Team-Standard.
+     */
     public function setzeBrille(Team $viewer, string $modus, ?int $teamId = null, ?int $userId = null): array
     {
         $uid = $userId ?? auth()->id();
@@ -125,13 +132,27 @@ class StandortService
             throw new \RuntimeException('Dieser Standort gehört nicht zu diesem Team.');
         }
         $wert = ['modus' => $modus, 'team_id' => $modus === 'team' ? (int) $teamId : null];
+        $vorher = $this->brille($viewer, $uid);
         session(['fa.team_brille.'.$viewer->id => $wert]);
         if ($uid !== null) {
             DB::table('foodalchemist_team_brillen')->updateOrInsert(['user_id' => $uid, 'team_id' => $viewer->id],
                 ['sicht' => $modus, 'sicht_team_id' => $wert['team_id'], 'updated_at' => now(), 'created_at' => now()]);
         }
+        if ($vorher !== $wert) {
+            $x = $wert['team_id'] !== null ? Team::find($wert['team_id']) : null;
+            app(ActiveOutletContext::class)->set($viewer, $x !== null ? $this->zugeordneterBetrieb($x)?->id : null, $uid);
+        }
 
         return $wert;
+    }
+
+    /** Das Kalkulationsprofil, das die aktuelle Brille vorgibt (Betrieb des gewählten Unter-Teams), oder null. */
+    public function profilDerBrille(Team $viewer, ?int $userId = null): ?FoodAlchemistOutlet
+    {
+        $b = $this->brille($viewer, $userId);
+        $x = $b['modus'] === 'team' && $b['team_id'] !== null ? Team::find($b['team_id']) : null;
+
+        return $x !== null ? $this->zugeordneterBetrieb($x) : null;
     }
 
     /**

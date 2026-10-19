@@ -14,6 +14,9 @@
             <option value="{{ $b->id }}">{{ $b->name }}</option>
         @endforeach
     </select>
+    @if($folgtBrille)
+        <span class="text-[12px] text-gray-600 whitespace-nowrap" data-betrieb-folgt-brille>folgt der Team-Brille: {{ $folgtBrille }}</span>
+    @endif
     @if($betriebe->isEmpty())
         <a href="{{ route('foodalchemist.einstellungen') }}" wire:navigate class="text-[12px] text-violet-600 hover:text-violet-700 whitespace-nowrap">Kalkulationsprofil anlegen</a>
     @endif

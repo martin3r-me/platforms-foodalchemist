@@ -51,6 +51,19 @@ class ActiveOutletContext
             ->where('is_inactive', false)->find($id);
     }
 
+    /**
+     * Reconcile-Regel der Preis-Flächen UND Druckwege (Kurator 19.10.): dokument-gebundener Betrieb ?? aktiver Betrieb.
+     * Der gebundene Betrieb zählt nur, wenn er dem Team gehört (wie bisher im Speiseplan-Druck).
+     */
+    public function fuerDokument(Team $team, ?int $gebundenOutletId, ?int $userId = null): ?FoodAlchemistOutlet
+    {
+        if ($gebundenOutletId !== null && ($gebunden = FoodAlchemistOutlet::where('team_id', $team->id)->find($gebundenOutletId)) !== null) {
+            return $gebunden;
+        }
+
+        return $this->current($team, $userId);
+    }
+
     /** Setzt den aktiven Betrieb (null = zurück auf Team-Baseline). Validiert Besitz + aktiv. Schreibt Session + durabel. */
     public function set(Team $team, ?int $outletId, ?int $userId = null): ?FoodAlchemistOutlet
     {

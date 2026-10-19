@@ -391,16 +391,16 @@ class AngebotService
      *
      * @return array{angebot:FoodAlchemistAngebot, kalk:array, menues:list<array>, kunde:?string, kontakt:?string}
      */
-    public function dokumentDaten(Team $team, FoodAlchemistAngebot $angebot): array
+    public function dokumentDaten(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $conceptSvc = app(ConceptService::class);
         $angebot->loadMissing(['crmCompany', 'crmContact', 'concepts', 'referenzierteConcepts']);
-        $kalk = $this->kalkulation($team, $angebot);
+        $kalk = $this->kalkulation($team, $angebot, $outlet);   // Kurator 19.10.: Druck rechnet gegen das Profil wie die Seite
 
         $menues = [];
         foreach ($this->menueConcepts($angebot) as $c) {
             $positionen = [];
-            foreach ($conceptSvc->preisCockpit($c, null, $team)['zeilen'] as $z) {
+            foreach ($conceptSvc->preisCockpit($c, $outlet, $team)['zeilen'] as $z) {
                 if (($z['type'] ?? '') === 'leer') {
                     continue;
                 }
@@ -517,11 +517,11 @@ class AngebotService
         return $this->costingCache[$key] ??= $service->costConcept($team, $concept, $pax, $outlet);
     }
 
-    public function karteDaten(Team $team, int $id): array
+    public function karteDaten(Team $team, int $id, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->with(['crmCompany', 'crmContact'])->findOrFail($id);
-        $komposition = app(OfferCompositionService::class)->komposition($team, $angebot, null, false);
-        $kalk = $this->kalkulation($team, $angebot);
+        $komposition = app(OfferCompositionService::class)->komposition($team, $angebot, $outlet, false);
+        $kalk = $this->kalkulation($team, $angebot, $outlet);
         $mwst = app(TeamSettingsService::class)->mwst($team);
         $satz = ($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer'
             ? (float) ($mwst['regulaer'] ?? 19.0)

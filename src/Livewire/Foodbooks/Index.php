@@ -1521,9 +1521,9 @@ class Index extends Component
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,
             // Board (2026-08-27): EIN Baum statt Übersicht/Fortschritt/Preise — Status + Inhalt + Preis je Kapitel.
-            // Ebene 2: VK/EK/WE je Kapitel gegen die Betriebsbrille (ambient) rechnen.
+            // Ebene 2: VK/EK/WE je Kapitel — dokument-gebundener Betrieb ?? Betriebsbrille (wie der Druck, Kurator 19.10.).
             'kapitelBoard' => $fb !== null
-                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelBoard($team, $fb, app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team)) : [],
+                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelBoard($team, $fb, app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->fuerDokument($team, $fb->outlet_id)) : [],
             // Coverage/Befunde je Kapitel (aus dem EINEN CoverageService-Call gruppiert) — inline beim Aufklappen.
             'boardCoverage' => collect($coverage['befunde'] ?? [])
                 ->groupBy('chapter_id')->map(fn ($g) => $g->values()->all())->all(),
