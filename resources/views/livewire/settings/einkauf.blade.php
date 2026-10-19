@@ -97,6 +97,13 @@
                     <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Eure bevorzugten Artikel und Sperren gelten auch an den Standorten — außer ein Standort legt selbst einen fest.</span>
                 </span>
             </label>
+            <label class="flex items-start gap-2 pt-3 cursor-pointer" data-standorte-uebernehmen-favoriten>
+                <input type="checkbox" wire:model="standorteUebernehmenFavoriten" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+                <span class="min-w-0">
+                    <span class="block text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Standorte übernehmen unsere Favoriten</span>
+                    <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Eure Favoriten gelten auch an den Standorten — eigene Favoriten und Ausschlüsse eines Standorts gehen vor.</span>
+                </span>
+            </label>
         @endif
     </x-fa::section>
 

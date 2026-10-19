@@ -653,7 +653,7 @@ it('E4 favoritKandidatenFuerStep: nur noch nicht gepinnte GPs, gepinnte fallen r
     $recipe = $this->makeRecipe($this->rootTeam, 'Basis mit GPs');
     $frei = $this->makeGp($this->rootTeam, 'Kürbiskernöl');
     $fav = $this->makeGp($this->rootTeam, 'Olivenöl');
-    $fav->forceFill(['is_favorite' => true])->save();
+    app(\Platform\FoodAlchemist\Services\FavoriteGpService::class)->pin($this->rootTeam, $fav);   // Spec 85 FAV-1: Favorit des Teams
     $this->makeIngredient($recipe, 'Kürbiskernöl', $frei, '50', 1);
     $this->makeIngredient($recipe, 'Olivenöl', $fav, '50', 2);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);

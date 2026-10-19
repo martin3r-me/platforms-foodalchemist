@@ -102,12 +102,19 @@ class FoodAlchemistGp extends Model
         return $query->where('commodity_group_code', \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE);
     }
 
-    /** 06·H1: kuratierte Favoriten-GPs (nach Anzeige-Rang, dann Name). */
-    public function scopeFavorites(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    /**
+     * Spec 85 FAV-1: die wirksamen Favoriten EINES Teams (Overlay mit Übernahme vom Hauptteam, nie vom Master), nach Rang.
+     * Ersetzt das frühere `scopeFavorites` (globale Spalte `is_favorite` — die liest niemand mehr).
+     */
+    public function scopeFavoritenFuer(\Illuminate\Database\Eloquent\Builder $query, \Platform\Core\Models\Team $team): \Illuminate\Database\Eloquent\Builder
     {
-        return $query->where('is_favorite', true)
-            ->orderByRaw('favorite_rank IS NULL, favorite_rank ASC')
-            ->orderBy('name');
+        $ids = \Platform\FoodAlchemist\Support\FavoritenOverlay::gpIds($team);
+        if ($ids === []) {
+            return $query->whereRaw('1 = 0');
+        }
+        $reihenfolge = 'CASE ' . $this->getTable() . '.id ' . implode(' ', array_map(fn ($id, $pos) => 'WHEN ' . (int) $id . ' THEN ' . (int) $pos, $ids, array_keys($ids))) . ' END';
+
+        return $query->whereIn($this->getTable() . '.id', $ids)->orderByRaw($reihenfolge);
     }
 
     public function commodity_group(): BelongsTo

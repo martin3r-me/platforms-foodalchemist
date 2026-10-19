@@ -48,6 +48,9 @@ class Einkauf extends Component
     /** Spec 85 PR-B: am Kunden-Hauptteam — Standorte übernehmen unsere Leitartikel (Standard AN). */
     public bool $standorteUebernehmen = true;
 
+    /** Spec 85 FAV-1: am Kunden-Hauptteam — Standorte übernehmen unsere Favoriten (Standard AN). */
+    public bool $standorteUebernehmenFavoriten = true;
+
     public string $neuerPrioLieferant = '';
 
     public ?string $meldung = null;
@@ -108,6 +111,7 @@ class Einkauf extends Component
         $this->prioritaeten = $settings->lead_la_prioritaeten ?? [];
         $this->ausweichKette = (bool) ($settings->show_fallback_chain ?? false);
         $this->standorteUebernehmen = (bool) ($settings->standorte_uebernehmen_leitartikel ?? true);
+        $this->standorteUebernehmenFavoriten = (bool) ($settings->standorte_uebernehmen_favoriten ?? true);
         $this->strategiePerWg = is_array($settings->lead_la_strategie_per_wg ?? null) ? $settings->lead_la_strategie_per_wg : [];
         $this->ladeLagerForm();
     }
@@ -125,7 +129,8 @@ class Einkauf extends Component
             'lead_la_strategie_per_wg' => $perWg ?: null,
             'lead_la_prioritaeten' => array_values(array_map('intval', $this->prioritaeten)),
             'show_fallback_chain' => $this->ausweichKette,
-        ] + ($this->istHauptteam() ? ['standorte_uebernehmen_leitartikel' => $this->standorteUebernehmen] : []));
+        ] + ($this->istHauptteam() ? ['standorte_uebernehmen_leitartikel' => $this->standorteUebernehmen,
+            'standorte_uebernehmen_favoriten' => $this->standorteUebernehmenFavoriten] : []));
         $this->meldung = 'Gespeichert. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
     }
 

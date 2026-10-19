@@ -2668,12 +2668,12 @@ class Index extends Component
             return;
         }
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId);
-        if ($gp === null || ! $gp->isOwnedBy($team)) {
-            $this->fehler = 'GP nicht editierbar (global/Master ist read-only) — nicht gepinnt.';
+        if ($gp === null) {
+            $this->fehler = 'GP nicht gefunden — nicht gepinnt.';
 
             return;
         }
-        $fav->pin($gp);
+        try { $fav->pin($team, $gp); } catch (\RuntimeException $e) { $this->fehler = $e->getMessage(); return; }   // Spec 85 FAV-1: Liste des Teams, Kuratieren
         $this->meldung = 'GP „' . $gp->name . '" als Favorit gepinnt.';
         // aus allen geladenen Vorschlagslisten entfernen (ist jetzt Favorit)
         foreach ($this->favoritVorschlaege as $sid => $liste) {

@@ -27,6 +27,8 @@ beforeEach(function () {
     $this->nichtConv->update(['status' => 'approved', 'tag_is_convenience' => false]);
 
     $this->svc = app(FavoriteGpService::class);
+    // Spec 85 FAV-1: Favoriten sind je Team (Overlay), nicht mehr die GP-Spalte
+    $this->fav = fn (FoodAlchemistGp $gp, $team = null) => \Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team ?? $this->rootTeam)[(int) $gp->id] ?? null;
 });
 
 it('scored alle approved GPs (nicht nur Convenience)', function () {
@@ -41,31 +43,30 @@ it('markiert Convenience-getaggte GPs (is_convenience-Flag pro Zeile)', function
 });
 
 it('pinnt JEDEN approved GP — auch nicht-Convenience (kein §4-Zwang)', function () {
-    $this->svc->pin($this->conv, 1);
-    expect($this->conv->refresh()->is_favorite)->toBeTrue();
-    expect($this->conv->favorite_rank)->toBe(1);
+    $this->svc->pin($this->rootTeam, $this->conv, 1);
+    expect(($this->fav)($this->conv))->not->toBeNull();
+    expect(($this->fav)($this->conv)['rang'])->toBe(1);
 
-    $this->svc->pin($this->nichtConv);                 // früher: RuntimeException — jetzt erlaubt
-    expect($this->nichtConv->refresh()->is_favorite)->toBeTrue();
+    $this->svc->pin($this->rootTeam, $this->nichtConv);                 // früher: RuntimeException — jetzt erlaubt
+    expect(($this->fav)($this->nichtConv))->not->toBeNull();
 });
 
 it('exclude entfernt den Favorit', function () {
-    $this->svc->pin($this->conv, 2);
-    $this->svc->exclude($this->conv);
-    expect($this->conv->refresh()->is_favorite)->toBeFalse();
-    expect($this->conv->favorite_rank)->toBeNull();
+    $this->svc->pin($this->rootTeam, $this->conv, 2);
+    $this->svc->exclude($this->rootTeam, $this->conv);
+    expect(($this->fav)($this->conv))->toBeNull();
 });
 
 it('current listet gepinnte nach Rang', function () {
     $b = $this->makeGp($this->rootTeam, 'TK-Rösti');
     $b->update(['status' => 'approved']);
-    $this->svc->pin($this->conv, 2);
-    $this->svc->pin($b, 1);
+    $this->svc->pin($this->rootTeam, $this->conv, 2);
+    $this->svc->pin($this->rootTeam, $b, 1);
     expect($this->svc->current($this->rootTeam)->pluck('name')->all())->toBe(['TK-Rösti', 'TK-Kartoffelgratin']);
 });
 
 it('gepinnte Favoriten bleiben trotz Score-Cap in der Liste — und der Cap greift wirklich', function () {
-    $this->svc->pin($this->nichtConv);                 // Score 0 (keine Nutzung/Lead), gepinnt
+    $this->svc->pin($this->rootTeam, $this->nichtConv);                 // Score 0 (keine Nutzung/Lead), gepinnt
     $items = $this->svc->suggest($this->rootTeam, 1);  // Cap = 1
     // gepinnter Low-Score-GP bleibt drin …
     expect($items->pluck('name'))->toContain('Frische Kartoffel')
@@ -100,26 +101,30 @@ it('suggest sortiert absteigend nach Score (höchster zuerst)', function () {
 
 it('Command --suggest + --pin', function () {
     $this->artisan('foodalchemist:favorites', ['--team' => $this->rootTeam->id, '--suggest' => true])->assertSuccessful();
-    $this->artisan('foodalchemist:favorites', ['--pin' => $this->conv->id, '--rank' => 3])->assertSuccessful();
-    expect($this->conv->refresh()->is_favorite)->toBeTrue();
+    $this->artisan('foodalchemist:favorites', ['--team' => $this->rootTeam->id, '--pin' => $this->conv->id, '--rank' => 3])->assertSuccessful();
+    expect(($this->fav)($this->conv)['rang'])->toBe(3);
+    $this->artisan('foodalchemist:favorites', ['--pin' => $this->conv->id])->assertFailed();   // Spec 85: ohne --team kein Pinnen
 });
 
-it('MCP GET/PUT: jeder eigene GP pinbar + Ownership-Guard (D1)', function () {
+it('MCP GET/PUT: Liste des Teams; ein Standort nimmt einen übernommenen Favoriten nur für sich heraus (Spec 85 FAV-1)', function () {
     $ctx = new ToolContext($this->makeUser($this->rootTeam), $this->rootTeam);
 
     $put = (new FavoritesPutTool())->execute(['gp_id' => $this->conv->id, 'action' => 'pin', 'rank' => 1], $ctx);
     expect($put->success)->toBeTrue();
-    expect($this->conv->refresh()->is_favorite)->toBeTrue();
+    expect(($this->fav)($this->conv))->not->toBeNull();
 
     // nicht-Convenience, aber eigenes Team → jetzt erlaubt (kein §4)
     $roh = (new FavoritesPutTool())->execute(['gp_id' => $this->nichtConv->id, 'action' => 'pin'], $ctx);
     expect($roh->success)->toBeTrue();
-    expect($this->nichtConv->refresh()->is_favorite)->toBeTrue();
+    expect(($this->fav)($this->nichtConv))->not->toBeNull();
 
-    // Ownership-Guard: Kind-Team-User darf ein root-eigenes (geerbtes) GP NICHT pinnen
+    // Spec 85 FAV-1: früher Ownership-Guard (Kind durfte nicht) — jetzt hat jedes Team seine Liste: der Standort schließt den
+    // übernommenen Favoriten für SICH aus, das Hauptteam behält ihn
     $childCtx = new ToolContext($this->makeUser($this->childA), $this->childA);
-    $verweigert = (new FavoritesPutTool())->execute(['gp_id' => $this->conv->id, 'action' => 'exclude'], $childCtx);
-    expect($verweigert->success)->toBeFalse();
+    $aus = (new FavoritesPutTool())->execute(['gp_id' => $this->conv->id, 'action' => 'exclude'], $childCtx);
+    \Platform\FoodAlchemist\Support\EinkaufsKette::vergessen();
+    expect($aus->success)->toBeTrue()->and(($this->fav)($this->conv, $this->childA))->toBeNull()
+        ->and(($this->fav)($this->conv))->not->toBeNull();
 
     $get = (new FavoritesGetTool())->execute(['mode' => 'current'], $ctx);
     expect($get->success)->toBeTrue();
@@ -136,5 +141,5 @@ it('Kuratierungs-Screen rendert + pinnt', function () {
         ->call('pin', $this->conv->id)
         ->assertOk();
 
-    expect($this->conv->refresh()->is_favorite)->toBeTrue();
+    expect(($this->fav)($this->conv))->not->toBeNull();
 });

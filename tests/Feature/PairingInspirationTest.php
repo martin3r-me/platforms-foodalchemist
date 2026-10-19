@@ -68,7 +68,8 @@ beforeEach(function () {
     };
     // „Rote Bete"-GP = Favorit (bucket 'fuehren'); „Dill"-GP = Lead-LA + Preis, kein Favorit (bucket 'leicht');
     // meerrettich hat keinen tragenden GP → Nachbar-Lücke.
-    $this->gpRoteBete = ($this->mkGpMitAnker)('Rote Bete', $this->roteBete, ['is_favorite' => true], true);
+    $this->gpRoteBete = ($this->mkGpMitAnker)('Rote Bete', $this->roteBete, [], true);
+    app(\Platform\FoodAlchemist\Services\FavoriteGpService::class)->pin($this->rootTeam, $this->gpRoteBete);   // Spec 85 FAV-1: Favorit des Teams
     $this->gpDill = ($this->mkGpMitAnker)('Dill', $this->dill, [], true);
 });
 

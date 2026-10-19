@@ -1995,7 +1995,7 @@ class PlanningCascadeService
         }
 
         return \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)
-            ->where('is_favorite', false)
+            ->whereNotIn('id', \Platform\FoodAlchemist\Support\FavoritenOverlay::gpIds($team))   // Spec 85 FAV-1: Liste des Teams
             ->orderBy('name')->get(['id', 'name'])
             ->map(fn ($g) => ['id' => (int) $g->id, 'name' => (string) $g->name])->all();
     }

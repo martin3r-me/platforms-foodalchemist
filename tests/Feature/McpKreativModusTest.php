@@ -91,7 +91,8 @@ it('E9.5: pairing_inspiration.GET liefert Nachbarn je Modus (search→Anker, gee
         ]);
     }
     $gp = $this->makeGp($this->rootTeam, 'Rote Bete');
-    $gp->update(['is_derivat' => false, 'is_platzhalter' => false, 'is_favorite' => true]);
+    $gp->update(['is_derivat' => false, 'is_platzhalter' => false]);
+    app(\Platform\FoodAlchemist\Services\FavoriteGpService::class)->pin($this->rootTeam, $gp);   // Spec 85 FAV-1: Favorit des Teams
     DB::table('foodalchemist_gp_anchor_mappings')->insert([
         'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
         'gp_id' => $gp->id, 'anchor_id' => $rb, 'role' => 'kern', 'created_at' => now(), 'updated_at' => now(),

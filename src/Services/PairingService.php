@@ -1206,19 +1206,19 @@ class PairingService
         $gps = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
             ->whereIn('id', $gpIds)
             ->where('is_derivat', false)->where('is_platzhalter', false)
-            ->get(['id', 'name', 'lead_la_supplier_item_id', 'is_favorite', 'status', 'requires_la'])
+            ->get(['id', 'name', 'lead_la_supplier_item_id', 'status', 'requires_la'])
             ->keyBy('id');
 
-        // Eine Zeile pro (GP, Anker) — der Aufrufer gruppiert nach Anker (Inspiration) bzw. GP (Erdung).
+        $favoriten = \Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team);   // Spec 85 FAV-1 · Eine Zeile pro (GP, Anker) — der Aufrufer gruppiert nach Anker (Inspiration) bzw. GP (Erdung).
         return $mapping
             ->filter(fn ($m) => $gps->has((int) $m->gp_id))
-            ->map(function ($m) use ($gps) {
+            ->map(function ($m) use ($gps, $favoriten) {
                 $gp = $gps->get((int) $m->gp_id);
 
                 return (object) [
                     'id' => (int) $gp->id, 'name' => (string) $gp->name,
                     'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null,
-                    'is_favorite' => (bool) $gp->is_favorite,
+                    'is_favorite' => isset($favoriten[(int) $gp->id]),
                     'status' => is_object($gp->status) ? $gp->status->value : (string) $gp->status,
                     'requires_la' => (bool) $gp->requires_la,
                     'anchor_id' => (int) $m->anchor_id,
