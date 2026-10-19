@@ -73,7 +73,10 @@ it('Freigabeliste im Lesepfad: Team-Zeile auf nicht übersteuerbarem Schlüssel 
     RegelBuch::alle($this->mandant);
     Log::shouldHaveReceived('warning')->withArgs(fn ($m) => str_contains($m, 'gp.10.generik') && str_contains($m, 'ignoriert'))->once();
     expect(in_array('gp.10.generik', RegelBuch::UEBERSTEUERBAR, true))->toBeFalse()
-        ->and(RegelBuch::UEBERSTEUERBAR)->toBe(['basisrezept.5.default_gp', 'gericht.kleinstmengen', 'basisrezept.bestand.haus_zuordnung']);
+        ->and(RegelBuch::UEBERSTEUERBAR)->toBe(['basisrezept.5.default_gp', 'gericht.kleinstmengen', 'basisrezept.bestand.haus_zuordnung',
+            // D-7 PR 1b (Dominique 19.10.): HACCP-Temperaturen, lockerer nur bis zur belegten Untergrenze
+            'haccp.heisshalten', 'haccp.kuehlen', 'haccp.schnellkuehlen', 'haccp.kuehlkette', 'haccp.abkuehlen',
+            'haccp.standzeit_gefahrenzone', 'haccp.garen_zerkleinert', 'haccp.regenerieren']);
 });
 
 it('inaktive Team-Zeile wirkt nicht (kein Abschalten der globalen Regel über das Team)', function () {

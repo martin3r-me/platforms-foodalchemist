@@ -38,22 +38,24 @@ final class RegelPromptBlock
      */
     private const KONSUMENTEN = [
         // vk.zeile.rolle (Regel gericht.teller_rolle, Dominique 11.10.): im Basisrezept die möglichen Rollen des Rezepts.
-        'recipe.generator' => ['ziele' => [...self::ZIELE_REZEPT, 'vk.zeile.rolle'], 'typ' => true],
-        'recipe.ueberarbeiten' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
-        'recipe.review' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
+        'recipe.generator' => ['ziele' => [...self::ZIELE_REZEPT, 'vk.zeile.rolle', 'haccp.temperatur'], 'typ' => true],
+        'recipe.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, 'haccp.temperatur'], 'typ' => true],
+        'recipe.review' => ['ziele' => [...self::ZIELE_REZEPT, 'haccp.temperatur'], 'typ' => true],
         'recipe.komponenten_plan' => ['ziele' => ['rezept.name', 'rezeptzeile.typ'], 'typ' => true],
         'recipe.name_putzen' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.titel_vorschlag' => ['ziele' => ['rezept.name'], 'typ' => true],
-        'recipe.steps' => ['ziele' => ['rezept.schritt'], 'typ' => false],
+        'recipe.steps' => ['ziele' => ['rezept.schritt', 'haccp.temperatur'], 'typ' => false],
         'recipe.description' => ['ziele' => ['rezept.beschreibung'], 'typ' => false],
         'recipe.category' => ['ziele' => [], 'typ' => 'liste'],   // wählt eine Kategorie, benennt nichts
         'signal.recipe_naming_suggest' => ['ziele' => ['rezept.name', 'rezept.name.grammatur', ...self::ZIELE_VK], 'typ' => true],
-        'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK, 'vk.zeile.rolle'], 'typ' => true],
+        'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK, 'vk.zeile.rolle', 'haccp.temperatur'], 'typ' => true],
+        // HACCP-Temperaturen (Spec 85 D-7 PR 1b): Regenerieren/Heißhalten/Kühlen der Darreichung
+        'vk.regeneration' => ['ziele' => ['haccp.temperatur'], 'typ' => false],
         // Spec 81 Teil E (Dominique 11.10.): das Teller-Vokabular kommt aus der Regel, nicht aus dem Kanon-Dossier §12 —
         // die Doppelung (Regel + Tabelle im Dossier) brach den Probelauf auf demo (KI folgte der alten Tabelle).
         'vk.rollen' => ['ziele' => ['vk.zeile.rolle'], 'typ' => false],
-        'vk.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
-        'vk.review' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
+        'vk.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK, 'haccp.temperatur'], 'typ' => true],
+        'vk.review' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK, 'haccp.temperatur'], 'typ' => true],
         'vk.titel_vorschlag' => ['ziele' => self::ZIELE_VK, 'typ' => false],
         'gp.suggest' => ['ziele' => self::ZIELE_GP, 'typ' => false],
         'gp.conformance_revise' => ['ziele' => self::ZIELE_GP, 'typ' => false],
@@ -74,6 +76,7 @@ final class RegelPromptBlock
         'rezeptzeile.vegan' => 'Zutatenzeilen, wenn das Rezept vegan ist',
         'rezeptzeile.vegetarisch' => 'Zutatenzeilen, wenn das Rezept vegetarisch ist',
         'rezeptzeile.typ' => 'Zutatenzeilen je nach Rezept-Typ',
+        'haccp.temperatur' => 'Hygiene-Temperaturen und -Zeiten (HACCP-Hausstandard; gilt für Zubereitung, Abkühlen, Lagern, Regenerieren, Ausgabe)',
         'vk.zeile.rolle' => 'Teller-Rolle einer Gerichtszeile bzw. mögliche Rollen eines Basisrezepts — die Reihenfolge der Werte ist die Anrichte-Reihenfolge',
         'vk.name' => 'Gerichtname',
         'vk.name.hg' => 'Hauptgruppen-Kürzel des Gerichtnamens',
@@ -183,12 +186,34 @@ final class RegelPromptBlock
             'verbot' => $this->verbot($kopf, $p, $r) . $bed,
             'vokabular' => $this->vokabular($kopf, (array) ($p['werte'] ?? []), $liste),
             'pflichtangabe' => $kopf . ': Pflicht — ' . (trim((string) ($p['hinweis'] ?? '')) ?: $r->titel) . $bed,
-            'schwelle' => $kopf . ': ' . (($p['vergleich'] ?? '') === 'zwischen'
-                ? ($p['min'] ?? '') . '–' . ($p['max'] ?? '') : ($p['vergleich'] ?? '') . ' ' . ($p['wert'] ?? '')) . ' ' . ($p['einheit'] ?? ''),
+            'schwelle' => $this->schwelle($kopf, $p, $r),
             'ersetzung' => $kopf . ': ' . implode('; ', array_map(static fn ($x) => ($x['von'] ?? '') . ' → ' . ($x['nach'] ?? ''), (array) ($p['paare'] ?? [])))
                 . (($aus = $liste((array) ($p['ausnahmen'] ?? []))) !== '' ? '. Nicht ersetzen: ' . $aus . '.' : ''),
             default => null,
         };
+    }
+
+    /**
+     * Schwelle mit Dauer und Geltung („> 75 °C, 2 min — gilt für Hack, Farce …“). Team-Abweichung (Spec 85 D-7): strenger → nur
+     * der Team-Wert; lockerer → „Hausstandard des Teams: X (gesetzliches Minimum Y)“, damit die KI die Grenze kennt.
+     */
+    private function schwelle(string $kopf, array $p, FoodAlchemistRule $r): string
+    {
+        $zeile = $kopf . ': ' . Arten\Schwelle::text($p);
+        if (trim((string) ($p['geltung'] ?? '')) !== '') {
+            $zeile .= ' — gilt für ' . trim((string) $p['geltung']);
+        }
+        if ($r->team_id === null || ($global = RegelBuch::global((string) $r->schluessel)) === null) {
+            return $zeile;
+        }
+        $g = (array) $global->params;
+        if (! (new Arten\Schwelle)->lockerer($global, $r)) {
+            return $zeile . ' (Hausstandard des Teams, strenger als ' . Arten\Schwelle::text($g) . ')';
+        }
+
+        return $kopf . ': Hausstandard des Teams: ' . Arten\Schwelle::text($p)
+            . ' (gesetzliches Minimum ' . (Arten\Schwelle::untergrenzeText($g) ?? Arten\Schwelle::text($g)) . ')'
+            . (trim((string) ($g['geltung'] ?? '')) !== '' ? ' — gilt für ' . trim((string) $g['geltung']) : '');
     }
 
     /**
