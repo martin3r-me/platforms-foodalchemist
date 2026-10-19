@@ -57,7 +57,7 @@ class ConformanceService
         return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeUndHeileImLauf($team, $typ, $id, $runId));
     }
 
-    /** Das GP-Regelwerk (Naming, Zustand, Pflichtangaben) gilt für Lebensmittel; Non-Food (Warengruppe 16) hat ein eigenes, schlankes Schema (§6.4/§8.13). */
+    /** Das GP-Regelwerk (Naming, Zustand, Pflichtangaben) gilt für Lebensmittel; Non-Food (Warengruppe 16) hat ein eigenes, schlankes Schema (§6.5/§8.18). */
     private function istNonFoodGp(string $typ, int $id): bool
     {
         return $typ === 'gp' && \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereKey($id)->nonFood()->exists();

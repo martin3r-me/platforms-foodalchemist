@@ -276,7 +276,7 @@ class GpNamingService
     {
         $in = $this->bereinigeFelder($in);
         if ($this->istNonFood($in)) {
-            // Non-Food (Warengruppe 16, Regelwerk §6.4): `Produkt: Eigenschaft, Größe` — kein Zustand, keine Portion, keine Diät-Suffixe.
+            // Non-Food (Warengruppe 16, Regelwerk §6.5): `Produkt: Eigenschaft, Größe` — kein Zustand, keine Portion, keine Diät-Suffixe.
             // Eigenschaft = processing (sonst form), Größe = pflichtangabe.
             $teile = array_values(array_filter([($in['processing'] ?? null) ?: ($in['form'] ?? null), $in['pflichtangabe'] ?? null], fn ($t) => trim((string) $t) !== ''));
             $produkt = trim($in['hauptzutat'] ?? '');
@@ -326,7 +326,7 @@ class GpNamingService
             $errors[] = 'Name ist leer.';
         }
         if ($this->istNonFood($in)) {
-            // Non-Food: eigenes, schlankes Schema (§6.4). Die Lebensmittel-Namensregeln (Zustand, Pflichtangaben) gelten nicht;
+            // Non-Food: eigenes, schlankes Schema (§6.5). Die Lebensmittel-Namensregeln (Zustand, Pflichtangaben) gelten nicht;
             // Lebensmittel-Zustandswörter im Namen sind ein Hinweis (Anti-Pattern), kein Blocker.
             if (preg_match('/(?<![\p{L}])(' . self::zustandMuster() . ')(?![\p{L}])/u', $name) === 1) {
                 $warnings[] = 'Non-Food braucht keinen Zustand (' . self::zustandListe('/') . ') — Schema: Produkt: Eigenschaft, Größe.';
