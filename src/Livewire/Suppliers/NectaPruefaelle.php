@@ -55,6 +55,9 @@ class NectaPruefaelle extends Component
 
     public array $sammelVorschau = [];
 
+    /** Laufender Hintergrund-Lauf einer Sammel-Entscheidung (Stand per wire:poll) */
+    public ?string $sammelLauf = null;
+
     public function mount(): void
     {
         abort_unless(MasterTeam::istMaster($this->team()), 403, 'Necta-Prüffälle entscheidet das Master-Team.');
@@ -104,6 +107,13 @@ class NectaPruefaelle extends Component
         try {
             $r = app(NectaPruefallService::class)->entscheiden($this->team(), null, $this->filter(), $this->sammelAktion, Auth::id(),
                 (string) ($this->sammelVorschau['schluessel'] ?? ''));
+            if ($r['im_hintergrund'] ?? false) {
+                $this->sammelLauf = $r['lauf'];
+                $this->meldung = sprintf('%s: %d Prüffälle laufen im Hintergrund …', self::AKTION_LABEL[$this->sammelAktion], $r['gesamt']);
+                $this->reset('sammelAktion', 'sammelVorschau');
+
+                return;
+            }
             $this->meldung = sprintf('%s: %d erledigt%s%s.', self::AKTION_LABEL[$this->sammelAktion], $r['erledigt'],
                 $r['uebersprungen'] !== [] ? ', '.count($r['uebersprungen']).' übersprungen' : '',
                 $r['rezepte_nachgerechnet'] > 0 ? ', '.$r['rezepte_nachgerechnet'].' Rezepte nachgerechnet' : '');
@@ -111,6 +121,26 @@ class NectaPruefaelle extends Component
             $this->fehler = $e->getMessage();
         }
         $this->reset('sammelAktion', 'sammelVorschau');
+    }
+
+    /** wire:poll, solange ein Hintergrund-Lauf läuft: Fortschritt, am Ende die Fertig-Meldung. */
+    public function sammelStand(): void
+    {
+        if ($this->sammelLauf === null || ($s = NectaPruefallService::sammelStand($this->sammelLauf)) === null) {
+            return;
+        }
+        $label = self::AKTION_LABEL[$s['aktion']] ?? 'Sammel-Entscheidung';
+        if (! ($s['fertig'] ?? false)) {
+            $this->meldung = sprintf('%s: %d von %d entschieden …', $label, $s['erledigt'] + $s['uebersprungen'], $s['gesamt']);
+
+            return;
+        }
+        $this->sammelLauf = null;
+        $this->meldung = sprintf('%s fertig: %d erledigt%s%s.', $label, $s['erledigt'],
+            $s['uebersprungen'] > 0 ? ', '.$s['uebersprungen'].' übersprungen' : '', $s['rezepte_nachgerechnet'] > 0 ? ', '.$s['rezepte_nachgerechnet'].' Rezepte nachgerechnet' : '');
+        if (isset($s['fehler'])) {
+            $this->fehler = 'Abgebrochen: '.$s['fehler'];
+        }
     }
 
     public function sammelAbbrechen(): void
@@ -139,7 +169,8 @@ class NectaPruefaelle extends Component
             'zaehler' => $svc->zaehler($team, $this->filter()),
             'arten' => self::ARTEN,
             'aktionLabel' => self::AKTION_LABEL,
-            'sammelErlaubt' => $this->art !== '' && $this->lieferant !== null && $this->status === 'offen',
+            // Kurator 19.10.: Art genügt (z. B. „Deklaration lockerer“ über alle Lieferanten); Lieferant/Suche schränken optional ein
+            'sammelErlaubt' => $this->art !== '' && $this->status === 'offen' && $this->sammelLauf === null,
         ])->layout(FaShell::layout());
     }
 

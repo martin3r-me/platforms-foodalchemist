@@ -284,3 +284,86 @@ it('MySQL only_full_group_by (Hotfix nach #496): keine gruppierte Abfrage im Die
         expect(preg_match('/\.\s*\*/', $auswahl))->toBe(0, $s)->and($auswahl)->not->toContain('COALESCE');
     }
 });
+
+// ── Kurator 19.10.: Werte in Worten, Sammel über den aktuellen Filter (Art genügt) ─────────────────────────────────────────
+
+it('Anzeige: Deklarations-Codes und Allergenwerte in Worten — Seite und MCP (der Code bleibt daneben)', function () {
+    ($this->fall)('deklaration_aenderung', 'item_declaration', 36674788, 'glutamate', '3', '1');
+    ($this->fall)('allergen_aenderung', 'item_allergen', 36674790, 'allergen_milk', 'spuren', 'nicht_enthalten');
+    $faelle = collect($this->svc->liste($this->rootTeam, [], 1, 50)['faelle'])->keyBy('objekt');
+
+    expect($faelle['item_declaration']['fa_damals_text'])->toBe('ja (enthalten)')
+        ->and($faelle['item_declaration']['necta_text'])->toBe('nein')
+        ->and($faelle['item_declaration']['fa_jetzt_text'])->toBe('k. A.')                    // keine Deklarationszeile am Artikel
+        ->and($faelle['item_declaration']['necta'])->toBe('1')
+        ->and($faelle['item_allergen']['fa_damals_text'])->toBe('Spuren')
+        ->and($faelle['item_allergen']['necta_text'])->toBe('nicht enthalten')
+        ->and(NectaPruefallService::wertText('item_declaration', '0'))->toBe('k. A.')
+        ->and(NectaPruefallService::wertText('price', '12.50'))->toBe('12.50');
+
+    $get = app(\Platform\Core\Tools\ToolRegistry::class)->get('foodalchemist.necta_pruefaelle.GET')
+        ->execute(['art' => 'deklaration_aenderung'], new \Platform\Core\Contracts\ToolContext($this->admin, $this->rootTeam));
+    expect($get->data['faelle'][0]['fa_damals_text'])->toBe('ja (enthalten)')->and($get->data['faelle'][0]['fa_damals'])->toBe('3');
+
+    $this->actingAs($this->kurator);
+    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\NectaPruefaelle::class)
+        ->assertSee('ja (enthalten)')->assertSee('nicht enthalten');
+});
+
+it('Sammel nur nach Art über alle Lieferanten: Bestätigung nennt Anzahl und Lieferanten, andere Art bleibt unberührt, Lauf am Fall', function () {
+    $zweiter = FoodAlchemistSupplier::create(['team_id' => null, 'legacy_id' => 19492, 'name' => 'Metzgerei', 'stamm_class' => StammPaket::PAKET]);
+    FoodAlchemistSupplierItem::create(['team_id' => null, 'legacy_id' => 36674791, 'supplier_id' => $zweiter->id, 'designation' => 'Leberkäse', 'stamm_class' => StammPaket::PAKET]);
+    $d1 = ($this->fall)('deklaration_aenderung', 'item_declaration', 36674788, 'glutamate', '3', '1');
+    $d2 = ($this->fall)('deklaration_aenderung', 'item_declaration', 36674791, 'phosphate', '3', '0');
+    $andere = ($this->fall)('allergen_aenderung', 'item_allergen', 36674790, 'allergen_milk', 'enthalten', 'nicht_enthalten');
+    $this->actingAs($this->kurator);
+
+    $lw = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\NectaPruefaelle::class)
+        ->set('art', 'deklaration_aenderung')->assertSeeHtml('data-sammel-leiste')
+        ->call('sammelPruefen', 'fa_behalten')
+        ->assertSet('sammelVorschau.anzahl', 2)->assertSee('2 Prüffälle bei 2 Lieferanten')
+        ->call('sammelBestaetigen')->assertSet('fehler', null);
+
+    $zeile = fn (int $id) => DB::table('foodalchemist_necta_pruefaelle')->find($id);
+    expect($zeile($d1)->status)->toBe('verworfen')->and($zeile($d2)->status)->toBe('verworfen')
+        ->and($zeile($d1)->sammel_lauf)->not->toBeNull()->and($zeile($d1)->sammel_lauf)->toBe($zeile($d2)->sammel_lauf)
+        ->and((int) $zeile($d1)->erledigt_von)->toBe((int) $this->kurator->id)
+        ->and($zeile($andere)->status)->toBe('offen')->and($zeile($andere)->sammel_lauf)->toBeNull();
+});
+
+it('Sammel: ohne Kuratier-Recht abgewiesen; MCP-Sammel über art ohne Lieferant', function () {
+    ($this->fall)('deklaration_aenderung', 'item_declaration', 36674788, 'glutamate', '3', '1');
+    ($this->fall)('deklaration_aenderung', 'item_declaration', 36674790, 'phosphate', '3', '1');
+    $leser = $this->makeUser($this->rootTeam, 'Leser M', 'viewer');
+    $v = $this->svc->vorschau($this->rootTeam, null, ['art' => 'deklaration_aenderung'], 'fa_behalten');
+
+    expect(fn () => $this->svc->entscheiden($this->rootTeam, null, ['art' => 'deklaration_aenderung'], 'fa_behalten', $leser->id, $v['schluessel']))
+        ->toThrow(FaRechtFehltException::class);
+
+    $tool = app(\Platform\Core\Tools\ToolRegistry::class)->get('foodalchemist.necta_pruefaelle.ENTSCHEIDEN');
+    $ctx = new \Platform\Core\Contracts\ToolContext($this->kurator, $this->rootTeam);
+    $vor = $tool->execute(['aktion' => 'fa_behalten', 'filter' => ['art' => 'deklaration_aenderung']], $ctx);
+    expect($vor->data['anzahl'])->toBe(2)
+        ->and($tool->execute(['aktion' => 'fa_behalten', 'filter' => ['art' => 'deklaration_aenderung'], 'bestaetigen' => true, 'schluessel' => $vor->data['schluessel']], $ctx)->data['erledigt'])->toBe(2);
+});
+
+it('Sammel über viele Fälle läuft als Job in Teilmengen: Stand fertig, alle entschieden, Stand per MCP abfragbar', function () {
+    $n = NectaPruefallService::SAMMEL_SOFORT_MAX + 1;
+    $zeilen = [];
+    for ($i = 0; $i < $n; $i++) {
+        $zeilen[] = ['uuid' => (string) UuidV7::generate(), 'art' => 'deklaration_aenderung', 'objekt' => 'item_declaration', 'legacy_id' => 36674788,
+            'feld' => 'stoff_'.$i, 'fa_wert' => '3', 'necta_wert' => '1', 'status' => 'offen', 'created_at' => now(), 'updated_at' => now()];
+    }
+    DB::table('foodalchemist_necta_pruefaelle')->insert($zeilen);
+    $v = $this->svc->vorschau($this->rootTeam, null, ['art' => 'deklaration_aenderung'], 'fa_behalten');
+
+    $r = $this->svc->entscheiden($this->rootTeam, null, ['art' => 'deklaration_aenderung'], 'fa_behalten', $this->kurator->id, $v['schluessel']);
+
+    expect($r['im_hintergrund'])->toBeTrue()->and($r['gesamt'])->toBe($n)                     // Sync-Queue: der Job lief schon inline
+        ->and(NectaPruefallService::sammelStand($r['lauf']))->toMatchArray(['gesamt' => $n, 'erledigt' => $n, 'fertig' => true])
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('status', 'offen')->count())->toBe(0);
+
+    $stand = app(\Platform\Core\Tools\ToolRegistry::class)->get('foodalchemist.necta_pruefaelle.ENTSCHEIDEN')
+        ->execute(['lauf' => $r['lauf']], new \Platform\Core\Contracts\ToolContext($this->kurator, $this->rootTeam));
+    expect($stand->data['erledigt'])->toBe($n)->and($stand->data['fertig'])->toBeTrue();
+});

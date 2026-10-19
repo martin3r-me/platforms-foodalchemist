@@ -28,7 +28,9 @@ class NectaPruefaelleEntscheidenTool extends FoodAlchemistTool implements ToolCo
             .'inzwischen anders ist), fa_behalten (derselbe Necta-Wert wird nicht wieder gemeldet), eingestellt_bestaetigen / aktiv_lassen '
             .'(eingestellt_widerspruch). Auswahl: ids[] ODER filter{art, lieferant, feld, suche, normalpreis_tage}. Ablauf: zuerst bestaetigen=false '
             .'→ Vorschau mit anzahl, allergene (betroffene Allergen-Lockerungen) und schluessel; dann bestaetigen=true mit genau diesem schluessel. '
-            .'Allergen-Lockerungen sind sicherheitsrelevant: Vorschau dem Menschen zeigen. Nur Master-Team.';
+            .'Allergen-Lockerungen sind sicherheitsrelevant: Vorschau dem Menschen zeigen. Sammel über den Filter: art genügt (alle Lieferanten), '
+            .'lieferant/suche schränken ein; die Vorschau nennt je_lieferant. Ab '.NectaPruefallService::SAMMEL_SOFORT_MAX.' Fällen läuft die '
+            .'Entscheidung im Hintergrund (Antwort im_hintergrund=true + lauf); Stand mit lauf=<id> abfragen. Nur Master-Team.';
     }
 
     public function getSchema(): array
@@ -44,8 +46,9 @@ class NectaPruefaelleEntscheidenTool extends FoodAlchemistTool implements ToolCo
                 ]],
                 'bestaetigen' => ['type' => 'boolean', 'description' => 'false = nur Vorschau (Standard), true = ausführen'],
                 'schluessel' => ['type' => 'string', 'description' => 'aus der Vorschau'],
+                'lauf' => ['type' => 'string', 'description' => 'nur Stand eines Hintergrund-Laufs abfragen (gesamt, erledigt, uebersprungen, fertig)'],
             ],
-            'required' => ['aktion'],
+            'required' => [],
         ];
     }
 
@@ -54,6 +57,14 @@ class NectaPruefaelleEntscheidenTool extends FoodAlchemistTool implements ToolCo
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if (isset($arguments['lauf']) && is_string($arguments['lauf']) && $arguments['lauf'] !== '') {
+            if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+                return ToolResult::error('Necta-Prüffälle entscheidet das Master-Team.', 'ACCESS_DENIED');
+            }
+            $stand = NectaPruefallService::sammelStand($arguments['lauf']);
+
+            return $stand === null ? ToolResult::error('Lauf unbekannt oder abgelaufen.', 'NOT_FOUND') : ToolResult::success(['lauf' => $arguments['lauf']] + $stand);
         }
         $ids = isset($arguments['ids']) && is_array($arguments['ids']) && $arguments['ids'] !== [] ? array_map('intval', $arguments['ids']) : null;
         $filter = is_array($arguments['filter'] ?? null) ? array_intersect_key($arguments['filter'], array_flip(['art', 'lieferant', 'feld', 'suche', 'normalpreis_tage'])) : [];
