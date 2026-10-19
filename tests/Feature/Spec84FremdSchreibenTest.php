@@ -202,3 +202,22 @@ it('Auswertung: foodalchemist:fremd-schreiben gruppiert die Tages-Dateien', func
         @unlink($tagesDatei);
     }
 });
+
+it("Ausnahme 'unterteam-verwaltung': Oberteam setzt die Preis-Toleranz des Unter-Teams — ausdrücklich, keine Zeile; die Zeile des Unter-Teams wird gefunden", function () {
+    config(['foodalchemist.fremd_schreiben.modus' => 'aus']);
+    $ober = $this->rootTeam;
+    $admin = $this->makeUser($ober, 'Ober-Admin', 'owner');
+    $this->actingAs($admin);
+    $vorhanden = \Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting::create(['team_id' => $this->childA->id, 'ai_active' => false]);
+    config(['foodalchemist.fremd_schreiben.modus' => 'log']);
+
+    foreach ([0, 4] as $stufe) {
+        config(['foodalchemist.team_sicht.stufe' => $stufe]);
+        FaTeam::imTeam($ober, fn () => app(\Platform\FoodAlchemist\Services\TripleMatchService::class)->setzeToleranz($this->childA, 3.0 + $stufe, 0.5, $admin->id));
+
+        $zeilen = DB::table('foodalchemist_team_settings')->where('team_id', $this->childA->id)->get();
+        expect($zeilen)->toHaveCount(1)->and((int) $zeilen[0]->id)->toBe((int) $vorhanden->id)
+            ->and((float) $zeilen[0]->tm_toleranz_preis_pct)->toBe(3.0 + $stufe)
+            ->and(array_filter(($this->zeilen)(), fn ($k) => $k['modell'] === 'FoodAlchemistTeamSetting'))->toBe([]);
+    }
+});

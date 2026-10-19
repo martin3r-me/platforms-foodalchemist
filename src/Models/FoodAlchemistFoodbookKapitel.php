@@ -89,19 +89,19 @@ class FoodAlchemistFoodbookKapitel extends Model
     /** Optionaler Outlet-Tag (Spec 19, E3.6) — lose BelongsTo, keine harte FK. */
     public function outlet(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id')->ohneTeamSicht('verweis');
     }
 
     /** Kapitel-Servierform-Override (Spec 19, M3) — Scharnier DarreichungResolver::fuerBlock (E7.1). */
     public function servingForm(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id')->ohneTeamSicht('verweis');
     }
 
     /** Kapitel-Einsatzmoment-Override (Spec 19, M3) — sonst Foodbook-Default in der Kaskade. */
     public function serviceMoment(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id');
+        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id')->ohneTeamSicht('verweis');
     }
 
     /**

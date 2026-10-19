@@ -37,7 +37,7 @@ class FoodAlchemistRecipeRegeneration extends Model
     /** Regenerations-Gerät (Kombidämpfer, Bain Marie …) — für Editor UND Druck. */
     public function device(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabRegenerationDevice::class, 'device_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabRegenerationDevice::class, 'device_vocab_id')->ohneTeamSicht('verweis');
     }
 
     /** Deutscher Alias (Modul-Konvention). */

@@ -149,7 +149,8 @@ class BriefTemplateService
     /** Spec 84 L1: sichtbar = eigene Team-Kette, ohne team_id NULL (kein applyVisible — das zeigte die Globals). */
     private function sichtbar(\Illuminate\Database\Eloquent\Builder $q, Team $team): \Illuminate\Database\Eloquent\Builder
     {
-        return $q->whereIn('team_id', TeamScope::ancestryIds($team));
+        // Spec 84 B3 Stufe 4: ab Schalter 4 nur bis zur Kundengrenze (nie die Vorlagen des Masters beim Mandanten)
+        return $q->whereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::kette(FoodAlchemistBriefTemplate::class, TeamScope::ancestryIds($team)));
     }
 
     /** Editier-Guard: die Vorlage per id nur, wenn sie dem Team gehört. Sonst wirft es (nicht vorhanden / fremd / geerbt). */

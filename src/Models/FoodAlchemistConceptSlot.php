@@ -73,7 +73,7 @@ class FoodAlchemistConceptSlot extends Model
 
     public function unit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id')->ohneTeamSicht('verweis');
     }
 
     /** Optional: explizit gewählte Darreichung des Gerichts (Umbau-Spec Phase 3). */

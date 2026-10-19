@@ -320,7 +320,7 @@ trait SeedsTeamHierarchy
      */
     protected function makeMainGroup(Team $owner, string $code = 'FIX', bool $inactive = false): \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup
     {
-        return \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::firstOrCreate(
+        return \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::ohneTeamSicht('test')->firstOrCreate(
             ['team_id' => $owner->id, 'code' => $code],
             ['label' => 'Hauptgruppe ' . $code, 'is_inactive' => $inactive]
         );
@@ -332,12 +332,12 @@ trait SeedsTeamHierarchy
      */
     protected function makeRecipeCategory(Team $owner, string $code = 'FIX-KAT'): \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory
     {
-        $hg = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::firstOrCreate(
+        $hg = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::ohneTeamSicht('test')->firstOrCreate(
             ['team_id' => $owner->id, 'code' => 'FIX-PHG'],
             ['label' => 'Produktions-Hauptgruppe']
         );
 
-        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::firstOrCreate(
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::ohneTeamSicht('test')->firstOrCreate(
             ['team_id' => $owner->id, 'code' => $code],
             ['label' => 'Kategorie ' . $code, 'main_group_id' => $hg->id]
         );
@@ -346,7 +346,7 @@ trait SeedsTeamHierarchy
     /** Einheit „g" (idempotent je Team) — Zutaten brauchen eine Mengen-Einheit. */
     protected function unitG(Team $owner): \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit
     {
-        return \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(
+        return \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::ohneTeamSicht('test')->firstOrCreate(
             ['team_id' => $owner->id, 'slug' => 'g'],
             ['display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]
         );

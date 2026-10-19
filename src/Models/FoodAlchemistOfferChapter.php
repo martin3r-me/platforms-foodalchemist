@@ -91,13 +91,13 @@ class FoodAlchemistOfferChapter extends Model
     /** Kapitel-Servierform-Override (Scharnier DarreichungResolver::fuerBlock). */
     public function servingForm(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id')->ohneTeamSicht('verweis');
     }
 
     /** Kapitel-Einsatzmoment-Override (Foodbook-Parität) — sonst Default in der Kaskade. */
     public function serviceMoment(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id');
+        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id')->ohneTeamSicht('verweis');
     }
 
     /** Schreibstil-Override PRO KAPITEL (Foodbook-Parität). NULL = erbt Standard aus den Concepten. */

@@ -47,7 +47,7 @@ class FoodAlchemistRecipeDarreichung extends Model
 
     public function servingForm()
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → servingForm() */
@@ -58,7 +58,7 @@ class FoodAlchemistRecipeDarreichung extends Model
 
     public function markupClass()
     {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → markupClass() */
@@ -75,7 +75,7 @@ class FoodAlchemistRecipeDarreichung extends Model
 
     public function unit()
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id')->ohneTeamSicht('verweis');
     }
 
     public function deltas()

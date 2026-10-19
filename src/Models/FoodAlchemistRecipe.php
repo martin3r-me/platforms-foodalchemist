@@ -152,7 +152,7 @@ class FoodAlchemistRecipe extends Model
     /** Stufe 3 — Default-Posten des Rezepts (weiche Referenz, team-scoped, kein DB-FK). */
     public function defaultStation(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistProductionStation::class, 'default_station_id');
+        return $this->belongsTo(FoodAlchemistProductionStation::class, 'default_station_id')->ohneTeamSicht('verweis');
     }
 
     /**
@@ -263,7 +263,7 @@ class FoodAlchemistRecipe extends Model
 
     public function category(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'category_id');
+        return $this->belongsTo(FoodAlchemistRecipeCategory::class, 'category_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → category() */
@@ -275,7 +275,7 @@ class FoodAlchemistRecipe extends Model
     public function equipment(): BelongsToMany
     {
         return $this->belongsToMany(FoodAlchemistVocabKochequipment::class, 'foodalchemist_recipe_equipment', 'recipe_id', 'equipment_id')
-            ->withPivot('note', 'source', 'ai_confidence', 'ai_reasoning');
+            ->withPivot('note', 'source', 'ai_confidence', 'ai_reasoning')->ohneTeamSicht('verweis');
     }
 
     /** Eltern-Rezepte = Rezepte, die DIESES als Sub-Rezept referenzieren (↑-Navigation). */
@@ -310,7 +310,7 @@ class FoodAlchemistRecipe extends Model
 
     public function dishClass(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistDishClass::class, 'dish_class_id');
+        return $this->belongsTo(FoodAlchemistDishClass::class, 'dish_class_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → dishClass() */
@@ -325,7 +325,7 @@ class FoodAlchemistRecipe extends Model
      */
     public function dishMainGroup(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id');
+        return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → dishMainGroup() */
@@ -336,7 +336,7 @@ class FoodAlchemistRecipe extends Model
 
     public function markupClass(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id');
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → markupClass() */
@@ -347,7 +347,7 @@ class FoodAlchemistRecipe extends Model
 
     public function salesUnit(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'sales_unit_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'sales_unit_vocab_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → salesUnit() */

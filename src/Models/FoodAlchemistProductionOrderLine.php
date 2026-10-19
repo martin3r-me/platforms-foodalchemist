@@ -75,7 +75,7 @@ class FoodAlchemistProductionOrderLine extends Model
     /** Posten (Spec 30 E3) — NULL = unverplant. */
     public function station(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistProductionStation::class, 'station_id');
+        return $this->belongsTo(FoodAlchemistProductionStation::class, 'station_id')->ohneTeamSicht('verweis');
     }
 
     /** Freie Position (Spec 30) — kein Rezept dahinter, vom Recompute unberührt. */

@@ -345,7 +345,8 @@ class PaketGrundeinstellungenService
         if (! Schema::hasColumn('foodalchemist_team_settings', 'default_markup_class_id')) {
             return 'übersprungen';
         }
-        $settings = FoodAlchemistTeamSetting::firstOrNew(['team_id' => $mandant->id]);
+        // Spec 84 Stufe 4: der Master bucht für den Mandanten — Zeile in dessen Sicht suchen (sonst zweite Einstellungszeile)
+        $settings = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => FoodAlchemistTeamSetting::firstOrNew(['team_id' => $mandant->id]));
         if (! empty($settings->default_markup_class_id)) {
             return 'bereits gesetzt';
         }
@@ -455,12 +456,13 @@ class PaketGrundeinstellungenService
         if (! Schema::hasTable('foodalchemist_production_stations') || ! Schema::hasColumn('foodalchemist_team_settings', 'gerichte_station_id')) {
             return ['posten' => 'übersprungen', 'vorgabe' => 'übersprungen'];
         }
-        $station = FoodAlchemistProductionStation::where('team_id', $mandant->id)->where('slug', 'pass')->first();
+        // Spec 84 Stufe 4: in der Sicht des Mandanten suchen — aus dem Master-Kontext fände der Scope seinen Pass nicht
+        $station = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => FoodAlchemistProductionStation::where('team_id', $mandant->id)->where('slug', 'pass')->first());
         $neu = $station === null;
         if ($neu) {
             $station = FoodAlchemistProductionStation::create(['team_id' => $mandant->id, 'slug' => 'pass', 'name' => 'Pass', 'group_name' => 'Ausgabe', 'sort_order' => 900, 'ist_sammelposten' => true]);
         }
-        $settings = FoodAlchemistTeamSetting::firstOrNew(['team_id' => $mandant->id]);
+        $settings = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::lesenIm($mandant, fn () => FoodAlchemistTeamSetting::firstOrNew(['team_id' => $mandant->id]));
         $gesetzt = empty($settings->gerichte_station_id);
         if ($gesetzt) {
             $settings->gerichte_station_id = $station->id;

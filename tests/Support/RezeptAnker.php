@@ -31,7 +31,7 @@ final class RezeptAnker
             'uuid' => (string) UuidV7::generate(), 'team_id' => $rezept->team_id, 'gp_id' => $gp->id,
             'anchor_id' => $ankerId, 'role' => 'kern', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now(),
         ]);
-        $g = FoodAlchemistVocabEinheit::firstOrCreate(
+        $g = FoodAlchemistVocabEinheit::ohneTeamSicht('test')->firstOrCreate(
             ['team_id' => $rezept->team_id, 'slug' => 'g'],
             ['display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1],
         );

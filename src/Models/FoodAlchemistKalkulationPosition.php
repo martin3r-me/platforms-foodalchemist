@@ -32,7 +32,7 @@ class FoodAlchemistKalkulationPosition extends Model
 
     public function calculation(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistKalkulation::class, 'calculation_id');
+        return $this->belongsTo(FoodAlchemistKalkulation::class, 'calculation_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → calculation() */

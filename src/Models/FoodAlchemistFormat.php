@@ -42,12 +42,12 @@ class FoodAlchemistFormat extends Model
     // Format-Umbau F1: Concept-Dimensionen (Facetten) am Format — spiegelt FoodAlchemistConcept.
     public function servingForm(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id')->ohneTeamSicht('verweis');
     }
 
     public function eventType(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id');
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id')->ohneTeamSicht('verweis');
     }
 
     public function serviceMoments(): BelongsToMany

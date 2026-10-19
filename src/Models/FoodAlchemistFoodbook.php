@@ -99,13 +99,13 @@ class FoodAlchemistFoodbook extends Model
     /** Default-Eventtyp (Spec 19, M2) — frame-weiter Fallback, Kapitel erben. */
     public function defaultEventType(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistEventtyp::class, 'default_event_type_id');
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'default_event_type_id')->ohneTeamSicht('verweis');
     }
 
     /** Default-Servierform (Spec 19, M2) — Scharnier zur Darreichungs-Auflösung (DarreichungResolver::fuerBlock). */
     public function defaultServingForm(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistServierform::class, 'default_serving_form_id');
+        return $this->belongsTo(FoodAlchemistServierform::class, 'default_serving_form_id')->ohneTeamSicht('verweis');
     }
 
     /** Einsatzmomente / Tagesablauf des Foodbooks (Spec 19, M2) — 1–n. */

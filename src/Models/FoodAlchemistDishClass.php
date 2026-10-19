@@ -22,7 +22,7 @@ class FoodAlchemistDishClass extends Model
 
     public function mainGroup()
     {
-        return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id');
+        return $this->belongsTo(FoodAlchemistDishMainGroup::class, 'dish_main_group_id')->ohneTeamSicht('verweis');
     }
 
     /** @deprecated #486 deutscher Alias → mainGroup() */
@@ -33,7 +33,7 @@ class FoodAlchemistDishClass extends Model
 
     public function defaultMarkupClass()
     {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'default_markup_class_id');
+        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'default_markup_class_id')->ohneTeamSicht('verweis');
     }
 
     /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */

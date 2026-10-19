@@ -36,6 +36,6 @@ class FoodAlchemistOutletSetting extends Model
 
     public function outlet(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id')->ohneTeamSicht('verweis');
     }
 }

@@ -47,7 +47,76 @@ final class TeamSicht implements Scope
             \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::class,
             \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::class,
         ],
+        // Spec 84 B3 Stufe 4: Einstellungen und Vokabular (Wurzel-Modelle; Kind-Tabellen nie)
+        4 => [
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabRegenerationDevice::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistVocabRolle::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistServierform::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSaison::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistRule::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistCanvasTemplate::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistLabelTemplate::class,
+            // Inhalte ohne Freigabe-Hülle (Kurator 18.10.): Kalkulation (Preise/Margen) und Bestellvorlage — eigenes Team + Kette bis zur
+            // Kundengrenze, Master-Zeilen nie beim Mandanten. Fachlich Stufe 2; hier geführt, damit sie erst mit Stufe 4 scharf werden
+            // (io steht dann schon auf Stufe 3 — ein Eintrag in STUFEN[2] wäre mit dem Merge sofort live). Kind-Tabellen (Position/Zeile) nie.
+            \Platform\FoodAlchemist\Models\FoodAlchemistKalkulation::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistOrderTemplate::class,
+        ],
     ];
+
+    /**
+     * Kappung Stufe 4 (Kurator 18.10., Vorbedingung Einschalten): für Vokabular/Einstellungen endet die Kette an der Kundengrenze
+     * (kundenHauptTeam, wie DnaResolver::teamIds) — ein Mandant unter dem Master sieht nie dessen Einstellungen, Aufschlagsklassen,
+     * Vorlagen. Greift erst mit Schalter >= 4 und nur für STUFEN[4]; sonst unverändert die volle Kette.
+     *
+     * @param  list<int>  $kette  eigenes Team zuerst … Wurzel
+     * @return list<int>
+     */
+    public static function kette(string $modelKlasse, array $kette): array
+    {
+        return self::stufe() >= 4 && in_array($modelKlasse, self::STUFEN[4], true) ? self::gekappt($kette) : $kette;
+    }
+
+    /** Wie {@see kette()}, für rohe Abfragen über den Tabellennamen (TeamScope::applyVisible, Services mit eigener Ketten-Abfrage). */
+    public static function ketteFuerTabelle(string $tabelle, array $kette): array
+    {
+        if (self::stufe() < 4) {
+            return $kette;
+        }
+        self::$stufe4Tabellen ??= array_map(fn (string $m) => (new $m)->getTable(), self::STUFEN[4]);
+
+        return in_array($tabelle, self::$stufe4Tabellen, true) ? self::gekappt($kette) : $kette;
+    }
+
+    /** @param list<int> $kette @return list<int> Kette bis einschließlich Kunden-Hauptteam; der Master selbst behält seine Kette */
+    public static function gekappt(array $kette): array
+    {
+        $grenze = \Platform\FoodAlchemist\Support\AboSicht::kundenHauptTeamId($kette);
+        $pos = $grenze === null ? false : array_search($grenze, $kette, true);
+
+        return $pos === false ? $kette : array_slice($kette, 0, $pos + 1);
+    }
+
+    /** @var list<string>|null */
+    private static ?array $stufe4Tabellen = null;
 
     /** Aktueller FA-Eingang (`seite`, `mcp`) mit angemeldetem Nutzer — nur dort ist fehlender Kontext ein Fehler. */
     private static ?string $eingang = null;

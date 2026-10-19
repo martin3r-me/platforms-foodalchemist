@@ -141,3 +141,18 @@ it('F5: Aufschlagsklasse ohne Aufschlag (Paket-Kopie) liefert keinen Preis statt
     expect($marge->vkVorschlag(5.20, 250.0, (object) ['code' => 'A', 'raw_markup_pct' => null, 'formula_type' => 'aufschlag']))->toBeNull()
         ->and($marge->vkVorschlag(5.20, 250.0, (object) ['code' => 'A', 'raw_markup_pct' => 0, 'formula_type' => 'aufschlag'])['sales_net'])->toBe(1.3);
 });
+
+it('Spec 84 Stufe 4: Buchen aus dem Master-Kontext findet die vorhandene Einstellungszeile und den Pass des Mandanten — keine zweite Zeile', function () {
+    config(['foodalchemist.team_sicht.stufe' => 4]);
+    $passId = ($this->ins)('production_stations', ['slug' => 'pass', 'name' => 'Pass', 'group_name' => 'Ausgabe', 'sort_order' => 900], $this->mandant->id);
+    ($this->ins)('team_settings', ['ai_active' => false], $this->mandant->id);
+
+    \Platform\FoodAlchemist\Support\FaTeam::imTeam($this->master, fn () => $this->svc->buchen($this->mandant, $this->admin));
+
+    $zeilen = DB::table('foodalchemist_team_settings')->where('team_id', $this->mandant->id)->get();
+    expect($zeilen)->toHaveCount(1)
+        ->and((bool) $zeilen[0]->ai_active)->toBeFalse()                              // vorhandene Zeile ergänzt, nicht neu angelegt
+        ->and((int) $zeilen[0]->gerichte_station_id)->toBe((int) $passId)              // der vorhandene Pass, kein zweiter
+        ->and((int) $zeilen[0]->default_markup_class_id)->toBe((int) ($this->kopie)('markup_classes', $this->klasseA))
+        ->and(DB::table('foodalchemist_production_stations')->where('team_id', $this->mandant->id)->where('slug', 'pass')->count())->toBe(1);
+});

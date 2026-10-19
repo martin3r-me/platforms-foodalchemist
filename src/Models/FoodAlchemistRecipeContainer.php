@@ -54,7 +54,7 @@ class FoodAlchemistRecipeContainer extends Model
 
     public function container(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistVocabContainer::class, 'container_vocab_id');
+        return $this->belongsTo(FoodAlchemistVocabContainer::class, 'container_vocab_id')->ohneTeamSicht('verweis');
     }
 
     /** Deutscher Alias (Modul-Konvention). */

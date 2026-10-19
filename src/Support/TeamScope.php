@@ -57,6 +57,9 @@ final class TeamScope
             });
         }
 
+        // Spec 84 B3 Stufe 4: Vokabular/Einstellungen nur bis zur Kundengrenze (erst ab Schalter 4)
+        $ids = \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle($basisTabelle, $ids);
+
         return $query->where(function ($q) use ($teamIdColumn, $ids) {
             $q->whereNull($teamIdColumn);
             if ($ids !== []) {
