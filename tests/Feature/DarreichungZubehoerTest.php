@@ -218,7 +218,11 @@ it('Preis-Anstoß: ändert sich der Lead-Preis des Zubehör-GP (Preiszeile, Lead
     $la2 = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => 'Schraubglas günstig', 'qty' => 12, 'unit_code' => 'Stk']);
     FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'gp_id' => $this->glas->id]);
     FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'price' => 3.00, 'status' => '0']);
+    // Spec 85 Controlling PR-A: den Lead eines globalen GP setzt angemeldet nur der Besitzer — hier geht es um den Recompute danach,
+    // darum der Systemweg ohne Anmeldung (wie Neuwahl-Job/Kommando)
+    \Illuminate\Support\Facades\Auth::logout();
     app(\Platform\FoodAlchemist\Services\LeadLaService::class)->setLeadLa($this->rootTeam, $this->glas->fresh(), $la2->id);
+    $this->actingAs($this->user);
     expect(($this->ek)())->toBe(2.25)->and((float) $andereDar->fresh()->ek_portion)->toBe(99.0);
 
     // Gegenprobe: ein Lebensmittel-GP ohne Zubehör-Zeile löst keinen Darreichungs-Recompute aus
