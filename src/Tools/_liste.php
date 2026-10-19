@@ -220,7 +220,6 @@ return [
     \Platform\FoodAlchemist\Tools\InventoryMovementsPostTool::class,
     \Platform\FoodAlchemist\Tools\InventoryMovementsStornoTool::class,
     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
-    \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,

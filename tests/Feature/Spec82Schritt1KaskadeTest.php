@@ -145,23 +145,25 @@ it('Foodbook mit CRM-Firma: das Kapitel-Wording (concept.wording) übergibt die 
         ->and($optionen['food_dna_crm_company_id'] ?? null)->toBe(4711);
 });
 
-it('Foodbook mit CRM-Firma: die Kapitel-Ideen (foodbook.kapitel_ideen) übergeben die Firma an die Kaskade', function () {
+it('Foodbook mit CRM-Firma: der Foodbook-Kundentext (foodbook.kundentext) übergibt die Firma an die Kaskade', function () {
+    // Bis Spec 85 lief dieser Fall über die Kapitel-Ideen (IdeenService::kiDivergenz, gelöscht mit der alten
+    // Kapitel-Anlage); geprüft wird jetzt ein lebender Foodbook-Weg mit derselben DNA-Ebene „Kunde“.
     $fb = $this->makeFoodbook($this->rootTeam, 'Adler-Gala', ['crm_company_id' => 4711]);
-    $kapitel = $this->makeChapter($fb);
     $optionen = null;
     $this->mock(AiGatewayService::class, function ($mock) use (&$optionen) {
         $mock->shouldReceive('propose')->andReturnUsing(function (string $key, array $kontext, array $options = []) use (&$optionen) {
-            if ($key === 'foodbook.kapitel_ideen') {
+            if ($key === 'foodbook.kundentext') {
                 $optionen = $options;
             }
 
-            return new AiProposal(werte: ['ideen' => []], confidence: 0.5);
+            return new AiProposal(werte: ['text' => 'Kundentext.'], confidence: 0.5);
         });
     });
 
-    app(\Platform\FoodAlchemist\Services\IdeenService::class)->kiDivergenz($this->rootTeam, $kapitel->id, 3);
+    app(FoodbookService::class)->kiKundentextVorschlag($this->rootTeam, $fb->id);
 
     expect($optionen)->not->toBeNull()
+        ->and($optionen['food_dna_foodbook_id'] ?? null)->toBe((int) $fb->id)
         ->and($optionen['food_dna_crm_company_id'] ?? null)->toBe(4711);
 });
 

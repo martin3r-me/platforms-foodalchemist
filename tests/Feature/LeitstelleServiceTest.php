@@ -170,13 +170,13 @@ it('kapitelMatrix liefert je Kapitel Ziele-/Inhalts-/Preis-Status + WE-Ampel', f
         ->and($l['wareneinsatz']['status'])->toBe('unbekannt');   // kein VK → unbekannt
 });
 
-// E8.1: preiseBaum speist den Preise-Tab (Kapitel-Baum mit EK/VK/WE-% + Duality-Positionen + VK-Refs).
-it('preiseBaum liefert je Kapitel Aggregat, WE-Ampel und Positionen mit VK-Referenz', function () {
+// E8.1: die Preis-Sicht je Kapitel (seit 27.08. kapitelBoard; preiseBaum gelöscht, Spec 85) speist den Preise-Tab (Kapitel-Baum mit EK/VK/WE-% + Duality-Positionen + VK-Refs).
+it('kapitelBoard liefert je Kapitel Aggregat, WE-Ampel und Positionen mit VK-Referenz', function () {
     // Einzelgericht (recipe_ref, €/Pos) + WE-Ziel am Kapitel für die Ampel.
     $k = $this->fbSvc->addKapitel($this->rootTeam, $this->fb->id, ['title' => 'Menü', 'target_food_cost_pct' => 30]);
     $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
 
-    $baum = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
+    $baum = collect($this->svc->kapitelBoard($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
 
     $m = $baum['Menü'];
     expect($m['kapitel_id'])->toBe($k->id)
@@ -196,8 +196,8 @@ it('preiseBaum liefert je Kapitel Aggregat, WE-Ampel und Positionen mit VK-Refer
 });
 
 // E8.2: R2.5-Snapshot-Badge — Einzelgericht, dessen freigegebener VK-Snapshot über die
-// Leitplanke vom Live-VK abweicht, trägt in preiseBaum ein r2_5-Objekt.
-it('preiseBaum hängt R2.5-Snapshot-Badge an ein Einzelgericht mit abweichendem Snapshot', function () {
+// Leitplanke vom Live-VK abweicht, trägt im kapitelBoard ein r2_5-Objekt.
+it('kapitelBoard hängt R2.5-Snapshot-Badge an ein Einzelgericht mit abweichendem Snapshot', function () {
     $sf = FoodAlchemistServierform::firstOrCreate(['code' => 'unbestimmt', 'team_id' => $this->rootTeam->id], ['label' => 'Unbestimmt']);
     $darr = FoodAlchemistRecipeDarreichung::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $this->dish->id, 'serving_form_id' => $sf->id,
@@ -217,7 +217,7 @@ it('preiseBaum hängt R2.5-Snapshot-Badge an ein Einzelgericht mit abweichendem 
     $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $this->dish->id]);
     $this->fbSvc->addBlock($this->rootTeam, $k->id, ['type' => 'recipe_ref', 'sales_recipe_id' => $ohne->id]);
 
-    $positionen = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))
+    $positionen = collect($this->svc->kapitelBoard($this->rootTeam, $this->fb->refresh()))
         ->firstWhere('titel', 'Menü')['positionen'];
 
     $mit = collect($positionen)->firstWhere('ref_id', $this->dish->id);
@@ -231,14 +231,14 @@ it('preiseBaum hängt R2.5-Snapshot-Badge an ein Einzelgericht mit abweichendem 
         ->and($ohneP['r2_5'])->toBeNull();
 });
 
-it('preiseBaum trennt Paket-Position (concept_ref, €/Gast, ref_typ concept)', function () {
+it('kapitelBoard trennt Paket-Position (concept_ref, €/Gast, ref_typ concept)', function () {
     $frame = $this->frames->frameFor($this->rootTeam, 'foodbook', $this->fb->id);
     $this->frames->addSlot($this->rootTeam, $frame, ['label' => 'Paket-Kapitel', 'slot_type' => 'gang', 'target_count' => 1]);
     $this->fbSvc->strukturAusGeruest($this->rootTeam, $this->fb->id);
     $slot = $frame->refresh()->slots->firstWhere('label', 'Paket-Kapitel');
     $this->fbSvc->uebernehmeVorschlag($this->rootTeam, $this->fb->id, $slot->id, $this->dish->id);
 
-    $baum = collect($this->svc->preiseBaum($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
+    $baum = collect($this->svc->kapitelBoard($this->rootTeam, $this->fb->refresh()))->keyBy('titel');
     $paket = collect($baum['Paket-Kapitel']['positionen'])->firstWhere('art', 'paket');
 
     expect($paket)->not->toBeNull()

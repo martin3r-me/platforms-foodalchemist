@@ -5,7 +5,6 @@ use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Jobs\BulkEnrichGpJob;
 use Platform\FoodAlchemist\Jobs\BulkEnrichJob;
 use Platform\FoodAlchemist\Jobs\ImportArticlesJob;
-use Platform\FoodAlchemist\Jobs\MaterializeIdeaJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Services\IngestStatusService;
@@ -137,18 +136,3 @@ it('meldet verwaist und Fehlergrund über ingest.STATUS mit', function () {
         ->and($laeufe[$gescheitert->id]['fehler_grund'])->toBe('Spalte fehlt');
 });
 
-it('markiert eine queued Skizze als fehlgeschlagen, wenn ihr Job stirbt', function () {
-    // Derselbe Fehler eine Ebene tiefer: der Job führt keine Lauf-Zeile, aber `queued`
-    // heißt in der Oberfläche „wartet auf KI" — und niemand wartet mehr.
-    $kapitel = $this->makeChapter($this->makeFoodbook($this->rootTeam, 'H3b'));
-    $offen = $this->makeDishIdea($kapitel);
-    $durch = $this->makeDishIdea($kapitel, ['generation_status' => 'erstellt']);
-
-    (new MaterializeIdeaJob($this->rootTeam->id, $this->user->id, $offen->id))->failed(new RuntimeException('Timeout KI'));
-    (new MaterializeIdeaJob($this->rootTeam->id, $this->user->id, $durch->id))->failed(new RuntimeException('Timeout KI'));
-
-    expect(FoodAlchemistDishIdea::findOrFail($offen->id)->generation_status)->toBe('fehlgeschlagen')
-        ->and(FoodAlchemistDishIdea::findOrFail($offen->id)->source_meta['generation_fehler'])->toContain('Job abgebrochen')
-        // Was schon durch war, wird nicht nachträglich für gescheitert erklärt.
-        ->and(FoodAlchemistDishIdea::findOrFail($durch->id)->generation_status)->toBe('erstellt');
-});
