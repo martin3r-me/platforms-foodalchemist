@@ -24,7 +24,6 @@
 namespace Platform\FoodAlchemist;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\Core\PlatformCore;
@@ -576,7 +575,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if (
             config()->has('foodalchemist.routing') &&
             config()->has('foodalchemist.navigation') &&
-            Schema::hasTable('modules')
+            PlatformCore::modulesTableExists()
         ) {
             /**
              * Modul bei PlatformCore registrieren
