@@ -132,4 +132,56 @@ class EinkaufOptimizerService
             'n_skipped' => $skipped,
         ];
     }
+
+    /**
+     * Spec 85 PR-E: der Optimizer in der Team-Brille. Ein Team → wie {@see optimieren} (Zeilen mit team_id); mehrere (Brille „alle“) → je Standort
+     * der EIGENE Lauf (eigenes Journal, eigene Artikel und Preise — nie eine gemeinsame Preis-Sicht), danach summiert. Die Zeilen tragen team_id und
+     * Standort, `je_standort` das Potenzial je Standort.
+     *
+     * @param  list<int>  $excludeSupplierIds
+     * @return array<string,mixed>
+     */
+    public function optimierenBrille(Team $viewer, array $excludeSupplierIds = [], ?string $von = null, ?string $bis = null): array
+    {
+        $standorte = app(StandortService::class);
+        $ids = $standorte->leseTeamIds($viewer);
+        $teams = Team::whereIn('id', $ids)->get()->keyBy('id');
+
+        $teile = [];
+        foreach ($ids as $id) {
+            $t = $teams->get($id);
+            if ($t === null) {
+                continue;
+            }
+            // als der Standort: seine Artikel, Grundprodukte und Preise (Sichtfilter und Brille aus Sicht des Standorts)
+            $r = \Platform\FoodAlchemist\Support\FaTeam::imTeam($t, fn () => $standorte->alsEigen($t, fn () => $this->optimieren($t, $excludeSupplierIds, $von, $bis)));
+            $r['top'] = array_map(fn (array $z) => $z + ['team_id' => (int) $t->id, 'standort' => (string) $t->name], $r['top']);
+            $teile[] = ['team' => $t, 'r' => $r];
+        }
+        if (count($teile) === 1) {
+            return $teile[0]['r'] + ['je_standort' => []];
+        }
+
+        $summe = fn (string $k) => round(array_sum(array_map(fn ($t) => (float) $t['r'][$k], $teile)), 2);
+        $ist = $summe('ist_total');
+        $top = array_merge(...array_map(fn ($t) => $t['r']['top'], $teile ?: [['r' => ['top' => []]]]));
+        usort($top, fn ($a, $b) => $b['saving_rebate'] <=> $a['saving_rebate']);
+
+        return [
+            'ist_total' => $ist,
+            'optimal_list_total' => $summe('optimal_list_total'),
+            'optimal_rebate_total' => $summe('optimal_rebate_total'),
+            'saving_list' => $summe('saving_list'),
+            'saving_rebate' => $summe('saving_rebate'),
+            'saving_list_pct' => $ist > 0 ? round($summe('saving_list') / $ist * 100, 1) : null,
+            'saving_rebate_pct' => $ist > 0 ? round($summe('saving_rebate') / $ist * 100, 1) : null,
+            'top' => array_slice($top, 0, self::TOP_N),
+            'n_articles' => (int) array_sum(array_map(fn ($t) => $t['r']['n_articles'], $teile)),
+            'n_skipped' => (int) array_sum(array_map(fn ($t) => $t['r']['n_skipped'], $teile)),
+            'je_standort' => array_map(fn ($t) => [
+                'team_id' => (int) $t['team']->id, 'standort' => (string) $t['team']->name,
+                'ist_total' => $t['r']['ist_total'], 'saving_rebate' => $t['r']['saving_rebate'], 'saving_list' => $t['r']['saving_list'],
+            ], $teile),
+        ];
+    }
 }

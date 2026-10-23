@@ -224,6 +224,15 @@ class Erfolg extends Component
                 ? $engineering->matrix($team, $this->von ?: null, $this->bis ?: null)
                 : null,
             'offen' => $offen,
+            // Spec 85 PR-E: Brille „alle“ — Umsatz und Gerichte je Standort (jeder mit seinen Zahlen), die Matrix oben ist die Summe
+            'jeStandort' => $team !== null
+                ? array_map(fn ($z) => ['team_id' => $z['team_id'], 'standort' => $z['standort'], 'umsatz' => $z['wert']['umsatz'], 'n' => $z['wert']['n']],
+                    app(\Platform\FoodAlchemist\Services\StandortService::class)->jeStandort($team, function ($t) use ($engineering) {
+                        $m = $engineering->matrix($t, $this->von ?: null, $this->bis ?: null);
+
+                        return ['umsatz' => $m['umsatz'], 'n' => $m['n']];
+                    }))
+                : [],
             'treffer' => $this->getTrefferProperty(),
         ]);
     }

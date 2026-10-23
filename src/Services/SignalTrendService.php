@@ -173,6 +173,47 @@ class SignalTrendService
     }
 
     /**
+     * Spec 85 PR-E: Verlauf in der Team-Brille. Ein Team → dessen Übersicht; mehrere (Brille „alle“) → je Team die Übersicht des EIGENEN jüngsten Laufs,
+     * Zähler je Metrik summiert (die Läufe der Standorte liegen zu verschiedenen Zeitpunkten, darum kein gemeinsames measured_at).
+     *
+     * @return array{measured_at:string|null,previous_at:string|null,metriken:list<array<string,mixed>>}
+     */
+    public function uebersichtBrille(Team $viewer, ?string $source = null): array
+    {
+        $ids = app(StandortService::class)->leseTeamIds($viewer);
+        $teams = Team::whereIn('id', $ids)->get();
+        if (count($ids) < 2) {
+            return $this->uebersicht($teams->first() ?? $viewer, $source);
+        }
+
+        $summe = [];
+        $jetzt = null;
+        $vor = null;
+        foreach ($teams as $t) {
+            $u = $this->uebersicht($t, $source);
+            $jetzt = max($jetzt ?? '', (string) $u['measured_at']) ?: $jetzt;
+            $vor = max($vor ?? '', (string) $u['previous_at']) ?: $vor;
+            foreach ($u['metriken'] as $m) {
+                $k = $m['source'].'|'.$m['metric_key'];
+                if (! isset($summe[$k])) {
+                    $summe[$k] = $m;
+
+                    continue;
+                }
+                $summe[$k]['count'] += $m['count'];
+                $summe[$k]['previous'] = ($summe[$k]['previous'] === null && $m['previous'] === null) ? null : (int) $summe[$k]['previous'] + (int) $m['previous'];
+            }
+        }
+        foreach ($summe as $k => $m) {
+            $summe[$k]['delta'] = $m['previous'] === null ? null : $m['count'] - $m['previous'];
+            $summe[$k]['pct'] = ($m['previous'] === null || $m['previous'] === 0) ? null : round((($m['count'] - $m['previous']) / $m['previous']) * 100, 1);
+        }
+        uasort($summe, fn ($a, $b) => strcmp($a['metric_key'], $b['metric_key']));
+
+        return ['measured_at' => $jetzt, 'previous_at' => $vor, 'metriken' => array_values($summe)];
+    }
+
+    /**
      * Die jüngsten Lauf-Zeitstempel (neuester zuerst).
      *
      * @return list<string>

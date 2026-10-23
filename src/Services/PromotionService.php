@@ -210,7 +210,7 @@ class PromotionService
 
         $t = 'foodalchemist_sales_facts';
         $q = DB::table($t)
-            ->where($t . '.team_id', $team->id)->whereNull($t . '.deleted_at')
+            ->whereIn($t . '.team_id', app(StandortService::class)->leseTeamIds($team))->whereNull($t . '.deleted_at')   // Spec 85 PR-E: Team-Brille
             ->whereIn($t . '.recipe_id', $recipeIds)
             ->whereDate($t . '.sold_at', '<=', $bis !== null ? min($bis, $tag->toDateString()) : $tag->toDateString())
             ->when($von !== null, fn ($qq) => $qq->whereDate($t . '.sold_at', '>=', $von));
@@ -227,7 +227,7 @@ class PromotionService
         $t = 'foodalchemist_sales_facts';
 
         return round((float) DB::table($t)
-            ->where($t . '.team_id', $team->id)->whereNull($t . '.deleted_at')
+            ->whereIn($t . '.team_id', app(StandortService::class)->leseTeamIds($team))->whereNull($t . '.deleted_at')
             ->whereDate($t . '.sold_at', '<=', $tag->toDateString())
             ->when($nurZugeordnet, fn ($q) => $q->whereNotNull($t . '.recipe_id'))
             ->sum($t . '.revenue_net'), 2);

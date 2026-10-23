@@ -125,7 +125,7 @@ class PortfolioService
         $laufend = $this->laufendeAm($team, $stichtag);
 
         if ($brille === 'betrieb') {
-            $zuordnungen = FoodAlchemistOutlet::where('team_id', $team->id)
+            $zuordnungen = FoodAlchemistOutlet::whereIn('team_id', $this->brille()->leseTeamIds($team))
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')
                 ->get(['id', 'name'])->mapWithKeys(fn ($o) => [(int) $o->id => (string) $o->name])->all();
             $keyVon = fn (array $z) => $z['outlet_id'];
@@ -202,6 +202,11 @@ class PortfolioService
 
     // ── intern ────────────────────────────────────────────────────────────────
 
+    private function brille(): StandortService
+    {
+        return app(StandortService::class);
+    }
+
     /**
      * Die Ausgaben je Art, mit allem eager geladen, was die Zeilenform braucht.
      *
@@ -216,15 +221,15 @@ class PortfolioService
         $out = [];
 
         if ($nurArt === null || $nurArt === 'foodbook') {
-            $out['foodbook'] = FoodAlchemistFoodbook::visibleToTeam($team)
+            $out['foodbook'] = $this->brille()->leseBereichOderSichtbar(FoodAlchemistFoodbook::query(), $team)
                 ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('chapters')->get();
         }
         if ($nurArt === null || $nurArt === 'speisekarte') {
-            $out['speisekarte'] = FoodAlchemistSpeisekarte::visibleToTeam($team)
+            $out['speisekarte'] = $this->brille()->leseBereichOderSichtbar(FoodAlchemistSpeisekarte::query(), $team)
                 ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('sections')->get();
         }
         if ($nurArt === null || $nurArt === 'speiseplan') {
-            $out['speiseplan'] = FoodAlchemistSpeiseplan::visibleToTeam($team)
+            $out['speiseplan'] = $this->brille()->leseBereichOderSichtbar(FoodAlchemistSpeiseplan::query(), $team)
                 ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('entries')
                 ->withMin('entries', 'entry_date')->withMax('entries', 'entry_date')->get();
         }
@@ -252,6 +257,7 @@ class PortfolioService
             'laeuft' => $a->laeuftAm($tag),
             'von' => $a->gueltigVon()?->toDateString(),
             'bis' => $a->gueltigBis()?->toDateString(),
+            'team_id' => $a->team_id !== null ? (int) $a->team_id : null,   // Spec 85 PR-E: Standort der Ausgabe (Team-Brille)
             'outlet_id' => $a->outlet_id !== null ? (int) $a->outlet_id : null,
             'outlet_name' => $a->outlet?->name,
             'kunde' => $kunde,

@@ -20,6 +20,13 @@
         </x-fa::field>
     </div>
 
+    @if(! empty($jeStandort))
+        {{-- Spec 85 PR-E: Brille „alle“ — Anzahl Auffälligkeiten je Standort --}}
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ctrl-ausreisser-je-standort>
+            @foreach($jeStandort as $st)<span wire:key="anom-st-{{ $st['team_id'] }}" class="mr-3">{{ $st['standort'] }}: <strong>{{ $st['anzahl'] }}</strong></span>@endforeach
+        </p>
+    @endif
+
     @if(count($treffer) === 0)
         <x-fa::empty compact icon="heroicon-o-check-badge" title="Keine auffälligen Buchungen">
             Bei Faktor {{ number_format((float) $faktor, 1, ',', '.') }} weicht keine Buchung auffällig ab. Ohne Einkaufsjournal bleibt die Liste ebenfalls leer.
@@ -30,6 +37,7 @@
             <table class="fa-table">
                 <thead>
                     <tr>
+                        @if(! empty($jeStandort))<th>Standort</th>@endif
                         <th>Artikel</th>
                         <th>Lieferant</th>
                         <th>Datum</th>
@@ -42,6 +50,7 @@
                 <tbody>
                     @foreach($treffer as $t)
                         <tr wire:key="anom-{{ $t['transaction_id'] }}">
+                            @if(! empty($jeStandort))<td class="text-[var(--fa-ink-2)]">{{ $t['standort'] }}</td>@endif
                             <td>{{ $t['designation'] }}</td>
                             <td class="text-[var(--fa-ink-2)]">{{ $lieferanten[$t['supplier_id']] ?? '–' }}</td>
                             <td class="text-[var(--fa-ink-2)] tabular-nums whitespace-nowrap">{{ $t['purchased_at'] ? \Illuminate\Support\Carbon::parse($t['purchased_at'])->format('d.m.Y') : '–' }}</td>
