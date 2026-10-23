@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\PromotionService;
 
@@ -19,6 +18,8 @@ use Platform\FoodAlchemist\Services\PromotionService;
  */
 class Promotion extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /** Leer = heute. */
     public string $stichtag = '';
 
@@ -29,7 +30,7 @@ class Promotion extends Component
 
     public function render(PromotionService $promotion)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
 
         return view('foodalchemist::livewire.controlling.panels.promotion', [
             'p' => $team === null ? null : $promotion->uebersicht($team, $this->stichtag ?: null),

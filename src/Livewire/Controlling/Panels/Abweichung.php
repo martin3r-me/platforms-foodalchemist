@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\WareneinsatzAbweichungService;
 
@@ -19,6 +18,8 @@ use Platform\FoodAlchemist\Services\WareneinsatzAbweichungService;
  */
 class Abweichung extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     public string $von = '';
 
     public string $bis = '';
@@ -38,7 +39,7 @@ class Abweichung extends Component
 
     public function render(WareneinsatzAbweichungService $svc)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         $von = $this->von ?: null;
         $bis = $this->bis ?: null;
 

@@ -2,8 +2,8 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -35,6 +35,8 @@ use RuntimeException;
  */
 class Wareneinsatz extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /** So viele Positionen zeigt die Vorschau namentlich; der Rest wird als Zahl ausgewiesen. */
     private const VORSCHAU_MAX = 20;
 
@@ -59,10 +61,6 @@ class Wareneinsatz extends Component
      */
     private ?array $laufCache = null;
 
-    private function team(): ?Team
-    {
-        return Auth::user()?->currentTeamRelation;
-    }
 
     /** Der Optimizer-Lauf für diesen Request (memoisiert, s. {@see self::$laufCache}). */
     private function lauf(EinkaufOptimizerService $optimizer, Team $team): array
@@ -100,8 +98,18 @@ class Wareneinsatz extends Component
         $this->hinweis = null;
         $this->fehler = null;
         $team = $this->team();
-        if ($team === null || $this->auswahl === []) {
-            $this->fehler = $team === null ? 'Kein Team zugeordnet.' : 'Nichts markiert.';
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+        if (($recht = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Bezugsquellen umstellen')) !== null) {
+            $this->fehler = $recht;
+
+            return;
+        }
+        if ($this->auswahl === []) {
+            $this->fehler = 'Nichts markiert.';
 
             return;
         }
@@ -144,8 +152,18 @@ class Wareneinsatz extends Component
         $this->hinweis = null;
         $this->fehler = null;
         $team = $this->team();
-        if ($team === null || $this->auswahl === []) {
-            $this->fehler = $team === null ? 'Kein Team zugeordnet.' : 'Nichts markiert.';
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+        if (($recht = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Bezugsquellen umstellen')) !== null) {
+            $this->fehler = $recht;
+
+            return;
+        }
+        if ($this->auswahl === []) {
+            $this->fehler = 'Nichts markiert.';
 
             return;
         }

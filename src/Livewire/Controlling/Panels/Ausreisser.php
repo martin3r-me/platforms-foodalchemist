@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\PurchaseAnomalyService;
@@ -22,12 +21,14 @@ use Platform\FoodAlchemist\Services\PurchaseAnomalyService;
  */
 class Ausreisser extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /** Abweichungsfaktor gegen die Trendlinie; unter 2 wird jede normale Schwankung ein „Fund". */
     public float $faktor = 3.0;
 
     public function render(PurchaseAnomalyService $anomalien)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         $treffer = $team !== null ? $anomalien->detect($team, max(1.5, (float) $this->faktor)) : [];
 
         return view('foodalchemist::livewire.controlling.panels.ausreisser', [
