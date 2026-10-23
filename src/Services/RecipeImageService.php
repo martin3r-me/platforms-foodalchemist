@@ -454,6 +454,7 @@ PROMPT);
     /** @param list<string> $stilFilesUsed gebundene Kanon-Dossiers (slug@version) — leer ohne Bindung. */
     private function generiereFoto(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $caption, int $sort, bool $isResult, string $feature, ?int $stepId, array $stilFilesUsed = []): FoodAlchemistRecipeStepPhoto
     {
+        app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class)->pruefe();   // Bild geht am Gateway vorbei: Kill-Switch + Monatsdeckel hier
         $started = microtime(true);
         $result = app(ImageGenerationService::class)->generateAndStore(
             $prompt,

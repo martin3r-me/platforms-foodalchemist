@@ -305,7 +305,7 @@ class FaRechte
         return [
             'standorte' => count($alle) - 1,
             'user' => (int) DB::table('team_user')->whereIn('team_id', $alle)->distinct()->count('user_id'),
-            'ki_eur_monat' => $this->kiKostenMonat($alle),
+            'ki_eur_monat' => round(app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class)->verbrauchMonat((int) \Platform\FoodAlchemist\Support\KiVerursacher::hauptteam($team)->id), 2),   // eingefroren, wie die Rechnung
         ];
     }
 
@@ -326,28 +326,15 @@ class FaRechte
         }
     }
 
-    /** KI-Budget des Haupt-Teams für den laufenden Monat erschöpft? (Euro, Spec 77 F1) */
+    /** KI-Monatsdeckel des zahlenden Mandanten erreicht? (Spec 77 F1 + Projekt-Deckel 23.10.; Master-Team nie) */
     public function kiBudgetErschoepft(Team $team): bool
     {
-        $budget = $this->kontingente($team)['ki_budget_eur_monat'];
-        if ($budget === null) {
+        $haupt = \Platform\FoodAlchemist\Support\KiVerursacher::hauptteam($team);
+        if (\Platform\FoodAlchemist\Support\MasterTeam::istMaster($haupt)) {
             return false;
         }
 
-        return $this->kontingentNutzung($team)['ki_eur_monat'] >= $budget;
-    }
-
-    /** @param list<int> $teamIds */
-    private function kiKostenMonat(array $teamIds): float
-    {
-        $cached = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached') ? 'SUM(COALESCE(tokens_cached,0))' : '0';
-        $zeilen = DB::table('foodalchemist_ai_call_log')->whereIn('team_id', $teamIds)
-            ->where('created_at', '>=', now()->startOfMonth())
-            ->selectRaw('feature, tier, model, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '.$cached.' AS t_cached, SUM(COALESCE(tokens_out,0)) AS t_out')
-            ->groupBy('feature', 'tier', 'model')->get();
-        $rechner = app(\Platform\FoodAlchemist\Services\Ai\AiCostCalculator::class);
-
-        return round((float) $zeilen->sum(fn ($z) => (float) ($rechner->displayCost($rechner->costUsd($z)) ?? 0)), 2);
+        return app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class)->erschoepft((int) $haupt->id);
     }
 
     /** Höchste Plattform-Rolle des Users im Team oder einem Eltern-Team. */

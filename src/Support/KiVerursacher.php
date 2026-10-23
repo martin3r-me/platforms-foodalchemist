@@ -71,17 +71,13 @@ final class KiVerursacher
         return ['abrechnung_team_id' => (int) $haupt->id, 'verursacher' => self::MANDANT];
     }
 
-    /** Oberstes Team der Kette (Schutz gegen Zyklen). */
+    /**
+     * Zahlendes Kunden-Hauptteam: dieselbe Kundengrenze wie Kontingente und Bereiche ({@see \Platform\FoodAlchemist\Services\FaRechte::kundenHauptTeam}) —
+     * oberstes Team der Kette, aber nie über das Master-Team hinaus. Hängt ein Kunde unter dem Master, zahlt er selbst (vorher lief seine KI
+     * als „plattform“ und war weder abgerechnet noch gedeckelt, Kurator 23.10.).
+     */
     public static function hauptteam(Team $team): Team
     {
-        for ($i = 0; $i < 12 && $team->parent_team_id !== null; $i++) {
-            $eltern = Team::find($team->parent_team_id);
-            if ($eltern === null) {
-                break;
-            }
-            $team = $eltern;
-        }
-
-        return $team;
+        return app(\Platform\FoodAlchemist\Services\FaRechte::class)->kundenHauptTeam($team);
     }
 }
