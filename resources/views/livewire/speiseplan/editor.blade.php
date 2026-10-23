@@ -1004,6 +1004,9 @@
                             @endif
                         </x-fa::section>
 
+                        {{-- Spec 86: Handbuch-Link (zweiter Link neben dem Aushang-Link) --}}
+                        <livewire:foodalchemist.handbuch.panel type="speiseplan" :quelle-id="$planId" :key="'hb-speiseplan-'.$planId" />
+
                         {{-- Slice F: Betriebs-Links — pro Betrieb ein eigener Aushang-Link (eigene Vorlage + Name) --}}
                         <x-fa::section title="Aushang je Kalkulationsprofil" icon="heroicon-o-building-storefront" :meta="$mehrzahl(count($betriebsLinks), 'Link', 'Links')" description="Ein zusätzlicher Aushang-Link pro Kalkulationsprofil, mit der Vorlage und dem Namen dieses Kalkulationsprofils und eigener Freigabe. Der Standard-Link oben bleibt bestehen.">
                             @forelse($betriebsLinks as $bl)

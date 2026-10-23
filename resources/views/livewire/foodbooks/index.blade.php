@@ -583,6 +583,9 @@
                             </div>
                         @endif
 
+                        {{-- ── Spec 86: Handbuch-Link (zweiter Link neben dem Kundenlink) ── --}}
+                        <livewire:foodalchemist.handbuch.panel type="foodbook" :quelle-id="$fb->id" :key="'hb-foodbook-'.$fb->id" />
+
                         {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Link ── --}}
                         <div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]">
                             <div>
