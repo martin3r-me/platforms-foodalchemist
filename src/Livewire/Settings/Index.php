@@ -243,12 +243,132 @@ class Index extends Component
         $this->normalisieren($sichtbar);
     }
 
-    /** Reiter wechseln (Leiste im Server-Modus): nur sichtbare Reiter, Sprungziel fällt weg. */
+    /** Reiter wechseln (Leiste im Server-Modus): nur sichtbare Reiter, Sprungziel fällt weg. Eigene Sperren des alten Reiters gehen frei. */
     public function tabWaehlen(string $tab): void
     {
+        $this->reiterFreigeben();
         $this->tab = $tab;
         $this->bereich = null;
         $this->normalisieren(self::sichtbareSektionen());
+    }
+
+    // ── E-3: EIN Bearbeiten je Reiter (Dominique 23.10.) ─────────────────────────────────────────────────────
+    // Der Reiter holt, verlängert und gibt die Sperren ALLER seiner Bereiche frei (dieselben Ziele settings.<bereich> wie die
+    // Bereiche selbst, BearbeitungssperreService). Die Bereiche zeichnen sich danach neu (Ereignis settings-reiter-geaendert) und
+    // lesen den Zustand aus dem Dienst; eine fremde Sperre zeigt der Bereich weiter selbst an.
+
+    public function reiterBearbeiten(): void
+    {
+        $user = Auth::user();
+        $teamId = $user?->currentTeamRelation?->id;
+        if ($teamId === null || ! self::darfAendern() || ! (bool) config('foodalchemist.bearbeitungssperre', true)) {
+            return;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class);
+        $belegt = [];
+        foreach ($this->reiterSperrziele() as $key => $bereich) {
+            $r = $svc->sperren('settings.' . $bereich, (int) $teamId, (int) $user->id, $user->name ?? null, (int) $teamId);
+            if (! $r['ok']) {
+                $belegt[] = (self::SEKTIONEN[$key]['label'] ?? $key) . ' (' . ($r['inhaber']['name'] ?? 'jemand anderes') . ')';
+            }
+        }
+        if ($belegt !== []) {
+            $this->dispatch('fa-saved', message: 'Gerade in Bearbeitung: ' . implode(', ', $belegt) . '. Die übrigen Bereiche kannst du ändern.', type: 'error');
+        }
+        $this->dispatch('settings-reiter-geaendert');
+    }
+
+    public function reiterFertig(): void
+    {
+        $this->reiterFreigeben();
+        $this->dispatch('settings-reiter-geaendert');
+    }
+
+    /** Tippen/Klicken im Reiter verlängert alle eigenen Sperren (höchstens einmal je Minute, siehe View). */
+    public function reiterHerzschlag(): void
+    {
+        $uid = Auth::id();
+        $teamId = Auth::user()?->currentTeamRelation?->id;
+        if ($uid === null || $teamId === null) {
+            return;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class);
+        foreach ($this->reiterSperrziele() as $bereich) {
+            $svc->verlaengern('settings.' . $bereich, (int) $teamId, (int) $uid);
+        }
+    }
+
+    private function reiterFreigeben(): void
+    {
+        $uid = Auth::id();
+        $teamId = Auth::user()?->currentTeamRelation?->id;
+        if ($uid === null || $teamId === null || $this->tab === '') {
+            return;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class);
+        foreach ($this->reiterSperrziele() as $bereich) {
+            if ($svc->haelt('settings.' . $bereich, (int) $teamId, (int) $uid)) {
+                $svc->freigeben('settings.' . $bereich, (int) $teamId, (int) $uid);
+            }
+        }
+    }
+
+    /**
+     * Sperrbare Bereiche des aktiven Reiters: Sektion ⇒ Sperr-Bereich der Komponente (sperrBereich(), z. B. brief-vorlagen ⇒ brief_vorlagen).
+     *
+     * @return array<string, string>
+     */
+    private function reiterSperrziele(): array
+    {
+        $sichtbar = self::sichtbareSektionen();
+        $out = [];
+        foreach (self::sichtbareGruppen($sichtbar)[$this->tab]['sektionen'] ?? [] as $key) {
+            $klasse = self::komponente($key);
+            if ($klasse !== null && self::mitSperre($klasse)) {
+                $m = new \ReflectionMethod($klasse, 'sperrBereich');
+                $m->setAccessible(true);
+                $out[$key] = (string) $m->invoke(new $klasse);
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return class-string|null Livewire-Klasse einer Sektion (Schlüssel kebab ⇒ Klasse Studly). */
+    public static function komponente(string $sektion): ?string
+    {
+        $klasse = __NAMESPACE__ . '\\' . \Illuminate\Support\Str::studly($sektion);
+
+        return class_exists($klasse) ? $klasse : null;
+    }
+
+    public static function mitSperre(string $klasse): bool
+    {
+        return in_array(\Platform\FoodAlchemist\Livewire\Settings\Concerns\MitEinstellungsSperre::class, class_uses_recursive($klasse), true);
+    }
+
+    /** @return array{modus: string, fremd: list<string>} modus: aus (nichts zu sperren/keine Rechte) · lesen · bearbeiten (mind. ein Bereich meins) */
+    private function reiterZustand(): array
+    {
+        $ziele = $this->reiterSperrziele();
+        $uid = Auth::id();
+        $teamId = Auth::user()?->currentTeamRelation?->id;
+        if ($ziele === [] || $uid === null || $teamId === null || ! self::darfAendern()
+            || ! (bool) config('foodalchemist.bearbeitungssperre', true)) {
+            return ['modus' => 'aus', 'fremd' => []];
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class);
+        $meins = false;
+        $fremd = [];
+        foreach ($ziele as $key => $bereich) {
+            if ($svc->haelt('settings.' . $bereich, (int) $teamId, (int) $uid)) {
+                $meins = true;
+            } elseif (($f = $svc->fremd('settings.' . $bereich, (int) $teamId, (int) $uid)) !== null) {
+                $fremd[] = (self::SEKTIONEN[$key]['label'] ?? $key) . ': ' . ($f['name'] ?? 'jemand anderes');
+            }
+        }
+
+        return ['modus' => $meins ? 'bearbeiten' : 'lesen', 'fremd' => $fremd];
     }
 
     /** Ungültiger oder nicht sichtbarer Reiter/Bereich (auch aus einer geteilten URL) → erster sichtbarer Reiter, kein Sprung. */
@@ -372,6 +492,8 @@ class Index extends Component
             'stichworte' => self::STICHWORTE,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
             'nurLesen' => ! self::darfAendern(),
+            'reiterSperre' => $this->reiterZustand(),
+            'mitSperre' => collect($imReiter)->mapWithKeys(fn ($k) => [$k => ($c = self::komponente($k)) !== null && self::mitSperre($c)])->all(),
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }
