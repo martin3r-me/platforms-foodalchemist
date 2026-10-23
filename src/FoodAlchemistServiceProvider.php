@@ -93,6 +93,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\GpBereinigenCommand::class,
                 \Platform\FoodAlchemist\Console\GpUmhaengenCommand::class,
+                \Platform\FoodAlchemist\Console\GpPaketImportCommand::class,   // E2: GP-Paket → io (global, stamm_paket)
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde
                 // bei jedem Lauf mitgeschrieben — auf einer frischen DB hätte das den
