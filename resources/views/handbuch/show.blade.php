@@ -16,6 +16,7 @@
             $codeLabel[$e['code']] = $e['label'];
         }
     }
+    $freie = $snapshot['freie_kapitel'] ?? [];
     $nKapitel = count($snapshot['sections'] ?? []);
     $nSpeisen = count($gerichte);
     $fmtMenge = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format((float) $v, $v < 10 ? 3 : 1, ',', ''), '0'), ',');
@@ -26,75 +27,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
     <title>{{ $snapshot['title'] ?? 'Handbuch' }} · Handbuch</title>
-    <style>
-        :root { --onac:#fff; --ground:#f3f5f8; --surface:#fdfdfe; --line:#dde2ea; --line2:#c5ccd8; --ink:#131a26; --ink2:#4a5466; --ink3:#657084; --ac:#0a3dd6; --acs:#e6edfe; --warn:#fff4d6; --warnt:#7a5300; --r:6px; --rs:10px; }
-        body.dunkel { --ground:#141d36; --surface:#1b2744; --line:#2d3b5f; --line2:#40507a; --ink:#eef2fb; --ink2:#b9c3da; --ink3:#8f9bb8; --ac:#8fb0ff; --acs:#243a6e; --onac:#0b1b33; --warn:#4a3a14; --warnt:#f5d58a; }
-        * { box-sizing: border-box; }
-        html, body { margin: 0; height: 100%; }
-        body { background: var(--ground); color: var(--ink); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust: 100%; }
-        .app { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
-        .top { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-        .top .kopf { min-width: 0; }
-        .top .klein { font-size: 11px; color: var(--ink3); }
-        .top h1 { margin: 0; font-size: 16px; font-weight: 600; }
-        .kpi { background: var(--ground); border: 1px solid var(--line); border-radius: var(--rs); padding: 3px 10px; color: var(--ink2); font-size: 12px; white-space: nowrap; }
-        .kpi b { color: var(--ink); font-size: 14px; margin-right: 2px; }
-        .sp { flex: 1; }
-        .logo { font-weight: 600; font-size: 14px; } .logo span { color: var(--ac); }
-        .pill { border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); padding: 4px 10px; font: inherit; cursor: pointer; min-height: 30px; }
-        .stepper { display: inline-flex; align-items: center; gap: 6px; color: var(--ink3); }
-        .stepper button { width: 30px; height: 30px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); cursor: pointer; font: inherit; }
-        .stepper input { width: 56px; height: 30px; text-align: center; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); font: inherit; }
-        .body { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 0; }
-        nav { overflow: auto; background: var(--surface); border-right: 1px solid var(--line); padding: 6px 0 24px; }
-        .kap { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-weight: 600; cursor: pointer; }
-        .kap .n { font-weight: 400; color: var(--ink3); font-size: 12px; }
-        .kap-text { padding: 0 12px 4px; font-size: 12px; color: var(--ink3); }
-        .liste { display: none; } .kapw.open .liste { display: block; }
-        .liste a { display: block; padding: 8px 12px 8px 24px; color: var(--ink2); text-decoration: none; border-left: 3px solid transparent; }
-        .liste a:hover { background: var(--ground); }
-        .liste a.on { background: var(--acs); border-left-color: var(--ac); color: var(--ink); font-weight: 600; }
-        main { overflow: auto; padding: 12px 16px 40px; }
-        .back { display: none; margin: 0 0 8px; color: var(--ac); background: none; border: 0; font: inherit; cursor: pointer; padding: 6px 0; }
-        .gericht { display: none; max-width: 920px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--rs); padding: 12px 14px; }
-        .gericht.on { display: block; }
-        .head { display: flex; gap: 12px; align-items: flex-start; }
-        .foto { width: 92px; height: 68px; border-radius: var(--r); background: var(--ground); border: 1px solid var(--line); object-fit: cover; flex: none; }
-        h2 { margin: 0 0 2px; font-size: 16px; }
-        .meta { color: var(--ink3); }
-        .chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--warn); color: var(--warnt); margin: 4px 4px 0 0; }
-        .tabs { display: inline-flex; gap: 2px; background: var(--ground); border: 1px solid var(--line); border-radius: var(--rs); padding: 3px; margin: 10px 0 8px; max-width: 100%; overflow: auto; }
-        .tab { padding: 6px 12px; border: 0; background: none; color: var(--ink2); font: inherit; cursor: pointer; border-radius: var(--r); white-space: nowrap; }
-        .tab.on { background: var(--ac); color: var(--onac); font-weight: 600; }
-        .pane { display: none; } .pane.on { display: block; }
-        table { border-collapse: collapse; width: 100%; }
-        td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-        th { color: var(--ink3); font-weight: 500; font-size: 12px; }
-        td.r { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .sub { color: var(--ac); cursor: pointer; background: none; border: 0; font: inherit; padding: 0; text-align: left; }
-        .subbox { display: none; margin: 4px 0 6px 12px; padding: 8px 10px; background: var(--ground); border: 1px solid var(--line); border-radius: var(--r); }
-        .subbox.open { display: block; }
-        .subbox h4 { margin: 0 0 4px; font-size: 13px; }
-        .step { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
-        .nr { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--acs); color: var(--ac); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-        .fotos { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-        .fotos img { width: 84px; height: 60px; object-fit: cover; border-radius: var(--r); background: var(--ground); }
-        .hint { color: var(--ink3); font-size: 12px; margin-top: 6px; }
-        .leer { color: var(--ink3); padding: 12px 0; }
-        .legende { max-width: 920px; margin-top: 14px; color: var(--ink3); font-size: 12px; }
-        @media (max-width: 800px) {
-            .body { grid-template-columns: 1fr; }
-            .app.detail nav { display: none; }
-            .app:not(.detail) main { display: none; }
-            .back { display: inline-block; }
-            .kpi, .logo { display: none; }
-            main { padding: 10px; }
-            .gericht { padding: 10px 12px; }
-            .foto { width: 72px; height: 54px; }
-            .liste a, .kap { padding-top: 11px; padding-bottom: 11px; }
-        }
-        @media (pointer: coarse) { .tab { padding: 10px 12px; } }
-    </style>
+    <link rel="stylesheet" href="{{ route('foodalchemist.presentation.handbuch_css', ['v' => $cssVersion ?? 1]) }}">
 </head>
 <body class="dunkel">
 <div class="app" id="app">
@@ -108,8 +41,8 @@
         <span class="sp"></span>
         <span class="logo">Food<span>.Alchemist</span></span>
         <span class="sp"></span>
-        <span class="stepper">Portionen <button type="button" id="m" aria-label="weniger">−</button><input id="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" id="p" aria-label="mehr">+</button></span>
-        <button type="button" class="pill" id="dk" aria-label="Zwischen dunkel und hell umschalten">Dunkel / Hell</button>
+        <span class="stepper stepper-top">Portionen <button type="button" data-step="-10" aria-label="weniger">−</button><input class="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" data-step="10" aria-label="mehr">+</button></span>
+        <button type="button" class="ico" id="dk" aria-label="Zwischen dunkel und hell umschalten" title="Dunkel / Hell"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg></button>
     </div>
 
     <div class="body">
@@ -125,6 +58,14 @@
                     </div>
                 </div>
             @endforeach
+            @if($freie !== [])
+                <div class="kapw open">
+                    <div class="kap"><span>Allgemein</span><span class="n">{{ count($freie) }}</span></div>
+                    <div class="liste">
+                        @foreach($freie as $i => $fk)<a href="#k{{ $i }}" data-key="k{{ $i }}">{{ $fk['title'] }}</a>@endforeach
+                    </div>
+                </div>
+            @endif
         </nav>
 
         <main>
@@ -136,6 +77,7 @@
                         $portion['form'] ?? null,
                         ($portion['gramm'] ?? null) ? $fmtMenge($portion['gramm']) . ' g' : null,
                         $portion['geschirr'] ?? null,
+                        $portion['vehikel'] ?? null,
                     ]);
                     $z = $g['zutaten'] ?? ['basis' => 'ansatz', 'zeilen' => []];
                     $skaliert = ($z['basis'] ?? '') === 'portion';
@@ -146,7 +88,7 @@
                         <div>
                             <h2>{{ $g['name'] }}</h2>
                             @if($teile)<div class="meta">{{ implode(' · ', $teile) }}</div>@endif
-                            @foreach(($g['codes'] ?? []) as $c)<span class="chip">{{ $c }}@if(isset($codeLabel[$c])) · {{ $codeLabel[$c] }}@endif</span>@endforeach
+                            @foreach(($g['codes'] ?? []) as $c)@php $cl = $codeLabel[rtrim($c, '*')] ?? null; @endphp<span class="chip">{{ $c }}@if($cl) · {{ $cl }}{{ str_ends_with($c, '*') ? ' (Spuren)' : '' }}@endif</span>@endforeach
                         </div>
                     </div>
 
@@ -159,6 +101,9 @@
                     </div>
 
                     <div class="pane on" data-pane="zutaten">
+                        @if(!empty($z['zeilen']) && $skaliert)
+                            <div class="stepper stepper-pane">Portionen <button type="button" data-step="-10" aria-label="weniger">−</button><input class="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" data-step="10" aria-label="mehr">+</button></div>
+                        @endif
                         @if(!empty($z['zeilen']))
                             <table>
                                 <tr><th>Zutat</th><th class="r">Menge</th></tr>
@@ -224,6 +169,9 @@
                         @else
                             <div class="leer">Keine Regeneration hinterlegt.</div>
                         @endif
+                        @if(!empty($g['behaelter']))
+                            <div class="hint">@foreach($g['behaelter'] as $bh)<b>{{ $bh['zweck'] }}:</b> {{ $bh['name'] }}@if(!$loop->last) · @endif @endforeach</div>
+                        @endif
                     </div>
 
                     <div class="pane" data-pane="bestandteile">
@@ -233,6 +181,13 @@
                             <div class="leer">Keine Bestandteile hinterlegt.</div>
                         @endforelse
                     </div>
+                </article>
+            @endforeach
+
+            @foreach($freie as $i => $fk)
+                <article class="gericht" id="g-k{{ $i }}" data-key="k{{ $i }}">
+                    <h2>{{ $fk['title'] }}</h2>
+                    <div class="freitext">{!! nl2br(e($fk['text'])) !!}</div>
                 </article>
             @endforeach
 
@@ -282,20 +237,23 @@
     });
 
     // Portionen: skaliert nur Mengen, die der Snapshot je Portion trägt (data-b).
-    var px = document.getElementById('px');
+    var pxs = [].slice.call(document.querySelectorAll('.px'));
+    function aktuell() { return Math.max(1, parseFloat(pxs[0].value) || 1); }
+    function setze(v, quelle) { pxs.forEach(function (e) { if (e !== quelle) { e.value = v; } }); rechne(); }
     function fmt(v, u) {
         if (u === 'g' && v >= 1000) { v = v / 1000; u = 'kg'; } else if (u === 'ml' && v >= 1000) { v = v / 1000; u = 'l'; }
         var s = v >= 100 ? v.toFixed(0) : (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         return s.replace(/\.?0+$/, '').replace('.', ',') + ' ' + (u || '');
     }
     function rechne() {
-        var n = Math.max(1, parseFloat(px.value) || 1);
+        var n = aktuell();
         [].forEach.call(document.querySelectorAll('.pxs'), function (e) { e.textContent = n; });
         [].forEach.call(document.querySelectorAll('td[data-b]'), function (td) { td.textContent = fmt(parseFloat(td.dataset.b) * n, td.dataset.u); });
     }
-    document.getElementById('m').addEventListener('click', function () { px.value = Math.max(1, (parseFloat(px.value) || 1) - 10); rechne(); });
-    document.getElementById('p').addEventListener('click', function () { px.value = (parseFloat(px.value) || 1) + 10; rechne(); });
-    px.addEventListener('input', rechne);
+    [].forEach.call(document.querySelectorAll('[data-step]'), function (b) {
+        b.addEventListener('click', function () { setze(Math.max(1, aktuell() + parseInt(b.dataset.step, 10)), null); });
+    });
+    pxs.forEach(function (e) { e.addEventListener('input', function () { setze(e.value, e); }); });
 
     // Dunkel/Hell merkt sich die Wahl, wenn der Browser Speicher erlaubt.
     var dk = document.getElementById('dk');
