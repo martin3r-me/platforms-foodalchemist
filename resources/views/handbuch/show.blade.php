@@ -208,8 +208,15 @@
             });
         });
     });
-    var breit = window.matchMedia('(min-width: 801px)').matches;
-    fromHash(breit);
+    var breitQuery = window.matchMedia('(min-width: 801px)');
+    fromHash(breitQuery.matches);
+    // Tablet drehen / Fenster ändern: im breiten Layout darf die rechte Seite nie leer bleiben.
+    function breitPruefen() {
+        if (breitQuery.matches && !document.querySelector('.gericht.on')) { fromHash(true); }
+        if (breitQuery.matches) { app.classList.remove('detail'); }
+    }
+    if (breitQuery.addEventListener) { breitQuery.addEventListener('change', breitPruefen); } else { breitQuery.addListener(breitPruefen); }
+    window.addEventListener('resize', breitPruefen);
 })();
 </script>
 </body>
