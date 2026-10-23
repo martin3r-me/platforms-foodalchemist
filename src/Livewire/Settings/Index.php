@@ -44,6 +44,8 @@ class Index extends Component
      * gefunden" heißt. `einheiten` bleibt zuerst → mount()-Default unverändert.
      */
     public const SEKTIONEN = [
+        // Neuordnung 23.10. (E-2): Übersicht mit Kacheln und Status ist der erste Reiter (vorher Einstieg „Einheiten“, das ein Mandant nicht ändern darf).
+        'start' => ['label' => 'Übersicht', 'hint' => 'Was eingerichtet ist und was noch fehlt, je Reiter'],
         // — Stammdaten & Vokabulare —
         // fa-pass 2026-10-05: Beschriftungen in Küchensprache (ohne Spec-/Ticket-Kürzel). Der
         // fachliche Hintergrund je Sektion steht in den Kommentaren, nicht mehr im sichtbaren Text.
@@ -135,6 +137,7 @@ class Index extends Component
      * @var array<string, array{label: string, sektionen: list<string>}>
      */
     public const GRUPPEN = [
+        'uebersicht' => ['label' => 'Übersicht', 'sektionen' => ['start']],
         'team' => ['label' => 'Team & Zugriff', 'sektionen' => ['zugriffsrechte', 'unter-teams', 'plan-nutzung']],
         'kueche' => ['label' => 'Küche & Produktion', 'sektionen' => ['teamprofil', 'kueche', 'posten', 'rollen', 'behaelter', 'hausstandards']],
         'einkauf' => ['label' => 'Einkauf & Lager', 'sektionen' => ['einkauf']],
@@ -151,7 +154,7 @@ class Index extends Component
      *
      * @var list<string>
      */
-    public const GRUND = ['zugriffsrechte', 'unter-teams', 'teamprofil', 'posten', 'etiketten', 'einkauf', 'kalkulation', 'herstellkosten', 'betriebe', 'food-dna', 'ki'];
+    public const GRUND = ['start', 'zugriffsrechte', 'unter-teams', 'teamprofil', 'posten', 'etiketten', 'einkauf', 'kalkulation', 'herstellkosten', 'betriebe', 'food-dna', 'ki'];
 
     /**
      * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
