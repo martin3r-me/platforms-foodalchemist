@@ -91,9 +91,10 @@ class HandbuchService
     }
 
     /**
-     * Stand für den Editor: Link-Status + Lücken des AKTUELLEN Standes (live gerechnet, nicht persistiert).
+     * Link-Status für den Editor. Bewusst OHNE Snapshot-Aufbau: läuft bei jedem Render des Editors,
+     * die Komposition (Preise/Zeilen) darf dafür nicht ein zweites Mal gerechnet werden.
      *
-     * @return array{veroeffentlicht:bool, live:bool, url:?string, expires_at:?string, published_at:?string, luecken:list<array{gericht:string, fehlt:list<string>}>}
+     * @return array{veroeffentlicht:bool, live:bool, url:?string, expires_at:?string, published_at:?string}
      */
     public function status(Team $team, string $type, int $id): array
     {
@@ -106,8 +107,18 @@ class HandbuchService
             'url' => $hb !== null ? $this->publicUrl((string) $hb->token) : null,
             'expires_at' => $hb?->expires_at?->toIso8601String(),
             'published_at' => $hb?->published_at?->toIso8601String(),
-            'luecken' => $this->buildSnapshot($team, $entity, $type)['luecken'],
         ];
+    }
+
+    /**
+     * Lücken des AKTUELLEN Standes (live gerechnet, nicht persistiert) — nur auf Knopfdruck, weil der
+     * Aufbau die ganze Komposition rechnet.
+     *
+     * @return list<array{gericht:string, fehlt:list<string>}>
+     */
+    public function luecken(Team $team, string $type, int $id): array
+    {
+        return $this->buildSnapshot($team, $this->resolveEntity($team, $type, $id, forWrite: false), $type)['luecken'];
     }
 
     // ── Public-Auflösung (KEIN Team-Scope) ─────────────────────────────────

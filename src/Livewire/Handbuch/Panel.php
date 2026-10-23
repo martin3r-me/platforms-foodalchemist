@@ -23,6 +23,9 @@ class Panel extends Component
 
     public ?string $hinweis = null;
 
+    /** @var list<array{gericht:string, fehlt:list<string>}>|null  null = noch nicht geprüft */
+    public ?array $luecken = null;
+
     public function mount(string $type, int $quelleId): void
     {
         $this->type = $type;
@@ -34,8 +37,19 @@ class Panel extends Component
         $this->fehler = null;
         $this->hinweis = null;
         try {
-            app(HandbuchService::class)->publish($this->team(), $this->type, $this->quelleId, ['expires_at' => $this->gueltigBis]);
+            $res = app(HandbuchService::class)->publish($this->team(), $this->type, $this->quelleId, ['expires_at' => $this->gueltigBis]);
+            $this->luecken = $res['luecken'];
             $this->hinweis = 'Handbuch veröffentlicht — der Link ist aktiv.';
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function pruefen(): void
+    {
+        $this->fehler = null;
+        try {
+            $this->luecken = app(HandbuchService::class)->luecken($this->team(), $this->type, $this->quelleId);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }

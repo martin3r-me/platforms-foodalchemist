@@ -37,15 +37,20 @@
         </div>
     @endif
 
-    @if(! empty($status['luecken']))
-        <div class="flex flex-col gap-1" data-handbuch-luecken>
-            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Lücken im aktuellen Stand ({{ count($status['luecken']) }} Gerichte)</p>
+    <div class="flex flex-col gap-1" data-handbuch-luecken>
+        <div>
+            <x-fa::button size="sm" variant="ghost" wire:click="pruefen" data-handbuch-pruefen>Lücken prüfen</x-fa::button>
+        </div>
+        @if($luecken !== null && $luecken === [])
+            <p class="{{ $hinweisKlasse }}">Alle Gerichte haben Zubereitung, Anrichten und Regeneration.</p>
+        @elseif(! empty($luecken))
+            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Lücken im aktuellen Stand ({{ count($luecken) }} Gerichte)</p>
             <p class="{{ $hinweisKlasse }}">Diese Abschnitte erscheinen im Handbuch nicht, weil sie am Gericht nicht gepflegt sind.</p>
             <ul class="{{ $hinweisKlasse }} list-disc pl-5">
-                @foreach($status['luecken'] as $l)
+                @foreach($luecken as $l)
                     <li>{{ $l['gericht'] }}: {{ implode(', ', $l['fehlt']) }}</li>
                 @endforeach
             </ul>
-        </div>
-    @endif
+        @endif
+    </div>
 </div>

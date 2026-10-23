@@ -84,10 +84,11 @@ it('zurückgezogen und abgelaufen ist der Link 404, Wieder-Veröffentlichen beh�
 it('meldet Gerichte ohne Zubereitung, Anrichten und Regeneration als Lücke und lässt den Abschnitt weg', function () {
     $fb = ($this->baue)(mitSchritten: false);
     $status = $this->hb->status($this->rootTeam, 'foodbook', $fb->id);
+    $luecken = $this->hb->luecken($this->rootTeam, 'foodbook', $fb->id);
 
     expect($status['veroeffentlicht'])->toBeFalse()
-        ->and($status['luecken'])->toHaveCount(1)
-        ->and($status['luecken'][0]['fehlt'])->toContain('Zubereitung', 'Anrichten');
+        ->and($luecken)->toHaveCount(1)
+        ->and($luecken[0]['fehlt'])->toContain('Zubereitung', 'Anrichten');
 
     $res = $this->hb->publish($this->rootTeam, 'foodbook', $fb->id, ['expires_at' => now()->addDays(5)->toDateString()]);
     $this->get('/p/handbuch/' . $res['token'])->assertOk()->assertSee('Keine Zubereitung hinterlegt.');
@@ -109,6 +110,7 @@ it('Panel: veröffentlicht, zeigt Link und Lücken, zieht zurück', function () 
     $fb = ($this->baue)(mitSchritten: false);
 
     $c = Livewire::test(Panel::class, ['type' => 'foodbook', 'quelleId' => $fb->id])
+        ->call('pruefen')
         ->assertSee('Lücken im aktuellen Stand')
         ->set('gueltigBis', now()->addDays(14)->toDateString())
         ->call('veroeffentlichen')
