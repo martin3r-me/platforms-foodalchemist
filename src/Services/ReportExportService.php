@@ -1211,7 +1211,7 @@ class ReportExportService
             ],
             'allergene' => $allergene,
             'allergens_confidence' => $konfidenz === 'none' ? 'unknown' : $konfidenz,
-            'allergene_hinweis' => $angenommen > 0 ? $angenommen . ' Angaben ' . \Platform\FoodAlchemist\Support\AllergenAnnahme::HINWEIS : null,
+            'allergene_hinweis' => $angenommen > 0 ? $angenommen . ' Allergene: ' . \Platform\FoodAlchemist\Support\AllergenAnnahme::ANZEIGE . ' (Lieferant liefert nur Positivangaben)' : null,
             'zusatzstoffe' => $zusatzstoffe,
         ];
     }
