@@ -82,6 +82,23 @@ trait SeedsTeamHierarchy
             });
         }
 
+        // modulables: Stub (Allowlist-Lücke, 23.10.). Cores Module::accessibleKeys (a3e07395, „Modul-Zugriff gebündelt“) liest die
+        // Tabelle bei jedem Full-Page-Render (Navbar). Cores echte Migrationen taugen nicht für SQLite: add_team_id hängt eine
+        // NOT-NULL-Spalte ohne Default an. Nur die Spalten, die der Core liest; leer = kein Nutzer/Team hat Module freigeschaltet.
+        if (! \Illuminate\Support\Facades\Schema::hasTable('modulables')) {
+            \Illuminate\Support\Facades\Schema::create('modulables', function ($table) {
+                $table->id();
+                $table->unsignedBigInteger('module_id');
+                $table->unsignedBigInteger('team_id')->nullable();
+                $table->unsignedBigInteger('modulable_id');
+                $table->string('modulable_type');
+                $table->string('role')->nullable();
+                $table->boolean('enabled')->default(true);
+                $table->string('guard')->default('web');
+                $table->timestamps();
+            });
+        }
+
         // crm_contacts: Stub wie crm_companies (Spec 82 §9: Person der Freigabe, Rollen). Nur die Spalten, die FA liest.
         if (! \Illuminate\Support\Facades\Schema::hasTable('crm_contacts')) {
             \Illuminate\Support\Facades\Schema::create('crm_contacts', function ($table) {
