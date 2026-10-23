@@ -1,5 +1,7 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Handbuch\Panel;
 use Platform\FoodAlchemist\Models\FoodAlchemistHandbuch;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Services\HandbuchService;
@@ -101,4 +103,20 @@ it('lässt den Kundenlink der Präsentation unberührt', function () {
 
 it('unbekannter Token ist 404', function () {
     $this->get('/p/handbuch/gibtesnicht')->assertNotFound();
+});
+
+it('Panel: veröffentlicht, zeigt Link und Lücken, zieht zurück', function () {
+    $fb = ($this->baue)(mitSchritten: false);
+
+    $c = Livewire::test(Panel::class, ['type' => 'foodbook', 'quelleId' => $fb->id])
+        ->assertSee('Lücken im aktuellen Stand')
+        ->set('gueltigBis', now()->addDays(14)->toDateString())
+        ->call('veroeffentlichen')
+        ->assertSee('/p/handbuch/')
+        ->assertSee('Erreichbar');
+    $token = FoodAlchemistHandbuch::firstOrFail()->token;
+    $this->get('/p/handbuch/' . $token)->assertOk();
+
+    $c->call('zurueckziehen')->assertSee('Nicht erreichbar');
+    $this->get('/p/handbuch/' . $token)->assertNotFound();
 });
