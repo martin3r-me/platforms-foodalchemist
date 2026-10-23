@@ -24,8 +24,10 @@ class GpsReplaceTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Ersetzt ein GP in allen Rezept-Zeilen durch ein anderes (from → to) und rechnet die betroffenen '
-            . 'Rezepte neu. Reichweitenstark → confirm=true Pflicht. Nur fürs Besitzer-Team des from-GP.';
+        return 'Ersetzt ein GP komplett durch ein anderes (from → to): alle Rezept-Zeilen UND alle Lieferantenartikel '
+            . '(Allergen-Guard je Artikel; abgelehnte bleiben am from-GP und werden in artikel_abgelehnt gelistet), rechnet die '
+            . 'betroffenen Rezepte neu und wählt die Leads neu. Danach lässt sich das from-GP löschen. Reichweitenstark → confirm=true Pflicht. '
+            . 'Nur fürs Besitzer-Team des from-GP (globale Stamm-Paket-GPs: Master).';
     }
 
     public function getSchema(): array
@@ -65,7 +67,7 @@ class GpsReplaceTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         try {
-            $res = $svc->ersetzeInRezepten($von, $nach);
+            $res = $svc->ersetzeKomplett($team, $von, $nach);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -75,6 +77,8 @@ class GpsReplaceTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'to_id' => (int) $nach->id,
             'zeilen' => (int) ($res['zeilen'] ?? 0),
             'rezepte' => (int) ($res['rezepte'] ?? 0),
+            'artikel_umgehaengt' => (int) ($res['artikel_umgehaengt'] ?? 0),
+            'artikel_abgelehnt' => $res['artikel_abgelehnt'] ?? [],
         ]);
     }
 

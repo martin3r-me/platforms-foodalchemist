@@ -75,6 +75,13 @@
 
         $einordnung = implode(' · ', array_filter([$gp->commodity_group?->name ?? $gp->commodity_group_code, $gp->sub_category]));
         $darfLoeschen = $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null && $referenzen['summe'] === 0;
+        $loeschGrund = $referenzen === null || $referenzen['summe'] === 0 ? '' : implode(', ', array_filter([
+            $referenzen['las'] > 0 ? $referenzen['las'] . ' Lieferantenartikel (erst ersetzen)' : null,
+            $referenzen['rezept_zeilen'] > 0 ? $referenzen['rezept_zeilen'] . ' Rezept-Zeile(n) (erst ersetzen)' : null,
+            $referenzen['derivate'] > 0 ? $referenzen['derivate'] . ' Derivat(e)' : null,
+            $referenzen['merge_quellen'] > 0 ? $referenzen['merge_quellen'] . ' Merge-Verweis(e)' : null,
+            $referenzen['ersatz'] > 0 ? $referenzen['ersatz'] . ' Ersatz-Verknüpfung(en)' : null,
+        ]));
     }
 @endphp
 
@@ -746,7 +753,7 @@
         @if($section === null && $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null)
         <x-fa::section variant="plain" title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
             @if($referenzen['summe'] === 0)
-                <p class="{{ $leise }}">Nirgends verwendet, Löschen ist möglich (Weitere Aktionen oben).</p>
+                <p class="{{ $leise }}">Nirgends verwendet, Löschen ist möglich.</p>
             @else
                 <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ref-zusammenfassung>Löschen nicht möglich, noch verwendet in:
                     {{ implode(' · ', array_filter([
@@ -757,13 +764,14 @@
                         $referenzen['ersatz'] > 0 ? $referenzen['ersatz'] . ' ' . ($referenzen['ersatz'] === 1 ? 'Ersatz-Verknüpfung' : 'Ersatz-Verknüpfungen') : null,
                     ])) }}
                 </p>
-                @if($referenzen['rezept_zeilen'] > 0)
+                @if($referenzen['rezept_zeilen'] > 0 || $referenzen['las'] > 0)
                     <div class="flex flex-col gap-1 pt-1" data-gp-tausch>
-                        <x-fa::field label="In allen Rezepten ersetzen durch" for="gp-tausch-suche">
+                        <x-fa::field label="Ersetzen durch (Artikel und Rezepte)" for="gp-tausch-suche">
                             <x-fa::input id="gp-tausch-suche" size="sm" type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-Grundprodukt suchen" data-tausch-suche />
                         </x-fa::field>
                         @foreach($tauschKandidaten as $k)
-                            <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})" wire:confirm="„{{ $gp->name }}“ in {{ $referenzen['rezepte'] }} Rezept(en) durch „{{ $k->name }}“ ersetzen? Die Rezepte werden neu berechnet." class="{{ $listenKnopf }}">
+                            <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})"
+                                wire:confirm="„{{ $gp->name }}“ durch „{{ $k->name }}“ ersetzen? {{ $referenzen['las'] > 0 ? $referenzen['las'] . ' Artikel werden umgehängt (Allergen-Prüfung je Artikel, abgelehnte bleiben stehen). ' : '' }}{{ $referenzen['rezept_zeilen'] > 0 ? 'Die Zeilen in ' . $referenzen['rezepte'] . ' Rezept(en) werden umgehängt und neu berechnet.' : '' }}" class="{{ $listenKnopf }}">
                                 <x-fa::status :value="$k->status" class="shrink-0" />
                                 <span class="min-w-0 flex-1">{{ $k->name }}</span>
                             </button>
@@ -771,6 +779,22 @@
                     </div>
                 @endif
             @endif
+            @if($abgelehnteArtikel !== [])
+                <x-fa::notice tone="warn" data-abgelehnte-artikel>
+                    Diese Artikel blieben am Grundprodukt, weil die Allergen-Prüfung am Ziel sie ablehnt:
+                    <ul class="list-disc pl-5">
+                        @foreach($abgelehnteArtikel as $a)<li wire:key="abg-{{ $a['id'] }}">{{ $a['bezeichnung'] }} — {{ $a['grund'] }}</li>@endforeach
+                    </ul>
+                </x-fa::notice>
+            @endif
+            <div class="pt-2" data-gp-loeschen-bereich>
+                @if($darfLoeschen)
+                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="gpLoeschen" wire:confirm="„{{ $gp->name }}“ löschen? Es gibt keine Verweise darauf." data-gp-loeschen-knopf>Grundprodukt löschen</x-fa::button>
+                @else
+                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" disabled title="Löschen blockiert: {{ $loeschGrund }}" data-gp-loeschen-gesperrt>Grundprodukt löschen</x-fa::button>
+                    <p class="{{ $leise }} pt-1" data-gp-loeschen-grund>Gesperrt: {{ $loeschGrund }}</p>
+                @endif
+            </div>
         </x-fa::section>
         @endif
         </div>
