@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
  * R2.2 — Was-wäre-wenn-Simulation: hypothetisches Preisszenario (Warengruppe ODER
@@ -30,7 +31,7 @@ class SimulationService
         $ratio = 1 + $deltaPct / 100;
         $gpIds = $this->gpsFuerScope($team, $scope, $ref);
 
-        $res = $this->impact->impactFuerGps($team, $gpIds, $ratio);
+        $res = $this->impact->impactFuerGps($team, $gpIds, $ratio, teamSicht: true);   // Spec 85 PR-F: Preise des Betrachters, Team-Brille
         $res['scope'] = $scope;
         $res['ref'] = $ref;
         $res['delta_pct'] = $deltaPct;
@@ -40,31 +41,47 @@ class SimulationService
         return $res;
     }
 
-    /** GP-ids für den Szenario-Scope (Team-Kette, nur mit Lead-LA — nur die treiben EK). */
+    /**
+     * GP-ids für den Szenario-Scope. Spec 85 PR-F: aus den GPs, die das Team SIEHT (eigene, Master-Kette, globale/Stamm-Paket-GPs) — vorher nur die Kette
+     * ohne globale GPs; ein vorgegebener GP wird auf Sichtbarkeit geprüft. Maßgeblich ist der WIRKSAME Lead des Teams (sein Pin vor dem Plattform-Lead),
+     * nur GPs mit wirksamem Lead treiben den EK.
+     *
+     * @return list<int>
+     */
     private function gpsFuerScope(Team $team, string $scope, string $ref): array
     {
-        $ancestry = FoodAlchemistGp::teamAncestryIds($team);
-        // Spalten qualifiziert: der Scope „lieferant" joint die Artikel-Tabelle dazu, und die
-        // trägt team_id/deleted_at ebenfalls — unqualifiziert wirft SQLite „ambiguous column".
-        $q = DB::table('foodalchemist_gps')
-            ->whereIn('foodalchemist_gps.team_id', $ancestry)
-            ->whereNull('foodalchemist_gps.deleted_at');
+        $sichtbar = fn () => FoodAlchemistGp::visibleToTeam($team);
+        if ($scope === 'gp') {
+            return $sichtbar()->whereKey((int) $ref)->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all();
+        }
+        if (! in_array($scope, ['artikel', 'warengruppe', 'lieferant'], true)) {
+            return [];
+        }
+
+        // wirksamer Lead je GP: Pin des Teams, sonst der Plattform-Lead
+        $pins = DB::table('foodalchemist_gp_la_preferences')->where('team_id', $team->id)->where('gepinnt', true)->whereNull('deleted_at')
+            ->pluck('supplier_item_id', 'gp_id')->map(fn ($v) => (int) $v)->all();
+        $kandidaten = $sichtbar()->where(fn ($w) => $w->whereNotNull('lead_la_supplier_item_id')->orWhereIn('foodalchemist_gps.id', array_keys($pins)))
+            ->when($scope === 'warengruppe', fn ($q) => $q->where('commodity_group_code', $ref))
+            ->get(['foodalchemist_gps.id', 'lead_la_supplier_item_id']);
+        $effektiv = [];
+        foreach ($kandidaten as $g) {
+            $la = $pins[(int) $g->id] ?? ($g->lead_la_supplier_item_id !== null ? (int) $g->lead_la_supplier_item_id : null);
+            if ($la !== null) {
+                $effektiv[(int) $g->id] = $la;
+            }
+        }
 
         return match ($scope) {
-            'gp' => [(int) $ref],
-            'artikel' => $q->where('lead_la_supplier_item_id', (int) $ref)
-                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
-            'warengruppe' => $q->where('commodity_group_code', $ref)->whereNotNull('lead_la_supplier_item_id')
-                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
-            // Spec 32: „Lieferant X erhöht um 5 %" — die praxisnächste Frage im Einkauf und
-            // bis dahin die einzige, die sich NICHT simulieren ließ. Getroffen sind alle GPs,
-            // deren Lead-Artikel bei diesem Lieferanten liegt; wer woanders bezieht, ist es nicht.
-            'lieferant' => \Platform\FoodAlchemist\Support\StammPaket::begrenzen(   // Spec 82 §12 A3: Stamm-Paket-Lead ohne Opt-in zählt nicht
-                $q->join('foodalchemist_supplier_items as li', 'li.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id'),
-                'li', $team, 'foodalchemist_supplier_items')
-                ->where('li.supplier_id', (int) $ref)->whereNull('li.deleted_at')
-                ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
-            default => [],
+            'warengruppe' => array_map('intval', array_keys($effektiv)),
+            'artikel' => array_map('intval', array_keys(array_filter($effektiv, fn (int $la) => $la === (int) $ref))),
+            // Spec 82 §12 A3: Stamm-Paket-Artikel ohne Opt-in zählt nicht (visibleToTeam der Artikel)
+            'lieferant' => (function () use ($team, $effektiv, $ref) {
+                $laIds = FoodAlchemistSupplierItem::visibleToTeam($team)->whereIn('foodalchemist_supplier_items.id', array_values(array_unique($effektiv)))
+                    ->where('supplier_id', (int) $ref)->pluck('foodalchemist_supplier_items.id')->map(fn ($v) => (int) $v)->all();
+
+                return array_map('intval', array_keys(array_filter($effektiv, fn (int $la) => in_array($la, $laIds, true))));
+            })(),
         };
     }
 
