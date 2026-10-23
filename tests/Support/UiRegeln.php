@@ -21,7 +21,11 @@ final class UiRegeln
         'style_block' => '/<style\b/',
         // Inline-Stil nur für echte Laufzeitwerte (enthält {{ … }}).
         // (x-bind:style / :style sind gebundene Laufzeitwerte und zählen nicht.)
-        'style_statisch' => '/(?<![:\w-])style="(?![^"]*\{\{)[^"]+"/',
+        // Ausnahme (Kurator 23.10., #520): ein style, der NUR Grid-Platzierung trägt (grid-column/grid-row/grid-area), ist Layout-Geometrie,
+        // kein Design-Wert. Sie steht bewusst inline, weil io bei Modul-Deploys keine Assets baut — eine Klasse aus Tailwind oder der
+        // Modul-CSS griffe dort erst nach einem Build (Preisverlauf: SVG schrumpfte auf 56 × 24 px). Sobald etwas anderes im selben style
+        // steht (Farbe, Breite, Abstand …), zählt er wieder.
+        'style_statisch' => '/(?<![:\w-])style="(?![^"]*\{\{)(?!\s*(?:grid-(?:column|row|area)\s*:\s*[^;"]+;?\s*)+")[^"]+"/',
     ];
 
     public static function zaehlen(): array
