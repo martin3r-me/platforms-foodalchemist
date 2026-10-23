@@ -211,3 +211,45 @@ it('GP auflösen: Ziel gleich Quelle oder inaktiv ist ein Konflikt', function ()
 
     ($this->lauf)(['--plan' => [$plan]])->assertSuccessful()->expectsOutputToContain('Konflikte: 2');
 });
+
+it('WG setzen: auch der am GP gespeicherte Altbestandswert der Ziel-WG ist als Sub-Kategorie erlaubt (»13.1 Komponenten warm«)', function () {
+    ($this->wgAnlegen)('13', 'Convenience');
+    $a = ($this->gp)('a|', 'Schweinebraten: gegart, in Scheiben', '06');
+    ($this->gp)('b|', 'Kartoffelgratin: gegart', '13', ['sub_category' => '13.1 Komponenten warm']);
+    $plan = ($this->plan)([['wg_setzen', '', $a->id, '', '', '13', '13.1 Komponenten warm', '', '']]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $a->id)->value('sub_category'))->toBe('13.1 Komponenten warm')
+        ->and(DB::table('foodalchemist_gps')->where('id', $a->id)->value('commodity_group_code'))->toBe('13');
+});
+
+it('Zwei neue GPs mit gleichem Pipe-Schlüssel (frisch/TK, ganz/in Scheiben) werden angelegt; das zweite bekommt den Namens-Slug als Schlüssel', function () {
+    $quelle = ($this->gp)('q|', 'Dorade: frisch');
+    $s1 = ($this->la)($quelle, 'Dorade ganz frisch');
+    $s2 = ($this->la)($quelle, 'Dorade ganz TK');
+    $plan = ($this->plan)([
+        ['neues_gp', $s1->supplier_item_id, $quelle->id, '', 'Dorade: frisch, ganz', '03', '', '', ''],
+        ['neues_gp', $s2->supplier_item_id, $quelle->id, '', 'Dorade: TK, ganz', '03', '', '', ''],
+    ]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    $a = DB::table('foodalchemist_gps')->where('name', 'Dorade: frisch, ganz')->first();
+    $b = DB::table('foodalchemist_gps')->where('name', 'Dorade: TK, ganz')->first();
+    expect($a)->not->toBeNull()->and($b)->not->toBeNull()->and($a->gp_key)->toBe('dorade||ganz')->and($b->gp_key)->toBe('dorade_tk_ganz');
+});
+
+it('Neues GP, dessen Pipe-Schlüssel an einem BESTEHENDEN GP mit anderem Namen kollidiert (32 % vs. 35 %), bekommt den Namens-Slug als Schlüssel', function () {
+    $quelle = ($this->gp)('schokolade_dulcey||blond', 'Schokolade Dulcey: trocken, blond, 35 % Kakao', '09');
+    $s1 = ($this->la)($quelle, 'Dulcey 32 % Kakao Couverture');
+    $plan = ($this->plan)([
+        ['neues_gp', $s1->supplier_item_id, $quelle->id, '', 'Schokolade Dulcey: trocken, blond, 32 % Kakao', '09', '', '', ''],
+    ]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    $neu = DB::table('foodalchemist_gps')->where('name', 'Schokolade Dulcey: trocken, blond, 32 % Kakao')->first();
+    expect($neu)->not->toBeNull()->and($neu->gp_key)->toBe('schokolade_dulcey_trocken_blond_32_kakao')
+        ->and(DB::table('foodalchemist_supplier_item_structures')->where('id', $s1->id)->value('gp_id'))->toBe($neu->id);
+});
