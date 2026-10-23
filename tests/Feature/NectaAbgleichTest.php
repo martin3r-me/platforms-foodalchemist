@@ -177,10 +177,10 @@ it('Allergene: strenger automatisch auch über Handpflege, lockerer immer Prüff
     $this->attrappe->daten['supplier-item-allergens'][0] = ['supplierItemId' => 36674788, 'gluten' => 3, 'milk' => 3,
         'egg' => 3,        // nicht_enthalten → enthalten: strenger → automatisch
         'soy' => 2,        // enthalten → spuren: lockerer → Prüffall
-        'celery' => null]; // nicht_enthalten → unbekannt: strenger (unbekannt > nicht_enthalten) → automatisch
+        'celery' => null]; // nicht_enthalten → k. A.: keine Aussage → FA bleibt, kein Prüffall (Dominique 23.10., vorher „strenger“)
     ($this->lauf)();
     ($this->lauf)(['voll' => true]);
-    expect($allergen('allergen_eggs'))->toBe('enthalten')->and($allergen('allergen_celery'))->toBeNull()
+    expect($allergen('allergen_eggs'))->toBe('enthalten')->and($allergen('allergen_celery'))->toBe('nicht_enthalten')
         ->and($allergen('allergen_soy'))->toBe('enthalten')
         ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->pluck('feld')->all())->toBe(['allergen_soy']);
 
@@ -201,6 +201,34 @@ it('Allergene: strenger automatisch auch über Handpflege, lockerer immer Prüff
     $this->travel(1)->minutes();
     $r = ($this->lauf)(['voll' => true]);
     expect($allergen('allergen_gluten'))->toBe('enthalten')->and($r['zaehler']['allergen_verschaerft'])->toBe(1);
+});
+
+it('k. A. von Necta (NULL, unbekannt, Deklaration 0): FA-Wert bleibt — auch „nicht enthalten“/„nein“ —, kein Prüffall, nur Zähler; ausdrücklich lockerer bleibt Prüffall', function () {
+    // Dominique 23.10.: k. A. ist keine Aussage. Sie darf keine Warnung entfernen (mit Positivlisten-Merkmal würde aus leer sonst
+    // „angenommen nicht enthalten“) und kein bewusst gepflegtes „nicht enthalten“ in „unbekannt“ zurückdrehen.
+    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['allergen_soy' => 'enthalten', 'allergen_celery' => 'nicht_enthalten',
+        'allergen_mustard' => 'enthalten', 'details' => json_encode(['oats' => 'enthalten', 'wheat' => 'nicht_enthalten'])]);
+    DB::table('foodalchemist_item_declarations')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 3, 'with_preservative' => 1, 'with_sweetener' => 3,
+        'created_at' => now(), 'updated_at' => now()]);
+    $this->attrappe->daten['supplier-item-allergens'][0] = ['supplierItemId' => 36674788, 'gluten' => 3, 'milk' => 3,
+        'soy' => null, 'celery' => null,          // k. A. gegen enthalten / nicht_enthalten → beide bleiben
+        'mustard' => 1];                          // ausdrücklich nicht_enthalten gegen enthalten → Prüffall wie bisher
+    // Unterarten: keine Angabe zu oats/wheat → beide bleiben
+    $this->attrappe->daten['supplier-item-declaration-substances'] = [['supplierItemId' => 36674788,
+        'declarationWithDye' => 0, 'declarationWithPreservative' => null,   // k. A. gegen ja / nein → beide bleiben
+        'declarationWithSweetener' => 1]];                                    // ausdrücklich nein gegen ja → Prüffall wie bisher
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    $al = DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->sole();
+    $dk = DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->sole();
+    expect($al->allergen_soy)->toBe('enthalten')->and($al->allergen_celery)->toBe('nicht_enthalten')->and($al->allergen_mustard)->toBe('enthalten')
+        ->and(json_decode($al->details, true))->toBe(['oats' => 'enthalten', 'wheat' => 'nicht_enthalten'])
+        ->and((int) $dk->with_dye)->toBe(3)->and((int) $dk->with_preservative)->toBe(1)->and((int) $dk->with_sweetener)->toBe(3)
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->whereIn('art', ['allergen_aenderung', 'deklaration_aenderung'])->orderBy('feld')->pluck('feld')->all())
+        ->toBe(['allergen_mustard', 'with_sweetener'])
+        ->and($r['zaehler']['kennzeichnung_ka_behalten'])->toBe(6);   // soy, celery, details.oats, details.wheat, with_dye, with_preservative
 });
 
 it('Deklaration: 3 (ja) > 0/NULL (k.A.) > 1 (nein) — nein → ja automatisch, ja → nein Prüffall, k.A. 0 ⇄ NULL angleichen', function () {

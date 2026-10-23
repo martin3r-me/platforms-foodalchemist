@@ -367,3 +367,27 @@ it('Sammel über viele Fälle läuft als Job in Teilmengen: Stand fertig, alle e
         ->execute(['lauf' => $r['lauf']], new \Platform\Core\Contracts\ToolContext($this->kurator, $this->rootTeam));
     expect($stand->data['erledigt'])->toBe($n)->and($stand->data['fertig'])->toBeTrue();
 });
+
+it('Dominique 23.10.: Artikelname öffnet das Artikel-Modal auf der Seite; nach dem Speichern bleibt die Liste gefiltert', function () {
+    config(['foodalchemist.bearbeitungssperre' => false]);
+    ($this->allergene)($this->a, ['allergen_milk' => 'enthalten']);
+    $f1 = ($this->fall)('allergen_aenderung', 'item_allergen', 36674788, 'allergen_milk', 'enthalten', 'nicht_enthalten');
+    ($this->fall)('manuell_gepflegt', 'supplier_item', 36674790, 'brand', null, 'X');
+    $this->actingAs($this->admin);
+
+    $c = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\NectaPruefaelle::class)
+        ->set('art', 'allergen_aenderung')->set('lieferant', $this->lieferant->id)
+        ->assertSeeHtml('data-pruefall-artikel="' . $this->a->id . '"')
+        ->assertSeeHtml("\$dispatch('item-modal.oeffnen', { id: " . $this->a->id . ' })')
+        ->assertDontSee('Rosinenschnecke');
+
+    // Modal auf der Seite eingebunden (eigener key, sonst springt es zu) und öffnet genau diesen Artikel
+    expect(file_get_contents(__DIR__ . '/../../resources/views/livewire/suppliers/necta-pruefaelle.blade.php'))
+        ->toContain('<livewire:foodalchemist.suppliers.item-modal key="necta-pruefaelle--suppliers.item-modal" />');
+    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\ItemModal::class)->call('oeffnen', $this->a->id)
+        ->assertSet('itemId', $this->a->id)->assertDispatched('modal.open');
+
+    // Speichern im Modal meldet „item-gespeichert“ → die Liste zeichnet neu, Filter und Fall bleiben
+    $c->dispatch('item-gespeichert')->assertSet('art', 'allergen_aenderung')->assertSet('lieferant', $this->lieferant->id)
+        ->assertSeeHtml('data-pruefall="' . $f1 . '"')->assertDontSee('Rosinenschnecke');
+});
