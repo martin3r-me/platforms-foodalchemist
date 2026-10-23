@@ -261,6 +261,18 @@ class GpUmhaengenService
                     continue;
                 }
                 $key = $this->naming->buildGpKey($this->naming->slugify($felder['hauptzutat']), $felder['processing'], $felder['form']);
+                // Der Pipe-Schlüssel (Hauptzutat|Verarbeitung|Form) kennt weder Zustand noch Gewicht/Zuschnitt: zwei geplante GPs mit demselben
+                // Pipe-Schlüssel, aber verschiedenem Namen (frisch/TK, ganz/in Scheiben, 100/120 g) bekommen für das zweite GP den Namens-Slug
+                // als Schlüssel (Bestandsformat der älteren GPs).
+                $schluesselNamensSlug = false;
+                foreach ($neueGps as $andere) {
+                    if ($andere['gp_key'] === $key && $andere['name'] !== $name) {
+                        $key = $this->naming->slugify($name);
+                        $schluesselNamensSlug = true;
+
+                        break;
+                    }
+                }
                 $guard = $this->naming->anlageGuard($team, $key, $name);
                 if ($guard['blockiert']) {
                     $fehler('GP gibt es schon: #' . ($guard['vorhandenes_gp']->id ?? '?') . ' ' . ($guard['vorhandenes_gp']->name ?? '') . " ({$guard['grund']}) — Plan auf umhaengen ändern");
@@ -273,7 +285,7 @@ class GpUmhaengenService
 
                     continue;
                 }
-                $neueGps[$schluessel] = ['name' => $name, 'in' => $in, 'bio' => (bool) $felder['bio'], 'status' => $status, 'gp_key' => $key, 'artikel' => []];
+                $neueGps[$schluessel] = ['name' => $name, 'in' => $in, 'bio' => (bool) $felder['bio'], 'status' => $status, 'gp_key' => $key, 'key_namensslug' => $schluesselNamensSlug, 'artikel' => []];
             }
             $neueGps[$schluessel]['artikel'][] = $si;
             $aktionen[] = ['aktion' => 'neues_gp', 'structure_id' => (int) $st->id, 'supplier_item_id' => $si, 'gp_alt' => $aktuell, 'gp_neu' => null, 'neu_schluessel' => $schluessel];
@@ -301,8 +313,13 @@ class GpUmhaengenService
             // 1) neue GPs
             $neueIds = [];
             foreach ($plan['neue_gps'] as $schluessel => $spec) {
-                $gp = $this->naming->createGp($team, $spec['in'] + ['name' => $spec['name']], false);
+                // Namens-Slug-Schlüssel: createGp prüft den Pipe-Schlüssel; die Planung hat Kollision/Dublette schon ausgeschlossen → bewusst anlegen
+                // und den Schlüssel danach auf den Namens-Slug setzen.
+                $gp = $this->naming->createGp($team, $spec['in'] + ['name' => $spec['name']], (bool) ($spec['key_namensslug'] ?? false));
                 $upd = ['status' => $spec['status'], 'updated_at' => now()];
+                if ($spec['key_namensslug'] ?? false) {
+                    $upd['gp_key'] = $spec['gp_key'];
+                }
                 if ($spec['bio']) {
                     $upd['bio'] = 'bio';
                 }

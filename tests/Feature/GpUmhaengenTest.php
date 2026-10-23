@@ -223,3 +223,19 @@ it('WG setzen: auch der am GP gespeicherte Altbestandswert der Ziel-WG ist als S
     expect(DB::table('foodalchemist_gps')->where('id', $a->id)->value('sub_category'))->toBe('13.1 Komponenten warm')
         ->and(DB::table('foodalchemist_gps')->where('id', $a->id)->value('commodity_group_code'))->toBe('13');
 });
+
+it('Zwei neue GPs mit gleichem Pipe-Schlüssel (frisch/TK, ganz/in Scheiben) werden angelegt; das zweite bekommt den Namens-Slug als Schlüssel', function () {
+    $quelle = ($this->gp)('q|', 'Dorade: frisch');
+    $s1 = ($this->la)($quelle, 'Dorade ganz frisch');
+    $s2 = ($this->la)($quelle, 'Dorade ganz TK');
+    $plan = ($this->plan)([
+        ['neues_gp', $s1->supplier_item_id, $quelle->id, '', 'Dorade: frisch, ganz', '03', '', '', ''],
+        ['neues_gp', $s2->supplier_item_id, $quelle->id, '', 'Dorade: TK, ganz', '03', '', '', ''],
+    ]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    $a = DB::table('foodalchemist_gps')->where('name', 'Dorade: frisch, ganz')->first();
+    $b = DB::table('foodalchemist_gps')->where('name', 'Dorade: TK, ganz')->first();
+    expect($a)->not->toBeNull()->and($b)->not->toBeNull()->and($a->gp_key)->toBe('dorade||ganz')->and($b->gp_key)->toBe('dorade_tk_ganz');
+});
