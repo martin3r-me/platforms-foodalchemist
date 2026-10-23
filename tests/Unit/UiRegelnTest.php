@@ -44,3 +44,14 @@ it('lässt keine View schlechter werden als ihren eingefrorenen Stand', function
 
     expect($schlechter)->toBe([], "Design-Regeln verletzt — Token/Baustein nutzen statt Einzelwert:\n" . implode("\n", $schlechter));
 });
+
+it('style_statisch: reine Grid-Platzierung ist Layout-Geometrie (#520), alles andere im selben style zählt weiter', function () {
+    $zahl = fn (string $html) => preg_match_all(UiRegeln::REGELN['style_statisch'], $html);
+
+    expect($zahl('<div style="grid-column: 1; grid-row: 2;"></div>'))->toBe(0)
+        ->and($zahl('<div style="grid-area: plot"></div>'))->toBe(0)
+        ->and($zahl('<div style="grid-column: 2; grid-row: 1; color: #ff0000;"></div>'))->toBe(1)      // Grid + Farbe: verboten
+        ->and($zahl('<svg style="grid-column: 2; grid-row: 1; width: 100%;"></svg>'))->toBe(1)       // Grid + Breite: verboten
+        ->and($zahl('<div style="margin-top: 1rem"></div>'))->toBe(1)
+        ->and($zahl('<div style="height: {{ $h }}px"></div>'))->toBe(0);                             // Laufzeitwert wie bisher
+});

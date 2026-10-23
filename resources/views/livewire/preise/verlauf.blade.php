@@ -53,7 +53,7 @@
                     <span style="position: absolute; right: 0; top: {{ $a['y'] / 10 }}%; transform: translateY(-50%); {{ $schrift }}" class="tabular-nums">{{ $a['label'] }}</span>
                 @endforeach
             </div>
-            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" style="grid-column: 2; grid-row: 1; width: 100%; height: 100%;" data-preisverlauf-svg>
+            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" style="grid-column: 2; grid-row: 1;" data-preisverlauf-svg>
                 @foreach($diagramm['achse_y'] as $a)
                     <line x1="0" x2="1000" y1="{{ $a['y'] }}" y2="{{ $a['y'] }}" stroke="var(--fa-line)" stroke-width="1" vector-effect="non-scaling-stroke" />
                 @endforeach
