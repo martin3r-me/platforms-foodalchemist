@@ -110,6 +110,14 @@ class MandantenService
     {
         $this->pruefeMandant($mandant);
         $akteur = $this->pruefeVerwaltung($user, 'Mandant pflegen');
+        if (array_key_exists('ki_deckel_eur', $felder) || array_key_exists('ki_deckel_unbegrenzt', $felder)) {
+            $this->setzeKiDeckel($mandant, $felder, $akteur);
+            unset($felder['ki_deckel_eur'], $felder['ki_deckel_unbegrenzt']);
+            if ($felder === []) {
+                // Nur der Deckel: KEINE Mandanten-Zeile anlegen — sonst würde ein Team ohne Zeile (Projekt-Deckel) still „aktiv“ und ungedeckelt.
+                return $this->zeige($mandant);
+            }
+        }
         $aendert = [];
 
         $zeile = FoodAlchemistMandant::firstOrNew(['team_id' => $mandant->id]);
@@ -223,6 +231,52 @@ class MandantenService
             'modus_geaendert_von' => $z?->modus_geaendert_von,
             'modus_geaendert_am' => $z?->modus_geaendert_at?->toDateString(),
             'hat_zeile' => $z !== null,
+        ] + $this->kiDeckelDarstellung((int) $team->id);
+    }
+
+    /**
+     * KI-Monatsdeckel (Dominique 23.10.2026): Betrag oder „unbegrenzt“ je Mandant, gesetzt vom Master-Admin in der Mandanten-Verwaltung.
+     * `ki_deckel_eur` null = Standard (bei Projekt/ohne Zeile `foodalchemist.ai.projekt_deckel_eur`, bei aktiv ungedeckelt).
+     * Schreibt dasselbe Kontingent wie Spec 77b ({@see FaRechte::setzeKontingente}), mit der Rechteprüfung der Mandanten-Verwaltung.
+     *
+     * @param  array<string, mixed>  $felder  ki_deckel_eur (Zahl|Text|null) und/oder ki_deckel_unbegrenzt (bool)
+     */
+    private function setzeKiDeckel(Team $mandant, array $felder, User $akteur): void
+    {
+        $daten = [];
+        if (array_key_exists('ki_deckel_eur', $felder)) {
+            $v = $felder['ki_deckel_eur'];
+            $v = $v === '' || $v === null ? null : (is_string($v) ? str_replace(',', '.', trim($v)) : $v);
+            if ($v !== null && (! is_numeric($v) || (float) $v < 0)) {
+                throw new \RuntimeException('Der KI-Deckel muss ein Betrag ≥ 0 sein (leer = Standard).');
+            }
+            $daten['ki_budget_eur_monat'] = $v === null ? null : round((float) $v, 2);
+        }
+        if (array_key_exists('ki_deckel_unbegrenzt', $felder)) {
+            $daten['ki_deckel_unbegrenzt'] = filter_var($felder['ki_deckel_unbegrenzt'], FILTER_VALIDATE_BOOLEAN);
+        }
+        $vorher = $this->kiDeckelDarstellung((int) $mandant->id);
+        $k = \Platform\FoodAlchemist\Models\FoodAlchemistTeamKontingent::updateOrCreate(['team_id' => $mandant->id], $daten + ['set_by' => $akteur->id]);
+        $nachher = $this->kiDeckelDarstellung((int) $mandant->id);
+        if ($vorher !== $nachher) {
+            $this->protokoll->schreibe('mandant_ki_deckel', ['team_id' => $mandant->id, 'team' => $mandant->name,
+                'von' => ['eur' => $vorher['ki_deckel_eur'], 'quelle' => $vorher['ki_deckel_quelle']], 'nach' => ['eur' => $nachher['ki_deckel_eur'], 'quelle' => $nachher['ki_deckel_quelle']]], $akteur, $k);
+        }
+    }
+
+    /** @return array{ki_deckel_eur: ?float, ki_deckel_quelle: string, ki_deckel_unbegrenzt: bool, ki_deckel_betrag_gesetzt: ?float, ki_verbrauch_eur_monat: float} */
+    private function kiDeckelDarstellung(int $mandantId): array
+    {
+        $svc = app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class);
+        $d = $svc->deckel($mandantId);
+        $k = \Platform\FoodAlchemist\Models\FoodAlchemistTeamKontingent::where('team_id', $mandantId)->first();
+
+        return [
+            'ki_deckel_eur' => $d['eur'],
+            'ki_deckel_quelle' => $d['quelle'],
+            'ki_deckel_unbegrenzt' => (bool) ($k?->ki_deckel_unbegrenzt ?? false),
+            'ki_deckel_betrag_gesetzt' => $k?->ki_budget_eur_monat !== null ? (float) $k->ki_budget_eur_monat : null,
+            'ki_verbrauch_eur_monat' => round($svc->verbrauchMonat($mandantId), 2),
         ];
     }
 }
