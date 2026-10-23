@@ -21,6 +21,6 @@ class FoodAlchemistTeamKontingent extends Model
 
     protected $casts = [
         'uuid' => 'string',
-        'ki_budget_eur_monat' => 'decimal:2', 'max_standorte' => 'integer', 'max_user' => 'integer',
+        'ki_budget_eur_monat' => 'decimal:2', 'max_standorte' => 'integer', 'max_user' => 'integer', 'ki_deckel_unbegrenzt' => 'boolean',
     ];
 }

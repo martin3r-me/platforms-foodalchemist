@@ -73,17 +73,18 @@ it('ohne gespeicherten Kurs gilt env; ohne env rechnet die Anzeige in USD', func
     expect($rechner->kurs())->toBeNull()->and($rechner->displayCost(10.0))->toBe(10.0)->and($rechner->currency())->toBe('USD');
 });
 
-it('★ das KI-Budget rechnet mit dem gespeicherten EZB-Kurs', function () {
+it('★ das KI-Budget rechnet mit dem beim Aufruf eingefrorenen Kurs — ein neuer EZB-Kurs ändert alten Verbrauch nicht', function () {
+    // KI-Abrechnung 23.10.: Budget, Anzeige und Rechnung lesen kosten_usd × usd_eur der Log-Zeile (Kurs je Aufruf eingefroren, KiAbrechnung::fuerLogZeile)
     DB::table('foodalchemist_ai_call_log')->insert(['uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->childA->id, 'feature' => 'test',
-        'model' => 'gpt-4o', 'tokens_in' => 1_000_000, 'tokens_out' => 1_000_000, 'created_at' => now(), 'updated_at' => now()]);
+        'model' => 'gpt-4o', 'tokens_in' => 1_000_000, 'tokens_out' => 1_000_000, 'abrechnung_team_id' => $this->rootTeam->id, 'verursacher' => 'mandant',
+        'kosten_usd' => 10.0, 'usd_eur' => 0.95, 'created_at' => now(), 'updated_at' => now()]);
     $rechte = app(FaRechte::class);
-    $mitEnv = $rechte->kontingentNutzung($this->rootTeam)['ki_eur_monat'];
+    expect($rechte->kontingentNutzung($this->rootTeam)['ki_eur_monat'])->toBe(9.5);
 
     Http::fake([WechselkursService::URL => Http::response(($this->xml)(now()->toDateString(), '2.0'))]);   // 1 USD = 0,50 EUR
     $this->svc->holen();
-    $mitEzb = $rechte->kontingentNutzung($this->rootTeam)['ki_eur_monat'];
 
-    expect($mitEnv)->toBeGreaterThan(0)->and(round($mitEzb / $mitEnv, 3))->toBe(round(0.5 / 0.95, 3));
+    expect($rechte->kontingentNutzung($this->rootTeam)['ki_eur_monat'])->toBe(9.5);   // alter Aufruf bleibt beim alten Kurs
 });
 
 it('Signal nach mehr als 5 Kalendertagen ohne neuen Kurs (Ostern ohne Fehlalarm); frischer Kurs schließt es', function () {

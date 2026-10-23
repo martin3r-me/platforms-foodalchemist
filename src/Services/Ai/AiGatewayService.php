@@ -60,13 +60,8 @@ class AiGatewayService
         // M7-08: Kill-Switch — Team-Schalter stoppt jeden Call VOR dem Provider. Spec 84 A-2: Team aus FaTeam (MCP-Team nach
         // team.switch, Job-Team aus dem Payload) statt currentTeamRelation (das war immer das UI-Team)
         $team = \Platform\FoodAlchemist\Support\FaTeam::aktuell();
-        if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
-        }
-        // Spec 77b: KI-Budget (€ je Monat) des Haupt-Teams
-        if ($team !== null && app(\Platform\FoodAlchemist\Services\FaRechte::class)->kiBudgetErschoepft($team)) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiBudgetErschoepftException();
-        }
+        // Kill-Switch + Monatsdeckel des zahlenden Mandanten (Spec 77b-Budget, Projekt-Deckel 23.10.) — dieselbe Zuordnung wie das Kosten-Log
+        app(KiDeckelService::class)->pruefe(array_intersect_key($options, ['verursacher_team_id' => 1, 'verursacher' => 1]));
 
         /*
          * Welcher Kanon gilt? Standard: der Prompt-Key selbst.
@@ -641,13 +636,7 @@ class AiGatewayService
     public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
         $team = \Platform\FoodAlchemist\Support\FaTeam::aktuell();   // Spec 84 A-2
-        if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
-        }
-        // Spec 77b: KI-Budget (€ je Monat) des Haupt-Teams
-        if ($team !== null && app(\Platform\FoodAlchemist\Services\FaRechte::class)->kiBudgetErschoepft($team)) {
-            throw new \Platform\FoodAlchemist\Exceptions\KiBudgetErschoepftException();
-        }
+        app(KiDeckelService::class)->pruefe();   // Kill-Switch + Monatsdeckel (Spec 84 A-2: Team aus FaTeam)
         $registry = app(\Platform\Core\Tools\ToolRegistry::class);
         $katalog = collect($toolNames)
             ->map(fn ($n) => $registry->get($n))

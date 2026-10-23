@@ -263,6 +263,7 @@ class VoiceModal extends Component
             return;
         }
         try {
+            app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class)->pruefe();   // die Transkription geht am Gateway vorbei: Kill-Switch + Deckel hier
             $this->transcript = trim(app(SttServiceContract::class)->transcribe(
                 (string) file_get_contents($this->audio->getRealPath()),
                 VoiceMime::aufgeloest($this->audio),

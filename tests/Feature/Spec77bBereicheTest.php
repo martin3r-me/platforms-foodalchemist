@@ -106,9 +106,10 @@ it('Kontingente: nur Plattform-Admin setzt; Standorte und Benutzer werden geprü
 
     // KI-Budget: ohne Verbrauch frei, mit teurem Aufruf im Monat erschöpft (Unter-Team zählt zum Haupt-Team)
     expect($this->rechte->kiBudgetErschoepft($this->rootTeam))->toBeFalse();
-    config(['foodalchemist.ai.usd_eur' => 1.0]);
+    // Verbrauch = eingefrorene Kosten des Mandanten (KI-Abrechnung 23.10.), wie Rechnung und Anzeige — nicht mehr live über team_id
     DB::table('foodalchemist_ai_call_log')->insert(['uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->childA->id, 'feature' => 'test',
-        'model' => 'gpt-4o', 'tokens_in' => 1_000_000, 'tokens_out' => 1_000_000, 'created_at' => now(), 'updated_at' => now()]);
+        'model' => 'gpt-4o', 'tokens_in' => 1_000_000, 'tokens_out' => 1_000_000, 'abrechnung_team_id' => $this->rootTeam->id, 'verursacher' => 'mandant',
+        'kosten_usd' => 10.0, 'usd_eur' => 1.0, 'created_at' => now(), 'updated_at' => now()]);
     expect($this->rechte->kontingentNutzung($this->rootTeam)['ki_eur_monat'])->toBeGreaterThan(0.01)
         ->and($this->rechte->kiBudgetErschoepft($this->childA))->toBeTrue();
     expect(new KiBudgetErschoepftException())->toBeInstanceOf(KiDeaktiviertException::class);

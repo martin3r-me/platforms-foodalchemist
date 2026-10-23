@@ -794,6 +794,12 @@ return [
 
         /* null = ehrliche USD-Anzeige; optionaler Deployment-Kurs für EUR. */
         'usd_eur' => env('FOODALCHEMIST_AI_USD_EUR', env('AI_USD_EUR')),
+
+        /*
+         * KI-Abrechnung je Mandant (Dominique 23.10.2026): Monatsdeckel in Euro für Mandanten vor der Lizenz (Status „projekt“) und Teams
+         * ohne Mandanten-Zeile, solange der Master-Admin nichts anderes setzt (Betrag oder „unbegrenzt“ am Kontingent des Mandanten).
+         */
+        'projekt_deckel_eur' => (float) env('FOODALCHEMIST_KI_PROJEKT_DECKEL_EUR', 20),
     ],
 
     /*
