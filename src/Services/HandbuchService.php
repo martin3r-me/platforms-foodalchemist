@@ -41,6 +41,7 @@ class HandbuchService
         private FoodAlchemistMediaService $media,
         private RegenerationCascadeService $regeneration,
         private HandbuchQuellenService $quellen,
+        private HandbuchZutatenService $zutaten,
     ) {
     }
 
@@ -144,6 +145,7 @@ class HandbuchService
     public function buildSnapshot(Team $team, Model $entity, string $type): array
     {
         $quelle = $this->quellen->lies($team, $type, $entity);
+        $this->zutaten->zuruecksetzen();
 
         // Gerichte einmalig laden: alle vorkommenden Rezept-IDs → Karten.
         $refs = [];
@@ -172,7 +174,7 @@ class HandbuchService
                     continue;
                 }
                 if (! isset($gerichte[$it['key']])) {
-                    $karte = $this->gerichtKarte($recipe, $it['label']);
+                    $karte = $this->gerichtKarte($team, $recipe, $it['label']);
                     $karte['codes'] = $it['codes'];
                     $gerichte[$it['key']] = $karte;
                     $fehlt = $this->fehlendeAbschnitte($karte);
@@ -196,6 +198,8 @@ class HandbuchService
             'freigabe' => ['at' => now()->toIso8601String(), 'by' => auth()->id(), 'datum' => now()->format('d.m.Y')],
             'sections' => $sections,
             'gerichte' => $gerichte,
+            'basisrezepte' => $this->zutaten->basisrezepte(),
+            'personen' => isset($quelle['personen']) && (int) $quelle['personen'] > 0 ? (int) $quelle['personen'] : null,
             'legende' => $quelle['legende'] ?? null,
             'luecken' => $luecken,
         ];
@@ -206,7 +210,7 @@ class HandbuchService
      *
      * @return array<string,mixed>
      */
-    public function gerichtKarte(FoodAlchemistRecipe $recipe, string $label): array
+    public function gerichtKarte(Team $team, FoodAlchemistRecipe $recipe, string $label): array
     {
         $dar = $recipe->standardPresentation;
         $regen = $this->regeneration->fuerRezept($recipe);
@@ -248,6 +252,7 @@ class HandbuchService
                 'form' => $dar?->servingForm?->label,
                 'geschirr' => $dar?->vessel?->name,
             ],
+            'zutaten' => $this->zutaten->fuerGericht($team, $recipe),
             'zubereitung' => $this->schritte($recipe->steps),
             'anrichten' => $this->schritte($recipe->platingSteps),
             'regeneration' => $regenZeilen,
@@ -277,8 +282,8 @@ class HandbuchService
     private function fehlendeAbschnitte(array $karte): array
     {
         $fehlt = [];
-        foreach (['zubereitung' => 'Zubereitung', 'anrichten' => 'Anrichten', 'regeneration' => 'Regeneration'] as $k => $l) {
-            if ($karte[$k] === []) {
+        foreach (['zutaten' => 'Zutaten', 'zubereitung' => 'Zubereitung', 'anrichten' => 'Anrichten', 'regeneration' => 'Regeneration'] as $k => $l) {
+            if (($k === 'zutaten' ? $karte[$k]['zeilen'] : $karte[$k]) === []) {
                 $fehlt[] = $l;
             }
         }
