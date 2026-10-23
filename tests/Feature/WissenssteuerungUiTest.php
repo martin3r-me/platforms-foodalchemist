@@ -148,7 +148,8 @@ it('sagt beim Entfernen, dass die Kategorie danach search-only ist', function ()
  * Der Test bleibt stehen: sobald der Harness Passport kennt, läuft er von selbst mit.
  */
 it('rendert die Sektion als ganze Seite, nicht nur als Komponente', function () {
-    config(['foodalchemist.prompts' => ['recipe.generator' => ['tier' => 'B', 'task' => 'x']]]);
+    config(['foodalchemist.prompts' => ['recipe.generator' => ['tier' => 'B', 'task' => 'x']],
+        'foodalchemist.master_team_id' => $this->rootTeam->id]);   // Neuordnung 23.10.: Wissens-Steuerung nur Master/Plattform-Admin
     $this->actingAs($this->makeUser($this->rootTeam));
 
     $this->get(route('foodalchemist.einstellungen', ['sektion' => 'wissenssteuerung']))

@@ -30,7 +30,7 @@ beforeEach(function () {
 
 it('Sektion Teamprofil steht in der Navigation (Gruppe Betrieb & Küche) und rendert', function () {
     expect(Einstellungen::SEKTIONEN)->toHaveKey('teamprofil')
-        ->and(Einstellungen::GRUPPEN['betrieb']['sektionen'])->toContain('teamprofil');
+        ->and(Einstellungen::GRUPPEN['kueche']['sektionen'])->toContain('teamprofil');
 
     Livewire::test(Einstellungen::class, ['sektion' => 'teamprofil'])
         ->assertSee('Teamprofil')->assertSeeHtml('data-settings-teamprofil');

@@ -57,13 +57,14 @@
     'visited' => [],               {{-- bereits serverseitig aufgebaute Reiter; verhindert Folge-Roundtrips --}}
     'counts' => [],                {{-- Server-Modus (optional): ['key' => int] → Zähler-Badge, nur wenn > 0 --}}
     'gesperrt' => false,           {{-- Spec 65: Lesemodus — Panels als <fieldset disabled>, Reiter bleiben klickbar --}}
+    'scroll' => false,             {{-- Einstellungen 23.10.: Reiter in EINER Zeile, auf schmalen Schirmen waagrecht scrollbar statt umbrechen --}}
 ])
 @php
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
     $startTab = $init ?? (array_key_first($sichtbar) ?? '');
     $serverModus = $action !== null;
-    $leiste = 'flex flex-wrap gap-1 border-b border-[var(--fa-line)] sticky -top-4 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank. -top-4 = Body-Padding (py-4): mit top-0 klebte sie 16 px tiefer und überlappte das erste Panel
-    $knopf = 'h-11 px-3.5 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
+    $leiste = ($scroll ? 'flex flex-nowrap overflow-x-auto overscroll-x-contain' : 'flex flex-wrap') . ' gap-1 border-b border-[var(--fa-line)] sticky -top-4 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank. -top-4 = Body-Padding (py-4): mit top-0 klebte sie 16 px tiefer und überlappte das erste Panel
+    $knopf = 'shrink-0 h-11 px-3.5 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
     $an = 'border-[var(--fa-accent)] text-[var(--fa-accent)] font-semibold bg-[var(--fa-accent-soft)]';
     $aus = 'border-transparent text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
 @endphp
