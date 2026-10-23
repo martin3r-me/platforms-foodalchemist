@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\PortfolioService;
 
@@ -22,6 +21,8 @@ use Platform\FoodAlchemist\Services\PortfolioService;
  */
 class Portfolio extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /** `betrieb` | `kunde` */
     public string $brille = 'betrieb';
 
@@ -42,7 +43,7 @@ class Portfolio extends Component
 
     public function render(PortfolioService $portfolio)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             return view('foodalchemist::livewire.controlling.panels.portfolio', [
                 'leer' => true, 'matrix' => [], 'arten' => PortfolioService::ARTEN,

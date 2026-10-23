@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\LeadLaService;
@@ -35,6 +36,8 @@ use RuntimeException;
  */
 class Preisvergleich extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     private const MAX = 60;
 
     #[Url(as: 'q')]
@@ -62,9 +65,14 @@ class Preisvergleich extends Component
     {
         $this->hinweis = null;
         $this->fehler = null;
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+        if (($recht = $this->einkaufFehlt($team, 'Artikel in die Bestellung übernehmen')) !== null) {
+            $this->fehler = $recht;
 
             return;
         }
@@ -91,9 +99,15 @@ class Preisvergleich extends Component
     {
         $this->hinweis = null;
         $this->fehler = null;
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+
+        if (($recht = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Bezugsquelle festlegen')) !== null) {
+            $this->fehler = $recht;
 
             return;
         }
@@ -119,7 +133,7 @@ class Preisvergleich extends Component
 
     public function render(LeadLaService $lead, RebateService $rebate)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         $aktiv = trim($this->q) !== '' || $this->wgCode !== '' || $this->supplierId !== null;
 
         $zeilen = [];

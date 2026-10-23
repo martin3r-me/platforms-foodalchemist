@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -45,6 +44,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Cockpit extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /**
      * Reihenfolge = Anzeige. Links die Lage, dann die Mehrbetriebs-Sicht, dann die Kostenseite,
      * dann die Erlösseite, zuletzt Befunde und Bewegung.
@@ -131,10 +132,6 @@ class Cockpit extends Component
         // deshalb reicht der leere Rumpf; ein zusätzliches Refresh-Event wäre ein zweiter Lauf.
     }
 
-    private function team(): ?Team
-    {
-        return Auth::user()?->currentTeamRelation;
-    }
 
     public function render(
         BenchmarkService $benchmark,

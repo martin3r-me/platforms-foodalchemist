@@ -2,9 +2,9 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Services\ActiveOutletContext;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
@@ -30,6 +30,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Kennzahlen extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     /** Zielwareneinsatz in % — inline setzbar (s. {@see self::zieleSpeichern}). */
     public string $zielWe = '';
 
@@ -40,7 +42,7 @@ class Kennzahlen extends Component
 
     public function mount(TeamSettingsService $settings): void
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             return;
         }
@@ -70,8 +72,13 @@ class Kennzahlen extends Component
      */
     public function zieleSpeichern(TeamSettingsService $settings): void
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
+            return;
+        }
+        if (($recht = $this->rolleFehlt($team, FaRolle::Admin, 'Zielwerte speichern')) !== null) {
+            $this->meldung = $recht;
+
             return;
         }
 
@@ -91,7 +98,7 @@ class Kennzahlen extends Component
 
     public function render(KalkulationService $kalk, FixkostenService $fix, TeamSettingsService $settings, MargeService $marge)
     {
-        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $team = $this->teamPflicht();
         // Ebene 2: die Kennzahlen folgen dem aktiven Betrieb (Fixkosten/Marge/Ziel-WE/Zuschlag/Break-even).
         $outlet = app(ActiveOutletContext::class)->current($team);
 

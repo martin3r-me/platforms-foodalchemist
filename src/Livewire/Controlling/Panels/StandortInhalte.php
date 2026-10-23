@@ -19,6 +19,8 @@ use Platform\FoodAlchemist\Services\StandortService;
  */
 class StandortInhalte extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -95,7 +97,7 @@ class StandortInhalte extends Component
         $this->fehler = null;
         $this->meldung = null;
         try {
-            $n = $svc->sammlungHinzu($this->team(), (int) $this->sammlungOffen, $typ, $ids, Auth::user());
+            $n = $svc->sammlungHinzu($this->teamPflicht(), (int) $this->sammlungOffen, $typ, $ids, Auth::user());
             $this->pickerAuswahl = [];
             $this->meldung = $n . ' hinzugefügt.';
         } catch (\RuntimeException $e) {
@@ -105,7 +107,7 @@ class StandortInhalte extends Component
 
     public function erbtAllesSetzen(int $unterTeamId, bool $an, InhaltsFreigabeService $svc): void
     {
-        $this->ausfuehren(fn () => $svc->setzeErbtAlles($this->team(), $unterTeamId, $an, Auth::user()),
+        $this->ausfuehren(fn () => $svc->setzeErbtAlles($this->teamPflicht(), $unterTeamId, $an, Auth::user()),
             $an ? 'Der Standort übernimmt wieder alles vom Oberteam.' : 'Der Standort sieht jetzt nur noch, was ihm freigegeben ist.');
     }
 
@@ -117,26 +119,26 @@ class StandortInhalte extends Component
 
             return;
         }
-        $this->ausfuehren(fn () => $svc->freigeben($this->team(), $typ, (int) $id, $unterTeamId, Auth::user()), 'Freigegeben.');
+        $this->ausfuehren(fn () => $svc->freigeben($this->teamPflicht(), $typ, (int) $id, $unterTeamId, Auth::user()), 'Freigegeben.');
         unset($this->freigabeNeu[$unterTeamId]);
     }
 
     public function freigabeEntziehen(int $freigabeId, InhaltsFreigabeService $svc): void
     {
-        $this->ausfuehren(fn () => $svc->freigabeEntziehen($this->team(), $freigabeId, Auth::user()), 'Freigabe entzogen.');
+        $this->ausfuehren(fn () => $svc->freigabeEntziehen($this->teamPflicht(), $freigabeId, Auth::user()), 'Freigabe entzogen.');
     }
 
     public function sammlungAnlegen(InhaltsFreigabeService $svc): void
     {
         $this->ausfuehren(function () use ($svc) {
-            $this->sammlungOffen = $svc->sammlungAnlegen($this->team(), $this->neueSammlung, null, Auth::user());
+            $this->sammlungOffen = $svc->sammlungAnlegen($this->teamPflicht(), $this->neueSammlung, null, Auth::user());
             $this->neueSammlung = '';
         }, 'Sammlung angelegt.');
     }
 
     public function sammlungLoeschen(int $id, InhaltsFreigabeService $svc): void
     {
-        $this->ausfuehren(fn () => $svc->sammlungLoeschen($this->team(), $id, Auth::user()), 'Sammlung gelöscht.');
+        $this->ausfuehren(fn () => $svc->sammlungLoeschen($this->teamPflicht(), $id, Auth::user()), 'Sammlung gelöscht.');
     }
 
     public function sammlungOeffnen(int $id): void
@@ -148,17 +150,17 @@ class StandortInhalte extends Component
 
     public function sammlungHinzu(int $sammlungId, string $typ, int $id, InhaltsFreigabeService $svc): void
     {
-        $this->ausfuehren(fn () => $svc->sammlungHinzu($this->team(), $sammlungId, $typ, [$id], Auth::user()), 'Hinzugefügt.');
+        $this->ausfuehren(fn () => $svc->sammlungHinzu($this->teamPflicht(), $sammlungId, $typ, [$id], Auth::user()), 'Hinzugefügt.');
     }
 
     public function sammlungEntfernen(int $sammlungId, string $typ, int $id, InhaltsFreigabeService $svc): void
     {
-        $this->ausfuehren(fn () => $svc->sammlungEntfernen($this->team(), $sammlungId, $typ, $id, Auth::user()), 'Entfernt.');
+        $this->ausfuehren(fn () => $svc->sammlungEntfernen($this->teamPflicht(), $sammlungId, $typ, $id, Auth::user()), 'Entfernt.');
     }
 
     public function render(InhaltsFreigabeService $svc, StandortService $standorte)
     {
-        $team = $this->team();
+        $team = $this->teamPflicht();
         $unter = $standorte->unterTeams($team);
         foreach ($unter as &$u) {
             $u['erbt_alles'] = $svc->erbtAlles(Team::find($u['id']));
@@ -252,8 +254,4 @@ class StandortInhalte extends Component
         }
     }
 
-    private function team(): Team
-    {
-        return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    }
 }

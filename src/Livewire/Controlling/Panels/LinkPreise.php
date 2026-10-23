@@ -2,8 +2,8 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
@@ -22,6 +22,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class LinkPreise extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     public ?string $hinweis = null;
 
     private const EDITOR = [
@@ -31,15 +33,16 @@ class LinkPreise extends Component
         PresentationService::TYPE_ANGEBOT => ['foodalchemist.angebote.index', 'sel', 'Angebot'],
     ];
 
-    private function team(): ?Team
-    {
-        return Auth::user()?->currentTeamRelation;
-    }
 
     public function jetztPruefen(SignalDetektorService $detektor): void
     {
         $team = $this->team();
         if ($team === null) {
+            return;
+        }
+        if (($recht = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Ausgabe-Links prüfen')) !== null) {
+            $this->hinweis = $recht;
+
             return;
         }
         $n = $detektor->ausgabeDriftPruefen($team);

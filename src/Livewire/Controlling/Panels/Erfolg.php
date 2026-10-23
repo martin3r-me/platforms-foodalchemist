@@ -2,8 +2,8 @@
 
 namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -25,6 +25,8 @@ use RuntimeException;
  */
 class Erfolg extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;
+
     use WithFileUploads;
 
     /** Hochzuladende CSV (landet im festen Ablage-Ordner). */
@@ -56,10 +58,6 @@ class Erfolg extends Component
 
     public ?string $fehler = null;
 
-    private function team(): ?Team
-    {
-        return Auth::user()?->currentTeamRelation;
-    }
 
     /** Hochgeladene Datei in den Ablage-Ordner legen — Dateiname, kein freier Pfad. */
     public function hochladen(): void
@@ -67,14 +65,19 @@ class Erfolg extends Component
         $this->hinweis = null;
         $this->fehler = null;
 
-        $this->validate(['datei' => 'required|file|mimes:csv,txt,tsv|max:20480'], [], ['datei' => 'Datei']);
-
         $team = $this->team();
         if ($team === null) {
             $this->fehler = 'Kein Team zugeordnet.';
 
             return;
         }
+        if (($rolle = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Verkaufszahlen hochladen')) !== null) {
+            $this->fehler = $rolle;
+
+            return;
+        }
+
+        $this->validate(['datei' => 'required|file|mimes:csv,txt,tsv|max:20480'], [], ['datei' => 'Datei']);
 
         // Team-eigene Ablage: ein geteilter Ordner hiesse, dass ein Betrieb die Datei eines
         // anderen überschreiben und dessen Umsätze einlesen könnte.
@@ -133,6 +136,12 @@ class Erfolg extends Component
 
             return;
         }
+        // Der Probelauf schreibt nichts (Lesen genügt); erst der scharfe Lauf übernimmt Verkaufszahlen.
+        if ($apply && ($rolle = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Verkaufszahlen übernehmen')) !== null) {
+            $this->fehler = $rolle;
+
+            return;
+        }
 
         // Leere Auswahl heißt „Spalte nicht zugeordnet" — nicht „Spalte 0".
         $mapping = [];
@@ -168,6 +177,12 @@ class Erfolg extends Component
     {
         $team = $this->team();
         if ($team === null || $this->zuordnenId === null) {
+            return;
+        }
+        if (($rolle = $this->rolleFehlt($team, FaRolle::Kuratieren, 'Verkaufszeile einem Gericht zuordnen')) !== null) {
+            $this->fehler = $rolle;
+            $this->zuordnenAbbrechen();
+
             return;
         }
 
