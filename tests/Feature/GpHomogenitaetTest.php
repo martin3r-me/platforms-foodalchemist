@@ -119,3 +119,41 @@ it('StammPaket-Cache wird am Request-Ende geleert (terminating)', function () {
 
     expect(StammPaket::istFreigeschaltet($this->rootTeam))->toBeFalse();
 });
+
+it('Detail: je GP × Merkmal die abweichenden Artikel, Anteile, Vorschlag „neues GP“ und Konfidenz LOW (Plan §0.8)', function () {
+    // 2 enthalten, 1 nicht enthalten, 1 ohne Daten → Minderheit = „ohne“ (der eine nicht-enthalten-Artikel)
+    $a = ($this->la)('Sahne mit Milch 1', 'enthalten');
+    $b = ($this->la)('Sahne mit Milch 2', 'enthalten');
+    $c = ($this->la)('Sahne laktosefrei', 'nicht_enthalten');
+    $d = ($this->la)('Sahne ohne Daten', false);
+    DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', [$a->id, $b->id, $c->id, $d->id])->update(['gp_id' => $this->gp->id]);
+
+    $details = app(GpHomogenitaetService::class)->bericht()['details'];
+
+    expect($details)->toHaveCount(1);
+    $z = $details[0];
+    expect($z['gp_id'])->toBe($this->gp->id)
+        ->and($z['merkmal'])->toBe('Allergen „Milch“')
+        ->and([$z['artikel'], $z['mit'], $z['ohne'], $z['unbekannt']])->toBe([4, 2, 1, 1])
+        ->and($z['minderheit'])->toBe('ohne')
+        ->and($z['abweichende_artikel'])->toHaveCount(1)
+        ->and($z['abweichende_artikel'][0])->toContain('Sahne laktosefrei')
+        ->and($z['vorschlag'])->toBe('neues GP: Sahne — ohne Milch')
+        ->and($z['konfidenz'])->toContain('LOW');
+});
+
+it('Befehl schreibt mit --detail-csv die Detail-Zeilen und ändert keine Verknüpfung', function () {
+    $bestand = [($this->la)('B1', 'enthalten'), ($this->la)('B2', 'nicht_enthalten')];
+    DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', collect($bestand)->pluck('id'))->update(['gp_id' => $this->gp->id]);
+    $vorher = DB::table('foodalchemist_supplier_item_structures')->orderBy('id')->get(['id', 'gp_id'])->toArray();
+    $datei = sys_get_temp_dir() . '/gp_homogenitaet_detail_' . uniqid() . '.csv';
+
+    $this->artisan('foodalchemist:gp-homogenitaet-bericht', ['--detail-csv' => $datei])->expectsOutputToContain('Detail-CSV')->assertSuccessful();
+
+    $zeilen = array_map(fn ($l) => str_getcsv($l, ';'), file($datei, FILE_IGNORE_NEW_LINES));
+    @unlink($datei);
+    expect($zeilen[0])->toContain('abweichende_artikel')->toContain('vorschlag')
+        ->and($zeilen)->toHaveCount(2)
+        ->and($zeilen[1][4])->toBe('Allergen „Milch“')
+        ->and(DB::table('foodalchemist_supplier_item_structures')->orderBy('id')->get(['id', 'gp_id'])->toArray())->toEqual($vorher);
+});

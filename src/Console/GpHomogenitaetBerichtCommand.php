@@ -12,7 +12,8 @@ class GpHomogenitaetBerichtCommand extends Command
 {
     protected $signature = 'foodalchemist:gp-homogenitaet-bericht
         {--limit=30 : Anzahl GPs in der Liste (0 = alle)}
-        {--csv= : zusätzlich als CSV in diese Datei schreiben}';
+        {--csv= : zusätzlich als CSV in diese Datei schreiben}
+        {--detail-csv= : Detail-CSV je GP × Merkmal (abweichende Artikel, Anteile, Vorschlag „neues GP“, Konfidenz) — Plan §0.8 allergen_abweichungen.csv}';
 
     protected $description = 'Bericht: GPs, unter denen Artikel mit abweichenden Allergenen/Zusatzstoffen hängen (nur lesend)';
 
@@ -40,6 +41,17 @@ class GpHomogenitaetBerichtCommand extends Command
             }
             fclose($fp);
             $this->line("CSV: {$datei}");
+        }
+
+        if (is_string($detail = $this->option('detail-csv')) && $detail !== '') {
+            $fp = fopen($detail, 'w');
+            fputcsv($fp, ['gp_id', 'gp_key', 'name', 'wg', 'merkmal', 'artikel', 'mit', 'ohne', 'unbekannt', 'minderheit', 'abweichende_artikel', 'vorschlag', 'konfidenz'], ';');
+            foreach ($bericht['details'] as $d) {
+                fputcsv($fp, [$d['gp_id'], $d['gp_key'], $d['name'], $d['wg'], $d['merkmal'], $d['artikel'], $d['mit'], $d['ohne'], $d['unbekannt'],
+                    $d['minderheit'], implode(' ## ', $d['abweichende_artikel']), $d['vorschlag'], $d['konfidenz']], ';');
+            }
+            fclose($fp);
+            $this->line("Detail-CSV: {$detail} (" . count($bericht['details']) . ' Zeilen)');
         }
 
         return self::SUCCESS;
