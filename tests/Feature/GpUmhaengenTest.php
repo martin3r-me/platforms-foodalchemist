@@ -239,3 +239,17 @@ it('Zwei neue GPs mit gleichem Pipe-Schlüssel (frisch/TK, ganz/in Scheiben) wer
     $b = DB::table('foodalchemist_gps')->where('name', 'Dorade: TK, ganz')->first();
     expect($a)->not->toBeNull()->and($b)->not->toBeNull()->and($a->gp_key)->toBe('dorade||ganz')->and($b->gp_key)->toBe('dorade_tk_ganz');
 });
+
+it('Neues GP, dessen Pipe-Schlüssel an einem BESTEHENDEN GP mit anderem Namen kollidiert (32 % vs. 35 %), bekommt den Namens-Slug als Schlüssel', function () {
+    $quelle = ($this->gp)('schokolade_dulcey||blond', 'Schokolade Dulcey: trocken, blond, 35 % Kakao', '09');
+    $s1 = ($this->la)($quelle, 'Dulcey 32 % Kakao Couverture');
+    $plan = ($this->plan)([
+        ['neues_gp', $s1->supplier_item_id, $quelle->id, '', 'Schokolade Dulcey: trocken, blond, 32 % Kakao', '09', '', '', ''],
+    ]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    $neu = DB::table('foodalchemist_gps')->where('name', 'Schokolade Dulcey: trocken, blond, 32 % Kakao')->first();
+    expect($neu)->not->toBeNull()->and($neu->gp_key)->toBe('schokolade_dulcey_trocken_blond_32_kakao')
+        ->and(DB::table('foodalchemist_supplier_item_structures')->where('id', $s1->id)->value('gp_id'))->toBe($neu->id);
+});

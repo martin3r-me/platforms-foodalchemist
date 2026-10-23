@@ -274,6 +274,14 @@ class GpUmhaengenService
                     }
                 }
                 $guard = $this->naming->anlageGuard($team, $key, $name);
+                // Gleiches gilt gegen einen BESTEHENDEN GP: nur der Pipe-Schlüssel kollidiert, der Name ist ein anderer (frisch/TK, 32/35 %,
+                // 450/800 g) → Namens-Slug als Schlüssel; die Namens-Prüfung (Jaccard + Zahlen) im erneuten Guard bleibt bindend.
+                if ($guard['blockiert'] && $guard['grund'] === 'gp_key' && ! $schluesselNamensSlug
+                    && trim((string) ($guard['vorhandenes_gp']->name ?? '')) !== $name) {
+                    $key = $this->naming->slugify($name);
+                    $schluesselNamensSlug = true;
+                    $guard = $this->naming->anlageGuard($team, $key, $name);
+                }
                 if ($guard['blockiert']) {
                     $fehler('GP gibt es schon: #' . ($guard['vorhandenes_gp']->id ?? '?') . ' ' . ($guard['vorhandenes_gp']->name ?? '') . " ({$guard['grund']}) — Plan auf umhaengen ändern");
 
