@@ -15,6 +15,12 @@
     $tabLabels = array_map(fn ($g) => $g['label'], $gruppen);
     $eager = $bereich ?? ($grundBereiche[0] ?? null);
     $erweitertOffen = $bereich !== null && in_array($bereich, $erweiterteBereiche, true);
+    // E-3: Symbol je Reiter (in der Bereichs-Karte), nur FA-Akzent
+    $reiterIcon = ['uebersicht' => 'heroicon-o-squares-2x2', 'team' => 'heroicon-o-user-group', 'kueche' => 'heroicon-o-fire',
+        'einkauf' => 'heroicon-o-truck', 'kalkulation' => 'heroicon-o-calculator', 'stil' => 'heroicon-o-swatch',
+        'kategorien' => 'heroicon-o-tag', 'ki' => 'heroicon-o-sparkles', 'plattform' => 'heroicon-o-server-stack'][$tab] ?? 'heroicon-o-cog-6-tooth';
+    $bereichParam = fn (string $key, bool $lazy) => ['key' => $key, 'meta' => $sektionen[$key], 'lazy' => $lazy, 'ziel' => $key === $bereich,
+        'icon' => $reiterIcon, 'imReiter' => (bool) ($mitSperre[$key] ?? false)];
 @endphp
 
 <x-ui-page>
@@ -69,14 +75,15 @@
             </x-fa::notice>
         @endif
 
-        <x-foodalchemist::editor-tabs marker="settings" action="tabWaehlen" :active="$tab" :tabs="$tabLabels" scroll />
+        <x-foodalchemist::editor-tabs marker="settings" action="tabWaehlen" :active="$tab" :tabs="$tabLabels" scroll stark />
 
         <div class="flex flex-col gap-8" data-settings-reiter="{{ $tab }}">
-            {{-- Sprungmarken im Reiter --}}
+            {{-- Sprungmarken im Reiter + EIN Bearbeiten für den ganzen Reiter (E-3) --}}
+            <div class="flex flex-wrap items-center gap-3">
             @if(count($grundBereiche) + count($erweiterteBereiche) > 1)
-                <nav class="flex flex-wrap gap-1.5" aria-label="Bereiche in diesem Reiter" data-settings-sprung>
+                <nav class="flex flex-wrap gap-1.5 flex-1 min-w-0" aria-label="Bereiche in diesem Reiter" data-settings-sprung>
                     @foreach($grundBereiche as $key)
-                        <a href="#bereich-{{ $key }}" class="px-2.5 py-1 rounded-full border border-[var(--fa-line)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]"
+                        <a href="#bereich-{{ $key }}" class="px-2.5 py-1 rounded-full border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:bg-[var(--fa-accent-soft-hover)]"
                            title="{{ $sektionen[$key]['hint'] }}">{{ $sektionen[$key]['label'] }}</a>
                     @endforeach
                     @if($erweiterteBereiche !== [])
@@ -84,10 +91,26 @@
                            x-on:click="$dispatch('settings-erweitert-oeffnen')">Erweitert ({{ count($erweiterteBereiche) }})</a>
                     @endif
                 </nav>
+            @else
+                <div class="flex-1"></div>
+            @endif
+            @if($reiterSperre['modus'] === 'lesen')
+                <x-fa::button variant="primary" icon="heroicon-m-pencil-square" wire:click="reiterBearbeiten" data-reiter-bearbeiten>Bearbeiten</x-fa::button>
+            @elseif($reiterSperre['modus'] === 'bearbeiten')
+                <span class="hidden" x-data x-on:input.window.throttle.60000ms="$wire.reiterHerzschlag()" x-on:click.window.throttle.60000ms="$wire.reiterHerzschlag()"></span>
+                <span class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ok)]" data-reiter-in-bearbeitung>
+                    <span class="w-2 h-2 rounded-full bg-[var(--fa-ok)]"></span>Du bearbeitest diesen Reiter
+                </span>
+                <x-fa::button variant="secondary" icon="heroicon-m-check" wire:click="reiterFertig"
+                    wire:confirm="Bearbeitung beenden? Nicht gespeicherte Eingaben in Formularen dieses Reiters gehen verloren." data-reiter-fertig>Fertig</x-fa::button>
+            @endif
+            </div>
+            @if($reiterSperre['fremd'] !== [])
+                <x-fa::notice tone="warn" data-reiter-fremd>Gerade in Bearbeitung: {{ implode(' · ', $reiterSperre['fremd']) }}. Diese Bereiche sind für dich nur lesbar.</x-fa::notice>
             @endif
 
             @foreach($grundBereiche as $key)
-                @include('foodalchemist::livewire.settings.partials.bereich', ['key' => $key, 'meta' => $sektionen[$key], 'lazy' => $key !== $eager, 'ziel' => $key === $bereich])
+                @include('foodalchemist::livewire.settings.partials.bereich', $bereichParam($key, $key !== $eager))
             @endforeach
 
             @if($erweiterteBereiche !== [])
@@ -100,7 +123,7 @@
                     </button>
                     <div class="flex flex-col gap-8" x-show="offen" x-cloak>
                         @foreach($erweiterteBereiche as $key)
-                            @include('foodalchemist::livewire.settings.partials.bereich', ['key' => $key, 'meta' => $sektionen[$key], 'lazy' => $key !== $bereich, 'ziel' => $key === $bereich])
+                            @include('foodalchemist::livewire.settings.partials.bereich', $bereichParam($key, $key !== $bereich))
                         @endforeach
                     </div>
                 </div>

@@ -120,7 +120,7 @@ it('markiert die aktive Sektion und zeigt ihren Kopf genau einmal', function () 
     // Der Kopf kommt aus DERSELBEN Quelle wie die Navigation — sonst driftet die Beschriftung
     // zwischen Liste und Überschrift auseinander.
     $meta = Einstellungen::SEKTIONEN['herstellkosten'];
-    $kopf = substr($html, strpos($html, 'data-settings-kopf="herstellkosten"'), 400);
+    $kopf = substr($html, strpos($html, 'data-settings-kopf="herstellkosten"'), 1500);   // E-3: Symbol im Kopf vor dem Namen
     // e() nicht vergessen: „Herstellkosten & Zuschläge" steht als `&amp;` in der Seite.
     expect($kopf)->toContain(e($meta['label']));
 });

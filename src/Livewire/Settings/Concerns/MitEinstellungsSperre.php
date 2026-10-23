@@ -25,6 +25,27 @@ trait MitEinstellungsSperre
         sperreErlaubt as protected sperreErlaubtOhneRolle;
         sperreAbgewiesen as protected sperreAbgewiesenOhneRolle;
         sperrZustand as protected sperrZustandOhneRolle;
+        bearbeitenBeenden as protected bearbeitenBeendenEinzeln;
+    }
+
+    /**
+     * Einstellungen E-3 (Dominique 23.10.: EIN Bearbeiten je Reiter): der Bereich steht in einem Reiter von Settings\Index. Dann hält
+     * der Reiter die Sperre aller seiner Bereiche (dieselben Ziele settings.<bereich>): die eigene Leiste entfällt bis auf den Hinweis
+     * „wird von … bearbeitet“, und Speichern beendet die Bearbeitung NICHT — erst „Fertig“ am Reiter gibt frei.
+     */
+    public bool $imReiter = false;
+
+    /** Der Reiter hat gesperrt oder freigegeben: neu zeichnen (der Zustand kommt aus dem Sperr-Dienst). */
+    #[\Livewire\Attributes\On('settings-reiter-geaendert')]
+    public function reiterGeaendert(): void {}
+
+    /** Im Reiter bleibt die Sperre nach dem Speichern stehen (der Reiter gibt frei); einzeln wie bisher. */
+    protected function bearbeitenBeenden(): void
+    {
+        if ($this->imReiter) {
+            return;
+        }
+        $this->bearbeitenBeendenEinzeln();
     }
 
     /**
@@ -44,7 +65,7 @@ trait MitEinstellungsSperre
     /** Lesende Methoden, die auch ohne Admin-Recht laufen (Anzeigen, Reiter, Herzschlag). */
     protected function nurLesendErlaubt(): array
     {
-        return array_merge(['render', 'mount', '$refresh', '__dispatch', 'tabLaden', 'oeffnen', 'sperreHerzschlag',
+        return array_merge(['render', 'mount', '$refresh', '__dispatch', 'tabLaden', 'oeffnen', 'sperreHerzschlag', 'reiterGeaendert',
             'sperreBeiSchliessen', 'bearbeitenAbbrechen'], $this->sperrFreiExtra());
     }
 
