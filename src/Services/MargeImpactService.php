@@ -68,8 +68,9 @@ class MargeImpactService
      * Setzt totalCache[recipeId] (= Σ Zeilenkosten) als Seiteneffekt.
      *
      * @param  array<int,bool>  $gpSet  Set der GP-ids (id => true)
+     * @param  ?Team  $preisTeam  Spec 85 PR-F: mit wessen Preisen und Leitartikeln gerechnet wird (null = der Besitzer des Rezepts, wie bisher)
      */
-    public function gpSetExposure(int $recipeId, array $gpSet, array &$recCache, array &$lineCache, array &$totalCache, array &$expCache, int $tiefe = 0): float
+    public function gpSetExposure(int $recipeId, array $gpSet, array &$recCache, array &$lineCache, array &$totalCache, array &$expCache, int $tiefe = 0, ?Team $preisTeam = null): float
     {
         if (isset($expCache[$recipeId])) {
             return $expCache[$recipeId];
@@ -77,13 +78,15 @@ class MargeImpactService
         if ($tiefe > 5) {
             return 0.0;
         }
-        $rec = $recCache[$recipeId] ??= FoodAlchemistRecipe::with('ingredients')->find($recipeId);
+        // Der Rezept-Baum gehört zu einem Rezept, dessen Sicht der Aufrufer schon geprüft hat (impactFuerGps/SignalDetektor); der Sichtfilter des Betrachters
+        // würde das Rezept eines Standorts der Brille (oder Unter-Rezepte darunter) wegfiltern und die Exposure auf 0 setzen.
+        $rec = $recCache[$recipeId] ??= FoodAlchemistRecipe::query()->ohneTeamSicht('simulation-rezeptbaum')->with('ingredients')->find($recipeId);
         if ($rec === null) {
             $totalCache[$recipeId] = 0.0;
 
             return $expCache[$recipeId] = 0.0;
         }
-        $lines = $lineCache[$recipeId] ??= $this->recompute->zeilenKostenUndMassen($rec, Team::find($rec->team_id));
+        $lines = $lineCache[$recipeId] ??= $this->recompute->zeilenKostenUndMassen($rec, $preisTeam ?? Team::find($rec->team_id));
         $total = 0.0;
         foreach ($lines as $l) {
             if ($l['kosten'] !== null) {
@@ -102,7 +105,7 @@ class MargeImpactService
                 $exp += $lk;
             } elseif ($ing->referenced_recipe_id !== null) {
                 $subId = (int) $ing->referenced_recipe_id;
-                $subExp = $this->gpSetExposure($subId, $gpSet, $recCache, $lineCache, $totalCache, $expCache, $tiefe + 1);
+                $subExp = $this->gpSetExposure($subId, $gpSet, $recCache, $lineCache, $totalCache, $expCache, $tiefe + 1, $preisTeam);
                 $subTotal = $totalCache[$subId] ?? 0.0;
                 if ($subExp > 0.0 && $subTotal > 0.0) {
                     $exp += $lk * ($subExp / $subTotal);
@@ -129,7 +132,7 @@ class MargeImpactService
      * @param  list<int>  $gpIds
      * @return array{n_gps:int,n_recipes:int,n_gerichte:int,n_concepts:int,marge_delta_eur:float,top:list<array>}
      */
-    public function impactFuerGps(Team $team, array $gpIds, float $ratio, int $maxGerichte = 2000): array
+    public function impactFuerGps(Team $team, array $gpIds, float $ratio, int $maxGerichte = 2000, bool $teamSicht = false): array
     {
         $gpIds = array_values(array_unique(array_map('intval', $gpIds)));
         $leer = ['n_gps' => count($gpIds), 'n_recipes' => 0, 'n_gerichte' => 0, 'n_concepts' => 0, 'marge_delta_eur' => 0.0, 'top' => []];
@@ -142,7 +145,19 @@ class MargeImpactService
         if ($affected === []) {
             return $leer;
         }
-        $recipes = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $affected)->with('standardPresentation')->get();
+        // Spec 85 PR-F ($teamSicht, Simulation): Rezepte der Team-Brille (alle = jeder Standort), gerechnet mit den Preisen und Leitartikeln des
+        // BETRACHTENDEN Teams — bei Rezepten eines Standorts der Brille mit dessen eigenen (nie eine gemeinsame Preis-Sicht). Sonst wie bisher.
+        $lens = $teamSicht ? app(StandortService::class)->leseTeamIds($team) : [];
+        // Sicht des Betrachters (eigene, Master-Kette = geerbte/Abo-Rezepte, globale) PLUS die Rezepte der Standorte der Brille
+        $extra = array_values(array_diff($lens, [(int) $team->id]));
+        $basis = $teamSicht && $extra !== []
+            ? FoodAlchemistRecipe::query()->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\TeamSicht::class)
+                ->where(fn ($w) => $w->where(fn ($v) => FoodAlchemistRecipe::sichtBedingung($v, $team))->orWhereIn('foodalchemist_recipes.team_id', $extra))
+            : FoodAlchemistRecipe::visibleToTeam($team);
+        $recipes = $basis->whereIn('foodalchemist_recipes.id', $affected)->with('standardPresentation')->get();
+        $preisTeamId = fn ($r): int => $teamSicht && $r->team_id !== null && (int) $r->team_id !== (int) $team->id && in_array((int) $r->team_id, $lens, true)
+            ? (int) $r->team_id : (int) $team->id;
+        $preisTeams = $teamSicht ? Team::whereIn('id', $recipes->map($preisTeamId)->unique()->all())->get()->keyBy('id') : collect();
         // Spec 85 D-1: VK aus der Standard-Darreichung (Preisleiter), nicht aus recipes.sales_net.
         $vkJe = $recipes->mapWithKeys(fn ($r) => [(int) $r->id => $r->is_sales_recipe ? app(DarreichungResolver::class)->vkNetto($r) : null]);
         $gerichte = $recipes->filter(fn ($r) => ($vkJe[(int) $r->id] ?? 0) > 0)->values();
@@ -151,12 +166,19 @@ class MargeImpactService
         $rows = [];
         $recCache = $lineCache = $totalCache = $expCache = [];
         $zahl = 0;
-        foreach ($gerichte as $rec) {
+        $cacheFuer = null;
+        foreach ($teamSicht ? $gerichte->sortBy($preisTeamId)->values() : $gerichte as $rec) {
             if ($zahl >= $maxGerichte) {
                 break;
             }
             $zahl++;
-            $exposure = $this->gpSetExposure((int) $rec->id, $gpSet, $recCache, $lineCache, $totalCache, $expCache);
+            $preisTeam = $teamSicht ? $preisTeams->get($preisTeamId($rec)) : null;
+            if ($teamSicht && $cacheFuer !== $preisTeamId($rec)) {
+                // eigener Cache je Preis-Sicht: ein geteiltes Unter-Rezept kostet bei jedem Standort etwas anderes
+                $recCache = $lineCache = $totalCache = $expCache = [];
+                $cacheFuer = $preisTeamId($rec);
+            }
+            $exposure = $this->gpSetExposure((int) $rec->id, $gpSet, $recCache, $lineCache, $totalCache, $expCache, 0, $preisTeam);
             $istEk = $totalCache[(int) $rec->id] ?? 0.0;
             if ($exposure <= 0 || $istEk <= 0) {
                 continue;

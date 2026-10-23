@@ -2,7 +2,6 @@
 
 namespace Platform\FoodAlchemist\Livewire\Kalkulation;
 
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -21,6 +20,8 @@ use Platform\FoodAlchemist\Services\SimulationService;
  */
 class Simulation extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Controlling\Concerns\ControllingTeam;   // Spec 85 PR-F: das betrachtende Team über FaTeam::aktuell
+
     /** 'warengruppe' | 'artikel' | 'gp' | 'lieferant' */
     #[Validate('required|in:warengruppe,artikel,gp,lieferant')]
     public string $scope = 'warengruppe';
@@ -76,7 +77,7 @@ class Simulation extends Component
             return;
         }
 
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             $this->addError('ref', 'Kein Team gewählt.');
 
@@ -99,7 +100,7 @@ class Simulation extends Component
         if ($this->scope !== 'gp' || mb_strlen($q) < 2) {
             return [];
         }
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
         if ($team === null) {
             return [];
         }
@@ -119,7 +120,7 @@ class Simulation extends Component
 
     public function render(GpService $gps)
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = $this->team();
 
         return view('foodalchemist::livewire.kalkulation.simulation', [
             'warengruppen' => $team ? $gps->warengruppenOptions($team) : collect(),
