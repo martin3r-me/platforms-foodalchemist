@@ -22,7 +22,8 @@ class GpHomogenitaetService
     /**
      * @return array{
      *   zusammenfassung: array<string,int>,
-     *   gps: list<array{gp_id:int,name:string,artikel:int,unbekannt:int,abweichungen:list<string>}>
+     *   gps: list<array{gp_id:int,name:string,artikel:int,unbekannt:int,abweichungen:list<string>}>,
+     *   details: list<array<string,mixed>>
      * }
      */
     /**
@@ -53,6 +54,7 @@ class GpHomogenitaetService
         $gpIds = array_values(array_diff($gpIds, $nonFoodIds));
 
         $gps = [];
+        $details = [];   // je GP × abweichendem Merkmal eine Zeile (CSV für den Allergen-Konsistenzlauf, Plan §0.8)
         $artikelInUneinheitlichen = 0;
         $unbekanntInUneinheitlichen = 0;
 
@@ -62,26 +64,41 @@ class GpHomogenitaetService
             $allergene = FoodAlchemistItemAllergen::query()->whereIn('supplier_item_id', $itemIds)->get()->keyBy('supplier_item_id');
             $stoffe = FoodAlchemistItemDeclaration::query()->whereIn('supplier_item_id', $itemIds)->get()->keyBy('supplier_item_id');
             $namen = DB::table('foodalchemist_gps')->whereIn('id', $ids)->pluck('name', 'id');
+            $gpInfo = DB::table('foodalchemist_gps')->whereIn('id', $ids)->get(['id', 'gp_key', 'commodity_group_code'])->keyBy('id');
+            $artInfo = DB::table('foodalchemist_supplier_items AS i')->leftJoin('foodalchemist_suppliers AS sp', 'sp.id', '=', 'i.supplier_id')
+                ->whereIn('i.id', $itemIds)->get(['i.id', 'i.legacy_id', 'i.designation', 'sp.name AS lieferant'])->keyBy('id');
 
             foreach ($zeilen->groupBy('gp_id') as $gpId => $artikel) {
                 $abw = [];
                 $unbekannt = 0;
+                $merkmale = [];   // Merkmal => ['mit' => [item_id…], 'ohne' => […], 'unbekannt' => […]]
                 foreach (FoodAlchemistItemAllergen::ALLERGENE as $feld => $label) {
                     $mit = $ohne = false;
+                    $seiten = ['mit' => [], 'ohne' => [], 'unbekannt' => []];
                     foreach ($artikel as $z) {
                         $w = $allergene->get($z->supplier_item_id)?->{"allergen_{$feld}"};
                         if (DeklarationsProfil::allergenBekannt($w)) {
                             $w === 'enthalten' ? $mit = true : $ohne = true;
+                            $seiten[$w === 'enthalten' ? 'mit' : 'ohne'][] = (int) $z->supplier_item_id;
+                        } else {
+                            $seiten['unbekannt'][] = (int) $z->supplier_item_id;
                         }
                     }
                     if ($mit && $ohne) {
                         $abw[] = 'Allergen „' . $label . '“';
+                        $merkmale['Allergen „' . $label . '“'] = $seiten;
                     }
                 }
                 foreach (FoodAlchemistItemDeclaration::STOFFE as $feld => $label) {
                     $werte = $artikel->map(fn ($z) => (int) ($stoffe->get($z->supplier_item_id)?->{$feld}))->all();
                     if (in_array(1, $werte, true) && in_array(3, $werte, true)) {
                         $abw[] = 'Zusatzstoff „' . $label . '“';
+                        $seiten = ['mit' => [], 'ohne' => [], 'unbekannt' => []];
+                        foreach ($artikel as $z) {
+                            $w = (int) ($stoffe->get($z->supplier_item_id)?->{$feld});
+                            $seiten[$w === 3 ? 'mit' : ($w === 1 ? 'ohne' : 'unbekannt')][] = (int) $z->supplier_item_id;
+                        }
+                        $merkmale['Zusatzstoff „' . $label . '“'] = $seiten;
                     }
                 }
                 foreach ($artikel as $z) {
@@ -97,6 +114,9 @@ class GpHomogenitaetService
                         'unbekannt' => $unbekannt,
                         'abweichungen' => $abw,
                     ];
+                    foreach ($merkmale as $merkmal => $seiten) {
+                        $details[] = $this->detailZeile((int) $gpId, $gpInfo->get($gpId), (string) ($namen[$gpId] ?? ''), $merkmal, $seiten, $artInfo, $artikel->count());
+                    }
                     $artikelInUneinheitlichen += $artikel->count();
                     $unbekanntInUneinheitlichen += $unbekannt;
                 }
@@ -115,6 +135,36 @@ class GpHomogenitaetService
                 'artikel_unbekannt_in_uneinheitlichen_gps' => $unbekanntInUneinheitlichen,
             ],
             'gps' => $gps,
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Eine Zeile je GP × abweichendem Merkmal (Plan §0.8): welche Artikel weichen ab (die kleinere Seite; bei Gleichstand die Seite
+     * „ohne“), Anteil je Profil und ein TEXT-Vorschlag „neues GP“ — es wird nichts umgehängt, angelegt oder gesetzt.
+     * Konfidenz: ein Widerspruch enthalten ↔ nicht enthalten ist immer LOW und gehört in die Review (LA-Regelwerk §10).
+     *
+     * @param  array{mit:list<int>,ohne:list<int>,unbekannt:list<int>}  $seiten
+     * @return array<string,mixed>
+     */
+    private function detailZeile(int $gpId, ?object $gp, string $name, string $merkmal, array $seiten, $artInfo, int $artikelGesamt): array
+    {
+        $minderheit = count($seiten['mit']) < count($seiten['ohne']) ? 'mit' : 'ohne';
+        $abweichend = array_map(function (int $id) use ($artInfo) {
+            $a = $artInfo->get($id);
+
+            return ($a->legacy_id ?? '?') . ' | ' . ($a->lieferant ?? '?') . ' | ' . ($a->designation ?? '?');
+        }, $seiten[$minderheit]);
+        $basis = trim((string) strstr($name . ':', ':', true));
+        $kurz = trim((string) preg_replace('/^(Allergen|Zusatzstoff)\s*„|“$/u', '', $merkmal));
+
+        return [
+            'gp_id' => $gpId, 'gp_key' => (string) ($gp->gp_key ?? ''), 'name' => $name, 'wg' => (string) ($gp->commodity_group_code ?? ''),
+            'merkmal' => $merkmal, 'artikel' => $artikelGesamt,
+            'mit' => count($seiten['mit']), 'ohne' => count($seiten['ohne']), 'unbekannt' => count($seiten['unbekannt']),
+            'minderheit' => $minderheit, 'abweichende_artikel' => $abweichend,
+            'vorschlag' => 'neues GP: ' . $basis . ' — ' . ($minderheit === 'mit' ? 'mit ' : 'ohne ') . $kurz,
+            'konfidenz' => 'LOW (needs_allergen_review)',
         ];
     }
 
