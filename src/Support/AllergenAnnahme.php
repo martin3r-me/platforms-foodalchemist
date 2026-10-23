@@ -19,6 +19,15 @@ final class AllergenAnnahme
 
     public const HINWEIS = 'angenommen (Lieferant liefert nur Positivangaben)';
 
+    /**
+     * Dominique 23.10.: Anzeige eines angenommenen Werts. Necta lässt Spuren oft weg (BOS: 0 Spuren-Werte in 18.689 Artikeln; Edna-Datenblatt
+     * 758 nennt „kann Spuren enthalten: Eier, Schalenfrüchte“, Necta k. A.) — „nicht enthalten“ gilt nur angenommen, Spuren sind unbekannt.
+     * Etiketten und Speisekarten bleiben unverändert (Pflicht sind nur enthaltene Allergene).
+     */
+    public const ANZEIGE = 'nicht enthalten (angenommen) · Spuren unbekannt';
+
+    public const ERKLAERUNG = 'Der Lieferant liefert nur positive Angaben. Ohne Angabe gilt das Allergen als nicht enthalten; Spuren gibt er oft nicht an, sie bleiben unbekannt.';
+
     public const WERT = 'nicht_enthalten';
 
     private const MEMO = 'foodalchemist.allergen_annahme_lieferanten';

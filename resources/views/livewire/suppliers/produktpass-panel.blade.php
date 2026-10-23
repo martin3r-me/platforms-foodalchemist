@@ -197,7 +197,7 @@
                                     @if($a['zitat'] ?? null)<span class="block {{ $leise }}">„{{ Str::limit($a['zitat'], 120) }}“</span>@endif
                                     @if($a['url'])<a href="{{ $a['url'] }}" target="_blank" rel="noopener nofollow" class="block underline text-[var(--fa-accent)] {{ $leise }} truncate">{{ Str::limit($a['url'], 48) }}</a>@endif</td>
                                 <td><x-fa::badge :tone="$a['konfidenz'] >= $schwelle ? 'ok' : 'warn'" class="tabular-nums">{{ number_format($a['konfidenz'] * 100, 0) }} %</x-fa::badge></td>
-                                <td class="{{ $leise }}">{{ ! empty($a['aktuell_angenommen']) ? 'angenommen nicht enthalten' : ($allergenText[$a['aktuell']] ?? $a['aktuell']) }}</td>
+                                <td class="{{ $leise }}" @if(! empty($a['aktuell_angenommen'])) title="{{ \Platform\FoodAlchemist\Support\AllergenAnnahme::ERKLAERUNG }}" data-pass-angenommen @endif>{{ ! empty($a['aktuell_angenommen']) ? \Platform\FoodAlchemist\Support\AllergenAnnahme::ANZEIGE : ($allergenText[$a['aktuell']] ?? $a['aktuell']) }}</td>
                             </tr>
                         @endforeach
                         </tbody>

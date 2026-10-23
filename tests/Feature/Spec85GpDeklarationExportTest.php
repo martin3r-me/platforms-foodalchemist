@@ -53,6 +53,6 @@ it('GP-Bericht bei Positiv-Lieferant: leere Felder angenommen nicht enthalten, S
 
     expect(collect($d['allergene'])->pluck('wert', 'key')['gluten'])->toBe('nicht_enthalten')
         ->and($d['allergens_confidence'])->toBe('medium')
-        ->and($d['allergene_hinweis'])->toBe('13 Angaben ' . AllergenAnnahme::HINWEIS)
+        ->and($d['allergene_hinweis'])->toBe('13 Allergene: ' . AllergenAnnahme::ANZEIGE . ' (Lieferant liefert nur Positivangaben)')
         ->and($html)->toContain('data-allergene-hinweis')->not->toContain('Ohne Angabe');
 });

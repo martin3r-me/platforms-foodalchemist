@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Suppliers;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
@@ -149,6 +150,10 @@ class NectaPruefaelle extends Component
     }
 
     /** @return array<string, mixed> */
+    /** Dominique 23.10.: nach dem Speichern im Artikel-Modal die Liste neu zeichnen („FA jetzt“), Filter und Seite bleiben. */
+    #[On('item-gespeichert')]
+    public function artikelGespeichert(): void {}
+
     private function filter(): array
     {
         return array_filter([

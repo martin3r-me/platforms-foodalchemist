@@ -359,7 +359,7 @@
                         <div class="flex flex-wrap items-center gap-2" data-allergen-kopf>
                             <x-fa::badge :tone="$allergenQuelle === 'manual' ? 'ok' : 'neutral'">{{ $quelleText($allergenQuelle) }}</x-fa::badge>
                             @if(($allergenAngenommen ?? []) !== [])
-                                <span class="{{ $leise }}" data-allergen-annahme>Lieferant liefert nur Positivangaben: ohne Angabe gilt als nicht enthalten (angenommen).</span>
+                                <span class="{{ $leise }}" data-allergen-annahme>Lieferant liefert nur Positivangaben: ohne Angabe gilt {{ \Platform\FoodAlchemist\Support\AllergenAnnahme::ANZEIGE }}.</span>
                             @else
                                 <span class="{{ $leise }}">Ohne Angabe heißt unbekannt, nicht frei von.</span>
                             @endif
@@ -368,7 +368,7 @@
                             @foreach($allergenLabels as $key => $lbl)
                                 <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5" data-tri-row="{{ $key }}">
                                     <span class="{{ $zeilenLabel }}">{{ $lbl }}@if(in_array($key, $allergenAngenommen ?? [], true))
-                                        <span class="{{ $leise }}" x-show="(werte['{{ $key }}'] ?? 'unbekannt') === 'unbekannt'" data-angenommen="{{ $key }}">· angenommen nicht enthalten</span>@endif</span>
+                                        <span class="{{ $leise }}" x-show="(werte['{{ $key }}'] ?? 'unbekannt') === 'unbekannt'" data-angenommen="{{ $key }}" title="{{ \Platform\FoodAlchemist\Support\AllergenAnnahme::ERKLAERUNG }}">· {{ \Platform\FoodAlchemist\Support\AllergenAnnahme::ANZEIGE }}</span>@endif</span>
                                     <div class="inline-flex shrink-0 overflow-hidden rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] divide-x divide-[var(--fa-line-strong)]" role="group" aria-label="{{ $lbl }}">
                                         @foreach($allergenKnoepfe as $wert => [$text, $titel, $an])
                                             <button type="button" title="{{ $titel }}" @disabled(! $darfEdit)

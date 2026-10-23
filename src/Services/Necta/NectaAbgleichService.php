@@ -93,7 +93,7 @@ class NectaAbgleichService extends NectaLaufBasis
         $this->zaehler += ['seit' => $seit, 'preise_geprueft' => 0, 'preise_aktualisiert' => 0, 'vorgaenger_fortgeschrieben' => 0,
             'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0,
             'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'unterart_verschaerft' => 0, 'nicht_aus_necta' => 0,
-            'allergen_abwesenheit_erklaert' => 0, 'deklaration_abwesenheit_erklaert' => 0,
+            'allergen_abwesenheit_erklaert' => 0, 'deklaration_abwesenheit_erklaert' => 0, 'kennzeichnung_ka_behalten' => 0,
             'produktpass_abweichung_neu' => 0, 'produktpass_behalten' => 0, 'produktpass_necta_gewinnt' => 0,
             'pruefaelle_je_feld' => [], 'lockerung_je_wechsel' => []];
 
@@ -434,6 +434,13 @@ class NectaAbgleichService extends NectaLaufBasis
 
                 continue;
             }
+            if ($kennzeichnung && self::keineAngabe($objekt, $nWert) && ! self::keineAngabe($objekt, $fa->{$spalte} ?? null)) {
+                // Dominique 23.10.: k. A. ist keine Aussage — sie überschreibt keinen FA-Wert (auch kein „nicht enthalten“/„nein“) und
+                // wird kein Prüffall; nur gezählt. Wie beim Produktpass-Schutz oben. Ausdrückliches nicht_enthalten/1 bleibt Prüffall.
+                $this->zaehler['kennzeichnung_ka_behalten']++;
+
+                continue;
+            }
             if ($kennzeichnung) {
                 $strenge = $spalte === 'details' ? null : self::strenge($objekt, $nWert) <=> self::strenge($objekt, $fa->{$spalte} ?? null);
                 $nichtVonHand = ($stand === null && ! $handOhneStand) || ($stand !== null && self::norm($stand[$spalte] ?? null) === $f);
@@ -518,6 +525,11 @@ class NectaAbgleichService extends NectaLaufBasis
         foreach (array_unique([...array_keys($fa), ...array_keys($necta)]) as $unterart) {
             $f = $fa[$unterart] ?? null;
             $n = $necta[$unterart] ?? null;
+            if (self::keineAngabe('item_allergen', $n) && ! self::keineAngabe('item_allergen', $f)) {
+                $this->zaehler['kennzeichnung_ka_behalten']++;   // k. A. an der Unterart: FA-Wert bleibt, kein Prüffall (23.10.)
+
+                continue;
+            }
             $vergleich = self::strenge('item_allergen', $n) <=> self::strenge('item_allergen', $f);
             if ($vergleich === 1) {
                 $ergebnis[$unterart] = $n;   // NULL = unbekannt (strenger als nicht_enthalten) → Schlüssel fällt unten weg
@@ -537,6 +549,16 @@ class NectaAbgleichService extends NectaLaufBasis
         ksort($ergebnis);
 
         return $ergebnis === [] ? null : json_encode($ergebnis);
+    }
+
+    /** Keine Angabe (k. A.): Allergen NULL, '' oder „unbekannt“; Deklaration NULL, '' oder 0. Ein ganzes Unterarten-JSON zählt nicht hierzu. */
+    private static function keineAngabe(string $objekt, mixed $wert): bool
+    {
+        if ($wert === null || $wert === '') {
+            return true;
+        }
+
+        return $objekt === 'item_allergen' ? $wert === 'unbekannt' : (is_numeric($wert) && (int) $wert === 0);
     }
 
     /**

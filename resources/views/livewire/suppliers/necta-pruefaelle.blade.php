@@ -120,7 +120,14 @@
                                 @foreach($liste['faelle'] as $f)
                                     <tr wire:key="pf-{{ $f['id'] }}" data-pruefall="{{ $f['id'] }}">
                                         <td>
-                                            <div class="font-medium">{{ $f['artikel'] ?? 'Necta-ID '.$f['legacy_id'] }}</div>
+                                            {{-- Dominique 23.10.: Artikel direkt öffnen (Allergene, Produktpass), ohne die gefilterte Liste zu verlassen --}}
+                                            @if($f['artikel_id'] !== null)
+                                                <button type="button" class="font-medium text-left text-[var(--fa-accent)] hover:underline"
+                                                        wire:click="$dispatch('item-modal.oeffnen', { id: {{ (int) $f['artikel_id'] }} })"
+                                                        title="Artikel öffnen" data-pruefall-artikel="{{ (int) $f['artikel_id'] }}">{{ $f['artikel'] ?? 'Necta-ID '.$f['legacy_id'] }}</button>
+                                            @else
+                                                <div class="font-medium">{{ $f['artikel'] ?? 'Necta-ID '.$f['legacy_id'] }}</div>
+                                            @endif
                                             <div class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $f['lieferant'] ?? '—' }} · {{ $arten[$f['art']] ?? $f['art'] }}</div>
                                         </td>
                                         <td>
@@ -165,5 +172,7 @@
                 </div>
             @endif
         </div>
+
+        <livewire:foodalchemist.suppliers.item-modal key="necta-pruefaelle--suppliers.item-modal" />
     </x-ui-page-container>
 </x-ui-page>

@@ -180,3 +180,17 @@ it('Helfer: ohne Allergen-Zeile keine Annahme (Necta hat keinen Block geliefert)
 
     expect($zeile['gluten'])->toBe(['wert' => null, 'angenommen' => false]);   // keine Zeile = keine Annahme
 });
+
+it('Wortlaut (Dominique 23.10.): angenommene Werte heißen „nicht enthalten (angenommen) · Spuren unbekannt“ — Artikel-Modal und GP-Panel, mit Erklärung als Tooltip', function () {
+    expect(AllergenAnnahme::ANZEIGE)->toBe('nicht enthalten (angenommen) · Spuren unbekannt');
+    $this->actingAs($this->makeUser($this->rootTeam, 'Kuratorin', 'owner'));
+    $gp = $this->makeGp($this->rootTeam, 'Butter');
+    $la = ($this->la)($gp, $this->bos, ['milk' => 'enthalten']);
+
+    $modal = Livewire::test(ItemModal::class)->call('oeffnen', $la->id)->html();
+    expect($modal)->toContain('· ' . AllergenAnnahme::ANZEIGE)->toContain('title="' . e(AllergenAnnahme::ERKLAERUNG) . '"')
+        ->not->toContain('· angenommen nicht enthalten');
+
+    $panel = Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\DetailPanel::class, ['gpId' => $gp->id])->html();
+    expect($panel)->toContain('davon 13 ' . e(AllergenAnnahme::ANZEIGE))->toContain('data-allergene-angenommen');
+});
