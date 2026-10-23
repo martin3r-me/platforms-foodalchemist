@@ -617,3 +617,18 @@ it('Zustand NULL ist bei Öle/Fette (WG 11) gültig; bei Fleisch (WG 4) angenomm
     expect(DB::table('foodalchemist_gps')->pluck('gp_key')->sort()->values()->all())->toBe(['olivenoel', 'rindfleisch'])
         ->and(collect(($this->csv)('gp_abgelehnt'))->pluck('code', 'gp_key')->all())->toBe(['kalbfleisch_frisch' => 'zustand']);
 });
+
+it('Warengruppe als Zahl (4 oder "4") im Paket wird wie "04" gegen die io-Codes aufgelöst', function () {
+    B::schreibe($this->dir, [
+        B::gp('Zanderfilet: frisch', ['commodity_group_code' => 4]),
+        B::gp('Lachsfilet: frisch', ['commodity_group_code' => '4']),
+    ], []);
+
+    ($this->apply)([]);
+
+    foreach (['Zanderfilet: frisch', 'Lachsfilet: frisch'] as $name) {
+        $g = ($this->gp)(app(\Platform\FoodAlchemist\Services\GpNamingService::class)->slugify($name));
+        expect($g)->not->toBeNull()->and($g->commodity_group_code)->toBe('04');
+    }
+    expect(($this->csv)('gp_abgelehnt'))->toBe([]);
+});
