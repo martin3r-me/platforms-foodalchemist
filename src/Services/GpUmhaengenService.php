@@ -136,7 +136,9 @@ class GpUmhaengenService
                     continue;
                 }
                 $sub = trim((string) ($z['neu_sub'] ?? ''));
-                if ($sub !== '' && ! DB::table('foodalchemist_commodity_group_subcategories')->where('commodity_group_code', $neuWg)->where('name', $sub)->exists()) {
+                // Sub-Kategorie: Tabellenname (»Komponenten warm«) ODER der am GP gespeicherte Altbestandswert (»13.1 Komponenten warm«) derselben WG.
+                if ($sub !== '' && ! DB::table('foodalchemist_commodity_group_subcategories')->where('commodity_group_code', $neuWg)->where('name', $sub)->exists()
+                    && ! DB::table('foodalchemist_gps')->where('commodity_group_code', $neuWg)->where('sub_category', $sub)->exists()) {
                     $fehler("Sub-Kategorie »{$sub}« gibt es in WG {$neuWg} nicht");
 
                     continue;

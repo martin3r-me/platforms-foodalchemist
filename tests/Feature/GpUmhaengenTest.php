@@ -211,3 +211,15 @@ it('GP auflösen: Ziel gleich Quelle oder inaktiv ist ein Konflikt', function ()
 
     ($this->lauf)(['--plan' => [$plan]])->assertSuccessful()->expectsOutputToContain('Konflikte: 2');
 });
+
+it('WG setzen: auch der am GP gespeicherte Altbestandswert der Ziel-WG ist als Sub-Kategorie erlaubt (»13.1 Komponenten warm«)', function () {
+    ($this->wgAnlegen)('13', 'Convenience');
+    $a = ($this->gp)('a|', 'Schweinebraten: gegart, in Scheiben', '06');
+    ($this->gp)('b|', 'Kartoffelgratin: gegart', '13', ['sub_category' => '13.1 Komponenten warm']);
+    $plan = ($this->plan)([['wg_setzen', '', $a->id, '', '', '13', '13.1 Komponenten warm', '', '']]);
+
+    ($this->lauf)(['--plan' => [$plan], '--apply' => true, '--backup-nachweis' => ($this->backup)(), '--ohne-recompute' => true])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_gps')->where('id', $a->id)->value('sub_category'))->toBe('13.1 Komponenten warm')
+        ->and(DB::table('foodalchemist_gps')->where('id', $a->id)->value('commodity_group_code'))->toBe('13');
+});
