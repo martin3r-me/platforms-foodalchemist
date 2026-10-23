@@ -336,7 +336,8 @@ class TeamSettingsService
     {
         $typ = $this->for($team)->kitchen_type;
 
-        return isset(self::KUECHEN_TYPEN[$typ]) ? $typ : null;
+        // PHP 8.5: null als Array-Schlüssel ist deprecated (io-Log 23.10.) — ungesetzt erst gar nicht nachschlagen
+        return is_string($typ) && isset(self::KUECHEN_TYPEN[$typ]) ? $typ : null;
     }
 
     /** Segment (Bespielung) aus dem Küchen-Typ ableiten. @return array{key:string, label:string}|null */
