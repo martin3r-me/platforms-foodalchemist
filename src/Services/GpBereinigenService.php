@@ -6,6 +6,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent;
+use Platform\FoodAlchemist\Support\StammPaket;
 
 /**
  * GP-Stamm bereinigen (Dominique/Kurator 19.10.2026): Dubletten mergen, Namen nach Regelwerk korrigieren.
@@ -261,6 +262,22 @@ class GpBereinigenService
     // ── Plan: Namen ─────────────────────────────────────────────────────────────────────────────────
 
     /**
+     * Geltungsbereich der Namens-Phase: `$teamId` = team-eigene GPs; `null` = GLOBALE Stamm-GPs (team_id NULL + stamm_class stamm_paket,
+     * nur über `--global` im Befehl, der das Master-Team voraussetzt).
+     */
+    private function bereich(\Illuminate\Database\Query\Builder $q, ?int $teamId): \Illuminate\Database\Query\Builder
+    {
+        return $teamId === null ? $q->whereNull('team_id')->where('stamm_class', StammPaket::PAKET) : $q->where('team_id', $teamId);
+    }
+
+    private function imBereich(object $gp, ?int $teamId): bool
+    {
+        return $teamId === null
+            ? $gp->team_id === null && ($gp->stamm_class ?? null) === StammPaket::PAKET
+            : (int) $gp->team_id === $teamId && $gp->team_id !== null;
+    }
+
+    /**
      * Deterministische Namensvorschläge aus der Sichtungs-CSV prüfen. Je GP genau EIN eindeutiger Vorschlag; mehrere
      * verschiedene Vorschläge, „unklar", „kein Eingriff", Warengruppe 15 (eigene Phase) und jede Regelwerk-Verletzung des
      * neuen Namens gehen als Konflikt in die Liste.
@@ -270,7 +287,7 @@ class GpBereinigenService
      *
      * @return array{aenderungen: list<array<string,mixed>>, konflikte: list<array<string,mixed>>, ohne_aenderung: int}
      */
-    public function planNamen(int $teamId, string|array $csv, ?string $wg = null, bool $keyFolgtName = false): array
+    public function planNamen(?int $teamId, string|array $csv, ?string $wg = null, bool $keyFolgtName = false): array
     {
         // Mehrere Pläne (z. B. Regelverstöße + Marke/Gebinde) werden je GP zusammengeführt: zwei VERSCHIEDENE Vorschläge für dasselbe GP
         // sind ein Konflikt (manuell), derselbe Vorschlag aus zwei Dateien zählt einmal.
@@ -322,7 +339,7 @@ class GpBereinigenService
                 continue;
             }
             $neu = (string) array_key_first($vorschlaege);
-            if ((int) $gp->team_id !== $teamId || ! in_array($gp->status, self::AKTIV, true)) {
+            if (! $this->imBereich($gp, $teamId) || ! in_array($gp->status, self::AKTIV, true)) {
                 $konflikt("Team/Status passt nicht (Team {$gp->team_id}, {$gp->status})");
 
                 continue;
@@ -374,7 +391,7 @@ class GpBereinigenService
             // Namens-Kollision: ein anderes aktives GP trägt den neuen Namen schon, oder ein früherer Vorschlag desselben Laufs (auch aus einer
             // anderen CSV) ergibt denselben Namen — beides ist ein Merge-Kandidat, kein Fall für automatisches Umbenennen.
             $nameKey = mb_strtolower(trim($neu));
-            $nameBesetzt = $nameGleich ? null : DB::table('foodalchemist_gps')->where('team_id', $teamId)->whereNull('deleted_at')->whereIn('status', self::AKTIV)
+            $nameBesetzt = $nameGleich ? null : $this->bereich(DB::table('foodalchemist_gps'), $teamId)->whereNull('deleted_at')->whereIn('status', self::AKTIV)
                 ->where('name', $neu)->where('id', '!=', $gp->id)->first();
             if ($nameBesetzt !== null) {
                 $konflikt("Namens-Kollision: »{$neu}« trägt schon #{$nameBesetzt->id} ({$nameBesetzt->status}) — Merge-Kandidat?");
@@ -412,7 +429,7 @@ class GpBereinigenService
             }
             if ($neuerKey !== $gp->gp_key) {
                 // UNIQUE (team_id, gp_key) gilt für ALLE Zeilen (auch merged/soft-gelöscht) — mit-prüfen.
-                $kollision = DB::table('foodalchemist_gps')->where('team_id', $teamId)->where('gp_key', $neuerKey)->where('id', '!=', $gp->id)->first();
+                $kollision = $this->bereich(DB::table('foodalchemist_gps'), $teamId)->where('gp_key', $neuerKey)->where('id', '!=', $gp->id)->first();
                 if ($kollision !== null) {
                     $konflikt("Key-Kollision: »{$neuerKey}« gehört schon #{$kollision->id} {$kollision->name} ({$kollision->status}) — Merge-Kandidat?");
 

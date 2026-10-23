@@ -22,6 +22,7 @@ class GpBereinigenCommand extends Command
 {
     protected $signature = 'foodalchemist:gp-bereinigen
         {--team= : Team, dem die GPs gehören (Standard: konfiguriertes Master-Team)}
+        {--global : GLOBALE Stamm-GPs (team_id NULL, stamm_class stamm_paket) statt team-eigener; nur Phase namen, nur als Master-Team}
         {--phase=dubletten,namen : Komma-Liste: dubletten, namen}
         {--plan-dubletten= : Sichtungs-CSV dubletten_fa.csv}
         {--plan-namen=* : Sichtungs-CSV benennung_fa.csv; mehrfach angebbar (z. B. zusätzlich benennung_marke_gebinde.csv)}
@@ -54,6 +55,19 @@ class GpBereinigenCommand extends Command
         }
         $team = (int) $team;
         $phasen = array_map('trim', explode(',', (string) $this->option('phase')));
+        $global = (bool) $this->option('global');
+        if ($global) {
+            if (MasterTeam::id() === null || $team !== (int) MasterTeam::id()) {
+                $this->error('--global ist nur als Master-Team erlaubt (Master: ' . (MasterTeam::id() ?? 'nicht konfiguriert') . ', angefragt: ' . $team . ').');
+
+                return self::FAILURE;
+            }
+            if ($phasen !== ['namen']) {
+                $this->error('--global gilt nur für --phase=namen (Dubletten-Merge bleibt team-eigenen GPs vorbehalten).');
+
+                return self::FAILURE;
+            }
+        }
         $apply = (bool) $this->option('apply');
         $wg = $this->option('wg') !== null ? (string) $this->option('wg') : null;
         $bericht = (string) ($this->option('bericht') ?: storage_path('app/fa-gp-bereinigen'));
@@ -66,10 +80,11 @@ class GpBereinigenCommand extends Command
 
         $keinMerge = $this->option('review-dir') ? $svc->keinMergeAusReview((string) $this->option('review-dir')) : [];
         $this->line($this->option('review-dir') ? 'Link-Review: ' . count($keinMerge) . ' GP(s) mit „kein Merge".' : 'Kein --review-dir: Link-Review wird NICHT berücksichtigt.');
-        $this->line($apply ? '<comment>APPLY</comment> auf Team ' . $team : 'TROCKENLAUF auf Team ' . $team . ' (schreibt nur Berichte)');
+        $ziel = $global ? 'GLOBALE Stamm-GPs (Master-Team ' . $team . ')' : 'Team ' . $team;
+        $this->line($apply ? '<comment>APPLY</comment> auf ' . $ziel : 'TROCKENLAUF auf ' . $ziel . ' (schreibt nur Berichte)');
 
         $konflikte = [];
-        $protokoll = ['lauf' => $stempel, 'team' => $team, 'wg' => $wg, 'phasen' => $phasen, 'moves' => [], 'deleted' => [], 'merges' => [], 'renames' => []];
+        $protokoll = ['lauf' => $stempel, 'team' => $team, 'global' => $global, 'wg' => $wg, 'phasen' => $phasen, 'moves' => [], 'deleted' => [], 'merges' => [], 'renames' => []];
         $recipeIds = [];
 
         if (in_array('dubletten', $phasen, true)) {
@@ -98,7 +113,7 @@ class GpBereinigenCommand extends Command
 
                 return self::FAILURE;
             }
-            $plan = $svc->planNamen($team, $csv, $wg, (bool) $this->option('key-folgt-name'));
+            $plan = $svc->planNamen($global ? null : $team, $csv, $wg, (bool) $this->option('key-folgt-name'));
             $konflikte = array_merge($konflikte, $plan['konflikte']);
             $this->zeigeNamen($plan);
             $this->schreibeCsv("{$bericht}/{$stempel}_namen_plan.csv", ['gp_id', 'wg', 'regeln', 'name_alt', 'name_neu', 'key_alt', 'key_neu', 'key_wechsel', 'key_nicht_ableitbar'],
