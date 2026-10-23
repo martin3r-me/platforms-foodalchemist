@@ -35,7 +35,7 @@ trait MitBearbeitungssperre
     {
         return array_merge([
             'bearbeitenStarten', 'bearbeitenAbbrechen', 'bearbeitenFertig', 'sperreHerzschlag', 'sperreLoesen', 'sperreBeiSchliessen',
-            'oeffnen', 'tabLaden', 'render', 'mount', '$refresh', '__dispatch',
+            'oeffnen', 'tabLaden', 'render', 'mount', '$refresh', '__dispatch', '__lazyLoad', '__lazyLoadIsland',   // Livewire-Nachladen = mount
         ], $this->sperrFreiExtra());
     }
 

@@ -65,7 +65,7 @@ trait MitEinstellungsSperre
     /** Lesende Methoden, die auch ohne Admin-Recht laufen (Anzeigen, Reiter, Herzschlag). */
     protected function nurLesendErlaubt(): array
     {
-        return array_merge(['render', 'mount', '$refresh', '__dispatch', 'tabLaden', 'oeffnen', 'sperreHerzschlag', 'reiterGeaendert',
+        return array_merge(['render', 'mount', '$refresh', '__dispatch', '__lazyLoad', '__lazyLoadIsland', 'tabLaden', 'oeffnen', 'sperreHerzschlag', 'reiterGeaendert',
             'sperreBeiSchliessen', 'bearbeitenAbbrechen'], $this->sperrFreiExtra());
     }
 
