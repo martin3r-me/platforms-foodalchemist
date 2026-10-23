@@ -169,6 +169,67 @@
     @endif
 
     @if($zeige('nutzung'))
+    {{-- ── KI-Verbrauch des Mandanten (Dominique 23.10.2026): Standort sieht sich, Hauptteam den ganzen Mandanten + je Standort ── --}}
+    @if($verbrauch !== null)
+        @php
+            $vEur = fn ($v) => number_format((float) $v, 2, ',', '.').' €';
+            $vZahl = fn ($v) => number_format((int) $v, 0, ',', '.');
+        @endphp
+        <x-fa::section title="KI-Verbrauch" icon="heroicon-o-banknotes" data-ki-verbrauch
+                       description="{{ $verbrauch['ist_haupt'] ? 'Was KI für euren Betrieb kostet — alle Standorte zusammen und je Standort.' : 'Was KI für diesen Standort kostet.' }} Euro mit dem Preis und Kurs zum Zeitpunkt des Aufrufs.">
+            <x-slot:actions>
+                <x-fa::choice name="verbrauchZeitraum" :options="$verbrauchOptionen" />
+            </x-slot:actions>
+            <p class="{{ $zeileHilfe }}">{{ $verbrauch['von']->format('d.m.Y') }} bis {{ $verbrauch['bis']->format('d.m.Y') }}</p>
+
+            @if($verbrauch['deckel'] !== null && $verbrauch['deckel']['eur'] !== null)
+                @php $anteil = $verbrauch['deckel']['eur'] > 0 ? min(100, round($verbrauch['deckel']['verbrauch_monat'] / $verbrauch['deckel']['eur'] * 100)) : 100; @endphp
+                <div class="flex flex-col gap-1" data-ki-verbrauch-deckel>
+                    <p class="text-[length:var(--fa-text-sm)]">
+                        {{ $vEur($verbrauch['deckel']['verbrauch_monat']) }} von {{ $vEur($verbrauch['deckel']['eur']) }} in diesem Monat
+                        {{ $verbrauch['deckel']['quelle'] === 'projekt_standard' ? '(KI-Kontingent der Projektphase)' : '(KI-Budget)' }}
+                    </p>
+                    <div class="h-2 rounded-full bg-[var(--fa-line)] overflow-hidden"><div class="h-full {{ $anteil >= 100 ? 'bg-[var(--fa-crit)]' : ($anteil >= 80 ? 'bg-[var(--fa-warn)]' : 'bg-[var(--fa-accent)]') }}" style="width: {{ $anteil }}%"></div></div>
+                    <p class="{{ $zeileHilfe }}">Ist der Betrag erreicht, ist KI bis zum 1. des nächsten Monats gesperrt{{ $verbrauch['deckel']['quelle'] === 'projekt_standard' ? ' oder bis zur Lizenz' : '' }}.</p>
+                </div>
+            @endif
+
+            <div class="overflow-x-auto">
+                <table class="fa-table min-w-[560px]" data-ki-verbrauch-tabelle>
+                    <thead><tr><th>{{ $verbrauch['ist_haupt'] ? 'Standort / Art' : 'Art' }}</th><th class="num">Aufrufe</th><th class="num">Fehlläufe</th><th class="num">Euro</th></tr></thead>
+                    <tbody>
+                        @if($verbrauch['ist_haupt'])
+                            @foreach($verbrauch['standorte'] as $st)
+                                <tr wire:key="kv-st-{{ $st['team_id'] }}" data-ki-verbrauch-standort="{{ $st['team_id'] }}">
+                                    <td>{{ $st['label'] }}@if($st['ist_haupt']) <span class="text-[var(--fa-ink-3)]">(Hauptteam)</span>@endif</td>
+                                    <td class="num">{{ $vZahl($st['calls'] - $st['fehler']) }}</td><td class="num">{{ $vZahl($st['fehler']) }}</td><td class="num">{{ $vEur($st['eur']) }}</td>
+                                </tr>
+                            @endforeach
+                        @endif
+                        @foreach($verbrauch['klassen'] as $k)
+                            <tr wire:key="kv-k-{{ $k['label'] }}" class="text-[var(--fa-ink-2)]" data-ki-verbrauch-art>
+                                <td>{{ $verbrauch['ist_haupt'] ? 'Art: ' : '' }}{{ $k['label'] }}</td>
+                                <td class="num">{{ $vZahl($k['calls'] - $k['fehler']) }}</td><td class="num">{{ $vZahl($k['fehler']) }}</td><td class="num">{{ $vEur($k['eur']) }}</td>
+                            </tr>
+                        @endforeach
+                        @if($verbrauch['summe']['calls'] === 0)
+                            <tr><td colspan="4" class="text-[var(--fa-ink-3)]">Im Zeitraum kein KI-Verbrauch.</td></tr>
+                        @endif
+                    </tbody>
+                    <tfoot>
+                        <tr data-ki-verbrauch-summe class="font-semibold">
+                            <td>Summe</td><td class="num">{{ $vZahl($verbrauch['summe']['calls'] - $verbrauch['summe']['fehler']) }}</td><td class="num">{{ $vZahl($verbrauch['summe']['fehler']) }}</td><td class="num">{{ $vEur($verbrauch['summe']['eur']) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <p class="{{ $zeileHilfe }}" data-ki-verbrauch-luecke>
+                Fehlläufe kosten, soweit der Anbieter dabei schon gerechnet hat, und sind im Betrag enthalten. Ohne Embeddings (Wissenssuche) — die werden noch nicht erfasst.
+                @if($verbrauch['summe']['ohne_preis'] > 0) {{ $verbrauch['summe']['ohne_preis'] }} Aufrufe ohne hinterlegten Preis sind nicht im Betrag enthalten.@endif
+            </p>
+        </x-fa::section>
+    @endif
+
     {{-- ── Nutzung ── --}}
     <x-fa::section title="Nutzung und Kosten" icon="heroicon-o-chart-bar" description="{{ $stammSicht ? 'Alle KI-Aufrufe dieses Teams und die der globalen Stamm-Arbeiten (ohne Team), je Arbeitsschritt und Modell.' : 'Alle KI-Aufrufe dieses Teams, je Arbeitsschritt und Modell.' }}">
         <x-slot:actions>
