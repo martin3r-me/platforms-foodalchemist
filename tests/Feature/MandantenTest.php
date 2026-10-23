@@ -144,5 +144,6 @@ it('MCP: mandanten.GET/PUT — Plattform-Admin und Master-Admin ja, Inhaber FORB
 it('Die Verwaltungsdaten enthalten keine Inhalte: nur die erwarteten Schlüssel', function () {
     $m = ($this->svc)()->zeige($this->soul);
 
-    expect(array_keys($m))->toBe(['team_id', 'name', 'status', 'modus', 'crm_company_id', 'crm_firma', 'notiz', 'modus_geaendert_von', 'modus_geaendert_am', 'hat_zeile']);
+    expect(array_keys($m))->toBe(['team_id', 'name', 'status', 'modus', 'crm_company_id', 'crm_firma', 'notiz', 'modus_geaendert_von', 'modus_geaendert_am', 'hat_zeile',
+        'ki_deckel_eur', 'ki_deckel_quelle', 'ki_deckel_unbegrenzt', 'ki_deckel_betrag_gesetzt', 'ki_verbrauch_eur_monat']);   // KI-Deckel 23.10.: Verwaltungsdaten, keine Inhalte
 });

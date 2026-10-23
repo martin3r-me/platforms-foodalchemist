@@ -22,9 +22,40 @@ class Mandanten extends Component
         abort_unless(app(MandantenService::class)->darfVerwaltung(Auth::user()), 404);
     }
 
+    /** KI-Monatsdeckel-Eingabe je Mandant (Euro als Text, leer = Standard) */
+    public array $kiDeckel = [];
+
+    /** „unbegrenzt“ je Mandant */
+    public array $kiUnbegrenzt = [];
+
+    public ?string $hinweis = null;
+
+    public ?string $kiFehler = null;
+
     public function auf(int $teamId): void
     {
         $this->offen = $this->offen === $teamId ? null : $teamId;
+        $this->kiFehler = $this->hinweis = null;
+        if ($this->offen !== null) {
+            $m = app(MandantenService::class)->zeige(\Platform\Core\Models\Team::findOrFail($teamId));
+            $this->kiDeckel[$teamId] = $m['ki_deckel_betrag_gesetzt'] !== null ? number_format($m['ki_deckel_betrag_gesetzt'], 2, ',', '') : '';
+            $this->kiUnbegrenzt[$teamId] = $m['ki_deckel_unbegrenzt'];
+        }
+    }
+
+    /** KI-Monatsdeckel des Mandanten speichern (Master-Admin, Dominique 23.10.2026). */
+    public function kiDeckelSpeichern(int $teamId): void
+    {
+        $this->kiFehler = $this->hinweis = null;
+        try {
+            app(MandantenService::class)->setze(\Platform\Core\Models\Team::findOrFail($teamId), [
+                'ki_deckel_eur' => trim((string) ($this->kiDeckel[$teamId] ?? '')),
+                'ki_deckel_unbegrenzt' => (bool) ($this->kiUnbegrenzt[$teamId] ?? false),
+            ], Auth::user());
+            $this->hinweis = 'KI-Deckel gespeichert.';
+        } catch (FaRechtFehltException|\RuntimeException $e) {
+            $this->kiFehler = $e->getMessage();
+        }
     }
 
     public function render()
