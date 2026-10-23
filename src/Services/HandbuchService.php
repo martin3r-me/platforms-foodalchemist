@@ -5,9 +5,12 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistHandbuch;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 
 /**
  * Spec 86 — Handbuch (Standards zum Nachschlagen). Friert zu einem Ausgabe-Dokument einen
@@ -23,14 +26,21 @@ class HandbuchService
 {
     public const TYPE_FOODBOOK = 'foodbook';
 
+    public const TYPE_SPEISEKARTE = 'speisekarte';
+
+    public const TYPE_SPEISEPLAN = 'speiseplan';
+
+    public const TYPE_ANGEBOT = 'angebot';
+
     public const SCHEMA_VERSION = 1;
 
-    /** Quelltypen, die das Handbuch schon kann (weitere folgen je Bauteil). */
-    public const TYPEN = [self::TYPE_FOODBOOK];
+    /** Quelltypen des Handbuchs (gleiche vier Ausgabe-Dokumente wie die Präsentation, Spec 43). */
+    public const TYPEN = [self::TYPE_FOODBOOK, self::TYPE_SPEISEKARTE, self::TYPE_SPEISEPLAN, self::TYPE_ANGEBOT];
 
     public function __construct(
         private FoodAlchemistMediaService $media,
         private RegenerationCascadeService $regeneration,
+        private HandbuchQuellenService $quellen,
     ) {
     }
 
@@ -122,10 +132,7 @@ class HandbuchService
     /** @return array<string,mixed> */
     public function buildSnapshot(Team $team, Model $entity, string $type): array
     {
-        $quelle = match ($type) {
-            self::TYPE_FOODBOOK => $this->quelleFoodbook($team, $entity),
-            default => throw new \InvalidArgumentException("Handbuch-Typ '{$type}' wird noch nicht unterstützt."),
-        };
+        $quelle = $this->quellen->lies($team, $type, $entity);
 
         // Gerichte einmalig laden: alle vorkommenden Rezept-IDs → Karten.
         $refs = [];
@@ -268,41 +275,6 @@ class HandbuchService
         return $fehlt;
     }
 
-    // ── Quellen-Adapter ────────────────────────────────────────────────────
-
-    /** @return array{title:string, subtitle:?string, sections:list<array>, legende:mixed} */
-    private function quelleFoodbook(Team $team, FoodAlchemistFoodbook $fb): array
-    {
-        // mitKaskade=false → kein EK/Lieferant-Leak; wir nehmen nur Struktur, Wording, Gericht-ID, Codes.
-        $dok = app(FoodbookService::class)->dokumentDaten($team, $fb, false, [], false);
-        $sections = [];
-        foreach ($dok['kapitel'] ?? [] as $k) {
-            $items = [];
-            foreach ($k['bloecke'] ?? [] as $b) {
-                foreach ($b['gerichte'] ?? [] as $g) {
-                    if (empty($g['recipe_id'])) {
-                        continue;
-                    }
-                    $rid = (int) $g['recipe_id'];
-                    $items[] = [
-                        'key' => 'r' . $rid, 'recipe_id' => $rid,
-                        'label' => (string) ($g['text'] ?? ''),
-                        'indent' => (int) ($g['einrueckung'] ?? 0),
-                        'codes' => array_values((array) ($g['codes'] ?? [])),
-                    ];
-                }
-            }
-            $sections[] = ['title' => (string) ($k['title'] ?? ''), 'text' => $k['text'] ?? null, 'items' => $items];
-        }
-
-        return [
-            'title' => (string) ($fb->label ?: $fb->code ?: 'Foodbook'),
-            'subtitle' => $fb->description ? (string) $fb->description : null,
-            'sections' => $sections,
-            'legende' => $dok['legende'] ?? null,
-        ];
-    }
-
     // ── Bilder ─────────────────────────────────────────────────────────────
 
     /** Identifier → frisch signierte URL (Snapshot speichert nur Identifier). */
@@ -330,7 +302,10 @@ class HandbuchService
     {
         $class = match ($type) {
             self::TYPE_FOODBOOK => FoodAlchemistFoodbook::class,
-            default => throw new \InvalidArgumentException("Handbuch-Typ '{$type}' wird noch nicht unterstützt."),
+            self::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
+            self::TYPE_SPEISEPLAN => FoodAlchemistSpeiseplan::class,
+            self::TYPE_ANGEBOT => FoodAlchemistAngebot::class,
+            default => throw new \InvalidArgumentException("Unbekannter Handbuch-Typ '{$type}'."),
         };
         $entity = $class::visibleToTeam($team)->findOrFail($id);
         if ($forWrite && ! $entity->isOwnedBy($team)) {

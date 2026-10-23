@@ -420,6 +420,9 @@
                             </div>
                         @endif
 
+                        {{-- ── Spec 86: Handbuch-Link (zweiter Link neben dem Kundenlink) ── --}}
+                        <livewire:foodalchemist.handbuch.panel type="speisekarte" :quelle-id="$karteId" :key="'hb-speisekarte-'.$karteId" />
+
                         {{-- ── Slice F: eigener Link je Betrieb ── --}}
                         <div class="pt-4 border-t border-[var(--fa-line)] flex flex-col gap-3">
                             <div>
