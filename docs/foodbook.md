@@ -44,3 +44,24 @@ Präsentations-Designs* gestaltete), **gültig bis** (Pflicht) setzen, **Veröff
 Kundenlink ist aktiv. Veröffentlichen friert einen **absoluten Snapshot** ein: Weiterarbeiten am
 Foodbook ändert den Link erst beim erneuten Veröffentlichen. Zurückziehen/Ablauf → 404. Die
 Kundensicht ist beweisbar interna-frei (kein EK/Marge/W%/Lieferant). Details → `PLANUNG/43_Praesentation_Digitales_Kundenbuch.md`.
+
+## Handbuch — Standards zum Nachschlagen (Spec 86)
+
+Zu jedem Ausgabe-Dokument (Foodbook, Speisekarte, Speiseplan, Angebot) gibt es ein **Handbuch** als zweiten,
+eigenen Link neben dem Kundenlink: Tablet-first, login-frei, **ohne Preise**, eingefroren (Änderungen erst nach
+erneutem Veröffentlichen). Je Gericht: Zubereitung, Anrichten (mit Schrittfotos), Regeneration je Komponente,
+Bestandteile (Garnitur markiert), Portion/Geschirr, Allergene. Fehlt ein Abschnitt, bleibt er im Handbuch weg;
+„Lücken prüfen" im Editor listet die betroffenen Gerichte. Link: `/p/handbuch/{token}` (eigener Token, eigenes
+Ablaufdatum, Widerruf; Wieder-Veröffentlichen behält den Link). Der Wandmonitor ist davon unberührt.
+
+**MCP** (je Dokumenttyp ein eigener Namensraum, damit die Rechte-Hülle über das Präfix den Bereich greift):
+
+| Tool | Zweck |
+|---|---|
+| `foodalchemist.<typ>_handbuch.PUBLISH` | veröffentlichen; `<typ>_id` + `expires_at` (Pflicht); Antwort enthält `token`, `url`, `luecken` |
+| `foodalchemist.<typ>_handbuch.GET` | Status (veröffentlicht, erreichbar, Link, Ablauf); `luecken=true` rechnet zusätzlich die Lücken |
+| `foodalchemist.<typ>_handbuch.WITHDRAW` | zurückziehen (Link → 404, Token bleibt) |
+
+`<typ>` = `foodbook` · `speisekarte` · `speiseplan` · `angebot`. Speiseplan: das Handbuch zeigt die laufende Woche,
+sonst die erste belegte. Quelle: `HandbuchService`, `HandbuchQuellenService`; Spec → `PLANUNG/86_Handbuch_Standards.md`.
+
