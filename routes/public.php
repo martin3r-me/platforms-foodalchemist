@@ -29,6 +29,14 @@ Route::get('/p/{type}/{token}/app-icon.png', [PresentationController::class, 'ap
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.app_icon');
 
+// Spec 86 — Handbuch (Standards zum Nachschlagen): eigener Token, eigener Link neben dem Kundenlink.
+// Routenname enthält das Segment „presentation" → bereichsfrei und im gesperrten Team erreichbar
+// (FaBereiche::ROUTEN / TeamSperre::ROUTEN_AUSNAHME), genau wie die Präsentation.
+Route::get('/p/handbuch/{token}', [\Platform\FoodAlchemist\Http\Controllers\HandbuchController::class, 'show'])
+    ->where('token', '[A-Za-z0-9-]+')
+    ->middleware(NoCacheHeaders::class)
+    ->name('foodalchemist.presentation.handbuch');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
     ->where('token', '[A-Za-z0-9-]+')
