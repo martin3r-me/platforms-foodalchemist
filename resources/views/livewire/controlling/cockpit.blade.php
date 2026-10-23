@@ -132,6 +132,26 @@
                         ['kpi' => 'break-even', 'label' => 'Break-even je Monat', 'value' => $kpi['fixkosten_monat'] > 0 ? $eur($kpi['break_even']) : 'Fixkosten fehlen'],
                         ['kpi' => 'geld-signale', 'label' => 'Geld-Signale', 'value' => number_format($kpi['geld_signale'], 0, ',', '.')],
                     ]" />
+                    @if(! empty($kpi['je_standort']))
+                        {{-- Spec 85 PR-D: Brille „alle“ — die Summe oben, darunter jeder Standort mit seinen eigenen Preisen und seinem Profil. --}}
+                        <table class="fa-table mt-3 w-full text-[length:var(--fa-text-sm)]" data-controlling-je-standort>
+                            <thead>
+                                <tr><th>Standort</th><th class="num">Ø Wareneinsatz</th><th class="num">Ziel</th><th class="num">EK-Abdeckung</th><th class="num">Einkauf 30 Tage</th><th class="num">Geld-Signale</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach($kpi['je_standort'] as $st)
+                                    <tr wire:key="kpi-standort-{{ $st['team_id'] }}" data-standort="{{ $st['team_id'] }}">
+                                        <td>{{ $st['standort'] }}</td>
+                                        <td class="num">{{ $pct($st['wert']['avg_w_pct']) ?? '–' }}</td>
+                                        <td class="num">{{ $pct($st['wert']['ziel_we_pct']) ?? '–' }}</td>
+                                        <td class="num">{{ $pct($st['wert']['ek_coverage_pct']) ?? '–' }}</td>
+                                        <td class="num">{{ $st['wert']['spend_30d'] > 0 ? $eur($st['wert']['spend_30d']) : '–' }}</td>
+                                        <td class="num">{{ number_format($st['wert']['geld_signale'], 0, ',', '.') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    @endif
                 </x-slot:kpiHeader>
             @endunless
 
