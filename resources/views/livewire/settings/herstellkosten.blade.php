@@ -10,6 +10,7 @@
     $einheit = ['eur_pro_portion' => '€', 'arbeitszeit' => '€/h'];
     $fixMonatGesamt = array_sum($fixSummen ?? []);
     $blockName = fn ($key) => collect($gkBloecke)->firstWhere('key', $key)['label'] ?? $key;
+    $zeige = fn (string $a) => $abschnitt === null || $abschnitt === $a;   // E-4: der Unter-Reiter zeigt nur seinen Abschnitt, null = alles
 @endphp
 
 <div class="flex flex-col gap-4" data-settings-herstellkosten>
@@ -58,6 +59,7 @@
 
     {{-- Spec 65: der Betriebs-Wähler oben bleibt im Lesemodus bedienbar (lädt nur), alles darunter ist gesperrt --}}
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
+    @if($zeige('zuschlaege'))
     {{-- Doc 16 §10: mehrstufiges Kostenblock-Schema --}}
     <x-fa::section title="Zuschlagskalkulation" icon="heroicon-o-calculator" data-hk-schema
         description="Gemeinkosten stehen auf automatisch: Du trägst unten deine Fixkosten in Euro ein, der Zuschlag rechnet sich selbst (Fixkosten je Monat geteilt durch die Bezugsbasis). Manuell nur als Ausnahme.">
@@ -187,6 +189,9 @@
         </div>
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('fixkosten'))
     {{-- M-K6/Doc 16 §10.2: Fixkosten + Bezugsbasen → abgeleitete Gemeinkosten-Sätze --}}
     <x-fa::section title="Fixkosten" icon="heroicon-o-banknotes" data-hk-fixkosten
         description="Kosten, die nicht am einzelnen Produkt hängen: Logistik, Spüle, Lager, Verwaltung. Je Kostenblock gilt: Zuschlag in % = Fixkosten je Monat ÷ Bezugsbasis × 100.">
@@ -311,5 +316,6 @@
             @endif
         </div>
     </x-fa::section>
+    @endif
     </fieldset>
 </div>

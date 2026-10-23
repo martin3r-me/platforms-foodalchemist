@@ -21,10 +21,10 @@ use Livewire\Component;
 class Index extends Component
 {
     /**
-     * Neuordnung 23.10. (Dominique: Reiter statt Seitenleiste): je GRUPPE ein Reiter, im Reiter die Bereiche als Abschnitte mit
-     * Sprungmarken. Reiter und Bereich stehen in der URL (?tab=…&bereich=…); alte Links /einstellungen/{sektion} öffnen den Reiter
-     * der Sektion und springen zum Bereich. Nur der aktive Reiter wird gerendert, Bereiche unterhalb des ersten laden verzögert
-     * (lazy), erweiterte Bereiche stecken in einem aufklappbaren Block.
+     * Neuordnung 23.10. (Dominique: Reiter statt Seitenleiste): je GRUPPE ein Reiter. E-4 (Dominique 23.10.: „alle Tab-Inhalte
+     * untereinander … eher schlimmer“): im Reiter je Unter-Bereich ein Unter-Reiter, es ist immer genau EINER gerendert. Reiter und
+     * Unter-Reiter stehen in der URL (?tab=…&bereich=…, ohne bereich gilt der erste); alte Links /einstellungen/{sektion} und
+     * ?bereich=<sektion> öffnen den passenden Unter-Reiter. Erweiterte Bereiche stehen als Unter-Reiter hinter einem Trenner.
      */
     #[Url(as: 'tab')]
     public string $tab = '';
@@ -157,6 +157,40 @@ class Index extends Component
     public const GRUND = ['start', 'zugriffsrechte', 'unter-teams', 'teamprofil', 'posten', 'etiketten', 'einkauf', 'kalkulation', 'herstellkosten', 'betriebe', 'food-dna', 'ki'];
 
     /**
+     * E-4: Sektionen, deren große Blöcke je einen eigenen Unter-Reiter bekommen (Dominique 23.10., Gliederung
+     * 00_INBOX/_Einstellungen_E4_Gliederung.md). Schlüssel = Unter-Reiter in der URL, an die Komponente geht er als `abschnitt`.
+     * Die Schlüssel dürfen keine Sektion benennen (sonst wäre ?bereich= mehrdeutig).
+     *
+     * @var array<string, array<string, array{label: string, hint: string, stichworte: string}>>
+     */
+    public const ABSCHNITTE = [
+        'teamprofil' => [
+            'kennzahlen' => ['label' => 'Kennzahlen', 'hint' => 'Gäste parallel zum Tagesgeschäft, Convenience-Grad, Besonderheiten', 'stichworte' => 'Teamprofil Gäste Convenience Kennzahlen Wege Engpass'],
+            'ausstattung' => ['label' => 'Ausstattung', 'hint' => 'Je Gerät: vorhanden, fehlt oder unbekannt', 'stichworte' => 'Teamprofil Geräte Equipment Kombidämpfer Pacojet'],
+            'flaechen' => ['label' => 'Flächen', 'hint' => 'Räume und Flächen mit Gästegrenze und Saison', 'stichworte' => 'Teamprofil Fläche Terrasse Saal Rooftop'],
+        ],
+        'einkauf' => [
+            'leitartikel' => ['label' => 'Leitartikel & Lieferanten', 'hint' => 'Welcher Artikel kalkuliert, Lieferanten-Reihenfolge, Stamm-Lieferanten je Warengruppe', 'stichworte' => 'Leitartikel Lead Bezugsquelle Favoriten Stamm-Lieferant Lieferant Strategie'],
+            'bestellversand' => ['label' => 'Bestellversand', 'hint' => 'Wie eine Bestellung beim Absenden zum Lieferanten kommt', 'stichworte' => 'Bestellversand Mail Absender Signatur Bestellung'],
+            'lagerorte' => ['label' => 'Lagerorte', 'hint' => 'Standardlager und weitere Lagerorte für Umlagerung, Inventur und Produktion', 'stichworte' => 'Lagerort Lager Inventur Umlagerung'],
+        ],
+        'kalkulation' => [
+            'verluste' => ['label' => 'Verluste', 'hint' => 'Gar- und Putzverlust je Warengruppe', 'stichworte' => 'Garverlust Putzverlust Verlust'],
+            'mwst-rundung' => ['label' => 'MwSt & Rundung', 'hint' => 'Steuersätze und Rundung der Verkaufspreise', 'stichworte' => 'MwSt Mehrwertsteuer Rundung Nachkommastellen'],
+        ],
+        'herstellkosten' => [
+            'zuschlaege' => ['label' => 'Zuschläge', 'hint' => 'Zuschlagsschema, Marge, Lohnnebenkosten und Lohnquelle', 'stichworte' => 'Zuschlag Stundensatz Marge Gemeinkosten Lohn Wareneinsatz'],
+            'fixkosten' => ['label' => 'Fixkosten', 'hint' => 'Fixkosten je Monat und Bezugsbasis für die automatischen Zuschläge', 'stichworte' => 'Fixkosten Bezugsbasis Miete Leasing'],
+        ],
+        'ki' => [
+            'anbieter' => ['label' => 'Anbieter & Notschalter', 'hint' => 'KI für dieses Team an- und abschalten', 'stichworte' => 'KI Notschalter Kill-Switch'],
+            'modellstufen' => ['label' => 'Modellstufen', 'hint' => 'Welche Modellstufe welcher Arbeitsschritt nutzt', 'stichworte' => 'KI Modell Modellstufen'],
+            'sprachbefehl' => ['label' => 'Sprachbefehl', 'hint' => 'Agenten-Modus, dauerhaft aktiv, Vorlesen und Stimme', 'stichworte' => 'KI Sprachbefehl Agenten-Modus Vorlesen Stimme'],
+            'nutzung' => ['label' => 'Nutzung & Kosten', 'hint' => 'KI-Aufrufe und Kosten im Zeitraum, Abrechnung je Mandant', 'stichworte' => 'KI Kosten Verbrauch Abrechnung'],
+        ],
+    ];
+
+    /**
      * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
      *
      * @var array<string, string>
@@ -237,10 +271,18 @@ class Index extends Component
         if ($sektion !== null) {
             // alter Link /einstellungen/{sektion}: unbekannt oder nicht erlaubt = 404 wie bisher, sonst Reiter + Sprung zum Bereich
             abort_unless(array_key_exists($sektion, self::SEKTIONEN) && isset($sichtbar[$sektion]), 404);
-            $this->tab = self::gruppeVon($sektion);
-            $this->bereich = $sektion;
+            $this->bereich = $sektion;   // normalisieren() setzt Reiter und Unter-Reiter (geteilte Sektion → erster Abschnitt)
         }
         $this->normalisieren($sichtbar);
+    }
+
+    /** E-4: Unter-Reiter wechseln. Die Sperre gilt je Reiter und bleibt stehen (kein Freigeben wie bei tabWaehlen). */
+    public function bereichWaehlen(string $key): void
+    {
+        $unter = self::unterReiter($this->tab, self::sichtbareSektionen());
+        if (isset($unter['grund'][$key]) || isset($unter['erweitert'][$key])) {
+            $this->bereich = $key;
+        }
     }
 
     /** Reiter wechseln (Leiste im Server-Modus): nur sichtbare Reiter, Sprungziel fällt weg. Eigene Sperren des alten Reiters gehen frei. */
@@ -371,19 +413,63 @@ class Index extends Component
         return ['modus' => $meins ? 'bearbeiten' : 'lesen', 'fremd' => $fremd];
     }
 
-    /** Ungültiger oder nicht sichtbarer Reiter/Bereich (auch aus einer geteilten URL) → erster sichtbarer Reiter, kein Sprung. */
+    /** Ungültiger oder nicht sichtbarer Reiter/Unter-Reiter (auch aus einer geteilten URL) → erster sichtbarer Reiter, erster Unter-Reiter. */
     private function normalisieren(array $sichtbar): void
     {
-        if ($this->bereich !== null && ! isset($sichtbar[$this->bereich])) {
-            $this->bereich = null;
-        }
         if ($this->bereich !== null) {
-            $this->tab = self::gruppeVon($this->bereich);
+            $ziel = self::unterReiterZiel($this->bereich, $sichtbar);
+            [$this->tab, $this->bereich] = $ziel ?? [$this->tab, null];
         }
         $gruppen = self::sichtbareGruppen($sichtbar);
         if (! isset($gruppen[$this->tab])) {
             $this->tab = (string) (array_key_first($gruppen) ?? '');
+            $this->bereich = null;
         }
+    }
+
+    /**
+     * E-4: Reiter und Unter-Reiter zu einem Schlüssel aus der URL: Sektion (geteilt → ihr erster Abschnitt) oder Abschnitt.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public static function unterReiterZiel(string $key, ?array $sichtbar = null): ?array
+    {
+        $sichtbar ??= self::sichtbareSektionen();
+        if (isset($sichtbar[$key])) {
+            return [self::gruppeVon($key), isset(self::ABSCHNITTE[$key]) ? (string) array_key_first(self::ABSCHNITTE[$key]) : $key];
+        }
+        foreach (self::ABSCHNITTE as $sektion => $abschnitte) {
+            if (isset($abschnitte[$key]) && isset($sichtbar[$sektion])) {
+                return [self::gruppeVon($sektion), $key];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * E-4: Unter-Reiter eines Reiters, Grundeinstellungen zuerst, erweiterte hinter dem Trenner (Reiter ohne Grundeinstellung: alle vorn).
+     * Eintrag: Sektion, Abschnitt (null = ganze Sektion), Beschriftung, Zweck, Suchwörter.
+     *
+     * @return array{grund: array<string, array{sektion: string, abschnitt: ?string, label: string, hint: string, stichworte: string}>, erweitert: array<string, array{sektion: string, abschnitt: ?string, label: string, hint: string, stichworte: string}>}
+     */
+    public static function unterReiter(string $tab, ?array $sichtbar = null): array
+    {
+        $sichtbar ??= self::sichtbareSektionen();
+        $out = ['grund' => [], 'erweitert' => []];
+        foreach (self::sichtbareGruppen($sichtbar)[$tab]['sektionen'] ?? [] as $sektion) {
+            $teil = in_array($sektion, self::GRUND, true) ? 'grund' : 'erweitert';
+            foreach (self::ABSCHNITTE[$sektion] ?? [$sektion => null] as $key => $abschnitt) {
+                $out[$teil][$key] = $abschnitt === null
+                    ? ['sektion' => $sektion, 'abschnitt' => null, 'label' => $sichtbar[$sektion]['label'], 'hint' => $sichtbar[$sektion]['hint'], 'stichworte' => self::STICHWORTE[$sektion] ?? '']
+                    : ['sektion' => $sektion, 'abschnitt' => $key] + $abschnitt;
+            }
+        }
+        if ($out['grund'] === []) {   // Reiter ganz ohne Grundeinstellung (z. B. Kategorien): alle gleichrangig, kein Trenner
+            $out = ['grund' => $out['erweitert'], 'erweitert' => []];
+        }
+
+        return $out;
     }
 
     public static function gruppeVon(string $sektion): string
@@ -478,18 +564,25 @@ class Index extends Component
         $sektionen = self::sichtbareSektionen();
         $gruppen = self::sichtbareGruppen($sektionen);
         $imReiter = $gruppen[$this->tab]['sektionen'] ?? [];
-        $grund = array_values(array_filter($imReiter, fn ($k) => in_array($k, self::GRUND, true)));   // Sprungziel bleibt an seinem Platz (Klappblock öffnet)
-        $erweitert = array_values(array_diff($imReiter, $grund));
-        if ($grund === []) {   // Reiter ganz ohne Grundeinstellung (z. B. Kategorien): alles offen, kein Klappblock
-            [$grund, $erweitert] = [$erweitert, []];
+        $unter = self::unterReiter($this->tab, $sektionen);
+        $alleUnter = $unter['grund'] + $unter['erweitert'];
+        $aktiv = isset($alleUnter[$this->bereich ?? '']) ? $this->bereich : array_key_first($alleUnter);
+        // Suche über alle Unter-Reiter aller sichtbaren Reiter: ein Treffer öffnet Reiter + Unter-Reiter
+        $treffer = [];
+        foreach (array_keys($gruppen) as $g) {
+            foreach (array_merge(...array_values(self::unterReiter($g, $sektionen))) as $key => $u) {
+                $treffer[$key] = $u + ['tab' => $g];
+            }
         }
 
         return view('foodalchemist::livewire.settings.index', [
             'sektionen' => $sektionen,
             'gruppen' => $gruppen,
-            'grundBereiche' => $grund,
-            'erweiterteBereiche' => $erweitert,
-            'stichworte' => self::STICHWORTE,
+            'grundReiter' => $unter['grund'],
+            'erweiterteReiter' => $unter['erweitert'],
+            'aktiv' => $aktiv,
+            'aktivEintrag' => $aktiv !== null ? $alleUnter[$aktiv] : null,
+            'treffer' => $treffer,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
             'nurLesen' => ! self::darfAendern(),
             'reiterSperre' => $this->reiterZustand(),

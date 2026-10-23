@@ -10,6 +10,7 @@
     $schluessel = 'font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $zahl = fn ($n) => number_format((int) $n, 0, ',', '.');
     $stufenTon = ['stark' => 'accent', 'mittel' => 'info', 'leicht' => 'neutral', 'S' => 'accent', 'M' => 'info', 'L' => 'neutral', 'A' => 'accent', 'B' => 'neutral', 'C' => 'info', 'D' => 'warn'];
+    $zeige = fn (string $a) => $abschnitt === null || $abschnitt === $a;   // E-4: der Unter-Reiter zeigt nur seinen Abschnitt, null = alles
     $nachKlasse = collect(KiKlassen::ALLE)->mapWithKeys(fn ($k) => [$k => collect($registry)->filter(fn ($kl) => $kl === $k)]);
 @endphp
 
@@ -22,6 +23,7 @@
     @endif
 
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
+    @if($zeige('anbieter'))
     {{-- ── KI an/aus (Kill-Switch) ── --}}
     <x-fa::section title="KI für dieses Team" icon="heroicon-o-power"
                    description="Schaltet alle KI-Funktionen dieses Teams auf einmal ab, zum Beispiel bei unerwarteten Kosten. Daten und Einstellungen bleiben erhalten.">
@@ -43,6 +45,9 @@
         </div>
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('sprachbefehl'))
     {{-- ── Sprachbefehl ── --}}
     <x-fa::section title="Sprachbefehl" icon="heroicon-o-microphone"
                    description="Der Agent hinter dem Sprachbefehl: was er selbst ausführen darf und wie er antwortet. Änderungen gelten sofort.">
@@ -112,8 +117,10 @@
         </div>
     </x-fa::section>
 
+    @endif
     </fieldset>
 
+    @if($zeige('modellstufen'))
     {{-- ── Modellstufen: drei KI-Klassen ── --}}
     <x-fa::section title="Modellstufen" icon="heroicon-o-rectangle-stack"
                    :meta="$registry->count() . ' Arbeitsschritte'"
@@ -159,6 +166,9 @@
         @endif
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('nutzung'))
     {{-- ── Nutzung ── --}}
     <x-fa::section title="Nutzung und Kosten" icon="heroicon-o-chart-bar" description="{{ $stammSicht ? 'Alle KI-Aufrufe dieses Teams und die der globalen Stamm-Arbeiten (ohne Team), je Arbeitsschritt und Modell.' : 'Alle KI-Aufrufe dieses Teams, je Arbeitsschritt und Modell.' }}">
         <x-slot:actions>
@@ -307,5 +317,6 @@
                 </table>
             </div>
         </x-fa::section>
+    @endif
     @endif
 </div>
