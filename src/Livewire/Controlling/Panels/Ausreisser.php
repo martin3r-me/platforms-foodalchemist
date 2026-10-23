@@ -29,10 +29,25 @@ class Ausreisser extends Component
     public function render(PurchaseAnomalyService $anomalien)
     {
         $team = $this->team();
-        $treffer = $team !== null ? $anomalien->detect($team, max(1.5, (float) $this->faktor)) : [];
+        // Spec 85 PR-E: Team-Brille. Jeder Standort wird mit SEINEM Preisverlauf geprüft (nie eine gemeinsame Serie), die Treffer tragen den Standort.
+        $treffer = [];
+        $jeStandort = [];
+        if ($team !== null) {
+            $standorte = app(\Platform\FoodAlchemist\Services\StandortService::class);
+            $teams = \Platform\Core\Models\Team::whereIn('id', $this->leseTeamIds($team))->get();
+            foreach ($teams as $t) {
+                $r = $standorte->alsEigen($t, fn () => $anomalien->detect($t, max(1.5, (float) $this->faktor)));
+                foreach ($r as $x) {
+                    $treffer[] = $x + ['team_id' => (int) $t->id, 'standort' => (string) $t->name];
+                }
+                $jeStandort[] = ['team_id' => (int) $t->id, 'standort' => (string) $t->name, 'anzahl' => count($r)];
+            }
+            usort($treffer, fn ($a, $b) => $b['factor'] <=> $a['factor']);
+        }
 
         return view('foodalchemist::livewire.controlling.panels.ausreisser', [
             'treffer' => $treffer,
+            'jeStandort' => count($jeStandort) > 1 ? $jeStandort : [],
             'lieferanten' => $team !== null
                 ? FoodAlchemistSupplier::visibleToTeam($team)->pluck('name', 'id')
                 : collect(),

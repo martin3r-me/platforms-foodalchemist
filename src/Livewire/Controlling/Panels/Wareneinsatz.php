@@ -65,7 +65,7 @@ class Wareneinsatz extends Component
     /** Der Optimizer-Lauf für diesen Request (memoisiert, s. {@see self::$laufCache}). */
     private function lauf(EinkaufOptimizerService $optimizer, Team $team): array
     {
-        return $this->laufCache ??= $optimizer->optimieren($team, array_map('intval', $this->excludeSupplierIds));
+        return $this->laufCache ??= $optimizer->optimierenBrille($team, array_map('intval', $this->excludeSupplierIds));   // Spec 85 PR-E: Team-Brille
     }
 
     /** Alle umstellbaren Zeilen markieren (die bereits optimalen bringen nichts). */
@@ -179,7 +179,9 @@ class Wareneinsatz extends Component
         $fehlgeschlagen = 0;
         $gepinnt = 0;   // Spec 85 PR-B: eigene Leitartikel (Pin)
         foreach ($zeilen as $z) {
-            $gp = FoodAlchemistGp::visibleToTeam($team)->whereKey($z['gp_id'])->first();
+            // Spec 85 PR-E: in der Brille „alle“ gehört jede Zeile einem Standort — der Leitartikel wird dort gesetzt, wo gekauft wurde
+            $zeilenTeam = isset($z['team_id']) && (int) $z['team_id'] !== (int) $team->id ? (\Platform\Core\Models\Team::find((int) $z['team_id']) ?? $team) : $team;
+            $gp = FoodAlchemistGp::visibleToTeam($zeilenTeam)->whereKey($z['gp_id'])->first();
             if ($gp === null) {
                 $fehlgeschlagen++;
 
@@ -188,7 +190,7 @@ class Wareneinsatz extends Component
             try {
                 // recompute: false — die Kaskade läuft gleich EINMAL über die ganze Menge.
                 // Spec 85 PR-B: Besitzer stellt den Lead für alle um, jedes andere Team setzt seinen Leitartikel (Pin)
-                $art = $lead->setzeLeitartikel($team, $gp, (int) $z['cheapest_rebate_la_id'],
+                $art = $lead->setzeLeitartikel($zeilenTeam, $gp, (int) $z['cheapest_rebate_la_id'],
                     'Controlling · Wareneinsatz-Batch', recompute: false);
                 if ($art === 'global') {
                     $gesetzt[] = (int) $gp->id;   // nur der globale Lead braucht die Kaskade; Pins markieren die Team-Kosten selbst veraltet
@@ -251,6 +253,7 @@ class Wareneinsatz extends Component
 
         return view('foodalchemist::livewire.controlling.panels.wareneinsatz', [
             'r' => $r,
+            'jeStandort' => $r['je_standort'] ?? [],
             'lieferanten' => $team !== null
                 ? FoodAlchemistSupplier::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('name')->get(['id', 'name'])

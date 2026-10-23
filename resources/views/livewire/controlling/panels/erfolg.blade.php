@@ -169,6 +169,12 @@
             </div>
         </x-slot:actions>
 
+        @if(! empty($jeStandort))
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ctrl-erfolg-je-standort>
+                @foreach($jeStandort as $st)<span wire:key="erf-st-{{ $st['team_id'] }}" class="mr-3">{{ $st['standort'] }}: <strong>{{ $eur($st['umsatz']) }}</strong> ({{ $st['n'] }} Gerichte)</span>@endforeach
+            </p>
+        @endif
+
         @if($matrix && $matrix['quelle'] === 'feedback')
             <x-fa::notice tone="warn" title="Beliebtheit aus dem Feedback">
                 Es sind noch keine Verkaufszahlen eingelesen. Die Beliebtheit kommt aus dem Praxis-Feedback, das ist Zustimmung, nicht Absatz.

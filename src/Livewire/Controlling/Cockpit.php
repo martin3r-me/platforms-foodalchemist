@@ -149,7 +149,7 @@ class Cockpit extends Component
             // Zeitreihe — nur im Lage-Tab holen, nicht im Kopf.
             'benchmark' => $team !== null && $this->tab === 'lage' ? $benchmark->benchmark($team) : null,
             'verlauf' => $team !== null && $this->tab === 'verlauf'
-                ? $trend->uebersicht($team)
+                ? $trend->uebersichtBrille($team)
                 : ['measured_at' => null, 'previous_at' => null, 'metriken' => []],
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }

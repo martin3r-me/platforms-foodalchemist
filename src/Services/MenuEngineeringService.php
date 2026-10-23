@@ -100,7 +100,7 @@ class MenuEngineeringService
     private function popularitaet(Team $team, ?string $von, ?string $bis): array
     {
         $q = DB::table('foodalchemist_sales_facts')
-            ->where('team_id', $team->id)->whereNull('deleted_at')->whereNotNull('recipe_id')
+            ->whereIn('team_id', app(StandortService::class)->leseTeamIds($team))->whereNull('deleted_at')->whereNotNull('recipe_id')   // Spec 85 PR-E: Team-Brille
             ->when($von !== null, fn ($qq) => $qq->whereDate('sold_at', '>=', $von))
             ->when($bis !== null, fn ($qq) => $qq->whereDate('sold_at', '<=', $bis))
             ->selectRaw('recipe_id, SUM(qty_sold) AS menge, SUM(revenue_net) AS umsatz')
@@ -124,7 +124,7 @@ class MenuEngineeringService
         // v0: menschliche Akzeptanz statt Absatz. Ausdrücklich eine andere Aussage.
         $fb = DB::table('foodalchemist_recipe_feedback as f')
             ->join('foodalchemist_recipes as r', 'r.id', '=', 'f.recipe_id')
-            ->where('r.team_id', $team->id)->where('r.is_sales_recipe', true)
+            ->whereIn('r.team_id', app(StandortService::class)->leseTeamIds($team))->where('r.is_sales_recipe', true)
             ->whereNull('f.deleted_at')->whereNotNull('f.score')
             ->selectRaw('f.recipe_id, AVG(f.score) AS score')
             ->groupBy('f.recipe_id')
@@ -146,7 +146,7 @@ class MenuEngineeringService
      */
     private function wirtschaft(Team $team): array
     {
-        $rezepte = FoodAlchemistRecipe::visibleToTeam($team)
+        $rezepte = app(StandortService::class)->leseBereichOderSichtbar(FoodAlchemistRecipe::query(), $team)   // Spec 85 PR-E: Team-Brille
             ->where('is_sales_recipe', true)
             ->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard'])
             ->get(['foodalchemist_recipes.id', 'name', 'ek_total_eur', 'sales_unit_count']);

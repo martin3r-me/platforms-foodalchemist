@@ -41,6 +41,12 @@
         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
             Grundlage: {{ number_format($r['n_articles'], 0, ',', '.') }} Artikel im Einkaufsjournal.
         </p>
+        @if(! empty($jeStandort))
+            {{-- Spec 85 PR-E: Brille „alle“ — Potenzial je Standort mit dessen eigenen Preisen; die Summe steht oben --}}
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ctrl-we-je-standort>
+                @foreach($jeStandort as $st)<span wire:key="we-st-{{ $st['team_id'] }}" class="mr-3">{{ $st['standort'] }}: <strong>−{{ $eur($st['saving_rebate']) }}</strong> von {{ $eur($st['ist_total']) }}</span>@endforeach
+            </p>
+        @endif
 
         @if($r['n_skipped'] > 0)
             <x-fa::signal tone="warn">

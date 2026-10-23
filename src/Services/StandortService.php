@@ -186,7 +186,9 @@ class StandortService
     {
         $ids = $this->leseTeamIds($team);
 
-        return $ids === [(int) $team->id] ? $q->visibleToTeam($team) : $q->whereIn($q->getModel()->getTable().'.team_id', $ids);
+        // Brille „alle“/„Standort“: die Zeilen der Brillen-Teams (Oberteam liest seine Standorte, Spec 77c). Der automatische Sichtfilter (Spec 84 B3) sähe aus
+        // Sicht des Oberteams keine Standort-Zeilen — hier ist genau das gewollt, begrenzt auf die Teams der Brille.
+        return $ids === [(int) $team->id] ? $q->visibleToTeam($team) : $q->ohneTeamSicht('team-brille')->whereIn($q->getModel()->getTable().'.team_id', $ids);
     }
 
     /**
