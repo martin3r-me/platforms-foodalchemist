@@ -16,6 +16,7 @@
             $codeLabel[$e['code']] = $e['label'];
         }
     }
+    $freie = $snapshot['freie_kapitel'] ?? [];
     $nKapitel = count($snapshot['sections'] ?? []);
     $nSpeisen = count($gerichte);
     $fmtMenge = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format((float) $v, $v < 10 ? 3 : 1, ',', ''), '0'), ',');
@@ -41,7 +42,8 @@
         .kpi b { color: var(--ink); font-size: 14px; margin-right: 2px; }
         .sp { flex: 1; }
         .logo { font-weight: 600; font-size: 14px; } .logo span { color: var(--ac); }
-        .pill { border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); padding: 4px 10px; font: inherit; cursor: pointer; min-height: 30px; }
+        .ico { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); cursor: pointer; padding: 0; }
+        .stepper-pane { display: none; margin: 0 0 8px; }
         .stepper { display: inline-flex; align-items: center; gap: 6px; color: var(--ink3); }
         .stepper button { width: 30px; height: 30px; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); cursor: pointer; font: inherit; }
         .stepper input { width: 56px; height: 30px; text-align: center; border: 1px solid var(--line2); background: var(--surface); color: var(--ink); border-radius: var(--r); font: inherit; }
@@ -82,14 +84,22 @@
         .fotos img { width: 84px; height: 60px; object-fit: cover; border-radius: var(--r); background: var(--ground); }
         .hint { color: var(--ink3); font-size: 12px; margin-top: 6px; }
         .leer { color: var(--ink3); padding: 12px 0; }
+        .freitext { margin-top: 8px; font-size: 14px; line-height: 1.55; }
         .legende { max-width: 920px; margin-top: 14px; color: var(--ink3); font-size: 12px; }
         @media (max-width: 800px) {
             .body { grid-template-columns: 1fr; }
             .app.detail nav { display: none; }
             .app:not(.detail) main { display: none; }
             .back { display: inline-block; }
-            .kpi, .logo { display: none; }
-            .tabs { display: flex; }
+            .kpi, .logo, .stepper-top, .top .sp { display: none; }
+            .top .klein { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .stepper-pane { display: inline-flex; }
+            .top { flex-wrap: nowrap; padding: 8px 12px; }
+            .top .kopf { flex: 1; }
+            .top h1 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; overflow: visible; }
+            .tab { padding: 10px 4px; text-align: center; min-height: 40px; }
+            .back { position: sticky; top: 0; z-index: 2; background: var(--ground); width: 100%; text-align: left; padding: 8px 0; }
             main { padding: 10px; }
             .gericht { padding: 10px 12px; }
             .foto { width: 72px; height: 54px; }
@@ -110,8 +120,8 @@
         <span class="sp"></span>
         <span class="logo">Food<span>.Alchemist</span></span>
         <span class="sp"></span>
-        <span class="stepper">Portionen <button type="button" id="m" aria-label="weniger">−</button><input id="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" id="p" aria-label="mehr">+</button></span>
-        <button type="button" class="pill" id="dk" aria-label="Zwischen dunkel und hell umschalten">Dunkel / Hell</button>
+        <span class="stepper stepper-top">Portionen <button type="button" data-step="-10" aria-label="weniger">−</button><input class="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" data-step="10" aria-label="mehr">+</button></span>
+        <button type="button" class="ico" id="dk" aria-label="Zwischen dunkel und hell umschalten" title="Dunkel / Hell"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg></button>
     </div>
 
     <div class="body">
@@ -127,6 +137,14 @@
                     </div>
                 </div>
             @endforeach
+            @if($freie !== [])
+                <div class="kapw open">
+                    <div class="kap"><span>Allgemein</span><span class="n">{{ count($freie) }}</span></div>
+                    <div class="liste">
+                        @foreach($freie as $i => $fk)<a href="#k{{ $i }}" data-key="k{{ $i }}">{{ $fk['title'] }}</a>@endforeach
+                    </div>
+                </div>
+            @endif
         </nav>
 
         <main>
@@ -138,6 +156,7 @@
                         $portion['form'] ?? null,
                         ($portion['gramm'] ?? null) ? $fmtMenge($portion['gramm']) . ' g' : null,
                         $portion['geschirr'] ?? null,
+                        $portion['vehikel'] ?? null,
                     ]);
                     $z = $g['zutaten'] ?? ['basis' => 'ansatz', 'zeilen' => []];
                     $skaliert = ($z['basis'] ?? '') === 'portion';
@@ -161,6 +180,9 @@
                     </div>
 
                     <div class="pane on" data-pane="zutaten">
+                        @if(!empty($z['zeilen']) && $skaliert)
+                            <div class="stepper stepper-pane">Portionen <button type="button" data-step="-10" aria-label="weniger">−</button><input class="px" inputmode="numeric" value="{{ $personen }}" aria-label="Portionen"><button type="button" data-step="10" aria-label="mehr">+</button></div>
+                        @endif
                         @if(!empty($z['zeilen']))
                             <table>
                                 <tr><th>Zutat</th><th class="r">Menge</th></tr>
@@ -226,6 +248,9 @@
                         @else
                             <div class="leer">Keine Regeneration hinterlegt.</div>
                         @endif
+                        @if(!empty($g['behaelter']))
+                            <div class="hint">@foreach($g['behaelter'] as $bh)<b>{{ $bh['zweck'] }}:</b> {{ $bh['name'] }}@if(!$loop->last) · @endif @endforeach</div>
+                        @endif
                     </div>
 
                     <div class="pane" data-pane="bestandteile">
@@ -235,6 +260,13 @@
                             <div class="leer">Keine Bestandteile hinterlegt.</div>
                         @endforelse
                     </div>
+                </article>
+            @endforeach
+
+            @foreach($freie as $i => $fk)
+                <article class="gericht" id="g-k{{ $i }}" data-key="k{{ $i }}">
+                    <h2>{{ $fk['title'] }}</h2>
+                    <div class="freitext">{!! nl2br(e($fk['text'])) !!}</div>
                 </article>
             @endforeach
 
@@ -284,20 +316,23 @@
     });
 
     // Portionen: skaliert nur Mengen, die der Snapshot je Portion trägt (data-b).
-    var px = document.getElementById('px');
+    var pxs = [].slice.call(document.querySelectorAll('.px'));
+    function aktuell() { return Math.max(1, parseFloat(pxs[0].value) || 1); }
+    function setze(v, quelle) { pxs.forEach(function (e) { if (e !== quelle) { e.value = v; } }); rechne(); }
     function fmt(v, u) {
         if (u === 'g' && v >= 1000) { v = v / 1000; u = 'kg'; } else if (u === 'ml' && v >= 1000) { v = v / 1000; u = 'l'; }
         var s = v >= 100 ? v.toFixed(0) : (v >= 10 ? v.toFixed(1) : v.toFixed(2));
         return s.replace(/\.?0+$/, '').replace('.', ',') + ' ' + (u || '');
     }
     function rechne() {
-        var n = Math.max(1, parseFloat(px.value) || 1);
+        var n = aktuell();
         [].forEach.call(document.querySelectorAll('.pxs'), function (e) { e.textContent = n; });
         [].forEach.call(document.querySelectorAll('td[data-b]'), function (td) { td.textContent = fmt(parseFloat(td.dataset.b) * n, td.dataset.u); });
     }
-    document.getElementById('m').addEventListener('click', function () { px.value = Math.max(1, (parseFloat(px.value) || 1) - 10); rechne(); });
-    document.getElementById('p').addEventListener('click', function () { px.value = (parseFloat(px.value) || 1) + 10; rechne(); });
-    px.addEventListener('input', rechne);
+    [].forEach.call(document.querySelectorAll('[data-step]'), function (b) {
+        b.addEventListener('click', function () { setze(Math.max(1, aktuell() + parseInt(b.dataset.step, 10)), null); });
+    });
+    pxs.forEach(function (e) { e.addEventListener('input', function () { setze(e.value, e); }); });
 
     // Dunkel/Hell merkt sich die Wahl, wenn der Browser Speicher erlaubt.
     var dk = document.getElementById('dk');

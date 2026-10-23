@@ -58,17 +58,20 @@ class HandbuchService
             throw new \RuntimeException('Ein gültig-bis-Datum ist Pflicht (kein Link ohne Ablauf).');
         }
         $entity = $this->resolveEntity($team, $type, $id, forWrite: true);
-        $snapshot = $this->buildSnapshot($team, $entity, $type);
-
         $hb = FoodAlchemistHandbuch::firstOrNew(['quelle_type' => $type, 'quelle_id' => $entity->getKey()]);
         $hb->team_id = $team->id;
+        // Freie Kapitel (Hygiene, Ausgabe-Regeln …): ohne Angabe bleiben die zuletzt veröffentlichten stehen.
+        $kapitel = array_key_exists('kapitel', $settings)
+            ? $this->bereinigeKapitel((array) $settings['kapitel'])
+            : (array) ($hb->settings_json['kapitel'] ?? []);
+        $snapshot = $this->buildSnapshot($team, $entity, $type, $kapitel);
         $token = $hb->token ?: $this->neuerToken();
 
         $hb->forceFill([
             'enabled' => true,
             'token' => $token,
             'snapshot_json' => $snapshot,
-            'settings_json' => ['expires_at' => $expiresAt->toIso8601String()],
+            'settings_json' => ['expires_at' => $expiresAt->toIso8601String(), 'kapitel' => $kapitel],
             'published_at' => now(),
             'published_by' => auth()->id(),
             'expires_at' => $expiresAt,
@@ -108,7 +111,28 @@ class HandbuchService
             'url' => $hb !== null ? $this->publicUrl((string) $hb->token) : null,
             'expires_at' => $hb?->expires_at?->toIso8601String(),
             'published_at' => $hb?->published_at?->toIso8601String(),
+            'kapitel' => (array) ($hb?->settings_json['kapitel'] ?? []),
         ];
+    }
+
+    /**
+     * Freie Kapitel auf Titel + Klartext reduzieren (kein HTML, begrenzt) — das Handbuch rendert sie escaped.
+     *
+     * @param  list<array<string,mixed>>  $roh
+     * @return list<array{title:string, text:string}>
+     */
+    public function bereinigeKapitel(array $roh): array
+    {
+        $out = [];
+        foreach (array_slice($roh, 0, 20) as $k) {
+            $titel = trim(mb_substr(strip_tags((string) ($k['title'] ?? '')), 0, 120));
+            $text = trim(mb_substr(strip_tags((string) ($k['text'] ?? '')), 0, 4000));
+            if ($titel !== '' || $text !== '') {
+                $out[] = ['title' => $titel !== '' ? $titel : 'Allgemein', 'text' => $text];
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -142,7 +166,7 @@ class HandbuchService
     // ── Snapshot ───────────────────────────────────────────────────────────
 
     /** @return array<string,mixed> */
-    public function buildSnapshot(Team $team, Model $entity, string $type): array
+    public function buildSnapshot(Team $team, Model $entity, string $type, array $kapitel = []): array
     {
         $quelle = $this->quellen->lies($team, $type, $entity);
         $this->zutaten->zuruecksetzen();
@@ -160,7 +184,7 @@ class HandbuchService
                 'steps.photos', 'platingSteps.photos',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
                 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name',
-                'standardPresentation.servingForm', 'standardPresentation.vessel:id,name',
+                'standardPresentation.servingForm', 'standardPresentation.vessel:id,name', 'containers.container',
             ])->get()->keyBy('id');
 
         $gerichte = [];
@@ -199,6 +223,7 @@ class HandbuchService
             'sections' => $sections,
             'gerichte' => $gerichte,
             'basisrezepte' => $this->zutaten->basisrezepte(),
+            'freie_kapitel' => $kapitel,
             'personen' => isset($quelle['personen']) && (int) $quelle['personen'] > 0 ? (int) $quelle['personen'] : null,
             'legende' => $quelle['legende'] ?? null,
             'luecken' => $luecken,
@@ -251,7 +276,11 @@ class HandbuchService
                 'gramm' => $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null,
                 'form' => $dar?->servingForm?->label,
                 'geschirr' => $dar?->vessel?->name,
+                'vehikel' => $dar?->serving_vehicle_vocab_id !== null
+                    ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')->where('id', $dar->serving_vehicle_vocab_id)->value('name')
+                    : null,
             ],
+            'behaelter' => $this->behaelter($recipe),
             'zutaten' => $this->zutaten->fuerGericht($team, $recipe),
             'zubereitung' => $this->schritte($recipe->steps),
             'anrichten' => $this->schritte($recipe->platingSteps),
@@ -259,6 +288,20 @@ class HandbuchService
             'bestandteile' => $bestandteile,
             'codes' => [],
         ];
+    }
+
+    /** @return list<array{zweck:string, name:string}> Behälter zum Regenerieren und zur Ausgabe (Eigene Zeilen des Gerichts). */
+    private function behaelter(FoodAlchemistRecipe $recipe): array
+    {
+        $labels = ['regenerieren' => 'Regenerieren', 'ausgabe' => 'Ausgabe'];
+        $out = [];
+        foreach ($recipe->containers as $c) {
+            if (isset($labels[$c->zweck]) && $c->container?->name) {
+                $out[] = ['zweck' => $labels[$c->zweck], 'name' => (string) $c->container->name];
+            }
+        }
+
+        return $out;
     }
 
     /** @return list<array{nr:int, text:string, fotos:list<array{context_file_id:?int, path:?string, caption:?string}>}> */

@@ -8,6 +8,23 @@
     @if($fehler)<x-fa::signal tone="warn">{{ $fehler }}</x-fa::signal>@endif
     @if($hinweis)<x-fa::signal tone="ok">{{ $hinweis }}</x-fa::signal>@endif
 
+    <div class="flex flex-col gap-2" data-handbuch-kapitel>
+        <div class="flex items-center gap-2">
+            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Allgemeine Kapitel</p>
+            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-plus" wire:click="kapitelNeu" data-handbuch-kapitel-neu>Kapitel hinzufügen</x-fa::button>
+        </div>
+        <p class="{{ $hinweisKlasse }}">Freie Texte vor den Gerichten, z.B. Hygiene oder Ausgabe-Regeln. Sie stehen im Handbuch unter „Allgemein“ und werden mit dem Veröffentlichen eingefroren.</p>
+        @foreach($kapitel as $i => $k)
+            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] p-2.5" wire:key="hb-kap-{{ $type }}-{{ $quelleId }}-{{ $i }}">
+                <div class="flex items-center gap-2">
+                    <x-fa::input size="sm" wire:model="kapitel.{{ $i }}.title" placeholder="Titel, z.B. Hygiene" aria-label="Titel des Kapitels" class="min-w-0 flex-1" />
+                    <x-fa::button size="sm" variant="ghost" wire:click="kapitelEntfernen({{ $i }})" aria-label="Kapitel entfernen">Entfernen</x-fa::button>
+                </div>
+                <x-fa::textarea wire:model="kapitel.{{ $i }}.text" rows="3" placeholder="Text" aria-label="Text des Kapitels" />
+            </div>
+        @endforeach
+    </div>
+
     <div class="flex flex-wrap items-end gap-3">
         <x-fa::field label="Gültig bis" for="hb-gueltig-{{ $type }}-{{ $quelleId }}">
             <x-fa::input type="date" id="hb-gueltig-{{ $type }}-{{ $quelleId }}" wire:model="gueltigBis" />

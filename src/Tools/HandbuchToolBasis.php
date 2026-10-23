@@ -42,6 +42,8 @@ abstract class HandbuchToolBasis extends FoodAlchemistTool
         $props = [$this->typ() . '_id' => ['type' => 'integer']];
         if ($this->verb() === 'PUBLISH') {
             $props['expires_at'] = ['type' => 'string', 'description' => 'Gültig bis (Datum ISO, Pflicht — kein Link ohne Ablauf)'];
+            $props['kapitel'] = ['type' => 'array', 'description' => 'Optional: freie Kapitel (Hygiene, Ausgabe-Regeln …) als Liste {title, text}; Klartext, max. 20. Fehlt der Parameter, bleiben die zuletzt veröffentlichten Kapitel stehen.',
+                'items' => ['type' => 'object', 'properties' => ['title' => ['type' => 'string'], 'text' => ['type' => 'string']]]];
         }
         if ($this->verb() === 'GET') {
             $props['luecken'] = ['type' => 'boolean', 'description' => 'Zusätzlich die Lücken des aktuellen Standes rechnen (rechnet die ganze Komposition, nur bei Bedarf).'];
@@ -64,7 +66,8 @@ abstract class HandbuchToolBasis extends FoodAlchemistTool
         $svc = app(HandbuchService::class);
         try {
             return match ($this->verb()) {
-                'PUBLISH' => ToolResult::success($svc->publish($team, $this->typ(), $id, ['expires_at' => $arguments['expires_at'] ?? null])),
+                'PUBLISH' => ToolResult::success($svc->publish($team, $this->typ(), $id, ['expires_at' => $arguments['expires_at'] ?? null]
+                    + (array_key_exists('kapitel', $arguments) ? ['kapitel' => (array) $arguments['kapitel']] : []))),
                 'WITHDRAW' => $this->zurueckziehen($svc, $team, $id),
                 default => ToolResult::success($svc->status($team, $this->typ(), $id) + (
                     ($arguments['luecken'] ?? false) ? ['luecken' => $svc->luecken($team, $this->typ(), $id)] : []

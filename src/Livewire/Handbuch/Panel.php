@@ -23,6 +23,9 @@ class Panel extends Component
 
     public ?string $hinweis = null;
 
+    /** @var list<array{title:string, text:string}> Freie Kapitel (Hygiene, Ausgabe-Regeln …) */
+    public array $kapitel = [];
+
     /** @var list<array{gericht:string, fehlt:list<string>}>|null  null = noch nicht geprüft */
     public ?array $luecken = null;
 
@@ -30,6 +33,24 @@ class Panel extends Component
     {
         $this->type = $type;
         $this->quelleId = $quelleId;
+        try {
+            $this->kapitel = array_values(app(HandbuchService::class)->status($this->team(), $type, $quelleId)['kapitel']);
+        } catch (\Throwable) {
+            $this->kapitel = [];
+        }
+    }
+
+    public function kapitelNeu(): void
+    {
+        if (count($this->kapitel) < 20) {
+            $this->kapitel[] = ['title' => '', 'text' => ''];
+        }
+    }
+
+    public function kapitelEntfernen(int $index): void
+    {
+        unset($this->kapitel[$index]);
+        $this->kapitel = array_values($this->kapitel);
     }
 
     public function veroeffentlichen(): void
@@ -37,7 +58,7 @@ class Panel extends Component
         $this->fehler = null;
         $this->hinweis = null;
         try {
-            $res = app(HandbuchService::class)->publish($this->team(), $this->type, $this->quelleId, ['expires_at' => $this->gueltigBis]);
+            $res = app(HandbuchService::class)->publish($this->team(), $this->type, $this->quelleId, ['expires_at' => $this->gueltigBis, 'kapitel' => $this->kapitel]);
             $this->luecken = $res['luecken'];
             $this->hinweis = 'Handbuch veröffentlicht — der Link ist aktiv.';
         } catch (\Throwable $e) {
