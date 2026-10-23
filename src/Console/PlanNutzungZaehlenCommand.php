@@ -21,7 +21,7 @@ class PlanNutzungZaehlenCommand extends Command
         {--dry-run : nur anzeigen, nichts schreiben}
         {--force : auch ohne eingeschaltete Abrechnung (foodalchemist.gebuehren.zaehlen_aktiv) in team_billable_usages schreiben}';
 
-    protected $description = 'Zählt die FA-Gebühren je Kunden-Hauptteam (Basis, User, Unter-Teams, Stamm-Paket, Abo) und schreibt Tageswerte in team_billable_usages';
+    protected $description = 'Zählt die FA-Gebühren je Kunden-Hauptteam (Basis, User, Unter-Teams, Stamm-Paket, Abo, KI-Verbrauch) und schreibt Tageswerte in team_billable_usages';
 
     public function handle(GebuehrenZaehler $zaehler): int
     {
@@ -55,7 +55,9 @@ class PlanNutzungZaehlenCommand extends Command
                 }
                 if ($dry) {
                     foreach ($r['zeilen'] as $z) {
-                        $this->line(sprintf('  %s · %s · %s: %d × %s €/Monat → %s €', $mandant->name, $z['datum'], $z['baustein'], $z['menge'], $z['betrag_monat'], number_format($z['tageswert'], 2, ',', '.')));
+                        $this->line($z['betrag_monat'] === null
+                            ? sprintf('  %s · %s · %s: %d Aufrufe → %s €', $mandant->name, $z['datum'], $z['baustein'], $z['menge'], number_format($z['tageswert'], 2, ',', '.'))
+                            : sprintf('  %s · %s · %s: %d × %s €/Monat → %s €', $mandant->name, $z['datum'], $z['baustein'], $z['menge'], $z['betrag_monat'], number_format($z['tageswert'], 2, ',', '.')));
                     }
                 }
             }

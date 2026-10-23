@@ -100,6 +100,17 @@ class PlanNutzungService
                 'monatsbetrag_vorschau' => $monatsbetrag, 'tage_gebucht' => $zeilen->count(), 'gebucht_bisher' => $bisher];
         }
 
+        // KI-Verbrauch (Dominique 23.10.2026): Betrag aus dem Verbrauch, keine Menge × Monatspreis. Vorschau = eingefrorener Verbrauch des Monats bis jetzt.
+        $kiZeilen = $gebucht->get(\Platform\FoodAlchemist\Services\GebuehrenZaehler::KI_MODELL, collect());
+        $kiBisher = round((float) $kiZeilen->sum('total_cost'), 2);
+        $kiVorschau = $start->isSameMonth(now()) ? round(app(\Platform\FoodAlchemist\Services\Ai\KiDeckelService::class)->verbrauchMonat((int) $mandant->id), 2) : $kiBisher;
+        if ($kiBisher > 0 || $kiVorschau > 0) {
+            $summeGebucht += $kiBisher;
+            $summeVorschau += $kiVorschau;
+            $positionen[] = ['baustein' => 'ki_verbrauch', 'label' => 'KI-Verbrauch (Selbstkosten, ohne Embeddings)', 'menge' => (int) $kiZeilen->sum('count'), 'betrag_monat' => null,
+                'monatsbetrag_vorschau' => $kiVorschau, 'tage_gebucht' => $kiZeilen->count(), 'gebucht_bisher' => $kiBisher];
+        }
+
         return [
             'team_id' => (int) $mandant->id, 'name' => (string) $mandant->name, 'monat' => $start->format('Y-m'),
             'user_gesamt' => $mengen['user_gesamt'], 'inklusive_user' => (int) config('foodalchemist.plan.basis_inklusive_user', 2),
