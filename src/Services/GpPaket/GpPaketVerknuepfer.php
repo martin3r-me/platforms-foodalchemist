@@ -288,6 +288,7 @@ class GpPaketVerknuepfer
      */
     public function verknuepfe(array &$P, Team $master, string $ts, array &$proto): array
     {
+        $this->guardMaster($master);
         $betroffen = [];
         $struktSpalten = array_flip(Schema::getColumnListing('foodalchemist_supplier_item_structures'));
         foreach ($P as $key => &$g) {
@@ -328,7 +329,7 @@ class GpPaketVerknuepfer
                     if ($st === null) {
                         // die Struktur-Zeile bleibt (ohne GP) — Struktur-Felder aus dem Paket schaden nicht; Rückweg entfernt sie
                     }
-                    $l['status'] = str_starts_with($e->getMessage(), 'Allergene oder Zusatzstoffe') ? 'guard_abgelehnt' : 'fehler';
+                    $l['status'] = $e instanceof \Platform\FoodAlchemist\Exceptions\DeklarationsprofilAbweichtException ? 'guard_abgelehnt' : 'fehler';
                     $l['grund'] = $e->getMessage();
 
                     continue;
@@ -457,5 +458,17 @@ class GpPaketVerknuepfer
         $row['needs_review'] = (int) ($row['needs_review'] ?? 0);
 
         return $row;
+    }
+
+    /**
+     * Eigentums-Riegel (Spec 84 D9 „sichtbar ist nicht eigen“): der Verknüpfer schreibt in globale Stamm-Zeilen (GP, Struktur, Lead) —
+     * das darf nur das Master-Team. Der Import-Service löst das Team schon über {@see \Platform\FoodAlchemist\Services\GpPaketImportService::master}
+     * auf; die öffentliche Methode sichert sich trotzdem selbst ab.
+     */
+    private function guardMaster(Team $master): void
+    {
+        if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($master)) {
+            throw new \Platform\FoodAlchemist\Exceptions\FaRechtFehltException(\Platform\FoodAlchemist\Enums\FaRolle::Admin, null, 'GP-Paket verknüpfen (nur als Master-Team)');
+        }
     }
 }

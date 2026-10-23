@@ -638,11 +638,7 @@ class LeadLaService
         foreach ($bestehend as $alt) {
             $abweichungen = DeklarationsProfil::abweichungen($alt->allergens, $alt->declarations, $neu->allergens, $neu->declarations);
             if ($abweichungen !== []) {
-                throw new \RuntimeException(
-                    'Allergene oder Zusatzstoffe weichen von einem vorhandenen Lieferantenartikel ab ('
-                    . implode(', ', array_slice($abweichungen, 0, 3))
-                    . '). Für diesen Artikel ein neues Grundprodukt anlegen.'
-                );
+                throw new \Platform\FoodAlchemist\Exceptions\DeklarationsprofilAbweichtException($abweichungen);
             }
         }
     }
