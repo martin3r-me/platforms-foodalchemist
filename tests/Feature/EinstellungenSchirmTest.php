@@ -31,7 +31,8 @@ it('führt jede registrierte Sektion in der Navigation', function () {
             continue;
         }
         // Spec 82 §13 C1: das Mandanten-Stammblatt sehen nur Plattform-Admin und Master-Admin.
-        if (in_array($key, Einstellungen::NUR_VERWALTUNG, true)) {
+        // Neuordnung 23.10.: Plattform-Wissen (Wissens-Steuerung) sehen nur Master-Team und Plattform-Admin.
+        if (in_array($key, Einstellungen::NUR_VERWALTUNG, true) || in_array($key, Einstellungen::NUR_MASTER, true)) {
             expect($html)->not->toContain('data-settings-link="' . $key . '"');
 
             continue;
@@ -43,7 +44,8 @@ it('führt jede registrierte Sektion in der Navigation', function () {
     config(['platform-shell.admins' => [strtolower((string) $admin->email)]]);
     $this->actingAs($admin);
     $html = Livewire::test(Einstellungen::class)->html();
-    expect($html)->toContain('data-settings-link="regeln"')->toContain('data-settings-link="mandanten"');
+    expect($html)->toContain('data-settings-link="regeln"')->toContain('data-settings-link="mandanten"')
+        ->toContain('data-settings-link="wissenssteuerung"');
 });
 
 it('trägt das clientseitige Filter-Feld über der Bereiche-Liste', function () {
@@ -53,14 +55,61 @@ it('trägt das clientseitige Filter-Feld über der Bereiche-Liste', function () 
     expect($html)->toContain('data-settings-filter')->toContain('x-model="q"');
 });
 
-it('stellt einheiten als erste Sektion voran (mount-Default steht oben)', function () {
-    // Nur der ANKER wird geprüft, nicht die volle 23er-Reihenfolge: die Kaskaden-Sortierung darf
-    // sich weiter feinjustieren, ohne dass dieser Test bei jedem Umstellen bricht.
-    expect(array_key_first(Einstellungen::SEKTIONEN))->toBe('einheiten');
+it('Reiter folgen den Gruppen (jede Sektion in genau einer), Leiste waagrecht scrollbar, erster Reiter ist aktiv', function () {
+    // Neuordnung 23.10. (Dominique: Reiter statt Seitenleiste)
+    $eingeordnet = collect(Einstellungen::GRUPPEN)->pluck('sektionen')->flatten();
+    expect($eingeordnet->sort()->values()->all())->toBe(collect(array_keys(Einstellungen::SEKTIONEN))->sort()->values()->all())
+        ->and($eingeordnet->duplicates()->all())->toBe([]);
 
-    $html = Livewire::test(Einstellungen::class)->html();
-    $ersterLink = strpos($html, 'data-settings-link="');
-    expect(substr($html, $ersterLink, 40))->toContain('data-settings-link="einheiten"');
+    $c = Livewire::test(Einstellungen::class);
+    $html = $c->html();
+    $reiter = [];
+    preg_match_all('/data-settings-tab="([a-z-]+)"/', $html, $reiter);
+    expect($reiter[1])->toBe(array_keys(Einstellungen::sichtbareGruppen()))
+        ->and($html)->toContain('overflow-x-auto')->not->toContain('data-settings-gruppe=');   // keine Seitenleiste mehr
+    $c->assertSet('tab', array_key_first(Einstellungen::sichtbareGruppen()));
+});
+
+it('alter Link /einstellungen/{sektion} öffnet den Reiter der Sektion und springt hin; Reiterwechsel per Klick, unbekannter Reiter → erster', function () {
+    Livewire::test(Einstellungen::class, ['sektion' => 'aufschlagsklassen'])
+        ->assertSet('tab', 'kalkulation')->assertSet('bereich', 'aufschlagsklassen')
+        ->assertSeeHtml('data-settings-sektion="aufschlagsklassen"')->assertSeeHtml('data-settings-reiter="kalkulation"')
+        ->call('tabWaehlen', 'kategorien')->assertSet('tab', 'kategorien')->assertSet('bereich', null)
+        ->assertSeeHtml('data-settings-sektion="einheiten"')->assertDontSeeHtml('data-settings-sektion="aufschlagsklassen"')
+        ->call('tabWaehlen', 'gibt-es-nicht')->assertSet('tab', array_key_first(Einstellungen::sichtbareGruppen()));
+
+    // Sprungziel in einem erweiterten Bereich: der Klappblock steht offen
+    expect(Livewire::test(Einstellungen::class, ['sektion' => 'behaelter'])->html())
+        ->toContain('data-settings-erweitert')->toContain('x-data="{ offen: true }"');
+});
+
+it('im Reiter: Grundeinstellungen offen mit Sprungmarken, übrige unter „Erweitert“; Suche kennt Stichworte über alle Reiter', function () {
+    expect(array_diff(Einstellungen::GRUND, array_keys(Einstellungen::SEKTIONEN)))->toBe([])
+        ->and(array_diff(array_keys(Einstellungen::STICHWORTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
+
+    $html = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche')->html();
+    $erweitert = strpos($html, 'data-settings-erweitert');
+    expect($html)->toContain('data-settings-sprung')
+        ->and(strpos($html, 'data-settings-sektion="teamprofil"'))->toBeLessThan($erweitert)          // Grund: vor dem Klappblock
+        ->and(strpos($html, 'data-settings-sektion="behaelter"'))->toBeGreaterThan($erweitert)        // erweitert: im Klappblock
+        ->and($html)->toContain('mwst mehrwertsteuer')                                                 // Stichwort der Kalkulation (anderer Reiter)
+        ->toContain('data-settings-link="kalkulation"');
+});
+
+it('Plattform-Gruppe: Wissens-Steuerung nur für Master-Team und Plattform-Admin; Mandant bekommt 404', function () {
+    $this->get(route('foodalchemist.einstellungen', ['sektion' => 'wissenssteuerung']))->assertNotFound();
+
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    expect(Livewire::test(Einstellungen::class)->html())->toContain('data-settings-link="wissenssteuerung"')
+        ->toContain('data-settings-tab="plattform"');
+});
+
+it('Mitglied ohne Admin-Recht sieht alles lesend mit Hinweis; Admin ohne Hinweis', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Mitglied', 'member'));
+    expect(Livewire::test(Einstellungen::class)->html())->toContain('data-settings-nur-lesen');
+
+    $this->actingAs($this->makeUser($this->rootTeam, 'Admin', 'owner'));
+    expect(Livewire::test(Einstellungen::class)->html())->not->toContain('data-settings-nur-lesen');
 });
 
 it('markiert die aktive Sektion und zeigt ihren Kopf genau einmal', function () {
@@ -71,7 +120,7 @@ it('markiert die aktive Sektion und zeigt ihren Kopf genau einmal', function () 
     // Der Kopf kommt aus DERSELBEN Quelle wie die Navigation — sonst driftet die Beschriftung
     // zwischen Liste und Überschrift auseinander.
     $meta = Einstellungen::SEKTIONEN['herstellkosten'];
-    $kopf = substr($html, strpos($html, 'data-settings-kopf'), 400);
+    $kopf = substr($html, strpos($html, 'data-settings-kopf="herstellkosten"'), 400);
     // e() nicht vergessen: „Herstellkosten & Zuschläge" steht als `&amp;` in der Seite.
     expect($kopf)->toContain(e($meta['label']));
 });

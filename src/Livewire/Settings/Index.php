@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -19,7 +20,17 @@ use Livewire\Component;
  */
 class Index extends Component
 {
-    public string $sektion = 'einheiten';
+    /**
+     * Neuordnung 23.10. (Dominique: Reiter statt Seitenleiste): je GRUPPE ein Reiter, im Reiter die Bereiche als Abschnitte mit
+     * Sprungmarken. Reiter und Bereich stehen in der URL (?tab=…&bereich=…); alte Links /einstellungen/{sektion} öffnen den Reiter
+     * der Sektion und springen zum Bereich. Nur der aktive Reiter wird gerendert, Bereiche unterhalb des ersten laden verzögert
+     * (lazy), erweiterte Bereiche stecken in einem aufklappbaren Block.
+     */
+    #[Url(as: 'tab')]
+    public string $tab = '';
+
+    #[Url(as: 'bereich')]
+    public ?string $bereich = null;
 
     /**
      * @var array<string, array{label: string, hint: string}>
@@ -92,7 +103,7 @@ class Index extends Component
         // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
         // Spec 61/75: was die Plattform-Rollen im FA dürfen + Häkchen „darf Rechnungen freigeben" — Rechte, nicht Kosten.
         'zugriffsrechte' => ['label' => 'Zugriffsrechte', 'hint' => 'Was Mitglieder und Betrachter dürfen, wer Rechnungen freigibt'],
-        'rollen' => ['label' => 'Rollen & Stundensätze', 'hint' => 'Küchenrollen mit Stundensatz für Kapazität und Produktionskosten'],
+        'rollen' => ['label' => 'Küchenrollen & Stundensätze', 'hint' => 'Küchenrollen mit Stundensatz für Kapazität und Produktionskosten'],
 
         // — Ausgabe & Betrieb —
         // Spec 43: visueller Struktur-Builder für Präsentations-Designs (Block-Palette · Live-Vorschau · Tokens)
@@ -117,19 +128,74 @@ class Index extends Component
     ];
 
     /**
-     * fa-pass 2026-10-05: Gruppen der Navigation (reine Darstellung). Jede Sektion steht in GENAU
-     * einer Gruppe; was hier fehlt, rendert die View unter „Weitere" (nie verschluckt). Die erste
-     * Gruppe beginnt mit `einheiten` — der mount()-Default steht weiter ganz oben.
+     * Gruppen der Navigation nach AUFGABE (Neuordnung 23.10., Dominique: 00_INBOX/_Einstellungen_Neuordnung_Vorschlag.md). Jede Sektion
+     * steht in GENAU einer Gruppe; was fehlt, rendert die View unter „Weitere" (nie verschluckt). „Plattform" ist nur für Master-Team
+     * und Plattform-Admin sichtbar (die Sektionen darin tragen ihre eigene Sperre: NUR_MASTER, NUR_VERWALTUNG, NUR_PLATTFORM_ADMIN).
      *
      * @var array<string, array{label: string, sektionen: list<string>}>
      */
     public const GRUPPEN = [
-        'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'plan-nutzung', 'mandanten', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil', 'hausstandards']],
-        'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
-        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'dna-felder', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
-        'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
+        'team' => ['label' => 'Team & Zugriff', 'sektionen' => ['zugriffsrechte', 'unter-teams', 'plan-nutzung']],
+        'kueche' => ['label' => 'Küche & Produktion', 'sektionen' => ['teamprofil', 'kueche', 'posten', 'rollen', 'behaelter', 'hausstandards']],
+        'einkauf' => ['label' => 'Einkauf & Lager', 'sektionen' => ['einkauf']],
+        'kalkulation' => ['label' => 'Kalkulation & Preise', 'sektionen' => ['kalkulation', 'herstellkosten', 'aufschlagsklassen', 'betriebe']],
+        'stil' => ['label' => 'Küchenstil & Ausgabe', 'sektionen' => ['food-dna', 'dna-felder', 'kunde-dna', 'schreibstile', 'brief-vorlagen', 'praesentations-designs', 'etiketten', 'speiseplan-chips', 'trendradar']],
+        'kategorien' => ['label' => 'Kategorien', 'sektionen' => ['taxonomie', 'vk-taxonomie', 'concepter-dimensionen', 'wissenskategorien', 'einheiten', 'warengruppen']],
+        'ki' => ['label' => 'KI', 'sektionen' => ['ki']],
+        'plattform' => ['label' => 'Plattform', 'sektionen' => ['mandanten', 'wissenssteuerung', 'regeln']],
     ];
+
+    /**
+     * Neuordnung 23.10.: Grundeinstellungen stehen im Reiter offen; alle übrigen im aufklappbaren Block „Erweitert" des Reiters
+     * (Suche und Direktlink öffnen sie immer). Liste von Dominique bestätigt.
+     *
+     * @var list<string>
+     */
+    public const GRUND = ['zugriffsrechte', 'unter-teams', 'teamprofil', 'posten', 'etiketten', 'einkauf', 'kalkulation', 'herstellkosten', 'betriebe', 'food-dna', 'ki'];
+
+    /**
+     * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
+     *
+     * @var array<string, string>
+     */
+    public const STICHWORTE = [
+        'einheiten' => 'Stückgewicht Umrechnung Gramm Milliliter',
+        'warengruppen' => 'Unterkategorie WG',
+        'taxonomie' => 'Basisrezept Hauptgruppe',
+        'vk-taxonomie' => 'Diätform vegan vegetarisch Speisen',
+        'behaelter' => 'GN Gastronorm Regeneration Kombidämpfer Vehikel Koch-Equipment Geräte',
+        'concepter-dimensionen' => 'Eventtyp Saison Zielgruppe Servierform Einsatzmoment',
+        'einkauf' => 'Leitartikel Lead Bezugsquelle Favoriten Bestellversand Lagerort Lager Stamm-Lieferant Lieferant',
+        'kalkulation' => 'MwSt Mehrwertsteuer Rundung Garverlust Putzverlust',
+        'herstellkosten' => 'Zuschlag Fixkosten Stundensatz Marge Gemeinkosten',
+        'aufschlagsklassen' => 'Preisstufe Basissatz Faktor Aufschlag',
+        'ki' => 'Notschalter Kill-Switch Kosten Verbrauch Modell Modellstufen Sprachbefehl Vorlesen Stimme',
+        'teamprofil' => 'Ausstattung Geräte Flächen Gäste Convenience Kennzahlen',
+        'kueche' => 'Küchentyp Farben Positionstyp',
+        'food-dna' => 'Leitbild Stil Aromatik No-Go DNA',
+        'dna-felder' => 'Zusatzfeld Canvas Feldgruppe',
+        'kunde-dna' => 'Kunde Marke Ton',
+        'schreibstile' => 'Tonfall Text Karte Foodbook',
+        'brief-vorlagen' => 'Vorlage Planung Brief Schnellstart',
+        'trendradar' => 'Google Trends DataForSEO Trend',
+        'wissenskategorien' => 'Wissen Dossier Kategorie',
+        'wissenssteuerung' => 'Wissen Kanon Routing Budget Leitplanken',
+        'regeln' => 'Regelwerk Verbote Schwellen Vokabular',
+        'posten' => 'Arbeitsplatz Kapazität Minuten Besetzung Topf Deckel',
+        'zugriffsrechte' => 'Rechte Rolle Mitglieder Betrachter Rechnungsfreigabe Support Bereiche Kontingente',
+        'rollen' => 'Küchenchef Koch Hilfskoch Stundensatz Kostenträger',
+        'praesentations-designs' => 'Design Farben Schrift Kundenbuch CSS Branding',
+        'betriebe' => 'Kalkulationsprofil Outlet Ausgabestelle Marge Logo Vorlage Standort',
+        'unter-teams' => 'Standort Freigabe Sammlung Unter-Team',
+        'plan-nutzung' => 'Gebühren Abrechnung Monat Abo Stamm-Paket',
+        'mandanten' => 'Mandant Stammblatt CRM Kontingent Gebühren',
+        'etiketten' => 'Etikett Drucker Label Jodsalz Format Felder',
+        'hausstandards' => 'HACCP Temperatur Kleinstmenge Standard-Grundprodukt Abweichung',
+        'speiseplan-chips' => 'Chip Vorgabe Speiseplan Ernährungsform',
+    ];
+
+    /** Neuordnung 23.10.: Plattform-Wissen — nur Master-Team und Plattform-Admin (Mandanten sahen bisher nur den „vorbehalten"-Hinweis). */
+    public const NUR_MASTER = ['wissenssteuerung'];
 
     /** Sektionen nur für Plattform-Admins (Spec 81: Regeln wie das globale Wissen — Kunden sehen sie nicht). */
     public const NUR_PLATTFORM_ADMIN = ['regeln'];
@@ -162,14 +228,83 @@ class Index extends Component
         };
     }
 
-    public function mount(string $sektion = 'einheiten'): void
+    public function mount(?string $sektion = null): void
     {
-        abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
-        abort_if(in_array($sektion, self::NUR_PLATTFORM_ADMIN, true) && ! self::istPlattformAdmin(), 404);
-        abort_if(in_array($sektion, self::NUR_OBERTEAM, true) && self::istUnterTeam(), 404);
-        abort_unless(self::bereichErlaubt($sektion), 404);
-        abort_unless(self::rechteErlaubt($sektion), 404);
-        $this->sektion = $sektion;
+        $sichtbar = self::sichtbareSektionen();
+        if ($sektion !== null) {
+            // alter Link /einstellungen/{sektion}: unbekannt oder nicht erlaubt = 404 wie bisher, sonst Reiter + Sprung zum Bereich
+            abort_unless(array_key_exists($sektion, self::SEKTIONEN) && isset($sichtbar[$sektion]), 404);
+            $this->tab = self::gruppeVon($sektion);
+            $this->bereich = $sektion;
+        }
+        $this->normalisieren($sichtbar);
+    }
+
+    /** Reiter wechseln (Leiste im Server-Modus): nur sichtbare Reiter, Sprungziel fällt weg. */
+    public function tabWaehlen(string $tab): void
+    {
+        $this->tab = $tab;
+        $this->bereich = null;
+        $this->normalisieren(self::sichtbareSektionen());
+    }
+
+    /** Ungültiger oder nicht sichtbarer Reiter/Bereich (auch aus einer geteilten URL) → erster sichtbarer Reiter, kein Sprung. */
+    private function normalisieren(array $sichtbar): void
+    {
+        if ($this->bereich !== null && ! isset($sichtbar[$this->bereich])) {
+            $this->bereich = null;
+        }
+        if ($this->bereich !== null) {
+            $this->tab = self::gruppeVon($this->bereich);
+        }
+        $gruppen = self::sichtbareGruppen($sichtbar);
+        if (! isset($gruppen[$this->tab])) {
+            $this->tab = (string) (array_key_first($gruppen) ?? '');
+        }
+    }
+
+    public static function gruppeVon(string $sektion): string
+    {
+        foreach (self::GRUPPEN as $key => $g) {
+            if (in_array($sektion, $g['sektionen'], true)) {
+                return $key;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Die Sektionen, die der angemeldete Benutzer in seinem Team sieht (Reiter, Bereiche und Suche aus EINER Quelle).
+     *
+     * @return array<string, array{label: string, hint: string}>
+     */
+    public static function sichtbareSektionen(): array
+    {
+        $sektionen = self::istPlattformAdmin() ? self::SEKTIONEN : array_diff_key(self::SEKTIONEN, array_flip(self::NUR_PLATTFORM_ADMIN));
+        if (self::istUnterTeam()) {
+            $sektionen = array_diff_key($sektionen, array_flip(self::NUR_OBERTEAM));
+        }
+        if (! self::istMasterOderPlattformAdmin()) {
+            $sektionen = array_diff_key($sektionen, array_flip(self::NUR_MASTER));
+        }
+
+        return array_filter($sektionen, static fn (string $key) => self::bereichErlaubt($key) && self::rechteErlaubt($key), ARRAY_FILTER_USE_KEY);
+    }
+
+    /** @return array<string, array{label: string, sektionen: list<string>}> nur Gruppen mit mindestens einer sichtbaren Sektion */
+    public static function sichtbareGruppen(?array $sichtbar = null): array
+    {
+        $sichtbar ??= self::sichtbareSektionen();
+        $out = [];
+        foreach (self::GRUPPEN as $key => $g) {
+            $drin = array_values(array_filter($g['sektionen'], fn ($k) => isset($sichtbar[$k])));
+            if ($drin !== []) {
+                $out[$key] = ['label' => $g['label'], 'sektionen' => $drin];
+            }
+        }
+
+        return $out;
     }
 
     /** Hängt die Sektion an einem Bereich, muss er für Team und Benutzer freigeschaltet sein. */
@@ -190,6 +325,23 @@ class Index extends Component
         return Auth::user()?->currentTeamRelation?->parent_team_id !== null;
     }
 
+    private static function istMasterOderPlattformAdmin(): bool
+    {
+        $team = Auth::user()?->currentTeamRelation;
+
+        return self::istPlattformAdmin() || ($team !== null && \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team));
+    }
+
+    /** Darf der angemeldete Benutzer in diesem Team Einstellungen ändern (FA-Admin)? Sonst zeigt die Seite einen Hinweis. */
+    private static function darfAendern(): bool
+    {
+        $user = Auth::user();
+        $team = $user?->currentTeamRelation;
+
+        return $user !== null && $team !== null
+            && app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Admin);
+    }
+
     private static function istPlattformAdmin(): bool
     {
         $user = Auth::user();
@@ -200,18 +352,23 @@ class Index extends Component
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
-
-        $sektionen = self::istPlattformAdmin() ? self::SEKTIONEN : array_diff_key(self::SEKTIONEN, array_flip(self::NUR_PLATTFORM_ADMIN));
-        if (self::istUnterTeam()) {
-            $sektionen = array_diff_key($sektionen, array_flip(self::NUR_OBERTEAM));
+        $sektionen = self::sichtbareSektionen();
+        $gruppen = self::sichtbareGruppen($sektionen);
+        $imReiter = $gruppen[$this->tab]['sektionen'] ?? [];
+        $grund = array_values(array_filter($imReiter, fn ($k) => in_array($k, self::GRUND, true)));   // Sprungziel bleibt an seinem Platz (Klappblock öffnet)
+        $erweitert = array_values(array_diff($imReiter, $grund));
+        if ($grund === []) {   // Reiter ganz ohne Grundeinstellung (z. B. Kategorien): alles offen, kein Klappblock
+            [$grund, $erweitert] = [$erweitert, []];
         }
-        $sektionen = array_filter($sektionen, static fn (string $key) => self::bereichErlaubt($key) && self::rechteErlaubt($key), ARRAY_FILTER_USE_KEY);
-        $gruppen = array_map(static fn ($g) => ['sektionen' => array_values(array_intersect($g['sektionen'], array_keys($sektionen)))] + $g, self::GRUPPEN);
 
         return view('foodalchemist::livewire.settings.index', [
             'sektionen' => $sektionen,
             'gruppen' => $gruppen,
+            'grundBereiche' => $grund,
+            'erweiterteBereiche' => $erweitert,
+            'stichworte' => self::STICHWORTE,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
+            'nurLesen' => ! self::darfAendern(),
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

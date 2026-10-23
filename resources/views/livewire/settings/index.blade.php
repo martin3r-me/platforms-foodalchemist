@@ -1,21 +1,20 @@
-{{-- M1-01: Settings-Gerüst — Sektion = eigene URL (V-17).
-     Spec 28 / E16: die Sektions-Navigation gehört in die Seitenleiste links, wie in allen anderen Schirmen.
-     Der Sektions-Kopf (Titel + Zweck) steht EINMAL hier statt in jeder Sektion.
+{{-- Einstellungen — Neuordnung 23.10. (Dominique, 00_INBOX/_Einstellungen_Neuordnung_Vorschlag.md): REITER statt Seitenleiste.
 
-     fa-pass 2026-10-05: auf Bausteine/Tokens umgestellt. Navigation in fünf Gruppen
-     (Settings\Index::GRUPPEN), je Eintrag Name + ein Satz, wofür er da ist. Der Filter sucht
-     weiter über Name UND Beschreibung (rein clientseitig, alle Links bleiben im DOM).
-     Sektionen ohne Gruppe landen unter „Weitere" — nie verschluckt. --}}
+     Je Gruppe (Settings\Index::GRUPPEN) ein Reiter oben; im Reiter die Bereiche als Abschnitte mit Sprungmarken. Reiter und
+     Sprungziel stehen in der URL (?tab=…&bereich=…); alte Links /einstellungen/{sektion} öffnen den passenden Reiter.
+
+     Keine Seitenleiste mehr: die Reiter SIND die Navigation, eine Leiste daneben hätte sie nur verdoppelt und breiten Editoren
+     (Präsentations-Designs, Wissens-Steuerung) 288 px genommen. Die Suche steht über den Reitern und findet jeden sichtbaren
+     Bereich über Name, Beschreibung und Stichworte (Unterabschnitte wie MwSt, Drucker, Lagerort).
+
+     Leistung: nur der aktive Reiter wird gerendert (Leiste im Server-Modus). Im Reiter lädt der erste Bereich (bzw. das Sprungziel)
+     sofort, die übrigen verzögert (lazy, beim Hineinscrollen); erweiterte Bereiche stehen in einem aufklappbaren Block. --}}
 @php
-    $einsortiert = collect($gruppen)->pluck('sektionen')->flatten()->all();
-    $rest = array_values(array_diff(array_keys($sektionen), $einsortiert));
-    $navGruppen = collect($gruppen)
-        ->map(fn ($g) => ['label' => $g['label'], 'sektionen' => array_values(array_filter($g['sektionen'], fn ($k) => isset($sektionen[$k])))])
-        ->when($rest !== [], fn ($c) => $c->put('weitere', ['label' => 'Weitere', 'sektionen' => $rest]))
-        ->filter(fn ($g) => $g['sektionen'] !== []);
-    $suchtext = fn (string $key) => \Illuminate\Support\Str::lower($sektionen[$key]['label'] . ' ' . $sektionen[$key]['hint']);
-    $suchtexte = collect(array_keys($sektionen))->map($suchtext)->values();
-    $aktiveGruppe = $navGruppen->first(fn ($g) => in_array($sektion, $g['sektionen'], true))['label'] ?? null;
+    $suchtext = fn (string $key) => \Illuminate\Support\Str::lower($sektionen[$key]['label'] . ' ' . $sektionen[$key]['hint'] . ' ' . ($stichworte[$key] ?? ''));
+    $link = fn (string $key) => route('foodalchemist.einstellungen', ['tab' => \Platform\FoodAlchemist\Livewire\Settings\Index::gruppeVon($key), 'bereich' => $key]);
+    $tabLabels = array_map(fn ($g) => $g['label'], $gruppen);
+    $eager = $bereich ?? ($grundBereiche[0] ?? null);
+    $erweitertOffen = $bereich !== null && in_array($bereich, $erweiterteBereiche, true);
 @endphp
 
 <x-ui-page>
@@ -26,100 +25,42 @@
     <x-slot name="actionbar">
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Einstellungen'],
-            ['label' => $sektionen[$sektion]['label'] ?? ''],
+            ['label' => 'Einstellungen', 'href' => route('foodalchemist.einstellungen')],
+            ['label' => $gruppen[$tab]['label'] ?? ''],
         ]" />
-    </x-slot>
-
-    {{-- LINKS: Bereiche, nach Gruppen --}}
-    <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Bereiche" width="w-72">
-            @php
-                $gruppenIcons = [
-                    'katalog' => 'heroicon-o-squares-2x2',
-                    'betrieb' => 'heroicon-o-building-storefront',
-                    'kalkulation' => 'heroicon-o-calculator',
-                    'ki' => 'heroicon-o-sparkles',
-                    'ausgabe' => 'heroicon-o-document-text',
-                    'weitere' => 'heroicon-o-ellipsis-horizontal-circle',
-                ];
-                $aktiverGruppenKey = $navGruppen->search(fn ($g) => in_array($sektion, $g['sektionen'], true));
-            @endphp
-            {{-- Gruppen klappen auf/zu (Kachel-Kopf). Offen: die Gruppe des aktiven Bereichs + was der Nutzer
-                 zuletzt offen hatte (localStorage, best effort). Beim Suchen sind alle Treffer-Gruppen offen. --}}
-            <div class="p-3 flex flex-col gap-3"
-                 x-data="{
-                    q: '',
-                    offen: {},
-                    init() {
-                        try { this.offen = JSON.parse(localStorage.getItem('fa.einstellungen.offen') || '{}') || {}; } catch (e) { this.offen = {}; }
-                        @if($aktiverGruppenKey !== false && $aktiverGruppenKey !== null) this.offen[@js($aktiverGruppenKey)] = true; @endif
-                    },
-                    umschalten(k) {
-                        this.offen[k] = ! this.offen[k];
-                        try { localStorage.setItem('fa.einstellungen.offen', JSON.stringify(this.offen)); } catch (e) {}
-                    },
-                    istOffen(k) { return this.q !== '' || !! this.offen[k]; },
-                 }">
-                <div class="relative">
-                    <label for="settings-filter" class="sr-only">Bereiche filtern</label>
-                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
-                    <x-fa::input id="settings-filter" type="search" x-model="q" data-settings-filter
-                        placeholder="Bereich suchen" aria-label="Bereiche filtern" class="pl-8" />
-                </div>
-
-                <nav class="flex flex-col gap-2" aria-label="Einstellungen" data-settings-nav>
-                    @foreach($navGruppen as $gKey => $gruppe)
-                        @php
-                            $gruppenTexte = collect($gruppe['sektionen'])->map($suchtext)->values();
-                            $enthaeltAktiv = $gKey === $aktiverGruppenKey;
-                        @endphp
-                        <div class="flex flex-col" wire:key="settings-gruppe-{{ $gKey }}" data-settings-gruppe="{{ $gKey }}"
-                             x-show="q === '' || @js($gruppenTexte).some(s => s.includes(q.toLowerCase()))">
-                            <button type="button" x-on:click="umschalten(@js($gKey))" x-bind:aria-expanded="istOffen(@js($gKey))"
-                                    aria-controls="settings-gruppe-liste-{{ $gKey }}"
-                                    class="fa-settings-gruppe {{ $enthaeltAktiv ? 'is-aktiv' : '' }}">
-                                <span class="fa-settings-gruppe-icon">@svg($gruppenIcons[$gKey] ?? 'heroicon-o-folder', 'w-4 h-4')</span>
-                                <span class="flex-1 min-w-0 truncate text-left">{{ $gruppe['label'] }}</span>
-                                <span class="fa-settings-gruppe-zahl">{{ count($gruppe['sektionen']) }}</span>
-                                <span class="shrink-0 transition-transform duration-150" x-bind:class="istOffen(@js($gKey)) ? 'rotate-90' : ''">@svg('heroicon-m-chevron-right', 'w-4 h-4')</span>
-                            </button>
-                            <div id="settings-gruppe-liste-{{ $gKey }}" class="flex flex-col gap-0.5 pt-1 pl-2" x-show="istOffen(@js($gKey))" x-cloak>
-                                @foreach($gruppe['sektionen'] as $key)
-                                    @php
-                                        $meta = $sektionen[$key];
-                                        $aktiv = $sektion === $key;
-                                    @endphp
-                                    <a href="{{ route('foodalchemist.einstellungen', ['sektion' => $key]) }}" wire:navigate.hover
-                                       x-show="q === '' || @js($suchtext($key)).includes(q.toLowerCase())"
-                                       @if($aktiv) aria-current="page" @endif
-                                       class="block px-2.5 py-1.5 rounded-[var(--fa-radius-control)] border-l-2 transition-colors duration-150 {{ $aktiv
-                                            ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]'
-                                            : 'border-transparent text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }}"
-                                       data-settings-link="{{ $key }}">
-                                        <span class="block text-[length:var(--fa-text-md)] font-medium">{{ $meta['label'] }}</span>
-                                        <span class="block mt-0.5 text-[length:var(--fa-text-sm)] leading-snug {{ $aktiv ? 'text-[var(--fa-ink-2)]' : 'text-[var(--fa-ink-3)]' }}">{{ $meta['hint'] }}</span>
-                                    </a>
-                                @endforeach
-                            </div>
-                        </div>
-                    @endforeach
-                    <p class="px-2.5 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-settings-filter-leer
-                       x-show="q !== '' && ! @js($suchtexte).some(s => s.includes(q.toLowerCase()))" x-cloak>
-                        Kein Bereich passt zu „<span x-text="q"></span>“.
-                    </p>
-                </nav>
-            </div>
-        </x-ui-page-sidebar>
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
 
-        {{-- Sektions-Kopf: EINMAL hier, aus derselben Quelle wie die Navigation --}}
-        <div class="min-w-0" data-settings-kopf>
-            <h2 class="text-[length:var(--fa-text-2xl)] font-semibold tracking-tight leading-tight text-[var(--fa-ink)]">{{ $sektionen[$sektion]['label'] ?? '' }}</h2>
-            <p class="mt-1 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] max-w-[75ch]">{{ $sektionen[$sektion]['hint'] ?? '' }}@if($aktiveGruppe)<span class="text-[var(--fa-ink-3)]"> · {{ $aktiveGruppe }}</span>@endif</p>
+        {{-- Suche über alle sichtbaren Bereiche (alle Reiter); Treffer öffnen Reiter + Bereich --}}
+        <div class="relative max-w-xl" x-data="{ q: '' }" x-on:keydown.escape="q = ''" data-settings-suche>
+            <label for="settings-filter" class="sr-only">Einstellungen durchsuchen</label>
+            @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-[1.15rem] -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+            <x-fa::input id="settings-filter" type="search" x-model="q" data-settings-filter autocomplete="off"
+                placeholder="Einstellung suchen, z. B. MwSt, Drucker, Lagerort" aria-label="Einstellungen durchsuchen" class="pl-8" />
+            <ul class="absolute z-30 mt-1 w-full max-h-80 overflow-y-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] shadow-lg"
+                x-show="q !== ''" x-cloak data-settings-nav aria-label="Treffer">
+                @foreach($sektionen as $key => $meta)
+                    <li x-show="@js($suchtext($key)).includes(q.toLowerCase())">
+                        <a href="{{ $link($key) }}" wire:navigate class="block px-3 py-2 hover:bg-[var(--fa-hover)]" data-settings-link="{{ $key }}">
+                            <span class="block text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $meta['label'] }}
+                                <span class="font-normal text-[var(--fa-ink-3)]"> · {{ $gruppen[\Platform\FoodAlchemist\Livewire\Settings\Index::gruppeVon($key)]['label'] ?? '' }}</span></span>
+                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $meta['hint'] }}</span>
+                        </a>
+                    </li>
+                @endforeach
+                <li class="px-3 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-settings-filter-leer
+                    x-show="! @js(collect(array_keys($sektionen))->map($suchtext)->values()).some(s => s.includes(q.toLowerCase()))">
+                    Nichts gefunden zu „<span x-text="q"></span>“.
+                </li>
+            </ul>
         </div>
+
+        @if($nurLesen)
+            <x-fa::notice tone="info" data-settings-nur-lesen>
+                Du siehst die Einstellungen deines Teams. Ändern kann sie der Admin deines Teams.
+            </x-fa::notice>
+        @endif
 
         @if($istKindTeam)
             <x-fa::notice tone="info" data-settings-erbe>
@@ -128,9 +69,42 @@
             </x-fa::notice>
         @endif
 
-        {{-- aktive Sektion (eigene Livewire-Komponente, isolierter State) --}}
-        <div class="min-w-0" data-settings-sektion="{{ $sektion }}">
-            @livewire('foodalchemist.settings.' . $sektion, key('sektion-' . $sektion))
+        <x-foodalchemist::editor-tabs marker="settings" action="tabWaehlen" :active="$tab" :tabs="$tabLabels" scroll />
+
+        <div class="flex flex-col gap-8" data-settings-reiter="{{ $tab }}">
+            {{-- Sprungmarken im Reiter --}}
+            @if(count($grundBereiche) + count($erweiterteBereiche) > 1)
+                <nav class="flex flex-wrap gap-1.5" aria-label="Bereiche in diesem Reiter" data-settings-sprung>
+                    @foreach($grundBereiche as $key)
+                        <a href="#bereich-{{ $key }}" class="px-2.5 py-1 rounded-full border border-[var(--fa-line)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]"
+                           title="{{ $sektionen[$key]['hint'] }}">{{ $sektionen[$key]['label'] }}</a>
+                    @endforeach
+                    @if($erweiterteBereiche !== [])
+                        <a href="#settings-erweitert" class="px-2.5 py-1 rounded-full border border-dashed border-[var(--fa-line-strong)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] hover:bg-[var(--fa-hover)]"
+                           x-on:click="$dispatch('settings-erweitert-oeffnen')">Erweitert ({{ count($erweiterteBereiche) }})</a>
+                    @endif
+                </nav>
+            @endif
+
+            @foreach($grundBereiche as $key)
+                @include('foodalchemist::livewire.settings.partials.bereich', ['key' => $key, 'meta' => $sektionen[$key], 'lazy' => $key !== $eager, 'ziel' => $key === $bereich])
+            @endforeach
+
+            @if($erweiterteBereiche !== [])
+                <div id="settings-erweitert" class="scroll-mt-24 flex flex-col gap-8" x-data="{ offen: @js($erweitertOffen) }"
+                     x-on:settings-erweitert-oeffnen.window="offen = true" data-settings-erweitert>
+                    <button type="button" x-on:click="offen = ! offen" x-bind:aria-expanded="offen"
+                            class="flex items-center gap-2 text-left text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]">
+                        <span class="transition-transform duration-150" x-bind:class="offen ? 'rotate-90' : ''">@svg('heroicon-m-chevron-right', 'w-4 h-4')</span>
+                        Erweitert: {{ collect($erweiterteBereiche)->map(fn ($k) => $sektionen[$k]['label'])->implode(', ') }}
+                    </button>
+                    <div class="flex flex-col gap-8" x-show="offen" x-cloak>
+                        @foreach($erweiterteBereiche as $key)
+                            @include('foodalchemist::livewire.settings.partials.bereich', ['key' => $key, 'meta' => $sektionen[$key], 'lazy' => $key !== $bereich, 'ziel' => $key === $bereich])
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </div>
 
     </x-ui-page-container>
