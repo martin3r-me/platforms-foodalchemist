@@ -122,3 +122,27 @@ it('Panel: veröffentlicht, zeigt Link und Lücken, zieht zurück', function () 
     $c->call('zurueckziehen')->assertSee('Nicht erreichbar');
     $this->get('/p/handbuch/' . $token)->assertNotFound();
 });
+
+it('Zutaten und aufklappbares Basisrezept stehen im Handbuch, ohne Preise und Lieferanten', function () {
+    $fb = ($this->baue)();
+    $team = $this->rootTeam;
+    $dish = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::where('name', 'Zanderfilet')->firstOrFail();
+    $linsen = $this->makeRecipe($team, 'Linsengemüse Basis', ['is_sales_recipe' => false, 'sales_net' => 7.77]);
+    $this->makeIngredient($linsen, 'Beluga-Linsen', $this->makeGp($team, 'Beluga-Linsen'), '500', 1);
+    FoodAlchemistRecipeStep::create(['team_id' => $team->id, 'recipe_id' => $linsen->id, 'position' => 1, 'ebene' => 'produktion', 'text' => 'Linsen 25 min weich garen.']);
+    $this->makeIngredient($dish, 'Zander', $this->makeGp($team, 'Zanderfilet mit Haut'), '180', 1);
+    $sub = $this->makeIngredient($dish, 'Linsengemüse', null, '120', 2);
+    $sub->update(['referenced_recipe_id' => $linsen->id]);
+
+    $res = $this->hb->publish($team, 'foodbook', $fb->id, ['expires_at' => now()->addDays(10)->toDateString()]);
+    $snap = FoodAlchemistHandbuch::where('token', $res['token'])->firstOrFail()->snapshot_json;
+    $namen = array_column(array_values($snap['gerichte'])[0]['zutaten']['zeilen'], 'name');
+    expect($namen)->toContain('Zanderfilet mit Haut')
+        ->and($snap['basisrezepte'])->not->toBeEmpty()
+        ->and(array_values($snap['basisrezepte'])[0]['schritte'])->toContain('Linsen 25 min weich garen.');
+
+    $json = json_encode($snap);
+    expect($json)->not->toContain('7.77')->not->toContain('ek_')->not->toContain('lieferant')->not->toContain('price');
+
+    $this->get('/p/handbuch/' . $res['token'])->assertOk()->assertSee('Basisrezept')->assertSee('Linsen 25 min weich garen.')->assertDontSee('7,77');
+});

@@ -70,6 +70,7 @@ class HandbuchQuellenService
         return [
             'title' => (string) ($fb->label ?: $fb->code ?: 'Foodbook'),
             'subtitle' => $fb->description ? (string) $fb->description : null,
+            'personen' => $fb->personen ?? null,
             'sections' => $sections,
             'legende' => $dok['legende'] ?? null,
         ];
@@ -165,6 +166,7 @@ class HandbuchQuellenService
         return [
             'title' => (string) ($angebot->name ?: 'Angebot'),
             'subtitle' => $angebot->occasion ? (string) $angebot->occasion : null,
+            'personen' => $angebot->personen ?? null,
             'sections' => $sections,
             'legende' => $this->legende(),
         ];
