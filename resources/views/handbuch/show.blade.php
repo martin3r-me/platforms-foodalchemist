@@ -64,6 +64,7 @@
         .meta { color: var(--ink3); }
         .chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--warn); color: var(--warnt); margin: 4px 4px 0 0; }
         .tabs { display: inline-flex; gap: 2px; background: var(--ground); border: 1px solid var(--line); border-radius: var(--rs); padding: 3px; margin: 10px 0 8px; max-width: 100%; overflow: auto; }
+        .tabs { scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; }
         .tab { padding: 6px 12px; border: 0; background: none; color: var(--ink2); font: inherit; cursor: pointer; border-radius: var(--r); white-space: nowrap; }
         .tab.on { background: var(--ac); color: var(--onac); font-weight: 600; }
         .pane { display: none; } .pane.on { display: block; }
@@ -88,6 +89,7 @@
             .app:not(.detail) main { display: none; }
             .back { display: inline-block; }
             .kpi, .logo { display: none; }
+            .tabs { display: flex; }
             main { padding: 10px; }
             .gericht { padding: 10px 12px; }
             .foto { width: 72px; height: 54px; }
@@ -146,7 +148,7 @@
                         <div>
                             <h2>{{ $g['name'] }}</h2>
                             @if($teile)<div class="meta">{{ implode(' · ', $teile) }}</div>@endif
-                            @foreach(($g['codes'] ?? []) as $c)<span class="chip">{{ $c }}@if(isset($codeLabel[$c])) · {{ $codeLabel[$c] }}@endif</span>@endforeach
+                            @foreach(($g['codes'] ?? []) as $c)@php $cl = $codeLabel[rtrim($c, '*')] ?? null; @endphp<span class="chip">{{ $c }}@if($cl) · {{ $cl }}{{ str_ends_with($c, '*') ? ' (Spuren)' : '' }}@endif</span>@endforeach
                         </div>
                     </div>
 
