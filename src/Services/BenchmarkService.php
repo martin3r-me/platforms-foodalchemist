@@ -27,14 +27,17 @@ class BenchmarkService
     ];
 
     /**
-     * Portfolio-Kennzahlen EINES Teams (nur team-eigene Verkaufsrezepte).
+     * Portfolio-Kennzahlen eines Teams ODER mehrerer Teams (Team-Brille „alle“): nur deren eigene Verkaufsrezepte. Die gespeicherten Kosten
+     * am Rezept stammen aus den Preisen des jeweiligen Besitzers — jeder Standort rechnet also mit seinen eigenen Preisen, hier wird nur gezählt.
      *
+     * @param  int|list<int>  $teamIds
      * @return array{n_dishes:int,ek_coverage_pct:?float,allergen_high_pct:?float,forms_complete_pct:?float,avg_w_pct:?float,rating_avg:?float}
      */
-    public function kpisFuerTeam(int $teamId): array
+    public function kpisFuerTeam(int|array $teamIds): array
     {
+        $teamIds = array_values(array_map('intval', (array) $teamIds));
         $base = DB::table('foodalchemist_recipes')
-            ->where('team_id', $teamId)->where('is_sales_recipe', true)->whereNull('deleted_at');
+            ->whereIn('team_id', $teamIds)->where('is_sales_recipe', true)->whereNull('deleted_at');
 
         $n = (clone $base)->count();
         if ($n === 0) {
@@ -81,7 +84,7 @@ class BenchmarkService
         // Ø Bewertung: Feedback-Scores auf den team-eigenen Gerichten
         $ratingAvg = DB::table('foodalchemist_recipe_feedback as f')
             ->join('foodalchemist_recipes as r', 'r.id', '=', 'f.recipe_id')
-            ->where('r.team_id', $teamId)->where('r.is_sales_recipe', true)
+            ->whereIn('r.team_id', $teamIds)->where('r.is_sales_recipe', true)
             ->whereNull('f.deleted_at')->whereNotNull('f.score')
             ->avg('f.score');
 
@@ -129,23 +132,19 @@ class BenchmarkService
     }
 
     /**
-     * Alle Team-ids der Root-Kette (Root = oberster Vorfahre, dann BFS abwärts).
-     * Definiert das „BHG-interne" Netz; keine Teams außerhalb dieser Wurzel.
+     * Alle Team-ids des Vergleichsnetzes: das Kunden-Hauptteam und alles darunter (BFS abwärts). Das Netz endet an der KUNDENGRENZE
+     * (Spec 85 PR-D, Dominique 19.10.): ein Mandant, der unter dem Master hängt, wird nie gegen andere Mandanten verglichen. Das Master-Team
+     * selbst hat kein Vergleichsnetz (nur sich).
      *
      * @return list<int>
      */
     public function netzTeamIds(Team $team): array
     {
-        $root = $team;
-        $guard = 0;
-        while ($root->parent_team_id !== null && $guard < 32) {
-            $eltern = Team::find($root->parent_team_id);
-            if ($eltern === null) {
-                break;
-            }
-            $root = $eltern;
-            $guard++;
+        $rechte = app(FaRechte::class);
+        if ($rechte->istMasterTeam($team)) {
+            return [(int) $team->id];
         }
+        $root = $rechte->kundenHauptTeam($team);
 
         $ids = [(int) $root->id];
         $frontier = [(int) $root->id];

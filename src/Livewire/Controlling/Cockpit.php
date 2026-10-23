@@ -6,7 +6,6 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Services\ActiveOutletContext;
 use Platform\FoodAlchemist\Services\BenchmarkService;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\MargeService;
@@ -177,27 +176,46 @@ class Cockpit extends Component
             return ['leer' => true];
         }
 
-        // Ebene 2: die kostenstruktur-KPIs (Ziel-WE, Fixkosten, Break-even) folgen dem aktiven Betrieb;
-        // die gemessenen Ist-Werte (avg_w_pct/ek_coverage/spend/Signale) bleiben team-weit — per-Betrieb-Ist
-        // bräuchte materialisierte VK je Betrieb, das ist bewusst nicht der Weg (Strategie A, on-the-fly).
-        $outlet = app(ActiveOutletContext::class)->current($team);
-        $eigen = $benchmark->kpisFuerTeam((int) $team->id);
-        $zielWe = $settings->zielWareneinsatzPct($team, $outlet);
+        // Spec 85 PR-D: der Kopf folgt der Team-Brille. eigen → das Team; alle → die Summe der Standorte, JEDER Standort mit seinen eigenen Preisen
+        // (die Rezept-Kosten stehen mit den Preisen ihres Besitzers) und seinem eigenen Profil, danach summiert; ein Standort → nur dieser.
+        // Ebene 2: Ziel-WE, Fixkosten und Break-even folgen dem aktiven Betrieb (Kalkulationsprofil), getrennt von der Brille.
+        $ids = $this->leseTeamIds($team);
+        $teams = Team::whereIn('id', $ids)->get()->keyBy('id');
+        $bezug = count($ids) === 1 ? ($teams->get($ids[0]) ?? $team) : $team;   // wessen Ziel gilt: bei „ein Standort“ sein eigenes
+        $outlet = $this->profil($bezug);
+        $eigen = $benchmark->kpisFuerTeam($ids);
+        $zielWe = $settings->zielWareneinsatzPct($bezug, $outlet);
 
         // Break-even-Umsatz/Monat = Σ Fixkosten ÷ Deckungsbeitragsquote (= 1 − Zielwareneinsatz).
         // Gastro-Standardformel, Planungs-Näherung — dieselbe Rechnung wie bisher auf `/kalkulation`
         // (jetzt Kennzahlen-Tab), damit nicht zwei Break-even-Zahlen im Umlauf sind.
-        $fixMonat = array_sum($fix->summeJeBlock($team, $outlet));
-
-        // Ebene 2: die Geld-Signal-Zähler folgen der Betriebsbrille (Betriebs-Lane + Team-Core-Lane).
-        $offeneNachTyp = $signale->offeneNachTyp($team, $outlet, nurLane: true);
-        $jeTyp = [];
-        $geldSignale = 0;
-        foreach (self::GELD_SIGNALE as $typ) {
-            $n = (int) ($offeneNachTyp[$typ] ?? 0);
-            $jeTyp[$typ] = $n;
-            $geldSignale += $n;
+        $fixMonat = 0.0;
+        foreach ($ids as $id) {
+            if (($t = $teams->get($id)) !== null) {
+                $fixMonat += array_sum($fix->summeJeBlock($t, $this->profil($t)));   // Standort-Fixkosten mit dessen Profil, Summe über die Brille
+            }
         }
+
+        // Ebene 2: die Geld-Signal-Zähler folgen der Betriebsbrille (Betriebs-Lane + Team-Core-Lane) und der Team-Brille.
+        [$geldSignale, $jeTyp] = $this->geldSignale($signale->offeneNachTyp($team, $outlet, nurLane: true, mitBrille: true));
+
+        // Zeile je Standort (ab 2 Teams in der Brille): eigene Zahlen, eigene Preise, eigenes Profil.
+        $von30 = now()->subDays(30)->toDateString();
+        $jeStandort = app(\Platform\FoodAlchemist\Services\StandortService::class)->jeStandort($team, function (Team $t) use ($benchmark, $journal, $fix, $settings, $signale, $marge, $von30) {
+            $o = $this->profil($t);
+            $k = $benchmark->kpisFuerTeam((int) $t->id);
+            $ziel = $settings->zielWareneinsatzPct($t, $o);
+
+            return [
+                'avg_w_pct' => $k['avg_w_pct'],
+                'ziel_we_pct' => $ziel,
+                'we_ampel' => $marge->weAmpel($k['avg_w_pct'], $ziel),
+                'ek_coverage_pct' => $k['ek_coverage_pct'],
+                'n_dishes' => $k['n_dishes'],
+                'spend_30d' => $journal->spend($t, null, $von30),
+                'geld_signale' => $this->geldSignale($signale->offeneNachTypEigene($t, $o, nurLane: true))[0],
+            ];
+        });
 
         return [
             'leer' => false,
@@ -207,11 +225,31 @@ class Cockpit extends Component
             'we_ampel' => $marge->weAmpel($eigen['avg_w_pct'], $zielWe),
             'ek_coverage_pct' => $eigen['ek_coverage_pct'],
             'n_dishes' => $eigen['n_dishes'],
-            'spend_30d' => $journal->spend($team, null, now()->subDays(30)->toDateString()),
+            'spend_30d' => $journal->spend($team, null, $von30),
             'fixkosten_monat' => $fixMonat,
             'break_even' => $marge->breakEven($fixMonat, $zielWe),
             'geld_signale' => $geldSignale,
             'geld_signale_je_typ' => $jeTyp,
+            'je_standort' => $jeStandort,
         ];
+    }
+
+    /**
+     * Summe und Aufteilung der Geld-Signale aus einer Zählung je Typ.
+     *
+     * @param  array<string,int>  $offeneNachTyp
+     * @return array{0:int, 1:array<string,int>}
+     */
+    private function geldSignale(array $offeneNachTyp): array
+    {
+        $jeTyp = [];
+        $summe = 0;
+        foreach (self::GELD_SIGNALE as $typ) {
+            $n = (int) ($offeneNachTyp[$typ] ?? 0);
+            $jeTyp[$typ] = $n;
+            $summe += $n;
+        }
+
+        return [$summe, $jeTyp];
     }
 }

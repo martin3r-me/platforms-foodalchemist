@@ -71,7 +71,7 @@ class WareneinsatzAbweichungService
         $umsatz = (float) $basis()->sum($t . '.revenue_net');
         $umsatzZugeordnet = (float) $basis()->whereNotNull($t . '.recipe_id')->sum($t . '.revenue_net');
         $einkauf = $this->journal->spend($team, null, $von, $bis);
-        $ziel = $this->settings->zielWareneinsatzPct($team);
+        $ziel = $this->settings->zielWareneinsatzPct($team, app(ActiveOutletContext::class)->current($team));   // Spec 85 PR-D: Ziel des aktiven Kalkulationsprofils
 
         // Spec 66 §5: mit Inventur am Anfang UND Ende der Periode wird aus der Perioden- eine
         // Verbrauchsrechnung: Verbrauch = Anfangsbestand + Einkauf − Endbestand. Ohne beide

@@ -225,9 +225,22 @@ class SignalService
      * @return array<string,int> offene Signale je Typ. `$nurLane` (Ebene 2): auf die
      *                           Betriebsbrille eingrenzen (Betriebs-Lane + Team-Core-Lane).
      */
-    public function offeneNachTyp(Team $team, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false): array
+    public function offeneNachTyp(Team $team, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false, bool $mitBrille = false): array
     {
-        return FoodAlchemistSignal::visibleToTeam($team)->offen()
+        // Spec 85 PR-D: mit Team-Brille (Controlling-Kopf) zählen die Signale der Brillen-Teams; bei „eigen“ bleibt es die sichtbare Kette wie bisher
+        $basis = $mitBrille
+            ? app(StandortService::class)->leseBereichOderSichtbar(FoodAlchemistSignal::query(), $team)
+            : FoodAlchemistSignal::visibleToTeam($team);
+
+        return $basis->offen()
+            ->when($nurLane, fn ($q) => $q->lane($outlet))
+            ->selectRaw('type, COUNT(*) as c')->groupBy('type')->pluck('c', 'type')->all();
+    }
+
+    /** Offene Signale NUR dieses Teams (ohne die Kette aufwärts) — für die Zeile je Standort, damit Signale des Oberteams nicht je Standort doppelt zählen. */
+    public function offeneNachTypEigene(Team $team, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false): array
+    {
+        return FoodAlchemistSignal::query()->where('team_id', $team->id)->offen()
             ->when($nurLane, fn ($q) => $q->lane($outlet))
             ->selectRaw('type, COUNT(*) as c')->groupBy('type')->pluck('c', 'type')->all();
     }

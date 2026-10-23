@@ -5,7 +5,6 @@ namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\FaRolle;
-use Platform\FoodAlchemist\Services\ActiveOutletContext;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\MargeService;
@@ -46,8 +45,9 @@ class Kennzahlen extends Component
         if ($team === null) {
             return;
         }
-        $this->zielWe = (string) $settings->zielWareneinsatzPct($team);
-        $this->marge = (string) $settings->margePct($team);
+        $outlet = $this->profil($team);   // Spec 85 PR-D: die Eingabefelder starten mit den Werten des aktiven Profils (wie die Kacheln darunter)
+        $this->zielWe = (string) $settings->zielWareneinsatzPct($team, $outlet);
+        $this->marge = (string) $settings->margePct($team, $outlet);
     }
 
     /** Re-Render der Kennzahlen-Kacheln nach Regel-Änderung (Einstellungen). */
@@ -100,7 +100,7 @@ class Kennzahlen extends Component
     {
         $team = $this->teamPflicht();
         // Ebene 2: die Kennzahlen folgen dem aktiven Betrieb (Fixkosten/Marge/Ziel-WE/Zuschlag/Break-even).
-        $outlet = app(ActiveOutletContext::class)->current($team);
+        $outlet = $this->profil($team);
 
         // #379+ Controlling-Kennzahlen: Σ Fixkosten/Monat + Food-Cost-Ziel → Break-even.
         // Break-even-Umsatz/Monat = Σ Fixkosten ÷ Deckungsbeitragsquote (= 1 − Wareneinsatzquote);
