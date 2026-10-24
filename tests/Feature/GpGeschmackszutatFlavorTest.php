@@ -95,7 +95,7 @@ it('Modal: Vorschau, Speichern und Laden mit dem Feld Geschmack', function () {
     expect($gp->flavor)->toBe('Chili');
 
     Livewire::test(GpModal::class)->call('oeffnen', $gp->id)->assertSet('builder.flavor', 'Chili')->assertSeeHtml('data-gp-flavor-edit')
-        ->set('builder.flavor', 'Kräuter')->call('nameAusFeldern')->call('speichern')->assertSet('fehler', null);
+        ->call('felderAusName')->set('builder.flavor', 'Kräuter')->call('nameAusFeldern')->call('speichern')->assertSet('fehler', null);
     expect($gp->fresh()->flavor)->toBe('Kräuter')->and($gp->fresh()->name)->toBe('Käse: Kräuter, frisch, Scheiben');
 });
 

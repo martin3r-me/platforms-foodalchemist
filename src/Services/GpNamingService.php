@@ -235,7 +235,7 @@ class GpNamingService
             // §6.6: ein Wort VOR dem Zustand ist die Geschmackszutat („Käse: Chili, frisch, Scheiben"): erstes Attribut, selbst kein Zustand/Portion/Bio,
             // und ein späteres Attribut ist ein §9-Zustand. Ohne Zustand im Namen bleibt die alte Lesart (Verarbeitung/Form).
             $erstes = $teile[0];
-            $istZustand = $this->normalisiereZustand($erstes) !== null;
+            $istZustand = in_array($this->normalisiereZustand($erstes), self::ZUSTAND_VOCAB, true);   // normalisiereZustand liefert auch für Nicht-Zustandswörter einen Wert
             $istPortion = preg_match('/pro\s+st(?:ue|ü)ck$/iu', $erstes) === 1 || mb_strtolower($erstes) === 'bio';
             $spaeterZustand = false;
             foreach (array_slice($teile, 1) as $teil) {
