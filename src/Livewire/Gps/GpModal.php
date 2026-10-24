@@ -405,14 +405,15 @@ class GpModal extends Component
             return;
         }
         try {
-            $ergebnis = app(GpService::class)->ersetzeInRezepten($gp, $ziel);
+            $ergebnis = app(GpService::class)->ersetzeKomplett($team, $gp, $ziel);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
         $this->tauschSuche = '';
-        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}“ umgehängt — Rezepte neu berechnet.";
+        $this->hinweis = "{$ergebnis['artikel_umgehaengt']} Artikel und {$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}“ umgehängt — Rezepte neu berechnet."
+            . ($ergebnis['artikel_abgelehnt'] !== [] ? ' ' . count($ergebnis['artikel_abgelehnt']) . ' Artikel blieben stehen (Allergen-Prüfung): ' . implode('; ', array_map(fn ($a) => $a['bezeichnung'], $ergebnis['artikel_abgelehnt'])) . '.' : '');
         $this->dispatch('gp-gespeichert');
     }
 

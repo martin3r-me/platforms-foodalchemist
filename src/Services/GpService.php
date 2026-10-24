@@ -440,13 +440,57 @@ class GpService
     }
 
     /**
-     * GP in ALLEN Rezept-Zeilen durch einen anderen ersetzen (Vorstufe zum Löschen:
-     * Referenzen umhängen). Global wie der Katalog selbst; alle betroffenen Rezepte
-     * werden anschließend neu berechnet (Yield/Allergene/Kosten + Propagation).
+     * GP KOMPLETT ersetzen: Lieferantenartikel UND Rezept-Zeilen wandern auf das Ziel (Vorstufe zum Löschen).
      *
-     * @return array{zeilen: int, rezepte: int}
+     * Artikel gehen einzeln den normalen Weg {@see LeadLaService::entknuepfen()} → {@see LeadLaService::verknuepfen()} (dort greift der
+     * Allergen-Guard) in EINER Transaktion je Artikel: lehnt der Guard ab, bleibt der Artikel am Quell-GP und wird aufgelistet.
+     * Leads (Quelle und Ziel) werden dabei neu gewählt, `n_las_total` beider GPs am Ende aus dem Ist-Stand gesetzt. Danach die
+     * Rezept-Zeilen wie {@see self::ersetzeInRezepten()}. Nur wer beide GPs kuratieren darf (bei globalen Stamm-Paket-GPs der Master).
+     *
+     * @return array{zeilen: int, rezepte: int, artikel_umgehaengt: int, artikel_abgelehnt: list<array{id: int, bezeichnung: string, grund: string}>}
      */
-    public function ersetzeInRezepten(FoodAlchemistGp $von, FoodAlchemistGp $nach): array
+    public function ersetzeKomplett(Team $team, FoodAlchemistGp $von, FoodAlchemistGp $nach): array
+    {
+        $this->pruefeErsatzZiel($von, $nach);
+        if (! $von->isOwnedBy($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('das GP', self::GEERBT);
+        }
+        $artikel = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+            ->where('gp_id', $von->id)->whereNull('deleted_at')->orderBy('id')->pluck('supplier_item_id')->map(fn ($v) => (int) $v)->all();
+        if ($artikel !== [] && ! $nach->isOwnedBy($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('das Ziel-GP', self::GEERBT);
+        }
+
+        $lead = app(LeadLaService::class);
+        $umgehaengt = 0;
+        $abgelehnt = [];
+        foreach ($artikel as $laId) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($lead, $team, $von, $nach, $laId) {
+                    $lead->entknuepfen($team, $von->refresh(), $laId);
+                    $lead->verknuepfen($team, $nach->refresh(), $laId);
+                });
+                $umgehaengt++;
+            } catch (\Platform\FoodAlchemist\Exceptions\DeklarationsprofilAbweichtException|\RuntimeException $e) {
+                $bez = (string) (\Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items')->where('id', $laId)->value('designation') ?? "#{$laId}");
+                $abgelehnt[] = ['id' => $laId, 'bezeichnung' => $bez, 'grund' => $e->getMessage()];
+            }
+        }
+        foreach ([$von, $nach] as $gp) {
+            $gp->refresh();
+            $n = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')->where('gp_id', $gp->id)->whereNull('deleted_at')->count();
+            if ((int) $gp->n_las_total !== $n) {
+                $gp->update(['n_las_total' => $n]);
+            }
+        }
+
+        $rezepte = $this->ersetzeInRezepten($von->refresh(), $nach->refresh());
+
+        return $rezepte + ['artikel_umgehaengt' => $umgehaengt, 'artikel_abgelehnt' => $abgelehnt];
+    }
+
+    /** Gemeinsame Zielprüfung für das Ersetzen (Rezepte allein und komplett). */
+    private function pruefeErsatzZiel(FoodAlchemistGp $von, FoodAlchemistGp $nach): void
     {
         if ($von->id === $nach->id) {
             throw new \RuntimeException('Quelle und Ziel sind identisch.');
@@ -457,6 +501,18 @@ class GpService
         if ($nach->istNonFood()) {
             throw new \Platform\FoodAlchemist\Exceptions\NonFoodAlsZutatException([(string) $nach->name]);
         }
+    }
+
+    /**
+     * GP in ALLEN Rezept-Zeilen durch einen anderen ersetzen (Vorstufe zum Löschen:
+     * Referenzen umhängen). Global wie der Katalog selbst; alle betroffenen Rezepte
+     * werden anschließend neu berechnet (Yield/Allergene/Kosten + Propagation).
+     *
+     * @return array{zeilen: int, rezepte: int}
+     */
+    public function ersetzeInRezepten(FoodAlchemistGp $von, FoodAlchemistGp $nach): array
+    {
+        $this->pruefeErsatzZiel($von, $nach);
 
         $recipeIds = FoodAlchemistRecipeIngredient::where('gp_id', $von->id)
             ->distinct()->pluck('recipe_id');

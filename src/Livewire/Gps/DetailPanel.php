@@ -52,6 +52,9 @@ class DetailPanel extends Component
     /** Verwaltung: Suchtext für das Ersetzungsziel („GP in allen Rezepten tauschen"). */
     public string $tauschSuche = '';
 
+    /** @var list<array{id: int, bezeichnung: string, grund: string}> Artikel, die der Allergen-Guard beim Ersetzen am Quell-GP gelassen hat */
+    public array $abgelehnteArtikel = [];
+
     public ?string $fehler = null;
 
     /** Erfolgs-Feedback (z.B. nach Rezept-Ersetzung) — grünes Pendant zu $fehler. */
@@ -89,6 +92,7 @@ class DetailPanel extends Component
         $this->ersatzSuche = '';
         $this->ersatzKiVorschlaege = null;
         $this->tauschSuche = '';
+        $this->abgelehnteArtikel = [];
         $this->fehler = null;
         $this->hinweis = null;
         $this->kiVorschlag = null;
@@ -344,15 +348,23 @@ class DetailPanel extends Component
 
             return;
         }
+        $this->abgelehnteArtikel = [];
         try {
-            $ergebnis = app(\Platform\FoodAlchemist\Services\GpService::class)->ersetzeInRezepten($gp, $ziel);
+            $ergebnis = app(\Platform\FoodAlchemist\Services\GpService::class)->ersetzeKomplett($team, $gp, $ziel);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
         $this->tauschSuche = '';
-        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}\" umgehängt — Rezepte neu berechnet.";
+        $this->abgelehnteArtikel = $ergebnis['artikel_abgelehnt'];
+        $teile = array_filter([
+            $ergebnis['artikel_umgehaengt'] > 0 ? "{$ergebnis['artikel_umgehaengt']} Artikel" : null,
+            $ergebnis['zeilen'] > 0 ? "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en)" : null,
+        ]);
+        $this->hinweis = ($teile !== [] ? implode(' und ', $teile) : 'Nichts')
+            . " auf „{$ziel->name}\" umgehängt" . ($ergebnis['zeilen'] > 0 ? ' — Rezepte neu berechnet' : '')
+            . ($ergebnis['artikel_abgelehnt'] !== [] ? '; ' . count($ergebnis['artikel_abgelehnt']) . ' Artikel blieben stehen (Allergen-Prüfung, unten aufgelistet)' : '') . '.';
         $this->dispatch('gp-gespeichert'); // Browser: Rezept-Zähler/Zeile aktualisieren
     }
 
