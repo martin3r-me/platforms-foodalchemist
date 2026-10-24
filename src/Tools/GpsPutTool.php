@@ -22,7 +22,7 @@ use Platform\FoodAlchemist\Services\GpService;
 class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     private const IN_KEYS = [
-        'name', 'hauptzutat', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
+        'name', 'hauptzutat', 'flavor', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id',
     ];
 
@@ -34,7 +34,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
     public function getDescription(): string
     {
         return 'Bearbeitet ein team-eigenes Grundprodukt über die Strukturfelder (Regelwerk §6). '
-            . 'Bei leerem `name` wird der Name aus den Feldern neu gerendert — dann `hauptzutat` mitgeben. '
+            . 'Bei leerem `name` wird der Name aus den Feldern neu gerendert — dann `hauptzutat` mitgeben (optional `flavor` = Geschmackszutat §6.6, steht vor dem Zustand). '
             . 'Globale/geerbte GPs sind read-only. Status ändern → gps.STATUS.';
     }
 
@@ -46,6 +46,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
                 'id' => ['type' => 'integer', 'description' => 'GP-Id (team-eigen).'],
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert — dann hauptzutat nötig).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (nötig, wenn name leer bleibt).'],
+                'flavor' => ['type' => 'string', 'description' => 'Geschmackszutat (§6.6): erste Eigenschaft im Namen vor dem Zustand, z. B. Chili → "Käse: Chili, frisch, …". Nur wenn im Artikel belegt; die Grundware bleibt hauptzutat.'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'serving_vehicle' => ['type' => 'string', 'description' => 'Non-Food (WG 16): Servier-Typ des Gefäßes als Name oder Id (als Text) aus dem Vokabular Servier-Vehikel (leer löscht); die Darreichung liest ihn von hier.'],
                 'diameter_cm' => ['type' => 'number', 'description' => 'Non-Food (WG 16): Ø in cm, z. B. 27 oder 7,5 (leer löscht).'],

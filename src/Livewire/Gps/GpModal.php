@@ -61,7 +61,7 @@ class GpModal extends Component
     }
 
     private const BUILDER_LEER = [
-        'hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '',
+        'hauptzutat' => '', 'flavor' => '', 'condition' => '', 'processing' => '', 'form' => '',
         'portion' => '', 'pflichtangabe' => '',
         'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false,
         'commodity_group_code' => '', 'sub_category' => '',
@@ -179,6 +179,7 @@ class GpModal extends Component
             $this->builder = array_merge(self::BUILDER_LEER, [
                 // Spec 80 (Paket 11): die strukturierten Felder auch beim Bearbeiten laden.
                 'hauptzutat' => (string) ($gp->main_ingredient_display ?: strstr((string) $gp->name . ':', ':', true)),
+                'flavor' => (string) ($gp->flavor ?? ''),
                 'processing' => (string) ($gp->processing ?? ''),
                 'form' => (string) ($gp->form ?? ''),
                 'bio' => mb_strtolower((string) $gp->bio) === 'bio',
@@ -905,7 +906,7 @@ class GpModal extends Component
             return;
         }
         $naming = app(GpNamingService::class);
-        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
+        foreach (['hauptzutat', 'flavor', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             // „unbekannt" & Co. sind kein Wert: das Feld bleibt leer und gelangt nie in Name oder Kennung (Regelwerk GP §6, §12)
             $wert = $naming->bereinigeFeld($vorschlag->werte[$feld] ?? null);
             if ($wert !== '') {
@@ -1158,7 +1159,7 @@ class GpModal extends Component
             return;
         }
         $builder = $this->builder;
-        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
+        foreach (['hauptzutat', 'flavor', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             $wert = app(GpNamingService::class)->bereinigeFeld($vorschlag->werte[$feld] ?? null);
             if ($wert !== '') {
                 $builder[$feld] = $wert;
@@ -1237,7 +1238,7 @@ class GpModal extends Component
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null)
+                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null)
                 : ($gp->gp_key ?? ''),
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
@@ -1322,7 +1323,7 @@ class GpModal extends Component
      */
     public function felderAusName(GpNamingService $naming): void
     {
-        foreach ($naming->felderAusName($this->manuellerName) as $feld => $wert) {
+        foreach ($naming->felderAusName($this->manuellerName, true) as $feld => $wert) {
             if ($feld === 'bio') {
                 $this->builder['bio'] = (bool) ($this->builder['bio'] ?? false) || $wert;
 
