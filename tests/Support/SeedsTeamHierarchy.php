@@ -292,6 +292,21 @@ trait SeedsTeamHierarchy
     }
 
     /**
+     * Standard-Darreichung mit festem VK (Spec 85 D-1 PR-C): der VK eines Gerichts liegt nur noch an der Darreichung, die
+     * Rezept-Spalten `sales_net`/`markup_class_id` sind gedroppt. Neue Tests legen den VK hierüber an statt über die Fixture-Brücke.
+     */
+    protected function makeStandardDarreichung(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $gericht, ?float $vk = null, array $attrs = []): \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung
+    {
+        $form = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::withoutGlobalScopes()->where('team_id', $gericht->team_id)->where('code', 'teller')->first()
+            ?? \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create(['team_id' => $gericht->team_id, 'code' => 'teller', 'label' => 'Teller']);
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::create(array_merge([
+            'team_id' => $gericht->team_id, 'recipe_id' => $gericht->id, 'serving_form_id' => $form->id, 'is_standard' => true, 'unit_count' => 1,
+            'created_via' => 'test',
+        ], $vk !== null ? ['price_mode' => 'fixed', 'sales_net' => $vk, 'price_override_reason' => 'Test'] : [], $attrs));
+    }
+
+    /**
      * Behälter-Zeile am Rezept (Spec 51 · B-10). Seit `dichteklasse` in der Basisrezept-
      * Schrittfolge steht, gilt der Schritt erst als erfüllt, wenn Klasse UND ein Behälter je Zweck
      * stehen — ein Fixture, das „nichts anzureichern" beweisen will, braucht darum diese Zeile.

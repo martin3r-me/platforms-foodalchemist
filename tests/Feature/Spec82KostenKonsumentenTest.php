@@ -139,14 +139,13 @@ it('Pflicht (Auflage 4): 0 € ist kein Preis — unvollständiger EK im Angebot
         ->assertDontSee('ab 5,00 €');
 });
 
-it('KostenCacheService lädt Teil-Spalten nach: ein Gericht nur mit id/sales_net/ek_total_eur wird richtig zugeordnet', function () {
-    $teil = FoodAlchemistRecipe::mitFassungen()->select(['id', 'sales_net', 'ek_total_eur'])->find($this->jus->id);
+it('KostenCacheService lädt Teil-Spalten nach: ein Gericht nur mit id/ek_total_eur wird richtig zugeordnet', function () {
+    $teil = FoodAlchemistRecipe::mitFassungen()->select(['id', 'ek_total_eur'])->find($this->jus->id);
     expect(app(KostenCacheService::class)->fuer($teil, $this->master)['quelle'])->toBe('rezept');
 });
 
 it('Pflicht (Auflage 4): VK-Vorschlag und Marge — aus einer EK-Teilsumme kein Wareneinsatz/DB, VK-Vorschlag nur vorläufig', function () {
     $kalk = app(\Platform\FoodAlchemist\Services\KalkulationService::class);
-    $this->jusF->forceFill(['sales_net' => null]);   // Fassung trägt keinen VK des Masters (Leck-Sperre)
 
     $neu = $kalk->recipeHk($this->neu, $this->jusF);
     expect($neu['ek_vollstaendig'])->toBeFalse()
@@ -175,7 +174,6 @@ it('§8 Punkt 8 / §12 C: VK eines Abo-Gerichts = Team-EK je Portion × Basissat
     app(RecipeRecomputeService::class)->recomputePipeline($gericht->id);
     $d = app(\Platform\FoodAlchemist\Services\DarreichungService::class)->anlegen($this->master, $gericht->id, $form->id, ['quantity_per_unit_g' => 200]);
     $d->forceFill(['markup_class_id' => $klasseMaster->id, 'sales_net' => 99.0])->save();
-    $gericht->update(['sales_net' => 99.0]);
     $inhalte = app(InhaltsFreigabeService::class);
     $sid = $inhalte->sammlungAnlegen($this->master, 'Gerichte', null, $this->kurator);
     $inhalte->sammlungHinzu($this->master, $sid, 'recipe', [$gericht->id], $this->kurator);
@@ -188,7 +186,7 @@ it('§8 Punkt 8 / §12 C: VK eines Abo-Gerichts = Team-EK je Portion × Basissat
     // Übergeben: Form + Portion, nichts vom Preis des Masters
     expect((float) $fd->quantity_per_unit_g)->toBe(200.0)
         ->and($fd->markup_class_id)->toBeNull()->and($fd->sales_net)->toBeNull()->and($fd->ek_portion)->toBeNull()
-        ->and($fassung->sales_net)->toBeNull()->and($fassung->markup_class_id)->toBeNull();
+        ->and($fassung->vk_netto)->toBeNull()->and($fassung->vk_klasse)->toBeNull();
 
     // Broich: VK aus SEINEM EK × Basissatz (Default Ziel-WE 30 % ⇒ Faktor 100/30) × neutrale Klasse 100 %
     $k = app(KostenCacheService::class)->fuer($fassung, $this->broich);

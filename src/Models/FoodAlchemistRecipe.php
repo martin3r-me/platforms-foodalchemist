@@ -130,13 +130,7 @@ class FoodAlchemistRecipe extends Model
     public function getVkNettoAttribute($value): ?float
     {
         if (array_key_exists('vk_netto', $this->attributes)) {
-            if ($value !== null) {
-                return (float) $value;
-            }
-            // Spec 85 D-1: Rückfall Altspalte bis PR-C (wie die Preisleiter; nur wenn die Spalte mitselektiert ist).
-            $alt = $this->attributes['sales_net'] ?? null;
-
-            return $alt !== null ? (float) $alt : null;
+            return $value !== null ? (float) $value : null;
         }
 
         return app(\Platform\FoodAlchemist\Services\DarreichungResolver::class)->vkNetto($this);
@@ -379,17 +373,6 @@ class FoodAlchemistRecipe extends Model
     public function speisenHauptgruppe(): BelongsTo
     {
         return $this->dishMainGroup();
-    }
-
-    public function markupClass(): BelongsTo
-    {
-        return $this->belongsTo(FoodAlchemistMarkupClass::class, 'markup_class_id')->ohneTeamSicht('verweis');
-    }
-
-    /** @deprecated #486 deutscher Alias → markupClass() */
-    public function aufschlagsklasse(): BelongsTo
-    {
-        return $this->markupClass();
     }
 
     public function salesUnit(): BelongsTo

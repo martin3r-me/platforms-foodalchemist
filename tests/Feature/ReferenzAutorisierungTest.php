@@ -104,7 +104,7 @@ it('VK-Update weist fremde Klasse und fremde Aufschlagsklasse ab (MVP-050)', fun
 
     $frisch = $gericht->fresh();
     expect($frisch->dish_class_id)->toBeNull()
-        ->and($frisch->markup_class_id)->toBeNull();
+        ->and($frisch->vk_klasse)->toBeNull();                 // Spec 85 D-1: Klasse an der Standard-Darreichung
 });
 
 it('VK-Update akzeptiert globale und geerbte Vokabeln (Vererbung bleibt nutzbar)', function () {
@@ -127,7 +127,7 @@ it('VK-Update akzeptiert globale und geerbte Vokabeln (Vererbung bleibt nutzbar)
 
     $frisch = $gericht->fresh();
     expect($frisch->dish_class_id)->toBe($global->id)
-        ->and($frisch->markup_class_id)->toBe($vomMaster->id);
+        ->and($frisch->vk_klasse?->id)->toBe($vomMaster->id);
 });
 
 it('VK-Update weist eine fremde Speisen-Hauptgruppe ab (Modell A: eigene Achse, MVP-049/050)', function () {

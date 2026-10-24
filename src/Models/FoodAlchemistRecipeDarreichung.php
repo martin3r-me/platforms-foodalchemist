@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * @ai.description Darreichung eines VK-Gerichts (Umbau-Spec Phase 3): dünne
  * Varianten-Zeile am Kerngericht — Servierform, Grammatur, Behälter/Regeneration,
  * EK/VK je Form. Genau eine Standard-Darreichung pro Gericht. Preis-Wahrheit
- * liegt HIER (recipes.sales_net ist nur noch Anzeige-Spiegel der Standard-Form).
+ * liegt HIER (die Rezept-Spalten sales_net/markup_class_id sind seit Spec 85 D-1 gedroppt).
  * WaWi = Master (Recompute 206 Stufe 4 rechnet ek_portion/Auto-VK); FA-native
  * Anlage nur mit created_via-Marker (F12).
  */

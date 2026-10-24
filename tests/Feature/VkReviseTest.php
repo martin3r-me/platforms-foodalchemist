@@ -106,7 +106,7 @@ it('L1a: Verkaufs-Facetten überleben das Revise (Klasse/Diät/Verkaufseinheit w
         ->and($r->dishClass->diet_form)->toBe('vegan')
         ->and((int) $r->sales_unit_count)->toBe(4)
         ->and((float) $r->sales_quantity_per_unit_g)->toBe(60.0)
-        ->and($r->markup_class_id)->toBeNull()
+        ->and($r->vk_klasse)->toBeNull()                                            // Spec 85 D-1: Klasse liegt an der Darreichung
         ->and((float) $r->fresh()->ingredients()->first()->quantity)->toBe(45.0);   // Mengen-Revise IST angekommen
 });
 

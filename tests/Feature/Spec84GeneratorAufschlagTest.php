@@ -61,20 +61,21 @@ it('Prompt: nur sichtbare Aufschlagsklassen, fremde Labels nie — bei gleichem 
 it('Code-Auflösung: gleicher Code → eigene Klasse, nie die fremde (auch wenn die fremde die kleinere id hat)', function () {
     $r = ($this->gen)($this->rootTeam);
 
-    expect((int) $r->markup_class_id)->toBe((int) $this->eigenAlc->id);
+    expect((int) $r->fresh()->vk_klasse?->id)->toBe((int) $this->eigenAlc->id);   // Spec 85 D-1: an der Standard-Darreichung
 });
 
 it('Code-Auflösung: Code nur beim fremden Team → keine Klasse am Gericht statt der fremden', function () {
     $this->code = 'BKT';
     $r = ($this->gen)($this->rootTeam);
 
-    expect($r->markup_class_id)->not->toBe($this->fremdNur->id)->and($r->markup_class_id)->toBeNull();
+    $klasseId = $r->fresh()->vk_klasse?->id;
+    expect($klasseId)->not->toBe($this->fremdNur->id)->and($klasseId)->toBeNull();
 });
 
 it('Kette bleibt: Unter-Team ohne eigene Klasse erbt die des Oberteams (nicht die fremde)', function () {
     $r = ($this->gen)($this->childA);
 
-    expect((int) $r->markup_class_id)->toBe((int) $this->eigenAlc->id)
+    expect((int) $r->fresh()->vk_klasse?->id)->toBe((int) $this->eigenAlc->id)
         ->and($this->prompt)->toBe(['ALC' => 'A la Carte eigen']);
 });
 
@@ -88,7 +89,7 @@ it('Generator: Klassen-Default auf eine fremde Aufschlagsklasse → keine Klasse
     $r = app(RecipeGeneratorService::class)->generiere($this->rootTeam, 'Test', [], ['name' => 'HG: Testgericht',
         'zutaten' => [['text' => 'Salz', 'quantity' => 1, 'unit' => 'g', 'slug' => 'salz']], 'dish_class_id' => $klasse->id], true)['recipe'];
 
-    expect((int) $r->dish_class_id)->toBe((int) $klasse->id)->and($r->markup_class_id)->toBeNull();
+    expect((int) $r->dish_class_id)->toBe((int) $klasse->id)->and($r->fresh()->vk_klasse)->toBeNull();
 });
 
 it('OneShot-Kaskade: Klassen-/HG-Default auf eine fremde Klasse zählt als nicht gesetzt; eine sichtbare greift', function () {
@@ -163,9 +164,11 @@ describe('Preisweg', function () {
     });
 
     it('Preisweg: der Master selbst rechnet mit seiner Klasse (Gegenprobe, Riegel sperrt nur Fremde)', function () {
-        $p = ($this->preis)($this->fremd, abo_rechnung($this->masterFassung));
+        // Spec 85 D-1 PR-C: die Klasse steht nur noch an der Darreichung (kein Rückfall auf recipes.markup_class_id) —
+        // dieselbe Darreichung mit Master-Klasse, die beim Kunden gesperrt ist, rechnet beim Master mit Faktor 300 %.
+        $p = ($this->preis)($this->fremd, abo_rechnung($this->masterFassung, (int) $this->fremdAlc->id));
 
-        expect((int) $p['class_id'])->toBe((int) $this->fremdAlc->id)->and($p['class_source'])->toBe('gericht')
+        expect((int) $p['class_id'])->toBe((int) $this->fremdAlc->id)->and($p['class_source'])->toBe('darreichung')
             ->and($p['sales_net'])->toBe(24.0);
     });
 });

@@ -72,7 +72,6 @@ it('★ read-only: die Messung legt KEINE Standard-Darreichung an', function () 
     $reife = $this->svc->reife($this->rootTeam, 'sales_recipe', $g->id);
 
     expect(FoodAlchemistRecipeDarreichung::where('recipe_id', $g->id)->count())->toBe(0)
-        ->and($g->fresh()->markup_class_id)->toBeNull()
         // …und die fehlende Darreichung wird als blockierende Lücke gemeldet, nicht behoben.
         ->and(array_column($reife['luecken'], 'code'))->toContain('darreichung')
         ->and($reife['ampel'])->toBe('rot');

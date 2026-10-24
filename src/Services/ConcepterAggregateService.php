@@ -42,7 +42,6 @@ class ConcepterAggregateService
         return [
             'id', 'name', 'sales_wording_standard',             // Wording-Kette (Menü-Ansicht) — load() hier überschreibt sonst detail()
             'ek_total_eur', 'work_time_min', 'sales_unit_count', 'sales_quantity_per_unit_g',
-            'sales_net',   // Spec 85 D-1: Rückfall Altspalte bis PR-C
             'is_sales_recipe',                            // Basis vs. VK — Paket-Posten-Badge + g/P-EK-Zweig
             'yield_kg', 'yield_pieces',                     // Stück-Modus (kg↔Stück): Teiler/Gramm aus Ertrag+Yield
             'nutri_kcal_per_100g', 'nutri_protein_g_per_100g', 'nutri_fat_g_per_100g',

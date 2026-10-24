@@ -723,7 +723,7 @@ class AngebotService
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
             ->orderBy('name')->limit($limit)
-            ->select(['id', 'name', 'sales_net'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
+            ->select(['id', 'name'])->mitStandardVk()->get();   // Spec 85 D-1: VK als vk_netto aus der Standard-Darreichung
     }
 
     // ── A3 · Branding (pro Angebot) — spiegelt FoodbookService::setBranding/storeLogo/… ──

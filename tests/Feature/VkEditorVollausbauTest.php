@@ -157,7 +157,6 @@ it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darre
         'label' => 'Buffet',
     ]);
     $this->vk->update([
-        'markup_class_id' => $klasseAlt->id,
         'yield_kg' => 0.05,
         'ek_per_kg_eur' => 10,
     ]);
@@ -182,21 +181,12 @@ it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darre
         ->assertSet('fehler', null)
         ->assertNotDispatched('modal.close');
 
-    expect($this->vk->fresh()->markup_class_id)->toBe($klasseNeu->id)
+    expect($this->vk->fresh()->vk_klasse?->id)->toBe($klasseNeu->id)
         ->and($darreichung->fresh()->markup_class_id)->toBe($klasseNeu->id)
         ->and((float) $darreichung->fresh()->sales_net)->toBeGreaterThan($alterPreis);
 });
 
 it('zeigt im Kalkulations-Tab die Preisklasse der Standard-Darreichung als Wahrheit', function () {
-    $rezeptKlasse = FoodAlchemistMarkupClass::create([
-        'team_id' => $this->rootTeam->id,
-        'code' => 'REZ',
-        'label' => 'Rezept-Cache',
-        'class_factor_pct' => 100,
-        'raw_markup_pct' => 0,
-        'vat_rate' => 7,
-        'formula_type' => 'aufschlag',
-    ]);
     $darreichungsKlasse = FoodAlchemistMarkupClass::create([
         'team_id' => $this->rootTeam->id,
         'code' => 'DAR',
@@ -211,7 +201,6 @@ it('zeigt im Kalkulations-Tab die Preisklasse der Standard-Darreichung als Wahrh
         'code' => 'portion',
         'label' => 'Portion',
     ]);
-    $this->vk->update(['markup_class_id' => $rezeptKlasse->id]);
     FoodAlchemistRecipeDarreichung::create([
         'team_id' => $this->rootTeam->id,
         'recipe_id' => $this->vk->id,

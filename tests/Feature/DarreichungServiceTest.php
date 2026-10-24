@@ -27,7 +27,7 @@ beforeEach(function () {
 
     $this->gericht = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g-dar', 'name' => 'Testgericht',
-        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 25.00,
+        'status' => 'approved', 'is_sales_recipe' => true,   // Spec 85 D-1: kein VK am Rezept mehr
     ]);
 });
 
@@ -59,14 +59,13 @@ it('Resolver-Fallback: Gericht ohne Darreichung → standardFuer ist null (kein 
     expect($this->resolver->standardFuer($this->gericht->fresh()))->toBeNull();
 });
 
-it('Money-Path: die Standard-Darreichung ist die Preis-Wahrheit; recipes.sales_net spiegelt sie', function () {
-    // Preis-Wahrheit liegt an der Darreichung; das Legacy-Feld recipes.sales_net ist die
-    // Anzeige-/Kompat-Schicht und wird AUS dem Standard gespiegelt (nicht umgekehrt).
+it('Money-Path: die Standard-Darreichung ist die Preis-Wahrheit; das Gericht liest sie', function () {
+    // Preis-Wahrheit liegt an der Darreichung; `vk_netto` am Gericht liest den Standard (Spec 85 D-1: kein Spiegel mehr).
     $standard = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
     $this->svc->aktualisieren($this->rootTeam, $standard->id, ['sales_net' => 2.32, 'price_mode' => 'manuell']);
 
     expect((float) $this->resolver->standardFuer($this->gericht->fresh())->sales_net)->toBe(2.32)
-        ->and((float) $this->gericht->fresh()->sales_net)->toBe(2.32); // Legacy-Feld folgt dem Standard
+        ->and($this->gericht->fresh()->vk_netto)->toBe(2.32);
 });
 
 // ── Spec 19 E7.1 · DarreichungResolver::fuerBlock (recipe_ref-Einzel-Gericht) ──

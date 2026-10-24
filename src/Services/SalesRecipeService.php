@@ -278,7 +278,7 @@ class SalesRecipeService
             ->with([
                 'speisenKlasse:id,label,diet_form,dish_main_group_id',
                 'dishClass.mainGroup:id,code,label',
-                'aufschlagsklasse',
+                'standardPresentation.markupClass',   // Spec 85 D-1 PR-C: Klasse nur an der Darreichung (DarreichungResolver::klasseFuer)
                 'vkEinheit:id,slug,display_de',
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
                 // M9-01e: Bio-/Regional-Anteil braucht die GP-Tags; Nährwert-Faktor die Einheit
@@ -320,8 +320,8 @@ class SalesRecipeService
         // speichern: der Klassifikations-Block war damit funktionslos.
         'dish_main_group_id',
         'sales_unit_vocab_id', 'sales_unit_count', 'sales_quantity_per_unit_g',
-        // Rückwärtskompatibler API-Eingang; die Preis-Wahrheit wird unten auf die
-        // Standard-Darreichung umgeleitet und anschließend nur zurückgespiegelt.
+        // API-Eingang für die Standard-Darreichung: sales_net/markup_class_id gehen NUR an die Darreichung
+        // (Spec 85 D-1 PR-C, die Rezept-Spalten gibt es nicht mehr).
         'sales_net', 'price_mode', 'price_override_reason',
         'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
@@ -483,12 +483,12 @@ class SalesRecipeService
             if (array_key_exists('storage_types', $update)) {
                 $update['storage_types'] = RecipeService::lagerarten($update['storage_types']);
             }
-            $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason']));
+            $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason', 'sales_net', 'markup_class_id']));
             $recipeUpdate['last_modified_by'] = 'vk_editor';
             $recipe->update($recipeUpdate);
 
-            // Umbau-Spec Phase 5: Standard-Darreichung synchron halten — Preis-Wahrheit
-            // liegt an der Darreichung, die Legacy-Spalten sind Anzeige-/Kompat-Schicht.
+            // Umbau-Spec Phase 5 / Spec 85 D-1: Preis-Wahrheit liegt an der Standard-Darreichung — VK, Preisklasse
+            // und Einheiten gehen dorthin.
             $this->syncStandardDarreichung($team, $recipe->refresh(), $update);
 
             // 2026-09-04: `plating_text` ist der Spiegel der ANRICHTE-Schritte (Regelwerk §3.3),
@@ -592,12 +592,11 @@ class SalesRecipeService
             $vk = $recipes->create($team, [
                 'name' => $name,
                 'is_sales_recipe' => true,
-                'markup_class_id' => app(TeamSettingsService::class)->defaultMarkupClassId($team),
             ]);
             $gramm = $basis->yield_kg !== null ? round((float) $basis->yield_kg * 1000, 1) : 1000.0;
             $einheitG = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id');
 
-            return $recipes->syncIngredients($team, $vk->id, [[
+            $vk = $recipes->syncIngredients($team, $vk->id, [[
                 'raw_text' => $basis->name,
                 'display_name' => $basis->name,
                 'quantity' => $gramm,
@@ -605,17 +604,25 @@ class SalesRecipeService
                 'referenced_recipe_id' => $basis->id,
                 'match_method' => 'recipe_ref',
             ]]);
+            // Spec 85 D-1: die Aufschlagsklasse steht an der Standard-Darreichung — gleich anlegen (Vorbelegung
+            // Speisen-Klasse → Hauptgruppe → Team-Standard), sonst hätte das neue Gericht bis zur ersten Form keine.
+            app(DarreichungService::class)->ensureStandard($team, $vk->id, 'fa_ui');
+
+            return $vk;
         });
     }
 
     /** Leeres Verkaufsrezept (Gericht) ohne erste Komponente — Komponenten/Stück-Basisrezepte kommen im Editor dazu. */
     public function createLeer(Team $team, string $name): FoodAlchemistRecipe
     {
-        return app(RecipeService::class)->create($team, [
+        $vk = app(RecipeService::class)->create($team, [
             'name' => $name,
             'is_sales_recipe' => true,
-            'markup_class_id' => app(TeamSettingsService::class)->defaultMarkupClassId($team),
         ]);
+        // Spec 85 D-1: Klasse an der Standard-Darreichung (Vorbelegung → Team-Standard), siehe createFromBasis.
+        app(DarreichungService::class)->ensureStandard($team, $vk->id, 'fa_ui');
+
+        return $vk;
     }
 
     // V-19: Regen-Programme (zeilenbasiert)

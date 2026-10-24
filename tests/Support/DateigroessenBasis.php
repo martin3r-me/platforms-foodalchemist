@@ -20,8 +20,8 @@ return [
     'resources/views/livewire/concepter/editor.blade.php' => [1605, 'C6 mit Concepter/Editor (Spec 85 §9)'],
     'src/Services/RecipeRecomputeService.php' => [1566, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Services/ConceptService.php' => [1535, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
-    'src/Services/RecipeService.php' => [1535, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
-    'src/Livewire/Verkauf/VkModal.php' => [1546, 'C6 Darreichung / Regeneration (Spec 85 §9)'],
+    'src/Services/RecipeService.php' => [1526, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
+    'src/Livewire/Verkauf/VkModal.php' => [1542, 'C6 Darreichung / Regeneration (Spec 85 §9)'],
     'src/Services/RecipeGeneratorService.php' => [1544, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Livewire/Produktion/Tagesplan.php' => [1528, 'C6 Feedback / Anleitung (Spec 85 §9)'],
 ];

@@ -92,23 +92,19 @@ class MoneyTruthReportCommand extends Command
 
     private function zeigeB(array $b): void
     {
-        $this->line('  B · Preis-Leiter — welche Zahl gilt (V-046 / V-059)');
+        $this->line('  B · Preis-Wahrheit — genau eine Standard-Darreichung je Verkaufsrezept (Spec 85 D-1)');
         $this->table(['Kennzahl', 'Wert'], [
             ['VK-Gerichte', $b['vk_gerichte']],
             ['mit Standard-Darreichung', $b['mit_standard_darreichung']],
             ['ohne jede Darreichung', $b['ohne_darreichung']],
             ['Darreichungen ohne is_standard (V-059)', $b['darreichungen_ohne_standard']],
-            ['Darreichungs-Preis ≠ Rezept-Preis', $b['preis_divergenz']],
-            ['nur Legacy-Preis (Leiter fällt zurück)', $b['nur_legacy_preis']],
+            ['mehrere Standard-Darreichungen', $b['mehrere_standard']],
             ['gar kein VK', $b['kein_preis']],
         ]);
 
         if ($b['beispiele'] !== []) {
-            $this->table(['ID', 'Name', 'VK Darreichung', 'VK Legacy', 'Δ €'],
-                array_map(fn ($x) => [
-                    $x['recipe_id'], $this->kurz($x['name']),
-                    $x['vk_darreichung_eur'], $x['vk_legacy_eur'], $x['delta_eur'],
-                ], $b['beispiele']));
+            $this->table(['ID', 'Name', 'Problem'],
+                array_map(fn ($x) => [$x['recipe_id'], $this->kurz($x['name']), $x['problem']], $b['beispiele']));
         }
     }
 

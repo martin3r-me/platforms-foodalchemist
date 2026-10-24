@@ -765,10 +765,9 @@ class SignalDetektorService
     public function margeUnterZiel(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
         $kalk = app(KalkulationService::class);
-        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung; Rückfall Altspalte bis PR-C.
+        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung.
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->where(fn ($q) => $q->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
-                ->orWhere('sales_net', '>', 0))
+            ->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
             ->with('standardPresentation')->get();
 
         $n = 0;
@@ -817,10 +816,9 @@ class SignalDetektorService
         if ($ziel <= 0) {
             return 0;
         }
-        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung; Rückfall Altspalte bis PR-C.
+        // Spec 85 D-1: Kandidaten = Gerichte mit VK an der Standard-Darreichung.
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
-            ->where(fn ($q) => $q->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
-                ->orWhere('sales_net', '>', 0))
+            ->whereHas('standardPresentation', fn ($s) => $s->where('sales_net', '>', 0))
             ->with('standardPresentation')->get();
 
         $n = 0;

@@ -38,7 +38,7 @@ it('migriert aktive Preise idempotent und lässt historische Angebote unverände
     $withoutPresentation = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'migration-v2-ohne-form', 'name' => 'Ohne Form',
         'status' => 'approved', 'is_sales_recipe' => true, 'ek_per_kg_eur' => 20,
-        'yield_kg' => 1, 'sales_unit_count' => 5, 'markup_class_id' => $class->id,
+        'yield_kg' => 1, 'sales_unit_count' => 5,   // Spec 85 D-1 PR-C: keine Klasse am Rezept — sonst legte die Fixture-Brücke schon eine Darreichung an und der Altbestand-Pfad (ensureStandard) bliebe ungeprüft
     ]);
     $open = FoodAlchemistAngebot::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Offen', 'status' => 'angebot',

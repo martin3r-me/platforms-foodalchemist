@@ -27,7 +27,8 @@ beforeEach(function () {
     $this->hb = app(HandbuchService::class);
     $this->team = $this->rootTeam;
     $this->gericht = function (string $name) {
-        $dish = $this->makeRecipe($this->team, $name, ['is_sales_recipe' => true, 'sales_net' => 24.5]);
+        $dish = $this->makeRecipe($this->team, $name, ['is_sales_recipe' => true]);
+        $this->makeStandardDarreichung($dish, 24.5);
         FoodAlchemistRecipeStep::create([
             'team_id' => $this->team->id, 'recipe_id' => $dish->id, 'position' => 1, 'ebene' => 'produktion', 'text' => "Schritt für {$name}.",
         ]);

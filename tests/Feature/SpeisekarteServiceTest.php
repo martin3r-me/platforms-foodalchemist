@@ -38,7 +38,7 @@ it('Stufe A: Karte + Rubrik + gericht_ref-Position; Preis flach aus Rezept', fun
     expect($pos->type)->toBe('gericht_ref')->and($pos->position)->toBe(1);
 
     $preis = $this->karten->positionPreis($pos->refresh());
-    expect($preis['vk'])->toBe(24.0)->and($preis['quelle'])->toBe('legacy'); // ohne Darreichung → recipes.sales_net
+    expect($preis['vk'])->toBe(24.0)->and($preis['quelle'])->toBe('darreichung'); // Spec 85 D-1 PR-C: recipes.sales_net gedroppt, der Fixture-VK liegt an der Standard-Darreichung
 });
 
 it('Stufe A: Manueller Preis übersteuert', function () {

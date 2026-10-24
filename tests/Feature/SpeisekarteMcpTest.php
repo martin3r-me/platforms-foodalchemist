@@ -41,7 +41,7 @@ it('Stufe A MCP: Karte → Rubrik → Gericht-Position → Löschen', function (
     ], $this->kontext);
     expect($pos->success)->toBeTrue()
         ->and($pos->data['position']['vk_netto'])->toBe(26.0)
-        ->and($pos->data['position']['preis_quelle'])->toBe('legacy');
+        ->and($pos->data['position']['preis_quelle'])->toBe('darreichung');   // Spec 85 D-1 PR-C: recipes.sales_net gedroppt, VK an der Standard-Darreichung
     $posId = $pos->data['position']['id'];
 
     $del = $this->registry->get('foodalchemist.speisekarte_positionen.DELETE')->execute(['position_id' => $posId], $this->kontext);

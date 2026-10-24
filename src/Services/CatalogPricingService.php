@@ -82,7 +82,7 @@ class CatalogPricingService
     /** @return array<string,mixed> */
     public function catalogPrice(Team $team, FoodAlchemistRecipeDarreichung $presentation, ?FoodAlchemistOutlet $outlet = null, ?array $preBase = null): array
     {
-        $presentation->loadMissing('markupClass', 'recipe.markupClass');
+        $presentation->loadMissing('markupClass');
         $base = $preBase ?? $this->enterpriseBaseRate($team, $outlet);
         // Spec 84 (18.10.): EIN Riegel im Preisweg — eine Klasse an Darreichung oder Gericht zählt nur, wenn sie für das Team sichtbar ist.
         // Abo-Fassungen tragen die Klasse des Masters (Anzeige liest deren Label per 'verweis'); ihr Faktor darf nie in den Mandanten-VK.
@@ -91,10 +91,6 @@ class CatalogPricingService
         $sichtbar = fn ($klasse) => $klasse !== null && FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($klasse->id)->exists() ? $klasse : null;
         $class = $sichtbar($presentation->markupClass);
         $classSource = $class !== null ? 'darreichung' : null;
-        if ($class === null && ($gerichtKlasse = $sichtbar($presentation->recipe?->markupClass)) !== null) {   // Spec 85 D-1: Rückfall Altspalte bis PR-C
-            $class = $gerichtKlasse;
-            $classSource = 'gericht';
-        }
         if ($class === null && ($defaultId = $this->settings->defaultMarkupClassId($team)) !== null) {
             $class = FoodAlchemistMarkupClass::visibleToTeam($team)
                 ->whereKey($defaultId)->where('is_inactive', false)->first();

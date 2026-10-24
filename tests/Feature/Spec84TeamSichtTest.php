@@ -266,5 +266,5 @@ it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen das
             $geprueft++;
         }
     }
-    expect($geprueft)->toBe(134);   // 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant) + 40 der Stufe 4 (Vokabular/Einstellungen; HatAusgabeZuordnung liegt in Concerns/) + 1 TeamFavorit::gp (Spec 85 FAV-1)
+    expect($geprueft)->toBe(133);   // Spec 85 D-1 PR-C: −1 (FoodAlchemistRecipe::markupClass gedroppt, Klasse nur an der Darreichung); 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant) + 40 der Stufe 4 (Vokabular/Einstellungen; HatAusgabeZuordnung liegt in Concerns/) + 1 TeamFavorit::gp (Spec 85 FAV-1)
 });

@@ -304,15 +304,10 @@ class RecipeGeneratorService
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->where('code', $kiRezept['aufschlagsklasse_code'])
                         ->where('is_inactive', false)->orderByRaw('team_id = ? desc', [$team->id])->orderBy('id')->first()
                     : null;
-                // Spec 84 (18.10.): Klassen-/HG-Default nur, wenn die Aufschlagsklasse für das Team sichtbar ist (nie die Master-Klasse)
-                $sichtbareAk = fn (?int $id): ?int => $id !== null
-                    && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->exists() ? $id : null;
                 $recipe->update(array_filter([
                     'dish_class_id' => $klasse?->id,
                     'dish_class_source' => $klasse !== null ? 'ki' : null,
                     'dish_main_group_id' => $hg?->id,
-                    'markup_class_id' => $ak?->id ?? $sichtbareAk($klasse?->default_markup_class_id) ?? $sichtbareAk($hg?->default_markup_class_id),
-                    'vat_rate' => $ak?->vat_rate,
                     // L8b: die Portion kommt AUS DEM VORSCHLAG — sie ist die letzte
                     // Vorbedingung des Wirtschaftlichkeits-Glieds (L8a) und die einzige,
                     // für die es keinen ableitbaren Default gibt (V-041: `yield_kg /
@@ -320,6 +315,11 @@ class RecipeGeneratorService
                     // plausible Werte durch; alles andere bleibt die benannte Lücke.
                     'sales_quantity_per_unit_g' => $this->portionG($kiRezept['portion_g'] ?? null),
                 ], fn ($v) => $v !== null));
+                // Spec 85 D-1: Klasse an der Standard-Darreichung (entsteht hier wie bei createLeer; Vorbelegung Klasse → HG → Team)
+                $standard = $recipe->is_sales_recipe ? app(DarreichungService::class)->ensureStandard($team, (int) $recipe->id, 'generator') : null;
+                if ($ak !== null && $standard !== null && (int) $standard->markup_class_id !== (int) $ak->id) {
+                    app(DarreichungService::class)->aktualisieren($team, (int) $standard->id, ['markup_class_id' => $ak->id]);
+                }
             }
 
             // Diese Schlüssel bleiben für die Ergebnisfläche stabil. Bei der

@@ -149,7 +149,7 @@ class MenuEngineeringService
         $rezepte = FoodAlchemistRecipe::visibleToTeam($team)
             ->where('is_sales_recipe', true)
             ->with(['standardPresentation:id,recipe_id,sales_net,ek_portion,is_standard'])
-            ->get(['foodalchemist_recipes.id', 'name', 'ek_total_eur', 'sales_unit_count', 'sales_net']);   // Spec 85 D-1: Rückfall Altspalte bis PR-C
+            ->get(['foodalchemist_recipes.id', 'name', 'ek_total_eur', 'sales_unit_count']);
 
         $out = [];
         foreach ($rezepte as $r) {

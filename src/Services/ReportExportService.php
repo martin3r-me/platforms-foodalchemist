@@ -696,7 +696,6 @@ class ReportExportService
             'category:id,label',
             'dishClass:id,label',
             'dishMainGroup:id,label',
-            'markupClass:id,label,code',
             'salesUnit:id,slug,display_de',
             'defaultStation:id,name,slug,group_name',
             'equipment:id,slug,name',
