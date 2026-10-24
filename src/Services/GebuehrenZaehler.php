@@ -115,7 +115,62 @@ class GebuehrenZaehler
             }
         }
 
+        if (($ki = $this->zaehleKi($mandant, $tag, $schreiben)) !== null) {
+            $zeilen[] = $ki;
+        }
+
         return ['zeilen' => $zeilen, 'ohne_preis' => $ohnePreis];
+    }
+
+    public const KI_MODELL = 'foodalchemist.ki_verbrauch';
+
+    /**
+     * Rechnungsposition „KI-Verbrauch“ (Dominique 23.10.2026): ein Betrag aus dem Verbrauch, kein Plan-Preis. Tageswert = eingefrorene
+     * Kosten des Tages (kosten_usd × usd_eur der Log-Zeilen, die dieser Mandant zahlt) — inklusive Fehlläufe, die beim Anbieter
+     * gekostet haben; `count` zählt nur Aufrufe mit Ergebnis. Selbstkosten ohne Aufschlag. Erst ab `foodalchemist.ai.abrechnung_ab`.
+     * Rundung wie bei den Bausteinen: je Tag auf Cent, der letzte Monatstag gleicht aus. Embeddings stehen nicht im Log
+     * (Snapshot sagt es). Tage ohne Verbrauch und ohne Ausgleich schreiben keine Zeile.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function zaehleKi(Team $mandant, Carbon $tag, bool $schreiben): ?array
+    {
+        $ab = config('foodalchemist.ai.abrechnung_ab');
+        if ($ab === null || $ab === '' || $tag->lt(Carbon::parse($ab)->startOfDay())
+            || ! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'abrechnung_team_id')) {
+            return null;
+        }
+        $z = DB::table('foodalchemist_ai_call_log')
+            ->where('abrechnung_team_id', $mandant->id)->where('verursacher', \Platform\FoodAlchemist\Support\KiVerursacher::MANDANT)
+            ->where('created_at', '>=', $tag->copy()->startOfDay())->where('created_at', '<', $tag->copy()->addDay()->startOfDay())
+            ->selectRaw('SUM(CASE WHEN error IS NULL THEN 1 ELSE 0 END) AS aufrufe, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS fehllaeufe, '
+                .'SUM(CASE WHEN kosten_usd IS NOT NULL AND usd_eur IS NOT NULL THEN kosten_usd * usd_eur ELSE 0 END) AS eur, SUM(COALESCE(kosten_usd,0)) AS usd, '
+                .'SUM(CASE WHEN kosten_usd IS NULL AND error IS NULL AND model IS NOT NULL THEN 1 ELSE 0 END) AS ohne_preis, '
+                .'SUM(CASE WHEN kosten_usd IS NOT NULL AND usd_eur IS NULL THEN 1 ELSE 0 END) AS ohne_kurs')
+            ->first();
+        $exakt = (float) ($z->eur ?? 0);
+        $aufrufe = (int) ($z->aufrufe ?? 0);
+        $letzterTag = $tag->isSameDay($tag->copy()->endOfMonth());
+        $gesamt = $letzterTag
+            ? round($this->bereitsExakt($mandant, self::KI_MODELL, $tag) + $exakt - $this->bereitsGebucht($mandant, self::KI_MODELL, $tag), 2)
+            : round($exakt, 2);
+        if ($exakt == 0.0 && $aufrufe === 0 && $gesamt == 0.0) {
+            return null;
+        }
+        $zeile = ['team_id' => (int) $mandant->id, 'baustein' => 'ki_verbrauch', 'datum' => $tag->toDateString(), 'menge' => $aufrufe, 'betrag_monat' => null, 'tageswert' => $gesamt];
+
+        if ($schreiben) {
+            $u = TeamBillableUsage::where('team_id', $mandant->id)->where('billable_model', self::KI_MODELL)->whereDate('usage_date', $tag->toDateString())->first()
+                ?? new TeamBillableUsage(['team_id' => $mandant->id, 'billable_model' => self::KI_MODELL, 'usage_date' => $tag->toDateString()]);
+            $u->fill(['billable_type' => 'verbrauch', 'label' => 'Food Alchemist · KI-Verbrauch', 'count' => $aufrufe,
+                'cost_per_unit' => $aufrufe > 0 ? round($exakt / $aufrufe, 4) : 0, 'total_cost' => $gesamt,
+                'pricing_snapshot' => ['quelle' => 'foodalchemist_ai_call_log', 'aufrufe' => $aufrufe, 'fehllaeufe' => (int) ($z->fehllaeufe ?? 0),
+                    'usd' => round((float) ($z->usd ?? 0), 6), 'tageswert_exakt' => $exakt, 'ohne_preis' => (int) ($z->ohne_preis ?? 0),
+                    'ohne_kurs' => (int) ($z->ohne_kurs ?? 0), 'aufschlag' => 0, 'embeddings' => 'nicht_erfasst']]);
+            $u->save();
+        }
+
+        return $zeile;
     }
 
     /** Das Kunden-Hauptteam und alle seine Unter-Teams (jede Ebene), als Team-IDs mit dem Mandanten zuerst. @return list<int> */

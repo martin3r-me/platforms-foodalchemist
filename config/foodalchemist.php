@@ -800,6 +800,9 @@ return [
          * ohne Mandanten-Zeile, solange der Master-Admin nichts anderes setzt (Betrag oder „unbegrenzt“ am Kontingent des Mandanten).
          */
         'projekt_deckel_eur' => (float) env('FOODALCHEMIST_KI_PROJEKT_DECKEL_EUR', 20),
+
+        /* KI-Abrechnung: Rechnungsposition „KI-Verbrauch“ erst für Tage ab diesem Datum (Dominique 23.10.2026); leer = keine KI-Position. */
+        'abrechnung_ab' => env('FOODALCHEMIST_KI_ABRECHNUNG_AB', '2026-11-01'),
     ],
 
     /*
