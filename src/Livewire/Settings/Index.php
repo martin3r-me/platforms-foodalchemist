@@ -203,6 +203,18 @@ class Index extends Component
     ];
 
     /**
+     * Abnahme E-4 (Dominique 24.10.): Unter-Reiter, deren Karte genau EINEN Abschnitt zeigt, dessen Titel die Karten-Überschrift nur
+     * wiederholt → der innere Titel entfällt (Beschreibung und Knöpfe bleiben). Bewusst eine Liste statt einer CSS-Regel: „einziger
+     * Abschnitt“ lässt sich in CSS nur je Eltern-Container zählen und traf dann auch Felder (Etiketten), Hauptgruppen, Arbeitsschritte
+     * und die Food-DNA-Reiter (im Browser gemessen 24.10.). NICHT drin, weil der Titel etwas sagt: kunde-dna („Kunde“ = Auswahl),
+     * brief-vorlagen (eigene/geerbte), trendradar („Google Trends“), betriebe (zweiter Abschnitt „Standorte“ bei Unter-Teams).
+     *
+     * @var list<string>
+     */
+    public const EINZELTITEL = ['kennzahlen', 'ausstattung', 'flaechen', 'rollen', 'hausstandards', 'bestellversand', 'lagerorte',
+        'zuschlaege', 'fixkosten', 'dna-felder', 'anbieter', 'modellstufen', 'sprachbefehl', 'mandanten'];
+
+    /**
      * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
      *
      * @var array<string, string>

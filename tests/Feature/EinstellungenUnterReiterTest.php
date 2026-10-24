@@ -87,6 +87,12 @@ it('Abnahme: Leiste mit Kurznamen (volle Bezeichnung im Tooltip und auf der Kart
         ->toContain('title="Küchenrollen &amp; Stundensätze: ')
         ->and(substr($html, strpos($html, 'data-settings-kopf="rollen"'), 1500))->toContain('Küchenrollen &amp; Stundensätze');
 
-    // Der innere Titel eines alleinstehenden Abschnitts wird per CSS ausgeblendet (gemessen im Browser, Screenshot-Abnahme 24.10.)
-    expect($html)->toContain('[&_section.fa-surface:only-of-type:not(section_section_section)>header_h3]:hidden');
+    // Innerer Titel nur bei Einzel-Abschnitten mit doppeltem Titel weg (Liste, gemessen im Browser 24.10.); Gar-/Putzverlust und Etiketten behalten ihn
+    $alle = array_merge(array_keys(Einstellungen::SEKTIONEN), collect(Einstellungen::ABSCHNITTE)->flatMap(fn ($a) => array_keys($a))->all());
+    expect(array_diff(Einstellungen::EINZELTITEL, $alle))->toBe([])
+        ->and($html)->toContain('data-settings-einzeltitel');                                                     // rollen
+    $c = Livewire::test(Einstellungen::class);
+    expect($c->call('bereichWaehlen', 'kennzahlen')->call('tabWaehlen', 'kueche')->html())->toContain('data-settings-einzeltitel')
+        ->and($c->call('tabWaehlen', 'kalkulation')->html())->not->toContain('data-settings-einzeltitel')         // verluste: zwei Abschnitte
+        ->and($c->call('tabWaehlen', 'stil')->call('bereichWaehlen', 'etiketten')->html())->not->toContain('data-settings-einzeltitel');
 });
