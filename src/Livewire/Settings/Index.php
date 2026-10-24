@@ -191,6 +191,18 @@ class Index extends Component
     ];
 
     /**
+     * Abnahme E-4 (Dominique 24.10.): kurze Beschriftung in der Unter-Reiter-Leiste, damit jede Leiste bei 1440 px in EINE Zeile passt
+     * (neben „Bearbeiten“, ohne waagrechtes Scrollen). Karten-Überschrift und Suche behalten den vollen Namen.
+     *
+     * @var array<string, string>
+     */
+    public const KURZ = [
+        'posten' => 'Posten',
+        'rollen' => 'Küchenrollen',
+        'behaelter' => 'Behälter',
+    ];
+
+    /**
      * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
      *
      * @var array<string, string>
@@ -449,9 +461,9 @@ class Index extends Component
 
     /**
      * E-4: Unter-Reiter eines Reiters, Grundeinstellungen zuerst, erweiterte hinter dem Trenner (Reiter ohne Grundeinstellung: alle vorn).
-     * Eintrag: Sektion, Abschnitt (null = ganze Sektion), Beschriftung, Zweck, Suchwörter.
+     * Eintrag: Sektion, Abschnitt (null = ganze Sektion), Beschriftung, Kurzname für die Leiste, Zweck, Suchwörter.
      *
-     * @return array{grund: array<string, array{sektion: string, abschnitt: ?string, label: string, hint: string, stichworte: string}>, erweitert: array<string, array{sektion: string, abschnitt: ?string, label: string, hint: string, stichworte: string}>}
+     * @return array{grund: array<string, array{sektion: string, abschnitt: ?string, label: string, kurz: string, hint: string, stichworte: string}>, erweitert: array<string, array{sektion: string, abschnitt: ?string, label: string, kurz: string, hint: string, stichworte: string}>}
      */
     public static function unterReiter(string $tab, ?array $sichtbar = null): array
     {
@@ -461,8 +473,9 @@ class Index extends Component
             $teil = in_array($sektion, self::GRUND, true) ? 'grund' : 'erweitert';
             foreach (self::ABSCHNITTE[$sektion] ?? [$sektion => null] as $key => $abschnitt) {
                 $out[$teil][$key] = $abschnitt === null
-                    ? ['sektion' => $sektion, 'abschnitt' => null, 'label' => $sichtbar[$sektion]['label'], 'hint' => $sichtbar[$sektion]['hint'], 'stichworte' => self::STICHWORTE[$sektion] ?? '']
-                    : ['sektion' => $sektion, 'abschnitt' => $key] + $abschnitt;
+                    ? ['sektion' => $sektion, 'abschnitt' => null, 'label' => $sichtbar[$sektion]['label'], 'kurz' => self::KURZ[$sektion] ?? $sichtbar[$sektion]['label'],
+                        'hint' => $sichtbar[$sektion]['hint'], 'stichworte' => self::STICHWORTE[$sektion] ?? '']
+                    : ['sektion' => $sektion, 'abschnitt' => $key, 'kurz' => $abschnitt['label']] + $abschnitt;
             }
         }
         if ($out['grund'] === []) {   // Reiter ganz ohne Grundeinstellung (z. B. Kategorien): alle gleichrangig, kein Trenner

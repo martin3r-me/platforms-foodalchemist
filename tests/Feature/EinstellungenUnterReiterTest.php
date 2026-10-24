@@ -78,3 +78,15 @@ it('Abschnitt in der Komponente: Einkauf/Lagerorte ohne Strategie-Leiste, KI/Mod
     Livewire::test(Ki::class, ['abschnitt' => 'modellstufen'])->assertSee('Modellstufen')
         ->assertDontSee('Schaltet alle KI-Funktionen dieses Teams')->assertDontSee('Der Agent hinter dem Sprachbefehl');
 });
+
+it('Abnahme: Leiste mit Kurznamen (volle Bezeichnung im Tooltip und auf der Karte), Einzel-Abschnitt ohne doppelten Titel', function () {
+    expect(array_diff(array_keys(Einstellungen::KURZ), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
+
+    $html = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche')->call('bereichWaehlen', 'rollen')->html();
+    expect($html)->toContain('data-settings-erweitert="rollen">Küchenrollen</button>')
+        ->toContain('title="Küchenrollen &amp; Stundensätze: ')
+        ->and(substr($html, strpos($html, 'data-settings-kopf="rollen"'), 1500))->toContain('Küchenrollen &amp; Stundensätze');
+
+    // Der innere Titel eines alleinstehenden Abschnitts wird per CSS ausgeblendet (gemessen im Browser, Screenshot-Abnahme 24.10.)
+    expect($html)->toContain('[&_section.fa-surface:only-of-type:not(section_section_section)>header_h3]:hidden');
+});

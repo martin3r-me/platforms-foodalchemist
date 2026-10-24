@@ -85,15 +85,15 @@
             @if(count($grundReiter) + count($erweiterteReiter) > 1)
                 <nav class="flex flex-wrap items-center gap-1.5 flex-1 min-w-0" aria-label="Unterbereiche in diesem Reiter" data-settings-unter-reiter>
                     @foreach($grundReiter as $key => $u)
-                        <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
-                                class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAus }}" data-settings-unter-reiter-knopf="{{ $key }}">{{ $u['label'] }}</button>
+                        <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['label'] }}: {{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
+                                class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAus }}" data-settings-unter-reiter-knopf="{{ $key }}">{{ $u['kurz'] }}</button>
                     @endforeach
                     @if($erweiterteReiter !== [])
                         <span class="mx-1.5 h-5 w-px bg-[var(--fa-line-strong)]" aria-hidden="true"></span>
                         <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-settings-erweitert-trenner>Erweitert</span>
                         @foreach($erweiterteReiter as $key => $u)
-                            <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
-                                    class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAusErweitert }}" data-settings-unter-reiter-knopf="{{ $key }}" data-settings-erweitert="{{ $key }}">{{ $u['label'] }}</button>
+                            <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['label'] }}: {{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
+                                    class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAusErweitert }}" data-settings-unter-reiter-knopf="{{ $key }}" data-settings-erweitert="{{ $key }}">{{ $u['kurz'] }}</button>
                         @endforeach
                     @endif
                 </nav>
