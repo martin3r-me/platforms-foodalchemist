@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Livewire\Controlling\Panels\Ausreisser;
@@ -110,6 +111,24 @@ it('Promotion: der Gesamtumsatz im Journal folgt der Brille', function () {
     expect($gesamt())->toBe(300.0);
     ($this->brille)('team', $this->childA);
     expect($gesamt())->toBe(100.0);
+});
+
+it('Promotion: der Umsatz je laufender Ausgabe summiert die Verkäufe der Standorte der Brille (Karte eines Standorts, Umsatz am Standort)', function () {
+    $karte = app(SpeisekarteService::class)->create($this->childA, ['name' => 'Karte Standort A', 'status' => 'aktiv']);
+    $rubrik = app(SpeisekarteService::class)->addRubrik($this->childA, (int) $karte->id, ['name' => 'Speisen']);
+    DB::table('foodalchemist_menu_card_items')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->childA->id, 'section_id' => $rubrik->id,
+        'type' => 'gericht_ref', 'sales_recipe_id' => $this->gA->id, 'position' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    ($this->fakt)($this->childA, $this->gA, 100.0, 'promo-a');   // Verkauf am Standort A
+    ($this->fakt)($this->fremd, $this->gF, 999.0, 'promo-f');    // fremder Mandant: nie
+    $zeile = fn () => collect(app(PromotionService::class)->uebersicht($this->rootTeam)['zeilen'])->firstWhere('name', 'Karte Standort A');
+
+    ($this->brille)('alle');
+    expect($zeile())->not->toBeNull()->and($zeile()['umsatz'])->toBe(100.0)->and($zeile()['n_gerichte'])->toBe(1);   // der Umsatz liegt am Standort, nicht am Mandanten
+
+    ($this->brille)('team', $this->childA);
+    expect($zeile()['umsatz'])->toBe(100.0);
 });
 
 it('Verlauf: Zähler der Standorte summiert, ein Standort allein, fremde Mandanten nie', function () {
