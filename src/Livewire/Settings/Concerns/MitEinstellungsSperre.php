@@ -35,6 +35,10 @@ trait MitEinstellungsSperre
      */
     public bool $imReiter = false;
 
+    /** E-4 (Dominique 23.10.): eine Ansicht je Unter-Bereich. Der Unter-Reiter zeigt nur diesen Abschnitt des Bereichs (z. B. kalkulation:
+     * verluste | mwst-rundung); null = der ganze Bereich. Nur Anzeige: Speichern und Sperre bleiben je Bereich. */
+    public ?string $abschnitt = null;
+
     /** Der Reiter hat gesperrt oder freigegeben: neu zeichnen (der Zustand kommt aus dem Sperr-Dienst). */
     #[\Livewire\Attributes\On('settings-reiter-geaendert')]
     public function reiterGeaendert(): void {}

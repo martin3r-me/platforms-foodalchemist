@@ -1,7 +1,9 @@
 {{-- Spec 82 §6/§9 — Körper des Profil-Editors (Kennzahlen, Ausstattung, Flächen); geteilt von Einstellungen → Teamprofil und Standortprofil (Kunden-Standort). --}}
+    @php $tpAbschnitt = $abschnitt ?? null; $zeige = fn (string $a) => $tpAbschnitt === null || $tpAbschnitt === $a; @endphp   {{-- E-4; Standortprofil: alles --}}
     @if($fehler)<x-fa::notice tone="crit" data-teamprofil-fehler>{{ $fehler }}</x-fa::notice>@endif
     @if($meldung)<x-fa::notice tone="ok" data-teamprofil-meldung>{{ $meldung }}</x-fa::notice>@endif
 
+    @if($zeige('kennzahlen'))
     <x-fa::section title="Kennzahlen" data-teamprofil-kennzahlen
         description="Wie viele Gäste die Küche parallel zum Tagesgeschäft schafft und wie viel selbst gekocht wird.">
         <div class="flex flex-wrap items-end gap-3">
@@ -22,6 +24,9 @@
         </div>
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('ausstattung'))
     <x-fa::section title="Ausstattung" data-teamprofil-ausstattung
         description="Je Gerät: vorhanden, fehlt oder unbekannt. Gewarnt wird nur bei „fehlt“. Bei „unbekannt“ gibt es nur einen Hinweis, dass das Profil unvollständig ist. Standardausstattung gilt ohne Angabe als vorhanden.">
         @if($unbekannt > 0)
@@ -51,6 +56,9 @@
         @endforelse
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('flaechen'))
     <x-fa::section title="Flächen" data-teamprofil-flaechen
         description="Räume und Flächen mit ihrer Gästegrenze und Saison, zum Beispiel Terrasse, Saal oder Rooftop.">
         <div class="overflow-x-auto -mx-4">
@@ -87,3 +95,4 @@
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="flaecheAnlegen" data-teamprofil-flaeche-anlegen>Fläche anlegen</x-fa::button>
         </div>
     </x-fa::section>
+    @endif

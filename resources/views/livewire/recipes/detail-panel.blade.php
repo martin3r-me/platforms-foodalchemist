@@ -445,7 +445,7 @@
                     @elseif(($machbarkeit['status'] ?? null) === 'hinweis')
                         <p class="mt-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-machbarkeit-hinweis>
                             Profil unvollständig: {{ collect($machbarkeit['hinweise'])->pluck('equipment')->unique()->implode(', ') }} {{ count($machbarkeit['hinweise']) === 1 ? 'ist' : 'sind' }} im
-                            <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'teamprofil']) }}" class="underline">Teamprofil</a> noch unbekannt.
+                            <a href="{{ route('foodalchemist.einstellungen', ['tab' => 'kueche', 'bereich' => 'ausstattung']) }}" class="underline">Teamprofil</a> noch unbekannt.
                         </p>
                     @endif
                 </x-fa::section>

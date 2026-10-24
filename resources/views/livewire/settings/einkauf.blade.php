@@ -6,6 +6,7 @@
         'stamm_lieferant' => 'Artikel deiner Stamm-Lieferanten (je Warengruppe, siehe unten) haben Vorrang. Innerhalb derselben Stufe entscheidet der Preis.',
         'prioritaets_kette' => 'Eine feste Reihenfolge deiner Lieferanten entscheidet. Innerhalb derselben Stufe entscheidet der Preis.',
     ];
+    $zeige = fn (string $a) => $abschnitt === null || $abschnitt === $a;   // E-4: der Unter-Reiter zeigt nur seinen Abschnitt, null = alles
 @endphp
 
 <div class="flex flex-col gap-4">
@@ -13,15 +14,16 @@
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team; mehrere Abschnitts-Speichern → Bearbeiten/Fertig --}}
     @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true, 'hint' => 'Strategie, Bestellversand, Lagerorte und Stamm-Lieferanten.'])
-    @unless($sperrLesen)
+    @unless($sperrLesen || ! $zeige('leitartikel'))   {{-- die Leiste speichert nur die Strategie --}}
     <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Strategie für den kalkulierenden Artikel." />
     @endunless
-    @if($sperrLesen && $meldung)<x-fa::notice tone="ok" data-save-bar-meldung>{{ $meldung }}</x-fa::notice>@endif
+    @if(($sperrLesen || ! $zeige('leitartikel')) && $meldung)<x-fa::notice tone="ok" data-save-bar-meldung>{{ $meldung }}</x-fa::notice>@endif
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)
         <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>
     @endif
 
+    @if($zeige('leitartikel'))
     <x-fa::section title="Welcher Artikel kalkuliert" icon="heroicon-o-shopping-cart" data-einkauf-strategie
         description="Legt fest, welcher Lieferantenartikel je Grundprodukt den Preis für die Kalkulation liefert. Gilt nur für dein Team.">
         <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-2" role="radiogroup" aria-label="Strategie">
@@ -107,6 +109,9 @@
         @endif
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('bestellversand'))
     {{-- Spec 63: Bestellversand per Mail --}}
     <x-fa::section id="bestellversand" title="Bestellversand" icon="heroicon-o-paper-airplane" class="scroll-mt-6" data-bestellversand
         description="Wie eine Bestellung beim Absenden zum Lieferanten kommt.">
@@ -168,6 +173,9 @@
         </div>
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('lagerorte'))
     <x-fa::section id="lagerorte" title="Lagerorte" icon="heroicon-o-archive-box" class="scroll-mt-6" data-lagerorte
         description="Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für Umlagerung, Inventur und Produktion.">
         <div class="flex flex-wrap items-end gap-3">
@@ -244,6 +252,9 @@
         @endif
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('leitartikel'))
     {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}
     <x-fa::section title="Stamm-Lieferanten" icon="heroicon-o-truck" data-stamm-matrix
         description="Je Warengruppe oder für alle. Wirkt bei der Strategie „Stamm-Lieferant zuerst“. Vom übergeordneten Team geerbte Einträge sind fest und hier nicht änderbar. Änderungen wirken auf neue Wahlen; bestehende Leads bleiben, bis du sie über „Leads neu wählen“ übernimmst.">
@@ -327,5 +338,6 @@
             @endif
         </div>
     </x-fa::section>
+    @endif
     </fieldset>
 </div>

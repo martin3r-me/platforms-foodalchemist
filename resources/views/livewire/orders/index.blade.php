@@ -218,7 +218,7 @@
                 <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                     <x-fa::button variant="ghost" icon="heroicon-m-ellipsis-horizontal" iconRight="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Weitere Aktionen</x-fa::button>
                     <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
-                        <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'einkauf']) }}#lagerorte" role="menuitem" class="{{ $menuePunkt }}">
+                        <a href="{{ route('foodalchemist.einstellungen', ['tab' => 'einkauf', 'bereich' => 'lagerorte']) }}" role="menuitem" class="{{ $menuePunkt }}">
                             @svg('heroicon-o-archive-box', 'w-4 h-4 text-[var(--fa-ink-3)]') Lagerorte verwalten
                         </a>
                         @if($sicht !== 'bedarfe')

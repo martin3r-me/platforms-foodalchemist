@@ -37,7 +37,10 @@ it('führt jede registrierte Sektion in der Navigation', function () {
 
             continue;
         }
-        expect($html)->toContain('data-settings-link="' . $key . '"');
+        // E-4: geteilte Sektionen stehen mit ihren Unter-Reitern in der Suche
+        foreach (array_keys(Einstellungen::ABSCHNITTE[$key] ?? [$key => true]) as $link) {
+            expect($html)->toContain('data-settings-link="' . $link . '"');
+        }
     }
 
     $admin = $this->makeUser($this->rootTeam, 'Plattform Admin');
@@ -70,30 +73,32 @@ it('Reiter folgen den Gruppen (jede Sektion in genau einer), Leiste waagrecht sc
     $c->assertSet('tab', array_key_first(Einstellungen::sichtbareGruppen()));
 });
 
-it('alter Link /einstellungen/{sektion} öffnet den Reiter der Sektion und springt hin; Reiterwechsel per Klick, unbekannter Reiter → erster', function () {
+it('alter Link /einstellungen/{sektion} öffnet Reiter und Unter-Reiter der Sektion; Reiterwechsel per Klick, unbekannter Reiter → erster', function () {
     Livewire::test(Einstellungen::class, ['sektion' => 'aufschlagsklassen'])
         ->assertSet('tab', 'kalkulation')->assertSet('bereich', 'aufschlagsklassen')
         ->assertSeeHtml('data-settings-sektion="aufschlagsklassen"')->assertSeeHtml('data-settings-reiter="kalkulation"')
         ->call('tabWaehlen', 'kategorien')->assertSet('tab', 'kategorien')->assertSet('bereich', null)
-        ->assertSeeHtml('data-settings-sektion="einheiten"')->assertDontSeeHtml('data-settings-sektion="aufschlagsklassen"')
+        ->assertSeeHtml('data-settings-sektion="taxonomie"')->assertDontSeeHtml('data-settings-sektion="aufschlagsklassen"')
         ->call('tabWaehlen', 'gibt-es-nicht')->assertSet('tab', array_key_first(Einstellungen::sichtbareGruppen()));
 
-    // Sprungziel in einem erweiterten Bereich: der Klappblock steht offen
+    // E-4: ein erweiterter Bereich ist ein eigener Unter-Reiter (gleichrangig, ohne Trenner), allein im DOM
     expect(Livewire::test(Einstellungen::class, ['sektion' => 'behaelter'])->html())
-        ->toContain('data-settings-erweitert')->toContain('x-data="{ offen: true }"');
+        ->not->toContain('data-settings-erweitert-trenner')->toContain('data-settings-sektion="behaelter"')
+        ->not->toContain('data-settings-sektion="posten"');
 });
 
-it('im Reiter: Grundeinstellungen offen mit Sprungmarken, übrige unter „Erweitert“; Suche kennt Stichworte über alle Reiter', function () {
+it('E-4: Unter-Reiter gleichrangig, Grundeinstellungen vorn, seltene hinten; Suche kennt Stichworte über alle Reiter', function () {
     expect(array_diff(Einstellungen::GRUND, array_keys(Einstellungen::SEKTIONEN)))->toBe([])
-        ->and(array_diff(array_keys(Einstellungen::STICHWORTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
+        ->and(array_diff(array_keys(Einstellungen::STICHWORTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([])
+        ->and(array_diff(array_keys(Einstellungen::ABSCHNITTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([])
+        ->and(array_intersect(collect(Einstellungen::ABSCHNITTE)->flatMap(fn ($a) => array_keys($a))->all(), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
 
     $html = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche')->html();
-    $erweitert = strpos($html, 'data-settings-erweitert');
-    expect($html)->toContain('data-settings-sprung')
-        ->and(strpos($html, 'data-settings-sektion="teamprofil"'))->toBeLessThan($erweitert)          // Grund: vor dem Klappblock
-        ->and(strpos($html, 'data-settings-sektion="behaelter"'))->toBeGreaterThan($erweitert)        // erweitert: im Klappblock
-        ->and($html)->toContain('mwst mehrwertsteuer')                                                 // Stichwort der Kalkulation (anderer Reiter)
-        ->toContain('data-settings-link="kalkulation"');
+    preg_match_all('/data-settings-unter-reiter-knopf="([a-z-]+)"/', $html, $knoepfe);
+    expect($knoepfe[1])->toBe(['kennzahlen', 'ausstattung', 'flaechen', 'posten', 'kueche', 'rollen', 'behaelter', 'hausstandards'])   // Grund vorn, seltene hinten
+        ->and($html)->not->toContain('data-settings-erweitert-trenner')
+        ->and($html)->toContain('mwst mehrwertsteuer')                                                    // Stichwort der Kalkulation (anderer Reiter)
+        ->toContain('data-settings-link="mwst-rundung"');
 });
 
 it('Plattform-Gruppe: Wissens-Steuerung nur für Master-Team und Plattform-Admin; Mandant bekommt 404', function () {
@@ -118,9 +123,9 @@ it('markiert die aktive Sektion und zeigt ihren Kopf genau einmal', function () 
     expect($html)->toContain('data-settings-sektion="herstellkosten"')->toContain('data-settings-kopf');
 
     // Der Kopf kommt aus DERSELBEN Quelle wie die Navigation — sonst driftet die Beschriftung
-    // zwischen Liste und Überschrift auseinander.
-    $meta = Einstellungen::SEKTIONEN['herstellkosten'];
-    $kopf = substr($html, strpos($html, 'data-settings-kopf="herstellkosten"'), 1500);   // E-3: Symbol im Kopf vor dem Namen
+    // zwischen Liste und Überschrift auseinander. E-4: geteilte Sektion → Kopf des ersten Unter-Reiters.
+    $meta = Einstellungen::ABSCHNITTE['herstellkosten']['zuschlaege'];
+    $kopf = substr($html, strpos($html, 'data-settings-kopf="zuschlaege"'), 1500);   // E-3: Symbol im Kopf vor dem Namen
     // e() nicht vergessen: „Herstellkosten & Zuschläge" steht als `&amp;` in der Seite.
     expect($kopf)->toContain(e($meta['label']));
 });
@@ -172,6 +177,7 @@ it('die Einstellungs-Views tragen keine Emoji-Marker mehr in Bedienelementen', f
 it('die KI-Kachel nennt den Sprachbefehl (Agenten-Modus/dauerhaft aktiv/Vorlesen) im Hint', function () {
     expect(Einstellungen::SEKTIONEN['ki']['hint'])->toContain('Sprachbefehl');
 
+    // E-4: der Sprachbefehl ist ein eigener Unter-Reiter der KI; die Suche findet ihn mit Agenten-Modus/dauerhaft aktiv/Vorlesen
     $html = Livewire::test(Einstellungen::class)->html();
-    expect($html)->toContain('Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)');
+    expect($html)->toContain('data-settings-link="sprachbefehl"')->toContain('Agenten-Modus, dauerhaft aktiv, Vorlesen');
 });

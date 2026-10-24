@@ -8,6 +8,7 @@
         'next_050' => 'Auf x,50',
         'next_090' => 'Auf x,90',
     ];
+    $zeige = fn (string $a) => $abschnitt === null || $abschnitt === $a;   // E-4: der Unter-Reiter zeigt nur seinen Abschnitt, null = alles
 @endphp
 
 <div class="flex flex-col gap-4">
@@ -22,6 +23,7 @@
 
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
 
+    @if($zeige('verluste'))
     {{-- Garverlust: häufigste Pflege, deshalb oben --}}
     <x-fa::section title="Garverlust" icon="heroicon-o-fire" data-kalk-garverlust
         description="Standardwert in Prozent je Warengruppe. Vorrang hat der Wert an der Zutat, dann der am Grundprodukt, dann dieser Teamwert. Leer lassen heißt: kein Standardwert.">
@@ -74,6 +76,9 @@
         </div>
     </x-fa::section>
 
+    @endif
+
+    @if($zeige('mwst-rundung'))
     {{-- MwSt + Rundung --}}
     <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-4">
         <x-fa::section title="Mehrwertsteuer" icon="heroicon-o-receipt-percent" data-kalk-mwst
@@ -118,9 +123,13 @@
         </x-fa::section>
     </div>
 
+    @endif
+
+    @if($abschnitt === null)
     <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
         @svg('heroicon-o-information-circle', 'w-4 h-4 shrink-0')
         Zuschläge, Fixkosten, Stundensatz und Marge pflegst du unter „Herstellkosten &amp; Zuschläge“.
     </p>
+    @endif
     </fieldset>
 </div>
