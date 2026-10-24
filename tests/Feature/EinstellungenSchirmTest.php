@@ -178,6 +178,7 @@ it('die Einstellungs-Views tragen keine Emoji-Marker mehr in Bedienelementen', f
 it('die KI-Kachel nennt den Sprachbefehl (Agenten-Modus/dauerhaft aktiv/Vorlesen) im Hint', function () {
     expect(Einstellungen::SEKTIONEN['ki']['hint'])->toContain('Sprachbefehl');
 
+    // E-4: der Sprachbefehl ist ein eigener Unter-Reiter der KI; die Suche findet ihn mit Agenten-Modus/dauerhaft aktiv/Vorlesen
     $html = Livewire::test(Einstellungen::class)->html();
-    expect($html)->toContain('Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)');
+    expect($html)->toContain('data-settings-link="sprachbefehl"')->toContain('Agenten-Modus, dauerhaft aktiv, Vorlesen');
 });

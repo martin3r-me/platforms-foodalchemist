@@ -25,7 +25,8 @@ it('genau ein Unter-Reiter im DOM: Küche zeigt erst die Kennzahlen, Ausstattung
     $c = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche');
     expect($c->html())->toContain('data-settings-bereich="kennzahlen"')->toContain('data-teamprofil-kennzahlen')
         ->not->toContain('data-teamprofil-ausstattung')->not->toContain('data-settings-sektion="posten"')
-        ->toContain('data-settings-unter-reiter-knopf="kennzahlen" aria-current="page"');
+        ->and(preg_match('/<button[^>]*aria-current="page"[^>]*data-settings-unter-reiter-knopf="([a-z-]+)"/', $c->html(), $m))->toBe(1)
+        ->and($m[1])->toBe('kennzahlen');   // genau der aktive Unter-Reiter ist markiert
 
     $c->call('bereichWaehlen', 'ausstattung')->assertSet('bereich', 'ausstattung');
     expect($c->html())->toContain('data-teamprofil-ausstattung')->not->toContain('data-teamprofil-kennzahlen');
