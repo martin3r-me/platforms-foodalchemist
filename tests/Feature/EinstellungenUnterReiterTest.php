@@ -83,7 +83,7 @@ it('Abnahme: Leiste mit Kurznamen (volle Bezeichnung im Tooltip und auf der Kart
     expect(array_diff(array_keys(Einstellungen::KURZ), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
 
     $html = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche')->call('bereichWaehlen', 'rollen')->html();
-    expect($html)->toContain('data-settings-erweitert="rollen">Küchenrollen</button>')
+    expect($html)->toContain('data-settings-unter-reiter-knopf="rollen">Küchenrollen</button>')
         ->toContain('title="Küchenrollen &amp; Stundensätze: ')
         ->and(substr($html, strpos($html, 'data-settings-kopf="rollen"'), 1500))->toContain('Küchenrollen &amp; Stundensätze');
 

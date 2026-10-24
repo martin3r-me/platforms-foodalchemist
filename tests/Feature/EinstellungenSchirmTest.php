@@ -81,23 +81,22 @@ it('alter Link /einstellungen/{sektion} öffnet Reiter und Unter-Reiter der Sekt
         ->assertSeeHtml('data-settings-sektion="taxonomie"')->assertDontSeeHtml('data-settings-sektion="aufschlagsklassen"')
         ->call('tabWaehlen', 'gibt-es-nicht')->assertSet('tab', array_key_first(Einstellungen::sichtbareGruppen()));
 
-    // E-4: ein erweiterter Bereich ist ein eigener Unter-Reiter hinter dem Trenner, allein im DOM
+    // E-4: ein erweiterter Bereich ist ein eigener Unter-Reiter (gleichrangig, ohne Trenner), allein im DOM
     expect(Livewire::test(Einstellungen::class, ['sektion' => 'behaelter'])->html())
-        ->toContain('data-settings-erweitert-trenner')->toContain('data-settings-sektion="behaelter"')
+        ->not->toContain('data-settings-erweitert-trenner')->toContain('data-settings-sektion="behaelter"')
         ->not->toContain('data-settings-sektion="posten"');
 });
 
-it('E-4: Unter-Reiter Grund vor dem Trenner, Erweitert dahinter; Suche kennt Stichworte über alle Reiter', function () {
+it('E-4: Unter-Reiter gleichrangig, Grundeinstellungen vorn, seltene hinten; Suche kennt Stichworte über alle Reiter', function () {
     expect(array_diff(Einstellungen::GRUND, array_keys(Einstellungen::SEKTIONEN)))->toBe([])
         ->and(array_diff(array_keys(Einstellungen::STICHWORTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([])
         ->and(array_diff(array_keys(Einstellungen::ABSCHNITTE), array_keys(Einstellungen::SEKTIONEN)))->toBe([])
         ->and(array_intersect(collect(Einstellungen::ABSCHNITTE)->flatMap(fn ($a) => array_keys($a))->all(), array_keys(Einstellungen::SEKTIONEN)))->toBe([]);
 
     $html = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'kueche')->html();
-    $trenner = strpos($html, 'data-settings-erweitert-trenner');
-    expect($html)->toContain('data-settings-unter-reiter')
-        ->and(strpos($html, 'data-settings-unter-reiter-knopf="ausstattung"'))->toBeLessThan($trenner)   // Grund: vor dem Trenner
-        ->and(strpos($html, 'data-settings-unter-reiter-knopf="behaelter"'))->toBeGreaterThan($trenner)  // erweitert: dahinter
+    preg_match_all('/data-settings-unter-reiter-knopf="([a-z-]+)"/', $html, $knoepfe);
+    expect($knoepfe[1])->toBe(['kennzahlen', 'ausstattung', 'flaechen', 'posten', 'kueche', 'rollen', 'behaelter', 'hausstandards'])   // Grund vorn, seltene hinten
+        ->and($html)->not->toContain('data-settings-erweitert-trenner')
         ->and($html)->toContain('mwst mehrwertsteuer')                                                    // Stichwort der Kalkulation (anderer Reiter)
         ->toContain('data-settings-link="mwst-rundung"');
 });

@@ -8,7 +8,7 @@
      (Präsentations-Designs, Wissens-Steuerung) 288 px genommen. Die Suche steht über den Reitern und findet jeden sichtbaren
      Bereich über Name, Beschreibung und Stichworte (Unterabschnitte wie MwSt, Drucker, Lagerort).
 
-     Erweiterte Bereiche stehen als Unter-Reiter hinter einem Trenner (kein Menü, kein Klappblock). Große Blöcke einer Sektion
+     Alle Unter-Reiter stehen gleichrangig nebeneinander, die selten gebrauchten hinten (Abnahme 24.10.: kein Trenner, kein Menü). Große Blöcke einer Sektion
      (Ausstattung, Verluste, Fixkosten, Modellstufen …) sind eigene Unter-Reiter: die Komponente bekommt `abschnitt` und zeigt nur ihn. --}}
 @php
     $suchtext = fn (array $t) => \Illuminate\Support\Str::lower($t['label'] . ' ' . $t['hint'] . ' ' . $t['stichworte'] . ' ' . ($sektionen[$t['sektion']]['label'] ?? ''));
@@ -17,7 +17,6 @@
     $unterKnopf = 'shrink-0 h-8 px-3 rounded-full border text-[length:var(--fa-text-sm)] font-medium whitespace-nowrap transition-colors';
     $unterAn = 'border-[var(--fa-accent)] bg-[var(--fa-accent)] text-[var(--fa-on-accent)]';
     $unterAus = 'border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] hover:bg-[var(--fa-accent-soft-hover)]';
-    $unterAusErweitert = 'border-[var(--fa-line)] bg-[var(--fa-surface)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]';
     // E-3: Symbol je Reiter (in der Bereichs-Karte), nur FA-Akzent
     $reiterIcon = ['uebersicht' => 'heroicon-o-squares-2x2', 'team' => 'heroicon-o-user-group', 'kueche' => 'heroicon-o-fire',
         'einkauf' => 'heroicon-o-truck', 'kalkulation' => 'heroicon-o-calculator', 'stil' => 'heroicon-o-swatch',
@@ -79,23 +78,15 @@
         <x-foodalchemist::editor-tabs marker="settings" action="tabWaehlen" :active="$tab" :tabs="$tabLabels" scroll stark />
 
         <div class="flex flex-col gap-8" data-settings-reiter="{{ $tab }}">
-            {{-- E-4: Unter-Reiter (je Unter-Bereich EINE Ansicht, Erweitert hinter dem Trenner) + EIN Bearbeiten für den ganzen Reiter (E-3).
+            {{-- E-4: Unter-Reiter (je Unter-Bereich EINE Ansicht, seltene hinten) + EIN Bearbeiten für den ganzen Reiter (E-3).
                  Der Wechsel des Unter-Reiters gibt die Sperre des Reiters nicht frei. --}}
             <div class="flex flex-wrap items-center gap-3">
             @if(count($grundReiter) + count($erweiterteReiter) > 1)
                 <nav class="flex flex-wrap items-center gap-1.5 flex-1 min-w-0" aria-label="Unterbereiche in diesem Reiter" data-settings-unter-reiter>
-                    @foreach($grundReiter as $key => $u)
+                    @foreach($grundReiter + $erweiterteReiter as $key => $u)
                         <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['label'] }}: {{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
                                 class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAus }}" data-settings-unter-reiter-knopf="{{ $key }}">{{ $u['kurz'] }}</button>
                     @endforeach
-                    @if($erweiterteReiter !== [])
-                        <span class="mx-1.5 h-5 w-px bg-[var(--fa-line-strong)]" aria-hidden="true"></span>
-                        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-settings-erweitert-trenner>Erweitert</span>
-                        @foreach($erweiterteReiter as $key => $u)
-                            <button type="button" wire:click="bereichWaehlen('{{ $key }}')" title="{{ $u['label'] }}: {{ $u['hint'] }}" @if($key === $aktiv) aria-current="page" @endif
-                                    class="{{ $unterKnopf }} {{ $key === $aktiv ? $unterAn : $unterAusErweitert }}" data-settings-unter-reiter-knopf="{{ $key }}" data-settings-erweitert="{{ $key }}">{{ $u['kurz'] }}</button>
-                        @endforeach
-                    @endif
                 </nav>
             @else
                 <div class="flex-1"></div>
