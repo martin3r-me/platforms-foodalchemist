@@ -61,6 +61,56 @@ class KiAbrechnungService
         ];
     }
 
+    /**
+     * KI-Verbrauch aus Sicht EINES Teams (Mandanten-Sicht, Dominique 23.10.2026): ein Standort sieht nur seinen eigenen Verbrauch
+     * (Daten-Team im eigenen Teilbaum), das Kunden-Hauptteam alles — Summe des Mandanten und je Standort. Gezählt werden nur Zeilen,
+     * die dieser Mandant zahlt (verursacher mandant, abrechnung_team_id = Kunden-Hauptteam); Euro aus Preis und Kurs beim Aufruf.
+     * Embeddings stehen nicht im Log und fehlen hier (ausgewiesen).
+     *
+     * @return array{ist_haupt: bool, mandant_id: int, summe: array<string, mixed>, klassen: list<array<string, mixed>>, standorte: list<array<string, mixed>>, deckel: ?array<string, mixed>}
+     */
+    public function fuerTeam(Team $team, CarbonInterface $von, CarbonInterface $bis): array
+    {
+        $haupt = KiVerursacher::hauptteam($team);
+        $istHaupt = (int) $haupt->id === (int) $team->id;
+        $teamIds = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $team->id);
+
+        $zeilen = DB::table('foodalchemist_ai_call_log')
+            ->where('verursacher', KiVerursacher::MANDANT)->where('abrechnung_team_id', $haupt->id)
+            ->whereIn('team_id', $teamIds)
+            ->where('created_at', '>=', $von)->where('created_at', '<=', $bis)
+            ->selectRaw('team_id, tier, COUNT(*) AS calls, '
+                .'SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS fehler, '
+                .'SUM(COALESCE(tokens_in,0)) AS t_in, SUM(COALESCE(tokens_cached,0)) AS t_cached, SUM(COALESCE(tokens_out,0)) AS t_out, '
+                .'SUM(COALESCE(kosten_usd,0)) AS usd, '
+                .'SUM(CASE WHEN kosten_usd IS NOT NULL AND usd_eur IS NOT NULL THEN kosten_usd * usd_eur ELSE 0 END) AS eur, '
+                .'SUM(CASE WHEN kosten_usd IS NOT NULL AND usd_eur IS NULL THEN 1 ELSE 0 END) AS ohne_kurs, '
+                .'SUM(CASE WHEN kosten_usd IS NULL AND error IS NULL AND model IS NOT NULL THEN 1 ELSE 0 END) AS ohne_preis')
+            ->groupBy('team_id', 'tier')
+            ->get();
+
+        $reihenfolge = fn ($tier) => ($i = array_search($tier, ['S', 'M', 'L', 'D', 'I'], true)) === false ? 99 : $i;
+        $klassen = $zeilen->groupBy(fn ($r) => (string) $r->tier)->sortBy(fn ($z, $tier) => $reihenfolge($tier))
+            ->map(fn (Collection $z, $tier) => $this->zeile($z->all(), KiKlassen::logLabel($tier === '' ? null : $tier) ?? '–'))->values()->all();
+
+        $standorte = [];
+        if ($istHaupt) {
+            $namen = Team::whereIn('id', $zeilen->pluck('team_id')->filter()->unique())->pluck('name', 'id');
+            $standorte = $zeilen->groupBy('team_id')->map(fn (Collection $z, $tid) => ['team_id' => (int) $tid, 'ist_haupt' => (int) $tid === (int) $haupt->id]
+                + $this->zeile($z->all(), (string) ($namen[$tid] ?? '#'.$tid)))
+                ->sortByDesc(fn ($r) => $r['eur'])->values()->all();
+        }
+
+        $deckel = null;
+        if ($istHaupt) {
+            $svc = app(KiDeckelService::class);
+            $deckel = $svc->deckel((int) $haupt->id) + ['verbrauch_monat' => round($svc->verbrauchMonat((int) $haupt->id), 2)];
+        }
+
+        return ['ist_haupt' => $istHaupt, 'mandant_id' => (int) $haupt->id, 'summe' => $this->zeile($zeilen->all(), 'Summe'),
+            'klassen' => $klassen, 'standorte' => $standorte, 'deckel' => $deckel];
+    }
+
     /** @param list<object> $zeilen @return array<string, mixed> */
     private function zeile(array $zeilen, string $label): array
     {

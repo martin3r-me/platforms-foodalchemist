@@ -95,6 +95,7 @@ it('UI: Stammblatt öffnen, Deckel eintragen, speichern; Tabelle zeigt Verbrauch
     $this->actingAs($this->masterAdmin);
     Livewire::test(MandantenKomponente::class)
         ->assertSeeHtml('data-mandant-ki="'.$this->kunde->id.'"')
+        ->assertSeeHtml('data-mandant-ohne-status')->assertSee('ohne Status (Projekt-Deckel)')   // ohne Mandanten-Zeile nicht „aktiv“ (Dominique 23.10.)
         ->call('auf', $this->kunde->id)
         ->assertSeeHtml('data-mandant-ki-deckel="'.$this->kunde->id.'"')
         ->set('kiDeckel.'.$this->kunde->id, '7,5')

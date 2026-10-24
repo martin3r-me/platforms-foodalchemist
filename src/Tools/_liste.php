@@ -232,6 +232,7 @@ return [
     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
     \Platform\FoodAlchemist\Tools\KiKlassenGetTool::class,
     \Platform\FoodAlchemist\Tools\KiKlassenPutTool::class,
+    \Platform\FoodAlchemist\Tools\KiVerbrauchGetTool::class,   // KI-Abrechnung 23.10.: Verbrauch des eigenen Teams
     \Platform\FoodAlchemist\Tools\KnowledgeAliasTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeBindingsGetTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeBudgetPutTool::class,

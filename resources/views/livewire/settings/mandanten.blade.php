@@ -21,7 +21,7 @@
                         @foreach($blaetter as $b)
                             <tr wire:key="mb-{{ $b['team_id'] }}" data-mandant-zeile="{{ $b['team_id'] }}">
                                 <td class="font-medium whitespace-nowrap">{{ $b['name'] }}</td>
-                                <td><x-fa::badge tone="{{ $statusTon[$b['status']] ?? 'neutral' }}">{{ ucfirst($b['status']) }}</x-fa::badge></td>
+                                <td>@if($b['hat_zeile'])<x-fa::badge tone="{{ $statusTon[$b['status']] ?? 'neutral' }}">{{ ucfirst($b['status']) }}</x-fa::badge>@else<x-fa::badge tone="neutral" title="Kein Mandanten-Status gesetzt: KI ist wie in der Projektphase gedeckelt, abgerechnet wird nicht." data-mandant-ohne-status>ohne Status (Projekt-Deckel)</x-fa::badge>@endif</td>
                                 <td><x-fa::badge tone="{{ $b['modus'] === 'kuratiert' ? 'accent' : 'neutral' }}">{{ ucfirst($b['modus']) }}</x-fa::badge></td>
                                 <td>{{ $b['crm_firma'] ?? '–' }}</td>
                                 <td>{{ $b['stamm_paket']['gebucht'] ? 'ja' : 'nein' }}</td>

@@ -39,6 +39,9 @@ class Ki extends Component
     /** Abrechnung je Mandant (nur Master-Team): 'monat' (laufender Kalendermonat) | 'vormonat' | '30' | '90' | 'all'. */
     public string $abrechnungZeitraum = 'monat';
 
+    /** Zeitraum der Mandanten-Karte „KI-Verbrauch“ (Dominique 23.10.2026) */
+    public string $verbrauchZeitraum = 'monat';
+
     /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
     public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
@@ -186,6 +189,18 @@ class Ki extends Component
             : sprintf('Kurs %s € je $ (eingestellter Kurs, kein EZB-Tageskurs gespeichert)', $wert);
     }
 
+    /** @return array{0: \Carbon\CarbonInterface, 1: \Carbon\CarbonInterface} */
+    private static function zeitraum(string $wahl): array
+    {
+        return match ($wahl) {
+            'vormonat' => [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()],
+            '30' => [now()->subDays(30), now()],
+            '90' => [now()->subDays(90), now()],
+            'all' => [now()->setDate(2000, 1, 1)->startOfDay(), now()],
+            default => [now()->startOfMonth(), now()],
+        };
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -223,17 +238,20 @@ class Ki extends Component
         $abrechnung = null;
         $abrechnungOptionen = ['monat' => 'Dieser Monat', 'vormonat' => 'Vormonat', '30' => 'Letzte 30 Tage', '90' => 'Letzte 90 Tage', 'all' => 'Gesamte Historie'];
         if ($stammSicht && Schema::hasColumn('foodalchemist_ai_call_log', 'verursacher')) {
-            [$von, $bis] = match ($this->abrechnungZeitraum) {
-                'vormonat' => [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()],
-                '30' => [now()->subDays(30), now()],
-                '90' => [now()->subDays(90), now()],
-                'all' => [now()->setDate(2000, 1, 1)->startOfDay(), now()],
-                default => [now()->startOfMonth(), now()],
-            };
+            [$von, $bis] = self::zeitraum($this->abrechnungZeitraum);
             $abrechnung = app(KiAbrechnungService::class)->auswertung($von, $bis) + ['von' => $von, 'bis' => $bis];
         }
 
+        // Mandanten-Sicht „KI-Verbrauch“ (Dominique 23.10.2026): jedes Nicht-Master-Team sieht, was es kostet — Standort nur sich, Hauptteam alles
+        $verbrauch = null;
+        if ($team !== null && ! $stammSicht && Schema::hasColumn('foodalchemist_ai_call_log', 'verursacher')) {
+            [$vVon, $vBis] = self::zeitraum($this->verbrauchZeitraum);
+            $verbrauch = app(KiAbrechnungService::class)->fuerTeam($team, $vVon, $vBis) + ['von' => $vVon, 'bis' => $vBis];
+        }
+
         return view('foodalchemist::livewire.settings.ki', [
+            'verbrauch' => $verbrauch,
+            'verbrauchOptionen' => ['monat' => 'Dieser Monat', 'vormonat' => 'Vormonat', '30' => 'Letzte 30 Tage', '90' => 'Letzte 90 Tage'],
             'sperr' => $this->sperrZustand(),   // Spec 65
             'stammSicht' => $stammSicht,
             'abrechnung' => $abrechnung,
