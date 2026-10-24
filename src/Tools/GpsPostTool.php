@@ -21,7 +21,7 @@ use Platform\FoodAlchemist\Services\GpNamingService;
 class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     private const IN_KEYS = [
-        'name', 'hauptzutat', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
+        'name', 'hauptzutat', 'flavor', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id',
     ];
 
@@ -33,7 +33,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
     public function getDescription(): string
     {
         return 'Legt ein Grundprodukt an (team-eigen, status=tentative), Name nach Regelwerk_Grundprodukte §6. '
-            . 'Entweder `name` direkt oder Strukturfelder (hauptzutat + condition/processing/form/…) zum Rendern. '
+            . 'Entweder `name` direkt oder Strukturfelder (hauptzutat + flavor/condition/processing/form/…) zum Rendern; flavor = Geschmackszutat (§6.6), steht vor dem Zustand. '
             . 'hauptzutat ist Pflicht. Dubletten werden hart geblockt — force=true legt bewusst trotzdem an. '
             . 'Für den Zutaten→GP-Sourcing-Backlog stattdessen gps.MATCH/gp_proposals.POST nutzen.';
     }
@@ -45,6 +45,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             'properties' => [
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (Pflicht) — Basis des Namens + main_ingredient_slug.'],
+                'flavor' => ['type' => 'string', 'description' => 'Geschmackszutat (§6.6): erste Eigenschaft im Namen vor dem Zustand, z. B. Chili → "Käse: Chili, frisch, …". Nur wenn im Artikel belegt; die Grundware bleibt hauptzutat.'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'processing' => ['type' => 'string', 'description' => 'Verarbeitung/Zuschnitt (z.B. Wuerfel 10 mm).'],
                 'form' => ['type' => 'string', 'description' => 'Form (falls keine processing).'],

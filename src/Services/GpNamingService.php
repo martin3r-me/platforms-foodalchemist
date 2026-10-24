@@ -167,7 +167,7 @@ class GpNamingService
     /** Alle strukturierten Naming-Felder eines Eingabe-Arrays bereinigen (Name/Kennung bleiben frei von Platzhaltern). */
     public function bereinigeFelder(array $in): array
     {
-        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe', 'portion', 'sub_category'] as $feld) {
+        foreach (['hauptzutat', 'flavor', 'condition', 'processing', 'form', 'pflichtangabe', 'portion', 'sub_category'] as $feld) {
             if (array_key_exists($feld, $in)) {
                 $in[$feld] = $this->bereinigeFeld($in[$feld]);
             }
@@ -177,9 +177,14 @@ class GpNamingService
     }
 
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
-    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form): string
+    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null): string
     {
-        return $hauptzutatSlug . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
+        // §6.6: die Geschmackszutat trennt Varianten derselben Grundware („Käse: Chili" ≠ „Käse") — sie hängt am ersten Slot, damit der Schlüssel
+        // eindeutig bleibt und die 3 Slots unverändert sind. Ohne Geschmack ist der Schlüssel wie bisher.
+        $flavorSlug = $this->slugify($this->bereinigeFeld($flavor));
+        $slot1 = $flavorSlug === '' ? $hauptzutatSlug : $hauptzutatSlug . '_' . $flavorSlug;
+
+        return $slot1 . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
     }
 
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
@@ -211,9 +216,12 @@ class GpNamingService
      *
      * @return array{hauptzutat: string, condition: string, processing: string, form: string, portion: string, pflichtangabe: string, bio: bool}
      */
-    public function felderAusName(string $name): array
+    public function felderAusName(string $name, bool $mitGeschmack = false): array
     {
         $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false];
+        if ($mitGeschmack) {
+            $out = ['hauptzutat' => '', 'flavor' => ''] + array_slice($out, 1);   // nur für den Editor (§6.6); Bestands-Backfill und Pläne behalten die alte Form
+        }
         $name = trim($name);
         if (preg_match('/\(\s*bio\s*\)/iu', $name) === 1) {
             $out['bio'] = true;
@@ -223,6 +231,25 @@ class GpNamingService
         $rest = str_contains($name, ':') ? trim((string) substr($name, strpos($name, ':') + 1)) : '';
         // Dezimalkomma („62,5 g pro Stück", „3,5 % Fett") ist kein Trenner der Attribute
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
+        if ($mitGeschmack && count($teile) >= 2) {
+            // §6.6: ein Wort VOR dem Zustand ist die Geschmackszutat („Käse: Chili, frisch, Scheiben"): erstes Attribut, selbst kein Zustand/Portion/Bio,
+            // und ein späteres Attribut ist ein §9-Zustand. Ohne Zustand im Namen bleibt die alte Lesart (Verarbeitung/Form).
+            $erstes = $teile[0];
+            $istZustand = in_array($this->normalisiereZustand($erstes), self::ZUSTAND_VOCAB, true);   // normalisiereZustand liefert auch für Nicht-Zustandswörter einen Wert
+            $istPortion = preg_match('/pro\s+st(?:ue|ü)ck$/iu', $erstes) === 1 || mb_strtolower($erstes) === 'bio';
+            $spaeterZustand = false;
+            foreach (array_slice($teile, 1) as $teil) {
+                $z = $this->normalisiereZustand($teil);
+                if ($z !== null && in_array($z, self::ZUSTAND_VOCAB, true)) {
+                    $spaeterZustand = true;
+                    break;
+                }
+            }
+            if (! $istZustand && ! $istPortion && $spaeterZustand) {
+                $out['flavor'] = $erstes;
+                $teile = array_values(array_slice($teile, 1));
+            }
+        }
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
         $pflicht = [];
         $tkZusatz = false;
@@ -270,7 +297,7 @@ class GpNamingService
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: <condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (Bio)]…`
+     * `<Hauptzutat>: [<flavor>, ]<condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (Bio)]…` (flavor = Geschmackszutat §6.6)
      */
     public function renderGpName(array $in): string
     {
@@ -284,6 +311,10 @@ class GpNamingService
             return $teile === [] ? $produkt : $produkt.': '.implode(', ', $teile);
         }
         $parts = [];
+        $flavor = trim((string) ($in['flavor'] ?? ''));
+        if ($flavor !== '') {
+            $parts[] = self::umlautKanon($flavor);                          // §6.6: Geschmackszutat steht als ERSTE Eigenschaft, vor dem Zustand
+        }
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
         if ($condition !== null) {
             $parts[] = $condition;
@@ -351,6 +382,10 @@ class GpNamingService
         }
         if ($condition !== null && ! in_array($condition, self::ZUSTAND_VOCAB, true)) {
             $errors[] = "§9: Zustand »{$condition}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
+        }
+        $flavor = trim((string) ($in['flavor'] ?? ''));
+        if ($flavor !== '' && ($fz = $this->normalisiereZustand($flavor)) !== null && in_array($fz, self::ZUSTAND_VOCAB, true)) {
+            $errors[] = "§6.6: Geschmackszutat »{$flavor}« ist ein Zustandswort — der Zustand gehört in das Feld Zustand.";
         }
         if ($this->normalisiere($name) !== $this->normalisiere($this->renderGpName($in))) {
             $warnings[] = 'Drift: Name weicht vom Render aus den strukturierten Feldern ab (I4).';
@@ -443,7 +478,7 @@ class GpNamingService
         if ($hauptzutatSlug === '') {
             throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: main_ingredient_slug ab Editor).');
         }
-        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null);
+        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null);
 
         $guard = $this->anlageGuard($team, $gpKey, $name);
         if ($guard['blockiert']) {
@@ -469,6 +504,7 @@ class GpNamingService
             'main_ingredient_slug' => $hauptzutatSlug,
             'status' => 'tentative',
             'condition' => $this->normalisiereZustand($in['condition'] ?? null),
+            'flavor' => trim((string) ($in['flavor'] ?? '')) ?: null,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
             'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
@@ -504,6 +540,7 @@ class GpNamingService
             // Nur wenn das Feld mitkommt (MCP-/Teil-Schreiber ohne Feld lassen den Wert stehen).
             'processing' => array_key_exists('processing', $in) ? (trim((string) $in['processing']) ?: null) : $gp->processing,
             'form' => array_key_exists('form', $in) ? (trim((string) $in['form']) ?: null) : $gp->form,
+            'flavor' => array_key_exists('flavor', $in) ? (trim((string) $in['flavor']) ?: null) : $gp->flavor,
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
