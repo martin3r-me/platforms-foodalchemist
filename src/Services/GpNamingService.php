@@ -278,22 +278,28 @@ class GpNamingService
         // Dezimalkomma („62,5 g pro Stück", „3,5 % Fett") ist kein Trenner der Attribute
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
         if ($mitGeschmack && count($teile) >= 2) {
-            // §6.6: ein Wort VOR dem Zustand ist die Geschmackszutat („Käse: Chili, frisch, Scheiben"): erstes Attribut, selbst kein Zustand/Portion/Bio,
-            // und ein späteres Attribut ist ein §9-Zustand. Ohne Zustand im Namen bleibt die alte Lesart (Verarbeitung/Form).
-            $erstes = $teile[0];
-            $istZustand = in_array($this->normalisiereZustand($erstes), self::ZUSTAND_VOCAB, true);   // normalisiereZustand liefert auch für Nicht-Zustandswörter einen Wert
-            $istPortion = preg_match('/pro\s+st(?:ue|ü)ck$/iu', $erstes) === 1 || mb_strtolower($erstes) === 'bio';
-            $spaeterZustand = false;
-            foreach (array_slice($teile, 1) as $teil) {
+            // §6.6: alles VOR dem ersten Zustandswort ist die Geschmackszutat bzw. bei Komposit-Salaten die Hauptbestandteile („Reissalat: schwarzer Reis,
+            // Avocado, Azukibohnen, TK" → flavor „schwarzer Reis, Avocado, Azukibohnen"). Kein Zustand im Namen oder Zustand an erster Stelle: alte Lesart.
+            $zustandIdx = null;
+            foreach ($teile as $i => $teil) {
                 $z = $this->normalisiereZustand($teil);
                 if ($z !== null && in_array($z, self::ZUSTAND_VOCAB, true)) {
-                    $spaeterZustand = true;
+                    $zustandIdx = $i;
                     break;
                 }
             }
-            if (! $istZustand && ! $istPortion && $spaeterZustand) {
-                $out['flavor'] = $erstes;
-                $teile = array_values(array_slice($teile, 1));
+            if ($zustandIdx !== null && $zustandIdx >= 1) {
+                $vor = array_slice($teile, 0, $zustandIdx);
+                $keinFlavor = false;
+                foreach ($vor as $teil) {
+                    if (preg_match('/pro\s+st(?:ue|ü)ck$/iu', $teil) === 1 || mb_strtolower($teil) === 'bio') {
+                        $keinFlavor = true;
+                    }
+                }
+                if (! $keinFlavor) {
+                    $out['flavor'] = implode(', ', $vor);
+                    $teile = array_values(array_slice($teile, $zustandIdx));
+                }
             }
         }
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();

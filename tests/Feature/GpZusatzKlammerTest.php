@@ -57,7 +57,8 @@ it('felderAusName (Editor): ein Klammerteil, der kein Flag ist, wird zum Zusatz;
     $name = 'Reissalat: schwarzer Reis, Avocado, Azukibohnen, TK / (Mambonito) / (Bio)';
     $f = $this->naming->felderAusName($name, true);
 
-    expect($f['zusatz'])->toBe('Mambonito')->and($f['bio'])->toBeTrue()->and($f['flavor'])->toBe('schwarzer Reis')->and($f['hauptzutat'])->toBe('Reissalat');
+    expect($f['zusatz'])->toBe('Mambonito')->and($f['bio'])->toBeTrue()->and($f['flavor'])->toBe('schwarzer Reis, Avocado, Azukibohnen')->and($f['condition'])->toBe('TK')->and($f['hauptzutat'])->toBe('Reissalat')
+        ->and($this->naming->renderGpName($f))->toBe($name);   // Rundlauf
     expect($this->naming->felderAusName('Mehl: trocken / (Bio)', true)['zusatz'])->toBe('');
     expect($this->naming->felderAusName($name))->not->toHaveKey('zusatz');   // Bestand/Backfill lesen wie bisher
 });
