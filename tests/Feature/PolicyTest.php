@@ -241,6 +241,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - LogsActivity + HasUuidV7 trägt das Model.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistAbgleichLog') {
+            // Abgleich-Dienst (GP-Abgleich, PR A): append-only Protokoll je Entscheidung (Kandidaten, Felder, Begründung, Tokens) — Nachvollziehbarkeit
+            // und Rücknahme, wie ai_call_log. Kein kuratierter Datensatz:
+            //  - kein LogsActivity: die Zeile IST das Protokoll; ein zweites Activity-Log wäre Rauschen (je Artikel eine Zeile, Massenläufe);
+            //  - kein SoftDeletes/HasUuidV7-Trait: wird nie gelöscht; die uuid setzt das Model selbst im creating-Hook;
+            //  - kein BelongsToTeamHierarchy: gelesen wird strikt `where team_id` (ein Mandant sieht nur eigene Entscheidungen, nie die der Eltern).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).

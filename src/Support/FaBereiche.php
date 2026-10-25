@@ -115,7 +115,7 @@ final class FaBereiche
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
         // Stammdaten
         ['gp', 'stammdaten'], ['gps', 'stammdaten'], ['preise_verlauf', 'stammdaten'], ['preise_historie', 'stammdaten'], ['nonfood', 'stammdaten'], ['artikel', 'stammdaten'], ['produktpass', 'stammdaten'], ['necta_pruefaelle', 'stammdaten'], ['supplier', 'stammdaten'], ['suppliers', 'stammdaten'],
-        ['favorites', 'stammdaten'], ['match', 'stammdaten'], ['lead_la', 'stammdaten'], ['ingest', 'stammdaten'],
+        ['favorites', 'stammdaten'], ['match', 'stammdaten'], ['la', 'stammdaten'], ['lead_la', 'stammdaten'], ['ingest', 'stammdaten'],
         ['struktur_vokabular', 'stammdaten'], ['component_equivalents', 'stammdaten'],
         // Einstellungen
         ['settings', 'einstellungen'], ['team_settings', 'einstellungen'], ['team_profile', 'einstellungen'], ['vocab_', 'einstellungen'], ['outlet_settings', 'einstellungen'],

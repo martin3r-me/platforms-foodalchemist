@@ -191,8 +191,18 @@ class GpAbgleichService
                 throw new \RuntimeException('Keine Hauptzutat in den Artikelfeldern — GP nicht anlegbar.');
             }
 
-            return DB::transaction(function () use ($team, $la, $in) {
-                $gp = $this->naming->createGp($team, $in);   // wirft bei §6-Verstoß oder Dublette (anlageGuard)
+            return DB::transaction(function () use ($team, $la, $in, $eigenes) {
+                // Option eigenes_gp ist die bewusste Entscheidung „GP im Mandanten statt Stamm-GP": ein globaler Namensvetter darf dann existieren
+                // (force → ~n-Suffix im gp_key). Ein team-eigener Namensvetter bleibt Hard-Stop — das wäre eine echte Dublette im Mandanten.
+                $force = false;
+                if ($eigenes) {
+                    $in = $this->naming->bereinigeFelder($in);
+                    $name = $this->naming->renderGpName($in);
+                    $key = $this->naming->buildGpKey($this->naming->slugify((string) ($in['hauptzutat'] ?? '')), $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
+                    $g = $this->naming->anlageGuard($team, $key, $name);
+                    $force = $g['blockiert'] && $g['vorhandenes_gp'] !== null && ! $g['vorhandenes_gp']->isOwnedBy($team);
+                }
+                $gp = $this->naming->createGp($team, $in, $force);   // wirft bei §6-Verstoß oder Dublette (anlageGuard)
                 $this->lead->verknuepfen($team, $gp, (int) $la->id);
 
                 return ['ausgefuehrt' => 'neu_angelegt', 'gp' => $gp->refresh()];

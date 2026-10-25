@@ -136,6 +136,10 @@ class GpKandidatenSucher
         $basis = ['frisch', 'TK', 'trocken', 'konserviert'];
         $az = $this->naming->normalisiereZustand($felder['condition'] ?? null);
         $gz = $this->naming->normalisiereZustand($gp->condition);
+        if (! in_array($gz, $basis, true)) {
+            // Bestands-GP ohne gepflegtes Zustandsfeld: Zustand aus dem Namen (§6-Schema) ableiten, nie raten — ohne Treffer bleibt er offen
+            $gz = $this->naming->normalisiereZustand($this->naming->felderAusName((string) $gp->name)['condition'] ?? null);
+        }
         if (in_array($az, $basis, true) && in_array($gz, $basis, true) && $az !== $gz) {
             return false;
         }

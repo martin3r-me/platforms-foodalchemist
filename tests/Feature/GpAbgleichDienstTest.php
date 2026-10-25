@@ -163,6 +163,7 @@ it('harter Filter: anderer Zustand (TK ≠ frisch) und andere Warengruppe fliege
 
     $e = ($this->dienst)()->entscheide($this->rootTeam, $la);
 
+    expect($e->felder['condition'] ?? null)->toBe('frisch')->and($e->felder['commodity_group_code'] ?? null)->toBe('01');   // Felder kamen aus dem KI-Mock an
     expect($e->kandidaten)->toBe([])->and($e->aktion)->toBe('neu');
 });
 
