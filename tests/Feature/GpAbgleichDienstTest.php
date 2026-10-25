@@ -140,8 +140,22 @@ it('Diagnose „warum nicht das heutige GP?“ nennt Recall, Filter, Diff, Guard
     expect($text)->toContain('harter Filter SPERRT: Zustand: Artikel frisch ≠ GP TK')->and($text)->toContain('Position in den Kandidaten');
 });
 
+it('Süßwaren/Eis-Markenartikel (§5 Ausnahme 2): Marke bleibt im GP-Namen — GP ohne die Marke ist abweichend, mit Marke gleich; Rohware nicht', function () {
+    $diff = app(MerkmalsDiff::class);
+    $felder = ['hauptzutat' => 'Riegel', 'commodity_group_code' => '09', 'sub_category' => 'Süßwaren', 'marke' => 'Ferrero'];
+    $ohne = ($this->gp)('Schokoriegel: trocken', ['commodity_group_code' => '09']);
+    $mit = ($this->gp)('Ferrero Kinder Riegel: trocken', ['commodity_group_code' => '09']);
+    $eis = ['hauptzutat' => 'Eis am Stiel', 'commodity_group_code' => '13', 'sub_category' => 'Desserts', 'marke' => 'Langnese'];
+
+    expect($diff->vergleiche($felder, ['Ferrero Kinder Riegel 21g'], false, $ohne)['abweichungen'])->toContain('Marke: Artikel Ferrero ≠ GP —')
+        ->and($diff->vergleiche($felder, ['Ferrero Kinder Riegel 21g'], false, $mit)['abweichend'])->toBeFalse()
+        ->and(MerkmalsDiff::istMarkenSuessware($eis))->toBeTrue()
+        ->and(MerkmalsDiff::istMarkenSuessware(['sub_category' => 'Zucker & Süßungsmittel', 'hauptzutat' => 'Kuvertüre', 'marke' => 'Callebaut']))->toBeFalse();
+});
+
 it('Fantasiename (zusatz) exakt im Artikel: bereits angelegter Komposit-Salat wird über den Recall gefunden', function () {
-    $gp = ($this->gp)('Reissalat: frisch, schwarzer Reis / (Mambonito)', ['commodity_group_code' => '13', 'zusatz' => 'Mambonito', 'main_ingredient_slug' => 'reissalat']);
+    // Name bewusst ohne „Mambonito“/„Reissalat“: nur das Feld zusatz kann das GP über den zusatz-Recall finden (Gegenprobe A10)
+    $gp = ($this->gp)('Quinoa-Bowl: frisch, Avocado', ['commodity_group_code' => '13', 'zusatz' => 'Mambonito', 'main_ingredient_slug' => 'quinoa-bowl']);
     ($this->ki)(['hauptzutat' => 'Reissalat', 'zusatz' => 'Mambonito', 'commodity_group_code' => '13']);
     $la = ($this->la)('TK Cuisin Mambonito 1,25kg', ['marketing_name' => 'Mambonito Salat']);
 

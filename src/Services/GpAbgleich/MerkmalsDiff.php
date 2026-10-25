@@ -78,12 +78,15 @@ class MerkmalsDiff
 
         // Bio
         // Getränke (WG 15, §5 Ausnahme 1 + §7.1a): Marke, Einzelgebinde und Füllmenge sind Teil der Ware (vol-% steht oben bei den Prozentwerten)
-        if ((string) ($felder['commodity_group_code'] ?? '') === '15' || (string) $gp->commodity_group_code === '15') {
+        $getraenk = (string) ($felder['commodity_group_code'] ?? '') === '15' || (string) $gp->commodity_group_code === '15';
+        if ($getraenk || self::istMarkenSuessware($felder)) {
             $marke = trim((string) ($felder['marke'] ?? ''));
             if ($marke !== '') {
                 $imGp = str_contains($this->norm((string) $gp->name), $this->norm($marke));
                 $e[] = $this->eintrag('Marke', $marke, $imGp ? $marke : null, $imGp ? 'gleich' : 'abweichend');
             }
+        }
+        if ($getraenk) {
             $af = $this->fuellmenge($text . ' ' . implode(' ', array_map('strval', [$felder['pflichtangabe'] ?? '', $felder['form'] ?? '', $felder['processing'] ?? ''])));
             $gf = $this->fuellmenge((string) $gp->name);
             if ($af !== null || $gf !== null) {
@@ -102,6 +105,25 @@ class MerkmalsDiff
             'abweichend' => $abw !== [],
             'abweichungen' => array_map(fn ($x) => $x['merkmal'] . ': Artikel ' . ($x['artikel'] ?? '—') . ' ≠ GP ' . ($x['gp'] ?? '—'), $abw),
         ];
+    }
+
+    /**
+     * §5 Ausnahme 2 (Entscheid Dominique 25.10.2026): Markenartikel bei Süßwaren und Eis behalten die Marke im GP-Namen (Ferrero, KitKat, Mars, Langnese …).
+     * Erkennung: Marke am Artikel UND Unterkategorie Süßwaren (WG 09) bzw. Eis (Unterkategorie/Hauptzutat). Rohware (Schokolade, Kuvertüre, Zucker) zählt nicht:
+     * dafür gilt §5/§8.19 — die Unterkategorie „Süßwaren“ trägt nur den fertigen Markenartikel, Zutaten stehen in den Zucker-/Backzutaten-Gruppen.
+     *
+     * @param  array<string,mixed>  $felder
+     */
+    public static function istMarkenSuessware(array $felder): bool
+    {
+        if (trim((string) ($felder['marke'] ?? '')) === '') {
+            return false;
+        }
+        $sub = mb_strtolower(trim((string) ($felder['sub_category'] ?? '')));
+        $haupt = mb_strtolower(trim((string) ($felder['hauptzutat'] ?? '')));
+
+        return str_contains($sub, 'süßwar') || str_contains($sub, 'suesswar')
+            || preg_match('/(?<![\p{L}])(eis|speiseeis|eiscreme)(?![\p{L}])/u', $sub . ' ' . $haupt) === 1;
     }
 
     /** Non-Food (§8.18): nur Größe/Maß entscheidet; kein Zustand, Bio, Zucker, Allergene. */

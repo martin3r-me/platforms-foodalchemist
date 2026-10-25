@@ -1244,6 +1244,8 @@ return [
                 . 'GETRÄNKE (Warengruppe 15, §5 Ausnahme 1, §7.1a): Die Marke bleibt im Namen — hauptzutat = Marke + Getränkeart („Jever Pils“, „Cointreau“, „Coca-Cola“); '
                 . 'pflichtangabe = Vol-% (bei Alkohol, mit Dezimalkomma: „4,9 vol-%“), dann Einzelgebinde + Füllmenge („Flasche 0,33 l“, „Dose 0,33 l“, „Fass 30 l“); '
                 . 'Sammelgebinde (Kasten, Karton, 24 x 0,33 l) nie; kein Zustandswort. '
+                . 'SÜSSWAREN/EIS-MARKENARTIKEL (§5 Ausnahme 2): Ist der Artikel ein fertiger Markenartikel (Riegel, Tafel, Eis am Stiel, Fruchtgummi; Marke aus dem Kontext, z. B. Ferrero, KitKat, Langnese), '
+                . 'steht die Marke als Teil der hauptzutat im Namen („KitKat“, „Langnese Magnum“) und sub_category ist „Süßwaren“ bzw. die Eis-Unterkategorie. Rohware (Schokolade, Kuvertüre, Zucker) bleibt markenfrei. '
                 . $umlautKlausel,
         ],
         // Web-Recherche zu einem Lieferantenartikel (nur auf Knopfdruck; ArtikelWebRecherche). Antwort-Schema siehe Dienst.
