@@ -639,6 +639,9 @@ class LeadLaService
      */
     public function guardAbweichungen(Team $team, FoodAlchemistGp $gp, int $neuerLaId): array
     {
+        if ($gp->istNonFood()) {
+            return [];   // Non-Food nimmt nicht an der Allergen-/Deklarations-Vererbung teil (Regelwerk §8.18.4)
+        }
         $neu = FoodAlchemistSupplierItem::visibleToTeam($team)->with(['allergens', 'declarations'])->findOrFail($neuerLaId);
         $bestehend = FoodAlchemistSupplierItem::query()
             ->with(['allergens', 'declarations'])

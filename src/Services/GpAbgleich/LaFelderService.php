@@ -30,12 +30,12 @@ class LaFelderService
      * @return array{hauptzutat: string, flavor: string, zusatz: string, condition: string, processing: string, form: string, pflichtangabe: string,
      *               commodity_group_code: string, sub_category: string, quelle: string, ki: ?AiProposal}
      */
-    public function fuer(Team $team, FoodAlchemistSupplierItem $la, bool $kiErlaubt = true): array
+    public function fuer(Team $team, FoodAlchemistSupplierItem $la, bool $kiErlaubt = true, bool $nonFood = false): array
     {
         $la->loadMissing('structure');
         $s = $la->structure;
         if ($s !== null && $s->classified_at !== null && trim((string) $s->main_ingredient_display) !== '') {
-            return [
+            return $this->abschluss([
                 'hauptzutat' => (string) $s->main_ingredient_display,
                 'flavor' => (string) ($s->flavor ?? ''),
                 'zusatz' => (string) ($s->zusatz ?? ''),
@@ -47,10 +47,10 @@ class LaFelderService
                 'sub_category' => '',
                 'quelle' => 'struktur',
                 'ki' => null,
-            ];
+            ], $la, $nonFood);
         }
         if (! $kiErlaubt) {
-            return $this->leer('keine');
+            return $this->abschluss($this->leer('keine'), $la, $nonFood);
         }
 
         $vorschlag = $this->ki->propose('gp.suggest', [
@@ -58,11 +58,11 @@ class LaFelderService
             'taxonomie' => $this->taxonomie($team),
             'regel' => 'commodity_group_code und sub_category ausschließlich aus taxonomie wählen',
             'quell_lieferantenartikel' => $this->artikelKontext($la),
-        ]);
+        ] + ($nonFood ? ['artikel_ist_nonfood' => true, 'nonfood_subkategorie' => $la->nonfood?->subkategorie] : []));
         $w = $vorschlag->werte;
         $feld = fn (string $k): string => $this->naming->bereinigeFeld($w[$k] ?? null);
 
-        return [
+        return $this->abschluss([
             'hauptzutat' => $feld('hauptzutat'),
             'flavor' => $feld('flavor'),
             'zusatz' => $this->naming->zusatzAusArtikel($w['zusatz'] ?? null, [$la->designation, $la->marketing_name]),
@@ -74,7 +74,44 @@ class LaFelderService
             'sub_category' => $feld('sub_category'),
             'quelle' => 'ki',
             'ki' => $vorschlag,
-        ];
+        ], $la, $nonFood);
+    }
+
+    /**
+     * Einheitlicher Abschluss der Felder: Marke vom Artikel (nur für den Abgleich der Getränke, §5 Ausnahme 1 — nie aus der KI), Verarbeitung und Zuschnitt
+     * zusammenführen (§6: „gegart, Würfel 10 mm“ — der Namens-Renderer nimmt sonst nur eines von beiden), Zuschnittmaße kanonisch („10 x 10 mm“ → „10 mm“),
+     * bei Non-Food die Warengruppe 16 erzwingen (§8.18.1: kein Zustand, keine Form).
+     *
+     * @param  array<string,mixed>  $f
+     * @return array<string,mixed>
+     */
+    private function abschluss(array $f, FoodAlchemistSupplierItem $la, bool $nonFood): array
+    {
+        $f['marke'] = trim((string) $la->brand);
+        $f['processing'] = $this->kanonischeMasse((string) ($f['processing'] ?? ''));
+        $f['form'] = $this->kanonischeMasse((string) ($f['form'] ?? ''));
+        if ($nonFood) {
+            $f['commodity_group_code'] = \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE;
+            $f['condition'] = '';
+            $f['form'] = '';   // Non-Food: Produkt: Eigenschaft, Größe (processing = Eigenschaft, pflichtangabe = Größe)
+            $f['non_food'] = true;
+
+            return $f;
+        }
+        $verarbeitung = trim((string) $f['processing']);
+        $form = trim((string) $f['form']);
+        if ($verarbeitung !== '' && $form !== '' && mb_stripos($verarbeitung, $form) === false && mb_stripos($form, $verarbeitung) === false) {
+            $f['processing'] = $verarbeitung . ', ' . $form;   // beide Attribute stehen im Namen; Reihenfolge Verarbeitung vor Zuschnitt
+            $f['form'] = '';
+        }
+
+        return $f;
+    }
+
+    /** „Würfel 10 x 10 mm“ / „10x10mm“ → „Würfel 10 mm“ (gleiche Kantenlängen = ein Maß, v3.6.0 §7.3). */
+    private function kanonischeMasse(string $s): string
+    {
+        return trim((string) preg_replace('/(\d+(?:[.,]\d+)?)\s*[x×]\s*\1\s*mm\b/iu', '$1 mm', $s));
     }
 
     /** @return array<string,mixed> */

@@ -27,6 +27,9 @@ class MerkmalsDiff
     public function vergleiche(array $felder, array $artikelTexte, bool $artikelBio, FoodAlchemistGp $gp): array
     {
         $text = mb_strtolower(implode(' | ', array_filter(array_map('trim', $artikelTexte))));
+        if ($gp->istNonFood()) {
+            return $this->vergleicheNonFood($text, $gp);
+        }
         $gpFelder = $this->naming->felderAusName((string) $gp->name, true);
         $e = [];
 
@@ -74,7 +77,25 @@ class MerkmalsDiff
         }
 
         // Bio
-        $gbio = mb_strtolower((string) $gp->bio) === 'bio';
+        // Getränke (WG 15, §5 Ausnahme 1 + §7.1a): Marke, Einzelgebinde und Füllmenge sind Teil der Ware (vol-% steht oben bei den Prozentwerten)
+        $getraenk = (string) ($felder['commodity_group_code'] ?? '') === '15' || (string) $gp->commodity_group_code === '15';
+        if ($getraenk || self::istMarkenSuessware($felder)) {
+            $marke = trim((string) ($felder['marke'] ?? ''));
+            if ($marke !== '') {
+                $imGp = str_contains($this->norm((string) $gp->name), $this->norm($marke));
+                $e[] = $this->eintrag('Marke', $marke, $imGp ? $marke : null, $imGp ? 'gleich' : 'abweichend');
+            }
+        }
+        if ($getraenk) {
+            $af = $this->fuellmenge($text . ' ' . implode(' ', array_map('strval', [$felder['pflichtangabe'] ?? '', $felder['form'] ?? '', $felder['processing'] ?? ''])));
+            $gf = $this->fuellmenge((string) $gp->name);
+            if ($af !== null || $gf !== null) {
+                $e[] = $this->eintrag('Gebinde/Füllmenge', $af, $gf, $af !== null && $gf !== null ? ($this->gleicheFuellmenge($af, $gf) ? 'gleich' : 'abweichend') : 'unbekannt');
+            }
+        }
+
+        // Bio steht im Feld ODER (Bestands-GP ohne Backfill) als Marker im Namen („…, BIO“ / „/ (Bio)“)
+        $gbio = mb_strtolower((string) $gp->bio) === 'bio' || ! empty($gpFelder['bio']) || preg_match('/(?<![\p{L}])bio(?![\p{L}])/iu', (string) $gp->name) === 1;
         $e[] = $this->eintrag('Bio', $artikelBio ? 'bio' : 'konventionell', $gbio ? 'bio' : 'konventionell', $artikelBio === $gbio ? 'gleich' : 'abweichend');
 
         $abw = array_values(array_filter($e, fn ($x) => $x['urteil'] === 'abweichend'));
@@ -84,6 +105,81 @@ class MerkmalsDiff
             'abweichend' => $abw !== [],
             'abweichungen' => array_map(fn ($x) => $x['merkmal'] . ': Artikel ' . ($x['artikel'] ?? '—') . ' ≠ GP ' . ($x['gp'] ?? '—'), $abw),
         ];
+    }
+
+    /**
+     * §5 Ausnahme 2 (Entscheid Dominique 25.10.2026): Markenartikel bei Süßwaren und Eis behalten die Marke im GP-Namen (Ferrero, KitKat, Mars, Langnese …).
+     * Erkennung: Marke am Artikel UND Unterkategorie Süßwaren (WG 09) bzw. Eis (Unterkategorie/Hauptzutat). Rohware (Schokolade, Kuvertüre, Zucker) zählt nicht:
+     * dafür gilt §5/§8.19 — die Unterkategorie „Süßwaren“ trägt nur den fertigen Markenartikel, Zutaten stehen in den Zucker-/Backzutaten-Gruppen.
+     *
+     * @param  array<string,mixed>  $felder
+     */
+    public static function istMarkenSuessware(array $felder): bool
+    {
+        if (trim((string) ($felder['marke'] ?? '')) === '') {
+            return false;
+        }
+        $sub = mb_strtolower(trim((string) ($felder['sub_category'] ?? '')));
+        $haupt = mb_strtolower(trim((string) ($felder['hauptzutat'] ?? '')));
+
+        return str_contains($sub, 'süßwar') || str_contains($sub, 'suesswar')
+            || preg_match('/(?<![\p{L}])(eis|speiseeis|eiscreme)(?![\p{L}])/u', $sub . ' ' . $haupt) === 1;
+    }
+
+    /** Non-Food (§8.18): nur Größe/Maß entscheidet; kein Zustand, Bio, Zucker, Allergene. */
+    private function vergleicheNonFood(string $text, FoodAlchemistGp $gp): array
+    {
+        $gm = $this->masse((string) $gp->name);
+        $am = $this->masse($text);
+        $urteil = $gm !== [] && $am !== [] ? (array_intersect($gm, $am) !== [] ? 'gleich' : 'abweichend') : 'unbekannt';
+        $e = [$this->eintrag('Größe', $am !== [] ? implode(' / ', $am) : null, $gm !== [] ? implode(' / ', $gm) : null, $urteil)];
+        $abw = array_values(array_filter($e, fn ($x) => $x['urteil'] === 'abweichend'));
+
+        return [
+            'eintraege' => $e,
+            'abweichend' => $abw !== [],
+            'abweichungen' => array_map(fn ($x) => $x['merkmal'] . ': Artikel ' . ($x['artikel'] ?? '—') . ' ≠ GP ' . ($x['gp'] ?? '—'), $abw),
+        ];
+    }
+
+    /** Maße mit Einheit, kanonisch in mm/ml/g („33 cm“ → „330 mm“, „0,9 l“ → „900 ml“). @return list<string> */
+    private function masse(string $text): array
+    {
+        preg_match_all('/(\d+(?:[.,]\d+)?)\s*(mm|cm|ml|l|g|kg)(?![\p{L}])/iu', mb_strtolower($text), $m, PREG_SET_ORDER);
+        $out = [];
+        foreach ($m as $t) {
+            $v = (float) str_replace(',', '.', $t[1]);
+            [$v, $u] = match ($t[2]) {
+                'cm' => [$v * 10, 'mm'], 'l' => [$v * 1000, 'ml'], 'kg' => [$v * 1000, 'g'], default => [$v, $t[2]],
+            };
+            $out[] = rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') . ' ' . $u;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /** Menge gleich UND (Gebinde-Wort gleich oder auf einer Seite nicht genannt — der Artikeltext nennt „Flasche“ oft nicht). */
+    private function gleicheFuellmenge(string $a, string $b): bool
+    {
+        $ma = preg_match('/^(.*?)\s*([\d.]+ ml)$/u', $a, $x) === 1 ? [trim($x[1]), $x[2]] : ['', $a];
+        $mb = preg_match('/^(.*?)\s*([\d.]+ ml)$/u', $b, $y) === 1 ? [trim($y[1]), $y[2]] : ['', $b];
+
+        return $ma[1] === $mb[1] && ($ma[0] === $mb[0] || $ma[0] === '' || $mb[0] === '');
+    }
+
+    /** Einzelgebinde + Füllmenge eines Getränks („Flasche 0,33 l“ → „flasche 330 ml“); ohne Gebinde-Wort nur die Menge in ml/l. */
+    private function fuellmenge(string $text): ?string
+    {
+        $t = mb_strtolower($text);
+        if (preg_match('/(flasche|dose|fass|bag[- ]in[- ]box)?\s*(\d+(?:[.,]\d+)?)\s*(ml|l|cl)(?![\p{L}])/iu', $t, $m) !== 1) {
+            return null;
+        }
+        $v = (float) str_replace(',', '.', $m[2]);
+        $ml = match ($m[3]) {
+            'l' => $v * 1000, 'cl' => $v * 10, default => $v,
+        };
+
+        return trim($m[1] . ' ' . rtrim(rtrim(number_format($ml, 1, '.', ''), '0'), '.') . ' ml');
     }
 
     /** @return array{merkmal: string, artikel: ?string, gp: ?string, urteil: string} */
@@ -106,7 +202,11 @@ class MerkmalsDiff
     private function prozent(string $text, string $wort): ?string
     {
         if ($wort === 'vol') {
-            return preg_match('/(\d+(?:[.,]\d+)?)\s*vol\.?\s*-?\s*%/iu', $text, $m) === 1 ? str_replace(',', '.', $m[1]) : null;
+            if (preg_match('/(\d+(?:[.,]\d+)?)\s*vol\.?\s*-?\s*%/iu', $text, $m) === 1 || preg_match('/(\d+(?:[.,]\d+)?)\s*%\s*vol/iu', $text, $m) === 1) {
+                return str_replace(',', '.', $m[1]);
+            }
+
+            return null;
         }
         if (preg_match('/(\d+(?:[.,]\d+)?)\s*%\s*(?:' . preg_quote($wort, '/') . ')/iu', $text, $m) === 1) {
             return str_replace(',', '.', $m[1]);
