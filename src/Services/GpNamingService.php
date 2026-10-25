@@ -258,7 +258,7 @@ class GpNamingService
      */
     public function felderAusName(string $name, bool $mitGeschmack = false): array
     {
-        $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false];
+        $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false];
         if ($mitGeschmack) {
             $out = ['hauptzutat' => '', 'flavor' => ''] + array_slice($out, 1);   // nur für den Editor (§6.6); Bestands-Backfill und Pläne behalten die alte Form
         }
@@ -276,6 +276,9 @@ class GpNamingService
         }
         if (preg_match('/\(\s*bio\s*\)/iu', $name) === 1) {
             $out['bio'] = true;
+        }
+        foreach (['vegan', 'glutenfrei', 'laktosefrei'] as $diaet) {   // Namensmarker „/ (Vegan)“ usw. (Felder namens_*)
+            $out[$diaet] = preg_match('/\(\s*' . $diaet . '\s*\)/iu', $name) === 1;
         }
         $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
         $out['hauptzutat'] = trim((string) strstr($name . ':', ':', true));
@@ -581,6 +584,10 @@ class GpNamingService
             'zusatz' => $this->bereinigeZusatz($in['zusatz'] ?? null) ?: null,
             'pflichtangabe' => trim((string) ($in['pflichtangabe'] ?? '')) ?: null,
             'portion' => trim((string) ($in['portion'] ?? '')) ?: null,
+            'bio' => ! empty($in['bio']) ? 'bio' : null,                          // Namensmarker „(Bio)“ — gleiche Mechanik wie die Diät-Marker
+            'namens_vegan' => ! empty($in['vegan']),
+            'namens_glutenfrei' => ! empty($in['glutenfrei']),
+            'namens_laktosefrei' => ! empty($in['laktosefrei']),
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
             'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
@@ -621,6 +628,11 @@ class GpNamingService
             // pflichtangabe/portion (Name aus Feldern vollständig): Teil-Schreiber ohne das Feld lassen den Wert stehen
             'pflichtangabe' => array_key_exists('pflichtangabe', $in) ? (trim((string) $in['pflichtangabe']) ?: null) : $gp->pflichtangabe,
             'portion' => array_key_exists('portion', $in) ? (trim((string) $in['portion']) ?: null) : $gp->portion,
+            // Namensmarker (Bio/Vegan/Glutenfrei/Laktosefrei): Teil-Schreiber ohne den Schlüssel lassen den Wert stehen
+            'bio' => array_key_exists('bio', $in) ? (! empty($in['bio']) ? 'bio' : null) : $gp->bio,
+            'namens_vegan' => array_key_exists('vegan', $in) ? ! empty($in['vegan']) : (bool) $gp->namens_vegan,
+            'namens_glutenfrei' => array_key_exists('glutenfrei', $in) ? ! empty($in['glutenfrei']) : (bool) $gp->namens_glutenfrei,
+            'namens_laktosefrei' => array_key_exists('laktosefrei', $in) ? ! empty($in['laktosefrei']) : (bool) $gp->namens_laktosefrei,
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
