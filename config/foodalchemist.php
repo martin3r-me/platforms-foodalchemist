@@ -1231,6 +1231,19 @@ return [
                 . 'Bei Warengruppe 13 (Convenience) wähle den Subtyp 13.1–13.7, der zur Art des Produkts passt (z. B. Dessert/Süßspeise), exakt aus taxonomie. '
                 . 'Gib sub_category immer an, wenn commodity_group_code gesetzt ist und eine Unterkategorie der Warengruppe fachlich passt '
                 . '(exakt aus taxonomie); nur wenn keine passt, "". '
+                . 'FERTIGE GERICHTE UND KOMPONENTEN (mehrere Hauptzutaten ≥ 20 %, fertig gewürzt/gegart, WG 13): hauptzutat ist der Gerichts- bzw. Speisenname aus der Bezeichnung '
+                . '(z. B. „Melanzane“, „Bolognese“, „Ratatouille“), NICHT die mengenmäßig größte Einzelzutat (nie „Aubergine: frittiert“ für Melanzane in Tomatensauce); '
+                . 'processing „verzehrfertig“, wenn die Ware nur erhitzt werden muss. '
+                . 'FESTSTEHENDER PRODUKTNAME: Steht in der Bezeichnung ein üblicher Produktname („Mousse au Chocolat“), ist genau der die hauptzutat — nicht frei umformuliert (nicht „Schokoladenmousse“). '
+                . 'PRODUKTFORM: Trockenmischungen und Pulver bekommen ihre Form („Pulver“, „Granulat“, „Flocken“, „Paste“) in form, z. B. Mousse-au-Chocolat-Mischung → condition trocken, form Pulver. '
+                . 'VERARBEITUNG UND ZUSCHNITT sind zwei getrennte Angaben: processing = Behandlung (gegart, vorgegart, blanchiert, frittiert), form = Zuschnitt mit Maß '
+                . '(„Würfel 10 mm“); gleiche Kantenlängen als ein Maß („10 x 10 mm“ → „Würfel 10 mm“). Gib beide an, wenn beide belegt sind. '
+                . 'NON-FOOD (kontext artikel_ist_nonfood = true, Warengruppe 16, §8.18.1): Schema „Produkt: Eigenschaft, Größe“ — hauptzutat = Produkt als Oberbegriff im Singular ohne Marke und Gebinde '
+                . '(„Salatschale“), processing = Eigenschaft (Material, Art, Farbe: „Bagasse“), pflichtangabe = Größe je Stück („900 ml“, „33 x 33 cm“, „Größe M“), condition und form leer, '
+                . 'commodity_group_code „16“, sub_category aus nonfood_subkategorie bzw. taxonomie; keine Lebensmittel-Wörter (frisch, TK, trocken, Portion). '
+                . 'GETRÄNKE (Warengruppe 15, §5 Ausnahme 1, §7.1a): Die Marke bleibt im Namen — hauptzutat = Marke + Getränkeart („Jever Pils“, „Cointreau“, „Coca-Cola“); '
+                . 'pflichtangabe = Vol-% (bei Alkohol, mit Dezimalkomma: „4,9 vol-%“), dann Einzelgebinde + Füllmenge („Flasche 0,33 l“, „Dose 0,33 l“, „Fass 30 l“); '
+                . 'Sammelgebinde (Kasten, Karton, 24 x 0,33 l) nie; kein Zustandswort. '
                 . $umlautKlausel,
         ],
         // Web-Recherche zu einem Lieferantenartikel (nur auf Knopfdruck; ArtikelWebRecherche). Antwort-Schema siehe Dienst.
@@ -1743,7 +1756,9 @@ return [
                 . 'Ein GP ist EIN einheitlicher Einkaufsgegenstand: verknüpfe NIE, wenn Zustand (frisch/TK/trocken/konserviert), Geschmackszutat (flavor, z. B. Chili), '
                 . 'Fantasiename (zusatz), Prozentwert (Fett, Kakao, Frucht, vol), Zucker (gezuckert/ungezuckert), Bio oder Sorte abweichen, oder wenn allergen_guard WIDERSPRUCH meldet '
                 . '(merkmals_diff und allergen_guard sind vorab geprüft; vertraue ihnen). Hersteller und Marke sind KEIN Unterscheidungsmerkmal (Regelwerk §5: gleichwertige Hersteller '
-                . 'stehen im selben GP). Abkürzungen der Lieferanten (z. B. „O+G“, „TK“, „Wib.“) deutest du aus Zutaten und Kontext; erfinde nichts. '
+                . 'stehen im selben GP) — AUSSER bei Getränken (Warengruppe 15: Marke, Vol-% und Einzelgebinde/Füllmenge gehören zur Ware) und Süßwaren/Eis-Markenartikeln. '
+                . 'NON-FOOD (kontext non_food = true): es gibt weder Zustand noch Allergen-Guard; entscheidend sind Produkt, Eigenschaft/Material und Größe (merkmals_diff „Größe“). '
+                . 'Ein vorhandenes GP mit demselben Fantasienamen (zusatz) wie der Artikel ist ein starkes Indiz für dieselbe Ware. Abkürzungen der Lieferanten (z. B. „O+G“, „TK“, „Wib.“) deutest du aus Zutaten und Kontext; erfinde nichts. '
                 . 'abweichungen: Merkmale, die gegen das gewählte GP sprechen (leer, wenn keine).',
         ],
         'gp.term_la_rank' => [

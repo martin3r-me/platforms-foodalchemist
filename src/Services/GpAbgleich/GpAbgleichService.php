@@ -69,10 +69,8 @@ class GpAbgleichService
         $kiErlaubt = (bool) ($opt['ki'] ?? true);
         $max = max(1, min(self::MAX_KANDIDATEN, (int) ($opt['max_kandidaten'] ?? self::MAX_KANDIDATEN)));
 
-        // Non-Food: nie an ein Food-GP
-        if ($this->nonFood->istNonFood((int) $la->id)) {
-            return new AbgleichErgebnis('blockiert', null, 'Non-Food-Artikel — kein Food-GP.', 0.0, [], [], [], 'nonfood');
-        }
+        // Non-Food (Warengruppe 16): eigener Pfad — nie an ein Food-GP, nur gegen Non-Food-GPs; ohne Zustand/Allergen-Guard (§8.18)
+        $nf = $this->nonFood->istNonFood((int) $la->id);
         // schon verknüpft
         $la->loadMissing('structure');
         if (empty($opt['ignoriere_verknuepfung']) && $la->structure?->gp_id !== null && $la->structure->deleted_at === null) {
@@ -83,7 +81,7 @@ class GpAbgleichService
         foreach ($this->match->exakteBruecken($la, $team) as $t) {
             /** @var FoodAlchemistGp $gp */
             $gp = $t['gp'];
-            if (! $this->aktiv($gp)) {
+            if (! $this->aktiv($gp, $nf)) {
                 continue;
             }
             $guard = $this->guardOrLeer($team, $gp, (int) $la->id);
@@ -102,13 +100,13 @@ class GpAbgleichService
         }
 
         // S1 — Felder
-        $felder = $this->felder->fuer($team, $la, $kiErlaubt);
+        $felder = $this->felder->fuer($team, $la, $kiErlaubt, $nf);
         $kiCalls = $felder['ki'] instanceof AiProposal ? 1 : 0;
         [$tIn, $tOut] = $this->tokens($felder['ki'] ?? null);
         $felderOut = collect($felder)->except('ki')->all();
 
         // S2–S5 — Kandidaten
-        $kandidaten = $this->sucher->kandidaten($team, $la, $felder, 'gleich', $max);
+        $kandidaten = $this->sucher->kandidaten($team, $la, $felder, $nf ? 'nonfood' : 'gleich', $max);
 
         if ($kandidaten === []) {
             if (trim((string) $felder['hauptzutat']) === '') {
@@ -126,7 +124,7 @@ class GpAbgleichService
         }
 
         // S6 — KI-Entscheider
-        $antwort = $this->entscheiderKi($la, $felderOut, $kandidaten);
+        $antwort = $this->entscheiderKi($la, $felderOut, $kandidaten, $nf);
         $kiCalls += 1;
         [$tI2, $tO2] = $this->tokens($antwort['ki']);
         $tIn += $tI2;
@@ -264,9 +262,10 @@ class GpAbgleichService
      * @param  list<array<string,mixed>>  $kandidaten
      * @return array{werte: array<string,mixed>, ki: AiProposal}
      */
-    private function entscheiderKi(FoodAlchemistSupplierItem $la, array $felder, array $kandidaten): array
+    private function entscheiderKi(FoodAlchemistSupplierItem $la, array $felder, array $kandidaten, bool $nonFood = false): array
     {
         $ctx = [
+            'non_food' => $nonFood,
             'artikel' => $this->felder->artikelKontext($la) + ['felder' => array_filter($felder, fn ($v, $k) => $k !== 'quelle' && $v !== '', ARRAY_FILTER_USE_BOTH)],
             'kandidaten' => array_map(function ($c) {
                 /** @var FoodAlchemistGp $gp */
@@ -355,11 +354,11 @@ class GpAbgleichService
 
     // ── Helfer ───────────────────────────────────────────────────────────────────────────────────────────
 
-    private function aktiv(FoodAlchemistGp $gp): bool
+    private function aktiv(FoodAlchemistGp $gp, bool $nonFood = false): bool
     {
         $status = $gp->status instanceof \BackedEnum ? $gp->status->value : (string) $gp->status;
 
-        return in_array($status, ['approved', 'tentative'], true) && ! $gp->is_derivat && ! $gp->is_platzhalter && (string) $gp->commodity_group_code !== '16';
+        return in_array($status, ['approved', 'tentative'], true) && ! $gp->is_derivat && ! $gp->is_platzhalter && $gp->istNonFood() === $nonFood;
     }
 
     /** @return list<string> */

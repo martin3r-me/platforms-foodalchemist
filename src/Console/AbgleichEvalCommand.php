@@ -9,6 +9,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\GpAbgleich\GpAbgleichService;
+use Platform\FoodAlchemist\Services\GpAbgleich\GpKandidatenSucher;
 use Platform\FoodAlchemist\Support\FaTeam;
 use Platform\FoodAlchemist\Support\MasterTeam;
 
@@ -52,7 +53,7 @@ class AbgleichEvalCommand extends Command
 
         $kopf = ['gruppe', 'artikel_id', 'bezeichnung', 'zutaten_kurz', 'heute_gp_id', 'heute_gp_name', 'entscheidung', 'gp_id', 'gp_name', 'sicherheit', 'automatisch',
             'begruendung', 'abweichungen', 'top3_kandidaten', 'merkmals_diff_sieger', 'guard', 'felder', 'stufe', 'ki_calls', 'tokens_in', 'tokens_out',
-            'dauer_ms', 'vergleich_automatisch', 'urteil_dominique', 'kommentar_dominique'];
+            'dauer_ms', 'vergleich_automatisch', 'heute_gp_diagnose', 'urteil_dominique', 'kommentar_dominique'];
         $rows = [];
         $summe = ['kosten_calls' => 0, 'tokens_in' => 0, 'tokens_out' => 0, 'dauer_ms' => 0, 'n' => 0];
         $zaehler = [];
@@ -69,10 +70,16 @@ class AbgleichEvalCommand extends Command
                 // KI-Aufrufe gehören IMMER ins ai_call_log (Kostenlog, Monatsdeckel, Abrechnung): der Rollback würde sie verschlucken. Deshalb werden genau die vom
                 // Abgleich erzeugten Zeilen (IDs aus dem Ergebnis) VOR dem Rollback gelesen und NACH dem Rollback neu geschrieben — alles andere bleibt zurückgerollt.
                 $logZeilen = [];
-                $e = FaTeam::imTeam($team, function () use ($dienst, $team, $la, $ki, &$logZeilen) {
+                $diag = '';
+                $heuteId = ($z['heute_gp_id'] ?? '') !== '' ? (int) $z['heute_gp_id'] : null;
+                $e = FaTeam::imTeam($team, function () use ($dienst, $team, $la, $ki, &$logZeilen, &$diag, $heuteId) {
                     DB::beginTransaction();
                     try {
                         $ergebnis = $dienst->entscheide($team, $la, ['ki' => $ki, 'ignoriere_verknuepfung' => true]);
+                        if ($heuteId !== null && $ergebnis->felder !== []) {
+                            // „Warum nicht das heutige GP?“ — Recall, harter Filter, Diff, Guard, Rang des heutigen GP (nur lesend)
+                            $diag = app(GpKandidatenSucher::class)->diagnose($team, $la, $ergebnis->felder, $heuteId);
+                        }
                         $logZeilen = $ergebnis->kiLogIds === [] ? [] : DB::table('foodalchemist_ai_call_log')->whereIn('id', $ergebnis->kiLogIds)->get()->map(fn ($r) => (array) $r)->all();
 
                         return $ergebnis;
@@ -106,7 +113,7 @@ class AbgleichEvalCommand extends Command
                 'merkmals_diff_sieger' => $sieger ? implode('; ', $sieger['diff_abweichungen']) : '', 'guard' => $sieger ? implode('; ', $sieger['guard']) : '',
                 'felder' => collect($e->felder)->only(['hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'commodity_group_code'])->filter()->map(fn ($v, $k) => "$k=$v")->implode(', '),
                 'stufe' => $e->stufe, 'ki_calls' => $e->kiCalls, 'tokens_in' => $e->tokensIn, 'tokens_out' => $e->tokensOut, 'dauer_ms' => $e->dauerMs,
-                'vergleich_automatisch' => $vergleich, 'urteil_dominique' => '', 'kommentar_dominique' => '',
+                'vergleich_automatisch' => $vergleich, 'heute_gp_diagnose' => $diag, 'urteil_dominique' => '', 'kommentar_dominique' => '',
             ];
             $summe['kosten_calls'] += $e->kiCalls;
             $summe['tokens_in'] += $e->tokensIn;

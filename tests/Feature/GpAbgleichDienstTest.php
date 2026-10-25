@@ -76,15 +76,78 @@ it('S0 exakte Brücke: gleicher Artikel/EAN an einem GP → verknüpfen, Sicherh
         ->and($e->automatisch)->toBeTrue()->and($e->kiCalls)->toBe(0);
 });
 
-it('Non-Food-Artikel werden vorab abgewiesen (blockiert), schon verknüpfte als bereits_verknuepft', function () {
-    $nf = ($this->la)('Duni Salatschale Bagasse 900 ml');
-    FoodAlchemistSupplierItemNonfood::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $nf->id, 'ist_nonfood' => true, 'quelle' => 'manuell']);
+it('schon verknüpfte Artikel: bereits_verknuepft', function () {
     $gp = ($this->gp)('Zwiebel: frisch, ganz');
     $schon = ($this->la)('Zwiebel 5kg', [], $gp);
 
-    expect(($this->dienst)()->entscheide($this->rootTeam, $nf)->aktion)->toBe('blockiert')
-        ->and(($this->dienst)()->entscheide($this->rootTeam, $schon)->aktion)->toBe('bereits_verknuepft')
+    expect(($this->dienst)()->entscheide($this->rootTeam, $schon)->aktion)->toBe('bereits_verknuepft')
         ->and(($this->dienst)()->entscheide($this->rootTeam, $schon)->gpId)->toBe($gp->id);
+});
+
+it('Non-Food-Artikel: eigener Pfad gegen WG-16-GPs — Größe entscheidet, kein Zustand, kein Allergen-Guard, Food-GPs nie Kandidat', function () {
+    $nfGp = ($this->gp)('Salatschale: Bagasse, 900 ml', ['commodity_group_code' => '16', 'condition' => null, 'main_ingredient_slug' => 'salatschale']);
+    ($this->gp)('Salatschale: Bagasse, 500 ml', ['commodity_group_code' => '16', 'condition' => null, 'main_ingredient_slug' => 'salatschale']);
+    ($this->gp)('Salat: frisch, ganz', ['commodity_group_code' => '01']);
+    $nf = ($this->la)('Duni Salatscha.Bagasse 900ml 160St');
+    FoodAlchemistSupplierItemNonfood::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $nf->id, 'ist_nonfood' => true, 'quelle' => 'manuell']);
+    ($this->ki)(['hauptzutat' => 'Salatschale', 'processing' => 'Bagasse', 'pflichtangabe' => '900 ml', 'commodity_group_code' => '16'],
+        fn ($k) => ['aktion' => 'verknuepfen', 'gp_id' => (string) $k['kandidaten'][0]['gp_id'], 'begruendung' => 'Salatschale Bagasse 900 ml.', 'sicherheit' => 0.95]);
+
+    $e = ($this->dienst)()->entscheide($this->rootTeam, $nf);
+
+    expect($e->aktion)->toBe('verknuepfen')->and($e->gpId)->toBe($nfGp->id)->and($e->automatisch)->toBeTrue()
+        ->and(collect($e->kandidaten)->pluck('name')->all())->not->toContain('Salat: frisch, ganz')   // ein Food-GP ist nie Kandidat
+        ->and($e->felder['commodity_group_code'])->toBe('16')->and($e->felder['condition'])->toBe('');
+});
+
+it('Non-Food ohne passendes WG-16-GP: neu aus den Feldern (kein blockiert)', function () {
+    $nf = ($this->la)('Duni Serviette Tissue 33x33');
+    FoodAlchemistSupplierItemNonfood::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $nf->id, 'ist_nonfood' => true, 'quelle' => 'manuell']);
+    ($this->ki)(['hauptzutat' => 'Serviette', 'processing' => 'Tissue', 'pflichtangabe' => '33 x 33 cm', 'commodity_group_code' => '16']);
+
+    $e = ($this->dienst)()->entscheide($this->rootTeam, $nf);
+
+    expect($e->aktion)->toBe('neu')->and($e->felder['hauptzutat'])->toBe('Serviette');
+});
+
+it('Merkmals-Diff Non-Food: andere Größe = abweichend, gleiche = gleich', function () {
+    $gp = ($this->gp)('Salatschale: Bagasse, 900 ml', ['commodity_group_code' => '16']);
+    $diff = app(MerkmalsDiff::class);
+
+    expect($diff->vergleiche([], ['Salatschale Bagasse 0,9 l'], false, $gp)['abweichend'])->toBeFalse()
+        ->and($diff->vergleiche([], ['Salatschale Bagasse 500 ml'], false, $gp)['abweichend'])->toBeTrue();
+});
+
+it('Wortteil-Recall: Kompositum „Sonnenblumenbolognese“ wird für „Bolognese“ gefunden, Bio im GP-Namen zählt als Bio', function () {
+    $gp = ($this->gp)('Sonnenblumenbolognese: TK, vegan, BIO', ['commodity_group_code' => '13', 'condition' => 'TK', 'main_ingredient_slug' => 'sonnenblumenbolognese']);
+    ($this->gp)('Lasagne Bolognese: TK, verzehrfertig', ['commodity_group_code' => '13', 'condition' => 'TK']);
+    ($this->ki)(['hauptzutat' => 'Bolognese', 'commodity_group_code' => '13']);
+    $la = ($this->la)('Planet V BIO Bolognese vegan 3kg', ['is_organic' => true]);
+
+    $e = ($this->dienst)()->entscheide($this->rootTeam, $la);
+    $sieger = collect($e->kandidaten)->firstWhere('gp_id', $gp->id);
+
+    expect($sieger)->not->toBeNull()
+        ->and($sieger['diff_abweichungen'])->not->toContain('Bio: Artikel bio ≠ GP konventionell');
+});
+
+it('Diagnose „warum nicht das heutige GP?“ nennt Recall, Filter, Diff, Guard und Position', function () {
+    $gp = ($this->gp)('Zwiebel: TK, ganz', ['condition' => 'TK']);
+    $la = ($this->la)('Zwiebel frisch ganz');
+
+    $text = app(\Platform\FoodAlchemist\Services\GpAbgleich\GpKandidatenSucher::class)->diagnose($this->rootTeam, $la, $this->zwiebelFelder, $gp->id);
+
+    expect($text)->toContain('harter Filter SPERRT: Zustand: Artikel frisch ≠ GP TK')->and($text)->toContain('Position in den Kandidaten');
+});
+
+it('Fantasiename (zusatz) exakt im Artikel: bereits angelegter Komposit-Salat wird über den Recall gefunden', function () {
+    $gp = ($this->gp)('Reissalat: frisch, schwarzer Reis / (Mambonito)', ['commodity_group_code' => '13', 'zusatz' => 'Mambonito', 'main_ingredient_slug' => 'reissalat']);
+    ($this->ki)(['hauptzutat' => 'Reissalat', 'zusatz' => 'Mambonito', 'commodity_group_code' => '13']);
+    $la = ($this->la)('TK Cuisin Mambonito 1,25kg', ['marketing_name' => 'Mambonito Salat']);
+
+    $e = ($this->dienst)()->entscheide($this->rootTeam, $la);
+
+    expect(collect($e->kandidaten)->pluck('gp_id')->all())->toContain($gp->id);
 });
 
 it('ohne passenden Kandidaten: aktion neu aus den Feldern, KEIN Entscheider-Call', function () {
