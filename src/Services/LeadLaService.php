@@ -625,6 +625,20 @@ class LeadLaService
      */
     private function guardDeklarationsprofil(Team $team, FoodAlchemistGp $gp, int $neuerLaId): void
     {
+        $abweichungen = $this->guardAbweichungen($team, $gp, $neuerLaId);
+        if ($abweichungen !== []) {
+            throw new \Platform\FoodAlchemist\Exceptions\DeklarationsprofilAbweichtException($abweichungen);
+        }
+    }
+
+    /**
+     * Guard-VORSCHAU (Abgleich-Dienst, Entscheid Dominique 25.10.2026): dieselbe Prüfung wie beim Verknüpfen, aber ohne zu werfen und ohne
+     * etwas zu schreiben. Leer = der Artikel darf an das GP; sonst die Abweichungs-Labels gegenüber dem ersten widersprechenden Bestandsartikel.
+     *
+     * @return list<string>
+     */
+    public function guardAbweichungen(Team $team, FoodAlchemistGp $gp, int $neuerLaId): array
+    {
         $neu = FoodAlchemistSupplierItem::visibleToTeam($team)->with(['allergens', 'declarations'])->findOrFail($neuerLaId);
         $bestehend = FoodAlchemistSupplierItem::query()
             ->with(['allergens', 'declarations'])
@@ -638,9 +652,11 @@ class LeadLaService
         foreach ($bestehend as $alt) {
             $abweichungen = DeklarationsProfil::abweichungen($alt->allergens, $alt->declarations, $neu->allergens, $neu->declarations);
             if ($abweichungen !== []) {
-                throw new \Platform\FoodAlchemist\Exceptions\DeklarationsprofilAbweichtException($abweichungen);
+                return $abweichungen;
             }
         }
+
+        return [];
     }
 
     // ── intern ───────────────────────────────────────────────────────────

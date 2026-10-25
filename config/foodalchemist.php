@@ -1732,6 +1732,20 @@ return [
             'task' => 'Ordne die unzugeordneten Lieferanten-Artikel dem passenden Grundprodukt '
                 . 'aus der Kandidaten-Liste zu; unsicher => weglassen: werte = {zuordnungen: [{item_id, gp_id}]}.',
         ],
+        // Abgleich-Dienst (Entscheid Dominique 25.10.2026): EIN Lieferantenartikel gegen höchstens 5 vorselektierte GP-Kandidaten. Die KI darf nur aus
+        // der Liste wählen; Allergen-/Deklarations-Widerspruch und bekannte Merkmals-Abweichungen prüft der Dienst vorher und danach hart.
+        'gp.la_abgleich' => [
+            'klasse' => 'mittel',
+            'task' => 'Entscheide, ob ein Lieferantenartikel zu einem der Kandidaten-GPs gehört (gleiche Ware, nur anderer Lieferant/anderes Gebinde) oder ein neues GP braucht: '
+                . 'werte = {aktion: "verknuepfen"|"neu", gp_id, begruendung, sicherheit, abweichungen}. '
+                . 'gp_id nur aus kandidaten (Zahl), bei "neu" null. sicherheit 0 bis 1: 0,9 und mehr NUR, wenn Ware, Zustand und alle Merkmale eindeutig übereinstimmen; '
+                . 'im Zweifel niedriger (unter 0,7) — ein Mensch prüft dann. begruendung: ein bis zwei Sätze mit den entscheidenden Belegen aus Bezeichnung, Zutaten oder Merkmalen. '
+                . 'Ein GP ist EIN einheitlicher Einkaufsgegenstand: verknüpfe NIE, wenn Zustand (frisch/TK/trocken/konserviert), Geschmackszutat (flavor, z. B. Chili), '
+                . 'Fantasiename (zusatz), Prozentwert (Fett, Kakao, Frucht, vol), Zucker (gezuckert/ungezuckert), Bio oder Sorte abweichen, oder wenn allergen_guard WIDERSPRUCH meldet '
+                . '(merkmals_diff und allergen_guard sind vorab geprüft; vertraue ihnen). Hersteller und Marke sind KEIN Unterscheidungsmerkmal (Regelwerk §5: gleichwertige Hersteller '
+                . 'stehen im selben GP). Abkürzungen der Lieferanten (z. B. „O+G“, „TK“, „Wib.“) deutest du aus Zutaten und Kontext; erfinde nichts. '
+                . 'abweichungen: Merkmale, die gegen das gewählte GP sprechen (leer, wenn keine).',
+        ],
         'gp.term_la_rank' => [
             'klasse' => 'mittel',
             'task' => 'Ranke die Lieferanten-Artikel-Kandidaten als Basis fuer den Produktbegriff '

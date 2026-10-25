@@ -30,7 +30,7 @@ const REGISTRY_KLASSEN = [
         'gp.suggest',   // Dominique 19.10. (vorher stark)
         'recipe.geschmack', 'gp.domain',
         'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',
-        'gp.zaehl_einheiten', 'recipe.verpackungsmasse', 'gp.la_suggest', 'gp.term_la_rank', 'recipe.eigenschaften', 'recipe.sensorik',
+        'gp.zaehl_einheiten', 'recipe.verpackungsmasse', 'gp.la_suggest', 'gp.la_abgleich', 'gp.term_la_rank', 'recipe.eigenschaften', 'recipe.sensorik',
         'recipe.regeneration', 'vk.regeneration',
     ],
     'leicht' => [

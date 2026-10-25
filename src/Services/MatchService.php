@@ -69,6 +69,28 @@ class MatchService
     }
 
     /**
+     * Abgleich-Dienst (Stufe S0): exakte Brücken (EAN, Lieferant+Artikelnummer über bereits gemappte Artikel) — öffentlich, damit der gemeinsame Dienst
+     * dieselbe Quelle nutzt wie die Lieferanten-Ansicht.
+     *
+     * @return Collection<int, array{gp: FoodAlchemistGp, score: float, band: MatchBand, methode: string}>
+     */
+    public function exakteBruecken(FoodAlchemistSupplierItem $la, Team $team): Collection
+    {
+        return $this->exactDubletten($la, $team);
+    }
+
+    /**
+     * Abgleich-Dienst (Stufe S2): Namens-Fuzzy (GL-04-Kern) — öffentlich aus demselben Grund.
+     *
+     * @param  array<int>  $ausschluss
+     * @return list<array{gp: FoodAlchemistGp, score: float, band: MatchBand, methode: string}>
+     */
+    public function nameKandidaten(FoodAlchemistSupplierItem $la, Team $team, int $limit = 12, array $ausschluss = []): array
+    {
+        return $this->fuzzyByName($la, $team, $limit, $ausschluss);
+    }
+
+    /**
      * M3-11: Bulk-Lauf je Lieferant — ungemappte, aktive LAs → beste Vorschläge
      * in die tentative Queue (foodalchemist_match_proposals). Fuzzy läuft über
      * einen invertierten Token-Index (1× aufgebaut), sonst wären es
