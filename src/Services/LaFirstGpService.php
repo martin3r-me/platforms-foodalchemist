@@ -78,6 +78,28 @@ class LaFirstGpService
                 return FoodAlchemistGp::visibleToTeam($team)->find($struktur->gp_id);
             }
 
+            // Abgleich-Dienst (Entscheid Dominique 25.10.2026), Stufe S0 — derselbe Dienst wie Modal/MCP/Eval, hier NUR die exakte Brücke (EAN/Artikelnummer eines schon
+            // gemappten Zwillings): ohne Recall und ohne KI-Call, weil dieser Pfad im Rezept-Hotpath läuft. Treffer = vorhandenes GP nutzen statt ein zweites anzulegen.
+            try {
+                $abgleich = app(\Platform\FoodAlchemist\Services\GpAbgleich\GpAbgleichService::class)->entscheide($team, $la, ['nur_exakt' => true, 'ki' => false]);
+                if ($abgleich->stufe === 'S0' && $abgleich->aktion === 'verknuepfen' && $abgleich->gpId !== null) {
+                    $vorhanden = FoodAlchemistGp::visibleToTeam($team)->find($abgleich->gpId);
+                    if ($vorhanden !== null) {
+                        if ($abgleich->darfVerknuepfen) {
+                            try {
+                                app(LeadLaService::class)->verknuepfen($team, $vorhanden, (int) $la->id);
+                            } catch (\RuntimeException $e) {
+                                // Guard/Zuordnung: das GP bleibt trotzdem nutzbar
+                            }
+                        }
+
+                        return $vorhanden;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // der Abgleich darf den Mint nie kippen — weiter mit dem bisherigen Weg
+            }
+
             $naming = app(GpNamingService::class);
             // §6: Produktname groß, mit Umlaut — Lauf 89 legte „gefluegel" an (gestemmter Suchtext als Name).
             $hauptzutat = self::grossAnfang(trim($anzeigeName ?? $this->hauptzutatAusText($text)));

@@ -271,6 +271,7 @@ return [
     \Platform\FoodAlchemist\Tools\LabNotesSearchTool::class,
     \Platform\FoodAlchemist\Tools\LagerartikelGetTool::class,
     \Platform\FoodAlchemist\Tools\LagerartikelPutTool::class,
+    \Platform\FoodAlchemist\Tools\LaGpAbgleichTool::class,
     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
     \Platform\FoodAlchemist\Tools\LeitstelleGetTool::class,
     \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
