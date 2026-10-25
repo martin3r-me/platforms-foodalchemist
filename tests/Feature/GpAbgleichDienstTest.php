@@ -129,6 +129,10 @@ it('Wortteil-Recall: Kompositum „Sonnenblumenbolognese“ wird für „Bologne
 
     expect($sieger)->not->toBeNull()
         ->and($sieger['diff_abweichungen'])->not->toContain('Bio: Artikel bio ≠ GP konventionell');
+
+    // Gegenprobe A8: ob Hybrid/Fuzzy das GP zufällig auch findet, ist egal — der Wortteil-Recall muss es nennen (die Methode steht in der Diagnose)
+    $diag = app(\Platform\FoodAlchemist\Services\GpAbgleich\GpKandidatenSucher::class)->diagnose($this->rootTeam, $la, $e->felder, $gp->id);
+    expect($diag)->toContain('wortteil');
 });
 
 it('Diagnose „warum nicht das heutige GP?“ nennt Recall, Filter, Diff, Guard und Position', function () {
