@@ -227,6 +227,9 @@
                         <x-fa::field label="Geschmack" for="gp-flavor" optional hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
                             <x-fa::input id="gp-flavor" wire:model.live.debounce.300ms="builder.flavor" placeholder="z. B. Chili" data-gp-flavor />
                         </x-fa::field>
+                        <x-fa::field label="Zusatz (Fantasiename)" for="gp-zusatz" optional hint="Steht im Namen als „ / (…)“ hinten. Nur exakt aus Bezeichnung oder Vermarktungsname des Artikels übernehmen, nie selbst bilden, übersetzen oder ausschmücken.">
+                            <x-fa::input id="gp-zusatz" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Mambonito" data-gp-zusatz />
+                        </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung" optional>
                             <x-fa::input id="gp-verarbeitung" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
                         </x-fa::field>
@@ -260,6 +263,9 @@
                         </x-fa::field>
                         <x-fa::field label="Geschmack" for="gp-flavor-edit" optional hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
                             <x-fa::input id="gp-flavor-edit" wire:model.live.debounce.300ms="builder.flavor" placeholder="z. B. Chili" data-gp-flavor-edit />
+                        </x-fa::field>
+                        <x-fa::field label="Zusatz (Fantasiename)" for="gp-zusatz-edit" optional hint="Steht im Namen als „ / (…)“ hinten. Nur exakt aus Bezeichnung oder Vermarktungsname des Artikels übernehmen, nie selbst bilden, übersetzen oder ausschmücken.">
+                            <x-fa::input id="gp-zusatz-edit" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Mambonito" data-gp-zusatz-edit />
                         </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung-edit" optional>
                             <x-fa::input id="gp-verarbeitung-edit" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />

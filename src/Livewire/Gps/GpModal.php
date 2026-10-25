@@ -61,7 +61,7 @@ class GpModal extends Component
     }
 
     private const BUILDER_LEER = [
-        'hauptzutat' => '', 'flavor' => '', 'condition' => '', 'processing' => '', 'form' => '',
+        'hauptzutat' => '', 'flavor' => '', 'zusatz' => '', 'condition' => '', 'processing' => '', 'form' => '',
         'portion' => '', 'pflichtangabe' => '',
         'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false,
         'commodity_group_code' => '', 'sub_category' => '',
@@ -180,6 +180,7 @@ class GpModal extends Component
                 // Spec 80 (Paket 11): die strukturierten Felder auch beim Bearbeiten laden.
                 'hauptzutat' => (string) ($gp->main_ingredient_display ?: strstr((string) $gp->name . ':', ':', true)),
                 'flavor' => (string) ($gp->flavor ?? ''),
+                'zusatz' => (string) ($gp->zusatz ?? ''),
                 'processing' => (string) ($gp->processing ?? ''),
                 'form' => (string) ($gp->form ?? ''),
                 'bio' => mb_strtolower((string) $gp->bio) === 'bio',
@@ -913,6 +914,12 @@ class GpModal extends Component
                 $this->builder[$feld] = $wert;
             }
         }
+        // §6.6 Klammer-Zusatz: nur der Fantasiename, der EXAKT in Bezeichnung oder Vermarktungsname des Quell-Artikels steht (sonst verworfen)
+        $zusatz = $naming->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null,
+            $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)]);
+        if ($zusatz !== '') {
+            $this->builder['zusatz'] = $zusatz;
+        }
         // Nachlauf (Praxisfall „Delice Schokoladen-Mousse mit Cashew-Crème"): Hauptzutat nur belegte Kernwörter, Zustand hart aus der
         // Haltbarkeit, Form/Verarbeitung ohne Dublette zur Hauptzutat
         $quellTexte = $quelle !== null
@@ -1165,6 +1172,10 @@ class GpModal extends Component
                 $builder[$feld] = $wert;
             }
         }
+        $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)]);
+        if ($zusatz !== '') {
+            $builder['zusatz'] = $zusatz;
+        }
         $name = trim(app(GpNamingService::class)->renderGpName($builder));
         if ($name === '') {
             $this->fehler = 'KI lieferte keinen verwertbaren Namensvorschlag aus der LA-Bezeichnung.';
@@ -1238,7 +1249,7 @@ class GpModal extends Component
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null)
+                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null)
                 : ($gp->gp_key ?? ''),
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],

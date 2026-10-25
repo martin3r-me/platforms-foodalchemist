@@ -167,7 +167,7 @@ class GpNamingService
     /** Alle strukturierten Naming-Felder eines Eingabe-Arrays bereinigen (Name/Kennung bleiben frei von Platzhaltern). */
     public function bereinigeFelder(array $in): array
     {
-        foreach (['hauptzutat', 'flavor', 'condition', 'processing', 'form', 'pflichtangabe', 'portion', 'sub_category'] as $feld) {
+        foreach (['hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'pflichtangabe', 'portion', 'sub_category'] as $feld) {
             if (array_key_exists($feld, $in)) {
                 $in[$feld] = $this->bereinigeFeld($in[$feld]);
             }
@@ -176,15 +176,55 @@ class GpNamingService
         return $in;
     }
 
+    /** Klammer-Zusatz (§6.6): ohne Klammern und Zeilenumbrüche, damit der Name lesbar zerlegbar bleibt („ / (…)“). */
+    public function bereinigeZusatz(?string $zusatz): string
+    {
+        $z = trim((string) preg_replace('/[()\r\n]+/u', ' ', $this->bereinigeFeld($zusatz)));
+
+        return trim((string) preg_replace('/\s{2,}/u', ' ', $z));
+    }
+
+    /**
+     * Klammer-Zusatz nur aus dem Artikel (Entscheid Dominique 25.10.2026): der Fantasiename muss als Teilstring (case-insensitiv) in einem der
+     * Quelltexte (Bezeichnung, Vermarktungsname) stehen und wird in der Schreibweise des Artikels übernommen. Sonst leer — nie erfinden,
+     * übersetzen oder ausschmücken.
+     *
+     * @param  list<string|null>  $quelltexte
+     */
+    public function zusatzAusArtikel(?string $zusatz, array $quelltexte): string
+    {
+        $z = $this->bereinigeZusatz($zusatz);
+        if ($z === '') {
+            return '';
+        }
+        foreach ($quelltexte as $text) {
+            $text = trim((string) $text);
+            if ($text === '') {
+                continue;
+            }
+            $pos = mb_stripos($text, $z);
+            if ($pos !== false) {
+                return mb_substr($text, $pos, mb_strlen($z));
+            }
+        }
+
+        return '';
+    }
+
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
-    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null): string
+    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null, ?string $zusatz = null): string
     {
         // §6.6: die Geschmackszutat trennt Varianten derselben Grundware („Käse: Chili" ≠ „Käse") — sie hängt am ersten Slot, damit der Schlüssel
         // eindeutig bleibt und die 3 Slots unverändert sind. Ohne Geschmack ist der Schlüssel wie bisher.
         $flavorSlug = $this->slugify($this->bereinigeFeld($flavor));
         $slot1 = $flavorSlug === '' ? $hauptzutatSlug : $hauptzutatSlug . '_' . $flavorSlug;
+        $key = $slot1 . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
+        // Klammer-Zusatz (Fantasiename): zwei Komposit-Salate mit gleichen Bestandteilen, aber anderem Fantasienamen sind zwei Produkte mit eigenen
+        // Allergenen und dürfen nicht am Schlüssel kollidieren. Eigener 4. Slot (nur wenn gesetzt, sonst bleiben alle bisherigen Schlüssel gleich) —
+        // ein angehängter Slot kann nicht mit einem flavor im ersten Slot verwechselt werden.
+        $zusatzSlug = $this->slugify($this->bereinigeZusatz($zusatz));
 
-        return $slot1 . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
+        return $zusatzSlug === '' ? $key : $key . '|' . $zusatzSlug;
     }
 
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
@@ -223,6 +263,17 @@ class GpNamingService
             $out = ['hauptzutat' => '', 'flavor' => ''] + array_slice($out, 1);   // nur für den Editor (§6.6); Bestands-Backfill und Pläne behalten die alte Form
         }
         $name = trim($name);
+        if ($mitGeschmack) {
+            $out['zusatz'] = '';
+            // §6.6: ein Klammerteil „ / (…)“, der kein Flag ist (Bio/Vegan/Glutenfrei/Laktosefrei), ist der Zusatz (Fantasiename)
+            if (preg_match_all('/\s*\/\s*\(([^)]*)\)/u', $name, $m) > 0) {
+                foreach ($m[1] as $inhalt) {
+                    if (! in_array(mb_strtolower(trim($inhalt)), ['bio', 'vegan', 'glutenfrei', 'laktosefrei'], true) && $out['zusatz'] === '') {
+                        $out['zusatz'] = trim($inhalt);
+                    }
+                }
+            }
+        }
         if (preg_match('/\(\s*bio\s*\)/iu', $name) === 1) {
             $out['bio'] = true;
         }
@@ -232,22 +283,28 @@ class GpNamingService
         // Dezimalkomma („62,5 g pro Stück", „3,5 % Fett") ist kein Trenner der Attribute
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
         if ($mitGeschmack && count($teile) >= 2) {
-            // §6.6: ein Wort VOR dem Zustand ist die Geschmackszutat („Käse: Chili, frisch, Scheiben"): erstes Attribut, selbst kein Zustand/Portion/Bio,
-            // und ein späteres Attribut ist ein §9-Zustand. Ohne Zustand im Namen bleibt die alte Lesart (Verarbeitung/Form).
-            $erstes = $teile[0];
-            $istZustand = in_array($this->normalisiereZustand($erstes), self::ZUSTAND_VOCAB, true);   // normalisiereZustand liefert auch für Nicht-Zustandswörter einen Wert
-            $istPortion = preg_match('/pro\s+st(?:ue|ü)ck$/iu', $erstes) === 1 || mb_strtolower($erstes) === 'bio';
-            $spaeterZustand = false;
-            foreach (array_slice($teile, 1) as $teil) {
+            // §6.6: alles VOR dem ersten Zustandswort ist die Geschmackszutat bzw. bei Komposit-Salaten die Hauptbestandteile („Reissalat: schwarzer Reis,
+            // Avocado, Azukibohnen, TK" → flavor „schwarzer Reis, Avocado, Azukibohnen"). Kein Zustand im Namen oder Zustand an erster Stelle: alte Lesart.
+            $zustandIdx = null;
+            foreach ($teile as $i => $teil) {
                 $z = $this->normalisiereZustand($teil);
                 if ($z !== null && in_array($z, self::ZUSTAND_VOCAB, true)) {
-                    $spaeterZustand = true;
+                    $zustandIdx = $i;
                     break;
                 }
             }
-            if (! $istZustand && ! $istPortion && $spaeterZustand) {
-                $out['flavor'] = $erstes;
-                $teile = array_values(array_slice($teile, 1));
+            if ($zustandIdx !== null && $zustandIdx >= 1) {
+                $vor = array_slice($teile, 0, $zustandIdx);
+                $keinFlavor = false;
+                foreach ($vor as $teil) {
+                    if (preg_match('/pro\s+st(?:ue|ü)ck$/iu', $teil) === 1 || mb_strtolower($teil) === 'bio') {
+                        $keinFlavor = true;
+                    }
+                }
+                if (! $keinFlavor) {
+                    $out['flavor'] = implode(', ', $vor);
+                    $teile = array_values(array_slice($teile, $zustandIdx));
+                }
             }
         }
         $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
@@ -297,7 +354,7 @@ class GpNamingService
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: [<flavor>, ]<condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (Bio)]…` (flavor = Geschmackszutat §6.6)
+     * `<Hauptzutat>: [<flavor>, ]<condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (<zusatz>)][ / (Bio)]…` (flavor/zusatz = §6.6)
      */
     public function renderGpName(array $in): string
     {
@@ -334,6 +391,12 @@ class GpNamingService
         $base = $parts === [] ? $hauptzutat : $hauptzutat . ': ' . implode(', ', $parts);
 
         $suffixes = [];
+        // §6.6: der Fantasiename (Klammer-Zusatz) steht VOR den festen Flags: er gehört zur Produktidentität, die Flags (Bio/Vegan/…) bleiben als
+        // normierte Marker am Ende — so bleibt das abschließende Flag-Muster für Parser und Match unverändert.
+        $zusatz = $this->bereinigeZusatz($in['zusatz'] ?? null);
+        if ($zusatz !== '') {
+            $suffixes[] = '(' . $zusatz . ')';
+        }
         foreach (['bio' => '(Bio)', 'vegan' => '(Vegan)', 'glutenfrei' => '(Glutenfrei)', 'laktosefrei' => '(Laktosefrei)'] as $flag => $suffix) {
             if (! empty($in[$flag])) {
                 $suffixes[] = $suffix;                                       // Reihenfolge fix (A1)
@@ -478,7 +541,7 @@ class GpNamingService
         if ($hauptzutatSlug === '') {
             throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: main_ingredient_slug ab Editor).');
         }
-        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null);
+        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
 
         $guard = $this->anlageGuard($team, $gpKey, $name);
         if ($guard['blockiert']) {
@@ -505,6 +568,7 @@ class GpNamingService
             'status' => 'tentative',
             'condition' => $this->normalisiereZustand($in['condition'] ?? null),
             'flavor' => trim((string) ($in['flavor'] ?? '')) ?: null,
+            'zusatz' => $this->bereinigeZusatz($in['zusatz'] ?? null) ?: null,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
             'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
@@ -541,6 +605,7 @@ class GpNamingService
             'processing' => array_key_exists('processing', $in) ? (trim((string) $in['processing']) ?: null) : $gp->processing,
             'form' => array_key_exists('form', $in) ? (trim((string) $in['form']) ?: null) : $gp->form,
             'flavor' => array_key_exists('flavor', $in) ? (trim((string) $in['flavor']) ?: null) : $gp->flavor,
+            'zusatz' => array_key_exists('zusatz', $in) ? ($this->bereinigeZusatz($in['zusatz']) ?: null) : $gp->zusatz,
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
