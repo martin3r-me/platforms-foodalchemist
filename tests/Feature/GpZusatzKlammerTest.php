@@ -125,3 +125,16 @@ it('MCP gps.POST und gps.PUT: Parameter zusatz wird gerendert und gespeichert, i
     $p = $reg->get('foodalchemist.gps.PUT')->execute(['id' => $gp->id, 'zusatz' => 'Mambolino'] + $this->salat, $ctx);
     expect($p->success)->toBeTrue()->and($gp->fresh()->name)->toContain('/ (Mambolino)')->and($gp->fresh()->zusatz)->toBe('Mambolino');
 });
+
+it('gp_key: der Zusatz steht im Schlüssel — zwei Salate mit gleichen Bestandteilen und anderem Fantasienamen sind zwei GPs mit zwei Schlüsseln', function () {
+    expect($this->naming->buildGpKey('reissalat', null, null, 'schwarzer Reis, Avocado', 'Mambonito'))->toBe('reissalat_schwarzer_reis_avocado||'.'|mambonito')
+        ->and($this->naming->buildGpKey('reissalat', null, null, 'schwarzer Reis, Avocado', null))->toBe('reissalat_schwarzer_reis_avocado||')
+        ->and($this->naming->buildGpKey('reissalat', null, null, 'schwarzer Reis, Avocado', 'Mambolino'))->not->toBe($this->naming->buildGpKey('reissalat', null, null, 'schwarzer Reis, Avocado', 'Mambonito'))
+        ->and($this->naming->buildGpKey('kaese', null, null, null, 'Chili'))->not->toBe($this->naming->buildGpKey('kaese', null, null, 'Chili', null));   // Zusatz ≠ Geschmack
+
+    $a = $this->naming->createGp($this->rootTeam, $this->salat + ['zusatz' => 'Mambonito']);
+    $b = $this->naming->createGp($this->rootTeam, $this->salat + ['zusatz' => 'Mambolino']);   // gleiche flavor, anderer Zusatz: kein HARD_STOP, eigener Schlüssel
+
+    expect($a->gp_key)->not->toBe($b->gp_key)->and($a->gp_key)->toEndWith('|mambonito')->and($b->gp_key)->toEndWith('|mambolino')
+        ->and(FoodAlchemistGp::whereIn('id', [$a->id, $b->id])->count())->toBe(2);
+});

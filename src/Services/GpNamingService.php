@@ -212,14 +212,19 @@ class GpNamingService
     }
 
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
-    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null): string
+    public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null, ?string $zusatz = null): string
     {
         // §6.6: die Geschmackszutat trennt Varianten derselben Grundware („Käse: Chili" ≠ „Käse") — sie hängt am ersten Slot, damit der Schlüssel
         // eindeutig bleibt und die 3 Slots unverändert sind. Ohne Geschmack ist der Schlüssel wie bisher.
         $flavorSlug = $this->slugify($this->bereinigeFeld($flavor));
         $slot1 = $flavorSlug === '' ? $hauptzutatSlug : $hauptzutatSlug . '_' . $flavorSlug;
+        $key = $slot1 . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
+        // Klammer-Zusatz (Fantasiename): zwei Komposit-Salate mit gleichen Bestandteilen, aber anderem Fantasienamen sind zwei Produkte mit eigenen
+        // Allergenen und dürfen nicht am Schlüssel kollidieren. Eigener 4. Slot (nur wenn gesetzt, sonst bleiben alle bisherigen Schlüssel gleich) —
+        // ein angehängter Slot kann nicht mit einem flavor im ersten Slot verwechselt werden.
+        $zusatzSlug = $this->slugify($this->bereinigeZusatz($zusatz));
 
-        return $slot1 . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
+        return $zusatzSlug === '' ? $key : $key . '|' . $zusatzSlug;
     }
 
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
@@ -536,7 +541,7 @@ class GpNamingService
         if ($hauptzutatSlug === '') {
             throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: main_ingredient_slug ab Editor).');
         }
-        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null);
+        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
 
         $guard = $this->anlageGuard($team, $gpKey, $name);
         if ($guard['blockiert']) {

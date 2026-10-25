@@ -1249,7 +1249,7 @@ class GpModal extends Component
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null)
+                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null)
                 : ($gp->gp_key ?? ''),
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
