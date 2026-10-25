@@ -86,6 +86,7 @@ class ClassifyLaJob implements ShouldQueue
         // „unbekannt" & Co. sind kein Wert (Regelwerk GP §6, §12): bleibt leer
         $hauptzutat = $naming->bereinigeFeld($werte['hauptzutat'] ?? null);
         $flavor = $naming->bereinigeFeld($werte['flavor'] ?? null);
+        $zusatz = $naming->zusatzAusArtikel($werte['zusatz'] ?? null, [$designation, $la->marketing_name ?? null]);   // §6.6: nur exakt aus dem Artikel
         $condition = $naming->bereinigeFeld($werte['condition'] ?? null);
         $processing = $naming->bereinigeFeld($werte['processing'] ?? null);
         $form = $naming->bereinigeFeld($werte['form'] ?? null);
@@ -108,6 +109,7 @@ class ClassifyLaJob implements ShouldQueue
                 'main_ingredient_display' => $hauptzutat,
                 'main_ingredient_confidence' => $confidence,
                 'flavor' => $flavor !== '' ? $flavor : null,
+                'zusatz' => $zusatz !== '' ? $zusatz : null,
                 'condition' => $condition !== '' ? $condition : null,
                 'processing' => $processing !== '' ? $processing : null,
                 'form' => $form !== '' ? $form : null,

@@ -1197,7 +1197,7 @@ return [
         'gp.suggest' => [
             'klasse' => 'mittel',   // Dominique 19.10.: Feld-Ableitung braucht nicht die starke Klasse (io ≈ 2 Cent je Aufruf auf STARK)
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
-                . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, flavor, condition '
+                . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, flavor, zusatz, condition '
                 . '(' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '; gepökelt/geräuchert/luftgetrocknet sind Zustand, nicht Verarbeitung; '
                 . 'mehrere Behandlungen ⇒ Vorrang luftgetrocknet > geräuchert > gepökelt; TK + Behandlung ⇒ condition = '
                 . 'die Behandlung, „TK“ steht vorn in processing, z. B. „TK, geschnitten“), processing, form, pflichtangabe, '
@@ -1214,6 +1214,8 @@ return [
                 . '(z. B. „Elbländer Chili Scheiben 45 %“ → hauptzutat Käse, flavor Chili) — nur wenn sie in Bezeichnung oder Zutatenangabe steht, sonst "". '
                 . 'flavor ist nur eine kleine, würzende Beigabe zu einer anderen Ware; macht die Zutat selbst die Ware aus, bleibt sie hauptzutat mit der Verarbeitung im Namen '
                 . '(„Passionsfruchtpüree“ → hauptzutat Passionsfruchtpüree, flavor ""; Erdbeerkonfitüre, Tomatenmark; nie „Püree: Passionsfrucht“). '
+                . 'zusatz nur, wenn ein Fantasie- oder Sortenname exakt in Bezeichnung oder Vermarktungsname des Quell-Artikels steht (z. B. „Mambonito“ bei einem fertig angemachten Salat). '
+                . 'Exakt übernehmen, nie bilden, übersetzen oder ausschmücken, sonst "". '
                 . 'Zugekaufte Pürees, Mus und Mark sind ein eigenes Produkt (§8.17): hauptzutat = das Püree, nie Roh-Zutat + form „Püree“ — '
                 . 'z. B. „Karottenpüree 2 kg“ → hauptzutat „Karottenpüree“, processing und form leer. '
                 . 'UNBEKANNT BLEIBT LEER: Ist processing, form oder pflichtangabe nicht belegt, gib "" zurück, '
