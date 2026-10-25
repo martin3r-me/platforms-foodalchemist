@@ -18,8 +18,8 @@ class GpPaketValidator
 
     /** Whitelist der GP-Spalten im Paket (Plan §14, = GP_SPALTEN des Export-Skripts). */
     public const GP_SPALTEN = [
-        'uuid', 'gp_key', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'commodity_group_code', 'sub_category',
-        'condition', 'condition_source', 'bio', 'requires_la', 'is_platzhalter', 'is_derivat', 'status',
+        'uuid', 'gp_key', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'flavor', 'zusatz', 'pflichtangabe', 'portion',
+        'commodity_group_code', 'sub_category', 'condition', 'condition_source', 'bio', 'requires_la', 'is_platzhalter', 'is_derivat', 'status',
         'cooking_loss_default_pct', 'trimming_loss_default_pct', 'piece_default_g', 'piece_default_g_source',
         'diameter_mm', 'length_mm', 'width_mm', 'height_mm', 'volume_ml',
         'tag_is_vegan', 'tag_is_vegetarian', 'tag_is_halal', 'tag_contains_pork', 'tag_contains_beef', 'tag_is_organic', 'tag_is_regional',
@@ -52,7 +52,7 @@ class GpPaketValidator
 
     /** Pflege-Felder, die geschrieben und abgeglichen werden (nur Spalten, die es im Ziel gibt). Favoriten sind seit FAV-3 Team-Overlay und werden nie geschrieben. */
     public const WRITE_SPALTEN = [
-        'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'commodity_group_code', 'sub_category',
+        'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'flavor', 'zusatz', 'pflichtangabe', 'portion', 'commodity_group_code', 'sub_category',
         'condition', 'condition_source', 'bio', 'requires_la', 'is_platzhalter', 'is_derivat',
         'cooking_loss_default_pct', 'trimming_loss_default_pct', 'piece_default_g', 'piece_default_g_source',
         'diameter_mm', 'length_mm', 'width_mm', 'height_mm', 'volume_ml',

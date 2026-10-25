@@ -569,6 +569,8 @@ class GpNamingService
             'condition' => $this->normalisiereZustand($in['condition'] ?? null),
             'flavor' => trim((string) ($in['flavor'] ?? '')) ?: null,
             'zusatz' => $this->bereinigeZusatz($in['zusatz'] ?? null) ?: null,
+            'pflichtangabe' => trim((string) ($in['pflichtangabe'] ?? '')) ?: null,
+            'portion' => trim((string) ($in['portion'] ?? '')) ?: null,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
             'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
@@ -606,6 +608,9 @@ class GpNamingService
             'form' => array_key_exists('form', $in) ? (trim((string) $in['form']) ?: null) : $gp->form,
             'flavor' => array_key_exists('flavor', $in) ? (trim((string) $in['flavor']) ?: null) : $gp->flavor,
             'zusatz' => array_key_exists('zusatz', $in) ? ($this->bereinigeZusatz($in['zusatz']) ?: null) : $gp->zusatz,
+            // pflichtangabe/portion (Name aus Feldern vollständig): Teil-Schreiber ohne das Feld lassen den Wert stehen
+            'pflichtangabe' => array_key_exists('pflichtangabe', $in) ? (trim((string) $in['pflichtangabe']) ?: null) : $gp->pflichtangabe,
+            'portion' => array_key_exists('portion', $in) ? (trim((string) $in['portion']) ?: null) : $gp->portion,
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
