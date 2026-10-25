@@ -181,6 +181,8 @@ class GpModal extends Component
                 'hauptzutat' => (string) ($gp->main_ingredient_display ?: strstr((string) $gp->name . ':', ':', true)),
                 'flavor' => (string) ($gp->flavor ?? ''),
                 'zusatz' => (string) ($gp->zusatz ?? ''),
+                'pflichtangabe' => (string) ($gp->pflichtangabe ?? ''),
+                'portion' => (string) ($gp->portion ?? ''),
                 'processing' => (string) ($gp->processing ?? ''),
                 'form' => (string) ($gp->form ?? ''),
                 'bio' => mb_strtolower((string) $gp->bio) === 'bio',

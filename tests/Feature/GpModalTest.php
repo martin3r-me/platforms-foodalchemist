@@ -152,7 +152,7 @@ it('Neuanlage verknüpft den ausgewählten Lieferantenartikel direkt und legt fe
         ->call('speichern')
         ->assertSet('fehler', null);
 
-    $gp = FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->firstOrFail();
+    $gp = FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart, Creme')->firstOrFail();   // Verarbeitung UND Zuschnitt im Namen (vorher gewann processing)
     expect((int) FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($gp->id)
         ->and($gp->fresh()->n_las_total)->toBe(1);
 });
