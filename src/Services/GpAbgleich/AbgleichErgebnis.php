@@ -33,6 +33,8 @@ final class AbgleichErgebnis
         public int $tokensIn = 0,
         public int $tokensOut = 0,
         public int $dauerMs = 0,
+        /** @var list<int> IDs der ai_call_log-Zeilen, die dieser Abgleich erzeugt hat (Eval schreibt sie nach dem Rollback nach) */
+        public array $kiLogIds = [],
     ) {}
 
     /** Banner im KI-Knopf (PR B): „Verknüpfen mit #X, weil …“ ab Sicherheit 0,7 (Entscheid Dominique 25.10.2026). */

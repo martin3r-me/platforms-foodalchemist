@@ -283,3 +283,29 @@ it('Mandant ohne Besitz am globalen Stamm-GP: Abgleich zeigt darauf, verknüpft 
         ->and(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($eigen['gp']->id)
         ->and((int) $global->fresh()->n_las_total)->toBe(3);   // Stamm unverändert
 });
+
+it('Eval: jeder KI-Aufruf steht danach im ai_call_log (genau die erwartete Zahl), sonst ist nichts geschrieben', function () {
+    ($this->gp)('Zwiebel: frisch, ganz');
+    $la = ($this->la)('Zwiebel frisch ganz');
+    // KI-Fake schreibt wie das echte Gateway je Aufruf EINE ai_call_log-Zeile und meldet deren ID
+    $this->mock(AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->andReturnUsing(function ($key, $kontext = []) {
+            $id = DB::table('foodalchemist_ai_call_log')->insertGetId(['uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->rootTeam->id, 'feature' => $key,
+                'tokens_in' => 100, 'tokens_out' => 20, 'created_at' => now(), 'updated_at' => now()]);
+            $werte = $key === 'gp.suggest' ? $this->zwiebelFelder
+                : ['aktion' => 'verknuepfen', 'gp_id' => $kontext['kandidaten'][0]['gp_id'], 'begruendung' => 'gleiche Ware', 'sicherheit' => 0.95];
+
+            return new AiProposal($werte, 0.8, 'Mock', [], $key, 0, $id);
+        });
+    });
+    $vorher = ['log' => DB::table('foodalchemist_ai_call_log')->count(), 'abgleich' => DB::table('foodalchemist_abgleich_log')->count(),
+        'struktur' => DB::table('foodalchemist_supplier_item_structures')->count(), 'gps' => DB::table('foodalchemist_gps')->count()];
+
+    $this->artisan('foodalchemist:abgleich-eval', ['--ids' => (string) $la->id, '--team' => $this->rootTeam->id, '--out' => sys_get_temp_dir() . '/evalkosten_' . uniqid()])->assertSuccessful();
+
+    expect(DB::table('foodalchemist_ai_call_log')->count())->toBe($vorher['log'] + 2)   // gp.suggest + gp.la_abgleich
+        ->and(DB::table('foodalchemist_ai_call_log')->whereIn('feature', ['gp.suggest', 'gp.la_abgleich'])->count())->toBe($vorher['log'] + 2)
+        ->and(DB::table('foodalchemist_abgleich_log')->count())->toBe($vorher['abgleich'])
+        ->and(DB::table('foodalchemist_supplier_item_structures')->count())->toBe($vorher['struktur'])
+        ->and(DB::table('foodalchemist_gps')->count())->toBe($vorher['gps']);
+});

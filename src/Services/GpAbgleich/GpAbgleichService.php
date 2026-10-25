@@ -35,6 +35,9 @@ class GpAbgleichService
 
     public const MAX_KANDIDATEN = 5;
 
+    /** @var list<int> ai_call_log-IDs des laufenden Abgleichs (siehe {@see AbgleichErgebnis::$kiLogIds}) */
+    private array $kiLogIds = [];
+
     public function __construct(
         private readonly LeadLaService $lead,
         private readonly GpKandidatenSucher $sucher,
@@ -53,8 +56,10 @@ class GpAbgleichService
     public function entscheide(Team $team, FoodAlchemistSupplierItem $la, array $opt = []): AbgleichErgebnis
     {
         $t0 = hrtime(true);
+        $this->kiLogIds = [];
         $ergebnis = $this->entscheideIntern($team, $la, $opt);
         $ergebnis->dauerMs = (int) round((hrtime(true) - $t0) / 1e6);
+        $ergebnis->kiLogIds = $this->kiLogIds;
 
         return $ergebnis;
     }
@@ -393,6 +398,7 @@ class GpAbgleichService
         if ($p === null || $p->callLogId === null) {
             return [0, 0];
         }
+        $this->kiLogIds[] = (int) $p->callLogId;
         $z = DB::table('foodalchemist_ai_call_log')->where('id', $p->callLogId)->first(['tokens_in', 'tokens_out']);
 
         return [(int) ($z->tokens_in ?? 0), (int) ($z->tokens_out ?? 0)];

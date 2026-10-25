@@ -65,15 +65,25 @@ class AbgleichEvalCommand extends Command
                 continue;
             }
             try {
-                // Absicherung: alles in einer Transaktion, die zurückgerollt wird — der Dienst schreibt in dieser Betriebsart ohnehin nichts.
-                $e = FaTeam::imTeam($team, function () use ($dienst, $team, $la, $ki) {
+                // Absicherung: alles in einer Transaktion, die zurückgerollt wird — der Dienst schreibt in dieser Betriebsart ohnehin nichts (außer ai_call_log, s. u.).
+                // KI-Aufrufe gehören IMMER ins ai_call_log (Kostenlog, Monatsdeckel, Abrechnung): der Rollback würde sie verschlucken. Deshalb werden genau die vom
+                // Abgleich erzeugten Zeilen (IDs aus dem Ergebnis) VOR dem Rollback gelesen und NACH dem Rollback neu geschrieben — alles andere bleibt zurückgerollt.
+                $logZeilen = [];
+                $e = FaTeam::imTeam($team, function () use ($dienst, $team, $la, $ki, &$logZeilen) {
                     DB::beginTransaction();
                     try {
-                        return $dienst->entscheide($team, $la, ['ki' => $ki, 'ignoriere_verknuepfung' => true]);
+                        $ergebnis = $dienst->entscheide($team, $la, ['ki' => $ki, 'ignoriere_verknuepfung' => true]);
+                        $logZeilen = $ergebnis->kiLogIds === [] ? [] : DB::table('foodalchemist_ai_call_log')->whereIn('id', $ergebnis->kiLogIds)->get()->map(fn ($r) => (array) $r)->all();
+
+                        return $ergebnis;
                     } finally {
                         DB::rollBack();
                     }
                 });
+                foreach ($logZeilen as $zeile) {
+                    unset($zeile['id']);
+                    DB::table('foodalchemist_ai_call_log')->insert($zeile);
+                }
             } catch (\Throwable $x) {
                 $rows[] = array_merge($this->leer($kopf), ['gruppe' => $z['gruppe'] ?? '', 'artikel_id' => $z['artikel_id'], 'bezeichnung' => $la->designation, 'entscheidung' => 'FEHLER: ' . $x->getMessage()]);
 
