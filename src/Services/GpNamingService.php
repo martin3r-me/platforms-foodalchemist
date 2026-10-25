@@ -376,9 +376,16 @@ class GpNamingService
         if ($condition !== null) {
             $parts[] = $condition;
         }
-        $mid = ($in['processing'] ?? null) ?: ($in['form'] ?? null);       // processing gewinnt (spezifischer)
-        if ($mid) {
-            $parts[] = self::umlautKanon((string) $mid);                  // „Wuerfel 10 mm" → „Würfel 10 mm" (Kanon mit Umlaut)
+        // Verarbeitung UND Zuschnitt stehen beide im Namen („gegart, Würfel 10 mm“), Verarbeitung zuerst — vorher gewann nur processing, die Form fiel aus dem
+        // Namen (Stufe 1: der Name muss aus den GESPEICHERTEN Feldern rekonstruierbar sein). Steht die Form schon im Text der Verarbeitung (TK-Zusatz), kein Doppel.
+        $verarbeitung = trim((string) ($in['processing'] ?? ''));
+        $zuschnitt = trim((string) ($in['form'] ?? ''));
+        $mid = $verarbeitung;
+        if ($zuschnitt !== '' && ($verarbeitung === '' || mb_stripos($verarbeitung, $zuschnitt) === false)) {
+            $mid = $verarbeitung === '' ? $zuschnitt : $verarbeitung . ', ' . $zuschnitt;
+        }
+        if ($mid !== '') {
+            $parts[] = self::umlautKanon($mid);                           // „Wuerfel 10 mm" → „Würfel 10 mm" (Kanon mit Umlaut)
         }
         if (! empty($in['portion'])) {
             $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stück';        // „660 g pro Stück" (echter Umlaut im GP-Namen; kein „Portion", Leerzeichen vor der Einheit)
@@ -567,6 +574,9 @@ class GpNamingService
             'main_ingredient_slug' => $hauptzutatSlug,
             'status' => 'tentative',
             'condition' => $this->normalisiereZustand($in['condition'] ?? null),
+            'processing' => trim((string) ($in['processing'] ?? '')) ?: null,   // vorher nur im Namen; Stufe 1: Felder gehören an den GP
+            'form' => trim((string) ($in['form'] ?? '')) ?: null,
+            'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: null,
             'flavor' => trim((string) ($in['flavor'] ?? '')) ?: null,
             'zusatz' => $this->bereinigeZusatz($in['zusatz'] ?? null) ?: null,
             'pflichtangabe' => trim((string) ($in['pflichtangabe'] ?? '')) ?: null,

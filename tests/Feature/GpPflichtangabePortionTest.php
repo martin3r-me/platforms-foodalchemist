@@ -27,12 +27,13 @@ beforeEach(function () {
 });
 
 it('Anlage speichert pflichtangabe und portion; Name aus den GESPEICHERTEN Feldern ergibt denselben Namen (Rundlauf)', function () {
-    $gp = $this->naming->createGp($this->rootTeam, array_merge($this->felder, ['processing' => 'geputzt, ganz', 'form' => null, 'pflichtangabe' => 'mini', 'portion' => '100 g']));
+    $gp = $this->naming->createGp($this->rootTeam, array_merge($this->felder, ['pflichtangabe' => 'mini', 'portion' => '100 g']));
 
-    expect($gp->pflichtangabe)->toBe('mini')->and($gp->portion)->toBe('100 g')->and($gp->name)->toBe('Karotten: frisch, geputzt, ganz, 100 g pro Stück, mini');
+    expect($gp->processing)->toBe('geputzt')->and($gp->form)->toBe('ganz')->and($gp->main_ingredient_display)->toBe('Karotten')
+        ->and($gp->pflichtangabe)->toBe('mini')->and($gp->portion)->toBe('100 g')->and($gp->name)->toBe('Karotten: frisch, geputzt, ganz, 100 g pro Stück, mini');
 
     $aus = $this->naming->renderGpName([
-        'hauptzutat' => $gp->main_ingredient_display ?? 'Karotten', 'condition' => $gp->condition, 'processing' => $gp->processing, 'form' => $gp->form,
+        'hauptzutat' => $gp->main_ingredient_display, 'condition' => $gp->condition, 'processing' => $gp->processing, 'form' => $gp->form,
         'portion' => $gp->portion, 'pflichtangabe' => $gp->pflichtangabe,
     ]);
     expect($aus)->toBe($gp->name);
@@ -94,4 +95,13 @@ it('Paket: Whitelist, Schreibfelder und Hash führen flavor, zusatz, pflichtanga
 
     // ältere Pakete ohne die Schlüssel lassen die Werte auf io stehen
     expect($v->werte(['name' => 'X'], '01', $ctx)['wert'])->not->toHaveKeys(['pflichtangabe', 'portion']);
+});
+
+it('renderGpName gibt Verarbeitung UND Zuschnitt aus (Verarbeitung zuerst); ein im Verarbeitungstext schon genannter Zuschnitt wird nicht verdoppelt', function () {
+    $n = app(GpNamingService::class);
+
+    expect($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: frisch, gegart, Würfel 10 mm')
+        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => '', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: frisch, Würfel 10 mm')
+        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => '']))->toBe('Kartoffel: frisch, gegart')
+        ->and($n->renderGpName(['hauptzutat' => 'Lachs', 'condition' => 'geräuchert', 'processing' => 'TK, geschnitten', 'form' => 'geschnitten']))->toBe('Lachs: geräuchert, TK, geschnitten');   // Zuschnitt schon im Text → kein Doppel
 });
