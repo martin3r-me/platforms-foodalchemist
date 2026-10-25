@@ -22,7 +22,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
 {
     private const IN_KEYS = [
         'name', 'hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
-        'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id',
+        'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id', 'bio', 'vegan', 'glutenfrei', 'laktosefrei',
     ];
 
     public function getName(): string
@@ -52,6 +52,10 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'form' => ['type' => 'string', 'description' => 'Form (falls keine processing).'],
                 'portion' => ['type' => 'string', 'description' => 'Portionsgrammatur pro Stück (optional, z. B. "100 g"; der Name zeigt "100 g pro Stück"). Wird am GP gespeichert.'],
                 'pflichtangabe' => ['type' => 'string', 'description' => 'Kategorie-Pflichtangabe (§8), z.B. Kochtyp/Käseart, mini, 3-fach sortiert. Wird am GP gespeichert.'],
+                'bio' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Bio)“ (Feld am GP; ohne den Parameter bleibt der Wert stehen).'],
+                'vegan' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Vegan)“ (Feld namens_vegan, getrennt vom Artikel-Tag).'],
+                'glutenfrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Glutenfrei)“ (Feld namens_glutenfrei).'],
+                'laktosefrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Laktosefrei)“ (Feld namens_laktosefrei).'],
                 'commodity_group_code' => ['type' => 'string', 'description' => 'Warengruppen-Code (§3).'],
                 'sub_category' => ['type' => 'string', 'description' => 'Sub-Kategorie.'],
                 'is_derivat' => ['type' => 'boolean', 'description' => 'Nebenprodukt-Derivat (§11.2) — requires_la wird dann 0.'],
