@@ -1,35 +1,58 @@
-lieferant;kuerzel;marke;typ
-;bürg;Bürger;herstellermarke
-;kn;Knorr;herstellermarke
-;oet;Dr. Oetker;herstellermarke
-;oetk;Dr. Oetker;herstellermarke
-;pomb;Pomberg;herstellermarke
-;wib;Wiberg;herstellermarke
-BOS Food GmbH;bone;Bone Suckin';herstellermarke
-BOS Food GmbH;creative;Creative Cuisine;herstellermarke
-BOS Food GmbH;gewürzgarten;Gewürzgarten;herstellermarke
-BOS Food GmbH;kastbergs;Kastbergs;herstellermarke
-BOS Food GmbH;oscar;Oscar;herstellermarke
-BOS Food GmbH;sosa;Sosa;herstellermarke
-BOS Food GmbH;wiberg;Wiberg;herstellermarke
-Chefs Culinar West Weeze;bc;Base Culinar;eigenmarke
-Chefs Culinar West Weeze;cart;Carte d'Or;herstellermarke
-Chefs Culinar West Weeze;frischli;Frischli;herstellermarke
-Chefs Culinar West Weeze;heinz;Heinz;herstellermarke
-Chefs Culinar West Weeze;hellma;Hellma;herstellermarke
-Chefs Culinar West Weeze;knorr;Knorr;herstellermarke
-Chefs Culinar West Weeze;kühne;Kühne;herstellermarke
-Chefs Culinar West Weeze;lubeca;Lubeca;herstellermarke
-Chefs Culinar West Weeze;milram;Milram;herstellermarke
-Chefs Culinar West Weeze;mm;Müllers Mühle;herstellermarke
-Chefs Culinar West Weeze;monin;Monin;herstellermarke
-Chefs Culinar West Weeze;nestle;Nestle;herstellermarke
-Chefs Culinar West Weeze;peka;Peka;herstellermarke
-Chefs Culinar West Weeze;sc;Star Culinar;eigenmarke
-Chefs Culinar West Weeze;schulte;Schulte;herstellermarke
-Chefs Culinar West Weeze;schär;Schär;herstellermarke
-Frischeteam Geschwister Kluth KG;nümbrechter;Nümbrechter;herstellermarke
-Gilde Frisch-Markt Rhein-Ruhr EG;chef;Chef;herstellermarke
-Gilde Frisch-Markt Rhein-Ruhr EG;knorr;Knorr;herstellermarke
-Heiner Weiß GmbH;nümbrechter;Nümbrechter;herstellermarke
-Heiner Weiß GmbH;rustico;Rustico;herstellermarke
+lieferant;kuerzel;marke;typ;position;vorrang
+;bürg;Bürger;herstellermarke;anfang;0
+;calleb;Callebaut;herstellermarke;anfang;0
+;delifr;Délifrance;herstellermarke;anfang;0
+;devel;Develey;herstellermarke;anfang;0
+;gg;Garden Gourmet;herstellermarke;anfang;0
+;herzb;Herzberger;herstellermarke;anfang;0
+;kn;Knorr;herstellermarke;anfang;0
+;kuchm;Kuchenmeister;herstellermarke;anfang;0
+;ma;Maggi;herstellermarke;anfang;0
+;mestem;Mestemacher;herstellermarke;anfang;0
+;oet;Dr. Oetker;herstellermarke;anfang;0
+;oetk;Dr. Oetker;herstellermarke;anfang;0
+;pomb;Pomberg;herstellermarke;anfang;0
+;schw;Schwartau;herstellermarke;anfang;0
+;tvb;The Vegetarian Butcher;herstellermarke;anfang;0
+;wib;Wiberg;herstellermarke;anfang;0
+BOS Food GmbH;bone;Bone Suckin';herstellermarke;anfang;0
+BOS Food GmbH;creative;Creative Cuisine;herstellermarke;anfang;0
+BOS Food GmbH;gewürzgarten;Gewürzgarten;herstellermarke;anfang;0
+BOS Food GmbH;kastbergs;Kastbergs;herstellermarke;anfang;0
+BOS Food GmbH;oscar;Oscar;herstellermarke;anfang;0
+BOS Food GmbH;sosa;Sosa;herstellermarke;anfang;0
+BOS Food GmbH;wiberg;Wiberg;herstellermarke;anfang;0
+Chefs Culinar West Weeze;bc;Base Culinar;eigenmarke;anfang;0
+Chefs Culinar West Weeze;bonp;Bon Pastaio;herstellermarke;anfang;0
+Chefs Culinar West Weeze;cart;Carte d'Or;herstellermarke;anfang;0
+Chefs Culinar West Weeze;dc;Danish Crown;herstellermarke;anfang;0
+Chefs Culinar West Weeze;frischli;Frischli;herstellermarke;anfang;0
+Chefs Culinar West Weeze;heinz;Heinz;herstellermarke;anfang;0
+Chefs Culinar West Weeze;hellma;Hellma;herstellermarke;anfang;0
+Chefs Culinar West Weeze;ht;Hi Taste;herstellermarke;anfang;1
+Chefs Culinar West Weeze;knorr;Knorr;herstellermarke;anfang;0
+Chefs Culinar West Weeze;kühlm;Kühlmann;herstellermarke;anfang;0
+Chefs Culinar West Weeze;kühne;Kühne;herstellermarke;anfang;0
+Chefs Culinar West Weeze;lubeca;Lubeca;herstellermarke;anfang;0
+Chefs Culinar West Weeze;milram;Milram;herstellermarke;anfang;0
+Chefs Culinar West Weeze;mm;Müllers Mühle;herstellermarke;anfang;0
+Chefs Culinar West Weeze;monin;Monin;herstellermarke;anfang;0
+Chefs Culinar West Weeze;naarm;Naarmann;herstellermarke;anfang;0
+Chefs Culinar West Weeze;nestle;Nestle;herstellermarke;anfang;0
+Chefs Culinar West Weeze;opti;Optimahl;herstellermarke;anfang;0
+Chefs Culinar West Weeze;peka;Peka;herstellermarke;anfang;0
+Chefs Culinar West Weeze;pfalzg;Pfalzgraf;herstellermarke;anfang;0
+Chefs Culinar West Weeze;sc;Star Culinar;eigenmarke;anfang;0
+Chefs Culinar West Weeze;schnef;Schne-frost;herstellermarke;anfang;0
+Chefs Culinar West Weeze;schulte;Schulte;herstellermarke;anfang;0
+Chefs Culinar West Weeze;schär;Schär;herstellermarke;anfang;0
+Chefs Culinar West Weeze;spr;Sprehe;herstellermarke;anfang;0
+Chefs Culinar West Weeze;tdp;Traiteur de Paris;herstellermarke;anfang;0
+Edna Backwaren GmbH;ff;Fix und fertig;herstellermarke;anfang;0
+Frischeteam Geschwister Kluth KG;nümbrechter;Nümbrechter;herstellermarke;anfang;0
+Gilde Frisch-Markt Rhein-Ruhr EG;chef;Chef;herstellermarke;anfang;0
+Gilde Frisch-Markt Rhein-Ruhr EG;knorr;Knorr;herstellermarke;anfang;0
+Handelshof Mönchengladbach;heng;Henglein;herstellermarke;ende;0
+Handelshof Mönchengladbach;oe;Dr. Oetker;herstellermarke;ende;0
+Heiner Weiß GmbH;nümbrechter;Nümbrechter;herstellermarke;anfang;0
+Heiner Weiß GmbH;rustico;Rustico;herstellermarke;anfang;0

@@ -25,6 +25,9 @@ class MarkeAusArtikel
     /** Zertifizierungen und ähnliche Präfixe, die nie eine Marke sind (Dominique 26.10.: „MSC ist die Zertifizierung“). */
     public const SPERRWOERTER = ['msc'];
 
+    /** Kürzel, die auch vor einem Bindestrich zählen (Edna „FF-Laugen…“) — wie `marken_kuerzel.py` (`sep == '-' and w != 'ff'`). */
+    public const BINDESTRICH_KUERZEL = ['ff'];
+
     /** Warengruppen, die nie Rezepturware sind: Wurst (§8.13), Getränke (§5 Ausnahme 1). */
     public const NIE_REZEPTURWARE_WG = ['04', '15'];
 
@@ -57,7 +60,10 @@ class MarkeAusArtikel
     }
 
     /**
-     * Kürzel bzw. Markenwort in den ersten drei Wörtern der Bezeichnung → [Marke, Rohkürzel] oder null.
+     * Kürzel bzw. Markenwort in der Bezeichnung → [Marke, Rohkürzel] oder null. Matchregel (Klaus, marken_kuerzel.py): ein Wort zählt nur, wenn es aus
+     * Buchstaben besteht und allein steht, direkt vor einem Punkt oder — nur für BINDESTRICH_KUERZEL (Edna „FF-Laugen…“) — vor einem Bindestrich endet.
+     * Position je Kürzel: `anfang` = erste drei Wörter, `ende` = letztes Wort (Handelshof „… HENG.“). Erst die Kürzel des Lieferanten, dann die globalen.
+     * Mehrere Treffer: höherer `vorrang` gewinnt (Produktlinie vor Dachmarke, „SC HT …“ → Hi Taste), bei Gleichstand der erste.
      *
      * @return array{0: string, 1: string}|null
      */
@@ -65,22 +71,30 @@ class MarkeAusArtikel
     {
         $karte = $this->karte();
         $eigen = $supplierId !== null ? ($karte[(string) $supplierId] ?? []) : [];
-        $woerter = array_slice(preg_split('/\s+/u', trim(str_replace('/', ' ', $bezeichnung)), -1, PREG_SPLIT_NO_EMPTY) ?: [], 0, 3);
-        foreach ($woerter as $wort) {
-            if (preg_match('/^(\p{L}+)(\.|$)/u', $wort, $m) !== 1) {
-                continue;   // nur Buchstaben, allein oder direkt vor einem Punkt
+        $woerter = preg_split('/\s+/u', trim(str_replace('/', ' ', $bezeichnung)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $pruefen = [];
+        foreach (array_slice($woerter, 0, 3) as $wort) {
+            $pruefen[] = [$wort, FoodAlchemistSupplierMarke::POSITION_ANFANG];
+        }
+        if ($woerter !== []) {
+            $pruefen[] = [$woerter[array_key_last($woerter)], FoodAlchemistSupplierMarke::POSITION_ENDE];
+        }
+        $bester = null;
+        foreach ($pruefen as [$wort, $position]) {
+            if (preg_match('/^(\p{L}+)(\.|-|$)/u', $wort, $m) !== 1) {
+                continue;   // nur Buchstaben, allein oder direkt vor einem Punkt bzw. Bindestrich
             }
             $k = mb_strtolower($m[1]);
-            if (in_array($k, self::SPERRWOERTER, true)) {
+            if (in_array($k, self::SPERRWOERTER, true) || ($m[2] === '-' && ! in_array($k, self::BINDESTRICH_KUERZEL, true))) {
                 continue;
             }
-            $marke = $eigen[$k] ?? $karte['global'][$k] ?? null;
-            if ($marke !== null) {
-                return [$marke, $m[1] . ($m[2] === '.' ? '.' : '')];
+            $eintrag = $eigen[$position][$k] ?? $karte['global'][$position][$k] ?? null;
+            if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester[2])) {
+                $bester = [$eintrag['marke'], $m[1] . ($m[2] === '.' ? '.' : ''), $eintrag['vorrang']];
             }
         }
 
-        return null;
+        return $bester !== null ? [$bester[0], $bester[1]] : null;
     }
 
     /**
@@ -151,9 +165,10 @@ class MarkeAusArtikel
             return $this->karte;
         }
         $this->karte = ['global' => []];
-        foreach (FoodAlchemistSupplierMarke::query()->get(['supplier_id', 'kuerzel', 'marke']) as $z) {
+        foreach (FoodAlchemistSupplierMarke::query()->get(['supplier_id', 'kuerzel', 'marke', 'position', 'vorrang']) as $z) {
             $schluessel = $z->supplier_id === null ? 'global' : (string) $z->supplier_id;
-            $this->karte[$schluessel][mb_strtolower($z->kuerzel)] = $z->marke;
+            $position = $z->position === FoodAlchemistSupplierMarke::POSITION_ENDE ? FoodAlchemistSupplierMarke::POSITION_ENDE : FoodAlchemistSupplierMarke::POSITION_ANFANG;
+            $this->karte[$schluessel][$position][mb_strtolower($z->kuerzel)] = ['marke' => $z->marke, 'vorrang' => (int) $z->vorrang];
         }
 
         return $this->karte;

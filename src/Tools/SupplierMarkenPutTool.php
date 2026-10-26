@@ -35,7 +35,9 @@ class SupplierMarkenPutTool extends FoodAlchemistTool implements ToolContract, T
                 'rolle' => ['type' => 'string', 'enum' => ['hersteller', 'haendler', 'offen']],
                 'kurzname' => ['type' => 'string', 'description' => 'Schreibweise in der Klammer, z. B. Heisters (nur bei hersteller)'],
                 'kuerzel_setzen' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
-                    'kuerzel' => ['type' => 'string'], 'marke' => ['type' => 'string'], 'typ' => ['type' => 'string', 'enum' => ['eigenmarke', 'herstellermarke']]],
+                    'kuerzel' => ['type' => 'string'], 'marke' => ['type' => 'string'], 'typ' => ['type' => 'string', 'enum' => ['eigenmarke', 'herstellermarke']],
+                    'position' => ['type' => 'string', 'enum' => ['anfang', 'ende'], 'description' => 'anfang = erste drei Wörter (Standard), ende = letztes Wort (z. B. Handelshof „… HENG.“)'],
+                    'vorrang' => ['type' => 'integer', 'description' => '0–9; bei mehreren Treffern gewinnt der höhere (Produktlinie vor Dachmarke)']],
                     'required' => ['kuerzel', 'marke']]],
                 'kuerzel_entfernen' => ['type' => 'array', 'items' => ['type' => 'string']],
             ],
@@ -71,8 +73,9 @@ class SupplierMarkenPutTool extends FoodAlchemistTool implements ToolContract, T
                     $out['kurzname'] = $l->kurzname;
                 }
                 foreach ((array) ($arguments['kuerzel_setzen'] ?? []) as $k) {
-                    $z = $pflege->kuerzelSetzen($user, $id, (string) ($k['kuerzel'] ?? ''), (string) ($k['marke'] ?? ''), (string) ($k['typ'] ?? 'herstellermarke'));
-                    $out['gesetzt'][] = ['kuerzel' => $z->kuerzel, 'marke' => $z->marke, 'typ' => $z->typ];
+                    $z = $pflege->kuerzelSetzen($user, $id, (string) ($k['kuerzel'] ?? ''), (string) ($k['marke'] ?? ''), (string) ($k['typ'] ?? 'herstellermarke'),
+                        (string) ($k['position'] ?? 'anfang'), (int) ($k['vorrang'] ?? 0));
+                    $out['gesetzt'][] = ['kuerzel' => $z->kuerzel, 'marke' => $z->marke, 'typ' => $z->typ, 'position' => $z->position, 'vorrang' => (int) $z->vorrang];
                 }
                 foreach ((array) ($arguments['kuerzel_entfernen'] ?? []) as $k) {
                     if ($pflege->kuerzelEntfernen($user, $id, (string) $k)) {

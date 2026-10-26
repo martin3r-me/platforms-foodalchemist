@@ -25,7 +25,7 @@ class LieferantMarken extends Component
     public string $kurzname = '';
 
     /** @var array{kuerzel: string, marke: string, typ: string} */
-    public array $neu = ['kuerzel' => '', 'marke' => '', 'typ' => FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE];
+    public array $neu = ['kuerzel' => '', 'marke' => '', 'typ' => FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE, 'position' => FoodAlchemistSupplierMarke::POSITION_ANFANG];
 
     public ?string $fehler = null;
 
@@ -52,8 +52,8 @@ class LieferantMarken extends Component
     public function markeAnlegen(): void
     {
         $this->schreibe(function (MarkenPflegeService $pflege) {
-            $pflege->kuerzelSetzen(Auth::user(), $this->supplierId, $this->neu['kuerzel'], $this->neu['marke'], $this->neu['typ']);
-            $this->neu = ['kuerzel' => '', 'marke' => '', 'typ' => FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE];
+            $pflege->kuerzelSetzen(Auth::user(), $this->supplierId, $this->neu['kuerzel'], $this->neu['marke'], $this->neu['typ'], $this->neu['position'] ?? FoodAlchemistSupplierMarke::POSITION_ANFANG);
+            $this->neu = ['kuerzel' => '', 'marke' => '', 'typ' => FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE, 'position' => FoodAlchemistSupplierMarke::POSITION_ANFANG];
 
             return 'Kürzel gespeichert.';
         });

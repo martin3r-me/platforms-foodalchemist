@@ -36,7 +36,8 @@ class MarkenPflegeService
     }
 
     /** Kürzel setzen (neu oder Marke/Typ ändern); supplierId null = gilt für alle Lieferanten. */
-    public function kuerzelSetzen(?User $user, ?int $supplierId, string $kuerzel, string $marke, string $typ = FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE): FoodAlchemistSupplierMarke
+    public function kuerzelSetzen(?User $user, ?int $supplierId, string $kuerzel, string $marke, string $typ = FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE,
+        string $position = FoodAlchemistSupplierMarke::POSITION_ANFANG, int $vorrang = 0): FoodAlchemistSupplierMarke
     {
         $this->pruefe($user);
         $k = self::normKuerzel($kuerzel);
@@ -50,8 +51,11 @@ class MarkenPflegeService
         if (! in_array($typ, [FoodAlchemistSupplierMarke::TYP_EIGENMARKE, FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE], true)) {
             throw new \RuntimeException('Typ muss eigenmarke oder herstellermarke sein.');
         }
+        if (! in_array($position, [FoodAlchemistSupplierMarke::POSITION_ANFANG, FoodAlchemistSupplierMarke::POSITION_ENDE], true)) {
+            throw new \RuntimeException('Position muss anfang (erste drei Wörter) oder ende (letztes Wort) sein.');
+        }
         $zeile = $this->zeile($supplierId, $k);
-        $werte = ['marke' => mb_substr($m, 0, 80), 'typ' => $typ];
+        $werte = ['marke' => mb_substr($m, 0, 80), 'typ' => $typ, 'position' => $position, 'vorrang' => max(0, min(9, $vorrang))];
         $zeile = $zeile !== null ? tap($zeile)->update($werte) : FoodAlchemistSupplierMarke::create(['supplier_id' => $supplierId, 'kuerzel' => $k] + $werte);
         $this->marken->vergessen();
 

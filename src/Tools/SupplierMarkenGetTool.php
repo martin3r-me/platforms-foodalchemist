@@ -37,7 +37,7 @@ class SupplierMarkenGetTool extends FoodAlchemistTool implements ToolContract, T
         $id = isset($arguments['supplier_id']) ? (int) $arguments['supplier_id'] : null;
         $kuerzel = fn (?int $sid) => FoodAlchemistSupplierMarke::query()
             ->when($sid === null, fn ($q) => $q->whereNull('supplier_id'), fn ($q) => $q->where('supplier_id', $sid))
-            ->orderBy('kuerzel')->get(['kuerzel', 'marke', 'typ'])->toArray();
+            ->orderBy('kuerzel')->get(['kuerzel', 'marke', 'typ', 'position', 'vorrang'])->toArray();
         if ($id === null) {
             return ToolResult::success(['global' => true, 'kuerzel' => $kuerzel(null)]);
         }

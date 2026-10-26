@@ -33,6 +33,7 @@
                     <span class="w-24 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $m->kuerzel }}</span>
                     <span class="flex-1 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $m->marke }}</span>
                     <x-fa::badge :tone="$m->typ === 'eigenmarke' ? 'info' : 'neutral'">{{ $m->typ === 'eigenmarke' ? 'Eigenmarke' : 'Herstellermarke' }}</x-fa::badge>
+                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $m->position === 'ende' ? 'am Ende' : 'am Anfang' }}@if($m->vorrang > 0) · Vorrang {{ $m->vorrang }}@endif</span>
                     @if($darf)
                         <x-fa::button size="sm" variant="ghost" icon="heroicon-m-trash" wire:click="markeLoeschen(@js($m->kuerzel))"
                             wire:confirm="Kürzel „{{ $m->kuerzel }}“ entfernen?" aria-label="Kürzel {{ $m->kuerzel }} entfernen" data-lm-marke-loeschen />
@@ -42,11 +43,14 @@
                 <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-3)]" data-lm-keine-marken>Keine Kürzel für diesen Lieferanten. Globale Kürzel (z. B. Kn. → Knorr) gelten trotzdem.</p>
             @endforelse
             @if($darf)
-                <div class="grid grid-cols-[8rem_1fr_10rem_auto] gap-2 items-end mt-1" data-lm-neu>
+                <div class="grid grid-cols-[8rem_1fr_10rem_9rem_auto] gap-2 items-end mt-1" data-lm-neu>
                     <x-fa::field label="Kürzel" for="lm-neu-k"><x-fa::input id="lm-neu-k" wire:model="neu.kuerzel" placeholder="BC" data-lm-neu-kuerzel /></x-fa::field>
                     <x-fa::field label="Marke" for="lm-neu-m"><x-fa::input id="lm-neu-m" wire:model="neu.marke" placeholder="Base Culinar" data-lm-neu-marke /></x-fa::field>
                     <x-fa::field label="Typ" for="lm-neu-t">
                         <x-fa::select id="lm-neu-t" wire:model="neu.typ" :options="['herstellermarke' => 'Herstellermarke', 'eigenmarke' => 'Eigenmarke']" />
+                    </x-fa::field>
+                    <x-fa::field label="Steht" for="lm-neu-p">
+                        <x-fa::select id="lm-neu-p" wire:model="neu.position" :options="['anfang' => 'am Anfang', 'ende' => 'am Ende']" />
                     </x-fa::field>
                     <x-fa::button icon="heroicon-m-plus" wire:click="markeAnlegen" data-lm-neu-anlegen>Hinzufügen</x-fa::button>
                 </div>

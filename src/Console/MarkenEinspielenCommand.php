@@ -12,7 +12,8 @@ use Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel;
  * GP-Regelwerk v3.7.1 §5 Ausnahme 3 — Lieferanten-Rolle/Kurzname und Marken-Kürzel aus den CSVs des Moduls einspielen. **Default ist Probelauf.**
  *
  * Quellen (resources/data/marken/, von Dominique bestätigt 26.10.2026): `lieferanten_rolle.csv` (lieferant;rolle;kurzname) und `kuerzel.csv`
- * (lieferant;kuerzel;marke;typ; lieferant leer = gilt für alle). Ein weiteres Kürzel ist eine CSV-Zeile plus erneuter Lauf.
+ * (lieferant;kuerzel;marke;typ[;position;vorrang]; lieferant leer = gilt für alle; position anfang|ende, vorrang Zahl — beide optional).
+ * Ein weiteres Kürzel ist eine CSV-Zeile plus erneuter Lauf.
  * Lieferanten nur per exaktem Namen (global, nicht gelöscht); kein oder mehrere Treffer werden gelistet, nie geraten. Idempotent (updateOrCreate),
  * löscht nie. Sperrwörter (MSC) werden abgewiesen.
  */
@@ -66,6 +67,13 @@ class MarkenEinspielenCommand extends Command
             $kuerzel = mb_strtolower(rtrim(trim($z['kuerzel'] ?? ''), '.'));
             $marke = trim($z['marke'] ?? '');
             $typ = trim($z['typ'] ?? '');
+            $position = trim($z['position'] ?? '') ?: FoodAlchemistSupplierMarke::POSITION_ANFANG;
+            $vorrang = (int) ($z['vorrang'] ?? 0);
+            if (! in_array($position, [FoodAlchemistSupplierMarke::POSITION_ANFANG, FoodAlchemistSupplierMarke::POSITION_ENDE], true)) {
+                $fehler[] = "Position unbekannt: „{$position}“ ({$kuerzel})";
+
+                continue;
+            }
             if ($kuerzel === '' || $marke === '' || ! in_array($typ, [FoodAlchemistSupplierMarke::TYP_EIGENMARKE, FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE], true)) {
                 $fehler[] = 'Kürzel-Zeile unvollständig: ' . implode(';', $z);
 
@@ -83,15 +91,16 @@ class MarkenEinspielenCommand extends Command
             }
             $vorhanden = FoodAlchemistSupplierMarke::query()->where('kuerzel', $kuerzel)
                 ->when($id === null, fn ($q) => $q->whereNull('supplier_id'), fn ($q) => $q->where('supplier_id', $id))->first();
-            if ($vorhanden !== null && $vorhanden->marke === $marke && $vorhanden->typ === $typ) {
+            $werte = ['marke' => $marke, 'typ' => $typ, 'position' => $position, 'vorrang' => $vorrang];
+            if ($vorhanden !== null && $vorhanden->marke === $marke && $vorhanden->typ === $typ && $vorhanden->position === $position && (int) $vorhanden->vorrang === $vorrang) {
                 $zaehler['kuerzel_gleich']++;
 
                 continue;
             }
             $zaehler[$vorhanden === null ? 'kuerzel_neu' : 'kuerzel_geaendert']++;
             $schreiben[] = fn () => $vorhanden !== null
-                ? $vorhanden->update(['marke' => $marke, 'typ' => $typ])
-                : FoodAlchemistSupplierMarke::create(['supplier_id' => $id, 'kuerzel' => $kuerzel, 'marke' => $marke, 'typ' => $typ]);
+                ? $vorhanden->update($werte)
+                : FoodAlchemistSupplierMarke::create(['supplier_id' => $id, 'kuerzel' => $kuerzel] + $werte);
         }
 
         $this->table(['Lieferanten neu/geändert', 'unverändert', 'Kürzel neu', 'geändert', 'unverändert', 'nicht zugeordnet/abgewiesen'], [[
@@ -136,9 +145,10 @@ class MarkenEinspielenCommand extends Command
         $kopf = array_map(fn ($k) => trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $k)), fgetcsv($h, 0, ';', '"', '\\') ?: []);
         $zeilen = [];
         while (($z = fgetcsv($h, 0, ';', '"', '\\')) !== false) {
-            if ($z === [null] || count($z) !== count($kopf)) {
+            if ($z === [null] || count($z) > count($kopf)) {
                 continue;
             }
+            $z = array_pad($z, count($kopf), '');   // optionale Spalten am Ende (position, vorrang) dürfen fehlen
             $zeilen[] = array_combine($kopf, array_map('strval', $z));
         }
         fclose($h);

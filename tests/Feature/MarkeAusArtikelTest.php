@@ -119,3 +119,25 @@ it('Seeder weist Sperrwörter ab und nimmt neue Zeilen aus einem anderen Ordner 
     array_map('unlink', glob($ordner . '/*'));
     rmdir($ordner);
 });
+
+it('Runde 2 aus der Modul-CSV: Beispiele aus marken_kuerzel.py (__main__) 1:1 — HT vor SC, FF vor Bindestrich, Handelshof am Ende, Lieferanten-Scope', function () {
+    FoodAlchemistSupplierMarke::query()->delete();
+    $l = [];
+    foreach (['Edna Backwaren GmbH', 'Handelshof Mönchengladbach', 'Hanos Venlo', 'Delta Fleisch Handels GmbH'] as $name) {
+        $l[$name] = FoodAlchemistSupplier::create(['team_id' => null, 'name' => $name])->id;
+    }
+    Artisan::call('foodalchemist:marken-einspielen', ['--apply' => true]);
+    $d = app(MarkeAusArtikel::class);
+    $d->vergessen();
+    $cc = $this->cc->id;
+    $faelle = [
+        ['TK SC HT Rindergulasch 2x1,5kg', $cc, 'Hi Taste'], ['TK HT Bami Goreng', $cc, 'Hi Taste'], ['SC Lachsfleisch ohne Kette', $cc, 'Star Culinar'],
+        ['Kn.Bratenjus', $cc, 'Knorr'], ['TK BonP.Cannelloni', $cc, 'Bon Pastaio'], ['FF-Laugenfußballbrötchen 0,07 kg', $l['Edna Backwaren GmbH'], 'Fix und fertig'],
+        ['MARINADE XY HENG.', $l['Handelshof Mönchengladbach'], 'Henglein'], ['KETCHUP 5KG OE', $l['Handelshof Mönchengladbach'], 'Dr. Oetker'], ['KETCHUP OE', $l['Hanos Venlo'], null],
+        ['SUS Schweinerücken oKn.m.Schw4,5kg', $cc, null], ['Ma.Tomatenketchup', null, 'Maggi'], ['DC Lachs Lasagne', $l['Delta Fleisch Handels GmbH'], null], ['TK DC Lachs', $cc, 'Danish Crown'],
+        ['Ma-Würze flüssig', null, null],   // Bindestrich zählt nur bei FF
+    ];
+    foreach ($faelle as [$bez, $sid, $soll]) {
+        expect($d->kuerzelAus($bez, $sid)[0] ?? null)->toBe($soll, $bez);
+    }
+});
