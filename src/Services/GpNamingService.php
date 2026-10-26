@@ -176,6 +176,24 @@ class GpNamingService
         return $in;
     }
 
+    /** Namensflags in „ / (…)“, die Produkteigenschaften sind (bleiben auch im Kundentext und im Matcher-Score). */
+    public const NAMENS_FLAGS = ['bio', 'vegan', 'glutenfrei', 'laktosefrei'];
+
+    /**
+     * GP-Name ohne die Marken-Klammer (§5 Ausnahme 3 / §6.6 Zusatz) — für Matcher-Score und Verkaufstexte (Kurator 26.10.). Mit `zusatz`
+     * genau dieser Teil „ / (Altoni)“; ohne (Bestand) jeder Klammerteil „ / (…)“, der kein Namensflag ist. Bio/Vegan/Glutenfrei/Laktosefrei bleiben.
+     */
+    public function nameOhneMarke(string $name, ?string $zusatz = null): string
+    {
+        $z = trim((string) $zusatz);
+        if ($z !== '') {
+            return trim((string) preg_replace('/\s*\/\s*\(' . preg_quote($z, '/') . '\)/u', '', $name, 1));
+        }
+
+        return trim((string) preg_replace_callback('/\s*\/\s*\(([^)]*)\)/u',
+            fn ($m) => in_array(mb_strtolower(trim($m[1])), self::NAMENS_FLAGS, true) ? $m[0] : '', $name));
+    }
+
     /** Klammer-Zusatz (§6.6): ohne Klammern und Zeilenumbrüche, damit der Name lesbar zerlegbar bleibt („ / (…)“). */
     public function bereinigeZusatz(?string $zusatz): string
     {

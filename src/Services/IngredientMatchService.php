@@ -40,6 +40,14 @@ class IngredientMatchService
     private string $currentIngredientName = '';
 
     /**
+     * Marken-Varianten (Kurator 26.10.): Tiebreak-Daten je Aufruf — Favoriten-Rang (FavoritenOverlay), Stamm-Lieferanten je WG, Lead-Lieferant je GP.
+     * Zu Beginn jedes öffentlichen Aufrufs geleert (Favoriten/Stamm können sich zwischen Aufrufen ändern).
+     *
+     * @var array{favoriten?: array<int,int>, stamm?: array<string, array<int,bool>>, lead?: array<int, ?int>, gp?: array<int, ?FoodAlchemistGp>}
+     */
+    private array $tiebreakMemo = [];
+
+    /**
      * @return array{target: string, status: MatchBand, gp_id: ?int, gp_name: ?string,
      *               recipe_id: ?int, recipe_name: ?string, score: float}
      */
@@ -78,6 +86,7 @@ class IngredientMatchService
         // bekannten Verwechslungs-Falle landen (Brie↛Bries etc.). Synchron gesetzt,
         // in bestGpMatch/bestSubrecipeMatch gelesen (kein Threading durch poolLauf).
         $this->currentIngredientName = $ingredientName;
+        $this->tiebreakMemo = [];
 
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
         if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
@@ -271,6 +280,7 @@ class IngredientMatchService
      */
     public function candidatesFor(Team $team, string $ingredientName, ?string $hauptzutatSlug = null, int $k = 5): array
     {
+        $this->tiebreakMemo = [];
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
         if ($queryTokens === [] && $querySlug === null) {
@@ -318,8 +328,9 @@ class IngredientMatchService
             if (! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition)) {
                 continue;
             }
-            $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
-            $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
+            $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);   // Marken-Klammer zählt nicht (wie bestGpMatch)
+            $combined = trim($scoreName . ' ' . ($gp->main_ingredient_display ?? ''));
+            $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
             if ($score > 0.0) {
                 $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
@@ -339,7 +350,7 @@ class IngredientMatchService
                 return $c;
             }, array_values($lex));
             $out = $this->stripAntiMarkers($ingredientName, $out);
-            usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
+            usort($out, $this->kandidatenSortierung($team));
 
             return array_slice($out, 0, $k);
         }
@@ -423,7 +434,7 @@ class IngredientMatchService
         }
 
         $out = $this->stripAntiMarkers($ingredientName, array_values($merged));
-        usort($out, fn ($a, $b) => $b['score'] <=> $a['score']);
+        usort($out, $this->kandidatenSortierung($team));
 
         return array_slice($out, 0, $k);
     }
@@ -548,6 +559,7 @@ class IngredientMatchService
     private function bestGpMatch(Team $team, array $queryTokens, ?string $querySlug, string $pref, bool $preferRaw, string $bio): ?array
     {
         $best = null;
+        $bestGp = null;
         $bestZustand = null;
         $bestBio = null;
         $bestFreigegeben = false;
@@ -568,14 +580,21 @@ class IngredientMatchService
                 && ! $this->heuristik->nenntDerivatForm($this->currentIngredientName, $marker)) {
                 continue;
             }
-            $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
-            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
+            // Marken-Varianten: die Marken-Klammer zählt nicht mit — „Sahnesauce … / (Altoni)“ und „/ (Hollyfood)“ starten gleich, ein GP ohne Klammer
+            // (marke_offen) hat keinen Vorteil (Kurator 26.10.). Namensflags (Bio …) bleiben und entscheiden wie bisher im Varianten-Rang.
+            $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);
+            $combined = trim($scoreName . ' ' . ($gp->main_ingredient_display ?? ''));
+            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
 
             $take = false;
             if ($best === null) {
                 $take = true;
             } elseif ($score > $best['score'] + MatchHeuristics::SCORE_EPS) {
                 $take = true;
+            } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS
+                && ($vorrang = $this->vorrangVergleich($team, $gp, $bestGp)) !== 0) {
+                // Marken-Varianten (Kurator 26.10.): erst Favorit des Teams, dann Lead-Artikel vom Stamm-Lieferanten — vor der bisherigen Logik
+                $take = $vorrang > 0;
             } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS) {
                 // 4.4l/u — Tiebreaker bei (Float-)Gleichstand, Feld-primär
                 $rangNeu = $this->heuristik->variantRankResolved($gp->name, $pref, $preferRaw, $bio, $gp->condition, $gp->bio);
@@ -585,6 +604,7 @@ class IngredientMatchService
                 $take = $rangNeu > $rangAlt || ($rangNeu === $rangAlt && self::istFreigegeben($gp) && ! $bestFreigegeben);
             }
             if ($take) {
+                $bestGp = $gp;
                 $bestZustand = $gp->condition;
                 $bestBio = $gp->bio;
                 $bestFreigegeben = self::istFreigegeben($gp);
@@ -597,6 +617,79 @@ class IngredientMatchService
         }
 
         return $best;
+    }
+
+    // ── Marken-Varianten: Tiebreak Favorit → Stamm-Lieferant (Kurator 26.10., vor der bisherigen Varianten-/Freigabe-/ID-Logik) ──
+
+    private function naming(): GpNamingService
+    {
+        return app(GpNamingService::class);
+    }
+
+    /**
+     * Vorrang eines GP bei Score-Gleichstand: [Favoriten-Priorität (0 = kein Favorit, höher = besser), Lead-Artikel vom Stamm-Lieferanten des Teams (1/0)].
+     * Favoriten aus FavoritenOverlay (wirksam, inkl. Übernahme vom Hauptteam; immer, unabhängig vom opt-in-Prompt-Block). Stamm = Stamm-Lieferanten-Matrix
+     * der Team-Kette für die WG des GP (StammLieferantService, derselbe Lese-Vertrag wie die Lead-LA-Wahl).
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function vorrangSchluessel(Team $team, ?FoodAlchemistGp $gp): array
+    {
+        if ($gp === null) {
+            return [0, 0];
+        }
+        $this->tiebreakMemo['favoriten'] ??= (function () use ($team) {
+            $ids = array_keys(\Platform\FoodAlchemist\Support\FavoritenOverlay::fuer($team));   // schon nach Rang sortiert
+            $n = count($ids);
+
+            return array_combine($ids, array_map(fn ($i) => $n - $i, array_keys($ids))) ?: [];
+        })();
+        $fav = $this->tiebreakMemo['favoriten'][(int) $gp->id] ?? 0;
+
+        $stamm = 0;
+        $leadId = $gp->lead_la_supplier_item_id;
+        if ($leadId !== null) {
+            $lieferant = $this->tiebreakMemo['lead'][(int) $leadId] ??= (int) (\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)
+                ->whereKey((int) $leadId)->value('supplier_id') ?? 0);
+            $wg = (string) ($gp->commodity_group_code ?? '');
+            $this->tiebreakMemo['stamm'][$wg] ??= array_fill_keys(app(StammLieferantService::class)->stammSupplierIdsFor($team, $wg !== '' ? $wg : null), true);
+            $stamm = $lieferant !== 0 && isset($this->tiebreakMemo['stamm'][$wg][$lieferant]) ? 1 : 0;
+        }
+
+        return [$fav, $stamm];
+    }
+
+    /** 1 = $neu hat Vorrang, -1 = $alt, 0 = gleich (dann bisherige Logik). */
+    private function vorrangVergleich(Team $team, FoodAlchemistGp $neu, ?FoodAlchemistGp $alt): int
+    {
+        return $this->vorrangSchluessel($team, $neu) <=> $this->vorrangSchluessel($team, $alt);
+    }
+
+    /** Kandidatenliste: Score absteigend; bei gleichem Score GP mit Favorit/Stamm-Vorrang zuerst, sonst stabil wie bisher. */
+    private function kandidatenSortierung(Team $team): \Closure
+    {
+        return function ($a, $b) use ($team) {
+            $s = $b['score'] <=> $a['score'];
+            if (abs((float) $a['score'] - (float) $b['score']) > MatchHeuristics::SCORE_EPS) {
+                return $s;
+            }
+            $v = $this->vorrangSchluessel($team, $this->kandidatGp($team, $b)) <=> $this->vorrangSchluessel($team, $this->kandidatGp($team, $a));
+
+            return $v !== 0 ? $v : $s;
+        };
+    }
+
+    private function kandidatGp(Team $team, array $c): ?FoodAlchemistGp
+    {
+        if (($c['kind'] ?? null) !== 'gp') {
+            return null;
+        }
+        $id = (int) $c['id'];
+        if (! array_key_exists($id, $this->tiebreakMemo['gp'] ?? [])) {
+            $this->tiebreakMemo['gp'][$id] = FoodAlchemistGp::visibleToTeam($team)->find($id, ['id', 'lead_la_supplier_item_id', 'commodity_group_code']);
+        }
+
+        return $this->tiebreakMemo['gp'][$id];
     }
 
     private function bestSubrecipeMatch(Team $team, array $queryTokens, ?string $querySlug): ?array
@@ -784,7 +877,8 @@ class IngredientMatchService
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'main_ingredient_slug', 'main_ingredient_display']);
 
         return $query->orderBy('id')->limit(300)
-            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat', 'status']);
+            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat', 'status',
+                'zusatz', 'lead_la_supplier_item_id', 'commodity_group_code']);   // Marken-Varianten: Score ohne Klammer, Tiebreak Stamm-Lieferant
     }
 
     /** Typ aus dem Präfix eines Namens, nur wenn er im Typ-Vokabular steht (sonst null). */
