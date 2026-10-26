@@ -20,6 +20,7 @@ class GpPaketValidator
     public const GP_SPALTEN = [
         'uuid', 'gp_key', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'flavor', 'zusatz', 'pflichtangabe', 'portion',
         'commodity_group_code', 'sub_category', 'condition', 'condition_source', 'bio', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'requires_la', 'is_platzhalter', 'is_derivat', 'status',
+        'rezepturware', 'marke_offen',   // §5 Ausnahme 3 (v3.7.1); auch im Export-Skript (Schritt 4) nachziehen
         'cooking_loss_default_pct', 'trimming_loss_default_pct', 'piece_default_g', 'piece_default_g_source',
         'diameter_mm', 'length_mm', 'width_mm', 'height_mm', 'volume_ml',
         'tag_is_vegan', 'tag_is_vegetarian', 'tag_is_halal', 'tag_contains_pork', 'tag_contains_beef', 'tag_is_organic', 'tag_is_regional',
@@ -54,6 +55,7 @@ class GpPaketValidator
     public const WRITE_SPALTEN = [
         'name', 'main_ingredient_slug', 'main_ingredient_display', 'processing', 'form', 'flavor', 'zusatz', 'pflichtangabe', 'portion', 'commodity_group_code', 'sub_category',
         'condition', 'condition_source', 'bio', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'requires_la', 'is_platzhalter', 'is_derivat',
+        'rezepturware', 'marke_offen',
         'cooking_loss_default_pct', 'trimming_loss_default_pct', 'piece_default_g', 'piece_default_g_source',
         'diameter_mm', 'length_mm', 'width_mm', 'height_mm', 'volume_ml',
         'tag_is_vegan', 'tag_is_vegetarian', 'tag_is_halal', 'tag_contains_pork', 'tag_contains_beef', 'tag_is_organic', 'tag_is_regional',
@@ -61,7 +63,7 @@ class GpPaketValidator
         'preferred_count_unit_id', 'serving_vehicle_vocab_id', 'derivat_von_gp_id',
     ];
 
-    private const BOOL_SPALTEN = ['requires_la', 'is_platzhalter', 'is_derivat', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'tag_is_vegan', 'tag_is_vegetarian', 'tag_is_halal', 'tag_contains_pork',
+    private const BOOL_SPALTEN = ['requires_la', 'is_platzhalter', 'is_derivat', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'rezepturware', 'marke_offen', 'tag_is_vegan', 'tag_is_vegetarian', 'tag_is_halal', 'tag_contains_pork',
         'tag_contains_beef', 'tag_is_organic', 'tag_is_regional', 'tag_is_staple_food', 'tag_is_convenience', 'tag_is_lactose_free', 'tag_is_gluten_free'];
 
     public function __construct(private readonly GpNamingService $naming) {}

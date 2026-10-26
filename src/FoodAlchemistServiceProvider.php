@@ -170,6 +170,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\VollstaendigkeitReportCommand::class,
                 \Platform\FoodAlchemist\Console\AllergenLaVorrangCommand::class,
                 \Platform\FoodAlchemist\Console\AllergeneNurPositivCommand::class,   // Spec 85
+                \Platform\FoodAlchemist\Console\MarkenEinspielenCommand::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
@@ -407,6 +408,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $component->sperreAbgewiesen((string) $method);
             $returnEarly(null);
         });
+
+        // GP-Regelwerk v3.7.1 §5 Ausnahme 3: Marken-Kürzel einmal je Anfrage laden (Karte im Dienst)
+        $this->app->scoped(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class);
 
         // Spec 79: Google Trends für den Trendradar — produktiv über DataForSEO (Integrations-Modul)
         $this->app->bind(\Platform\FoodAlchemist\Services\Trends\GoogleTrendsQuelle::class, \Platform\FoodAlchemist\Services\Trends\DataForSeoGoogleTrends::class);

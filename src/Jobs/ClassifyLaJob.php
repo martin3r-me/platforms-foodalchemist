@@ -86,7 +86,8 @@ class ClassifyLaJob implements ShouldQueue
         // „unbekannt" & Co. sind kein Wert (Regelwerk GP §6, §12): bleibt leer
         $hauptzutat = $naming->bereinigeFeld($werte['hauptzutat'] ?? null);
         $flavor = $naming->bereinigeFeld($werte['flavor'] ?? null);
-        $zusatz = $naming->zusatzAusArtikel($werte['zusatz'] ?? null, [$designation, $la->marketing_name ?? null]);   // §6.6: nur exakt aus dem Artikel
+        $zusatz = $naming->zusatzAusArtikel($werte['zusatz'] ?? null, [$designation, $la->marketing_name ?? null],
+            app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($la)->marke);   // §6.6: nur exakt aus dem Artikel; §5 Ausn. 3: Marke aus MarkeAusArtikel
         $condition = $naming->bereinigeFeld($werte['condition'] ?? null);
         $processing = $naming->bereinigeFeld($werte['processing'] ?? null);
         $form = $naming->bereinigeFeld($werte['form'] ?? null);

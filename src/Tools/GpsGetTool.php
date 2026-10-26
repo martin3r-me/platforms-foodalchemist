@@ -61,6 +61,9 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'derivat_von_gp_id' => $gp->derivat_von_gp_id !== null ? (int) $gp->derivat_von_gp_id : null,
             'requires_la' => (bool) $gp->requires_la,
             'is_platzhalter' => (bool) $gp->is_platzhalter,
+            'zusatz' => $gp->zusatz,
+            'rezepturware' => $gp->rezepturware,   // §5 Ausnahme 3: null = nicht entschieden
+            'marke_offen' => (bool) $gp->marke_offen,
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'tags' => $tags,
             // Non-Food (WG 16): Maße in mm/ml wie gespeichert, dazu die Größe in Betriebs-Einheiten (Ø 27 cm); sonst null

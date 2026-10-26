@@ -188,14 +188,20 @@ class GpNamingService
      * Klammer-Zusatz nur aus dem Artikel (Entscheid Dominique 25.10.2026): der Fantasiename muss als Teilstring (case-insensitiv) in einem der
      * Quelltexte (Bezeichnung, Vermarktungsname) stehen und wird in der Schreibweise des Artikels übernommen. Sonst leer — nie erfinden,
      * übersetzen oder ausschmücken.
+     * §5 Ausnahme 3 (v3.7.1): EINZIGE weitere zulässige Quelle ist die Marke aus {@see \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel}
+     * (aufgelöstes Kürzel „BC“ → Base Culinar, Hersteller-Kurzname) — nur genau dieser Wert, in seiner Schreibweise; alles andere bleibt wörtlich geprüft.
      *
      * @param  list<string|null>  $quelltexte
      */
-    public function zusatzAusArtikel(?string $zusatz, array $quelltexte): string
+    public function zusatzAusArtikel(?string $zusatz, array $quelltexte, ?string $markeAusArtikel = null): string
     {
         $z = $this->bereinigeZusatz($zusatz);
         if ($z === '') {
             return '';
+        }
+        $marke = $this->bereinigeZusatz($markeAusArtikel);
+        if ($marke !== '' && mb_strtolower($z) === mb_strtolower($marke)) {
+            return $marke;
         }
         foreach ($quelltexte as $text) {
             $text = trim((string) $text);
@@ -570,6 +576,10 @@ class GpNamingService
             $gpKey = "{$gpKey}~{$n}";
         }
 
+        // §5 Ausnahme 3 (v3.7.1): Rezepturware (WG 04/15 nie); marke_offen leitet sich ab — Rezepturware ohne Marke in der Klammer
+        $rezeptur = \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::rezepturwareFuerWg(
+            \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($in['rezepturware'] ?? null), (string) ($in['commodity_group_code'] ?? ''));
+
         return FoodAlchemistGp::create([
             'team_id' => $team->id,                                          // D1: Kind-eigene GPs möglich
             'gp_key' => $gpKey,
@@ -593,6 +603,8 @@ class GpNamingService
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
             'derivat_von_gp_id' => $in['derivat_von_gp_id'] ?? null,
             'requires_la' => ! (bool) ($in['is_derivat'] ?? false),          // §11.2: Derivat braucht keinen LA
+            'rezepturware' => $rezeptur,
+            'marke_offen' => \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::markeOffen($rezeptur, $this->bereinigeZusatz($in['zusatz'] ?? null)),
             'first_seen_at' => now(),
         ]);
     }
@@ -643,6 +655,12 @@ class GpNamingService
             // (requires_la=0 ohne Derivat) bleibt bei normalen Edits unangetastet.
             'requires_la' => $istDerivat !== $warDerivat ? ! $istDerivat : $gp->requires_la,
         ]);
+        // §5 Ausnahme 3: Rezepturware nur, wenn der Schreiber sie mitgibt; marke_offen folgt immer aus Rezepturware + Klammer
+        $rezeptur = \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::rezepturwareFuerWg(
+            array_key_exists('rezepturware', $in) ? \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($in['rezepturware']) : $gp->rezepturware,
+            (string) $gp->commodity_group_code);
+        $gp->update(['rezepturware' => $rezeptur,
+            'marke_offen' => \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::markeOffen($rezeptur, (string) $gp->zusatz)]);
 
         return $gp->refresh();
     }

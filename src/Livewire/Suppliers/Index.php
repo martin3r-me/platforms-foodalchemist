@@ -57,6 +57,10 @@ class Index extends Component
 
     public bool $includeInactive = false;
 
+    /** GP-Regelwerk v3.7.1 §5 Ausnahme 3: Liste „Lieferant einstufen“ — Rolle offen, Artikel hängen an Rezepturware (Pflege Plattform-/Master-Admin). */
+    #[Url(as: 'einstufen')]
+    public bool $einstufen = false;
+
     public bool $onlyActive = true;
 
     #[Url(as: 'zeilen')]
@@ -309,6 +313,10 @@ class Index extends Component
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
         $liste = $suppliers->listWithCounts($team, $this->includeInactive, $this->supplierSuche, $this->gruppe === '' ? null : (int) $this->gruppe);
+        if ($this->einstufen) {
+            $offen = $suppliers->zumEinstufen();
+            $liste = $liste->filter(fn ($s) => isset($offen[$s->id]))->values();
+        }
         $globaleSuche = trim($this->q) !== '';
 
         if (! $globaleSuche && $this->supplierId === null) {
@@ -336,6 +344,7 @@ class Index extends Component
             'offeneMatches' => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
                 ->where('status', 'offen')->count(),
             'lieferanten' => $liste,
+            'darfMarkenPflege' => app(\Platform\FoodAlchemist\Services\MandantenService::class)->darfVerwaltung(Auth::user()),
             'lieferantenGruppen' => app(\Platform\FoodAlchemist\Services\SupplierGroupService::class)->liste($team),
             'artikel' => $artikel,
             'globaleSuche' => $globaleSuche,

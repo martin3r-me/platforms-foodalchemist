@@ -184,7 +184,8 @@ class GpAbgleichService
             return ['ausgefuehrt' => 'verknuepft', 'gp' => $gp->refresh()];
         }
         if ($e->aktion === 'neu' || ($e->aktion === 'verknuepfen' && $eigenes)) {
-            $in = array_intersect_key($e->felder, array_flip(['hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'pflichtangabe', 'commodity_group_code', 'sub_category']));
+            $in = array_intersect_key($e->felder, array_flip(['hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'pflichtangabe', 'commodity_group_code', 'sub_category',
+                'rezepturware']));   // §5 Ausnahme 3: createGp leitet daraus marke_offen ab
             if (trim((string) ($in['hauptzutat'] ?? '')) === '') {
                 throw new \RuntimeException('Keine Hauptzutat in den Artikelfeldern — GP nicht anlegbar.');
             }
@@ -339,6 +340,13 @@ class GpAbgleichService
         if ($ziel['guard'] !== []) {
             return $mk('neu', null, min($sicherheit, 0.6), 'Allergen-/Deklarationsprofil widerspricht dem Ziel-GP — Verknüpfen ist nicht erlaubt; neue Variante anlegen. ' . $begruendung, array_merge($abweichungen, $ziel['guard']));
         }
+        // §5 Ausnahme 3 (v3.7.1): Rezeptur-GP mit anderer Marke/anderem Hersteller → nicht verknüpfen, eigenes GP je Hersteller (liest die Spalte rezepturware)
+        $markeAnders = collect($ziel['diff']['eintraege'] ?? [])->first(fn ($x) => $x['merkmal'] === MerkmalsDiff::MERKMAL_REZEPTUR_MARKE && $x['urteil'] === 'abweichend');
+        if ($markeAnders !== null) {
+            return $mk('neu', null, min($sicherheit, 0.8), 'Anderer Hersteller als am GP („' . $markeAnders['artikel'] . '“ statt „' . $markeAnders['gp']
+                . '“): bei Rezepturware ein eigenes GP je Hersteller anlegen (Regelwerk §5 Ausnahme 3), nicht verknüpfen. ' . $begruendung,
+                array_values(array_unique(array_merge($abweichungen, $ziel['diff']['abweichungen']))));
+        }
         $diffAbw = $ziel['diff']['abweichungen'];
         if ($diffAbw !== []) {
             $abweichungen = array_values(array_unique(array_merge($abweichungen, $diffAbw)));
@@ -397,6 +405,8 @@ class GpAbgleichService
             'methoden' => $c['methoden'],
             'exakt' => $c['exakt'],
             'diff_abweichungen' => $c['diff']['abweichungen'],
+            'rezepturware' => $gp->rezepturware,   // §5 Ausnahme 3: Spalte, nicht Prompt-Urteil
+            'klammer' => $gp->zusatz,
             'guard' => $c['guard'],
         ];
     }

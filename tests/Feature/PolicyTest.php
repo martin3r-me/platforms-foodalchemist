@@ -56,6 +56,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         'FoodAlchemistConceptSektorEignung', 'FoodAlchemistTeamSetting',
         'FoodAlchemistCanvasEntry',                                    // Zugriff nur via Canvas-Aggregat (CanvasService)
         'FoodAlchemistPlanningFrameSlot', 'FoodAlchemistPlanningFrameRule', // R4.1: Zugriff nur via Frame-Aggregat (PlanningFrameService-Guard)
+        'FoodAlchemistSupplierMarke',                                  // §5 Ausnahme 3: globale Regel-Daten am Lieferanten (supplier_id NULL = alle); Schreiben nur via MarkenPflegeService (Plattform-/Master-Admin)
     ];
     /**
      * Messungen und Urteile: haben ein team_id, dürfen aber NICHT vererben — sie

@@ -238,6 +238,23 @@ class SupplierService
     }
 
     /**
+     * GP-Regelwerk v3.7.1 §5 Ausnahme 3 — Liste „Lieferant einstufen“: Lieferanten mit Rolle offen, deren Artikel an Rezepturware hängen
+     * (GP rezepturware = true oder marke_offen). Nur IDs; die Sichtbarkeit filtert die Liste des Aufrufers.
+     *
+     * @return array<int, true>
+     */
+    public function zumEinstufen(): array
+    {
+        return DB::table('foodalchemist_supplier_items as si')
+            ->join('foodalchemist_suppliers as s', 's.id', '=', 'si.supplier_id')
+            ->join('foodalchemist_supplier_item_structures as st', fn ($j) => $j->on('st.supplier_item_id', '=', 'si.id')->whereNull('st.deleted_at'))
+            ->join('foodalchemist_gps as g', 'g.id', '=', 'st.gp_id')
+            ->where('s.rolle', 'offen')
+            ->where(fn ($w) => $w->where('g.rezepturware', true)->orWhere('g.marke_offen', true))
+            ->distinct()->pluck('si.supplier_id')->mapWithKeys(fn ($id) => [(int) $id => true])->all();
+    }
+
+    /**
      * R9.1: Stammblatt-Aggregat für die Detailseite/MCP — Stammdaten + Status +
      * Konditionen + Kontakte + Absprachen + Dokumente + WG-Abdeckung.
      */
@@ -260,6 +277,8 @@ class SupplierService
             'status' => $supplier->status instanceof SupplierStatus ? $supplier->status->value : 'aktiv',
             'is_inactive' => (bool) $supplier->is_inactive,
             'is_owned' => $supplier->isOwnedBy($team),
+            // GP-Regelwerk v3.7.1 §5 Ausnahme 3: Rolle + Kurzname für die GP-Klammer (Kürzel: foodalchemist.supplier_marken.GET)
+            'marke' => ['rolle' => $supplier->rolle?->value ?? 'offen', 'kurzname' => $supplier->kurzname],
             'stammdaten' => [
                 'branch' => $supplier->branch,
                 'group_id' => $supplier->group_id,
