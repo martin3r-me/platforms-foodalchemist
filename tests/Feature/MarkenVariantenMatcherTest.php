@@ -69,6 +69,19 @@ it('Kandidatenliste: bei gleichem Score steht der Favorit vorn, ohne Favorit die
     expect($mit[0])->toBe($this->holly->id);
 });
 
+it('Paar X ⇄ unX: nennt die Zutat keins, gewinnt „ungesalzen“ gegen „gesalzen / (Marke)“ — auch gegen die kleinere ID; nennt sie „gesalzen“, gilt das', function () {
+    $erdnuss = fn (string $name, ?string $zusatz = null) => FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => $name,
+        'gp_key' => 'k_' . bin2hex(random_bytes(4)), 'status' => 'approved', 'requires_la' => true, 'commodity_group_code' => '06', 'condition' => 'trocken',
+        'main_ingredient_slug' => 'erdnuss', 'main_ingredient_display' => 'Erdnüsse', 'zusatz' => $zusatz]);
+    $gesalzen = $erdnuss('Erdnüsse: trocken, geröstet, gesalzen / (Ültje)', 'Ültje');      // kleinere ID
+    $ungesalzen = $erdnuss('Erdnüsse: trocken, geröstet, ungesalzen');
+
+    expect(($this->matcher)('150 g Erdnüsse, geröstet')['gp_id'])->toBe($ungesalzen->id)
+        ->and(collect(app(IngredientMatchService::class)->candidatesFor($this->rootTeam, 'Erdnüsse, geröstet', null, 5))->where('kind', 'gp')->pluck('id')->first())
+        ->toBe($ungesalzen->id)
+        ->and(($this->matcher)('30 g Erdnüsse, geröstet, gesalzen')['gp_id'])->toBe($gesalzen->id);
+});
+
 it('nameOhneMarke: Zusatz aus der Spalte, Bestand ohne Spalte; Bio/Vegan/Glutenfrei/Laktosefrei bleiben', function () {
     $n = app(GpNamingService::class);
 

@@ -47,6 +47,9 @@ class IngredientMatchService
      */
     private array $tiebreakMemo = [];
 
+    /** Query-Tokens des laufenden Aufrufs — für den Tiebreak „weniger fremde Eigenschaften“. */
+    private array $tiebreakQuery = [];
+
     /**
      * @return array{target: string, status: MatchBand, gp_id: ?int, gp_name: ?string,
      *               recipe_id: ?int, recipe_name: ?string, score: float}
@@ -87,6 +90,7 @@ class IngredientMatchService
         // in bestGpMatch/bestSubrecipeMatch gelesen (kein Threading durch poolLauf).
         $this->currentIngredientName = $ingredientName;
         $this->tiebreakMemo = [];
+        $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
 
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
         if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
@@ -281,6 +285,7 @@ class IngredientMatchService
     public function candidatesFor(Team $team, string $ingredientName, ?string $hauptzutatSlug = null, int $k = 5): array
     {
         $this->tiebreakMemo = [];
+        $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
         if ($queryTokens === [] && $querySlug === null) {
@@ -619,7 +624,7 @@ class IngredientMatchService
         return $best;
     }
 
-    // ── Marken-Varianten: Tiebreak Favorit → Stamm-Lieferant (Kurator 26.10., vor der bisherigen Varianten-/Freigabe-/ID-Logik) ──
+    // ── Marken-Varianten: Tiebreak Favorit → Stamm-Lieferant → Paar X ⇄ unX (Kurator 26.10., vor der bisherigen Varianten-/Freigabe-/ID-Logik) ──
 
     private function naming(): GpNamingService
     {
@@ -628,6 +633,7 @@ class IngredientMatchService
 
     /**
      * Vorrang eines GP bei Score-Gleichstand: [Favoriten-Priorität (0 = kein Favorit, höher = besser), Lead-Artikel vom Stamm-Lieferanten des Teams (1/0)].
+     * Danach (in vorrangVergleich) die Paar-Regel X ⇄ unX.
      * Favoriten aus FavoritenOverlay (wirksam, inkl. Übernahme vom Hauptteam; immer, unabhängig vom opt-in-Prompt-Block). Stamm = Stamm-Lieferanten-Matrix
      * der Team-Kette für die WG des GP (StammLieferantService, derselbe Lese-Vertrag wie die Lead-LA-Wahl).
      *
@@ -659,10 +665,34 @@ class IngredientMatchService
         return [$fav, $stamm];
     }
 
+    /**
+     * Paar-Regel X ⇄ unX (Kurator 26.10., „Erdnüsse, geröstet“ → „ungesalzen“, nicht „gesalzen“): trägt das eine GP „unX“ und das andere „X“, und nennt
+     * die Zutat keins von beiden, gewinnt die un-Variante (Grundware ohne Zusatz). 1 = $neu, -1 = $alt, 0 = kein solches Paar.
+     */
+    private function unPaar(FoodAlchemistGp $neu, FoodAlchemistGp $alt): int
+    {
+        $tok = fn (FoodAlchemistGp $g) => array_flip($this->engine->tokenize($this->naming()->nameOhneMarke((string) $g->name, $g->zusatz)));
+        [$n, $a] = [$tok($neu), $tok($alt)];
+        $q = array_flip($this->tiebreakQuery);
+        foreach ([[$n, $a, 1], [$a, $n, -1]] as [$mitUn, $ohneUn, $r]) {
+            foreach (array_keys($mitUn) as $t) {
+                $x = (string) $t;
+                if (str_starts_with($x, 'un') && mb_strlen($x) > 4 && isset($ohneUn[mb_substr($x, 2)]) && ! isset($mitUn[mb_substr($x, 2)])
+                    && ! isset($q[$x]) && ! isset($q[mb_substr($x, 2)])) {
+                    return $r;
+                }
+            }
+        }
+
+        return 0;
+    }
+
     /** 1 = $neu hat Vorrang, -1 = $alt, 0 = gleich (dann bisherige Logik). */
     private function vorrangVergleich(Team $team, FoodAlchemistGp $neu, ?FoodAlchemistGp $alt): int
     {
-        return $this->vorrangSchluessel($team, $neu) <=> $this->vorrangSchluessel($team, $alt);
+        $v = $this->vorrangSchluessel($team, $neu) <=> $this->vorrangSchluessel($team, $alt);
+
+        return $v !== 0 || $alt === null ? $v : $this->unPaar($neu, $alt);
     }
 
     /** Kandidatenliste: Score absteigend; bei gleichem Score GP mit Favorit/Stamm-Vorrang zuerst, sonst stabil wie bisher. */
@@ -673,7 +703,11 @@ class IngredientMatchService
             if (abs((float) $a['score'] - (float) $b['score']) > MatchHeuristics::SCORE_EPS) {
                 return $s;
             }
-            $v = $this->vorrangSchluessel($team, $this->kandidatGp($team, $b)) <=> $this->vorrangSchluessel($team, $this->kandidatGp($team, $a));
+            [$gb, $ga] = [$this->kandidatGp($team, $b), $this->kandidatGp($team, $a)];
+            $v = $this->vorrangSchluessel($team, $gb) <=> $this->vorrangSchluessel($team, $ga);
+            if ($v === 0 && $gb !== null && $ga !== null) {
+                $v = $this->unPaar($gb, $ga);
+            }
 
             return $v !== 0 ? $v : $s;
         };
@@ -686,7 +720,7 @@ class IngredientMatchService
         }
         $id = (int) $c['id'];
         if (! array_key_exists($id, $this->tiebreakMemo['gp'] ?? [])) {
-            $this->tiebreakMemo['gp'][$id] = FoodAlchemistGp::visibleToTeam($team)->find($id, ['id', 'lead_la_supplier_item_id', 'commodity_group_code']);
+            $this->tiebreakMemo['gp'][$id] = FoodAlchemistGp::visibleToTeam($team)->find($id, ['id', 'name', 'zusatz', 'lead_la_supplier_item_id', 'commodity_group_code']);
         }
 
         return $this->tiebreakMemo['gp'][$id];
