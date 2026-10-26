@@ -122,19 +122,26 @@ class MarkeAusArtikel
         return in_array($erstes, self::SPERRWOERTER, true);
     }
 
-    /** Händler und ungeklärte Lieferanten: ihr eigener Name (bzw. Kurzname, erstes Namenswort) ist nie eine Marke. */
+    /**
+     * Händler und ungeklärte Lieferanten: ihr eigener Name ist nie eine Marke. Verglichen werden ganze Wörter, keine Teilstrings — „Chef“ (Nestlé) bei
+     * Chefs Culinar bleibt eine Marke, „Chefs“ / „Chefs Culinar“ nicht.
+     */
     private function istHaendlerName(string $wert, ?FoodAlchemistSupplier $lieferant): bool
     {
         if ($lieferant === null || $lieferant->rolle === SupplierRolle::Hersteller) {
             return false;
         }
-        $w = mb_strtolower($wert);
-        $name = mb_strtolower((string) $lieferant->name);
-        $kurz = mb_strtolower(trim((string) $lieferant->kurzname));
-        $erstes = preg_split('/\s+/u', $name)[0] ?? '';
+        $woerter = fn (?string $x) => array_values(array_filter(preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower((string) $x)) ?: []));
+        $w = $woerter($wert);
+        $name = $woerter($lieferant->name);
+        $kurz = $woerter($lieferant->kurzname);
+        if ($w === [] || $name === []) {
+            return false;
+        }
 
-        return str_contains($name, $w) || ($kurz !== '' && str_contains($w, $kurz))
-            || (mb_strlen($erstes) >= 4 && str_contains($w, rtrim($erstes, 's')));
+        return array_diff($w, $name) === []                                        // alle Wörter der Marke stehen im Lieferantennamen
+            || ($kurz !== [] && array_diff($kurz, $w) === [])                         // Kurzname des Händlers steckt in der Marke
+            || (mb_strlen($w[0]) >= 4 && $w[0] === $name[0]);                        // gleiches erstes Wort („CHEFS Feinkost“)
     }
 
     /** @return array<string, array<string, string>> */
