@@ -74,22 +74,24 @@ it('Matchregel wie marken_kuerzel.py: erste drei Wörter, Kürzel allein oder vo
 });
 
 it('Händlerschutz: Necta-brand und globale bzw. Hersteller-Kürzel nie mit dem eigenen Händlernamen — kuratierte Eigenmarke des Händlers schon', function () {
-    $kluth = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Frischeteam Geschwister Kluth KG', 'rolle' => 'haendler']);
     $hanos = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Hanos Venlo', 'rolle' => 'haendler']);
     $gilde = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Gilde Frisch-Markt Rhein-Ruhr EG', 'rolle' => 'haendler']);
+    $kluth = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Frischeteam Geschwister Kluth KG', 'rolle' => 'hersteller', 'kurzname' => 'Kluth']);   // Dominique 26.10.: Hersteller
+    // Lücke aus dem Fund (Kurator 26.10.): ein GLOBALES Kürzel, das wie ein Händler heißt — synthetisch, Gilde bleibt in der Seeder-CSV ohne Eintrag (Gruppe U)
+    FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'gilde', 'marke' => 'Gilde', 'typ' => 'herstellermarke']);
     FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'kluth', 'marke' => 'Kluth', 'typ' => 'herstellermarke']);
     FoodAlchemistSupplierMarke::create(['supplier_id' => $hanos->id, 'kuerzel' => 'selektie', 'marke' => 'Hanos Selektie', 'typ' => 'eigenmarke', 'vorrang' => 1]);
     app(MarkeAusArtikel::class)->vergessen();
 
-    expect(($this->marke)(($this->la)($kluth, 'Kluth Möhren geschält'))->offen())->toBeTrue()                                  // globales Kürzel = eigener Händlername
-        ->and(($this->marke)(($this->la)($kluth, 'Möhren geschält', ['brand' => 'Kluth']))->offen())->toBeTrue()              // Necta-brand = eigener Name
-        ->and(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg'))->marke)->toBe('Kluth')                          // fremder Händler: Marke
-        ->and(($this->marke)(($this->la)($this->cc, 'Cashewkerne 1kg', ['brand' => 'Kluth']))->marke)->toBe('Kluth')
+    expect(($this->marke)(($this->la)($gilde, 'Gilde Spießbraten vom Nacken'))->offen())->toBeTrue()                           // globales Kürzel = eigener Händlername
+        ->and(($this->marke)(($this->la)($gilde, 'Spießbraten', ['brand' => 'Gilde']))->offen())->toBeTrue()                 // Necta-brand = eigener Name
+        ->and(($this->marke)(($this->la)($this->cc, 'Gilde Bratensauce 1l'))->marke)->toBe('Gilde')                           // fremder Händler: Marke
+        ->and(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg'))->marke)->toBe('Kluth')
+        ->and(($this->marke)(($this->la)($kluth, 'Kluth Möhren geschält'))->marke)->toBe('Kluth')                             // Kluth ist jetzt Hersteller: Kürzel
+        ->and(($this->marke)(($this->la)($kluth, 'Möhren geschält'))->marke)->toBe('Kluth')                                   // … sonst Kurzname
         ->and(($this->marke)(($this->la)($hanos, 'SALAMI HANOS SELEKTIE'))->marke)->toBe('Hanos Selektie')                    // kuratierte Eigenmarke
         ->and(($this->marke)(($this->la)($hanos, 'Erdnüsse scharf', ['brand' => 'Hanos Selektie']))->marke)->toBe('Hanos Selektie')
-        ->and(($this->marke)(($this->la)($hanos, 'Rauwkost Coleslaw Luxe 1kg', ['brand' => 'HANOS']))->offen())->toBeTrue()  // „HANOS“ ohne kuratierten Eintrag: Händlername
-        ->and(($this->marke)(($this->la)($gilde, 'Gilde Spießbraten vom Nacken'))->offen())->toBeTrue()                       // Gruppe U: kein Eintrag
-        ->and(($this->marke)(($this->la)($gilde, 'Spießbraten', ['brand' => 'Gilde']))->offen())->toBeTrue();
+        ->and(($this->marke)(($this->la)($hanos, 'Rauwkost Coleslaw Luxe 1kg', ['brand' => 'HANOS']))->offen())->toBeTrue(); // „HANOS“ ohne kuratierten Eintrag
 });
 
 it('MSC ist eine Zertifizierung: nie Marke, weder als Kürzel noch aus Necta-brand', function () {
@@ -155,6 +157,8 @@ it('Runde 2 aus der Modul-CSV: Beispiele aus marken_kuerzel.py (__main__) 1:1 �
         ['MARINADE XY HENG.', $l['Handelshof Mönchengladbach'], 'Henglein'], ['KETCHUP 5KG OE', $l['Handelshof Mönchengladbach'], 'Dr. Oetker'], ['KETCHUP OE', $l['Hanos Venlo'], null],
         ['SUS Schweinerücken oKn.m.Schw4,5kg', $cc, null], ['Ma.Tomatenketchup', null, 'Maggi'], ['DC Lachs Lasagne', $l['Delta Fleisch Handels GmbH'], null], ['TK DC Lachs', $cc, 'Danish Crown'],
         ['Ma-Würze flüssig', null, null],   // Bindestrich zählt nur bei FF
+        ['TK Block Wildschweingulasch   250g', $cc, 'Block Menü'], ['Block Sauce Bolognese 2kg', $cc, 'Block Menü'],   // Dominique 26.10.: Block = Block Menü
+        ['SOJASAUCE DUNKEL 500ML LEE', $l['Handelshof Mönchengladbach'], 'Lee Kum Kee'],                                   // Handelshof-Suffix
     ];
     foreach ($faelle as [$bez, $sid, $soll]) {
         expect($d->kuerzelAus($bez, $sid)[0] ?? null)->toBe($soll, $bez);
