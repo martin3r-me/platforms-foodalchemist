@@ -31,7 +31,7 @@ class MarkeAusArtikel
     /** Warengruppen, die nie Rezepturware sind: Wurst (§8.13), Getränke (§5 Ausnahme 1). */
     public const NIE_REZEPTURWARE_WG = ['04', '15'];
 
-    /** @var array<string, array<string, string>>|null  'global' bzw. supplier_id → [kuerzel => marke] */
+    /** @var array<string, array<string, array<string, array{marke: string, vorrang: int, typ: string}>>>|null  'global' bzw. supplier_id → position → kuerzel → Eintrag */
     private ?array $karte = null;
 
     public function fuer(FoodAlchemistSupplierItem $la): MarkenErgebnis
@@ -42,13 +42,16 @@ class MarkeAusArtikel
         }
 
         $brand = trim((string) $la->brand);
-        if ($brand !== '' && ! $this->gesperrt($brand) && ! $this->istHaendlerName($brand, $lieferant)) {
+        if ($brand !== '' && ! $this->gesperrt($brand) && (! $this->istHaendlerName($brand, $lieferant) || $this->istKuratierteEigenmarke($brand, $lieferant?->id))) {
             return new MarkenErgebnis($brand, MarkenErgebnis::QUELLE_NECTA, $brand);
         }
 
-        $treffer = $this->kuerzelAus((string) $la->designation, $lieferant?->id);
-        if ($treffer !== null) {
-            return new MarkenErgebnis($treffer[0], MarkenErgebnis::QUELLE_KUERZEL, $treffer[1]);
+        $treffer = $this->kuerzelTreffer((string) $la->designation, $lieferant?->id);
+        // Händlername nie — auch nicht über ein globales Kürzel bzw. eine Herstellermarke: „Kluth“ (Carl Kluth) ist bei Chefs Culinar eine Marke, beim Händler
+        // „Frischeteam Geschwister Kluth“ wäre es der eigene Name in der Klammer. AUSNAHME: kuratierte Eigenmarke genau dieses Händlers (typ eigenmarke,
+        // auf ihn gescoped) — Dominique hat Händler-Eigenmarken ausdrücklich zugelassen („Hanos Selektie“). Kurator 26.10.
+        if ($treffer !== null && (($treffer['eigen'] && $treffer['typ'] === FoodAlchemistSupplierMarke::TYP_EIGENMARKE) || ! $this->istHaendlerName($treffer['marke'], $lieferant))) {
+            return new MarkenErgebnis($treffer['marke'], MarkenErgebnis::QUELLE_KUERZEL, $treffer['roh']);
         }
 
         $kurz = trim((string) $lieferant?->kurzname);
@@ -69,6 +72,18 @@ class MarkeAusArtikel
      */
     public function kuerzelAus(string $bezeichnung, ?int $supplierId): ?array
     {
+        $t = $this->kuerzelTreffer($bezeichnung, $supplierId);
+
+        return $t !== null ? [$t['marke'], $t['roh']] : null;
+    }
+
+    /**
+     * Wie {@see kuerzelAus}, dazu Typ und Herkunft des Eintrags (eigen = auf diesen Lieferanten gescoped) für den Händlerschutz.
+     *
+     * @return array{marke: string, roh: string, typ: string, eigen: bool}|null
+     */
+    private function kuerzelTreffer(string $bezeichnung, ?int $supplierId): ?array
+    {
         $karte = $this->karte();
         $eigen = $supplierId !== null ? ($karte[(string) $supplierId] ?? []) : [];
         $woerter = preg_split('/\s+/u', trim(str_replace('/', ' ', $bezeichnung)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
@@ -88,13 +103,14 @@ class MarkeAusArtikel
             if (in_array($k, self::SPERRWOERTER, true) || ($m[2] === '-' && ! in_array($k, self::BINDESTRICH_KUERZEL, true))) {
                 continue;
             }
+            $istEigen = isset($eigen[$position][$k]);
             $eintrag = $eigen[$position][$k] ?? $karte['global'][$position][$k] ?? null;
-            if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester[2])) {
-                $bester = [$eintrag['marke'], $m[1] . ($m[2] === '.' ? '.' : ''), $eintrag['vorrang']];
+            if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester['vorrang'])) {
+                $bester = ['marke' => $eintrag['marke'], 'roh' => $m[1] . ($m[2] === '.' ? '.' : ''), 'typ' => $eintrag['typ'], 'eigen' => $istEigen, 'vorrang' => $eintrag['vorrang']];
             }
         }
 
-        return $bester !== null ? [$bester[0], $bester[1]] : null;
+        return $bester !== null ? array_diff_key($bester, ['vorrang' => true]) : null;
     }
 
     /**
@@ -158,17 +174,35 @@ class MarkeAusArtikel
             || (mb_strlen($w[0]) >= 4 && $w[0] === $name[0]);                        // gleiches erstes Wort („CHEFS Feinkost“)
     }
 
-    /** @return array<string, array<string, string>> */
+    /** Necta-brand gleich einer kuratierten Eigenmarke (Marke oder Kürzel) genau dieses Lieferanten: zulässig, auch wenn sie wie der Händler heißt. */
+    private function istKuratierteEigenmarke(string $wert, ?int $supplierId): bool
+    {
+        if ($supplierId === null) {
+            return false;
+        }
+        $w = mb_strtolower(trim($wert));
+        foreach ($this->karte()[(string) $supplierId] ?? [] as $eintraege) {
+            foreach ($eintraege as $kuerzel => $e) {
+                if ($e['typ'] === FoodAlchemistSupplierMarke::TYP_EIGENMARKE && ($w === mb_strtolower($e['marke']) || $w === $kuerzel)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** @return array<string, array<string, array{marke: string, vorrang: int, typ: string}>> */
     private function karte(): array
     {
         if ($this->karte !== null) {
             return $this->karte;
         }
         $this->karte = ['global' => []];
-        foreach (FoodAlchemistSupplierMarke::query()->get(['supplier_id', 'kuerzel', 'marke', 'position', 'vorrang']) as $z) {
+        foreach (FoodAlchemistSupplierMarke::query()->get(['supplier_id', 'kuerzel', 'marke', 'typ', 'position', 'vorrang']) as $z) {
             $schluessel = $z->supplier_id === null ? 'global' : (string) $z->supplier_id;
             $position = $z->position === FoodAlchemistSupplierMarke::POSITION_ENDE ? FoodAlchemistSupplierMarke::POSITION_ENDE : FoodAlchemistSupplierMarke::POSITION_ANFANG;
-            $this->karte[$schluessel][$position][mb_strtolower($z->kuerzel)] = ['marke' => $z->marke, 'vorrang' => (int) $z->vorrang];
+            $this->karte[$schluessel][$position][mb_strtolower($z->kuerzel)] = ['marke' => $z->marke, 'vorrang' => (int) $z->vorrang, 'typ' => (string) $z->typ];
         }
 
         return $this->karte;
