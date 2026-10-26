@@ -35,7 +35,7 @@
                     <x-fa::badge :tone="$m->typ === 'eigenmarke' ? 'info' : 'neutral'">{{ $m->typ === 'eigenmarke' ? 'Eigenmarke' : 'Herstellermarke' }}</x-fa::badge>
                     <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $m->position === 'ende' ? 'am Ende' : 'am Anfang' }}@if($m->vorrang > 0) · Vorrang {{ $m->vorrang }}@endif</span>
                     @if($darf)
-                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-trash" wire:click="markeLoeschen(@js($m->kuerzel))"
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-trash" wire:click="markeLoeschen({{ \Illuminate\Support\Js::from($m->kuerzel) }})"
                             wire:confirm="Kürzel „{{ $m->kuerzel }}“ entfernen?" aria-label="Kürzel {{ $m->kuerzel }} entfernen" data-lm-marke-loeschen />
                     @endif
                 </div>
