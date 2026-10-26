@@ -60,6 +60,19 @@ it('Score: Marken-Klammer zählt nicht — Varianten mit Marke und ohne Klammer 
     expect($scores[$this->altoni->id])->toBe($scores[$this->holly->id])->and($scores[$offen->id])->toBe($scores[$this->altoni->id]);
 });
 
+it('Score ohne Haupt-Slug (nur Namenstext entscheidet): die Marken-Klammer kostet keine Punkte — Marke und ohne Klammer gleichauf, die ID entscheidet', function () {
+    $ohneSlug = fn (string $name, ?string $zusatz) => FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => $name,
+        'gp_key' => 'k_' . bin2hex(random_bytes(4)), 'status' => 'approved', 'requires_la' => true, 'commodity_group_code' => '13', 'condition' => 'konserviert',
+        'zusatz' => $zusatz]);
+    // Zwei Wörter: bei einem Wort hebt der Enthaltensein-Boden (0,90) beide Varianten gleich an und verdeckt die Klammer
+    $marke = $ohneSlug('Remoulade: konserviert / (Hollyfood)', 'Hollyfood');   // kleinere ID
+    $offen = $ohneSlug('Remoulade: konserviert', null);
+
+    $scores = collect(app(IngredientMatchService::class)->candidatesFor($this->rootTeam, 'Remoulade konserviert', null, 5))->where('kind', 'gp')->pluck('score', 'id');
+    expect($scores[$marke->id])->toBe($scores[$offen->id])
+        ->and(($this->matcher)('Remoulade konserviert')['gp_id'])->toBe($marke->id);
+});
+
 it('Kandidatenliste: bei gleichem Score steht der Favorit vorn, ohne Favorit die bisherige Reihenfolge', function () {
     $ohne = collect(app(IngredientMatchService::class)->candidatesFor($this->rootTeam, 'Sahnesauce', null, 5))->where('kind', 'gp')->pluck('id')->values()->all();
     expect($ohne[0])->toBe($this->altoni->id);
