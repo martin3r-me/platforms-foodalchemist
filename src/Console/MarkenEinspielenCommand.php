@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel;
  * Quellen (resources/data/marken/, von Dominique bestätigt 26.10.2026): `lieferanten_rolle.csv` (lieferant;rolle;kurzname) und `kuerzel.csv`
  * (lieferant;kuerzel;marke;typ[;position;vorrang]; lieferant leer = gilt für alle; position anfang|ende, vorrang Zahl — beide optional).
  * Ein weiteres Kürzel ist eine CSV-Zeile plus erneuter Lauf.
- * Lieferanten nur per exaktem Namen (global, nicht gelöscht); kein oder mehrere Treffer werden gelistet, nie geraten. Idempotent (updateOrCreate),
+ * Lieferanten nur per exaktem Namen (global oder Master-Team, nicht gelöscht); kein oder mehrere Treffer werden gelistet, nie geraten. Idempotent (updateOrCreate),
  * löscht nie. Sperrwörter (MSC) werden abgewiesen.
  */
 class MarkenEinspielenCommand extends Command
@@ -89,17 +89,17 @@ class MarkenEinspielenCommand extends Command
             if ($lieferant !== '' && $id === null) {
                 continue;
             }
-            $vorhanden = FoodAlchemistSupplierMarke::query()->where('kuerzel', $kuerzel)
+            $vorhanden = FoodAlchemistSupplierMarke::withTrashed()->where('kuerzel', $kuerzel)
                 ->when($id === null, fn ($q) => $q->whereNull('supplier_id'), fn ($q) => $q->where('supplier_id', $id))->first();
             $werte = ['marke' => $marke, 'typ' => $typ, 'position' => $position, 'vorrang' => $vorrang];
-            if ($vorhanden !== null && $vorhanden->marke === $marke && $vorhanden->typ === $typ && $vorhanden->position === $position && (int) $vorhanden->vorrang === $vorrang) {
+            if ($vorhanden !== null && ! $vorhanden->trashed() && $vorhanden->marke === $marke && $vorhanden->typ === $typ && $vorhanden->position === $position && (int) $vorhanden->vorrang === $vorrang) {
                 $zaehler['kuerzel_gleich']++;
 
                 continue;
             }
             $zaehler[$vorhanden === null ? 'kuerzel_neu' : 'kuerzel_geaendert']++;
             $schreiben[] = fn () => $vorhanden !== null
-                ? $vorhanden->update($werte)
+                ? tap($vorhanden, fn ($v) => $v->trashed() ? $v->restore() : null)->update($werte)
                 : FoodAlchemistSupplierMarke::create(['supplier_id' => $id, 'kuerzel' => $kuerzel] + $werte);
         }
 
@@ -125,10 +125,15 @@ class MarkenEinspielenCommand extends Command
         return self::SUCCESS;
     }
 
-    /** Globaler, nicht gelöschter Lieferant mit exakt diesem Namen; sonst Fehlerzeile. */
+    /**
+     * Nicht gelöschter Lieferant mit exakt diesem Namen im Stamm — global (team_id NULL) oder im Master-Team (dort liegen die Necta-Lieferanten
+     * lokal, gemessen 26.10.: Chefs Culinar, Heisters … team_id = Master). Kein oder mehrere Treffer → Fehlerzeile, nie raten.
+     */
     private function lieferantId(string $name, array &$fehler): ?int
     {
-        $ids = DB::table('foodalchemist_suppliers')->where('name', trim($name))->whereNull('team_id')->whereNull('deleted_at')->pluck('id');
+        $master = \Platform\FoodAlchemist\Support\MasterTeam::id();
+        $ids = DB::table('foodalchemist_suppliers')->where('name', trim($name))->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('team_id')->when($master !== null, fn ($w) => $w->orWhere('team_id', $master)))->pluck('id');
         if ($ids->count() !== 1) {
             $fehler[] = "Lieferant „{$name}“: {$ids->count()} Treffer — nicht zugeordnet.";
 

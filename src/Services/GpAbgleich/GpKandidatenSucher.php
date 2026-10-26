@@ -118,6 +118,11 @@ class GpKandidatenSucher
      */
     private function bewerte(Team $team, FoodAlchemistSupplierItem $la, array $c, array $felder, array $artikelTexte, bool $artikelBio): array
     {
+        // Ein Recall-Weg (MatchService::fuzzyByName) lädt GPs mit Spaltenauswahl — Diff, Guard und Entscheider brauchen das volle GP
+        // (§5 Ausnahme 3: rezepturware/zusatz fehlten sonst still, ein Rezeptur-GP mit anderer Marke wurde verknüpft; gemessen 26.10.).
+        if (! array_key_exists('rezepturware', $c['gp']->getAttributes())) {
+            $c['gp'] = $c['gp']->fresh() ?? $c['gp'];
+        }
         $c['diff'] = $this->diff->vergleiche($felder, $artikelTexte, $artikelBio, $c['gp']);
         try {
             $c['guard'] = $this->lead->guardAbweichungen($team, $c['gp'], (int) $la->id);

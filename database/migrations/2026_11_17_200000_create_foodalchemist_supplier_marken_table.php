@@ -21,6 +21,7 @@ return new class extends Migration
         }
         Schema::create('foodalchemist_supplier_marken', function (Blueprint $t) {
             $t->id();
+            $t->uuid('uuid')->unique();
             $t->foreignId('supplier_id')->nullable()->constrained('foodalchemist_suppliers')->cascadeOnDelete();
             $t->string('kuerzel', 60)->comment('klein, ohne Punkt: bc, kn, cart');
             $t->string('marke', 80)->comment('Schreibweise in der Klammer: Base Culinar, Knorr');
@@ -28,6 +29,7 @@ return new class extends Migration
             $t->string('position', 6)->default('anfang')->comment('anfang = erste drei Wörter | ende = letztes Wort');
             $t->smallInteger('vorrang')->default(0)->comment('mehrere Treffer: höherer Vorrang gewinnt (Produktlinie vor Dachmarke)');
             $t->timestamps();
+            $t->softDeletes();   // Entfernen bleibt nachvollziehbar (Audit); ein gelöschtes Kürzel wird beim erneuten Setzen wiederhergestellt
             $t->unique(['supplier_id', 'kuerzel']);
             $t->index('kuerzel');
         });

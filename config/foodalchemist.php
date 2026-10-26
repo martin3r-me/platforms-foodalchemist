@@ -1207,7 +1207,7 @@ return [
                 . 'Wenn quell_lieferantenartikel übergeben ist, ist genau dieser Artikel die Quelle: '
                 . 'nutze Bezeichnung, regulierten Namen und Zutatenangabe zur fachlichen Ableitung, '
                 . 'erfinde aber keine nicht belegten Eigenschaften. Artikelnummer, Lieferant, Gebinde, '
-                . 'Verpackung und Marke gehören nicht in den GP-Namen (Ausnahmen: Rezepturware trägt die Marke als zusatz, §5 Ausnahme 3, siehe REZEPTURWARE; sonst nur, wenn es keine vergleichbare messbare Spezifikation gibt, §5; '
+                . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur als Ausnahme, wenn es keine vergleichbare messbare Spezifikation gibt, §5; Rezepturware trägt die Marke als zusatz, §5 Ausnahme 3, siehe REZEPTURWARE; '
                 . 'Qualität steht als messbares Merkmal mit belegtem Wert im Namen, z. B. Frucht-, Kakao-, Fett-% oder Sorte, §8.19). '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1). '
                 . 'Gewürzte oder aromatisierte Variante einer Grundware (§6.6): Die Grundware bleibt hauptzutat, die Geschmackszutat steht in flavor '

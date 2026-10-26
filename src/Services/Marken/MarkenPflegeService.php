@@ -56,6 +56,9 @@ class MarkenPflegeService
         }
         $zeile = $this->zeile($supplierId, $k);
         $werte = ['marke' => mb_substr($m, 0, 80), 'typ' => $typ, 'position' => $position, 'vorrang' => max(0, min(9, $vorrang))];
+        if ($zeile?->trashed()) {
+            $zeile->restore();   // UNIQUE (supplier_id, kuerzel) gilt auch für entfernte Zeilen: wiederherstellen statt neu anlegen
+        }
         $zeile = $zeile !== null ? tap($zeile)->update($werte) : FoodAlchemistSupplierMarke::create(['supplier_id' => $supplierId, 'kuerzel' => $k] + $werte);
         $this->marken->vergessen();
 
@@ -66,10 +69,13 @@ class MarkenPflegeService
     {
         $this->pruefe($user);
         $zeile = $this->zeile($supplierId, self::normKuerzel($kuerzel));
-        $zeile?->delete();
+        $aktiv = $zeile !== null && ! $zeile->trashed();
+        if ($aktiv) {
+            $zeile->delete();
+        }
         $this->marken->vergessen();
 
-        return $zeile !== null;
+        return $aktiv;
     }
 
     public static function normKuerzel(string $kuerzel): string
@@ -79,7 +85,7 @@ class MarkenPflegeService
 
     private function zeile(?int $supplierId, string $kuerzel): ?FoodAlchemistSupplierMarke
     {
-        return FoodAlchemistSupplierMarke::query()->where('kuerzel', $kuerzel)
+        return FoodAlchemistSupplierMarke::withTrashed()->where('kuerzel', $kuerzel)
             ->when($supplierId === null, fn ($q) => $q->whereNull('supplier_id'), fn ($q) => $q->where('supplier_id', $supplierId))->first();
     }
 
