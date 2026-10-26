@@ -364,14 +364,16 @@ it('6d stamm_paket gibt es nur global (Guard im Modell) und ungültige Namen/Zus
         B::gp('Forellenfilet: frisch', ['preferred_count_unit_slug' => 'nix']),                   // Einheit unbekannt
         B::gp('Karpfenfilet: frisch', ['gp_key' => 'falscher_schluessel']),                       // Key nicht re-slugify-stabil
         B::gp('Zanderbacke: frisch', ['status' => 'review']),                                     // Status nicht importierbar
+        B::gp('Welsfilet: frisch / (Hollyfood)', ['gp_key' => 'welsfilet|||hollyfood']),          // 4. Slot = Marke/Zusatz (v3.7.1): angenommen
+        B::gp('Rotbarschfilet: frisch', ['gp_key' => 'rotbarschfilet|||']),                       // leerer 4. Slot: abgelehnt
     ], []);
 
     ($this->apply)([]);
 
     $abg = collect(($this->csv)('gp_abgelehnt'))->pluck('code', 'gp_key')->all();
     expect($abg)->toBe(['zander_1_kg_gebinde' => 'name_ungueltig', 'lachsfilet_frisch' => 'zustand', 'hechtfilet_frisch' => 'wg_unbekannt', 'barschfilet_frisch' => 'sub_unbekannt',
-        'forellenfilet_frisch' => 'einheit_unbekannt', 'falscher_schluessel' => 'key_instabil', 'zanderbacke_frisch' => 'status'])
-        ->and(DB::table('foodalchemist_gps')->pluck('gp_key')->all())->toBe(['zanderfilet_frisch']);
+        'forellenfilet_frisch' => 'einheit_unbekannt', 'falscher_schluessel' => 'key_instabil', 'zanderbacke_frisch' => 'status', 'rotbarschfilet|||' => 'key_instabil'])
+        ->and(DB::table('foodalchemist_gps')->orderBy('gp_key')->pluck('gp_key')->all())->toBe(['welsfilet|||hollyfood', 'zanderfilet_frisch']);
 });
 
 it('Sub-Kategorie löst als verwalteter Tabellenname und als gespeicherter Bestandswert „NN.N Name“ auf', function () {

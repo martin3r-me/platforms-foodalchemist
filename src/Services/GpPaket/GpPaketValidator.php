@@ -351,10 +351,12 @@ class GpPaketValidator
         if ($key === $this->naming->slugify($name)) {
             return true;
         }
-        if (str_contains($key, '|')) {                                     // Pipe-Schlüssel: hauptzutat|processing|form, jedes Segment slugify-stabil
+        if (str_contains($key, '|')) {                                     // Pipe-Schlüssel: hauptzutat|processing|form[|zusatz], jedes Segment slugify-stabil
             $teile = explode('|', $key);
+            // 4. Slot = Klammer-Zusatz bzw. Marke (buildGpKey seit #578/v3.7.1), nur wenn gesetzt — sonst wären Marken-GPs nicht importierbar (io 26.10.)
+            $vierterOk = count($teile) === 3 || (count($teile) === 4 && $teile[3] !== '');
 
-            return count($teile) === 3 && $teile[0] !== '' && array_reduce($teile, fn ($ok, $t) => $ok && $this->naming->slugify($t) === $t, true);
+            return $vierterOk && $teile[0] !== '' && array_reduce($teile, fn ($ok, $t) => $ok && $this->naming->slugify($t) === $t, true);
         }
 
         return $platzhalter && preg_match('/^[A-Za-z0-9_]+$/', $key) === 1;
