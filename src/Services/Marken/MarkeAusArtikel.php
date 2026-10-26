@@ -47,7 +47,9 @@ class MarkeAusArtikel
         }
 
         $treffer = $this->kuerzelAus((string) $la->designation, $lieferant?->id);
-        if ($treffer !== null) {
+        // Händlername nie — auch nicht über ein (globales) Kürzel: „Kluth“ (Carl Kluth) ist bei Chefs Culinar eine Marke, beim Händler
+        // „Frischeteam Geschwister Kluth“ wäre es der eigene Name in der Klammer (Kurator 26.10.)
+        if ($treffer !== null && ! $this->istHaendlerName($treffer[0], $lieferant)) {
             return new MarkenErgebnis($treffer[0], MarkenErgebnis::QUELLE_KUERZEL, $treffer[1]);
         }
 

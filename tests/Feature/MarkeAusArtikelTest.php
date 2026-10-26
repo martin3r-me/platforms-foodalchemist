@@ -73,6 +73,18 @@ it('Matchregel wie marken_kuerzel.py: erste drei Wörter, Kürzel allein oder vo
         ->and($d->kuerzelAus('BC Jagdwurst', $this->heisters->id))->toBeNull();   // Lieferanten-Kürzel gilt nur bei seinem Lieferanten
 });
 
+it('Händlerschutz gilt nur für den eigenen Lieferanten — und auch auf dem Kürzel-Weg (Kluth: Marke bei Chefs Culinar, Name beim Händler Frischeteam Kluth)', function () {
+    $kluth = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Frischeteam Geschwister Kluth KG', 'rolle' => 'haendler']);
+
+    expect(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg', ['brand' => 'Kluth']))->marke)->toBe('Kluth')       // fremder Händler: Marke zählt
+        ->and(($this->marke)(($this->la)($kluth, 'Möhren geschält', ['brand' => 'Kluth']))->offen())->toBeTrue();             // eigener Name: nie
+
+    FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'kluth', 'marke' => 'Kluth', 'typ' => 'herstellermarke']);
+    app(MarkeAusArtikel::class)->vergessen();
+    expect(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg'))->marke)->toBe('Kluth')                            // Kürzel bei Chefs Culinar
+        ->and(($this->marke)(($this->la)($kluth, 'Kluth Möhren geschält'))->offen())->toBeTrue();                             // Kürzel = eigener Händlername
+});
+
 it('MSC ist eine Zertifizierung: nie Marke, weder als Kürzel noch aus Necta-brand', function () {
     FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'msc', 'marke' => 'MSC', 'typ' => 'herstellermarke']);   // Altlast in der Tabelle
     app(MarkeAusArtikel::class)->vergessen();
