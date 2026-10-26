@@ -42,8 +42,15 @@ class MarkeAusArtikel
         }
 
         $brand = trim((string) $la->brand);
-        if ($brand !== '' && ! $this->gesperrt($brand) && (! $this->istHaendlerName($brand, $lieferant) || $this->istKuratierteEigenmarke($brand, $lieferant?->id))) {
-            return new MarkenErgebnis($brand, MarkenErgebnis::QUELLE_NECTA, $brand);
+        if ($brand !== '' && ! $this->gesperrt($brand)) {
+            // Kuratierte Eigenmarke dieses Händlers schreibt die Klammer in IHRER Schreibweise (Dominique 26.10.: Necta „HANOS“ → „Hanos Selektie“)
+            $eigenmarke = $this->kuratierteEigenmarke($brand, $lieferant?->id);
+            if ($eigenmarke !== null) {
+                return new MarkenErgebnis($eigenmarke, MarkenErgebnis::QUELLE_NECTA, $brand);
+            }
+            if (! $this->istHaendlerName($brand, $lieferant)) {
+                return new MarkenErgebnis($brand, MarkenErgebnis::QUELLE_NECTA, $brand);
+            }
         }
 
         $treffer = $this->kuerzelTreffer((string) $la->designation, $lieferant?->id);
@@ -174,22 +181,25 @@ class MarkeAusArtikel
             || (mb_strlen($w[0]) >= 4 && $w[0] === $name[0]);                        // gleiches erstes Wort („CHEFS Feinkost“)
     }
 
-    /** Necta-brand gleich einer kuratierten Eigenmarke (Marke oder Kürzel) genau dieses Lieferanten: zulässig, auch wenn sie wie der Händler heißt. */
-    private function istKuratierteEigenmarke(string $wert, ?int $supplierId): bool
+    /**
+     * Necta-brand gleich einer kuratierten Eigenmarke (Marke oder Kürzel) genau dieses Lieferanten → deren Marke (Schreibweise der Klammer), sonst null.
+     * Zulässig auch, wenn sie wie der Händler heißt (Dominique: Händler-Eigenmarken sind Marken).
+     */
+    private function kuratierteEigenmarke(string $wert, ?int $supplierId): ?string
     {
         if ($supplierId === null) {
-            return false;
+            return null;
         }
         $w = mb_strtolower(trim($wert));
         foreach ($this->karte()[(string) $supplierId] ?? [] as $eintraege) {
             foreach ($eintraege as $kuerzel => $e) {
                 if ($e['typ'] === FoodAlchemistSupplierMarke::TYP_EIGENMARKE && ($w === mb_strtolower($e['marke']) || $w === $kuerzel)) {
-                    return true;
+                    return $e['marke'];
                 }
             }
         }
 
-        return false;
+        return null;
     }
 
     /** @return array<string, array<string, array{marke: string, vorrang: int, typ: string}>> */

@@ -94,6 +94,19 @@ it('Händlerschutz: Necta-brand und globale bzw. Hersteller-Kürzel nie mit dem 
         ->and(($this->marke)(($this->la)($hanos, 'Rauwkost Coleslaw Luxe 1kg', ['brand' => 'HANOS']))->offen())->toBeTrue(); // „HANOS“ ohne kuratierten Eintrag
 });
 
+it('Hanos: Marke „HANOS“ (Necta oder Wort in der Bezeichnung) → „Hanos Selektie“ in der Klammer (Dominique 26.10.)', function () {
+    $hanos = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Hanos Venlo', 'rolle' => 'haendler']);
+    FoodAlchemistSupplierMarke::create(['supplier_id' => $hanos->id, 'kuerzel' => 'hanos', 'marke' => 'Hanos Selektie', 'typ' => 'eigenmarke']);
+    FoodAlchemistSupplierMarke::create(['supplier_id' => $hanos->id, 'kuerzel' => 'selektie', 'marke' => 'Hanos Selektie', 'typ' => 'eigenmarke', 'vorrang' => 1]);
+    app(MarkeAusArtikel::class)->vergessen();
+
+    $necta = ($this->marke)(($this->la)($hanos, 'Rauwkost Coleslaw Luxe 1kg', ['brand' => 'HANOS']));
+    expect([$necta->marke, $necta->quelle, $necta->roh])->toBe(['Hanos Selektie', 'necta_brand', 'HANOS'])
+        ->and(($this->marke)(($this->la)($hanos, 'HANOS WILDSAUCE'))->marke)->toBe('Hanos Selektie')
+        ->and(($this->marke)(($this->la)($hanos, 'SALAMI HANOS SELEKTIE'))->marke)->toBe('Hanos Selektie')
+        ->and(($this->marke)(($this->la)($this->cc, 'Coleslaw 1kg', ['brand' => 'HANOS']))->marke)->toBe('HANOS');   // bei anderem Händler: Necta wörtlich (Eintrag gilt nur für Hanos)
+});
+
 it('MSC ist eine Zertifizierung: nie Marke, weder als Kürzel noch aus Necta-brand', function () {
     FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'msc', 'marke' => 'MSC', 'typ' => 'herstellermarke']);   // Altlast in der Tabelle
     app(MarkeAusArtikel::class)->vergessen();
