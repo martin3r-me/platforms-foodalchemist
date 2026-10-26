@@ -71,13 +71,13 @@ class LeadLaRepickCommand extends Command
             $q->orderBy('id')->chunkById($limit !== null ? $limit : 200, function ($gps) use (&$ok, &$fix, &$park, &$betroffen, $lead, $preise, $team, $apply) {
                 foreach ($gps as $gp) {
                     $betroffen++;
-                    if ($this->loestAuf($gp->lead_la_supplier_item_id, $preise)) {
+                    if ($this->loestAuf($gp->lead_la_supplier_item_id, $preise, $team)) {
                         $ok++;
 
                         continue;
                     }
                     $neu = $lead->pickLeadLa($gp, $team);
-                    if ($neu !== null && $neu !== $gp->lead_la_supplier_item_id && $this->loestAuf($neu, $preise)) {
+                    if ($neu !== null && $neu !== $gp->lead_la_supplier_item_id && $this->loestAuf($neu, $preise, $team)) {
                         $fix++;
                         if ($apply) {
                             $gp->update(['lead_la_supplier_item_id' => $neu]);
@@ -103,13 +103,17 @@ class LeadLaRepickCommand extends Command
         return self::SUCCESS;
     }
 
-    /** True, wenn der LA einen aktiven Preis > 0 hat (kanonisch via PriceService). */
-    private function loestAuf(?int $laId, PriceService $preise): bool
+    /**
+     * True, wenn der LA einen aktiven Preis > 0 hat (kanonisch via PriceService). Das Team MUSS mit: ohne Team sieht activeFor() nur
+     * Besitzer-/globale Listenpreise und keine globalen Stamm-Artikel (stamm_paket) — auf io (Artikel global, Preise Team 1) hätte
+     * jeder Lead als „nicht aufgelöst“ gegolten (Befund 27.10.2026: Park 6.511 / löst auf 0).
+     */
+    private function loestAuf(?int $laId, PriceService $preise, Team $team): bool
     {
         if ($laId === null) {
             return false;
         }
-        $p = $preise->activeFor($laId);
+        $p = $preise->activeFor($laId, $team);
 
         return $p !== null && (float) $p->price > 0;
     }
