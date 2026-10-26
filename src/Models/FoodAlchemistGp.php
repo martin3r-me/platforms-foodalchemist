@@ -49,6 +49,8 @@ class FoodAlchemistGp extends Model
         'namens_vegan' => 'boolean',
         'namens_glutenfrei' => 'boolean',
         'namens_laktosefrei' => 'boolean',
+        'rezepturware' => 'boolean',   // §5 Ausnahme 3, nullable: NULL = nicht entschieden
+        'marke_offen' => 'boolean',
         'n_las_total' => 'integer',
         'cooking_loss_default_pct' => 'decimal:2',
         'trimming_loss_default_pct' => 'decimal:2',

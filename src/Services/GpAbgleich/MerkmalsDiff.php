@@ -17,6 +17,9 @@ class MerkmalsDiff
 {
     private const BASIS_ZUSTAENDE = ['frisch', 'TK', 'trocken', 'konserviert'];
 
+    /** §5 Ausnahme 3 (v3.7.1): Merkmal der Rezeptur-Marke — eine Abweichung heißt „eigenes GP je Hersteller“ (GpAbgleichService::auswerten). */
+    public const MERKMAL_REZEPTUR_MARKE = 'Marke (Rezepturware)';
+
     public function __construct(private readonly GpNamingService $naming) {}
 
     /**
@@ -91,6 +94,17 @@ class MerkmalsDiff
             $gf = $this->fuellmenge((string) $gp->name);
             if ($af !== null || $gf !== null) {
                 $e[] = $this->eintrag('Gebinde/Füllmenge', $af, $gf, $af !== null && $gf !== null ? ($this->gleicheFuellmenge($af, $gf) ? 'gleich' : 'abweichend') : 'unbekannt');
+            }
+        }
+
+        // §5 Ausnahme 3 (v3.7.1): bei Rezepturware unterscheiden Hersteller/Marke (Rezeptur und Allergene). Entscheidend ist die GP-SPALTE `rezepturware`,
+        // nicht der Prompt; verglichen wird die Marke aus MarkeAusArtikel mit der Klammer des GP. Fehlt eine Seite: unbekannt (kein Teilen ohne Beleg).
+        if ($gp->rezepturware === true) {
+            $am = trim((string) ($felder['marke_regel']['marke'] ?? ''));
+            $gm = trim((string) $gp->zusatz);
+            if ($am !== '' || $gm !== '') {
+                $e[] = $this->eintrag(self::MERKMAL_REZEPTUR_MARKE, $am !== '' ? $am : null, $gm !== '' ? $gm : null,
+                    $am !== '' && $gm !== '' ? ($this->norm($am) === $this->norm($gm) ? 'gleich' : 'abweichend') : 'unbekannt');
             }
         }
 

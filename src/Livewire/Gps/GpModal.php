@@ -66,6 +66,7 @@ class GpModal extends Component
         'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false,
         'commodity_group_code' => '', 'sub_category' => '',
         'is_derivat' => false, 'derivat_von_gp_id' => null,
+        'rezepturware' => '',   // §5 Ausnahme 3: '' = nicht entschieden, '1' ja, '0' nein
     ];
 
     public ?int $gpId = null;
@@ -194,6 +195,7 @@ class GpModal extends Component
                 'sub_category' => $gp->sub_category ?? '',
                 'is_derivat' => (bool) $gp->is_derivat,
                 'derivat_von_gp_id' => $gp->derivat_von_gp_id,
+                'rezepturware' => $gp->rezepturware === null ? '' : ($gp->rezepturware ? '1' : '0'),
             ]);
             foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
                 $wert = $gp->getAttribute("tag_{$tag}");
@@ -919,9 +921,20 @@ class GpModal extends Component
                 $this->builder[$feld] = $wert;
             }
         }
-        // §6.6 Klammer-Zusatz: nur der Fantasiename, der EXAKT in Bezeichnung oder Vermarktungsname des Quell-Artikels steht (sonst verworfen)
+        // §6.6 Klammer-Zusatz: nur der Fantasiename, der EXAKT in Bezeichnung oder Vermarktungsname des Quell-Artikels steht (sonst verworfen);
+        // §5 Ausnahme 3: zusätzlich genau die Marke aus MarkeAusArtikel (Kürzel aufgelöst, Hersteller-Kurzname)
+        $markeRegel = $quelle['marke_regel']['marke'] ?? null;
         $zusatz = $naming->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null,
-            $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)]);
+            $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)], $markeRegel);
+        $rezeptur = \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::rezepturwareFuerWg(
+            \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($vorschlag->werte['rezepturware'] ?? null),
+            trim((string) ($vorschlag->werte['commodity_group_code'] ?? '')) ?: (string) ($this->builder['commodity_group_code'] ?? ''));   // createGp prüft die WG noch einmal
+        if ($rezeptur !== null) {
+            $this->builder['rezepturware'] = $rezeptur ? '1' : '0';
+        }
+        if ($zusatz === '' && $rezeptur === true && $markeRegel !== null) {
+            $zusatz = (string) $markeRegel;   // Rezepturware trägt die Marke in der Klammer, auch wenn die KI sie ausließ
+        }
         if ($zusatz !== '') {
             $this->builder['zusatz'] = $zusatz;
         }
@@ -1033,6 +1046,8 @@ class GpModal extends Component
             'allergene' => $allergene,
             'naehrwerte_je_100' => $naehrwerte,
             'aehnliche_artikel_mit_gp' => $this->aehnlicheArtikelMitGp($la),
+            // §5 Ausnahme 3 (v3.7.1): Marke für die Klammer aus EINER Quelle; der Prompt übernimmt genau diesen Wert
+            'marke_regel' => app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($la)->toArray(),
         ];
     }
 
@@ -1151,12 +1166,11 @@ class GpModal extends Component
             return;
         }
 
-        $designation = $gp->lead_la_supplier_item_id !== null
-            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::find($gp->lead_la_supplier_item_id)?->designation
+        $quellLa = $gp->lead_la_supplier_item_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::find($gp->lead_la_supplier_item_id)
             : null;
-        if ($designation === null) {                                   // Fallback: irgendeine verknüpfte LA
-            $designation = $gp->structures()->with('item')->get()->pluck('item.designation')->filter()->first();
-        }
+        $quellLa ??= $gp->structures()->with('item')->get()->pluck('item')->filter(fn ($i) => trim((string) $i?->designation) !== '')->first();   // Fallback: irgendeine verknüpfte LA
+        $designation = $quellLa?->designation;
         if ($designation === null || trim($designation) === '') {
             $this->fehler = 'Kein verknüpfter Lieferantenartikel — kein Namens-Quelltext vorhanden.';
 
@@ -1177,7 +1191,8 @@ class GpModal extends Component
                 $builder[$feld] = $wert;
             }
         }
-        $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)]);
+        $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)],
+            app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($quellLa)->marke);   // §5 Ausnahme 3
         if ($zusatz !== '') {
             $builder['zusatz'] = $zusatz;
         }

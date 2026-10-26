@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\AiProposal;
 use Platform\FoodAlchemist\Services\GpNamingService;
+use Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
 /**
@@ -24,9 +25,12 @@ class LaFelderService
         private readonly AiGatewayService $ki,
         private readonly GpNamingService $naming,
         private readonly VocabularyService $vocab,
+        private readonly MarkeAusArtikel $marken,
     ) {}
 
     /**
+     * Zusätzlich (§5 Ausnahme 3): rezepturware (?bool), marke_regel (MarkenErgebnis::toArray), marke_offen (bool).
+     *
      * @return array{hauptzutat: string, flavor: string, zusatz: string, condition: string, processing: string, form: string, pflichtangabe: string,
      *               commodity_group_code: string, sub_category: string, quelle: string, ki: ?AiProposal}
      */
@@ -65,7 +69,8 @@ class LaFelderService
         return $this->abschluss([
             'hauptzutat' => $feld('hauptzutat'),
             'flavor' => $feld('flavor'),
-            'zusatz' => $this->naming->zusatzAusArtikel($w['zusatz'] ?? null, [$la->designation, $la->marketing_name]),
+            'zusatz' => $this->naming->zusatzAusArtikel($w['zusatz'] ?? null, [$la->designation, $la->marketing_name], $this->marken->fuer($la)->marke),
+            'rezepturware' => MarkeAusArtikel::dreiwertig($w['rezepturware'] ?? null),
             'condition' => $feld('condition'),
             'processing' => $feld('processing'),
             'form' => $feld('form'),
@@ -88,6 +93,14 @@ class LaFelderService
     private function abschluss(array $f, FoodAlchemistSupplierItem $la, bool $nonFood): array
     {
         $f['marke'] = trim((string) $la->brand);
+        // §5 Ausnahme 3 (v3.7.1): Rezepturware trägt die Marke aus MarkeAusArtikel in der Klammer; ohne Marke → marke_offen. Wurst/Getränke nie.
+        $regel = $this->marken->fuer($la);
+        $f['marke_regel'] = $regel->toArray();
+        $f['rezepturware'] = $nonFood ? false : MarkeAusArtikel::rezepturwareFuerWg($f['rezepturware'] ?? null, (string) ($f['commodity_group_code'] ?? ''));
+        if ($f['rezepturware'] === true && trim((string) ($f['zusatz'] ?? '')) === '' && $regel->marke !== null) {
+            $f['zusatz'] = $regel->marke;
+        }
+        $f['marke_offen'] = MarkeAusArtikel::markeOffen($f['rezepturware'], (string) ($f['zusatz'] ?? ''));
         $f['processing'] = $this->kanonischeMasse((string) ($f['processing'] ?? ''));
         $f['form'] = $this->kanonischeMasse((string) ($f['form'] ?? ''));
         if ($nonFood) {
@@ -165,6 +178,8 @@ class LaFelderService
             'haltbarkeit' => array_filter(['gekuehlt_tage' => $la->shelf_life_chilled_days, 'tiefgekuehlt_tage' => $la->shelf_life_frozen_days, 'trocken_tage' => $la->shelf_life_dry_days]),
             'gebinde_hinweis' => array_filter(['menge' => $la->qty !== null ? (float) $la->qty : null, 'einheit' => $la->unit_code, 'verpackung' => $la->packaging_unit]),
             'allergene' => $allergene,
+            // §5 Ausnahme 3 (v3.7.1): Marke für die Klammer, EINE Quelle (MarkeAusArtikel); der Prompt nimmt genau diesen Wert
+            'marke_regel' => $this->marken->fuer($la)->toArray(),
         ];
     }
 }

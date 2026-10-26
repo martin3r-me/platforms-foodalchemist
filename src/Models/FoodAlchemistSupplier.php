@@ -35,12 +35,19 @@ class FoodAlchemistSupplier extends Model
         'order_lead_days' => 'integer',
         'allergene_nur_positiv' => 'boolean',   // Spec 85: leer = angenommen nicht enthalten
         'allergene_nur_positiv_seit' => 'date',
+        'rolle' => \Platform\FoodAlchemist\Enums\SupplierRolle::class,   // §5 Ausnahme 3
     ];
 
     /** Hauptgruppe (Taxonomie); `branch` bleibt der Necta-Rohwert. */
     public function group(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSupplierGroup::class, 'group_id');
+    }
+
+    /** §5 Ausnahme 3: Marken-Kürzel dieses Lieferanten (Eigenmarken, lieferantenbezogene Kürzel); globale Kürzel haben supplier_id NULL. */
+    public function marken(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistSupplierMarke::class, 'supplier_id');
     }
 
     public function items(): HasMany
