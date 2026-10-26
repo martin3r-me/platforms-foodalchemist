@@ -50,6 +50,8 @@ class PlattformProtokoll
         'support_zugang_erteilt' => 'Support-Zugang erteilt',          // Spec 84 §4.4 (E3)
         'support_zugang_widerrufen' => 'Support-Zugang widerrufen',
         'support_zugriff' => 'Zugriff im Support-Zugang',
+        'marke_kuerzel_zugeordnet' => 'Marken-Kürzel zugeordnet (Marken-Nachlauf)',   // Plan GP-Stamm 3g
+        'gp_marke_nachgerendert' => 'GP-Name mit Marke neu gerendert (Marken-Nachlauf)',
     ];
 
     /**

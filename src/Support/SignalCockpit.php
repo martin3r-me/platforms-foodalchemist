@@ -153,6 +153,9 @@ final class SignalCockpit
             . 'oder einen neueren Produktpass hochladen. Das Signal schließt, wenn nichts mehr offen ist.',
         'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
             . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
+        // Plan GP-Stamm 3g: Kuratierungs-Entscheidung des Masters, kein Auto-Fix (eine Marke darf nie geraten werden).
+        'marken_nachlauf' => 'Lieferanten → „Marke offen“: je unbekanntem Kürzel die Marke zuordnen (Vorschau zeigt, welche GPs neu benannt werden; '
+            . 'GPs mit Artikeln mehrerer Marken oder ohne Marke bleiben offen). Lieferanten mit Rolle „offen“ beim Lieferanten als Hersteller oder Händler einstufen.',
         // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.
         'fassung_aktualisiert' => 'Zur Kenntnis: Neue Angebote und Planungen nutzen die neue Fassung automatisch. Die Änderungsnotiz und eine '
             . 'etwaige Allergen-Änderung stehen im Signal. Eigene Rezepte und eingefrorene Angebote bleiben bis zur bewussten Übernahme auf ihrer Fassung.',

@@ -282,6 +282,8 @@ return [
     \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
     \Platform\FoodAlchemist\Tools\MandantExportGetTool::class,   // Spec 82 §13 C3: Datenexport Status + Manifest
     \Platform\FoodAlchemist\Tools\MandantExportPostTool::class,   // Spec 82 §13 C3: Datenexport anstoßen
+    \Platform\FoodAlchemist\Tools\MarkeOffenGetTool::class,        // Plan GP-Stamm 3g: Marken-Nachlauf
+    \Platform\FoodAlchemist\Tools\MarkeOffenZuordnenTool::class,  // Plan GP-Stamm 3g: Marken-Nachlauf
     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,
     \Platform\FoodAlchemist\Tools\MatchProposalsPutTool::class,

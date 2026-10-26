@@ -69,6 +69,7 @@ class SignalDetektorService
             + $this->vertragsfristFaellig($team)
             + app(\Platform\FoodAlchemist\Services\Pairing\PairingSignale::class)->alle($team)   // Spec 60 · P8
             + $this->naehrwertPlausi($team)
+            + $this->markenNachlauf($team)   // Plan GP-Stamm 3g (nur Master-Team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
 
         // Ebene 2 — Betriebs-Lanes: die geldabhängigen Detektoren (Marge/Wareneinsatz/Ausgabe-Drift)
@@ -610,6 +611,40 @@ class SignalDetektorService
         );
 
         return 1;
+    }
+
+    /**
+     * Marken-Nachlauf (Plan GP-Stamm 3g): Summen-Signale im Master-Team — unbekannte Kürzel an Rezeptur-GPs ohne Marke und Lieferanten mit Rolle
+     * „offen“, die an Rezepturware hängen. Die Liste selbst baut {@see \Platform\FoodAlchemist\Services\Marken\MarkeOffenService}.
+     */
+    public function markenNachlauf(Team $team): int
+    {
+        if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            return 0;
+        }
+        $dienst = app(\Platform\FoodAlchemist\Services\Marken\MarkeOffenService::class);
+        $n = 0;
+        $liste = $dienst->liste();
+        if ($liste['gruppen'] !== []) {
+            $beispiele = array_map(fn ($g) => $g['roh'] . ' (' . $g['lieferant'] . ', ' . $g['gps'] . ' GP)', array_slice($liste['gruppen'], 0, 10));
+            $this->signals->erzeuge($team, SignalTyp::MarkenNachlauf, SignalSeverity::Info,
+                count($liste['gruppen']) . ' unbekannte Marken-Kürzel an ' . $liste['gps_offen'] . ' Rezeptur-GPs ohne Marke',
+                ['dedup_key' => 'marken-nachlauf-kuerzel',
+                    'description' => 'In den Bezeichnungen der Artikel stehen Kürzel, die noch keiner Marke zugeordnet sind. Unter Lieferanten → „Marke offen“ zuordnen; die passenden GPs bekommen die Marke in der Klammer.',
+                    'payload' => ['anzahl' => count($liste['gruppen']), 'gps' => $liste['gps_offen'], 'beispiele' => $beispiele]]);
+            $n++;
+        }
+        $offen = $dienst->lieferantenOffenMitRezepturware();
+        if ($offen !== []) {
+            $this->signals->erzeuge($team, SignalTyp::MarkenNachlauf, SignalSeverity::Info,
+                count($offen) . (count($offen) === 1 ? ' Lieferant' : ' Lieferanten') . ' mit Rezepturware noch nicht eingestuft',
+                ['dedup_key' => 'marken-nachlauf-lieferant-rolle',
+                    'description' => 'Diese Lieferanten haben die Rolle „offen“. Erst als Hersteller (Kurzname wird Marke) oder Händler einstufen, dann greift die Marken-Auflösung.',
+                    'payload' => ['anzahl' => count($offen), 'beispiele' => array_map(fn ($l) => $l['name'] . ' (' . $l['gps'] . ' GP)', array_slice($offen, 0, 10))]]);
+            $n++;
+        }
+
+        return $n;
     }
 
     /**

@@ -339,6 +339,9 @@ class Index extends Component
             'team' => $team,
             'nectaPruefaelleOffen' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_necta_pruefaelle')->where('status', 'offen')->count() : 0,
+            // Plan GP-Stamm 3g: Rezeptur-GPs ohne Marke (Marken-Nachlauf, nur Master-Team)
+            'markeOffen' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)
+                ? \Illuminate\Support\Facades\DB::table('foodalchemist_gps')->where('marke_offen', true)->whereNull('deleted_at')->count() : 0,
             // #393: Banner-Zähler team-scoped (aktuelles Team) statt teamübergreifend (Multi-Tenancy-Leak).
             // Model hat SoftDeletes → deleted_at automatisch raus. ReviewQueue-Seite folgt mit #378.
             'offeneMatches' => \Platform\FoodAlchemist\Models\FoodAlchemistMatchProposal::where('team_id', $team->id)
