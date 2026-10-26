@@ -77,7 +77,7 @@
                                         <td class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ implode(' · ', $g['beispiele']) }}</td>
                                         <td class="whitespace-nowrap text-right">
                                             @if($darfZuordnen && $offen !== $g['schluessel'])
-                                                <x-fa::button size="sm" variant="secondary" wire:click="oeffnen(@js($g['schluessel']))" data-kuerzel-zuordnen-oeffnen>Kürzel zuordnen</x-fa::button>
+                                                <x-fa::button size="sm" variant="secondary" wire:click="oeffnen({{ \Illuminate\Support\Js::from($g['schluessel']) }})" data-kuerzel-zuordnen-oeffnen>Kürzel zuordnen</x-fa::button>
                                             @endif
                                         </td>
                                     </tr>
