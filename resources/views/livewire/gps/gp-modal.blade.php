@@ -224,11 +224,17 @@
                                 @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
                             </x-fa::select>
                         </x-fa::field>
-                        <x-fa::field label="Geschmack" for="gp-flavor" optional hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
+                        <x-fa::field label="Geschmack" for="gp-flavor" optional einklappen hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
                             <x-fa::input id="gp-flavor" wire:model.live.debounce.300ms="builder.flavor" placeholder="z. B. Chili" data-gp-flavor />
                         </x-fa::field>
-                        <x-fa::field label="Zusatz (Fantasiename)" for="gp-zusatz" optional hint="Steht im Namen als „ / (…)“ hinten. Nur exakt aus Bezeichnung oder Vermarktungsname des Artikels übernehmen, nie selbst bilden, übersetzen oder ausschmücken.">
-                            <x-fa::input id="gp-zusatz" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Mambonito" data-gp-zusatz />
+                        <x-fa::field label="Zusatz (Marke / Handelsname)" for="gp-zusatz" optional einklappen hint="Steht im Namen als „/ (…)“ hinten. Bei Rezepturware (Convenience, Salate, belegte Brötchen, Brot, Fleischersatz, Saucen, Würzmischungen): Marke, Eigenmarke oder Hersteller — wörtlich aus Artikel oder Vermarktungsname, sonst der Kurzname des Herstellers. Nie selbst bilden, Händlernamen nie. Sonst ein Fantasiename exakt aus dem Artikel.">
+                            <x-fa::input id="gp-zusatz" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Block House, Heisters, Mambonito" data-gp-zusatz />
+                        </x-fa::field>
+                        <x-fa::field label="Rezepturware" for="gp-rezeptur" optional einklappen hint="Produkt mit eigener Rezeptur aus mehreren Zutaten (Regelwerk §5 Ausnahme 3): Marke bzw. Hersteller steht in der Klammer, ein anderer Hersteller ist ein eigenes Grundprodukt. Nein bei Rohware, nur verarbeiteten Einzelzutaten (Püree, TK-Gemüse, Pommes), Einzelgewürzen, Wurst und Getränken.">
+                            <x-fa::select id="gp-rezeptur" wire:model.live="builder.rezepturware" :options="['' => 'Nicht entschieden', '1' => 'Ja', '0' => 'Nein']" data-gp-rezepturware />
+                            @if(($builder['rezepturware'] ?? '') === '1' && trim((string) ($builder['zusatz'] ?? '')) === '')
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-gp-marke-offen>Marke offen: Der Artikel nennt keine Marke und der Lieferant ist kein Hersteller. Das Grundprodukt steht dann auf der Nachlauf-Liste.</p>
+                            @endif
                         </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung" optional>
                             <x-fa::input id="gp-verarbeitung" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
@@ -261,11 +267,17 @@
                         <x-fa::field label="Hauptzutat" for="gp-hauptzutat-edit">
                             <x-fa::input id="gp-hauptzutat-edit" wire:model.live.debounce.300ms="builder.hauptzutat" placeholder="z. B. Schalotten" />
                         </x-fa::field>
-                        <x-fa::field label="Geschmack" for="gp-flavor-edit" optional hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
+                        <x-fa::field label="Geschmack" for="gp-flavor-edit" optional einklappen hint="Gewürzte oder aromatisierte Variante einer Grundware: Geschmackszutat nur, wenn sie im Artikel steht (z. B. Chili, Kräuter, Knoblauch). Sie steht im Namen vor dem Zustand.">
                             <x-fa::input id="gp-flavor-edit" wire:model.live.debounce.300ms="builder.flavor" placeholder="z. B. Chili" data-gp-flavor-edit />
                         </x-fa::field>
-                        <x-fa::field label="Zusatz (Fantasiename)" for="gp-zusatz-edit" optional hint="Steht im Namen als „ / (…)“ hinten. Nur exakt aus Bezeichnung oder Vermarktungsname des Artikels übernehmen, nie selbst bilden, übersetzen oder ausschmücken.">
-                            <x-fa::input id="gp-zusatz-edit" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Mambonito" data-gp-zusatz-edit />
+                        <x-fa::field label="Zusatz (Marke / Handelsname)" for="gp-zusatz-edit" optional einklappen hint="Steht im Namen als „/ (…)“ hinten. Bei Rezepturware (Convenience, Salate, belegte Brötchen, Brot, Fleischersatz, Saucen, Würzmischungen): Marke, Eigenmarke oder Hersteller — wörtlich aus Artikel oder Vermarktungsname, sonst der Kurzname des Herstellers. Nie selbst bilden, Händlernamen nie. Sonst ein Fantasiename exakt aus dem Artikel.">
+                            <x-fa::input id="gp-zusatz-edit" wire:model.live.debounce.300ms="builder.zusatz" placeholder="z. B. Block House, Heisters, Mambonito" data-gp-zusatz-edit />
+                        </x-fa::field>
+                        <x-fa::field label="Rezepturware" for="gp-rezeptur-edit" optional einklappen hint="Produkt mit eigener Rezeptur aus mehreren Zutaten (Regelwerk §5 Ausnahme 3): Marke bzw. Hersteller steht in der Klammer, ein anderer Hersteller ist ein eigenes Grundprodukt. Nein bei Rohware, nur verarbeiteten Einzelzutaten (Püree, TK-Gemüse, Pommes), Einzelgewürzen, Wurst und Getränken.">
+                            <x-fa::select id="gp-rezeptur-edit" wire:model.live="builder.rezepturware" :options="['' => 'Nicht entschieden', '1' => 'Ja', '0' => 'Nein']" data-gp-rezepturware-edit />
+                            @if(($builder['rezepturware'] ?? '') === '1' && trim((string) ($builder['zusatz'] ?? '')) === '')
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-gp-marke-offen>Marke offen: Der Artikel nennt keine Marke und der Lieferant ist kein Hersteller. Das Grundprodukt steht dann auf der Nachlauf-Liste.</p>
+                            @endif
                         </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung-edit" optional>
                             <x-fa::input id="gp-verarbeitung-edit" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
@@ -285,7 +297,7 @@
                     </div>
                 @endif
 
-                <x-fa::field label="Name" for="gp-name" :hint="$neu ? 'Wird aus den Feldern gebildet. Nur bei Bedarf von Hand überschreiben.' : null">
+                <x-fa::field label="Name" for="gp-name" einklappen :hint="$neu ? 'Wird aus den Feldern gebildet. Nur bei Bedarf von Hand überschreiben.' : null">
                     <x-fa::input id="gp-name" wire:model.live.debounce.300ms="manuellerName" placeholder="{{ $vorschauName }}" data-name-feld />
                 </x-fa::field>
 
