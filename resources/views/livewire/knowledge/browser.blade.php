@@ -110,7 +110,7 @@
 
                 <p class="pt-2 border-t border-[var(--fa-line)] {{ $leise }} tabular-nums" data-wissen-anzahl>{{ $untertitel }}</p>
 
-                <div class="flex flex-col gap-0.5 max-h-[58vh] overflow-y-auto -mx-1 px-1">
+                <div class="fa-liste flex flex-col gap-0.5 max-h-[58vh] overflow-y-auto -mx-1 px-1">
                     @forelse($docs as $doc)
                         @php
                             $aktivDoc = $selected && $selected->id === $doc->id;

@@ -60,7 +60,7 @@
             <div class="p-3 flex flex-col gap-2">
                 <x-fa::input type="search" wire:model.live.debounce.300ms="search" placeholder="Karte suchen" aria-label="Karte suchen" />
                 <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu" class="w-full" data-sk-neu>Neue Karte</x-fa::button>
-                <div class="mt-1 flex flex-col gap-0.5">
+                <div class="fa-liste mt-1 flex flex-col gap-0.5">
                     @forelse($karten as $k)
                         <button type="button" wire:key="sk-{{ $k->id }}" wire:click="waehle({{ $k->id }})" data-sk-zeile="{{ $k->id }}"
                             class="w-full text-left px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $karteId === $k->id ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }}"

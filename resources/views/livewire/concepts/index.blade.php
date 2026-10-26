@@ -39,7 +39,7 @@
                 </x-foodalchemist::filter-row>
 
                 {{-- Concept-Liste: die eigentliche Navigation dieser Seite --}}
-                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                <div class="fa-liste flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
                     @forelse($concepts as $c)
                         @php
                             $preisListe = ($vkDisplay[$c->id] ?? null) !== null ? (float) $vkDisplay[$c->id] : ($c->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null);
