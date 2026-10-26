@@ -428,6 +428,25 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
   .fa-table tr[aria-selected="true"] td { background: var(--fa-accent-soft); }
   .fa-table--compact td { padding-block: 4px; }
 
+  /* Listen am Laptop (Dominique 26.10.): bei schmaler Arbeitsfläche werden ALLE .fa-table automatisch kompakter — kleinere Zellenschrift,
+     engere Zeilen, kleinere Pillen; am großen Bildschirm bleibt alles wie oben. Gemessen wird die ARBEITSFLÄCHE (Inhaltsbereich neben der
+     Core-Sidebar), nicht der Tabellen-Container: .fa-table steckt auch in schmalen Detail-Panels und Karten, die sonst auch am großen
+     Bildschirm kompakt würden. Schwelle 1600 px Arbeitsfläche ≈ Laptop (1440/1512/1728) kompakt, 1920/2560 normal. Druck/PDF nutzen
+     .fa-table nicht. Pillen: x-fa::badge liest Höhe/Padding aus --fa-badge-* (Standard = bisherige Werte), nur hier überschrieben. */
+  main > .order-first { container: fa-flaeche / inline-size; }
+  @container fa-flaeche (max-width: 1600px) {
+    .fa-table { font-size: var(--fa-text-sm); --fa-badge-h: 18px; --fa-badge-px: 6px; }
+    .fa-table th { padding: 5px 10px; }
+    .fa-table td { padding: 4px 10px; }
+  }
+
+  /* Zeilen-/Kartenlisten ohne Tabelle (Dominique 26.10.: Concepts, Foodbooks, Wissen, Speisekarte, Speiseplan — Klasse .fa-liste am
+     Listen-Container): dieselbe Schwelle. Die Zeilen setzen Größen über Tailwind-Utilities (schlagen diese Ebene), darum werden hier
+     nur die TOKENS kleiner, die sie lesen: Schrift md → sm, --spacing (Abstände/Padding der Utilities) 0,25 → 0,2rem, Pillen wie oben. */
+  @container fa-flaeche (max-width: 1600px) {
+    .fa-liste { --fa-text-md: var(--fa-text-sm); --spacing: 0.2rem; --fa-badge-h: 18px; --fa-badge-px: 6px; }
+  }
+
   /* Kennzahl-Kacheln (components/kpi-tiles) — vorher eigener style-Block mit 26 × !important und Dunkel-Kaskade */
   [data-fa-kpis] > div { min-width: 0; }
   [data-fa-kpis] .kpi-label { font-size: var(--fa-text-sm); }

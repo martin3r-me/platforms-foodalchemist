@@ -27,7 +27,7 @@
                     <x-fa::input id="sp-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Plan suchen" class="pl-8" />
                 </div>
                 <x-fa::button variant="primary" icon="heroicon-m-plus" class="w-full" wire:click="neu" data-sp-neu>Neuer Plan</x-fa::button>
-                <div class="flex flex-col gap-0.5">
+                <div class="fa-liste flex flex-col gap-0.5">
                     @forelse($plaene as $p)
                         <button type="button" wire:key="sp-list-{{ $p->id }}" wire:click="waehle({{ $p->id }})" data-sp-zeile="{{ $p->id }}"
                                 @if($selectedId === $p->id) aria-current="true" @endif

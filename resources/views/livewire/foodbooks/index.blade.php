@@ -51,7 +51,7 @@
                 {{-- Phasen-Filter entfernt (2026-08-31): die alte Foodbook-Statusmaschine ist tot (Planung
                      lebt in der Leitstelle), phase wird nicht mehr fortgeschrieben → Filter filterte auf statischen Daten. --}}
                 <x-fa::button icon="heroicon-m-plus" wire:click="neu" class="w-full">Foodbook anlegen</x-fa::button>
-                <div class="-mx-1 flex flex-col gap-0.5">
+                <div class="fa-liste -mx-1 flex flex-col gap-0.5">
                     @forelse($foodbooks as $f)
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedId === $f->id ? $aktiv : $hover }}"
