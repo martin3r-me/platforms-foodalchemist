@@ -73,8 +73,8 @@ it('Paar X ⇄ unX: nennt die Zutat keins, gewinnt „ungesalzen“ gegen „ges
     $erdnuss = fn (string $name, ?string $zusatz = null) => FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => $name,
         'gp_key' => 'k_' . bin2hex(random_bytes(4)), 'status' => 'approved', 'requires_la' => true, 'commodity_group_code' => '06', 'condition' => 'trocken',
         'main_ingredient_slug' => 'erdnuss', 'main_ingredient_display' => 'Erdnüsse', 'zusatz' => $zusatz]);
-    $gesalzen = $erdnuss('Erdnüsse: trocken, geröstet, gesalzen / (Ültje)', 'Ültje');      // kleinere ID
-    $ungesalzen = $erdnuss('Erdnüsse: trocken, geröstet, ungesalzen');
+    $gesalzen = $erdnuss('Erdnüsse: geröstet, gesalzen, trocken / (Ültje)', 'Ültje');      // kleinere ID; Reihenfolge Stufe 2 (Form vor Zustand)
+    $ungesalzen = $erdnuss('Erdnüsse: geröstet, ungesalzen, trocken');
 
     expect(($this->matcher)('150 g Erdnüsse, geröstet')['gp_id'])->toBe($ungesalzen->id)
         ->and(collect(app(IngredientMatchService::class)->candidatesFor($this->rootTeam, 'Erdnüsse, geröstet', null, 5))->where('kind', 'gp')->pluck('id')->first())
@@ -91,4 +91,14 @@ it('nameOhneMarke: Zusatz aus der Spalte, Bestand ohne Spalte; Bio/Vegan/Glutenf
         ->and($n->nameOhneMarke('Ketchup / (Heinz)'))->toBe('Ketchup')
         ->and($n->nameOhneMarke('Butter: frisch / (Bio) / (Laktosefrei)'))->toBe('Butter: frisch / (Bio) / (Laktosefrei)')
         ->and($n->nameOhneMarke('Tofu: frisch / (Vegan)', ''))->toBe('Tofu: frisch / (Vegan)');
+});
+
+it('nameOhneMarke passt zum Renderer (Stufe 2, Form vor Zustand): mit Marke gerendert, Marke entfernt = ohne Marke gerendert; Flags bleiben', function () {
+    $n = app(GpNamingService::class);
+    $felder = ['hauptzutat' => 'Räucherlachs', 'condition' => 'geräuchert', 'form' => 'geschnitten', 'bio' => true, 'glutenfrei' => true];
+    $mit = $n->renderGpName($felder + ['zusatz' => 'Friedrichs']);
+
+    expect($mit)->toContain('/ (Friedrichs)')
+        ->and($n->nameOhneMarke($mit, 'Friedrichs'))->toBe($n->renderGpName($felder))
+        ->and($n->nameOhneMarke($mit))->toBe($n->renderGpName($felder));
 });
