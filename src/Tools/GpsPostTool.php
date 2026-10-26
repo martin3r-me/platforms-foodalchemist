@@ -23,6 +23,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
     private const IN_KEYS = [
         'name', 'hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id', 'bio', 'vegan', 'glutenfrei', 'laktosefrei',
+        'rezepturware',   // §5 Ausnahme 3; marke_offen ist abgeleitet und nie Eingabe
     ];
 
     public function getName(): string
@@ -46,7 +47,8 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'name' => ['type' => 'string', 'description' => 'Fertiger GP-Name (optional; sonst aus Strukturfeldern gerendert).'],
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (Pflicht) — Basis des Namens + main_ingredient_slug.'],
                 'flavor' => ['type' => 'string', 'description' => 'Geschmackszutat (§6.6): erste Eigenschaft im Namen vor dem Zustand, z. B. Chili → "Käse: Chili, frisch, …". Nur wenn im Artikel belegt; die Grundware bleibt hauptzutat.'],
-                'zusatz' => ['type' => 'string', 'description' => 'Klammer-Zusatz (§6.6): Fantasiename EXAKT aus Bezeichnung/Vermarktungsname des Artikels, steht hinten als "/ (…)" (z. B. Mambonito). Nie selbst bilden, übersetzen oder ausschmücken; ohne Fantasienamen im Artikel leer lassen.'],
+                'zusatz' => ['type' => 'string', 'description' => 'Klammer-Zusatz, steht hinten als "/ (…)": Fantasiename (§6.6) oder bei Rezepturware die Marke (§5 Ausnahme 3; Wert aus foodalchemist.artikel.MARKE, z. B. Block House, Heisters). Nur exakt aus Artikel/Vermarktungsname bzw. aus artikel.MARKE, nie selbst bilden; Händlernamen nie.'],
+                'rezepturware' => ['type' => 'boolean', 'description' => '§5 Ausnahme 3: Produkt mit eigener Rezeptur aus mehreren Zutaten (Marke/Hersteller in der Klammer, anderer Hersteller = eigenes GP). null bzw. weglassen = nicht entschieden. Wurst (WG 04) und Getränke (WG 15) immer false. marke_offen leitet das System ab.'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'processing' => ['type' => 'string', 'description' => 'Verarbeitung/Zuschnitt (z.B. Wuerfel 10 mm).'],
                 'form' => ['type' => 'string', 'description' => 'Form (falls keine processing).'],

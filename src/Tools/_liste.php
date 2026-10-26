@@ -54,6 +54,7 @@ return [
     \Platform\FoodAlchemist\Tools\ArtikelDeleteTool::class,
     \Platform\FoodAlchemist\Tools\ArtikelDiscontinueTool::class,
     \Platform\FoodAlchemist\Tools\ArtikelListTool::class,
+    \Platform\FoodAlchemist\Tools\ArtikelMarkeTool::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
     \Platform\FoodAlchemist\Tools\ArtikelNaehrwertePutTool::class,
     \Platform\FoodAlchemist\Tools\ArtikelPostTool::class,
     \Platform\FoodAlchemist\Tools\ArtikelPreiseDeleteTool::class,
@@ -579,6 +580,8 @@ return [
     \Platform\FoodAlchemist\Tools\SupplierInvoicesPostTool::class,
     \Platform\FoodAlchemist\Tools\SupplierInvoicesPutTool::class,
     \Platform\FoodAlchemist\Tools\SupplierInvoicesStornoTool::class,
+    \Platform\FoodAlchemist\Tools\SupplierMarkenGetTool::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
+    \Platform\FoodAlchemist\Tools\SupplierMarkenPutTool::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
     \Platform\FoodAlchemist\Tools\SupplierRebateGetTool::class,
     \Platform\FoodAlchemist\Tools\SupplierRebatePutTool::class,
     \Platform\FoodAlchemist\Tools\SuppliersDeactivateTool::class,

@@ -188,6 +188,9 @@
                         @endif
                     </x-fa::section>
 
+                    {{-- GP-Regelwerk v3.7.1 §5 Ausnahme 3: Rolle, Kurzname, Marken-Kürzel (eigene Komponente, Pflege nur Plattform-/Master-Admin) --}}
+                    @livewire('foodalchemist.suppliers.lieferant-marken', ['supplierId' => $supplierId], key('lieferant-marken-' . $supplierId))
+
                     <x-fa::section title="Stamm-Lieferant für Warengruppen" icon="heroicon-o-squares-2x2"
                         description="In diesen Warengruppen wird dieser Lieferant beim Zuordnen zuerst gesucht.">
                         @if(count($stammblatt['wg_abdeckung']) > 0)
