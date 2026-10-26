@@ -32,11 +32,11 @@ beforeEach(function () {
 it('Render: Geschmackszutat steht als ERSTE Eigenschaft vor dem Zustand; ohne Geschmack unverändert', function () {
     $felder = ['hauptzutat' => 'Käse', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.'];
 
-    expect($this->naming->renderGpName($felder + ['flavor' => 'Chili']))->toBe('Käse: Chili, frisch, Scheiben, 45 % Fett i. Tr.')
-        ->and($this->naming->renderGpName($felder))->toBe('Käse: frisch, Scheiben, 45 % Fett i. Tr.')
+    expect($this->naming->renderGpName($felder + ['flavor' => 'Chili']))->toBe('Käse: Chili, Scheiben, frisch, 45 % Fett i. Tr.')
+        ->and($this->naming->renderGpName($felder))->toBe('Käse: Scheiben, frisch, 45 % Fett i. Tr.')
         ->and($this->naming->renderGpName(['hauptzutat' => 'Butter', 'flavor' => 'Kräuter', 'condition' => 'frisch', 'pflichtangabe' => '82 %']))->toBe('Butter: Kräuter, frisch, 82 %')
         ->and($this->naming->renderGpName(['hauptzutat' => 'Olivenöl', 'flavor' => 'Knoblauch', 'pflichtangabe' => 'extra vergine']))->toBe('Olivenöl: Knoblauch, extra vergine')
-        ->and($this->naming->renderGpName($felder + ['flavor' => 'unbekannt']))->toBe('Käse: frisch, Scheiben, 45 % Fett i. Tr.');
+        ->and($this->naming->renderGpName($felder + ['flavor' => 'unbekannt']))->toBe('Käse: Scheiben, frisch, 45 % Fett i. Tr.');
 });
 
 it('Non-Food (WG 16) bleibt unberührt: flavor wird dort nicht gerendert', function () {
@@ -55,11 +55,11 @@ it('Anlage und Bearbeiten speichern flavor; Käse mit Chili und Käse ohne Chili
     $mit = $this->naming->createGp($this->rootTeam, ['hauptzutat' => 'Käse', 'flavor' => 'Chili', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.']);
     $ohne = $this->naming->createGp($this->rootTeam, ['hauptzutat' => 'Käse', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.']);
 
-    expect($mit->name)->toBe('Käse: Chili, frisch, Scheiben, 45 % Fett i. Tr.')->and($mit->flavor)->toBe('Chili')
+    expect($mit->name)->toBe('Käse: Chili, Scheiben, frisch, 45 % Fett i. Tr.')->and($mit->flavor)->toBe('Chili')
         ->and($mit->gp_key)->toBe('kaese_chili|scheiben|')->and($ohne->flavor)->toBeNull()->and($ohne->gp_key)->toBe('kaese|scheiben|');
 
     $neu = $this->naming->updateGp($this->rootTeam, $ohne, ['hauptzutat' => 'Käse', 'flavor' => 'Kräuter', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.']);
-    expect($neu->name)->toBe('Käse: Kräuter, frisch, Scheiben, 45 % Fett i. Tr.')->and($neu->flavor)->toBe('Kräuter')->and($neu->gp_key)->toBe('kaese|scheiben|');   // Schlüssel bleibt stabil
+    expect($neu->name)->toBe('Käse: Kräuter, Scheiben, frisch, 45 % Fett i. Tr.')->and($neu->flavor)->toBe('Kräuter')->and($neu->gp_key)->toBe('kaese|scheiben|');   // Schlüssel bleibt stabil
 
     $teil = $this->naming->updateGp($this->rootTeam, $neu->refresh(), ['name' => $neu->name, 'condition' => 'frisch']);   // Teil-Schreiber ohne flavor lässt den Wert stehen
     expect($teil->flavor)->toBe('Kräuter');
@@ -72,14 +72,14 @@ it('Validator: ein Zustandswort ist keine Geschmackszutat', function () {
 });
 
 it('felderAusName: nur im Editor-Modus wird das Wort vor dem Zustand zur Geschmackszutat (Rundlauf); Bestand/Backfill unverändert', function () {
-    $name = 'Käse: Chili, frisch, Scheiben, 45 % Fett i. Tr.';
+    $name = 'Käse: Chili, Scheiben, frisch, 45 % Fett i. Tr.';
     $f = $this->naming->felderAusName($name, true);
 
     expect($f['flavor'])->toBe('Chili')->and($f['condition'])->toBe('frisch')->and($f['hauptzutat'])->toBe('Käse')
         ->and($this->naming->renderGpName($f))->toBe($name);
 
     $alt = $this->naming->felderAusName($name);
-    expect($alt)->not->toHaveKey('flavor')->and($alt['form'])->toBe('Chili');   // Bestands-Lesart wie bisher
+    expect($alt)->not->toHaveKey('flavor')->and($alt['form'])->toBe('Chili, Scheiben');   // ohne Geschmacksfeld: Teil der Form
 
     expect($this->naming->felderAusName('Käse: frisch, Scheiben', true)['flavor'])->toBe('')
         ->and($this->naming->felderAusName('Käse: frisch, Chili, Scheiben', true)['flavor'])->toBe('');   // nach dem Zustand ist es keine Geschmackszutat
@@ -88,15 +88,15 @@ it('felderAusName: nur im Editor-Modus wird das Wort vor dem Zustand zur Geschma
 it('Modal: Vorschau, Speichern und Laden mit dem Feld Geschmack', function () {
     Livewire::test(GpModal::class)->call('oeffnen')
         ->set('builder.hauptzutat', 'Käse')->set('builder.flavor', 'Chili')->set('builder.condition', 'frisch')->set('builder.processing', 'Scheiben')
-        ->assertSeeHtml('Käse: Chili, frisch, Scheiben')->assertSeeHtml('data-gp-flavor')
+        ->assertSeeHtml('Käse: Chili, Scheiben, frisch')->assertSeeHtml('data-gp-flavor')
         ->call('speichern')->assertSet('fehler', null);
 
-    $gp = FoodAlchemistGp::where('name', 'Käse: Chili, frisch, Scheiben')->firstOrFail();
+    $gp = FoodAlchemistGp::where('name', 'Käse: Chili, Scheiben, frisch')->firstOrFail();
     expect($gp->flavor)->toBe('Chili');
 
     Livewire::test(GpModal::class)->call('oeffnen', $gp->id)->assertSet('builder.flavor', 'Chili')->assertSeeHtml('data-gp-flavor-edit')
         ->call('felderAusName')->set('builder.flavor', 'Kräuter')->call('nameAusFeldern')->call('speichern')->assertSet('fehler', null);
-    expect($gp->fresh()->flavor)->toBe('Kräuter')->and($gp->fresh()->name)->toBe('Käse: Kräuter, frisch, Scheiben');
+    expect($gp->fresh()->flavor)->toBe('Kräuter')->and($gp->fresh()->name)->toBe('Käse: Kräuter, Scheiben, frisch');
 });
 
 it('gp.suggest: der Vorschlag übernimmt flavor in den Builder (Felder vorschlagen) und der Prompt kennt Feld und neue §5-Logik', function () {

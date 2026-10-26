@@ -24,8 +24,8 @@ class GpNamingService
      * §9 — kanonisches Zustand-Vokabular (A7: EIN Validator-Set; einzige Quelle im Code, Listen und Prompts lesen sie).
      * Regelwerk GP v3.6.0 (Dominique 19.10.): `gepoekelt`, `geraeuchert`, `luftgetrocknet` sind eigene Zustände
      * (vorher Verarbeitung). Vorrang bei mehreren Behandlungen (entschieden Dominique 19.10.): luftgetrocknet > geraeuchert >
-     * gepoekelt; TK + Behandlung ⇒ die Behandlung ist der Zustand, „TK“ steht als Zusatz im Namen („Raeucherlachs: geraeuchert,
-     * TK, geschnitten“). {@see zustandAusTreffern()}, {@see istTk()}.
+     * gepoekelt; TK + Behandlung ⇒ die Behandlung ist der Zustand, „TK“ steht als Zusatz im Namen hinter ihr (Stufe 2: „Räucherlachs: geschnitten,
+     * geräuchert, TK“). {@see zustandAusTreffern()}, {@see istTk()}.
      */
     public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert', 'gepökelt', 'geräuchert', 'luftgetrocknet'];   // Kanon mit echten Umlauten (Dominique 19.10.)
 
@@ -254,15 +254,16 @@ class GpNamingService
     }
 
     /**
-     * Spec 80 (Paket 11): Umkehrung von {@see renderGpName} — die strukturierten Felder aus einem Bestandsnamen
-     * nach §6-Schema `<Hauptzutat>: <Zustand>, <Verarbeitung|Form>[, Portion …][, <Pflichtangabe>][ / (Bio)]`.
-     * Deterministisch, ohne KI: Zustand nur aus dem §9-Vokabular; das erste Attribut danach wird Verarbeitung,
-     * wenn es ein §2-Verarbeitungs-Suffix trägt (Dossier), sonst Form; der Rest Pflichtangabe. Was nicht passt,
-     * bleibt leer — der Mensch korrigiert im Editor.
+     * Spec 80 (Paket 11): Umkehrung von {@see renderGpName} — die strukturierten Felder aus einem Namen nach §6-Schema
+     * `<Hauptzutat>: [<Geschmack>, ]<Verarbeitung>, <Zuschnitt>, <Zustand>[, <x> g pro Stück][, <Pflichtangabe>][ / (<Zusatz>)][ / (Bio)]…`.
+     * Deterministisch, ohne KI, nach der ART jedes Teils (Stufe 2, 26.10.): Zustand aus dem §9-Vokabular, Verarbeitung/Zuschnitt aus
+     * {@see artDesTeils()}, Unbekanntes vor allem anderen = Geschmack, nach dem Zustand = Pflichtangabe. `$alteReihenfolge` liest Altnamen
+     * („frisch, gegart, Würfel 10 mm“) zum Umstellen; ohne ihn ist „frisch, verzehrfertig“ Zustand + Pflichtangabe (neue Lesart).
+     * Was nicht passt, bleibt leer — der Mensch korrigiert im Editor.
      *
      * @return array{hauptzutat: string, condition: string, processing: string, form: string, portion: string, pflichtangabe: string, bio: bool}
      */
-    public function felderAusName(string $name, bool $mitGeschmack = false): array
+    public function felderAusName(string $name, bool $mitGeschmack = false, bool $alteReihenfolge = false): array
     {
         $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false];
         if ($mitGeschmack) {
@@ -287,72 +288,188 @@ class GpNamingService
             $out[$diaet] = preg_match('/\(\s*' . $diaet . '\s*\)/iu', $name) === 1;
         }
         $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
-        $out['hauptzutat'] = trim((string) strstr($name . ':', ':', true));
-        $rest = str_contains($name, ':') ? trim((string) substr($name, strpos($name, ':') + 1)) : '';
+        // Trenner Hauptzutat/Eigenschaften ist der ERSTE Doppelpunkt mit Leerzeichen (oder Ende) danach — „Gelierzucker: trocken, 2:1“ (Klaus 26.10.)
+        if (preg_match('/^(.*?):(?=\s|$)/u', $name, $m) === 1) {
+            $out['hauptzutat'] = trim($m[1]);
+            $rest = trim((string) mb_substr($name, mb_strlen($m[0])));
+        } else {
+            $out['hauptzutat'] = $name;
+            $rest = '';
+        }
         // Dezimalkomma („62,5 g pro Stück", „3,5 % Fett") ist kein Trenner der Attribute
         $teile = array_values(array_filter(array_map(fn ($t) => trim(str_replace("\x01", ',', $t)), explode(',', (string) preg_replace('/(?<=\d),(?=\d)/', "\x01", $rest))), fn ($t) => $t !== ''));
-        if ($mitGeschmack && count($teile) >= 2) {
-            // §6.6: alles VOR dem ersten Zustandswort ist die Geschmackszutat bzw. bei Komposit-Salaten die Hauptbestandteile („Reissalat: schwarzer Reis,
-            // Avocado, Azukibohnen, TK" → flavor „schwarzer Reis, Avocado, Azukibohnen"). Kein Zustand im Namen oder Zustand an erster Stelle: alte Lesart.
-            $zustandIdx = null;
-            foreach ($teile as $i => $teil) {
-                $z = $this->normalisiereZustand($teil);
-                if ($z !== null && in_array($z, self::ZUSTAND_VOCAB, true)) {
-                    $zustandIdx = $i;
-                    break;
-                }
-            }
-            if ($zustandIdx !== null && $zustandIdx >= 1) {
-                $vor = array_slice($teile, 0, $zustandIdx);
-                $keinFlavor = false;
-                foreach ($vor as $teil) {
-                    if (preg_match('/pro\s+st(?:ue|ü)ck$/iu', $teil) === 1 || mb_strtolower($teil) === 'bio') {
-                        $keinFlavor = true;
-                    }
-                }
-                if (! $keinFlavor) {
-                    $out['flavor'] = implode(', ', $vor);
-                    $teile = array_values(array_slice($teile, $zustandIdx));
-                }
+
+        // Stufe 2 „Form vor Zustand“ (Dominique 25.10.): Jeder Teil wird nach seiner ART eingeordnet, nicht nach seiner Position — so liest der Parser
+        // die neue Reihenfolge (`gegart, Würfel 10 mm, frisch`) und den Bestand in alter Reihenfolge (`frisch, gegart, Würfel 10 mm`) gleich.
+        $zustaende = [];
+        $erstZustand = null;
+        foreach ($teile as $i => $teil) {
+            $z = $this->normalisiereZustand($teil);
+            if ($z !== null && in_array($z, self::ZUSTAND_VOCAB, true)) {
+                $zustaende[$i] = $z;
+                $erstZustand ??= $i;
             }
         }
-        $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
-        $pflicht = [];
         $tkZusatz = false;
-        foreach ($teile as $teil) {
-            $zustand = $this->normalisiereZustand($teil);
-            if ($out['condition'] === '' && $zustand !== null && in_array($zustand, self::ZUSTAND_VOCAB, true)) {
-                $out['condition'] = $zustand;
-            } elseif ($zustand === 'TK' && in_array($out['condition'], self::BEHANDLUNG, true)) {
-                $tkZusatz = true;   // v3.6.0 2b: „geraeuchert, TK, …“ — TK als Zusatz, steht vorn in der Verarbeitung
-            } elseif (mb_strtolower($teil) === 'bio') {
-                $out['bio'] = true;
-            } elseif (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
-                $out['portion'] = $this->normalisierePortion($m[1]);        // „660 g pro Stück" (neu) und Bestand „660 g pro Stueck" / Altform „Portion 150 g pro Stueck" (beide Schreibweisen lesbar)
-            } elseif (preg_match('/^portion\s+(.+?)\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
-                $out['portion'] = $m[1];
-            } elseif ($out['processing'] === '' && $out['form'] === '' && $pflicht === []) {
-                $norm = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($teil);
-                $istVerarbeitung = false;
-                foreach ($suffixe as $s) {
-                    if (($sn = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($s)) !== '' && str_contains($norm, $sn)) {
-                        $istVerarbeitung = true;
-                        break;
-                    }
+        $behandlung = array_values(array_intersect(self::BEHANDLUNG_VORRANG, $zustaende));
+        if ($behandlung !== [] && in_array('TK', $zustaende, true)) {
+            $out['condition'] = $behandlung[0];   // v3.6.0 2b: TK + Behandlung ⇒ die Behandlung ist der Zustand, TK steht als Zusatz in der Verarbeitung
+            $tkZusatz = true;
+        } elseif (count($zustaende) > 1) {
+            // Mehrere Zustandswörter ohne TK-Paar (Bestand „Stremellachs: geräuchert, Seite, frisch“): das LETZTE ist der Zustand, die Behandlung
+            // davor steht als Verarbeitung im Namen
+            $erstZustand = array_key_last($zustaende);
+            $out['condition'] = $zustaende[$erstZustand];
+            $zustaende = [$erstZustand => $out['condition']];
+        } elseif ($zustaende !== []) {
+            $out['condition'] = reset($zustaende);
+        }
+
+        // Nach dem ersten Zustandswort folgen nur noch Portion und Pflichtangabe; davor Geschmack, Verarbeitung und Zuschnitt in Namensreihenfolge.
+        $mitte = [];        // [Teil, Art] in Namensreihenfolge
+        $geschmack = [];
+        $pflicht = [];
+        foreach ($teile as $i => $teil) {
+            if (isset($zustaende[$i])) {
+                if ($zustaende[$i] !== $out['condition'] && ! ($tkZusatz && $zustaende[$i] === 'TK')) {
+                    $pflicht[] = $teil;   // zweiter Zustand ohne Behandlungs-Paar: bleibt sichtbar
                 }
-                $out[$istVerarbeitung ? 'processing' : 'form'] = $teil;
+
+                continue;
+            }
+            if (mb_strtolower($teil) === 'bio') {
+                $out['bio'] = true;
+
+                continue;
+            }
+            if (preg_match('/^(?:portion\s+)?((?:ca\.?\s*)?\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l))\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
+                $out['portion'] = $this->normalisierePortion($m[1]);        // „660 g pro Stück" (neu) und Bestand „660 g pro Stueck" / Altform „Portion 150 g pro Stueck"
+                continue;
+            }
+            if (preg_match('/^portion\s+(.+?)\s+pro\s+st(?:ue|ü)ck$/iu', $teil, $m) === 1) {
+                $out['portion'] = $m[1];
+
+                continue;
+            }
+            $art = $this->artDesTeils($teil);
+            if ($erstZustand !== null && $i > $erstZustand) {
+                // Neue Reihenfolge: hinter dem Zustand nur Pflichtangabe. Nur auf Wunsch ($alteReihenfolge, Umstellung von Altbeständen) gilt die alte
+                // Lesart „Zustand zuerst“: Verarbeitung/Zuschnitt dahinter werden als solche gelesen, bis die erste Pflichtangabe kommt.
+                if (($alteReihenfolge || $art === 'form') && $erstZustand === 0 && $art !== null && $pflicht === [] && preg_match('/^(?:mit|ohne|in|am|aus)\s|^un/u', mb_strtolower($teil)) !== 1) {   // „mit Schale“, „ungezuckert“ = Pflichtangabe
+                    $mitte[] = [$teil, $art];
+                } else {
+                    $pflicht[] = $teil;
+                }
+
+                continue;
+            }
+            if ($erstZustand === null) {
+                // Ohne Zustand (Getränke, Öle, Sirupe, Non-Food-nahe Ware): Verarbeitung/Zuschnitt nur am Anfang, alles danach Pflichtangabe
+                if ($art !== null && $pflicht === [] && $out['portion'] === '') {
+                    $mitte[] = [$teil, $art];
+                } else {
+                    $pflicht[] = $teil;
+                }
+            } elseif ($art === null && $mitte === []) {
+                $geschmack[] = $teil;   // §6.6: unbekannter Teil ganz vorn = Geschmackszutat
             } else {
-                $pflicht[] = $teil;
+                $mitte[] = [$teil, $art ?? 'form'];
             }
         }
+        if ($geschmack !== []) {
+            if ($mitGeschmack) {
+                $out['flavor'] = implode(', ', $geschmack);
+            } else {
+                $mitte = [...array_map(fn ($t) => [$t, 'form'], $geschmack), ...$mitte];   // ohne Geschmacksfeld (Backfill, Pläne): Teil der Form
+            }
+        }
+        // Reihenfolge bleibt: Verarbeitung = alles bis zum letzten Verarbeitungsteil, Zuschnitt = der Rest (der Renderer gibt Verarbeitung vor Zuschnitt aus)
+        $letzteVerarbeitung = -1;
+        foreach ($mitte as $j => [, $art]) {
+            if ($art === 'processing') {
+                $letzteVerarbeitung = $j;
+            }
+        }
+        $out['processing'] = implode(', ', array_column(array_slice($mitte, 0, $letzteVerarbeitung + 1), 0));
+        $out['form'] = implode(', ', array_column(array_slice($mitte, $letzteVerarbeitung + 1), 0));
         $out['pflichtangabe'] = implode(', ', $pflicht);
         if ($tkZusatz) {
-            // renderGpName zeigt processing ODER form — TK muss in den gezeigten Teil, die Form bleibt in ihrer Spalte erhalten
-            $mitte = $out['processing'] !== '' ? $out['processing'] : $out['form'];
-            $out['processing'] = $mitte === '' ? 'TK' : 'TK, ' . $mitte;
+            $out['processing'] = $out['processing'] === '' ? 'TK' : 'TK, ' . $out['processing'];   // Datenmodell bleibt: „TK, …“ vorn in der Verarbeitung
         }
 
         return $out;
+    }
+
+    /** Zuschnitt-/Formwörter (Feld `form`), die kein §2-Schnittform-Token sind — aus den Formwerten des Bestands (Stufe 1, 26.10.). */
+    /** Zuschnitt-Hauptwörter aus §2 (Teilstring: „in Scheiben“, „Würfel 10 mm“). */
+    private const SCHNITTFORMEN = ['brunoise', 'würfel', 'stifte', 'scheiben', 'streifen', 'julienne'];
+
+    private const FORMWOERTER = ['ganz', 'ganze', 'halbiert', 'geviertelt', 'geachtelt', 'pulver', 'paste', 'granulat', 'flocken', 'fein', 'grob', 'stück',
+        'stange', 'stangen', 'bund', 'blatt', 'bruch', 'seite', 'rolle', 'hälften', 'spalten', 'ringe', 'blätter', 'portion', 'filet', 'filets', 'loin', 'loins', 'block', 'kugeln'];
+
+    /**
+     * Art eines Namensteils (ohne Zustand): `processing` (Verarbeitung: §2-Verarbeitungs-Token, Partizip wie gegart/geschält/paniert, roh,
+     * verzehrfertig), `form` (Zuschnitt: §2-Schnittform-Token, Maß in mm, Formwort, „mit …/ohne …/am …/aus der …/in …“) oder null (unbekannt:
+     * Geschmack vor bzw. Pflichtangabe nach dem Zustand).
+     */
+    private function artDesTeils(string $teil): ?string
+    {
+        $norm = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($teil);
+        $klein = mb_strtolower(trim($teil));
+        $erstes = (string) strtok($klein, ' ');
+        if (preg_match('/\d+(?:[.,]\d+)?\s*(?:x\s*\d+(?:[.,]\d+)?\s*)*mm\b/u', $klein) === 1
+            || in_array($erstes, self::FORMWOERTER, true) || in_array($klein, self::FORMWOERTER, true)
+            || preg_match('/^(?:mit|ohne|am|aus der|aus dem|in)\s/u', $klein) === 1) {
+            return 'form';
+        }
+        // Zuschnitt-Hauptwörter (Würfel, Scheiben …) sind Form; Partizipien wie geschnitten/gehackt bleiben Verarbeitung (so im Bestand, Stufe 1)
+        foreach (self::SCHNITTFORMEN as $s) {
+            if (($sn = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm((string) $s)) !== '' && str_contains($norm, $sn)) {
+                return 'form';
+            }
+        }
+        foreach (\Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe() as $s) {
+            if (($sn = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($s)) !== '' && str_contains($norm, $sn)) {
+                return 'processing';
+            }
+        }
+        if (preg_match('/\d/u', $klein) === 1) {
+            return null;   // „2-fach konzentriert“, „14 Monate gereift“: mit Zahl eine Pflichtangabe, keine Verarbeitung
+        }
+        foreach (preg_split('/[\s\-]+/u', $klein) as $wort) {
+            if (in_array($wort, ['roh', 'verzehrfertig'], true)
+                || preg_match('/^(?:un|vor|ein|aus|an|ab|auf|zu)?ge\p{L}{2,}(?:t|en)$/u', $wort) === 1
+                || preg_match('/^(?:ent|zu)\p{L}{2,}t$/u', $wort) === 1
+                || preg_match('/\p{L}{2,}iert$/u', $wort) === 1) {
+                return 'processing';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * §9-Zusatz (v3.6.1): Waren ohne Zustandswort — trinkfertige Getränke (WG 15; Kaffee/Tee/Kakaopulver mit „trocken“ behalten es), Öle/Fette (WG 11 außer Essig 11.3), Sirupe/Dicksäfte/Melassen
+     * (Sub-Kategorie „Sirupe“, Rückfall: Hauptzutat endet auf sirup/dicksaft/melasse). Der Renderer gibt hier keinen Zustand aus.
+     */
+    public function ohneZustandswort(array $in): bool
+    {
+        $wg = (string) ($in['warengruppe'] ?? $in['commodity_group_code'] ?? '');
+        $sub = mb_strtolower(trim((string) ($in['sub_category'] ?? '')));
+        $haupt = mb_strtolower(trim((string) ($in['hauptzutat'] ?? '')));
+        if (str_contains($sub, 'sirup')) {
+            return true;
+        }
+        if ($wg === '15') {
+            // Ausnahme (Kurator/Klaus 26.10.): Kaffee, Tee und Kakaogetränkepulver sind Grundstoffe und behalten „trocken“; trinkfertige Getränke nie
+            return $this->normalisiereZustand($in['condition'] ?? null) !== 'trocken';
+        }
+        if ($wg === '11') {
+            return ! str_starts_with($sub, '11.3') && ! str_contains($haupt, 'essig');
+        }
+
+        // Rückfall nur, wenn die Ware selbst der Sirup ist — nicht „Walnüsse in Sirup“, „Süßkartoffel mit Ahornsirup“ (Klaus 26.10.)
+        return $haupt !== '' && preg_match('/(?:sirup|dicksaft|melasse)$/u', $haupt) === 1 && preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) !== 1;
     }
 
     /** Warengruppe 16 (Non-Food)? Die WG steht in den strukturierten Feldern als `warengruppe` oder `commodity_group_code`. */
@@ -363,7 +480,8 @@ class GpNamingService
 
     /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
-     * `<Hauptzutat>: [<flavor>, ]<condition>, <processing|form>[, <x> g pro Stück][, <pflicht>][ / (<zusatz>)][ / (Bio)]…` (flavor/zusatz = §6.6)
+     * `<Hauptzutat>: [<flavor>, ]<processing>, <form>, <condition>[, TK][, <x> g pro Stück][, <pflicht>][ / (<zusatz>)][ / (Bio)]…` (flavor/zusatz = §6.6;
+     * Reihenfolge „Form vor Zustand“ Stufe 2, Dominique 25.10.)
      */
     public function renderGpName(array $in): string
     {
@@ -379,22 +497,31 @@ class GpNamingService
         $parts = [];
         $flavor = trim((string) ($in['flavor'] ?? ''));
         if ($flavor !== '') {
-            $parts[] = self::umlautKanon($flavor);                          // §6.6: Geschmackszutat steht als ERSTE Eigenschaft, vor dem Zustand
+            $parts[] = self::umlautKanon($flavor);                          // §6.6: Geschmackszutat steht als ERSTE Eigenschaft
         }
-        $condition = $this->normalisiereZustand($in['condition'] ?? null);
-        if ($condition !== null) {
-            $parts[] = $condition;
-        }
-        // Verarbeitung UND Zuschnitt stehen beide im Namen („gegart, Würfel 10 mm“), Verarbeitung zuerst — vorher gewann nur processing, die Form fiel aus dem
-        // Namen (Stufe 1: der Name muss aus den GESPEICHERTEN Feldern rekonstruierbar sein). Steht die Form schon im Text der Verarbeitung (TK-Zusatz), kein Doppel.
+        $condition = $this->ohneZustandswort($in) ? null : $this->normalisiereZustand($in['condition'] ?? null);   // §9-Zusatz: Getränke/Öle/Sirupe ohne Zustandswort
+        // Verarbeitung UND Zuschnitt stehen beide im Namen („gegart, Würfel 10 mm“), Verarbeitung zuerst. Steht die Form schon im Text der Verarbeitung, kein Doppel.
         $verarbeitung = trim((string) ($in['processing'] ?? ''));
+        $tkHinten = false;
+        if ($condition !== null && in_array($condition, self::BEHANDLUNG, true) && preg_match('/^(?:TK|tiefgekühlt|tiefgekuehlt)\s*(?:,\s*|$)/iu', $verarbeitung, $m) === 1) {
+            $verarbeitung = trim(mb_substr($verarbeitung, mb_strlen($m[0])));   // TK + Behandlung: „TK“ (Datenmodell vorn in processing) steht im Namen hinter dem Zustand
+            $tkHinten = true;
+        }
         $zuschnitt = trim((string) ($in['form'] ?? ''));
         $mid = $verarbeitung;
         if ($zuschnitt !== '' && ($verarbeitung === '' || mb_stripos($verarbeitung, $zuschnitt) === false)) {
             $mid = $verarbeitung === '' ? $zuschnitt : $verarbeitung . ', ' . $zuschnitt;
         }
+        // Stufe 2 „Form vor Zustand“ (Dominique 25.10.): Verarbeitung und Zuschnitt stehen VOR dem Zustand — „Kartoffel: gegart, Würfel 10 mm, frisch“,
+        // „Räucherlachs: geschnitten, geräuchert, TK“.
         if ($mid !== '') {
             $parts[] = self::umlautKanon($mid);                           // „Wuerfel 10 mm" → „Würfel 10 mm" (Kanon mit Umlaut)
+        }
+        if ($condition !== null) {
+            $parts[] = $condition;
+        }
+        if ($tkHinten) {
+            $parts[] = 'TK';
         }
         if (! empty($in['portion'])) {
             $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stück';        // „660 g pro Stück" (echter Umlaut im GP-Namen; kein „Portion", Leerzeichen vor der Einheit)
@@ -461,6 +588,9 @@ class GpNamingService
         }
         if ($condition !== null && ! in_array($condition, self::ZUSTAND_VOCAB, true)) {
             $errors[] = "§9: Zustand »{$condition}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
+        }
+        if ($condition !== null && $this->ohneZustandswort($in)) {
+            $warnings[] = '§9-Zusatz: Getränke, Öle und Sirupe tragen kein Zustandswort — »' . $condition . '« erscheint nicht im Namen.';
         }
         $flavor = trim((string) ($in['flavor'] ?? ''));
         if ($flavor !== '' && ($fz = $this->normalisiereZustand($flavor)) !== null && in_array($fz, self::ZUSTAND_VOCAB, true)) {

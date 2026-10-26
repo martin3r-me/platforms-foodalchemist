@@ -1,0 +1,3432 @@
+[
+ {
+  "gp_id": 7801,
+  "name": "Kartoffeln: Scheiben 6 mm, frisch, vorwiegend festkochend",
+  "felder": {
+   "hauptzutat": "Kartoffeln",
+   "form": "Scheiben 6 mm",
+   "condition": "frisch",
+   "pflichtangabe": "vorwiegend festkochend",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7802,
+  "name": "Kartoffeln: Scheiben 10 mm, frisch, vorwiegend festkochend",
+  "felder": {
+   "hauptzutat": "Kartoffeln",
+   "form": "Scheiben 10 mm",
+   "condition": "frisch",
+   "pflichtangabe": "vorwiegend festkochend",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7805,
+  "name": "Äpfel: geschält, Würfel 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Äpfel",
+   "processing": "geschält",
+   "form": "Würfel 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 7807,
+  "name": "Äpfel: geschält, Stifte 3 mm, frisch",
+  "felder": {
+   "hauptzutat": "Äpfel",
+   "processing": "geschält",
+   "form": "Stifte 3 mm",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 7809,
+  "name": "Äpfel: geschält, Stifte 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Äpfel",
+   "processing": "geschält",
+   "form": "Stifte 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 7832,
+  "name": "Chinakohl: Streifen 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Chinakohl",
+   "form": "Streifen 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7835,
+  "name": "Eichblattsalat rot: ganze Blätter, frisch",
+  "felder": {
+   "hauptzutat": "Eichblattsalat rot",
+   "form": "ganze Blätter",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7837,
+  "name": "Eichblattsalat rot: geschnitten 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Eichblattsalat rot",
+   "form": "geschnitten 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7846,
+  "name": "Endivien: Streifen 30 mm, frisch",
+  "felder": {
+   "hauptzutat": "Endivien",
+   "form": "Streifen 30 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7847,
+  "name": "Feldsalat: gewaschen, frisch",
+  "felder": {
+   "hauptzutat": "Feldsalat",
+   "processing": "gewaschen",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7849,
+  "name": "Fenchel: Streifen 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Fenchel",
+   "form": "Streifen 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7850,
+  "name": "Fenchel: Würfel 20 mm, frisch",
+  "felder": {
+   "hauptzutat": "Fenchel",
+   "form": "Würfel 20 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7851,
+  "name": "Frisee: Streifen 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Frisee",
+   "form": "Streifen 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7854,
+  "name": "Grünkohl: geschnitten, ohne Strunk, frisch",
+  "felder": {
+   "hauptzutat": "Grünkohl",
+   "processing": "geschnitten, ohne Strunk",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7863,
+  "name": "Gurken: Stifte 5 mm, frisch, mit Schale",
+  "felder": {
+   "hauptzutat": "Gurken",
+   "form": "Stifte 5 mm",
+   "condition": "frisch",
+   "pflichtangabe": "mit Schale",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7864,
+  "name": "Gurken: Stifte 10 mm, frisch, mit Schale",
+  "felder": {
+   "hauptzutat": "Gurken",
+   "form": "Stifte 10 mm",
+   "condition": "frisch",
+   "pflichtangabe": "mit Schale",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7867,
+  "name": "Gurken: Würfel 15 mm, frisch, mit Schale",
+  "felder": {
+   "hauptzutat": "Gurken",
+   "form": "Würfel 15 mm",
+   "condition": "frisch",
+   "pflichtangabe": "mit Schale",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7888,
+  "name": "Kopfsalat: Streifen 30 mm, frisch",
+  "felder": {
+   "hauptzutat": "Kopfsalat",
+   "form": "Streifen 30 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7896,
+  "name": "Lollo Bionda: ganze Blätter, frisch",
+  "felder": {
+   "hauptzutat": "Lollo Bionda",
+   "form": "ganze Blätter",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7907,
+  "name": "Möhren: Stifte 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Möhren",
+   "form": "Stifte 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7913,
+  "name": "Möhren: Scheiben 2 mm, frisch",
+  "felder": {
+   "hauptzutat": "Möhren",
+   "form": "Scheiben 2 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7916,
+  "name": "Möhren: Spirelli, frisch",
+  "felder": {
+   "hauptzutat": "Möhren",
+   "form": "Spirelli",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7923,
+  "name": "Rote Beete: vorgegart, Stifte 2 mm, konserviert",
+  "felder": {
+   "hauptzutat": "Rote Beete",
+   "processing": "vorgegart",
+   "form": "Stifte 2 mm",
+   "condition": "konserviert",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7954,
+  "name": "Pastinaken: Würfel 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Pastinaken",
+   "form": "Würfel 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7959,
+  "name": "Petersilienwurzeln: geschält, frisch",
+  "felder": {
+   "hauptzutat": "Petersilienwurzeln",
+   "processing": "geschält",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7963,
+  "name": "Porree: Streifen 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Porree",
+   "form": "Streifen 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7966,
+  "name": "Radicchio: Streifen 6 mm, frisch",
+  "felder": {
+   "hauptzutat": "Radicchio",
+   "form": "Streifen 6 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7971,
+  "name": "Radieschen: Würfel 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Radieschen",
+   "form": "Würfel 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7985,
+  "name": "Tomaten: Würfel 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Tomaten",
+   "form": "Würfel 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7994,
+  "name": "Tomaten: wasserlos, Würfel 20 mm, frisch",
+  "felder": {
+   "hauptzutat": "Tomaten",
+   "processing": "wasserlos",
+   "form": "Würfel 20 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 7998,
+  "name": "Schnittlauch: geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Schnittlauch",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 8001,
+  "name": "Sellerie: Stifte 3 mm, frisch",
+  "felder": {
+   "hauptzutat": "Sellerie",
+   "form": "Stifte 3 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8024,
+  "name": "Stielmus: Streifen 30 mm, frisch",
+  "felder": {
+   "hauptzutat": "Stielmus",
+   "form": "Streifen 30 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8063,
+  "name": "Zucchini: Stifte 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "form": "Stifte 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8066,
+  "name": "Zucchini: Scheiben 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "form": "Scheiben 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8067,
+  "name": "Zucchini: Scheiben 5 mm, halbiert, frisch",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "form": "Scheiben 5 mm, halbiert",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8068,
+  "name": "Zucchini: Scheiben 10 mm, halbiert, frisch",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "form": "Scheiben 10 mm, halbiert",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8083,
+  "name": "Radieschen: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Radieschen",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8103,
+  "name": "Gartenkresse: fein, frisch",
+  "felder": {
+   "hauptzutat": "Gartenkresse",
+   "form": "fein",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 8122,
+  "name": "Champignons: halbiert, frisch",
+  "felder": {
+   "hauptzutat": "Champignons",
+   "form": "halbiert",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8130,
+  "name": "Sellerie: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Sellerie",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8144,
+  "name": "Pfifferlinge: geputzt, frisch",
+  "felder": {
+   "hauptzutat": "Pfifferlinge",
+   "processing": "geputzt",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8183,
+  "name": "Flugentenbrust: geräuchert, TK",
+  "felder": {
+   "hauptzutat": "Flugentenbrust",
+   "processing": "geräuchert",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8262,
+  "name": "Sauerbratengulasch vom Falschen Filet: geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Sauerbratengulasch vom Falschen Filet",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8271,
+  "name": "Rehrücken: ohne Knochen, TK",
+  "felder": {
+   "hauptzutat": "Rehrücken",
+   "form": "ohne Knochen",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8303,
+  "name": "Rinder-Semerrolle: ganz, frisch, Argentinien",
+  "felder": {
+   "hauptzutat": "Rinder-Semerrolle",
+   "form": "ganz",
+   "condition": "frisch",
+   "pflichtangabe": "Argentinien",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8319,
+  "name": "Ochsenbrust: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Ochsenbrust",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8325,
+  "name": "Bärlauch: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Bärlauch",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 8326,
+  "name": "Frikadellen: gebraten, TK, 125 g pro Stück / (Hardy Opa Jupp)",
+  "felder": {
+   "hauptzutat": "Frikadellen",
+   "processing": "gebraten",
+   "condition": "TK",
+   "portion": "125 g",
+   "zusatz": "Hardy Opa Jupp",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 8338,
+  "name": "Schweineschinken: gepökelt, ohne Knochen, mit Schwarte, frisch",
+  "felder": {
+   "hauptzutat": "Schweineschinken",
+   "processing": "gepökelt",
+   "form": "ohne Knochen, mit Schwarte",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8340,
+  "name": "Schweinebauch: ohne Knochen, frisch",
+  "felder": {
+   "hauptzutat": "Schweinebauch",
+   "form": "ohne Knochen",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8350,
+  "name": "Schweinebauch: Scheiben 3 mm, frisch",
+  "felder": {
+   "hauptzutat": "Schweinebauch",
+   "form": "Scheiben 3 mm",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8361,
+  "name": "Kalbshüfte: ohne Deckel, frisch",
+  "felder": {
+   "hauptzutat": "Kalbshüfte",
+   "form": "ohne Deckel",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8364,
+  "name": "Kalbshaxe: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Kalbshaxe",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8367,
+  "name": "Kalbsknochen: ganz, TK",
+  "felder": {
+   "hauptzutat": "Kalbsknochen",
+   "form": "ganz",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8389,
+  "name": "Lammkrone: Baby-Racks, frisch",
+  "felder": {
+   "hauptzutat": "Lammkrone",
+   "form": "Baby-Racks",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8390,
+  "name": "Lammrücken: ohne Knochen, TK",
+  "felder": {
+   "hauptzutat": "Lammrücken",
+   "form": "ohne Knochen",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8399,
+  "name": "Entenbrust: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Entenbrust",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8465,
+  "name": "Auberginen: gegrillt, Streifen, frisch",
+  "felder": {
+   "hauptzutat": "Auberginen",
+   "processing": "gegrillt",
+   "form": "Streifen",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8524,
+  "name": "Rinder Ball Tip: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Rinder Ball Tip",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8531,
+  "name": "Iberico Schweinekarree: portioniert, frisch",
+  "felder": {
+   "hauptzutat": "Iberico Schweinekarree",
+   "processing": "portioniert",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8535,
+  "name": "Iberico Filet: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Iberico Filet",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8536,
+  "name": "Spanferkel: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Spanferkel",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8538,
+  "name": "Kalbsoberschale: ohne Deckel, frisch",
+  "felder": {
+   "hauptzutat": "Kalbsoberschale",
+   "form": "ohne Deckel",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8565,
+  "name": "US Flank Steak: ganz, frisch",
+  "felder": {
+   "hauptzutat": "US Flank Steak",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8567,
+  "name": "Bürgermeisterstück: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Bürgermeisterstück",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8569,
+  "name": "Schweinerückensteaks: mariniert, frisch",
+  "felder": {
+   "hauptzutat": "Schweinerückensteaks",
+   "processing": "mariniert",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8572,
+  "name": "Kalbssemerrolle: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Kalbssemerrolle",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 8581,
+  "name": "Geflügel-Bratwurst: geschnitten, angebraten, frisch",
+  "felder": {
+   "hauptzutat": "Geflügel-Bratwurst",
+   "processing": "geschnitten, angebraten",
+   "condition": "frisch",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 8600,
+  "name": "Hähnchenbrust: gefüllt, mariniert, frisch, mit Bärlauch-Frischkäse",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust",
+   "processing": "gefüllt, mariniert",
+   "condition": "frisch",
+   "pflichtangabe": "mit Bärlauch-Frischkäse",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 8601,
+  "name": "Currywursttopf: vorgegart, frisch / (Kluth)",
+  "felder": {
+   "hauptzutat": "Currywursttopf",
+   "processing": "vorgegart",
+   "condition": "frisch",
+   "zusatz": "Kluth",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 8616,
+  "name": "Staudensellerie: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Staudensellerie",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8617,
+  "name": "Schalotten: geschält, ganz, frisch",
+  "felder": {
+   "hauptzutat": "Schalotten",
+   "processing": "geschält",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8618,
+  "name": "Mango: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Mango",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 8646,
+  "name": "Kräuterseitlinge: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Kräuterseitlinge",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 8701,
+  "name": "Rotkohl Microgreens: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Rotkohl Microgreens",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 9117,
+  "name": "Scholle: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Scholle",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 9126,
+  "name": "Gomasio: grob, trocken, mit Salz",
+  "felder": {
+   "hauptzutat": "Gomasio",
+   "form": "grob",
+   "condition": "trocken",
+   "pflichtangabe": "mit Salz",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 9127,
+  "name": "Tomaten: Scheiben 6 mm, frisch",
+  "felder": {
+   "hauptzutat": "Tomaten",
+   "form": "Scheiben 6 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 9140,
+  "name": "Boerenkaas: gerieben, frisch, 48 % Fett i.Tr., Hartkäse, Rohmilch",
+  "felder": {
+   "hauptzutat": "Boerenkaas",
+   "processing": "gerieben",
+   "condition": "frisch",
+   "pflichtangabe": "48 % Fett i.Tr., Hartkäse, Rohmilch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 9221,
+  "name": "Mango: Würfel 15 mm, frisch",
+  "felder": {
+   "hauptzutat": "Mango",
+   "form": "Würfel 15 mm",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 9402,
+  "name": "Brotkrümel: grob, trocken",
+  "felder": {
+   "hauptzutat": "Brotkrümel",
+   "form": "grob",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 9436,
+  "name": "Tomaten passiert / Passata: püriert, konserviert",
+  "felder": {
+   "hauptzutat": "Tomaten passiert / Passata",
+   "processing": "püriert",
+   "condition": "konserviert",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 9465,
+  "name": "Kürbis Hokkaido: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Kürbis Hokkaido",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 9494,
+  "name": "Brötchen belegt mit veganem Aufschnitt: 0.5 Stück, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Brötchen belegt mit veganem Aufschnitt",
+   "form": "0.5 Stück",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 9495,
+  "name": "Brötchen mit veganem Fleischsalat: belegt, 0.5 Stück, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Brötchen mit veganem Fleischsalat",
+   "processing": "belegt",
+   "form": "0.5 Stück",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 9531,
+  "name": "Kartoffelbrei: Röstzwiebeln, Instant, trocken / (Maggi)",
+  "felder": {
+   "hauptzutat": "Kartoffelbrei",
+   "flavor": "Röstzwiebeln",
+   "processing": "Instant",
+   "condition": "trocken",
+   "zusatz": "Maggi",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 9554,
+  "name": "Amarenakirschen: gezuckert, konserviert",
+  "felder": {
+   "hauptzutat": "Amarenakirschen",
+   "processing": "gezuckert",
+   "condition": "konserviert",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 9581,
+  "name": "Apfel-Pecannusstorte: Stück, frisch",
+  "felder": {
+   "hauptzutat": "Apfel-Pecannusstorte",
+   "form": "Stück",
+   "condition": "frisch",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 9594,
+  "name": "Apfelessig: konserviert / (Bio)",
+  "felder": {
+   "hauptzutat": "Apfelessig",
+   "condition": "konserviert",
+   "bio": true,
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 9613,
+  "name": "Aprikosen: konserviert / (Bio)",
+  "felder": {
+   "hauptzutat": "Aprikosen",
+   "condition": "konserviert",
+   "bio": true,
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 9636,
+  "name": "Austern Sylter Royal: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Austern Sylter Royal",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 9679,
+  "name": "Balsamico Essig: konserviert, hell",
+  "felder": {
+   "hauptzutat": "Balsamico Essig",
+   "condition": "konserviert",
+   "pflichtangabe": "hell",
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 9680,
+  "name": "Balsamico-Essig: hell / (Bio)",
+  "felder": {
+   "hauptzutat": "Balsamico-Essig",
+   "pflichtangabe": "hell",
+   "bio": true,
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 9689,
+  "name": "Bananenkuchen: gebacken, frisch",
+  "felder": {
+   "hauptzutat": "Bananenkuchen",
+   "processing": "gebacken",
+   "condition": "frisch",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 9704,
+  "name": "Basilikum: TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Basilikum",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 9781,
+  "name": "Black Tiger Garnelen: ohne Kopf, TK, ohne Schale, 15-18 Stück pro Pfund",
+  "felder": {
+   "hauptzutat": "Black Tiger Garnelen",
+   "processing": "ohne Kopf",
+   "condition": "TK",
+   "pflichtangabe": "ohne Schale, 15-18 Stück pro Pfund",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 9801,
+  "name": "Blumenkohl: röschen, 5-15 mm, TK",
+  "felder": {
+   "hauptzutat": "Blumenkohl",
+   "form": "röschen, 5-15 mm",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 9814,
+  "name": "Blätterteig-Kirschtaschen: TK, 125 g pro Stück / (Vegan)",
+  "felder": {
+   "hauptzutat": "Blätterteig-Kirschtaschen",
+   "condition": "TK",
+   "portion": "125 g",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 9815,
+  "name": "Kirschtaschen aus Blätterteig: TK, 140 g pro Stück / (Vegan)",
+  "felder": {
+   "hauptzutat": "Kirschtaschen aus Blätterteig",
+   "condition": "TK",
+   "portion": "140 g",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 9822,
+  "name": "Blütenhonig: konserviert / (Bio)",
+  "felder": {
+   "hauptzutat": "Blütenhonig",
+   "condition": "konserviert",
+   "bio": true,
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 9864,
+  "name": "Bratenjus: TK / (Vegan)",
+  "felder": {
+   "hauptzutat": "Bratenjus",
+   "condition": "TK",
+   "vegan": true,
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 9879,
+  "name": "Brioche-Brezeln: Hot Dog, TK",
+  "felder": {
+   "hauptzutat": "Brioche-Brezeln",
+   "form": "Hot Dog",
+   "condition": "TK",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 9892,
+  "name": "Brokkoli: Röschen 40-60 mm, TK",
+  "felder": {
+   "hauptzutat": "Brokkoli",
+   "form": "Röschen 40-60 mm",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 9964,
+  "name": "Butter: Block, frisch, 82 % / (Bio)",
+  "felder": {
+   "hauptzutat": "Butter",
+   "form": "Block",
+   "condition": "frisch",
+   "pflichtangabe": "82 %",
+   "bio": true,
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 10039,
+  "name": "Champignons Portobello: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Champignons Portobello",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 10111,
+  "name": "Cocktailkirschen: ganz, konserviert",
+  "felder": {
+   "hauptzutat": "Cocktailkirschen",
+   "form": "ganz",
+   "condition": "konserviert",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 10143,
+  "name": "Couscous: TK / (Vegan)",
+  "felder": {
+   "hauptzutat": "Couscous",
+   "condition": "TK",
+   "vegan": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 10194,
+  "name": "Croustaden: 4 cm, trocken, neutral",
+  "felder": {
+   "hauptzutat": "Croustaden",
+   "form": "4 cm",
+   "condition": "trocken",
+   "pflichtangabe": "neutral",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 10219,
+  "name": "Currypulver: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Currypulver",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 10230,
+  "name": "Dattelsirup / (Bio)",
+  "felder": {
+   "hauptzutat": "Dattelsirup",
+   "bio": true,
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 10307,
+  "name": "Edamer: gerieben, frisch",
+  "felder": {
+   "hauptzutat": "Edamer",
+   "processing": "gerieben",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 10308,
+  "name": "Ei-Ersatz: trocken / (Vegan)",
+  "felder": {
+   "hauptzutat": "Ei-Ersatz",
+   "condition": "trocken",
+   "vegan": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 10342,
+  "name": "Emmentaler: Scheiben, frisch",
+  "felder": {
+   "hauptzutat": "Emmentaler",
+   "form": "Scheiben",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 10349,
+  "name": "Entenbrüste Barbarie: frisch, 180-200 g pro Stück, weiblich",
+  "felder": {
+   "hauptzutat": "Entenbrüste Barbarie",
+   "condition": "frisch",
+   "portion": "180-200 g",
+   "pflichtangabe": "weiblich",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 10351,
+  "name": "Entenkeulen: geschmort, TK",
+  "felder": {
+   "hauptzutat": "Entenkeulen",
+   "processing": "geschmort",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10426,
+  "name": "Fenchel: gemahlen, trocken",
+  "felder": {
+   "hauptzutat": "Fenchel",
+   "processing": "gemahlen",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 10456,
+  "name": "Five Spices: gemahlen, trocken",
+  "felder": {
+   "hauptzutat": "Five Spices",
+   "processing": "gemahlen",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 10544,
+  "name": "Fruchtkaviar Zitrone-Pfeffer: 5 mm, konserviert",
+  "felder": {
+   "hauptzutat": "Fruchtkaviar Zitrone-Pfeffer",
+   "form": "5 mm",
+   "condition": "konserviert",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10555,
+  "name": "Fruchtpüree Himbeere: gezuckert, konserviert",
+  "felder": {
+   "hauptzutat": "Fruchtpüree Himbeere",
+   "processing": "gezuckert",
+   "condition": "konserviert",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 10626,
+  "name": "Brötchen mit Geflügelsalami: belegt, frisch / (Freshcompany)",
+  "felder": {
+   "hauptzutat": "Brötchen mit Geflügelsalami",
+   "processing": "belegt",
+   "condition": "frisch",
+   "zusatz": "Freshcompany",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10627,
+  "name": "Brötchen mit gekochtem Schinken: belegt, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Brötchen mit gekochtem Schinken",
+   "processing": "belegt",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10635,
+  "name": "Brötchen mit Thunfisch: belegt, frisch / (Freshcompany)",
+  "felder": {
+   "hauptzutat": "Brötchen mit Thunfisch",
+   "processing": "belegt",
+   "condition": "frisch",
+   "zusatz": "Freshcompany",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10644,
+  "name": "Brötchen Körner mit Räucherlachs: belegt, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Brötchen Körner mit Räucherlachs",
+   "processing": "belegt",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10648,
+  "name": "Körnerbrötchen mit veganem Gouda: belegt, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Körnerbrötchen mit veganem Gouda",
+   "processing": "belegt",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10658,
+  "name": "Garnelen: geschält, TK, 26/30 pro Pfund",
+  "felder": {
+   "hauptzutat": "Garnelen",
+   "processing": "geschält",
+   "condition": "TK",
+   "pflichtangabe": "26/30 pro Pfund",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 10667,
+  "name": "Garnelen Jumbo: ungeschält, mit Kopf, TK, Wildfang",
+  "felder": {
+   "hauptzutat": "Garnelen Jumbo",
+   "processing": "ungeschält",
+   "form": "mit Kopf",
+   "condition": "TK",
+   "pflichtangabe": "Wildfang",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 10668,
+  "name": "Garnelen: geschälte, gekochte, TK, Kaltwasser",
+  "felder": {
+   "hauptzutat": "Garnelen",
+   "processing": "geschälte, gekochte",
+   "condition": "TK",
+   "pflichtangabe": "Kaltwasser",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 10679,
+  "name": "Hähnchenbrustfilets: gegart, TK, 80 g pro Stück",
+  "felder": {
+   "hauptzutat": "Hähnchenbrustfilets",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "80 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10698,
+  "name": "Maishähnchen: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Maishähnchen",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 10713,
+  "name": "Geflügelbratwürste: vorgebraten, in Scheiben, TK",
+  "felder": {
+   "hauptzutat": "Geflügelbratwürste",
+   "processing": "vorgebraten",
+   "form": "in Scheiben",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10745,
+  "name": "Hähnchenbrust: Paprika, mariniert, frisch, 100 g pro Stück",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust",
+   "flavor": "Paprika",
+   "processing": "mariniert",
+   "condition": "frisch",
+   "portion": "100 g",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 10749,
+  "name": "Hähnchenbrust-Nuggets: gegart, TK",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust-Nuggets",
+   "processing": "gegart",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10752,
+  "name": "Hähnchenbrustspiesse mit Paprika und Zwiebel: mariniert, frisch, 120 g pro Stück",
+  "felder": {
+   "hauptzutat": "Hähnchenbrustspiesse mit Paprika und Zwiebel",
+   "processing": "mariniert",
+   "condition": "frisch",
+   "portion": "120 g",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 10753,
+  "name": "Hähnchenbrust: Würfel, TK",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust",
+   "form": "Würfel",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 10757,
+  "name": "Hähnchenbrust: gegart, TK",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust",
+   "processing": "gegart",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10818,
+  "name": "Hähnchenbrust: knusprig paniert, TK, 150 g pro Stück",
+  "felder": {
+   "hauptzutat": "Hähnchenbrust",
+   "processing": "knusprig paniert",
+   "condition": "TK",
+   "portion": "150 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10834,
+  "name": "Gelbe Bete: geschält, ganz, frisch",
+  "felder": {
+   "hauptzutat": "Gelbe Bete",
+   "processing": "geschält",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 10835,
+  "name": "Gelbe Bete: geschält, Stifte 10x4 mm, frisch",
+  "felder": {
+   "hauptzutat": "Gelbe Bete",
+   "processing": "geschält",
+   "form": "Stifte 10x4 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 10853,
+  "name": "Gemüsestrudel pikant mit Käse: gebacken, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Gemüsestrudel pikant mit Käse",
+   "processing": "gebacken",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 10865,
+  "name": "Gemüsemix Alexandra: geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Gemüsemix Alexandra",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 10884,
+  "name": "Gewürznelken: ganz, trocken",
+  "felder": {
+   "hauptzutat": "Gewürznelken",
+   "form": "ganz",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 10920,
+  "name": "Goudakäse: gerieben, frisch",
+  "felder": {
+   "hauptzutat": "Goudakäse",
+   "processing": "gerieben",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 10924,
+  "name": "Goudakäse: Scheiben, frisch, mittelalt",
+  "felder": {
+   "hauptzutat": "Goudakäse",
+   "form": "Scheiben",
+   "condition": "frisch",
+   "pflichtangabe": "mittelalt",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 10949,
+  "name": "Erbsen: geschälte, trocken, grün / (Bio)",
+  "felder": {
+   "hauptzutat": "Erbsen",
+   "processing": "geschälte",
+   "condition": "trocken",
+   "pflichtangabe": "grün",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 10978,
+  "name": "Gurken: frisch, krumm / (Bio)",
+  "felder": {
+   "hauptzutat": "Gurken",
+   "condition": "frisch",
+   "pflichtangabe": "krumm",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11062,
+  "name": "Harissa: Paste, trocken",
+  "felder": {
+   "hauptzutat": "Harissa",
+   "form": "Paste",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 11120,
+  "name": "Hirse: gepufft, trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Hirse",
+   "processing": "gepufft",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 11186,
+  "name": "Ingwer: würfelig, TK",
+  "felder": {
+   "hauptzutat": "Ingwer",
+   "form": "würfelig",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11251,
+  "name": "Kalamata Oliven: entsteint, konserviert",
+  "felder": {
+   "hauptzutat": "Kalamata Oliven",
+   "processing": "entsteint",
+   "condition": "konserviert",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 11276,
+  "name": "Kalb-Leberwurst: fein, frisch",
+  "felder": {
+   "hauptzutat": "Kalb-Leberwurst",
+   "form": "fein",
+   "condition": "frisch",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 11363,
+  "name": "Kartoffeln Drillinge: halbiert, frisch, mit Schale",
+  "felder": {
+   "hauptzutat": "Kartoffeln Drillinge",
+   "form": "halbiert",
+   "condition": "frisch",
+   "pflichtangabe": "mit Schale",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11375,
+  "name": "Kartoffeln: geschält, geviertelt, frisch, festkochend / (Bio)",
+  "felder": {
+   "hauptzutat": "Kartoffeln",
+   "processing": "geschält",
+   "form": "geviertelt",
+   "condition": "frisch",
+   "pflichtangabe": "festkochend",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11376,
+  "name": "Kartoffeln: geschält, frisch / (Bio)",
+  "felder": {
+   "hauptzutat": "Kartoffeln",
+   "processing": "geschält",
+   "condition": "frisch",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11444,
+  "name": "Kidneybohnen: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Kidneybohnen",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 11462,
+  "name": "Kirschstreuselkuchen: geschnitten, TK, 2500 g pro Stück",
+  "felder": {
+   "hauptzutat": "Kirschstreuselkuchen",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "portion": "2500 g",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11515,
+  "name": "Knöpfle / Spätzle: kurz, frisch",
+  "felder": {
+   "hauptzutat": "Knöpfle / Spätzle",
+   "form": "kurz",
+   "condition": "frisch",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 11519,
+  "name": "Kohlrabi: Stifte 3-5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Kohlrabi",
+   "form": "Stifte 3-5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11521,
+  "name": "Kohlrabi: Streifen, TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Kohlrabi",
+   "form": "Streifen",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11522,
+  "name": "Kohlrabi: Würfel 10 mm, TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Kohlrabi",
+   "form": "Würfel 10 mm",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11536,
+  "name": "Kokosnuss-Öl / Kokosnuss-Fett / (Bio)",
+  "felder": {
+   "hauptzutat": "Kokosnuss-Öl / Kokosnuss-Fett",
+   "bio": true,
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 11570,
+  "name": "Kresse: fein, frisch / (Bio)",
+  "felder": {
+   "hauptzutat": "Kresse",
+   "form": "fein",
+   "condition": "frisch",
+   "bio": true,
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 11586,
+  "name": "Kräuter der Provence: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Kräuter der Provence",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 11597,
+  "name": "Salbei: im Topf, frisch",
+  "felder": {
+   "hauptzutat": "Salbei",
+   "form": "im Topf",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 11635,
+  "name": "Kuchen Apfel-Streusel: TK / (Vegan)",
+  "felder": {
+   "hauptzutat": "Kuchen Apfel-Streusel",
+   "condition": "TK",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11640,
+  "name": "Kuchen Apfel-Nuss: geschnitten, frisch / (Pfalzgraf) / (Vegan)",
+  "felder": {
+   "hauptzutat": "Kuchen Apfel-Nuss",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "zusatz": "Pfalzgraf",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11652,
+  "name": "Kuchen Heidelbeer-Limette: 5x6 cm, TK / (Heisters) / (Vegan)",
+  "felder": {
+   "hauptzutat": "Kuchen Heidelbeer-Limette",
+   "form": "5x6 cm",
+   "condition": "TK",
+   "zusatz": "Heisters",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11676,
+  "name": "Zitronenkranz: ungeschnitten, 22 cm, frisch / (Pfalzgraf)",
+  "felder": {
+   "hauptzutat": "Zitronenkranz",
+   "form": "ungeschnitten, 22 cm",
+   "condition": "frisch",
+   "zusatz": "Pfalzgraf",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11684,
+  "name": "Kuvertüre dunkel: trocken, Valrhona Amatika, 46 % Kakaoanteil / (Vegan)",
+  "felder": {
+   "hauptzutat": "Kuvertüre dunkel",
+   "condition": "trocken",
+   "pflichtangabe": "Valrhona Amatika, 46 % Kakaoanteil",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11702,
+  "name": "Käse Fougerus: gereift, frisch",
+  "felder": {
+   "hauptzutat": "Käse Fougerus",
+   "processing": "gereift",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 11706,
+  "name": "Käse-Ersatz Mildbert: frisch / (Vegan)",
+  "felder": {
+   "hauptzutat": "Käse-Ersatz Mildbert",
+   "condition": "frisch",
+   "vegan": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 11723,
+  "name": "Käse Vacherin Mont d'Or: gereift, frisch",
+  "felder": {
+   "hauptzutat": "Käse Vacherin Mont d'Or",
+   "processing": "gereift",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 11777,
+  "name": "Lachsfilets: mit Haut, Trim, TK",
+  "felder": {
+   "hauptzutat": "Lachsfilets",
+   "form": "mit Haut, Trim",
+   "condition": "TK",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 11832,
+  "name": "Landfrauenkuchen Zwetschge: geschnitten, TK / (Pfalzgraf)",
+  "felder": {
+   "hauptzutat": "Landfrauenkuchen Zwetschge",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "zusatz": "Pfalzgraf",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11837,
+  "name": "Langkornreis: parboiled, trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Langkornreis",
+   "processing": "parboiled",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 11857,
+  "name": "Lauch: fein geschnitten, TK",
+  "felder": {
+   "hauptzutat": "Lauch",
+   "form": "fein geschnitten",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11864,
+  "name": "Lauchzwiebeln / Frühlingszwiebeln: geschnitten 5 mm, frisch",
+  "felder": {
+   "hauptzutat": "Lauchzwiebeln / Frühlingszwiebeln",
+   "form": "geschnitten 5 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 11890,
+  "name": "Laugenkonfekt mit Räucherlachs: garniert, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Laugenkonfekt mit Räucherlachs",
+   "processing": "garniert",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 11893,
+  "name": "Laugenkonfekt / Laugenstangen: geschnitten, TK",
+  "felder": {
+   "hauptzutat": "Laugenkonfekt / Laugenstangen",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11913,
+  "name": "Laugenstangen mit Käse: gebacken, frisch / (Weyers)",
+  "felder": {
+   "hauptzutat": "Laugenstangen mit Käse",
+   "processing": "gebacken",
+   "condition": "frisch",
+   "zusatz": "Weyers",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 11945,
+  "name": "Leng-Loins: gegart, TK, 80 g pro Stück",
+  "felder": {
+   "hauptzutat": "Leng-Loins",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "80 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12013,
+  "name": "Maiskörner: TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Maiskörner",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12020,
+  "name": "Maiskolben: gekocht, konserviert",
+  "felder": {
+   "hauptzutat": "Maiskolben",
+   "processing": "gekocht",
+   "condition": "konserviert",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12042,
+  "name": "Mandarinen: konserviert / (Bio)",
+  "felder": {
+   "hauptzutat": "Mandarinen",
+   "condition": "konserviert",
+   "bio": true,
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 12053,
+  "name": "Mandeln: gehobelt, trocken",
+  "felder": {
+   "hauptzutat": "Mandeln",
+   "processing": "gehobelt",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 12064,
+  "name": "Mangold: geschnitten 20 mm, frisch",
+  "felder": {
+   "hauptzutat": "Mangold",
+   "form": "geschnitten 20 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12076,
+  "name": "Maronen: gegart, geschält, TK",
+  "felder": {
+   "hauptzutat": "Maronen",
+   "processing": "gegart, geschält",
+   "condition": "TK",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 12088,
+  "name": "Maulbeeren / Moltebeeren: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Maulbeeren / Moltebeeren",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 12141,
+  "name": "Mettenden / Mettwürste: geräuchert, konserviert",
+  "felder": {
+   "hauptzutat": "Mettenden / Mettwürste",
+   "processing": "geräuchert",
+   "condition": "konserviert",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 12184,
+  "name": "Milchreis: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Milchreis",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 12242,
+  "name": "Mini-Pizzen Champignon: gebacken, TK / (Heisters)",
+  "felder": {
+   "hauptzutat": "Mini-Pizzen Champignon",
+   "processing": "gebacken",
+   "condition": "TK",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12297,
+  "name": "Mozzarella: Rolle, frisch",
+  "felder": {
+   "hauptzutat": "Mozzarella",
+   "form": "Rolle",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 12336,
+  "name": "Muskat: gemahlen, trocken",
+  "felder": {
+   "hauptzutat": "Muskat",
+   "processing": "gemahlen",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 12344,
+  "name": "Möhren: Bund, frisch",
+  "felder": {
+   "hauptzutat": "Möhren",
+   "form": "Bund",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12382,
+  "name": "Sumach: gemahlen, trocken",
+  "felder": {
+   "hauptzutat": "Sumach",
+   "processing": "gemahlen",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 12441,
+  "name": "Olivenöl: extra vergine / (Bio)",
+  "felder": {
+   "hauptzutat": "Olivenöl",
+   "pflichtangabe": "extra vergine",
+   "bio": true,
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 12486,
+  "name": "Panna Cotta: Pulver, trocken",
+  "felder": {
+   "hauptzutat": "Panna Cotta",
+   "form": "Pulver",
+   "condition": "trocken",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12499,
+  "name": "Paprika: Stifte, frisch, gelb",
+  "felder": {
+   "hauptzutat": "Paprika",
+   "form": "Stifte",
+   "condition": "frisch",
+   "pflichtangabe": "gelb",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12509,
+  "name": "Paprika bunt: Streifen, TK",
+  "felder": {
+   "hauptzutat": "Paprika bunt",
+   "form": "Streifen",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12515,
+  "name": "Paprika gelb: Würfel 15 mm, frisch",
+  "felder": {
+   "hauptzutat": "Paprika gelb",
+   "form": "Würfel 15 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12526,
+  "name": "Paprika: Würfel 10x10 mm, frisch, gemischt",
+  "felder": {
+   "hauptzutat": "Paprika",
+   "form": "Würfel 10x10 mm",
+   "condition": "frisch",
+   "pflichtangabe": "gemischt",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12537,
+  "name": "Paprika rot: Würfel 15 mm, frisch",
+  "felder": {
+   "hauptzutat": "Paprika rot",
+   "form": "Würfel 15 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12544,
+  "name": "Paprika gefüllt mit Geflügel: gegart, TK, 90 g pro Stück",
+  "felder": {
+   "hauptzutat": "Paprika gefüllt mit Geflügel",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "90 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12552,
+  "name": "Paranüsse: geschält, trocken",
+  "felder": {
+   "hauptzutat": "Paranüsse",
+   "processing": "geschält",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 12560,
+  "name": "Pasteis de Nata: backfertig, TK",
+  "felder": {
+   "hauptzutat": "Pasteis de Nata",
+   "processing": "backfertig",
+   "condition": "TK",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 12573,
+  "name": "Pastrami: geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Pastrami",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 12602,
+  "name": "Petersilie: gerebelt, trocken",
+  "felder": {
+   "hauptzutat": "Petersilie",
+   "processing": "gerebelt",
+   "condition": "trocken",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 12612,
+  "name": "Pfannengemüse mediterran: geschnitten, TK",
+  "felder": {
+   "hauptzutat": "Pfannengemüse mediterran",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12625,
+  "name": "Pfeffer-Steaks: grob, frisch",
+  "felder": {
+   "hauptzutat": "Pfeffer-Steaks",
+   "form": "grob",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 12636,
+  "name": "Salami Geflügel: Pfeffer, geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Salami Geflügel",
+   "flavor": "Pfeffer",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 12647,
+  "name": "Pflaumen: frisch / (Bio)",
+  "felder": {
+   "hauptzutat": "Pflaumen",
+   "condition": "frisch",
+   "bio": true,
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 12655,
+  "name": "Pilzfond: konzentriert, konserviert, flüssig",
+  "felder": {
+   "hauptzutat": "Pilzfond",
+   "processing": "konzentriert",
+   "condition": "konserviert",
+   "pflichtangabe": "flüssig",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12666,
+  "name": "Pinsa: vorgebacken, TK, 150 g pro Stück",
+  "felder": {
+   "hauptzutat": "Pinsa",
+   "processing": "vorgebacken",
+   "condition": "TK",
+   "portion": "150 g",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 12710,
+  "name": "Pommes Frites Dippers: geschnitten, TK",
+  "felder": {
+   "hauptzutat": "Pommes Frites Dippers",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12728,
+  "name": "Porree / Lauch: Streifen 3 mm, frisch",
+  "felder": {
+   "hauptzutat": "Porree / Lauch",
+   "form": "Streifen 3 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12774,
+  "name": "Puffreis: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Puffreis",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 12803,
+  "name": "Quiche Lorraine: 28 cm rund, frisch",
+  "felder": {
+   "hauptzutat": "Quiche Lorraine",
+   "form": "28 cm rund",
+   "condition": "frisch",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12818,
+  "name": "Quinoa-Erbsen-Frikadellen: TK, 85 g pro Stück / (Vegan)",
+  "felder": {
+   "hauptzutat": "Quinoa-Erbsen-Frikadellen",
+   "condition": "TK",
+   "portion": "85 g",
+   "vegan": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 12825,
+  "name": "Radieschen: geputzt, ohne Grün, frisch",
+  "felder": {
+   "hauptzutat": "Radieschen",
+   "processing": "geputzt, ohne Grün",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 12834,
+  "name": "Rapsöl / Pflanzenöl / (Bio)",
+  "felder": {
+   "hauptzutat": "Rapsöl / Pflanzenöl",
+   "bio": true,
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 12861,
+  "name": "Ravioli Pomodoro: gefüllt, TK / (Bon Pastaio)",
+  "felder": {
+   "hauptzutat": "Ravioli Pomodoro",
+   "processing": "gefüllt",
+   "condition": "TK",
+   "zusatz": "Bon Pastaio",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 12913,
+  "name": "Rigatonelli: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Rigatonelli",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 12916,
+  "name": "Rigatoni: vorgegart, TK",
+  "felder": {
+   "hauptzutat": "Rigatoni",
+   "processing": "vorgegart",
+   "condition": "TK",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 12944,
+  "name": "Rinder-Cevapcici: gegart, TK, 45 g pro Stück",
+  "felder": {
+   "hauptzutat": "Rinder-Cevapcici",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "45 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12955,
+  "name": "Rinderfrikadellen: gegart, TK, 125 g pro Stück",
+  "felder": {
+   "hauptzutat": "Rinderfrikadellen",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "125 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12957,
+  "name": "Rinderfrikadellen: gegart, TK, 80 g pro Stück / (Danish Crown)",
+  "felder": {
+   "hauptzutat": "Rinderfrikadellen",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "80 g",
+   "zusatz": "Danish Crown",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 12966,
+  "name": "Rindergulasch: TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Rindergulasch",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 12982,
+  "name": "Rinder-Hamburger-Patties: TK, 180 g pro Stück, Dry Aged",
+  "felder": {
+   "hauptzutat": "Rinder-Hamburger-Patties",
+   "condition": "TK",
+   "portion": "180 g",
+   "pflichtangabe": "Dry Aged",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13013,
+  "name": "Rinderschmorbraten mit Sauce: gegart, portioniert, TK / (Block Menü)",
+  "felder": {
+   "hauptzutat": "Rinderschmorbraten mit Sauce",
+   "processing": "gegart, portioniert",
+   "condition": "TK",
+   "zusatz": "Block Menü",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13041,
+  "name": "Rinderrippen: vorgegart, TK",
+  "felder": {
+   "hauptzutat": "Rinderrippen",
+   "processing": "vorgegart",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13088,
+  "name": "Rote Bete: gegart, Kugeln, konserviert",
+  "felder": {
+   "hauptzutat": "Rote Bete",
+   "processing": "gegart",
+   "form": "Kugeln",
+   "condition": "konserviert",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13095,
+  "name": "Rote Bete: gegart, Scheiben 4 mm, konserviert",
+  "felder": {
+   "hauptzutat": "Rote Bete",
+   "processing": "gegart",
+   "form": "Scheiben 4 mm",
+   "condition": "konserviert",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13100,
+  "name": "Rote Bete: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Rote Bete",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13151,
+  "name": "Rührkuchen Stracciatella: geschnitten, frisch, 540 g pro Stück",
+  "felder": {
+   "hauptzutat": "Rührkuchen Stracciatella",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "portion": "540 g",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 13159,
+  "name": "Saatenbrote: geschnitten, TK / (Glutenfrei)",
+  "felder": {
+   "hauptzutat": "Saatenbrote",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "glutenfrei": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 13180,
+  "name": "Salami: geschnitten, trocken",
+  "felder": {
+   "hauptzutat": "Salami",
+   "processing": "geschnitten",
+   "condition": "trocken",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13194,
+  "name": "Salz: raffiniert, trocken, jodiert",
+  "felder": {
+   "hauptzutat": "Salz",
+   "processing": "raffiniert",
+   "condition": "trocken",
+   "pflichtangabe": "jodiert",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 13265,
+  "name": "Schmand-Alternative: frisch / (Vegan)",
+  "felder": {
+   "hauptzutat": "Schmand-Alternative",
+   "condition": "frisch",
+   "vegan": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 13293,
+  "name": "Schokobrötchen: TK, 80 g pro Stück / (Vegan)",
+  "felder": {
+   "hauptzutat": "Schokobrötchen",
+   "condition": "TK",
+   "portion": "80 g",
+   "vegan": true,
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 13369,
+  "name": "Schweinefilets: ohne Kopf, TK",
+  "felder": {
+   "hauptzutat": "Schweinefilets",
+   "processing": "ohne Kopf",
+   "condition": "TK",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13386,
+  "name": "Kohlrouladen vom Schwein: gegart, TK, 180 g pro Stück",
+  "felder": {
+   "hauptzutat": "Kohlrouladen vom Schwein",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "180 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13396,
+  "name": "Schweinenacken: ohne Knochen, gepökelt",
+  "felder": {
+   "hauptzutat": "Schweinenacken",
+   "form": "ohne Knochen",
+   "condition": "gepökelt",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13397,
+  "name": "Schweinenacken: gespritzt, ohne Knochen, frisch, mit Kochsalz",
+  "felder": {
+   "hauptzutat": "Schweinenacken",
+   "processing": "gespritzt",
+   "form": "ohne Knochen",
+   "condition": "frisch",
+   "pflichtangabe": "mit Kochsalz",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13423,
+  "name": "Schweineschnitzel: plattiert, frisch",
+  "felder": {
+   "hauptzutat": "Schweineschnitzel",
+   "processing": "plattiert",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13443,
+  "name": "Schweinebäckchen: pariert, frisch",
+  "felder": {
+   "hauptzutat": "Schweinebäckchen",
+   "processing": "pariert",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 13487,
+  "name": "Senfkörner / Senfsaat: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Senfkörner / Senfsaat",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 13514,
+  "name": "Silberzwiebeln / Perlzwiebeln: ganz, TK",
+  "felder": {
+   "hauptzutat": "Silberzwiebeln / Perlzwiebeln",
+   "form": "ganz",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13571,
+  "name": "Spirelli: gegart, TK",
+  "felder": {
+   "hauptzutat": "Spirelli",
+   "processing": "gegart",
+   "condition": "TK",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 13573,
+  "name": "Spitzkohl: Würfel 30 mm, frisch",
+  "felder": {
+   "hauptzutat": "Spitzkohl",
+   "form": "Würfel 30 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13574,
+  "name": "Spitzmorcheln: Bruch, trocken",
+  "felder": {
+   "hauptzutat": "Spitzmorcheln",
+   "form": "Bruch",
+   "condition": "trocken",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13575,
+  "name": "Spitzpaprika grün: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Spitzpaprika grün",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13594,
+  "name": "Staudensellerie: geschnitten 10 mm, frisch",
+  "felder": {
+   "hauptzutat": "Staudensellerie",
+   "form": "geschnitten 10 mm",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13610,
+  "name": "Sternanis: ganz, trocken",
+  "felder": {
+   "hauptzutat": "Sternanis",
+   "form": "ganz",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 13653,
+  "name": "Süßkartoffeln: geschälte Stücke, frisch",
+  "felder": {
+   "hauptzutat": "Süßkartoffeln",
+   "form": "geschälte Stücke",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 13661,
+  "name": "Süßrahmbutter: frisch / (Bio)",
+  "felder": {
+   "hauptzutat": "Süßrahmbutter",
+   "condition": "frisch",
+   "bio": true,
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 13720,
+  "name": "Tikka Masala: Paste, trocken / (Rajah)",
+  "felder": {
+   "hauptzutat": "Tikka Masala",
+   "form": "Paste",
+   "condition": "trocken",
+   "zusatz": "Rajah",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 13735,
+  "name": "Tofu: geräuchert, trocken, schnittfest / (Bio)",
+  "felder": {
+   "hauptzutat": "Tofu",
+   "processing": "geräuchert",
+   "condition": "trocken",
+   "pflichtangabe": "schnittfest",
+   "bio": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 13748,
+  "name": "Tomaten Polpa / passiert: konserviert / (Bio)",
+  "felder": {
+   "hauptzutat": "Tomaten Polpa / passiert",
+   "condition": "konserviert",
+   "bio": true,
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13771,
+  "name": "Tonkabohnen: ganz, trocken",
+  "felder": {
+   "hauptzutat": "Tonkabohnen",
+   "form": "ganz",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 13811,
+  "name": "Trockeneis: geschnitten, trocken",
+  "felder": {
+   "hauptzutat": "Trockeneis",
+   "processing": "geschnitten",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 13829,
+  "name": "Käseeersatz: 200 g pro Stück / (Bio) / (Vegan)",
+  "felder": {
+   "hauptzutat": "Käseeersatz",
+   "portion": "200 g",
+   "bio": true,
+   "vegan": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 13848,
+  "name": "Bratwürste vegan: frisch, 100 g pro Stück / (Bio)",
+  "felder": {
+   "hauptzutat": "Bratwürste vegan",
+   "condition": "frisch",
+   "portion": "100 g",
+   "bio": true,
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 13892,
+  "name": "Vegetarische Schnitzel: paniert, TK, 90 g pro Stück / (Valess)",
+  "felder": {
+   "hauptzutat": "Vegetarische Schnitzel",
+   "processing": "paniert",
+   "condition": "TK",
+   "portion": "90 g",
+   "zusatz": "Valess",
+   "commodity_group_code": "14"
+  }
+ },
+ {
+  "gp_id": 13914,
+  "name": "Vollkorntoast: Scheiben, trocken / (Golden Toast)",
+  "felder": {
+   "hauptzutat": "Vollkorntoast",
+   "form": "Scheiben",
+   "condition": "trocken",
+   "zusatz": "Golden Toast",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 13943,
+  "name": "Walnüsse / Walnusskerne: Bruch, trocken",
+  "felder": {
+   "hauptzutat": "Walnüsse / Walnusskerne",
+   "form": "Bruch",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 13949,
+  "name": "Wasserkresse: fein, frisch",
+  "felder": {
+   "hauptzutat": "Wasserkresse",
+   "form": "fein",
+   "condition": "frisch",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 13951,
+  "name": "Wassermelone: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Wassermelone",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 13963,
+  "name": "Weichweizengriess: trocken / (Bio)",
+  "felder": {
+   "hauptzutat": "Weichweizengriess",
+   "condition": "trocken",
+   "bio": true,
+   "commodity_group_code": "07"
+  }
+ },
+ {
+  "gp_id": 13985,
+  "name": "Weißwein-Creme: Pulver, trocken / (Dr. Oetker)",
+  "felder": {
+   "hauptzutat": "Weißwein-Creme",
+   "form": "Pulver",
+   "condition": "trocken",
+   "zusatz": "Dr. Oetker",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13987,
+  "name": "Welsfilets: gebraten, TK, 50 g pro Stück",
+  "felder": {
+   "hauptzutat": "Welsfilets",
+   "processing": "gebraten",
+   "condition": "TK",
+   "portion": "50 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 13991,
+  "name": "Wiener Boden dunkel: 60x40 cm, trocken / (Lieken)",
+  "felder": {
+   "hauptzutat": "Wiener Boden dunkel",
+   "form": "60x40 cm",
+   "condition": "trocken",
+   "zusatz": "Lieken",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 13995,
+  "name": "Feigen: gehackt, trocken",
+  "felder": {
+   "hauptzutat": "Feigen",
+   "processing": "gehackt",
+   "condition": "trocken",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 14008,
+  "name": "Windbeutel: 4 cm, TK, ungefüllt / (HUG)",
+  "felder": {
+   "hauptzutat": "Windbeutel",
+   "form": "4 cm",
+   "condition": "TK",
+   "pflichtangabe": "ungefüllt",
+   "zusatz": "HUG",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 14018,
+  "name": "Wirsing: geschnitten, TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Wirsing",
+   "processing": "geschnitten",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14076,
+  "name": "Zimtschnecken: vom Blech, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Zimtschnecken",
+   "form": "vom Blech",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 14089,
+  "name": "Zucchini-Nudeln / Zoodles: geschnitten, frisch",
+  "felder": {
+   "hauptzutat": "Zucchini-Nudeln / Zoodles",
+   "processing": "geschnitten",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14103,
+  "name": "Zucchini: frisch, grün / (Bio)",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "condition": "frisch",
+   "pflichtangabe": "grün",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14117,
+  "name": "Zwiebeln: Würfel, TK",
+  "felder": {
+   "hauptzutat": "Zwiebeln",
+   "form": "Würfel",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14118,
+  "name": "Zwiebeln: Würfel, TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Zwiebeln",
+   "form": "Würfel",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14125,
+  "name": "Zwiebeln: karamellisiert, frisch",
+  "felder": {
+   "hauptzutat": "Zwiebeln",
+   "processing": "karamellisiert",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14137,
+  "name": "Cherrytomaten / Kirschtomaten gelb: ganz, frisch",
+  "felder": {
+   "hauptzutat": "Cherrytomaten / Kirschtomaten gelb",
+   "form": "ganz",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 14139,
+  "name": "Bratapfel mit Rosinen-Marzipanfüllung: halbiert, frisch",
+  "felder": {
+   "hauptzutat": "Bratapfel mit Rosinen-Marzipanfüllung",
+   "form": "halbiert",
+   "condition": "frisch",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 14669,
+  "name": "Ravioloni Gigante Waldpilz Trüffel: gefüllt, frisch",
+  "felder": {
+   "hauptzutat": "Ravioloni Gigante Waldpilz Trüffel",
+   "processing": "gefüllt",
+   "condition": "frisch",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 14674,
+  "name": "Ravioli Artischocke Pecorino: gefüllt, frisch",
+  "felder": {
+   "hauptzutat": "Ravioli Artischocke Pecorino",
+   "processing": "gefüllt",
+   "condition": "frisch",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 14708,
+  "name": "Saubacken in Aceto-Sauce: Sous-Vide gegart, frisch",
+  "felder": {
+   "hauptzutat": "Saubacken in Aceto-Sauce",
+   "processing": "Sous-Vide gegart",
+   "condition": "frisch",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 14741,
+  "name": "Sesamsamen: Yuzu, geröstet, trocken",
+  "felder": {
+   "hauptzutat": "Sesamsamen",
+   "flavor": "Yuzu",
+   "processing": "geröstet",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 14814,
+  "name": "Laugenserviettenknödel: Rolle, TK / (Achenbach)",
+  "felder": {
+   "hauptzutat": "Laugenserviettenknödel",
+   "form": "Rolle",
+   "condition": "TK",
+   "zusatz": "Achenbach",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 15099,
+  "name": "Zitrus-Bergamotte-Kalamansi-Vanille-Mischung: gefriergetrocknet, trocken / (Achenbach)",
+  "felder": {
+   "hauptzutat": "Zitrus-Bergamotte-Kalamansi-Vanille-Mischung",
+   "processing": "gefriergetrocknet",
+   "condition": "trocken",
+   "zusatz": "Achenbach",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 15197,
+  "name": "Sahnesteif: Pulver, trocken",
+  "felder": {
+   "hauptzutat": "Sahnesteif",
+   "form": "Pulver",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 15214,
+  "name": "Maldon Sea Salt: Flocken, trocken",
+  "felder": {
+   "hauptzutat": "Maldon Sea Salt",
+   "form": "Flocken",
+   "condition": "trocken",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 15323,
+  "name": "Currymischung Jaipur: gemahlen, trocken / (Altes Gewürzamt)",
+  "felder": {
+   "hauptzutat": "Currymischung Jaipur",
+   "processing": "gemahlen",
+   "condition": "trocken",
+   "zusatz": "Altes Gewürzamt",
+   "commodity_group_code": "10"
+  }
+ },
+ {
+  "gp_id": 15446,
+  "name": "Maca: Pulver, trocken",
+  "felder": {
+   "hauptzutat": "Maca",
+   "form": "Pulver",
+   "condition": "trocken",
+   "commodity_group_code": "12"
+  }
+ },
+ {
+  "gp_id": 15768,
+  "name": "Zitronenzesten: Granulat, TK",
+  "felder": {
+   "hauptzutat": "Zitronenzesten",
+   "form": "Granulat",
+   "condition": "TK",
+   "commodity_group_code": "03"
+  }
+ },
+ {
+  "gp_id": 15797,
+  "name": "Romanesco: Röschen, TK",
+  "felder": {
+   "hauptzutat": "Romanesco",
+   "form": "Röschen",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 15804,
+  "name": "Curtido: fermentiert, konserviert, Weißkohl-Möhren-Mix",
+  "felder": {
+   "hauptzutat": "Curtido",
+   "processing": "fermentiert",
+   "condition": "konserviert",
+   "pflichtangabe": "Weißkohl-Möhren-Mix",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 15822,
+  "name": "Entenbrüste Barbarie: TK, 170-220 g pro Stück, weiblich",
+  "felder": {
+   "hauptzutat": "Entenbrüste Barbarie",
+   "condition": "TK",
+   "portion": "170-220 g",
+   "pflichtangabe": "weiblich",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 15866,
+  "name": "Maispoulardenbrust Supreme: gefüllt, frisch",
+  "felder": {
+   "hauptzutat": "Maispoulardenbrust Supreme",
+   "processing": "gefüllt",
+   "condition": "frisch",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 15904,
+  "name": "Mini-Salami: Würstchen, geräuchert",
+  "felder": {
+   "hauptzutat": "Mini-Salami",
+   "form": "Würstchen",
+   "condition": "geräuchert",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 15909,
+  "name": "Schweine-Tomahawk: am Knochen, frisch, Dry Aged",
+  "felder": {
+   "hauptzutat": "Schweine-Tomahawk",
+   "form": "am Knochen",
+   "condition": "frisch",
+   "pflichtangabe": "Dry Aged",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 15939,
+  "name": "Räucherspeck: gereift, am Stück, trocken",
+  "felder": {
+   "hauptzutat": "Räucherspeck",
+   "processing": "gereift",
+   "form": "am Stück",
+   "condition": "trocken",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 15979,
+  "name": "Brie de Meaux: Stück, frisch",
+  "felder": {
+   "hauptzutat": "Brie de Meaux",
+   "form": "Stück",
+   "condition": "frisch",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 15982,
+  "name": "Burrata mit Käse und Pfeffer: gefüllt, frisch, 80 g pro Stück",
+  "felder": {
+   "hauptzutat": "Burrata mit Käse und Pfeffer",
+   "processing": "gefüllt",
+   "condition": "frisch",
+   "portion": "80 g",
+   "commodity_group_code": "06"
+  }
+ },
+ {
+  "gp_id": 16044,
+  "name": "Rotbarschfilets: paniert, vorgebraten, TK, 100-120 g pro Stück",
+  "felder": {
+   "hauptzutat": "Rotbarschfilets",
+   "processing": "paniert, vorgebraten",
+   "condition": "TK",
+   "portion": "100-120 g",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 16052,
+  "name": "Seelachs-Loins: gegart, TK, 80-100 g pro Stück",
+  "felder": {
+   "hauptzutat": "Seelachs-Loins",
+   "processing": "gegart",
+   "condition": "TK",
+   "portion": "80-100 g",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 16055,
+  "name": "Sepia: ganz, TK",
+  "felder": {
+   "hauptzutat": "Sepia",
+   "form": "ganz",
+   "condition": "TK",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 16064,
+  "name": "Wolfsbarsche: ganz, frisch, ab 1000 g pro Stück",
+  "felder": {
+   "hauptzutat": "Wolfsbarsche",
+   "form": "ganz",
+   "condition": "frisch",
+   "pflichtangabe": "ab 1000 g pro Stück",
+   "commodity_group_code": "05"
+  }
+ },
+ {
+  "gp_id": 18404,
+  "name": "Bayrische Creme: Pulver, trocken / (RUF)",
+  "felder": {
+   "hauptzutat": "Bayrische Creme",
+   "form": "Pulver",
+   "condition": "trocken",
+   "zusatz": "RUF",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18422,
+  "name": "French Dressing: emulgiert, frisch / (Napuro)",
+  "felder": {
+   "hauptzutat": "French Dressing",
+   "processing": "emulgiert",
+   "condition": "frisch",
+   "zusatz": "Napuro",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18440,
+  "name": "Brötchen mit Räucherlachs: belegt, frisch, Garnitur / (Heisters)",
+  "felder": {
+   "hauptzutat": "Brötchen mit Räucherlachs",
+   "processing": "belegt",
+   "condition": "frisch",
+   "pflichtangabe": "Garnitur",
+   "zusatz": "Heisters",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18506,
+  "name": "Schokocroissants: gebacken, frisch / (Heisters)",
+  "felder": {
+   "hauptzutat": "Schokocroissants",
+   "processing": "gebacken",
+   "condition": "frisch",
+   "zusatz": "Heisters",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 18549,
+  "name": "Ravioli Verdura: gefüllt, TK / (Bio)",
+  "felder": {
+   "hauptzutat": "Ravioli Verdura",
+   "form": "gefüllt",
+   "condition": "TK",
+   "bio": true,
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 18562,
+  "name": "Polenta-Knuspertasche: Spinat, paniert, TK, 75 g pro Stück",
+  "felder": {
+   "hauptzutat": "Polenta-Knuspertasche",
+   "flavor": "Spinat",
+   "form": "paniert",
+   "condition": "TK",
+   "portion": "75 g",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18569,
+  "name": "Pellkartoffelsalat: Gurke, Zwiebel, verzehrfertig, frisch / (Base Culinar)",
+  "felder": {
+   "hauptzutat": "Pellkartoffelsalat",
+   "flavor": "Gurke, Zwiebel",
+   "form": "verzehrfertig",
+   "condition": "frisch",
+   "zusatz": "Base Culinar",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18584,
+  "name": "Brötchen: Brie, halbiert, frisch, belegt / (Freshcompany)",
+  "felder": {
+   "hauptzutat": "Brötchen",
+   "flavor": "Brie",
+   "processing": "halbiert",
+   "condition": "frisch",
+   "pflichtangabe": "belegt",
+   "zusatz": "Freshcompany",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18586,
+  "name": "Laugenkonfekt mit Rohschinken: belegt, frisch / (Freshcompany)",
+  "felder": {
+   "hauptzutat": "Laugenkonfekt mit Rohschinken",
+   "form": "belegt",
+   "condition": "frisch",
+   "zusatz": "Freshcompany",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18589,
+  "name": "Dinkel-Mehrkornbrötchen: halbiert, frisch, belegt / (Weyers)",
+  "felder": {
+   "hauptzutat": "Dinkel-Mehrkornbrötchen",
+   "processing": "halbiert",
+   "condition": "frisch",
+   "pflichtangabe": "belegt",
+   "zusatz": "Weyers",
+   "commodity_group_code": "09"
+  }
+ },
+ {
+  "gp_id": 18602,
+  "name": "Geflügelfrikadelle: gebraten, TK, 20 g pro Stück",
+  "felder": {
+   "hauptzutat": "Geflügelfrikadelle",
+   "form": "gebraten",
+   "condition": "TK",
+   "portion": "20 g",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 18605,
+  "name": "Rustico: Pecorino, Feige, gefüllt, TK",
+  "felder": {
+   "hauptzutat": "Rustico",
+   "flavor": "Pecorino, Feige",
+   "form": "gefüllt",
+   "condition": "TK",
+   "commodity_group_code": "08"
+  }
+ },
+ {
+  "gp_id": 18614,
+  "name": "Zucchini: Würfel 10 mm, TK",
+  "felder": {
+   "hauptzutat": "Zucchini",
+   "processing": "Würfel 10 mm",
+   "condition": "TK",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 18665,
+  "name": "Hähnchenoberkeulenfleisch: Kräuter, gefüllt, frisch, mit Haut",
+  "felder": {
+   "hauptzutat": "Hähnchenoberkeulenfleisch",
+   "flavor": "Kräuter",
+   "form": "gefüllt",
+   "condition": "frisch",
+   "pflichtangabe": "mit Haut",
+   "commodity_group_code": "04"
+  }
+ },
+ {
+  "gp_id": 18666,
+  "name": "Chili: Würfel, TK, rot",
+  "felder": {
+   "hauptzutat": "Chili",
+   "processing": "Würfel",
+   "condition": "TK",
+   "pflichtangabe": "rot",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 18677,
+  "name": "Balsam-Apfelessig: 8 Jahre gereift, konserviert, 5 % Säure",
+  "felder": {
+   "hauptzutat": "Balsam-Apfelessig",
+   "form": "8 Jahre gereift",
+   "condition": "konserviert",
+   "pflichtangabe": "5 % Säure",
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 18678,
+  "name": "Malzessig: 5 % Säure, konserviert",
+  "felder": {
+   "hauptzutat": "Malzessig",
+   "form": "5 % Säure",
+   "condition": "konserviert",
+   "commodity_group_code": "11"
+  }
+ },
+ {
+  "gp_id": 18681,
+  "name": "Orangenfilet: Segmente, konserviert, leicht gezuckert",
+  "felder": {
+   "hauptzutat": "Orangenfilet",
+   "form": "Segmente",
+   "condition": "konserviert",
+   "pflichtangabe": "leicht gezuckert",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 18704,
+  "name": "Rote-Bete-Microgreens: geerntet, frisch",
+  "felder": {
+   "hauptzutat": "Rote-Bete-Microgreens",
+   "form": "geerntet",
+   "condition": "frisch",
+   "commodity_group_code": "01"
+  }
+ },
+ {
+  "gp_id": 18727,
+  "name": "Erdbeerpüree: 85 % Frucht, TK, gezuckert",
+  "felder": {
+   "hauptzutat": "Erdbeerpüree",
+   "form": "85 % Frucht",
+   "condition": "TK",
+   "pflichtangabe": "gezuckert",
+   "commodity_group_code": "02"
+  }
+ },
+ {
+  "gp_id": 18736,
+  "name": "Hühnchen nach koreanischer Art: gebraten, TK",
+  "felder": {
+   "hauptzutat": "Hühnchen nach koreanischer Art",
+   "form": "gebraten",
+   "condition": "TK",
+   "commodity_group_code": "13"
+  }
+ },
+ {
+  "gp_id": 18746,
+  "name": "Gouda: Scheiben, frisch, 30 %",
+  "felder": {
+   "hauptzutat": "Gouda",
+   "processing": "Scheiben",
+   "condition": "frisch",
+   "pflichtangabe": "30 %",
+   "commodity_group_code": "06"
+  }
+ }
+]

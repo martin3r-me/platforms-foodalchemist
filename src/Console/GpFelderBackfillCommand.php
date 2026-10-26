@@ -38,7 +38,7 @@ class GpFelderBackfillCommand extends Command
         $setzbar = [];
         $leer = 0;
         foreach ($q->orderBy('id')->cursor() as $gp) {
-            $f = $naming->felderAusName((string) $gp->name);
+            $f = $naming->felderAusName((string) $gp->name, false, true);   // Bestandsnamen: alte Reihenfolge „Zustand zuerst“ mitlesen (Stufe 2)
             // Nur Verarbeitung, und nur wenn ein §2-Suffix sie belegt. Die Form schreibt der Befehl NICHT: das
             // Attribut nach dem Zustand ist oft eine Eigenschaft („Olivenoel: trocken, hochwertig") — das entscheidet
             // der Mensch im Editor („Felder aus dem Namen übernehmen").

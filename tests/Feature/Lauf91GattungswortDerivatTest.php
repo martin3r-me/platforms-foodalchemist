@@ -83,5 +83,5 @@ it('Hausstandard: der Regel-Block nennt „nur mit …" statt einer Verbotsliste
     $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
 
     expect($block)->toContain('nur mit knochen, karkasse, abschnitt')
-        ->toContain('Falsch z. B.: „Rinderhueften: frisch, pariert“');
+        ->toContain('Falsch z. B.: „Rinderhueften: pariert, frisch“');   // Beispiel seit Stufe 2 in neuer Reihenfolge
 });

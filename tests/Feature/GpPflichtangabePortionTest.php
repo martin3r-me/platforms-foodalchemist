@@ -30,7 +30,7 @@ it('Anlage speichert pflichtangabe und portion; Name aus den GESPEICHERTEN Felde
     $gp = $this->naming->createGp($this->rootTeam, array_merge($this->felder, ['pflichtangabe' => 'mini', 'portion' => '100 g']));
 
     expect($gp->processing)->toBe('geputzt')->and($gp->form)->toBe('ganz')->and($gp->main_ingredient_display)->toBe('Karotten')
-        ->and($gp->pflichtangabe)->toBe('mini')->and($gp->portion)->toBe('100 g')->and($gp->name)->toBe('Karotten: frisch, geputzt, ganz, 100 g pro Stück, mini');
+        ->and($gp->pflichtangabe)->toBe('mini')->and($gp->portion)->toBe('100 g')->and($gp->name)->toBe('Karotten: geputzt, ganz, frisch, 100 g pro Stück, mini');
 
     $aus = $this->naming->renderGpName([
         'hauptzutat' => $gp->main_ingredient_display, 'condition' => $gp->condition, 'processing' => $gp->processing, 'form' => $gp->form,
@@ -52,7 +52,7 @@ it('Bearbeiten ersetzt oder leert die Felder; ein Teil-Schreiber ohne sie lässt
 it('Modal: Speichern und Laden mit pflichtangabe und portion (Vorschau zeigt sie im Namen)', function () {
     Livewire::test(GpModal::class)->call('oeffnen')
         ->set('builder.hauptzutat', 'Karotten')->set('builder.condition', 'frisch')->set('builder.processing', 'ganz')->set('builder.pflichtangabe', 'mini')->set('builder.portion', '100 g')
-        ->assertSeeHtml('Karotten: frisch, ganz, 100 g pro Stück, mini')
+        ->assertSeeHtml('Karotten: ganz, frisch, 100 g pro Stück, mini')
         ->call('speichern')->assertSet('fehler', null);
 
     $gp = FoodAlchemistGp::where('pflichtangabe', 'mini')->firstOrFail();
@@ -100,8 +100,8 @@ it('Paket: Whitelist, Schreibfelder und Hash führen flavor, zusatz, pflichtanga
 it('renderGpName gibt Verarbeitung UND Zuschnitt aus (Verarbeitung zuerst); ein im Verarbeitungstext schon genannter Zuschnitt wird nicht verdoppelt', function () {
     $n = app(GpNamingService::class);
 
-    expect($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: frisch, gegart, Würfel 10 mm')
-        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => '', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: frisch, Würfel 10 mm')
-        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => '']))->toBe('Kartoffel: frisch, gegart')
-        ->and($n->renderGpName(['hauptzutat' => 'Lachs', 'condition' => 'geräuchert', 'processing' => 'TK, geschnitten', 'form' => 'geschnitten']))->toBe('Lachs: geräuchert, TK, geschnitten');   // Zuschnitt schon im Text → kein Doppel
+    expect($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: gegart, Würfel 10 mm, frisch')
+        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => '', 'form' => 'Würfel 10 mm']))->toBe('Kartoffel: Würfel 10 mm, frisch')
+        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'gegart', 'form' => '']))->toBe('Kartoffel: gegart, frisch')
+        ->and($n->renderGpName(['hauptzutat' => 'Lachs', 'condition' => 'geräuchert', 'processing' => 'TK, geschnitten', 'form' => 'geschnitten']))->toBe('Lachs: geschnitten, geräuchert, TK');   // Zuschnitt schon im Text → kein Doppel
 });
