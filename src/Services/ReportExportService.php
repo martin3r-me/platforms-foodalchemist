@@ -1037,7 +1037,10 @@ class ReportExportService
             'nr' => $nr,
             'position' => (int) $z->position,
             'adresse' => $kindAdresse,
-            'name' => $sub?->name ?? $gp?->name ?? $z->display_name ?? $z->raw_text,
+            // Verkaufstext ohne Marken-Klammer (Kurator 26.10.): Kundensicht (intern=false) zeigt „Sahnesauce: konserviert“ statt „… / (Altoni)“;
+            // Bio/Vegan/Glutenfrei/Laktosefrei bleiben. Intern (Kalkulation, Produktion) bleibt der volle GP-Name.
+            'name' => $sub?->name ?? ($gp !== null ? (($optionen['intern'] ?? false) ? $gp->name : app(GpNamingService::class)->nameOhneMarke((string) $gp->name, $gp->zusatz)) : null)
+                ?? $z->display_name ?? $z->raw_text,
             'raw_text' => $z->raw_text,
             'menge' => $this->mengeText($this->skaliere($z->quantity, $optionen), $z->unit),
             'quantity' => $this->skaliere($z->quantity, $optionen),

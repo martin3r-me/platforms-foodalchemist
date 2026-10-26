@@ -1687,9 +1687,9 @@ class SpeiseplanService
             return [];
         }
 
-        return $dish->ingredients()->with(['gp:id,name', 'referencedRecipe:id,name', 'unit:id,slug'])->limit(12)->get()
+        return $dish->ingredients()->with(['gp:id,name,zusatz', 'referencedRecipe:id,name', 'unit:id,slug'])->limit(12)->get()
             ->map(fn ($z) => [
-                'name' => (string) ($z->display_name ?: ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text)),
+                'name' => (string) ($z->display_name ?: ($z->gp !== null ? app(GpNamingService::class)->nameOhneMarke((string) $z->gp->name, $z->gp->zusatz) : ($z->referencedRecipe?->name ?? $z->raw_text))),   // Kundendokument: ohne Marken-Klammer
                 'menge' => $z->quantity !== null
                     ? rtrim(rtrim(number_format((float) $z->quantity, 2, ',', ''), '0'), ',') . ' ' . ($z->unit?->slug ?? '')
                     : null,
