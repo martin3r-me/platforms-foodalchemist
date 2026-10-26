@@ -84,6 +84,10 @@ Route::get('/lieferanten', \Platform\FoodAlchemist\Livewire\Suppliers\Index::cla
 Route::get('/lieferanten/necta-pruefaelle', \Platform\FoodAlchemist\Livewire\Suppliers\NectaPruefaelle::class)
     ->name('foodalchemist.suppliers.necta-pruefaelle');
 
+/** Plan GP-Stamm 3g · Marken-Nachlauf (nur Master-Team): Rezeptur-GPs ohne Marke, unbekannte Kürzel zuordnen. */
+Route::get('/lieferanten/marke-offen', \Platform\FoodAlchemist\Livewire\Suppliers\MarkeOffen::class)
+    ->name('foodalchemist.suppliers.marke-offen');
+
 /**
  * Spec 32: Die beiden Einkaufs-Auswertungen sind ins Controlling-Zentrum gewandert
  * (Preisvergleich → Tab „Preise", Optimierung → Tab „Wareneinsatz"). Die Routen bleiben

@@ -93,6 +93,28 @@ class MarkeAusArtikel
     {
         $karte = $this->karte();
         $eigen = $supplierId !== null ? ($karte[(string) $supplierId] ?? []) : [];
+        $bester = null;
+        foreach (self::kuerzelWoerter($bezeichnung) as ['kuerzel' => $k, 'roh' => $roh, 'position' => $position]) {
+            $istEigen = isset($eigen[$position][$k]);
+            $eintrag = $eigen[$position][$k] ?? $karte['global'][$position][$k] ?? null;
+            if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester['vorrang'])) {
+                $bester = ['marke' => $eintrag['marke'], 'roh' => $roh, 'typ' => $eintrag['typ'], 'eigen' => $istEigen, 'vorrang' => $eintrag['vorrang']];
+            }
+        }
+
+        return $bester !== null ? array_diff_key($bester, ['vorrang' => true]) : null;
+    }
+
+    /**
+     * Die Wörter einer Bezeichnung, die nach der Matchregel ein Kürzel sein KÖNNEN — EINE Zerlegung für die Auflösung ({@see kuerzelTreffer}) und die
+     * Nachlauf-Liste „Marke offen“ (MarkeOffenService). Erste drei Wörter (Position anfang) und das letzte Wort (Position ende). Ein Wort zählt nur, wenn es
+     * aus Buchstaben besteht — innen auch „&“ zwischen Buchstaben (B&B, C&F; Kurator 26.10.) — und allein steht, direkt vor einem Punkt oder (nur
+     * BINDESTRICH_KUERZEL) vor einem Bindestrich endet. Sperrwörter (MSC) nie.
+     *
+     * @return list<array{kuerzel: string, roh: string, position: string}>  kuerzel klein, roh wie in der Bezeichnung (mit Punkt)
+     */
+    public static function kuerzelWoerter(string $bezeichnung): array
+    {
         $woerter = preg_split('/\s+/u', trim(str_replace('/', ' ', $bezeichnung)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $pruefen = [];
         foreach (array_slice($woerter, 0, 3) as $wort) {
@@ -101,23 +123,19 @@ class MarkeAusArtikel
         if ($woerter !== []) {
             $pruefen[] = [$woerter[array_key_last($woerter)], FoodAlchemistSupplierMarke::POSITION_ENDE];
         }
-        $bester = null;
+        $out = [];
         foreach ($pruefen as [$wort, $position]) {
-            if (preg_match('/^(\p{L}+)(\.|-|$)/u', $wort, $m) !== 1) {
-                continue;   // nur Buchstaben, allein oder direkt vor einem Punkt bzw. Bindestrich
+            if (preg_match('/^(\p{L}+(?:&\p{L}+)*)(\.|-|$)/u', $wort, $m) !== 1) {
+                continue;   // nur Buchstaben (innen „&“), allein oder direkt vor einem Punkt bzw. Bindestrich
             }
             $k = mb_strtolower($m[1]);
             if (in_array($k, self::SPERRWOERTER, true) || ($m[2] === '-' && ! in_array($k, self::BINDESTRICH_KUERZEL, true))) {
                 continue;
             }
-            $istEigen = isset($eigen[$position][$k]);
-            $eintrag = $eigen[$position][$k] ?? $karte['global'][$position][$k] ?? null;
-            if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester['vorrang'])) {
-                $bester = ['marke' => $eintrag['marke'], 'roh' => $m[1] . ($m[2] === '.' ? '.' : ''), 'typ' => $eintrag['typ'], 'eigen' => $istEigen, 'vorrang' => $eintrag['vorrang']];
-            }
+            $out[] = ['kuerzel' => $k, 'roh' => $m[1] . ($m[2] === '.' ? '.' : ''), 'position' => $position];
         }
 
-        return $bester !== null ? array_diff_key($bester, ['vorrang' => true]) : null;
+        return $out;
     }
 
     /**

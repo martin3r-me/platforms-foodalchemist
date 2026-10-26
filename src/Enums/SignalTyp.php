@@ -155,6 +155,9 @@ enum SignalTyp: string
     // Produktpass-Vorrang (Dominique 16.10.2026): Necta liefert an einem Kern-Feld (Allergene/Unterarten, Zusatzstoffe, Nährwerte, Zutatenliste)
     // etwas anderes als der Produktpass. Der Pass-Wert bleibt; EIN Signal je Artikel, bis jede Abweichung entschieden ist.
     case ProduktpassAbweichung = 'produktpass_abweichung';
+    // Marken-Nachlauf (Plan GP-Stamm 3g, Dominique 26.10.2026): unbekannte Kürzel an Rezeptur-GPs ohne Marke bzw. Lieferanten mit Rolle „offen“, die an
+    // Rezepturware hängen. Nur im Master-Team (die GPs sind global); der Weg ist die Seite Lieferanten → „Marke offen“.
+    case MarkenNachlauf = 'marken_nachlauf';
 
     public function label(): string
     {
@@ -163,6 +166,7 @@ enum SignalTyp: string
             self::FassungAktualisiert => 'Abo-Rezept aktualisiert',
             self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
+            self::MarkenNachlauf => 'Marke offen bei Rezepturware',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
             self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
@@ -226,6 +230,7 @@ enum SignalTyp: string
             self::FassungAktualisiert => 'heroicon-o-arrow-path',
             self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
             self::NectaLieferantNeu => 'heroicon-o-truck',
+            self::MarkenNachlauf => 'heroicon-o-tag',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
             self::WechselkursVeraltet => 'heroicon-o-currency-euro',

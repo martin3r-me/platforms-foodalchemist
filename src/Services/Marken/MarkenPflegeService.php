@@ -42,8 +42,8 @@ class MarkenPflegeService
         $this->pruefe($user);
         $k = self::normKuerzel($kuerzel);
         $m = trim($marke);
-        if ($k === '' || $m === '' || preg_match('/^\p{L}+$/u', $k) !== 1) {
-            throw new \RuntimeException('Kürzel (nur Buchstaben, ohne Punkt) und Marke sind Pflicht.');
+        if ($k === '' || $m === '' || preg_match('/^\p{L}+(?:&\p{L}+)*$/u', $k) !== 1) {
+            throw new \RuntimeException('Kürzel (nur Buchstaben, innen auch „&“, ohne Punkt) und Marke sind Pflicht.');
         }
         if (in_array($k, MarkeAusArtikel::SPERRWOERTER, true)) {
             throw new \RuntimeException('„' . mb_strtoupper($k) . '“ ist eine Zertifizierung, keine Marke.');

@@ -134,6 +134,16 @@
             </x-fa::notice>
         @endif
 
+        {{-- Plan GP-Stamm 3g: Marken-Nachlauf (nur Master-Team) --}}
+        @if(($markeOffen ?? 0) > 0)
+            <x-fa::notice tone="info" data-marke-offen-hinweis>
+                {{ $fmt($markeOffen) }} Rezeptur-GPs haben noch keine Marke in der Klammer.
+                <x-slot:actions>
+                    <x-fa::button size="sm" icon="heroicon-m-tag" :href="route('foodalchemist.suppliers.marke-offen')" wire:navigate>Marke offen öffnen</x-fa::button>
+                </x-slot:actions>
+            </x-fa::notice>
+        @endif
+
         {{-- Fehler aus Seitenaktionen (Bevorzugen, Mehrfachauswahl, Abgleich) — vorher nur im Dialog sichtbar --}}
         @if($fehler)
             <x-fa::notice tone="crit" data-seiten-fehler>{{ $fehler }}</x-fa::notice>
