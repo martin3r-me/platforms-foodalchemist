@@ -165,7 +165,7 @@ it('★ Renderer: „660 g pro Stück" (Leerzeichen, ohne „Portion", echter Um
     $n = app(GpNamingService::class);
     $name = fn (string $portion) => $n->renderGpName(['hauptzutat' => 'Schokoladenmousse', 'condition' => 'TK', 'form' => 'Riegel', 'portion' => $portion]);
 
-    expect($name('660 g'))->toBe('Schokoladenmousse: TK, Riegel, 660 g pro Stück')
+    expect($name('660 g'))->toBe('Schokoladenmousse: Riegel, TK, 660 g pro Stück')
         ->and($name('660g'))->toBe($name('660 g'))->and($name('0,66 kg'))->toBe($name('660 g'))->and($name('0.66 kg'))->toBe($name('660 g'))
         ->and($name('2 kg'))->toContain('2000 g pro Stück')                              // Bestand schreibt Gramm auch ab 1000
         ->and($name('62,5 g'))->toContain('62,5 g pro Stück')
@@ -184,19 +184,19 @@ it('★ Rundlauf: rendern → felderAusName liefert dieselben Felder zurück (au
     }
     // Bestandsschreibweise „Stueck" (und die Altform mit „Portion") bleibt lesbar, ergibt dieselben Felder wie „Stück"
     foreach (['660 g pro Stueck', '660 g pro Stück', 'Portion 660 g pro Stueck', 'Portion 660 g pro STÜCK'] as $teil) {
-        expect($n->felderAusName("Schokoladenmousse: TK, Riegel, {$teil}"))->toMatchArray(['hauptzutat' => 'Schokoladenmousse', 'condition' => 'TK', 'form' => 'Riegel', 'portion' => '660 g', 'pflichtangabe' => ''], $teil);
+        expect($n->felderAusName("Schokoladenmousse: Riegel, TK, {$teil}"))->toMatchArray(['hauptzutat' => 'Schokoladenmousse', 'condition' => 'TK', 'form' => 'Riegel', 'portion' => '660 g', 'pflichtangabe' => ''], $teil);
     }
     // Altform der 91 Bestandsnamen wird gelesen, nicht verändert
-    expect($n->felderAusName('Blutwurst: frisch, im Ring, Portion 800 g pro Stück'))->toMatchArray(['form' => 'im Ring', 'portion' => '800 g', 'pflichtangabe' => '']);
+    expect($n->felderAusName('Blutwurst: im Ring, frisch, Portion 800 g pro Stück'))->toMatchArray(['form' => 'im Ring', 'portion' => '800 g', 'pflichtangabe' => '']);
 });
 
 
 it('★ Neue Namen entstehen mit echten Umlauten, der Zustand liest auch „tiefgekühlt", Vergleich bleibt tolerant', function () {
     $n = app(GpNamingService::class);
-    expect($n->renderGpName(['hauptzutat' => 'Brötchen', 'condition' => 'tiefgekühlt', 'form' => 'Mini', 'portion' => '45 g']))->toBe('Brötchen: TK, Mini, 45 g pro Stück')
+    expect($n->renderGpName(['hauptzutat' => 'Brötchen', 'condition' => 'tiefgekühlt', 'form' => 'Mini', 'portion' => '45 g']))->toBe('Brötchen: Mini, TK, 45 g pro Stück')
         ->and($n->normalisiereZustand('tiefgekühlt'))->toBe('TK')->and($n->normalisiereZustand('tiefgekuehlt'))->toBe('TK');
     // Dublettenprüfung/Drift: ASCII- und Umlaut-Schreibweise gelten als gleich (kein Drift-Warnhinweis)
-    $r = $n->validateGpName('Brötchen: TK, Mini, 45 g pro Stueck', ['hauptzutat' => 'Brötchen', 'condition' => 'TK', 'form' => 'Mini', 'portion' => '45 g']);
+    $r = $n->validateGpName('Brötchen: Mini, TK, 45 g pro Stueck', ['hauptzutat' => 'Brötchen', 'condition' => 'TK', 'form' => 'Mini', 'portion' => '45 g']);
     expect(implode(' ', $r['warnings']))->not->toContain('Drift');
 });
 

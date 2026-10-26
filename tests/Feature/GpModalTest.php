@@ -28,13 +28,13 @@ it('Neuanlage über den Builder: AUTO-SYNC-Name, Slug/gp_key-Vorschau, Insert va
         ->set('builder.hauptzutat', 'Zander')
         ->set('builder.condition', 'TK')
         ->set('builder.form', 'Filet')
-        ->assertSeeHtml('Zander: TK, Filet')          // AUTO-SYNC-Vorschau
+        ->assertSeeHtml('Zander: Filet, TK')          // AUTO-SYNC-Vorschau (Form vor Zustand)
         ->assertSeeHtml('zander||filet')              // gp_key-Vorschau (3 Slots)
         ->call('speichern')
         ->assertSet('fehler', null)
         ->assertDispatched('gp-gespeichert');
 
-    $gp = FoodAlchemistGp::where('name', 'Zander: TK, Filet')->firstOrFail();
+    $gp = FoodAlchemistGp::where('name', 'Zander: Filet, TK')->firstOrFail();
     expect($gp->gp_key)->toBe('zander||filet')
         ->and($gp->main_ingredient_slug)->toBe('zander')
         ->and($gp->status->value)->toBe('tentative')
@@ -152,7 +152,7 @@ it('Neuanlage verknüpft den ausgewählten Lieferantenartikel direkt und legt fe
         ->call('speichern')
         ->assertSet('fehler', null);
 
-    $gp = FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart, Creme')->firstOrFail();   // Verarbeitung UND Zuschnitt im Namen (vorher gewann processing)
+    $gp = FoodAlchemistGp::where('name', 'Rote Bete: sous-vide gegart, Creme, frisch')->firstOrFail();   // Verarbeitung UND Zuschnitt im Namen (vorher gewann processing)
     expect((int) FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($gp->id)
         ->and($gp->fresh()->n_las_total)->toBe(1);
 });
@@ -213,7 +213,7 @@ it('LA-first rollt die GP-Anlage zurück wenn der Artikel zwischenzeitlich gemap
     $modal->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'bereits einem anderen Grundprodukt'));
 
-    expect(FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->exists())->toBeFalse()
+    expect(FoodAlchemistGp::where('name', 'Rote Bete: sous-vide gegart, frisch')->exists())->toBeFalse()
         ->and((int) $struktur->fresh()->gp_id)->toBe($anderesGp->id);
 });
 
@@ -234,7 +234,7 @@ it('LA-first Ersatz-Anlage speichert GP, Artikel-Mapping und Äquivalenz in eine
         ->assertSet('fehler', null)
         ->assertNotDispatched('gp-selected');
 
-    $created = FoodAlchemistGp::where('name', 'Rote Bete: konserviert, püriert')->firstOrFail();
+    $created = FoodAlchemistGp::where('name', 'Rote Bete: püriert, konserviert')->firstOrFail();
     $equiv = FoodAlchemistComponentEquivalent::where('source_kind', 'gp')
         ->where('source_id', $source->id)->where('alt_kind', 'gp')->where('alt_id', $created->id)->firstOrFail();
 

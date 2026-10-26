@@ -26,7 +26,7 @@ it('GT-12-02: volles §6-Schema mit Pflichtangabe + Bio-Suffix', function () {
         'processing' => 'pasteurisiert', 'pflichtangabe' => '3,5 %', 'bio' => true,
     ]);
 
-    expect($name)->toBe('Vollmilch: frisch, pasteurisiert, 3,5 % / (Bio)');
+    expect($name)->toBe('Vollmilch: pasteurisiert, frisch, 3,5 % / (Bio)');
 });
 
 it('GT-12-03: §7.1 Verpackungswort = Hard-Error; Wort-Boundary („Dosentomate" erlaubt)', function () {

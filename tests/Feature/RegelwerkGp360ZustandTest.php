@@ -36,9 +36,9 @@ it('GP-Namen mit echten Umlauten (Dominique 19.10.): Rundlauf, ASCII-Vokabular w
     $n = app(GpNamingService::class);
     $f = $n->felderAusName('Möhre: frisch, Würfel 10 mm');
 
-    expect($n->renderGpName($f))->toBe('Möhre: frisch, Würfel 10 mm')
-        ->and($n->renderGpName(['hauptzutat' => 'Möhre', 'condition' => 'frisch', 'processing' => 'Wuerfel 10 mm']))->toBe('Möhre: frisch, Würfel 10 mm')
-        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'geschaelt', 'portion' => '150 g']))->toBe('Kartoffel: frisch, geschält, 150 g pro Stück')
+    expect($n->renderGpName($f))->toBe('Möhre: Würfel 10 mm, frisch')
+        ->and($n->renderGpName(['hauptzutat' => 'Möhre', 'condition' => 'frisch', 'processing' => 'Wuerfel 10 mm']))->toBe('Möhre: Würfel 10 mm, frisch')
+        ->and($n->renderGpName(['hauptzutat' => 'Kartoffel', 'condition' => 'frisch', 'processing' => 'geschaelt', 'portion' => '150 g']))->toBe('Kartoffel: geschält, frisch, 150 g pro Stück')
         ->and($n->slugify('Karottenpüree'))->toBe($n->slugify('Karottenpueree'))
         ->and($n->slugify('Süßkartoffel'))->toBe('suesskartoffel')
         ->and($n->slugify('Wuerfel 5 mm'))->toBe('wuerfel_5_mm')                    // ASCII-Bestand bleibt stabil
@@ -117,11 +117,11 @@ it('Backfill: Behandlung im Namen wird gesetzt, bei zweien gilt der Vorrang, TK 
 
 it('TK als Zusatz: Name ⇄ Felder runden sauber; TK wird aus Name/Verarbeitung gelesen (Lager, Filter, Ranking)', function () {
     $n = app(GpNamingService::class);
-    $f = $n->felderAusName('Räucherlachs: geräuchert, TK, geschnitten');
+    $f = $n->felderAusName('Räucherlachs: geschnitten, geräuchert, TK');   // Stufe 2: TK hinter der Behandlung
 
     expect($f['condition'])->toBe('geräuchert')
         ->and($f['processing'])->toBe('TK, geschnitten')
-        ->and($n->renderGpName($f))->toBe('Räucherlachs: geräuchert, TK, geschnitten')
+        ->and($n->renderGpName($f))->toBe('Räucherlachs: geschnitten, geräuchert, TK')
         ->and(GpNamingService::istTk('geräuchert', 'Räucherlachs: geräuchert, TK, geschnitten'))->toBeTrue()
         ->and(GpNamingService::istTk('geräuchert', 'Kassler: geräuchert, Scheiben'))->toBeFalse()
         ->and(GpNamingService::zustandPasst('geräuchert', 'Räucherlachs: geräuchert, TK', 'TK'))->toBeTrue()
