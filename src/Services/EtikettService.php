@@ -581,9 +581,13 @@ class EtikettService
         return isset($teile[1]) && trim($teile[1]) !== '' ? trim($teile[1]) : $name;
     }
 
-    /** Grundprodukt „Butter: frisch, Bio" → Produktname vor dem Doppelpunkt (Eigenschaften sind fürs Etikett zu technisch). */
+    /**
+     * Grundprodukt „Butter: frisch, Bio" → Produktname vor dem Doppelpunkt (Eigenschaften sind fürs Etikett zu technisch). Die Marken-Klammer fällt
+     * vorher weg — auch bei Namen ohne Doppelpunkt („Ketchup / (Heinz)“ → „Ketchup“; Kurator 26.10.). Allergen- und Zutatenangabe bleiben unberührt.
+     */
     private function kurzname(string $name): string
     {
+        $name = app(GpNamingService::class)->nameOhneMarke($name);
         $teil = trim(explode(':', $name, 2)[0]);
 
         return $teil !== '' ? $teil : trim($name);
