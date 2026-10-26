@@ -73,16 +73,23 @@ it('Matchregel wie marken_kuerzel.py: erste drei Wörter, Kürzel allein oder vo
         ->and($d->kuerzelAus('BC Jagdwurst', $this->heisters->id))->toBeNull();   // Lieferanten-Kürzel gilt nur bei seinem Lieferanten
 });
 
-it('Händlerschutz gilt nur für den eigenen Lieferanten — und auch auf dem Kürzel-Weg (Kluth: Marke bei Chefs Culinar, Name beim Händler Frischeteam Kluth)', function () {
+it('Händlerschutz: Necta-brand und globale bzw. Hersteller-Kürzel nie mit dem eigenen Händlernamen — kuratierte Eigenmarke des Händlers schon', function () {
     $kluth = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Frischeteam Geschwister Kluth KG', 'rolle' => 'haendler']);
-
-    expect(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg', ['brand' => 'Kluth']))->marke)->toBe('Kluth')       // fremder Händler: Marke zählt
-        ->and(($this->marke)(($this->la)($kluth, 'Möhren geschält', ['brand' => 'Kluth']))->offen())->toBeTrue();             // eigener Name: nie
-
+    $hanos = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Hanos Venlo', 'rolle' => 'haendler']);
+    $gilde = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Gilde Frisch-Markt Rhein-Ruhr EG', 'rolle' => 'haendler']);
     FoodAlchemistSupplierMarke::create(['supplier_id' => null, 'kuerzel' => 'kluth', 'marke' => 'Kluth', 'typ' => 'herstellermarke']);
+    FoodAlchemistSupplierMarke::create(['supplier_id' => $hanos->id, 'kuerzel' => 'selektie', 'marke' => 'Hanos Selektie', 'typ' => 'eigenmarke', 'vorrang' => 1]);
     app(MarkeAusArtikel::class)->vergessen();
-    expect(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg'))->marke)->toBe('Kluth')                            // Kürzel bei Chefs Culinar
-        ->and(($this->marke)(($this->la)($kluth, 'Kluth Möhren geschält'))->offen())->toBeTrue();                             // Kürzel = eigener Händlername
+
+    expect(($this->marke)(($this->la)($kluth, 'Kluth Möhren geschält'))->offen())->toBeTrue()                                  // globales Kürzel = eigener Händlername
+        ->and(($this->marke)(($this->la)($kluth, 'Möhren geschält', ['brand' => 'Kluth']))->offen())->toBeTrue()              // Necta-brand = eigener Name
+        ->and(($this->marke)(($this->la)($this->cc, 'Kluth Cashewkerne 1kg'))->marke)->toBe('Kluth')                          // fremder Händler: Marke
+        ->and(($this->marke)(($this->la)($this->cc, 'Cashewkerne 1kg', ['brand' => 'Kluth']))->marke)->toBe('Kluth')
+        ->and(($this->marke)(($this->la)($hanos, 'SALAMI HANOS SELEKTIE'))->marke)->toBe('Hanos Selektie')                    // kuratierte Eigenmarke
+        ->and(($this->marke)(($this->la)($hanos, 'Erdnüsse scharf', ['brand' => 'Hanos Selektie']))->marke)->toBe('Hanos Selektie')
+        ->and(($this->marke)(($this->la)($hanos, 'Rauwkost Coleslaw Luxe 1kg', ['brand' => 'HANOS']))->offen())->toBeTrue()  // „HANOS“ ohne kuratierten Eintrag: Händlername
+        ->and(($this->marke)(($this->la)($gilde, 'Gilde Spießbraten vom Nacken'))->offen())->toBeTrue()                       // Gruppe U: kein Eintrag
+        ->and(($this->marke)(($this->la)($gilde, 'Spießbraten', ['brand' => 'Gilde']))->offen())->toBeTrue();
 });
 
 it('MSC ist eine Zertifizierung: nie Marke, weder als Kürzel noch aus Necta-brand', function () {

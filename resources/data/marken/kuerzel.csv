@@ -5,6 +5,7 @@ lieferant;kuerzel;marke;typ;position;vorrang
 ;devel;Develey;herstellermarke;anfang;0
 ;gg;Garden Gourmet;herstellermarke;anfang;0
 ;herzb;Herzberger;herstellermarke;anfang;0
+;kluth;Kluth;herstellermarke;anfang;0
 ;kn;Knorr;herstellermarke;anfang;0
 ;kuchm;Kuchenmeister;herstellermarke;anfang;0
 ;ma;Maggi;herstellermarke;anfang;0
@@ -54,5 +55,6 @@ Gilde Frisch-Markt Rhein-Ruhr EG;chef;Chef;herstellermarke;anfang;0
 Gilde Frisch-Markt Rhein-Ruhr EG;knorr;Knorr;herstellermarke;anfang;0
 Handelshof Mönchengladbach;heng;Henglein;herstellermarke;ende;0
 Handelshof Mönchengladbach;oe;Dr. Oetker;herstellermarke;ende;0
+Hanos Venlo;selektie;Hanos Selektie;eigenmarke;anfang;1
 Heiner Weiß GmbH;nümbrechter;Nümbrechter;herstellermarke;anfang;0
 Heiner Weiß GmbH;rustico;Rustico;herstellermarke;anfang;0
