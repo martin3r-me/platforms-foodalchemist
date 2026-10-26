@@ -71,3 +71,22 @@ it('lässt saubere Leads unangetastet: Lead löst bereits auf', function () {
     $this->artisan('foodalchemist:lead-la-repick', ['--team' => $this->rootTeam->id, '--apply' => true])->assertSuccessful();
     expect($gp->refresh()->lead_la_supplier_item_id)->toBe($mit->id);
 });
+
+it('Stamm-Fall (io): globaler stamm_paket-Artikel mit Master-Preis löst auf — der Lead bleibt unangetastet und wird nicht als Park gezählt', function () {
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    $gp = $this->makeGp($this->rootTeam, 'Aalfilet');
+    $gp->update(['status' => 'approved']);
+    $la = FoodAlchemistSupplierItem::create(['team_id' => null, 'stamm_class' => 'stamm_paket', 'supplier_id' => $this->sup->id, 'designation' => 'Aalfilet geräuchert', 'qty' => 1.0, 'unit_code' => 'kg']);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => null, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
+    FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'price' => 7.50, 'status' => '0', 'valid_to' => null]);
+    $gp->update(['lead_la_supplier_item_id' => $la->id, 'n_las_total' => 1]);
+
+    $code = \Illuminate\Support\Facades\Artisan::call('foodalchemist:lead-la-repick', ['--team' => $this->rootTeam->id]);
+    $out = \Illuminate\Support\Facades\Artisan::output();
+
+    expect($code)->toBe(0)
+        ->and($out)->toMatch('/Lead löst bereits auf \(unangetastet\)\s*\|\s*1\s*\|/u')
+        ->and($out)->toMatch('/Park[^|]*\|\s*0\s*\|/u');
+    expect($gp->refresh()->lead_la_supplier_item_id)->toBe($la->id);
+});
