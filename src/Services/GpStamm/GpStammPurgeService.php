@@ -136,10 +136,15 @@ class GpStammPurgeService
         $ids = DB::table(self::GPS)->whereNull('team_id')->pluck('id')->map(fn ($v) => (int) $v)->all();
         $geloescht = [];
 
-        DB::transaction(function () use (&$geloescht) {
-            // 1) Selbstverweise (Derivat, merged_into) auf die globalen GPs lösen (auch von Team-GPs: FK wäre SET NULL)
-            $geloescht['selbstverweise_geloest'] = DB::table(self::GPS)->where(fn ($q) => $q->whereIn('derivat_von_gp_id', $this->auswahl())->orWhereIn('merged_into_id', $this->auswahl()))
-                ->update(['derivat_von_gp_id' => null, 'merged_into_id' => null]);
+        DB::transaction(function () use (&$geloescht, $ids) {
+            // 1) Selbstverweise (Derivat, merged_into) auf die globalen GPs lösen (auch von Team-GPs: FK wäre SET NULL).
+            //    MySQL verbietet UPDATE mit Unterabfrage auf dieselbe Tabelle (Fehler 1093, io 26.10.) → ID-Liste in Chargen.
+            $geloescht['selbstverweise_geloest'] = 0;
+            foreach (array_chunk($ids, 1000) as $charge) {
+                $geloescht['selbstverweise_geloest'] += DB::table(self::GPS)
+                    ->where(fn ($q) => $q->whereIn('derivat_von_gp_id', $charge)->orWhereIn('merged_into_id', $charge))
+                    ->update(['derivat_von_gp_id' => null, 'merged_into_id' => null]);
+            }
             // 2) Kind-Tabellen ohne FK
             foreach (self::OHNE_FK as [$tab, $cols]) {
                 $geloescht[$tab] = $this->tabelleDa($tab) ? DB::table($tab)->where(function ($q) use ($cols) {
