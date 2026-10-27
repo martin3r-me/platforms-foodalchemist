@@ -26,7 +26,8 @@ it('Bearbeiten: Zustand und „Gewicht oder Portion“ stehen im Namens-Abschnit
         ->assertSeeHtml('id="gp-portion-edit"')
         ->assertSeeHtml('Portionsgrammatur pro Stück, nie Packungsgröße (§7.1)')
         ->set('builder.portion', '45 g')
-        ->assertSeeHtml('45 g pro Stück');
+        ->call('nameAusFeldern')                                            // im Bearbeiten-Fall gilt der Name; aus den Feldern neu gebildet
+        ->assertSet('manuellerName', fn ($n) => str_contains($n, '45 g pro Stück'));
 });
 
 it('Kennung in der Vorschau kommt live aus den Feldern; die gespeicherte steht daneben, solange sie abweicht', function () {
