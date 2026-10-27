@@ -179,6 +179,9 @@ class GpNamingService
     /** Namensflags in „ / (…)“, die Produkteigenschaften sind (bleiben auch im Kundentext und im Matcher-Score). */
     public const NAMENS_FLAGS = ['bio', 'vegan', 'glutenfrei', 'laktosefrei'];
 
+    /** Anfang des Hinweises „Name passt nicht zu den Feldern“ (I4) — Konsumenten filtern über diese Konstante, nie über freien Text. */
+    public const HINWEIS_NAME_FELDER = 'Name passt nicht zu den Feldern';
+
     /**
      * GP-Name ohne die Marken-Klammer (§5 Ausnahme 3 / §6.6 Zusatz) — für Matcher-Score und Verkaufstexte (Kurator 26.10.). Mit `zusatz`
      * genau dieser Teil „ / (Altoni)“; ohne (Bestand) jeder Klammerteil „ / (…)“, der kein Namensflag ist. Bio/Vegan/Glutenfrei/Laktosefrei bleiben.
@@ -615,7 +618,7 @@ class GpNamingService
             $errors[] = "§6.6: Geschmackszutat »{$flavor}« ist ein Zustandswort — der Zustand gehört in das Feld Zustand.";
         }
         if ($this->normalisiere($name) !== $this->normalisiere($this->renderGpName($in))) {
-            $warnings[] = 'Drift: Name weicht vom Render aus den strukturierten Feldern ab (I4).';
+            $warnings[] = self::HINWEIS_NAME_FELDER . ': ' . $this->abweichungNameFelder($name, $in) . '.';   // I4
         }
 
         return ['errors' => $errors, 'warnings' => $warnings];
@@ -966,6 +969,37 @@ class GpNamingService
         $teil = str_contains($name, ':') ? substr($name, (int) strpos($name, ':') + 1) : $name;
 
         return (bool) preg_match('/(^|[\s,\/(])(unbekannt|unknown)([\s,\/)]|$)/iu', $teil);
+    }
+
+    /**
+     * Klartext zur Abweichung Name ⇄ Felder (I4, Dominique 27.10.: statt „Drift … (I4)“): was aus einem Feld im Namen fehlt bzw. was im Namen
+     * steht, aber aus keinem Feld kommt — höchstens zwei Funde. Ohne konkreten Fund unterscheiden sich nur Reihenfolge oder Schreibweise.
+     */
+    private function abweichungNameFelder(string $name, array $in): string
+    {
+        $labels = ['hauptzutat' => 'Hauptzutat', 'flavor' => 'Geschmack', 'processing' => 'Verarbeitung', 'form' => 'Form', 'condition' => 'Zustand',
+            'pflichtangabe' => 'Pflichtangabe', 'zusatz' => 'Zusatz'];
+        $imNamen = $this->normalisiere($name);
+        $funde = [];
+        foreach ($labels as $feld => $label) {
+            if ($feld === 'condition' && $this->ohneZustandswort($in)) {
+                continue;
+            }
+            foreach (array_filter(array_map('trim', explode(',', (string) ($in[$feld] ?? '')))) as $teil) {
+                if (! str_contains($imNamen, $this->normalisiere($teil))) {
+                    $funde[] = "„{$teil}“ aus dem Feld {$label} fehlt im Namen";
+                }
+            }
+        }
+        $gerendert = $this->normalisiere($this->renderGpName($in));
+        $rest = preg_match('/^.*?:(?=\s|$)(.*)$/su', $name, $m) === 1 ? $m[1] : '';
+        foreach (preg_split('/\s*,\s*|\s*\/\s*\(|\)/u', $rest) ?: [] as $teil) {
+            if (($teil = trim($teil)) !== '' && ! str_contains($gerendert, $this->normalisiere($teil))) {
+                $funde[] = "„{$teil}“ steht im Namen, aber in keinem Feld";
+            }
+        }
+
+        return $funde === [] ? 'Reihenfolge oder Schreibweise weicht ab' : implode('; ', array_slice($funde, 0, 2));
     }
 
     private function normalisiere(string $s): string

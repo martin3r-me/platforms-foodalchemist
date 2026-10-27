@@ -136,6 +136,9 @@ class GpModal extends Component
     /** Namensvorschlag aus der Lead-LA (Override-First: erst Vorschlag, dann Übernehmen). */
     public ?string $nameVorschlag = null;
 
+    /** Die Felder hinter {@see $nameVorschlag} — nur, was die KI geliefert hat; „Übernehmen“ schreibt sie in den Builder (Kurator 27.10.). */
+    public array $nameVorschlagFelder = [];
+
     /** Laufender Bulk-Autopilot-Run (Zustand+Tags+Allergene+Nährwerte in einem Rutsch). */
     public ?int $bulkRunId = null;
 
@@ -150,7 +153,7 @@ class GpModal extends Component
         ?float $equivalentConfidence = null,
     ): void
     {
-        $this->reset('fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
+        $this->reset('fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'nameVorschlagFelder', 'bulkRunId', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
@@ -1160,7 +1163,7 @@ class GpModal extends Component
     public function nameAusLeadLa(AiGatewayService $ki): void
     {
         $this->fehler = null;
-        $this->nameVorschlag = null;
+        $this->nameVorschlagVerwerfen();
         $gp = $this->gp();
         if ($gp === null) {
             return;
@@ -1184,39 +1187,64 @@ class GpModal extends Component
 
             return;
         }
-        $builder = $this->builder;
+        $felder = [];
         foreach (['hauptzutat', 'flavor', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
             $wert = app(GpNamingService::class)->bereinigeFeld($vorschlag->werte[$feld] ?? null);
             if ($wert !== '') {
-                $builder[$feld] = $wert;
+                $felder[$feld] = $wert;
             }
         }
         $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)],
             app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($quellLa)->marke);   // §5 Ausnahme 3
         if ($zusatz !== '') {
-            $builder['zusatz'] = $zusatz;
+            $felder['zusatz'] = $zusatz;
         }
-        $name = trim(app(GpNamingService::class)->renderGpName($builder));
+        $name = trim(app(GpNamingService::class)->renderGpName([...$this->builder, ...$felder]));
         if ($name === '') {
             $this->fehler = 'KI lieferte keinen verwertbaren Namensvorschlag aus der LA-Bezeichnung.';
 
             return;
         }
         $this->nameVorschlag = $name;
+        $this->nameVorschlagFelder = $felder;
     }
 
-    /** Vorschlag übernehmen = der EINE Schreib-Moment (Override-First, GL-07). */
+    /**
+     * Vorschlag übernehmen = der EINE Schreib-Moment (Override-First, GL-07): Name UND die Felder dahinter. Gelieferte Felder überschreiben auch
+     * gefüllte; nicht gelieferte und bio/vegan/… bleiben. Der Name wird aus dem Builder gerendert — damit passen Name und Felder (kein I4-Hinweis).
+     */
     public function nameVorschlagUebernehmen(): void
     {
-        if ($this->nameVorschlag !== null) {
-            $this->manuellerName = $this->nameVorschlag;
-            $this->nameVorschlag = null;
+        if ($this->nameVorschlag === null) {
+            return;
         }
+        foreach ($this->nameVorschlagFelder as $feld => $wert) {
+            $this->builder[$feld] = $wert;
+        }
+        $this->manuellerName = trim(app(GpNamingService::class)->renderGpName($this->builder)) ?: $this->nameVorschlag;
+        $this->nameVorschlagVerwerfen();
     }
 
     public function nameVorschlagVerwerfen(): void
     {
         $this->nameVorschlag = null;
+        $this->nameVorschlagFelder = [];
+    }
+
+    /** Am Vorschlag: nur die Felder, die sich beim Übernehmen ändern — [Bezeichnung, alt, neu]. */
+    private function nameVorschlagAenderungen(): array
+    {
+        $labels = ['hauptzutat' => 'Hauptzutat', 'flavor' => 'Geschmack', 'condition' => 'Zustand', 'processing' => 'Verarbeitung', 'form' => 'Form',
+            'pflichtangabe' => 'Pflichtangabe', 'zusatz' => 'Zusatz'];
+        $out = [];
+        foreach ($this->nameVorschlagFelder as $feld => $neu) {
+            $alt = trim((string) ($this->builder[$feld] ?? ''));
+            if ($alt !== trim((string) $neu)) {
+                $out[] = [$labels[$feld] ?? $feld, $alt, (string) $neu];
+            }
+        }
+
+        return $out;
     }
 
     public function render(GpNamingService $naming, VocabularyService $vocab, PriceService $preise, GpAggregateService $aggregate)
@@ -1231,10 +1259,10 @@ class GpModal extends Component
         if ($gebinde !== null && ($p = $this->portionGramm()) !== null && abs($p - $gebinde) < 0.5) {
             $pruefung['warnings'][] = '§7.1: „Gewicht oder Portion“ ('.trim((string) $this->builder['portion']).') entspricht der Gebindemenge des Lieferantenartikels. Packungsgrößen gehören nie in den GP-Namen. Das Feld nur für die Portionsgrammatur pro Stück nutzen.';
         }
-        // R20: Drift (I4) ist nur aussagekräftig, wenn die strukturierten Felder gepflegt sind —
+        // R20: der Hinweis „Name passt nicht zu den Feldern“ (I4) ist nur aussagekräftig, wenn die strukturierten Felder gepflegt sind —
         // Bestands-GPs ohne Builder-Pflege meldeten sonst IMMER Drift (Falsch-Positiv).
         if (trim($this->builder['hauptzutat'] ?? '') === '') {
-            $pruefung['warnings'] = array_values(array_filter($pruefung['warnings'], fn ($w) => ! str_starts_with($w, 'Drift:')));
+            $pruefung['warnings'] = array_values(array_filter($pruefung['warnings'], fn ($w) => ! str_starts_with($w, GpNamingService::HINWEIS_NAME_FELDER)));
         }
 
         // Spec 28 / E3.1: Kennzahlen für den KPI-Kopf des Voll-Editors. Bewusst DIESELBEN
@@ -1255,6 +1283,7 @@ class GpModal extends Component
             : null;
 
         return view('foodalchemist::livewire.gps.gp-modal', [
+            'nameVorschlagAenderungen' => $this->nameVorschlagAenderungen(),
             'servierTypen' => ($this->builder['commodity_group_code'] ?? '') === '16' && $team !== null
                 ? \Platform\FoodAlchemist\Support\TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->pluck('name', 'id')->all()
                 : [],
@@ -1271,9 +1300,9 @@ class GpModal extends Component
             'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
-            'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null)
-                : ($gp->gp_key ?? ''),
+            // 27.10.: Kennung immer live aus den Feldern; beim Bearbeiten zusätzlich die gespeicherte, wenn sie abweicht (updateGp schreibt gp_key nie um)
+            'vorschauKey' => $liveKey = $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null),
+            'gespeicherterKey' => $gp !== null && (string) $gp->gp_key !== '' && $gp->gp_key !== $liveKey ? (string) $gp->gp_key : null,
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
@@ -1372,7 +1401,7 @@ class GpModal extends Component
     private function vorschauName(): string
     {
         if (trim($this->manuellerName) !== '') {
-            return trim($this->manuellerName);                               // Override → Drift-Warning (I4)
+            return trim($this->manuellerName);                               // Override → ggf. Hinweis „Name passt nicht zu den Feldern“ (I4)
         }
 
         return app(GpNamingService::class)->renderGpName($this->builder);
