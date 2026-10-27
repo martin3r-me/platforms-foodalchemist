@@ -1300,9 +1300,9 @@ class GpModal extends Component
             'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
-            'vorschauKey' => $this->gpId === null
-                ? $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null)
-                : ($gp->gp_key ?? ''),
+            // 27.10.: Kennung immer live aus den Feldern; beim Bearbeiten zusätzlich die gespeicherte, wenn sie abweicht (updateGp schreibt gp_key nie um)
+            'vorschauKey' => $liveKey = $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null),
+            'gespeicherterKey' => $gp !== null && (string) $gp->gp_key !== '' && $gp->gp_key !== $liveKey ? (string) $gp->gp_key : null,
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),

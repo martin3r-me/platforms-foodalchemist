@@ -266,7 +266,7 @@
                     </fieldset>
                 @else
                     {{-- Spec 80 (Paket 11): die strukturierten Felder auch beim Bearbeiten — vorher nur bei der Anlage,
-                         darum stand „Würfel 5 mm" im Bestand nur im Namen. Zustand steht unter „Einordnung". --}}
+                         darum stand „Würfel 5 mm" im Bestand nur im Namen. Seit 27.10. auch Zustand und Portion. --}}
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" data-gp-felder-bearbeiten>
                         <x-fa::field label="Hauptzutat" for="gp-hauptzutat-edit">
                             <x-fa::input id="gp-hauptzutat-edit" wire:model.live.debounce.300ms="builder.hauptzutat" placeholder="z. B. Schalotten" />
@@ -289,6 +289,15 @@
                         <x-fa::field label="Form" for="gp-form-edit" optional>
                             <x-fa::input id="gp-form-edit" wire:model.live.debounce.300ms="builder.form" placeholder="Ganz, Filet, Püree …" />
                         </x-fa::field>
+                        {{-- 27.10.: Zustand gehört zum Namen (§6) — hier dieselbe Bindung wie unter „Einordnung“ (dort mit KI-Herkunft) --}}
+                        <x-fa::field label="Zustand" for="gp-zustand-edit">
+                            <x-fa::select id="gp-zustand-edit" wire:model.live="builder.condition" placeholder="Bitte wählen" data-gp-zustand-edit>
+                                @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
+                            </x-fa::select>
+                        </x-fa::field>
+                        <x-fa::field label="Gewicht oder Portion" for="gp-portion-edit" optional hint="Portionsgrammatur pro Stück, nie Packungsgröße (§7.1)">
+                            <x-fa::input id="gp-portion-edit" wire:model.live.debounce.300ms="builder.portion" placeholder="z. B. 180 g" data-gp-portion-edit />
+                        </x-fa::field>
                         <x-fa::field label="Pflichtangabe" for="gp-pflicht-edit" optional>
                             <x-fa::input id="gp-pflicht-edit" wire:model.live.debounce.300ms="builder.pflichtangabe" placeholder="z. B. 3,5 %, Type 405" />
                         </x-fa::field>
@@ -310,7 +319,10 @@
                     <p class="{{ $leise }}">So heißt es nach dem Speichern</p>
                     <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '–' }}</p>
                     <p class="{{ $leise }}" title="Hauptzutat und Kennung, über die doppelte Grundprodukte erkannt werden">
-                        Hauptzutat <span class="font-mono">{{ $vorschauSlug !== '' ? $vorschauSlug : '–' }}</span> · Kennung <span class="font-mono">{{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '–' }}</span>
+                        Hauptzutat <span class="font-mono">{{ $vorschauSlug !== '' ? $vorschauSlug : '–' }}</span> · Kennung <span class="font-mono" data-vorschau-key>{{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '–' }}</span>
+                        @if($gespeicherterKey !== null)
+                            <span title="Beim Bearbeiten bleibt die gespeicherte Kennung stehen (Seed-Stabilität); die Kennung oben ist die aus den aktuellen Feldern">· gespeichert <span class="font-mono" data-gespeicherter-key>{{ $gespeicherterKey }}</span></span>
+                        @endif
                     </p>
                 </div>
                 @if($liveFehler !== [] || $warnungen !== [])
