@@ -104,6 +104,11 @@
                                     class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]" data-anomalien-btn>
                                 @svg('heroicon-o-chart-bar', 'w-4 h-4 text-[var(--fa-ink-3)]') Preisausreißer anzeigen
                             </button>
+                            {{-- Marken dieses Lieferanten (27.10.): Lesen für alle Teams wie die Seite, darum außerhalb des Bearbeiten-Rechts --}}
+                            <a role="menuitem" href="{{ route('foodalchemist.suppliers.marken', ['lieferant' => $aktiverLieferant->id]) }}" wire:navigate x-on:click="offen = false"
+                               class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]" data-link-marken-lieferant>
+                                @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Marken
+                            </a>
                             @if($darfLieferantEdit)
                                 {{-- Stammdaten-Pflege lebt im Stammblatt; hier nur Aktivieren/Deaktivieren --}}
                                 <button type="button" role="menuitem" x-on:click="offen = false"
