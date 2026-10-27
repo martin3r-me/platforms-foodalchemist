@@ -41,6 +41,9 @@ class MarkeOffen extends Component
         abort_unless(MasterTeam::istMaster(Auth::user()?->currentTeamRelation), 403, 'Den Marken-Nachlauf bearbeitet das Master-Team.');
     }
 
+    /** Hinweis „Marke ist schon bei X angelegt, gilt daher für alle“ (Vorschlag „Gilt für: alle“, Dominique 27.10.) */
+    public ?string $geltungHinweis = null;
+
     /** Gruppe des offenen Formulars (bleibt sichtbar, auch wenn sie nach dem Zuordnen aus der Liste fällt — die Meldung steht im Formular). */
     public array $offenGruppe = [];
 
@@ -54,6 +57,38 @@ class MarkeOffen extends Component
         $this->ergebnis = [];
         $this->fehler = null;
         $this->meldung = null;
+        $this->geltungHinweis = null;
+    }
+
+    /**
+     * Vorschlag „Gilt für: alle“: Gibt es denselben Markennamen (ohne Groß/Klein) schon als Herstellermarke bei einem ANDEREN Lieferanten oder global, gilt die
+     * Marke für alle. Händler-Eigenmarken (Typ eigenmarke) bleiben beim Lieferanten. Nur ein Vorschlag — die Auswahl bleibt änderbar.
+     */
+    public function updatedFormMarke(): void
+    {
+        $sid = $this->offenGruppe['supplier_id'] ?? null;
+        $marke = mb_strtolower(trim((string) $this->form['marke']));
+        $warVorschlag = $this->geltungHinweis !== null;
+        $this->geltungHinweis = null;
+        if ($marke !== '' && $sid !== null && $this->form['typ'] === FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE) {
+            $treffer = FoodAlchemistSupplierMarke::query()->with('supplier:id,name')->where('typ', FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE)
+                ->whereRaw('LOWER(marke) = ?', [$marke])->where(fn ($q) => $q->whereNull('supplier_id')->orWhere('supplier_id', '!=', $sid))->first();
+            if ($treffer !== null) {
+                $this->form['geltung'] = 'alle';
+                $this->geltungHinweis = 'Marke ist schon ' . ($treffer->supplier_id === null ? 'für alle Lieferanten' : 'bei ' . ($treffer->supplier?->name ?? 'einem anderen Lieferanten'))
+                    . ' angelegt, gilt daher für alle.';
+
+                return;
+            }
+        }
+        if ($warVorschlag) {
+            $this->form['geltung'] = $sid !== null ? 'lieferant' : 'alle';   // Vorschlag zurücknehmen, wenn die Marke nicht mehr passt
+        }
+    }
+
+    public function updatedFormTyp(): void
+    {
+        $this->updatedFormMarke();
     }
 
     public function schliessen(): void

@@ -120,6 +120,7 @@
             @else
                 {{-- Preisausreißer gelten über alle Lieferanten — auch ohne Auswahl erreichbar (wie vorher) --}}
                 <x-slot:actions>
+                    <x-fa::button icon="heroicon-m-tag" :href="route('foodalchemist.suppliers.marken')" wire:navigate title="Alle Marken-Kürzel für die GP-Klammer" data-link-marken>Marken</x-fa::button>
                     <x-fa::button icon="heroicon-m-chart-bar" wire:click="anomalienAnzeigen" wire:loading.attr="disabled" data-anomalien-btn>Preisausreißer anzeigen</x-fa::button>
                 </x-slot:actions>
             @endif

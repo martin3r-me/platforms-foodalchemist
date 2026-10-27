@@ -21,7 +21,11 @@
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <div class="flex flex-col gap-4" data-marke-offen>
             <x-fa::page-header title="Marke offen"
-                :subtitle="$fmt($liste['gps_offen']) . ' Rezeptur-GPs ohne Marke · ' . $fmt($liste['artikel_offen']) . ' Artikel · ' . $fmt(count($liste['gruppen'])) . ' unbekannte Kürzel'" />
+                :subtitle="$fmt($liste['gps_offen']) . ' Rezeptur-GPs ohne Marke · ' . $fmt($liste['artikel_offen']) . ' Artikel · ' . $fmt(count($liste['gruppen'])) . ' unbekannte Kürzel'">
+                <x-slot:actions>
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-tag" :href="route('foodalchemist.suppliers.marken')" wire:navigate data-link-marken>Alle Marken</x-fa::button>
+                </x-slot:actions>
+            </x-fa::page-header>
 
             @if($fehler)<x-fa::notice tone="crit" data-marke-offen-fehler>{{ $fehler }}</x-fa::notice>@endif
             @if($meldung)<x-fa::notice tone="ok" data-marke-offen-meldung>{{ $meldung }}</x-fa::notice>@endif
@@ -93,9 +97,9 @@
                                                             <x-fa::input id="mo-marke" size="sm" wire:model.live.debounce.250ms="form.marke" placeholder="Markenname wie auf dem Artikel" required data-mo-marke />
                                                         </x-fa::field>
                                                         <x-fa::field label="Typ" for="mo-typ">
-                                                            <x-fa::select id="mo-typ" size="sm" wire:model="form.typ" :options="['herstellermarke' => 'Herstellermarke', 'eigenmarke' => 'Eigenmarke des Händlers']" />
+                                                            <x-fa::select id="mo-typ" size="sm" wire:model.live="form.typ" :options="['herstellermarke' => 'Herstellermarke', 'eigenmarke' => 'Eigenmarke des Händlers']" />
                                                         </x-fa::field>
-                                                        <x-fa::field label="Gilt für" for="mo-geltung">
+                                                        <x-fa::field label="Gilt für" for="mo-geltung" :hint="$geltungHinweis">
                                                             <x-fa::select id="mo-geltung" size="sm" wire:model="form.geltung" :options="['lieferant' => 'nur ' . $g['lieferant'], 'alle' => 'alle Lieferanten']" />
                                                         </x-fa::field>
                                                         <x-fa::field label="Vorrang" for="mo-vorrang" hint="0–9, höher gewinnt">
