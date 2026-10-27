@@ -14,6 +14,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Services\Preis\LetzterPreisService;
+use Platform\FoodAlchemist\Services\Preis\LetzterPreisSpur;
+use Platform\FoodAlchemist\Services\Rezept\RezeptGraphService;
 
 /**
  * M4-03: GL-02-Recompute-Pipeline — EINE Transaktion pro Rezept (V-07):
@@ -369,86 +372,13 @@ class RecipeRecomputeService
     }
 
     /**
-     * §3.5: Verknüpfungs-Guards parent→sub — Selbstreferenz, Zyklus, Tiefe > 3 BLOCKT (A-5-Ziel).
+     * §3.5: Verknüpfungs-Guards parent→sub — Selbstreferenz und Zyklus blocken, Tiefe nur informativ. Logik in {@see RezeptGraphService} (ausgelagert 27.10.).
      *
      * @return array{erlaubt: bool, grund: ?string, projizierte_tiefe: int}
      */
     public function pruefeVerknuepfung(int $parentId, int $subId): array
     {
-        if ($parentId === $subId) {
-            return ['erlaubt' => false, 'grund' => 'Selbstreferenz', 'projizierte_tiefe' => 0];
-        }
-        // BFS von sub abwärts: wird parent erreicht ⇒ Zyklus
-        $ebene = [$subId];
-        $besucht = [$subId => true];
-        while ($ebene !== []) {
-            $kinder = FoodAlchemistRecipeIngredient::whereIn('recipe_id', $ebene)
-                ->whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
-                ->distinct()->pluck('referenced_recipe_id')->reject(fn ($id) => isset($besucht[$id]))->values()->all();
-            if (in_array($parentId, $kinder, true)) {
-                return ['erlaubt' => false, 'grund' => 'Zyklus', 'projizierte_tiefe' => 0];
-            }
-            foreach ($kinder as $k) {
-                $besucht[$k] = true;
-            }
-            $ebene = $kinder;
-        }
-
-        // Projizierte Tiefe bleibt informativ (Ahnen des Parents + Sub-Baum), aber sie
-        // BLOCKT nicht mehr (A-5 2026-08-03 gelockert): tiefe Menü-/Komposit-Ketten sind
-        // legitim. Verworfen wird nur bei Selbstreferenz/Zyklus (oben geprüft).
-        $tiefe = max(
-            $this->ahnenHoehe($parentId) + $this->subtreeTiefe($subId),
-            $this->subtreeTiefe($parentId),
-        );
-
-        return ['erlaubt' => true, 'grund' => null, 'projizierte_tiefe' => $tiefe];
-    }
-
-    /** Längster Aufwärts-Pfad bis zur Wurzel, inkl. Start-Rezept (A→B→C: C ⇒ 3). */
-    private function ahnenHoehe(int $recipeId): int
-    {
-        $hoehe = 1;
-        $ebene = [$recipeId];
-        $besucht = [$recipeId => true];
-        while ($ebene !== []) {                                    // Visited-Set garantiert Terminierung (kein Tiefen-Cap)
-            $eltern = FoodAlchemistRecipeIngredient::whereIn('referenced_recipe_id', $ebene)
-                ->whereNull('deleted_at')->distinct()->pluck('recipe_id')
-                ->reject(fn ($id) => isset($besucht[$id]))->values()->all();
-            if ($eltern === []) {
-                break;
-            }
-            foreach ($eltern as $e) {
-                $besucht[$e] = true;
-            }
-            $ebene = $eltern;
-            $hoehe++;
-        }
-
-        return $hoehe;
-    }
-
-    /** Tiefe des Sub-Baums ab Rezept (Blatt = 1). */
-    public function subtreeTiefe(int $recipeId): int
-    {
-        $tiefe = 1;
-        $ebene = [$recipeId];
-        $besucht = [$recipeId => true];
-        while ($ebene !== []) {                                    // Visited-Set garantiert Terminierung (kein Tiefen-Cap)
-            $kinder = FoodAlchemistRecipeIngredient::whereIn('recipe_id', $ebene)
-                ->whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
-                ->distinct()->pluck('referenced_recipe_id')->reject(fn ($id) => isset($besucht[$id]))->values()->all();
-            if ($kinder === []) {
-                break;
-            }
-            foreach ($kinder as $k) {
-                $besucht[$k] = true;
-            }
-            $ebene = $kinder;
-            $tiefe++;
-        }
-
-        return $tiefe;
+        return app(RezeptGraphService::class)->pruefeVerknuepfung($parentId, $subId);
     }
 
     // ── 1. Yield + Zähler (§3.1) ────────────────────────────────────────
@@ -692,9 +622,7 @@ class RecipeRecomputeService
             $recipe->ek_n_ingredients_total = null;
             $recipe->ek_n_ingredients_priced = null;
             $recipe->ek_price_basis = null;
-            if (self::hatLetzterPreisSpalte()) {
-                $recipe->ek_n_letzter_preis = null;
-            }
+            LetzterPreisService::zaehlerSetzen($recipe, null);
 
             return;
         }
@@ -719,9 +647,7 @@ class RecipeRecomputeService
 
         $recipe->ek_n_ingredients_total = $nKosten;
         $recipe->ek_n_ingredients_priced = $nPriced;
-        if (self::hatLetzterPreisSpalte()) {
-            $recipe->ek_n_letzter_preis = $nLetzter;   // Hinweis „EK enthält n letzte Preise eingestellter Artikel“ (27.10.)
-        }
+        LetzterPreisService::zaehlerSetzen($recipe, $nLetzter);   // Hinweis „EK enthält n letzte Preise eingestellter Artikel“ (27.10.)
         // V-014: woher die Zahl kommt, wird mitgeführt statt vergessen (schwächstes Glied).
         $recipe->ek_price_basis = EkPriceBasis::aggregiere($basen);
         $recipe->ek_total_eur = $ekTotal > 0 ? round($ekTotal, 2) : null;
@@ -1033,13 +959,11 @@ class RecipeRecomputeService
 
         $gp = $z->gp;
         // 4. Element der Rückgabe: Preis stammt (auch) aus dem letzten Preis eines eingestellten Artikels (27.10.) — für den Rezept-Hinweis
-        $this->letzterPreisGenutzt = false;
+        $this->spur()->zuruecksetzen();
         [$pG, $bG] = $gp !== null ? $this->preisProGrammMitBasis($gp) : [null, null];
-        $letzterG = $this->letzterPreisGenutzt;
-        $this->letzterPreisGenutzt = false;
+        $letzterG = $this->spur()->abholen();
         [$pStk, $bStk] = $gp !== null ? $this->preisProStueckMitBasis($gp) : [null, null];
-        $letzterStk = $this->letzterPreisGenutzt;
-        $this->letzterPreisGenutzt = false;
+        $letzterStk = $this->spur()->abholen();
         $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
             ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
         // Vererbung statt Neu-Erfinden: das Eltern-Rezept kennt vom Sub nur den €/kg.
@@ -1272,7 +1196,7 @@ class RecipeRecomputeService
         $this->recomputeTeam = $team;
         $this->laCache = [];
         $this->leadPrefCache = [];
-        $this->letzterPreisGenutzt = false;
+        $this->spur()->zuruecksetzen();
 
         return $this->preisProGrammFuer($gp);
     }
@@ -1280,7 +1204,7 @@ class RecipeRecomputeService
     /** Nach preisProGrammPublic/preisProStueckPublic: stammt der Preis (auch) aus dem letzten Preis eines eingestellten Artikels? (Rückfall 27.10.) */
     public function letzterPreisGenutzt(): bool
     {
-        return $this->letzterPreisGenutzt;
+        return $this->spur()->genutzt();
     }
 
     /** Stk-Zwilling zu preisProGrammPublic: €/Stk fürs Client-Live-Rechnen bei Stück-Zeilen. */
@@ -1289,7 +1213,7 @@ class RecipeRecomputeService
         $this->recomputeTeam = $team;
         $this->laCache = [];
         $this->leadPrefCache = [];
-        $this->letzterPreisGenutzt = false;
+        $this->spur()->zuruecksetzen();
 
         return $this->preisProStueckFuer($gp);
     }
@@ -1322,9 +1246,7 @@ class RecipeRecomputeService
             ->select('foodalchemist_supplier_items.*')
             ->addSelect('s.gp_id AS _preis_gp_id')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'aktiver_preis') // Spec 82 3a
-            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $team))   // Rückfall eingestellter Artikel (27.10.)
-            ->get()
-            ->each(fn ($la) => $this->effektivPreis($la))
+            ->pipe(fn ($q) => app(LetzterPreisService::class)->laden($q, $team))   // Rückfall eingestellter Artikel (27.10.)
             ->groupBy(fn ($la) => (int) $la->_preis_gp_id);
 
         foreach ($gpIds as $gpId) {
@@ -1355,11 +1277,11 @@ class RecipeRecomputeService
                     ->map(fn ($la) => ((float) $la->aktiver_preis) / FoodAlchemistSupplierItem::mengeVon($la) / $stueckG)
                     ->values();
             }
-            $this->letzterPreisGenutzt = false;
+            $this->spur()->zuruecksetzen();
             $lead = $this->preisProGrammFuer($gp);
             $result[(int) $gp->id] = [
                 'lead' => $lead,
-                'lead_letzter' => $lead !== null && $this->letzterPreisGenutzt,   // Lead-Preis aus dem letzten Preis eines eingestellten Artikels (27.10.)
+                'lead_letzter' => $lead !== null && $this->spur()->genutzt(),   // Lead-Preis aus dem letzten Preis eines eingestellten Artikels (27.10.)
                 'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
                 'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
                 // €/Stk direkt: eine Stück-Zeile braucht KEIN Gewicht, um bepreist zu sein
@@ -1415,7 +1337,7 @@ class RecipeRecomputeService
             if (in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null) {
                 $pg = $this->preise->preisProGramm($la, (float) $la->aktiver_preis);
                 if ($pg !== null) {
-                    $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || $la->preis_quelle === 'letzter_eingestellt';
+                    $this->spur()->merke($la);
 
                     return [$pg, EkPriceBasis::Lead];
                 }
@@ -1430,14 +1352,12 @@ class RecipeRecomputeService
                 if ($pg !== null) {
                     $summe += $pg;
                     $n++;
-                    $letzteImAvg = ($letzteImAvg ?? false) || $la->preis_quelle === 'letzter_eingestellt';
+                    $this->spur()->merke($la);
                 }
             }
         }
 
         if ($n > 0) {
-            $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || ($letzteImAvg ?? false);
-
             return [$summe / $n, EkPriceBasis::Avg];
         }
 
@@ -1469,7 +1389,7 @@ class RecipeRecomputeService
     {
         foreach ($this->preisKandidaten($gp) as $la) {
             if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
-                $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || $la->preis_quelle === 'letzter_eingestellt';
+                $this->spur()->merke($la);
 
                 return [(float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la), EkPriceBasis::Lead];
             }
@@ -1481,11 +1401,8 @@ class RecipeRecomputeService
             if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
                 $summe += (float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la);
                 $n++;
-                $letzteImAvg = ($letzteImAvg ?? false) || $la->preis_quelle === 'letzter_eingestellt';
+                $this->spur()->merke($la);
             }
-        }
-        if ($n > 0) {
-            $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || ($letzteImAvg ?? false);
         }
 
         return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
@@ -1567,40 +1484,21 @@ class RecipeRecomputeService
         return $this->leadPrefCache[$key] ??= \Platform\FoodAlchemist\Support\LeadOverlay::fuer($this->recomputeTeam, [(int) $gp->id])[(int) $gp->id] ?? [];
     }
 
-    /** Wurde beim letzten Preis-Pfad ein letzter Preis eines eingestellten Artikels verwendet? (zutatKosten setzt zurück und liest aus) */
-    private bool $letzterPreisGenutzt = false;
-
-    private static ?bool $letzterPreisSpalte = null;
-
-    private static function hatLetzterPreisSpalte(): bool
+    /** Merker: hat im laufenden Preis-Pfad ein letzter Preis eines eingestellten Artikels beigetragen? (Rückfall 27.10.) */
+    private function spur(): LetzterPreisSpur
     {
-        return self::$letzterPreisSpalte ??= \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_recipes', 'ek_n_letzter_preis');
+        return $this->spur ??= new LetzterPreisSpur;
     }
 
-    /**
-     * Rückfall (Dominique 27.10.): hat ein eingestellter Artikel keinen aktiven Preis, rechnet das EK mit seinem letzten bekannten Preis — gekennzeichnet über
-     * `preis_quelle` (aktiv | letzter_eingestellt). `aktiver_preis` trägt danach den Rechenpreis; bestellbare Artikel bleiben unberührt (letzter_preis ist dort NULL).
-     */
-    private function effektivPreis(FoodAlchemistSupplierItem $la): void
-    {
-        if ($la->aktiver_preis === null && $la->letzter_preis !== null) {
-            $la->setAttribute('aktiver_preis', $la->letzter_preis);
-            $la->setAttribute('preis_quelle', 'letzter_eingestellt');
-        } else {
-            $la->setAttribute('preis_quelle', $la->aktiver_preis !== null ? 'aktiv' : null);
-        }
-    }
+    private ?LetzterPreisSpur $spur = null;
 
     private function alleAktivenLas(FoodAlchemistGp $gp): Collection
     {
         $prefs = $this->leadPrefs($gp);
-        $las = $this->laMitPreis($gp)->filter(
+        // Vorrang (27.10.): mit aktiv bepreisten Artikeln zählt der letzte Preis eingestellter Artikel im Durchschnitt nicht mit
+        return app(LetzterPreisService::class)->vorrang($this->laMitPreis($gp)->filter(
             fn ($la) => ! $la->is_discontinued && ! ($prefs[$la->id]['locked'] ?? false),
-        );
-        // Vorrang (27.10.): gibt es Artikel mit aktivem Preis, zählt der letzte Preis eingestellter Artikel im Durchschnitt nicht mit
-        $mitAktivem = $las->contains(fn ($la) => $la->preis_quelle === 'aktiv');
-
-        return $mitAktivem ? $las->filter(fn ($la) => $la->preis_quelle !== 'letzter_eingestellt') : $las;
+        ));
     }
 
     /** LAs des GP inkl. Aktiv-Preis (memoisiert pro Pipeline-Lauf). */
@@ -1618,9 +1516,7 @@ class RecipeRecomputeService
             ->select('foodalchemist_supplier_items.*')
             // Spec 82 3a: Preise des Rechen-Teams (Team → Vorfahren → global); ohne Team nur Listenpreis.
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $this->recomputeTeam)->toBase(), 'aktiver_preis')
-            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $this->recomputeTeam))   // Rückfall eingestellter Artikel (27.10.)
-            ->get()
-            ->each(fn ($la) => $this->effektivPreis($la));
+            ->pipe(fn ($q) => app(LetzterPreisService::class)->laden($q, $this->recomputeTeam));   // Rückfall eingestellter Artikel (27.10.)
     }
 
     private function rangZuText(?int $rang): string
