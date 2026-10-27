@@ -208,9 +208,10 @@ class IngredientMatchService
             }
         }
 
+        // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : $final;
+            : app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio);
     }
 
     /** 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2) — v1-Kernlauf. */

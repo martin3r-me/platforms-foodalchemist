@@ -43,6 +43,19 @@ class RezeptImport extends Component
     public string $importMeldung = '';
 
     /**
+     * Abgleich-Leitplanken NUR für diesen Import (Kurator 27.10.): vorbelegt aus der Planungs-Session, sonst Standard (konventionell, frisch,
+     * keine Convenience-Vorgabe). Werte/Labels wie die Planungs-Regler (Planung\Index::RICHTUNGEN, FRISCHE_OPTIONEN). Die Session bleibt unverändert;
+     * die Auswahl geht an legeAn und die anschließende Anreicherung (Bestandssuche vor jedem GP-Mint).
+     */
+    public string $abgleichBio = 'konventionell';
+
+    public string $abgleichFrische = 'frisch';
+
+    public string $abgleichConvenience = '';
+
+    public bool $abgleichAusSession = false;
+
+    /**
      * Schritt 1: Rohtext (Textarea oder Text-PDF) TREU extrahieren → editierbare Vorschau.
      * Bewusst synchron (EIN LLM-Call; das teure Erzeugen läuft weiterhin async über die Kaskade).
      */
@@ -103,6 +116,7 @@ class RezeptImport extends Component
             ], array_values(array_filter((array) ($extrakt['zutaten'] ?? []), 'is_array')))),
             'komponenten' => $this->vorschauKomponenten((array) ($extrakt['komponenten'] ?? [])),
         ];
+        $this->abgleichVorbelegen();
         $this->importStep = 'vorschau';
     }
 
@@ -130,7 +144,8 @@ class RezeptImport extends Component
             'komponenten' => $this->komponentenRein((array) ($this->importVorschau['komponenten'] ?? [])),
         ];
         try {
-            $res = $svc->legeAn($team, $extrakt, $this->importTyp === 'gericht');
+            $leitplanken = $this->abgleichLeitplanken();
+            $res = $svc->legeAn($team, $extrakt, $this->importTyp === 'gericht', 0, $leitplanken);
         } catch (\Throwable $e) {
             $this->importMeldung = $e->getMessage();
 
@@ -149,7 +164,7 @@ class RezeptImport extends Component
         // Import nicht kippen (fail-soft).
         try {
             app(PlanningCascadeService::class)->enrichBestehendesRezept(
-                $team, (int) $recipe->id, $this->importTyp === 'gericht', $this->sessionId
+                $team, (int) $recipe->id, $this->importTyp === 'gericht', $this->sessionId, leitplanken: $leitplanken
             );
             if ($this->sessionId !== null) {
                 $this->dispatch('planung.import-angelegt');   // Parent zieht den neuen Import-Lauf nach → Worker-Tab zeigt ihn
@@ -164,7 +179,7 @@ class RezeptImport extends Component
 
     public function importReset(): void
     {
-        $this->reset(['importText', 'importPdf', 'importVorschau', 'importErgebnis', 'importMeldung', 'importQuelle']);
+        $this->reset(['importText', 'importPdf', 'importVorschau', 'importErgebnis', 'importMeldung', 'importQuelle', 'abgleichBio', 'abgleichFrische', 'abgleichConvenience', 'abgleichAusSession']);
         $this->importStep = 'eingabe';
         $this->importTyp = 'basisrezept';
     }
@@ -239,6 +254,53 @@ class RezeptImport extends Component
         return $out;
     }
 
+    /** Optionen wie in der Planung: Bio/Convenience aus Index::RICHTUNGEN, Frische aus Index::FRISCHE_OPTIONEN. */
+    public static function abgleichOptionen(): array
+    {
+        $richtung = fn (string $feld) => collect(Index::RICHTUNGEN)->firstWhere('field', $feld)['optionen'] ?? [];
+
+        return ['bio' => $richtung('bio_praeferenz'), 'frische' => Index::FRISCHE_OPTIONEN, 'convenience' => $richtung('convenience')];
+    }
+
+    /** Session-Leitplanken (dieselbe Quelle wie die Kaskade) — leer ohne Session. */
+    private function sessionLeitplanken(): array
+    {
+        $team = $this->team();
+
+        return $team !== null && $this->sessionId !== null ? app(PlanningCascadeService::class)->sessionGenerationParams($team, $this->sessionId) : [];
+    }
+
+    /** Vorbelegung aus der Session (Umkehrung von ReglerParams), sonst der Standard. */
+    private function abgleichVorbelegen(): void
+    {
+        $p = $this->sessionLeitplanken();
+        $this->abgleichBio = match ($p['bio_pref'] ?? null) { 'bio' => 'bio', 'neutral' => 'egal', default => ($p['bio'] ?? false) === true ? 'bio' : 'konventionell' };
+        $roh = (array) ($p['frische_erlaubt'] ?? []);
+        $ausErlaubt = collect(Index::FRISCHE_CONDITION)->search(fn ($c) => array_intersect((array) $c, $roh) !== []);
+        $this->abgleichFrische = isset(Index::FRISCHE_OPTIONEN[$p['frische'] ?? '']) ? $p['frische'] : ($ausErlaubt !== false ? $ausErlaubt : 'frisch');
+        $this->abgleichConvenience = isset(self::abgleichOptionen()['convenience'][$p['convenience'] ?? '']) ? (string) $p['convenience'] : '';
+        $this->abgleichAusSession = array_intersect_key($p, array_flip(['bio_pref', 'bio', 'frische', 'frische_erlaubt', 'convenience'])) !== [];
+    }
+
+    /** Session-Leitplanken + die Abgleich-Auswahl dieses Imports (gewinnt). Weicht die Frische ab, entfällt der harte Zustands-Filter der Session. */
+    private function abgleichLeitplanken(): array
+    {
+        $p = $this->sessionLeitplanken();
+        if (($p['frische'] ?? null) !== $this->abgleichFrische) {
+            unset($p['frische_erlaubt']);
+        }
+        $p['bio_pref'] = match ($this->abgleichBio) { 'bio' => 'bio', 'egal' => 'neutral', default => 'conventional' };
+        $p['bio'] = $this->abgleichBio === 'bio';
+        $p['frische'] = $this->abgleichFrische;
+        if ($this->abgleichConvenience !== '') {
+            $p['convenience'] = $this->abgleichConvenience;
+        } else {
+            unset($p['convenience']);
+        }
+
+        return $p;
+    }
+
     private function team(): ?Team
     {
         return Auth::user()?->currentTeamRelation;
@@ -248,6 +310,7 @@ class RezeptImport extends Component
     {
         return view('foodalchemist::livewire.planung.rezept-import', [
             'komponentenFlach' => $this->komponentenFlach((array) ($this->importVorschau['komponenten'] ?? [])),
+            'abgleichOptionen' => self::abgleichOptionen(),
         ]);
     }
 }

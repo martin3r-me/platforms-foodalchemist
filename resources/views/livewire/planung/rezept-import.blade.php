@@ -69,6 +69,24 @@
                         </x-fa::select>
                     </x-fa::field>
                 </div>
+                {{-- Abgleich-Leitplanken nur für diesen Import (27.10.): womit die Zutaten gegen den GP-Bestand abgeglichen werden --}}
+                <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-import-abgleich>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-import-abgleich-text>
+                        Abgleich: <span class="font-medium text-[var(--fa-ink)]">{{ $abgleichOptionen['bio'][$abgleichBio] ?? $abgleichBio }} · {{ $abgleichOptionen['frische'][$abgleichFrische] ?? $abgleichFrische }} · {{ $abgleichOptionen['convenience'][$abgleichConvenience] ?? 'Keine Vorgabe' }}</span>
+                        <span class="text-[var(--fa-ink-3)]">({{ $abgleichAusSession ? 'aus der Planungs-Session' : 'Standard' }}, nur für diesen Import änderbar)</span>
+                    </p>
+                    <div class="flex flex-wrap items-end gap-3">
+                        <x-fa::field label="Bio" for="import-abgleich-bio" class="w-44">
+                            <x-fa::select id="import-abgleich-bio" size="sm" wire:model.live="abgleichBio" :options="$abgleichOptionen['bio']" data-import-abgleich-bio />
+                        </x-fa::field>
+                        <x-fa::field label="Frische" for="import-abgleich-frische" class="w-52">
+                            <x-fa::select id="import-abgleich-frische" size="sm" wire:model.live="abgleichFrische" :options="$abgleichOptionen['frische']" data-import-abgleich-frische />
+                        </x-fa::field>
+                        <x-fa::field label="Eigenleistung" for="import-abgleich-convenience" class="w-48">
+                            <x-fa::select id="import-abgleich-convenience" size="sm" wire:model.live="abgleichConvenience" :options="$abgleichOptionen['convenience']" data-import-abgleich-convenience />
+                        </x-fa::field>
+                    </div>
+                </div>
                 <div class="flex flex-col gap-1.5">
                     <div class="flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
                         <span class="w-20 shrink-0">Menge</span><span class="w-24 shrink-0">Einheit</span><span>Zutat</span>

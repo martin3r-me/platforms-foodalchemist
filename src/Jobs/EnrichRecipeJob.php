@@ -67,6 +67,7 @@ class EnrichRecipeJob implements ShouldQueue
         public bool $refresh = false,   // #4: Kaskaden-Anreicherung aus dem Editor → auch gefüllte, nicht-manuelle Felder auffrischen
         public bool $completeCoverage = true,   // Phase 0.3: Anreicherungs-Tiefe (Step-by-Step/Sensorik/…); Default an = Bestandsverhalten
         public bool $nurProduktfoto = false,
+        public array $leitplanken = [],   // 27.10.: Rezept-Leitplanken (bio_pref/frische/convenience) für die Bestandssuche vor jedem GP-Mint
     ) {}
 
     /** Cache-Schlüssel für den stepId-freien Produktfoto-Lauf (Modal-Knopf) — Status + Doppel-Enqueue-Guard. */
@@ -114,6 +115,7 @@ class EnrichRecipeJob implements ShouldQueue
                     completeCoverage: $this->completeCoverage,
                     refresh: $this->refresh,
                     shouldStop: fn () => $this->kaskadeAbgebrochen(),
+                    leitplanken: $this->leitplanken,
                 );
                 if ($this->kaskadeAbgebrochen()) {
                     return;
@@ -122,7 +124,7 @@ class EnrichRecipeJob implements ShouldQueue
                 // completeCoverage. Bei „leichter" Anreicherung (Step-by-Step aus) trotzdem minten, damit die
                 // Kalkulation vollständig bleibt (fail-soft, mintet nur echte Roh-Lücken, s. minteFehlendeGps).
                 if (! $this->completeCoverage) {
-                    $oneShot->minteFehlendeGps($team, $recipe->fresh() ?? $recipe);
+                    $oneShot->minteFehlendeGps($team, $recipe->fresh() ?? $recipe, $this->leitplanken);
                 }
                 // Spec 50 · D-2: `anreichern()` liefert seine Coverage — welches Glied lief,
                 // welches stieg mit welchem Grund aus. Bis 2026-09-05 stand hier ein Aufruf ohne

@@ -109,9 +109,10 @@ class RecipeExtractService
      * (geerdet), verknüpft sie im Parent per sub_rezept_id, und legt dann den Parent geerdet an.
      *
      * @param  array{typ?: string, name?: string, zutaten?: array, preparation?: string, komponenten?: array}  $extrakt
+     * @param  array  $parameter  Rezept-Leitplanken (bio_pref, frische, convenience …) wie in der Kaskade — 27.10.: vorher immer leer
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array, sub_recipes: list<array{id:int,name:string}>}
      */
-    public function legeAn(Team $team, array $extrakt, ?bool $vkModusOverride = null, int $tiefe = 0): array
+    public function legeAn(Team $team, array $extrakt, ?bool $vkModusOverride = null, int $tiefe = 0, array $parameter = []): array
     {
         $vkModus = $vkModusOverride ?? (($extrakt['typ'] ?? 'basisrezept') === 'gericht');
         $zutaten = array_map(function (array $z) {
@@ -141,7 +142,7 @@ class RecipeExtractService
                 'zutaten' => $kZutaten,
                 'preparation' => (string) ($k['preparation'] ?? ''),
                 'komponenten' => (array) ($k['komponenten'] ?? []),   // 27.10.: Unter-Komponenten weiterreichen (vorher [] → nur eine Ebene)
-            ], false, $tiefe + 1);
+            ], false, $tiefe + 1, $parameter);
             $subId = (int) $subRes['recipe']->id;
             $subInfo[] = ['id' => $subId, 'name' => $kName];
 
@@ -171,7 +172,7 @@ class RecipeExtractService
             throw new \RuntimeException("Rezept «{$name}» hat keine Zutaten — nichts zu erden.");
         }
         $result = $this->generator->generiere(
-            $team, $name, [], kiRezeptOverride: $override, vkModus: $vkModus, createdVia: 'import',
+            $team, $name, $parameter, kiRezeptOverride: $override, vkModus: $vkModus, createdVia: 'import',
         );
         $result['sub_recipes'] = $subInfo;
 

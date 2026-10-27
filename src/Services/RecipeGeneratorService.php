@@ -224,25 +224,9 @@ class RecipeGeneratorService
         // conversion“ im Schritt-Spiegel, das Gericht scheiterte nach dem KI-Call. Liste → nummerierter Text.
         $kiRezept['preparation'] = self::zubereitungAlsText($kiRezept['preparation'] ?? null);
 
-        // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool)
-        // VK-Modus: Komponenten = Basisrezepte zuerst (D-6 — Zutaten sind GPs UND/ODER Basisrezepte)
-        $convenience = $parameter['convenience'] ?? 'standard';
-        $mode = $vkModus || in_array($convenience, ['from_scratch', 'teil_convenience'], true) ? 'sub_recipe_first' : 'gp_first';
-        $preferRaw = $convenience === 'from_scratch';
-        $pref = match ($parameter['frische'] ?? null) {
-            'frisch' => 'fresh_first',
-            'tk' => 'frozen_first',
-            'konserve', 'behandelt' => 'preserved_first',   // behandelt = gepökelt/geräuchert/luftgetrocknet (v3.6 §9)
-            default => 'fresh_first',
-        };
-        // Bio dreiwertig: bio_pref (bio|conventional|neutral) gewinnt — „egal" ⇒ neutral (Adjustment 0),
-        // damit Bio-GPs nicht ungewollt bestraft werden. Fallback auf den Bool `bio` (MCP-Pfad, 4.4r).
-        $bio = match ($parameter['bio_pref'] ?? null) {
-            'bio' => 'bio',
-            'neutral' => 'neutral',
-            'conventional' => 'conventional',
-            default => ($parameter['bio'] ?? false) ? 'bio' : 'conventional',
-        };
+        // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool; VK-Modus: Basisrezepte zuerst, D-6) — EINE Abbildung,
+        // seit 27.10. auch für Rezept-Import und Mint/Bestand ({@see Matching\MatchLeitplanken})
+        ['convenience' => $convenience, 'mode' => $mode, 'preferRaw' => $preferRaw, 'pref' => $pref, 'bio' => $bio] = Matching\MatchLeitplanken::aus($parameter, $vkModus);
 
         $melde('Zutaten werden zugeordnet …');
 
