@@ -418,12 +418,13 @@
                     <div class="flex flex-col gap-1 pt-1" data-la-verknuepfen>
                         <div class="relative">
                             @svg('heroicon-m-plus', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
-                            <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Artikel verknüpfen: Bezeichnung suchen" aria-label="Lieferantenartikel suchen und verknüpfen" class="pl-8" />
+                            <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Artikel verknüpfen: Bezeichnung, Artikelnummer oder Marke" aria-label="Lieferantenartikel suchen und verknüpfen" class="pl-8" />
                         </div>
-                        @foreach($verknuepfbare as $kandidat)
-                            <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})" class="{{ $listenKnopf }}">{{ $kandidat->designation }} <span class="text-[var(--fa-ink-3)]">· {{ $kandidat->supplier_name ?? 'Lieferant unbekannt' }}</span></button>
+                        @foreach($verknuepfSuche['treffer'] as $kandidat)
+                            <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})" class="{{ $listenKnopf }}" data-la-treffer="{{ $kandidat->id }}">{{ $kandidat->designation }} <span class="text-[var(--fa-ink-3)]">· {{ $kandidat->supplier_name ?? 'Lieferant unbekannt' }}@if($kandidat->gebinde_text) · {{ $kandidat->gebinde_text }}@endif · {{ $kandidat->aktiver_preis !== null ? $zahl($kandidat->aktiver_preis) . ' €' : 'kein Preis' }}</span></button>
                         @endforeach
-                        @if($laSuche !== '' && $verknuepfbare->isEmpty())
+                        @include('foodalchemist::livewire.gps.partials.verknuepf-suche-hinweis', ['suche' => $verknuepfSuche, 'leise' => $leise])
+                        @if($laSuche !== '' && $verknuepfSuche['treffer']->isEmpty())
                             <p class="px-2 py-1 {{ $leise }}" data-la-suche-leer>Kein freier Artikel zu „{{ $laSuche }}". Ein Artikel gehört zu genau einem Grundprodukt, vielleicht ist er schon zugeordnet.</p>
                         @endif
                     </div>

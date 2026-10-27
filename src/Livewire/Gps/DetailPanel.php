@@ -514,7 +514,7 @@ class DetailPanel extends Component
         // Berechnung laeuft; die @if($section)-Guards im Blade steuern weiter die Sichtbarkeit.
         // null (Sidebar-Vollmodus) => alle Flags true => laedt ALLES wie bisher (Verhalten 1:1).
         $vollmodus = $this->section === null;
-        $brauchtLas = $vollmodus || $this->section === 'las';                 // kette, effektiverLead, leadSteuerung, preisBand, preisTrend, verknuepfbare, verwendungen
+        $brauchtLas = $vollmodus || $this->section === 'las';                 // kette, effektiverLead, leadSteuerung, preisBand, preisTrend, verknuepfSuche, verwendungen
         $brauchtAllergene = $vollmodus || $this->section === 'allergene';     // allergene, allergenKonfidenz (auch null-Cockpit)
         $brauchtZusatz = $vollmodus || $this->section === 'zusatzstoffe';     // zusatzstoffe
         $brauchtNaehr = $vollmodus || $this->section === 'naehrwerte';        // naehrwerte
@@ -549,7 +549,10 @@ class DetailPanel extends Component
             'ersatzKandidaten' => $gp !== null && $team !== null && $this->ersatzSuche !== ''
                 ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->sucheZiele($team, $this->ersatzSuche, 'gp', $gp->id)
                 : collect(),
-            'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
+            // Bugfix 27.10.: Relevanz + Lieferanten-Rang, 20 Treffer, Hinweis auf weitere, Gebinde + Preis je Treffer
+            'verknuepfSuche' => $gp !== null && $team !== null && $this->laSuche !== ''
+                ? app(\Platform\FoodAlchemist\Services\Matching\VerknuepfbareArtikelSuche::class)->suche($team, $this->laSuche, $gp->commodity_group_code)
+                : ['treffer' => collect(), 'weitere' => 0, 'mehr_als' => null],
             // Verwaltung (2026-07-02): Referenz-Zähler fürs Lösch-Gate + Kandidaten für den Rezept-Tausch
             'referenzen' => ($gp !== null && $vollmodus) ? app(\Platform\FoodAlchemist\Services\GpService::class)->referenzen($gp) : null,
             'tauschKandidaten' => $gp !== null && $team !== null && $this->tauschSuche !== ''
