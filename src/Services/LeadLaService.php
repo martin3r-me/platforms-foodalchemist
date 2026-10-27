@@ -593,31 +593,9 @@ class LeadLaService
             ->sortByDesc(fn ($la) => (float) $la->match_score)->take($limit)->values();
     }
 
-    public function sucheVerknuepfbare(Team $team, string $suche, int $limit = 8): Collection
+    public function sucheVerknuepfbare(Team $team, string $suche, int $limit = 20, ?string $warengruppe = null): Collection
     {
-        if (trim($suche) === '') {
-            return collect();
-        }
-
-        $query = FoodAlchemistSupplierItem::query()
-            ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
-            ->leftJoin('foodalchemist_supplier_item_structures AS s', function ($join) {
-                $join->on('s.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
-                    ->whereNull('s.deleted_at');
-            })
-            ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
-            ->whereNull('s.gp_id')
-            ->lieferbar();   // eingestellte Artikel (Necta, nicht bestellbar) nicht zum Verknüpfen anbieten
-        \Platform\FoodAlchemist\Support\Suche::likeAny($query, [
-            'foodalchemist_supplier_items.designation',
-            "COALESCE(foodalchemist_supplier_items.article_number, '')",
-        ], $suche);
-
-        return $query
-            ->orderBy('foodalchemist_supplier_items.designation')
-            ->limit($limit)
-            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
-            ->get();
+        return app(\Platform\FoodAlchemist\Services\Matching\VerknuepfbareArtikelSuche::class)->suche($team, $suche, $warengruppe, $limit)['treffer'];
     }
 
     /**

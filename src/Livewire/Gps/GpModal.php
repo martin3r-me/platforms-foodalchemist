@@ -1313,9 +1313,9 @@ class GpModal extends Component
             'supplierItem' => $this->supplierItemId !== null && $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->with('supplier:id,name')->find($this->supplierItemId)
                 : null,
-            'supplierItemKandidaten' => $this->gpId === null && $team !== null && $this->supplierItemId === null && trim($this->laSuche) !== ''
-                ? app(LeadLaService::class)->sucheVerknuepfbare($team, $this->laSuche, 8)
-                : collect(),
+            'supplierItemSuche' => $this->gpId === null && $team !== null && $this->supplierItemId === null && trim($this->laSuche) !== ''
+                ? app(\Platform\FoodAlchemist\Services\Matching\VerknuepfbareArtikelSuche::class)->suche($team, $this->laSuche, ($this->builder['commodity_group_code'] ?? '') ?: null)
+                : ['treffer' => collect(), 'weitere' => 0, 'mehr_als' => null],
             'statusFaelle' => [GpStatus::Approved, GpStatus::Tentative, GpStatus::Rejected],
             'bulkRun' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null,
             'bulkOffen' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->offeneGpVorschlaege($team, $this->bulkRunId) : 0,

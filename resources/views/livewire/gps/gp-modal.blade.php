@@ -188,18 +188,19 @@
                             <x-fa::button size="sm" variant="ghost" wire:click="supplierItemLoesen">Verknüpfung lösen</x-fa::button>
                         </div>
                     @else
-                        <x-fa::input type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Bezeichnung oder Artikelnummer suchen …" aria-label="Lieferantenartikel suchen" data-gp-la-search />
-                        @if($supplierItemKandidaten->isNotEmpty())
+                        <x-fa::input type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Bezeichnung, Artikelnummer oder Marke …" aria-label="Lieferantenartikel suchen" data-gp-la-search />
+                        @if($supplierItemSuche['treffer']->isNotEmpty())
                             <div class="flex flex-col" data-gp-la-results>
-                                @foreach($supplierItemKandidaten as $la)
+                                @foreach($supplierItemSuche['treffer'] as $la)
                                     <button type="button" wire:key="la-k-{{ $la->id }}" wire:click="supplierItemWaehlen({{ $la->id }})" class="{{ $listenKnopf }}">
                                         <span class="min-w-0">
                                             <span class="block font-medium">{{ $la->designation }}</span>
-                                            <span class="block {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }} · {{ $la->article_number ? 'Art.-Nr. ' . $la->article_number : 'ohne Artikelnummer' }}</span>
+                                            <span class="block {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }} · {{ $la->article_number ? 'Art.-Nr. ' . $la->article_number : 'ohne Artikelnummer' }}@if($la->gebinde_text) · {{ $la->gebinde_text }}@endif · {{ $la->aktiver_preis !== null ? number_format((float) $la->aktiver_preis, 2, ',', '.') . ' €' : 'kein Preis' }}</span>
                                         </span>
                                         @svg('heroicon-m-plus', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                                     </button>
                                 @endforeach
+                                @include('foodalchemist::livewire.gps.partials.verknuepf-suche-hinweis', ['suche' => $supplierItemSuche, 'leise' => $leise])
                             </div>
                         @elseif(trim($laSuche) !== '')
                             <p class="{{ $leise }}">Kein freier Lieferantenartikel gefunden.</p>
