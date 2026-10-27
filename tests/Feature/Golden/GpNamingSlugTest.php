@@ -92,12 +92,12 @@ it('Anlage-Guard: Jaccard ≥ 0.92 gegen bestehenden Namen blockt auch ohne Key-
     ]))->toThrow(RuntimeException::class, 'HARD_STOP_EXISTING_GP');
 });
 
-it('I4 Drift-Warning: manueller Name ≠ Render ⇒ Warning, kein Error', function () {
+it('I4: manueller Name ≠ Render ⇒ Hinweis „Name passt nicht zu den Feldern“ mit Klartext, kein Error', function () {
     $pruefung = $this->svc->validateGpName('Limettensaft Premium', ['hauptzutat' => 'Limettensaft', 'condition' => 'konserviert']);
 
     expect($pruefung['errors'])->toBeEmpty()
         ->and($pruefung['warnings'])->toHaveCount(1)
-        ->and($pruefung['warnings'][0])->toContain('Drift');
+        ->and($pruefung['warnings'][0])->toContain(GpNamingService::HINWEIS_NAME_FELDER)->toContain('„konserviert“ aus dem Feld Zustand fehlt im Namen');
 });
 
 it('§11.2: Derivat-Anlage setzt requires_la=0', function () {

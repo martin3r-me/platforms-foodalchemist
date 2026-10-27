@@ -197,7 +197,7 @@ it('★ Neue Namen entstehen mit echten Umlauten, der Zustand liest auch „tief
         ->and($n->normalisiereZustand('tiefgekühlt'))->toBe('TK')->and($n->normalisiereZustand('tiefgekuehlt'))->toBe('TK');
     // Dublettenprüfung/Drift: ASCII- und Umlaut-Schreibweise gelten als gleich (kein Drift-Warnhinweis)
     $r = $n->validateGpName('Brötchen: Mini, TK, 45 g pro Stueck', ['hauptzutat' => 'Brötchen', 'condition' => 'TK', 'form' => 'Mini', 'portion' => '45 g']);
-    expect(implode(' ', $r['warnings']))->not->toContain('Drift');
+    expect(implode(' ', $r['warnings']))->not->toContain(GpNamingService::HINWEIS_NAME_FELDER);
 });
 
 it('★ Prompts: gp.suggest und gp.conformance_revise geben echte Umlaute vor; die Umschreibung gilt nur für Dateinamen', function () {

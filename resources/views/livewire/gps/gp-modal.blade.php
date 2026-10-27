@@ -333,10 +333,19 @@
                         </div>
                         @if($nameVorschlag !== null)
                             <div class="flex flex-wrap items-center justify-between gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] px-3 py-2" data-name-vorschlag>
-                                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
+                                <div class="flex flex-col gap-1 min-w-0">
+                                    <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
+                                    @if($nameVorschlagAenderungen !== [])
+                                        <ul class="flex flex-wrap gap-x-4 gap-y-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-name-vorschlag-aenderungen>
+                                            @foreach($nameVorschlagAenderungen as [$label, $alt, $neu])
+                                                <li data-name-vorschlag-aenderung="{{ $label }}">{{ $label }}: <span class="text-[var(--fa-ink-3)]">{{ $alt !== '' ? $alt : 'leer' }}</span> → <span class="font-medium text-[var(--fa-ink)]">{{ $neu }}</span></li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+                                </div>
                                 <div class="flex items-center gap-1.5">
                                     <x-fa::button size="sm" variant="secondary" wire:click="nameVorschlagUebernehmen" data-name-vorschlag-uebernehmen>Vorschlag übernehmen</x-fa::button>
-                                    <x-fa::button size="sm" variant="ghost" wire:click="nameVorschlagVerwerfen">Verwerfen</x-fa::button>
+                                    <x-fa::button size="sm" variant="ghost" wire:click="nameVorschlagVerwerfen" data-name-vorschlag-verwerfen>Verwerfen</x-fa::button>
                                 </div>
                             </div>
                         @endif
