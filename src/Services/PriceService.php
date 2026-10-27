@@ -48,8 +48,8 @@ class PriceService
         $col = 'foodalchemist_prices.team_id';
 
         if ($team === null) {
-            return $this->nurListenpreis($query)                 // inkl. stammFilter (ohne Team: kein Opt-in)
-                ->orderByRaw("{$col} IS NULL ASC"); // Besitzer-Listenpreis vor globalem
+            return $this->nurListenpreis($query)                 // ohne Team: Besitzer- bzw. Master-Listenpreis, kein Stamm-Filter
+                ->orderByRaw("{$col} IS NULL ASC"); // Besitzer-/Master-Listenpreis vor globalem
         }
 
         $this->stammFilter($query, 'foodalchemist_prices', $team);   // Spec 82 §12 A3: Klasse folgt dem Artikel
@@ -128,23 +128,29 @@ class PriceService
     {
         $besitzer = "(SELECT si_lp.team_id FROM foodalchemist_supplier_items si_lp WHERE si_lp.id = {$alias}.supplier_item_id)";
         $this->stammFilter($query, $alias, $team);
+        // Bugfix io 27.10. (Akazienhonig): globale Artikel (team_id NULL, Stamm) tragen ihre Necta-Preise im MASTER-Team — das ist ihr Listenpreis. Nur der
+        // Master zählt, nie ein Mandanten-Teampreis (der bleibt der Team-Sicht in preisSichtFuer vorbehalten).
+        $master = MasterTeam::id();
 
-        return $query->where(fn ($w) => $w->whereNull("{$alias}.team_id")->orWhereRaw("{$alias}.team_id = {$besitzer}"));
+        return $query->where(fn ($w) => $w->whereNull("{$alias}.team_id")->orWhereRaw("{$alias}.team_id = {$besitzer}")
+            ->when($master !== null, fn ($m) => $m->orWhereRaw("({$alias}.team_id = ? AND {$besitzer} IS NULL)", [$master])));
     }
 
     /**
      * Spec 82 §12 A3 (Folge-PR zu 3a): Preise hängen am Artikel. Ist der Artikel für das Team
      * unsichtbar (globaler stamm_paket-Artikel ohne Opt-in), ist es sein Preis auch, ebenso ein
      * Teampreis an diesem Artikel. Die Regel selbst kommt aus {@see StammPaket::begrenzen} (eine
-     * Quelle). Ohne Team gibt es kein Opt-in, also keine stamm_paket-Preise. Der Stamm trägt laut
-     * Entscheidung 13.10. ohnehin keine Preise, das hier ist die Sicherung.
+     * Quelle). Ohne Team (Listenpreis-/Systemsicht) filtert er nicht: auf io tragen die globalen Stamm-Artikel die Necta-Preise im
+     * Master-Team (Befund 27.10., Annahme „Stamm trägt keine Preise“ vom 13.10. gilt nicht mehr).
      *
      * Korreliertes EXISTS (PK-Zugriff je Preiszeile) statt whereIn über alle Artikel.
-     * Mit Opt-in bzw. als Master: kein Filter.
+     * Ohne Team, mit Opt-in bzw. als Master: kein Filter.
      */
     public function stammFilter(Builder|\Illuminate\Database\Query\Builder $query, string $alias, ?Team $team): Builder|\Illuminate\Database\Query\Builder
     {
-        if (StammPaket::sieheAlleLieferanten($team)) {
+        // Ohne Team = Listenpreis-/Systemsicht (globaler Lead, Detail-Kette, Signale): kein Opt-in-Filter. Vorher blendete er alle globalen stamm_paket-Artikel
+        // aus — auf io sind das fast alle, so fehlte jeder Preis in der GP-Detail-Kette (Bugfix 27.10.). Eine Team-Sicht filtert weiter.
+        if ($team === null || StammPaket::sieheAlleLieferanten($team)) {
             return $query;
         }
 

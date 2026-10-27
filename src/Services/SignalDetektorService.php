@@ -272,7 +272,8 @@ class SignalDetektorService
         $preisSvc = app(PriceService::class);
         $recompute = app(RecipeRecomputeService::class);
         $margeSvc = app(MargeService::class);
-        $trend = $preisSvc->preisTrendBulk(array_keys($recent->all()));
+        // Team-Sicht (Bugfix 27.10.): das Signal geht an dieses Team — nie ein Master-Preis (BHG-Konditionen) bei einem Mandanten
+        $trend = $preisSvc->preisTrendBulk(array_keys($recent->all()), $team);
 
         $n = 0;
         $verarbeitet = 0;
@@ -509,7 +510,7 @@ class SignalDetektorService
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->where('s.gp_id', $gpId)->whereNull('s.deleted_at')->whereNull('i.deleted_at')
             ->select('i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code')   // vergleichspreis nimmt die korrigierte Menge
-            ->selectSub($preisSvc->activePriceSubquery('i.id')->toBase(), 'aktiver_preis');
+            ->selectSub($preisSvc->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis');   // Team-Sicht: Alternative und Preis stehen im Signal des Teams
         // Spec 82 §12 A3: Stamm-Paket-Artikel ohne Opt-in sind keine Alternative (Bezeichnung + Preis würden sonst im Signal stehen).
         $las = StammPaket::begrenzen($las, 'i', $team, 'foodalchemist_supplier_items')->get();
 
