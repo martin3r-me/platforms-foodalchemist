@@ -33,6 +33,8 @@ beforeEach(function () {
         'schalBrunoise' => ($this->gp)('Schalotte: Brunoise, frisch', 'schalotte', 'frisch'),
         'zwiebelGanz' => ($this->gp)('Zwiebel: ganz, frisch', 'zwiebel', 'frisch'),
         'zwiebelTk' => ($this->gp)('Zwiebel: Würfel 10 mm, TK', 'zwiebel', 'TK'),
+        'joghurt15' => ($this->gp)('Joghurt: frisch, 1,5 % Fett', 'joghurt', 'frisch'),
+        'joghurt35' => ($this->gp)('Joghurt: frisch, 3,5 % Fett', 'joghurt', 'frisch'),
     ];
     $this->m = fn (string $t) => app(IngredientMatchService::class)->matchIngredient($this->rootTeam, $t);
     $this->auto = fn (string $t) => IngredientMatchService::istAutomatischVerdrahtbar(($this->m)($t)) ? (($this->m)($t)['gp_id'] ?? null) : null;
@@ -45,7 +47,8 @@ it('ohne genannte Variante: nie automatisch Bio, Marke oder Zuschnitt — Basisv
     'Rinderbrühe → nicht automatisch Knorr-Pulver (Review)' => ['Rinderbrühe', null],
     'Schalotten → ganz, nicht Würfel' => ['Schalotten', 'schalGanz'],
     'Basilikum → frisch, nicht gehackt TK' => ['Basilikum', 'basFrisch'],
-    'Sahne ohne Fettstufe → Review (mehrere Fettstufen, keine Basis)' => ['Sahne', null],
+    'Sahne → Default-GP §5 (30 % Fett), Regel 1' => ['Sahne', 'sahne30'],
+    'Joghurt ohne Fettstufe → Review (mehrere Fettstufen, keine Basis)' => ['Joghurt', null],
 ]);
 
 it('Review statt Automatik trägt die offene Variante mit', function () {

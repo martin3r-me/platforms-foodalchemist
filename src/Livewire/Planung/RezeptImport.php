@@ -278,7 +278,7 @@ class RezeptImport extends Component
         $roh = (array) ($p['frische_erlaubt'] ?? []);
         $ausErlaubt = collect(Index::FRISCHE_CONDITION)->search(fn ($c) => array_intersect((array) $c, $roh) !== []);
         $this->abgleichFrische = isset(Index::FRISCHE_OPTIONEN[$p['frische'] ?? '']) ? $p['frische'] : ($ausErlaubt !== false ? $ausErlaubt : 'frisch');
-        $this->abgleichConvenience = isset(self::abgleichOptionen()['convenience'][$p['convenience'] ?? '']) ? (string) $p['convenience'] : '';
+        $this->abgleichConvenience = isset(self::abgleichOptionen()['convenience'][$p['convenience'] ?? '']) ? (string) ($p['convenience'] ?? '') : '';
         $this->abgleichAusSession = array_intersect_key($p, array_flip(['bio_pref', 'bio', 'frische', 'frische_erlaubt', 'convenience'])) !== [];
     }
 
