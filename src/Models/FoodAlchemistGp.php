@@ -37,6 +37,28 @@ class FoodAlchemistGp extends Model
 
     protected $table = 'foodalchemist_gps';
 
+    /**
+     * Ein bestehendes GP, das nach global umgehängt wird (team_id → NULL), wird Stamm-Paket (Kurator 27.10.2026).
+     *
+     * Fund io: 57 Marken-Split-GPs wurden per createGp teameigen angelegt und danach global gestellt. Die Spalte `stamm_class` behielt
+     * ihren DB-Default `basis`, und Basis-Zeilen der Stamm-Modelle sind für ALLE nur lesbar, auch für den Master
+     * ({@see Concerns\BelongsToTeamHierarchy::isOwnedBy()}). Wer ein GP in den globalen Bestand hebt, kuratiert Stamm-Inhalt, und den
+     * pflegt der Master nur als `stamm_paket` (so setzt es auch der GP-Paket-Import).
+     *
+     * Bewusst NUR beim Umhängen, nicht bei einer Anlage mit team_id NULL: `basis` ist für globale GPs ein gewollter Fall (Spec 82 §12 A3:
+     * „Default ist basis, Bestand ohne Klasse bleibt für alle Teams sichtbar“; Basis-GP, an dem nur der Master den Lead setzt,
+     * Dominique 18.10.). Das zeigen StammPaketScopeTest, MasterPflegtGlobalenStammTest und Spec85ControllingLeadBesitzerTest.
+     * Eine ausdrücklich mitgesetzte Klasse gilt immer. Query-Builder-Wege (DB::table) umgehen das Modell.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $gp) {
+            if ($gp->exists && $gp->team_id === null && $gp->isDirty('team_id') && ! $gp->isDirty('stamm_class')) {
+                $gp->stamm_class = \Platform\FoodAlchemist\Support\StammPaket::PAKET;
+            }
+        });
+    }
+
     /** Breite Stammdaten-Tabelle — Schreibwege laufen über Services (01_ARCHITEKTUR §1). */
     protected $guarded = ['id'];
 
