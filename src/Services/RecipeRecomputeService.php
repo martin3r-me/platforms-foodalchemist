@@ -692,19 +692,24 @@ class RecipeRecomputeService
             $recipe->ek_n_ingredients_total = null;
             $recipe->ek_n_ingredients_priced = null;
             $recipe->ek_price_basis = null;
+            if (self::hatLetzterPreisSpalte()) {
+                $recipe->ek_n_letzter_preis = null;
+            }
 
             return;
         }
         $ekTotal = 0.0;
         $nKosten = 0;
         $nPriced = 0;
+        $nLetzter = 0;
         $basen = [];
 
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             $nKosten++;
-            [$kosten, $priced, $basis] = $this->zutatKosten($z);
+            [$kosten, $priced, $basis, $letzter] = $this->zutatKosten($z) + [3 => false];
             if ($priced) {
                 $nPriced++;
+                $nLetzter += $letzter ? 1 : 0;
                 // Nur bepreiste Zeilen wiegen in der Basis — eine Lücke trägt keinen Cent
                 // zum EK bei und darf die Aussage über die bepreiste Hälfte nicht verwässern.
                 $basen[] = $basis ?? EkPriceBasis::Unknown;
@@ -714,6 +719,9 @@ class RecipeRecomputeService
 
         $recipe->ek_n_ingredients_total = $nKosten;
         $recipe->ek_n_ingredients_priced = $nPriced;
+        if (self::hatLetzterPreisSpalte()) {
+            $recipe->ek_n_letzter_preis = $nLetzter;   // Hinweis „EK enthält n letzte Preise eingestellter Artikel“ (27.10.)
+        }
         // V-014: woher die Zahl kommt, wird mitgeführt statt vergessen (schwächstes Glied).
         $recipe->ek_price_basis = EkPriceBasis::aggregiere($basen);
         $recipe->ek_total_eur = $ekTotal > 0 ? round($ekTotal, 2) : null;
@@ -772,6 +780,7 @@ class RecipeRecomputeService
             $summe = 0.0;
             $nTotal = 0;
             $nPriced = 0;
+            $nLetzter = 0;
             $basen = [];
             $masseTotal = 0.0;
             $masseFehlend = 0.0;
@@ -779,12 +788,13 @@ class RecipeRecomputeService
             $grund = null;
             foreach ($zutaten as $z) {
                 $nTotal++;
-                [$kosten, $priced, $basis] = $this->zutatKosten($z);
+                [$kosten, $priced, $basis, $letzter] = $this->zutatKosten($z) + [3 => false];
                 $masse = $this->mengeAvg($z) * $this->grammFaktor($z);
                 $masseTotal += $masse;
                 $name = (string) ($z->display_name ?: $z->raw_text ?: ($z->gp?->name ?? $z->referencedRecipe?->name ?? '?'));
                 if ($priced) {
                     $nPriced++;
+                    $nLetzter += $letzter ? 1 : 0;
                     $basen[] = $basis ?? EkPriceBasis::Unknown;
                     $summe += $kosten;
                 }
@@ -809,7 +819,7 @@ class RecipeRecomputeService
             return $memo[$recipeId] = [
                 'ek_summe' => $summe > 0 ? round($summe, 2) : null,
                 'ek_per_kg' => ($summe > 0 && $yield !== null && $yield > 0) ? round($summe / $yield, 2) : null,
-                'n_priced' => $nPriced, 'n_total' => $nTotal,
+                'n_priced' => $nPriced, 'n_total' => $nTotal, 'n_letzter' => $nLetzter,
                 'masse_total' => round($masseTotal, 2), 'masse_fehlend' => round($masseFehlend, 2),
                 'basis' => $basen === [] ? null : EkPriceBasis::aggregiere($basen),
                 'vollstaendig' => $vollstaendig, 'grund' => $vollstaendig ? null : ($grund ?? 'zutaten_ohne_preis'),
@@ -1022,8 +1032,14 @@ class RecipeRecomputeService
         $mengeG = $mengeAvg * $this->grammFaktor($z);
 
         $gp = $z->gp;
+        // 4. Element der Rückgabe: Preis stammt (auch) aus dem letzten Preis eines eingestellten Artikels (27.10.) — für den Rezept-Hinweis
+        $this->letzterPreisGenutzt = false;
         [$pG, $bG] = $gp !== null ? $this->preisProGrammMitBasis($gp) : [null, null];
+        $letzterG = $this->letzterPreisGenutzt;
+        $this->letzterPreisGenutzt = false;
         [$pStk, $bStk] = $gp !== null ? $this->preisProStueckMitBasis($gp) : [null, null];
+        $letzterStk = $this->letzterPreisGenutzt;
+        $this->letzterPreisGenutzt = false;
         $pSub = $z->referencedRecipe?->ek_per_kg_eur !== null
             ? ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000 : null;
         // Vererbung statt Neu-Erfinden: das Eltern-Rezept kennt vom Sub nur den €/kg.
@@ -1057,10 +1073,10 @@ class RecipeRecomputeService
             // system-weit das Stück — GpFormService spiegelt genau diesen Slug auf
             // piece_default_g, alle anderen Formen tragen ihr eigenes Gramm-Gewicht.
             if ($pStk !== null && $z->unit->slug === 'stk') {
-                return [$mengeAvg * $pStk, true, $bStk];
+                return [$mengeAvg * $pStk, true, $bStk, $letzterStk];
             }
             if ($mengeG > 0 && $pG !== null) {                     // count→mass-Brücke
-                return [$mengeG * $pG, true, $bG];
+                return [$mengeG * $pG, true, $bG, $letzterG];
             }
             if ($mengeG > 0 && $pSub !== null) {                   // Sub-Rezept per Stück: g/Stück (s. grammFaktor) × €/g des Sub
                 return [$mengeG * $pSub, true, $bSub];
@@ -1078,7 +1094,7 @@ class RecipeRecomputeService
             default => [null, null],
         };
         if ($source !== null && $mengeG > 0) {                     // T2: qs (Faktor 0) bleibt unpriced
-            return [$mengeG * $source, true, $basis];
+            return [$mengeG * $source, true, $basis, $pG !== null && $letzterG];
         }
 
         return [0.0, false, null];
@@ -1256,8 +1272,15 @@ class RecipeRecomputeService
         $this->recomputeTeam = $team;
         $this->laCache = [];
         $this->leadPrefCache = [];
+        $this->letzterPreisGenutzt = false;
 
         return $this->preisProGrammFuer($gp);
+    }
+
+    /** Nach preisProGrammPublic/preisProStueckPublic: stammt der Preis (auch) aus dem letzten Preis eines eingestellten Artikels? (Rückfall 27.10.) */
+    public function letzterPreisGenutzt(): bool
+    {
+        return $this->letzterPreisGenutzt;
     }
 
     /** Stk-Zwilling zu preisProGrammPublic: €/Stk fürs Client-Live-Rechnen bei Stück-Zeilen. */
@@ -1266,6 +1289,7 @@ class RecipeRecomputeService
         $this->recomputeTeam = $team;
         $this->laCache = [];
         $this->leadPrefCache = [];
+        $this->letzterPreisGenutzt = false;
 
         return $this->preisProStueckFuer($gp);
     }
@@ -1277,7 +1301,7 @@ class RecipeRecomputeService
      * und `GpService::lasForGp()` lud Artikel samt Aktivpreis nochmals je GP (N+1 beim Öffnen).
      *
      * @param  Collection<int, FoodAlchemistGp>  $gps
-     * @return array<int, array{lead: ?float, min: ?float, avg: ?float, stk: ?float}>
+     * @return array<int, array{lead: ?float, lead_letzter: bool, min: ?float, avg: ?float, stk: ?float}>
      */
     public function preisVariantenProGrammPublic(Collection $gps, ?Team $team = null): array
     {
@@ -1298,7 +1322,9 @@ class RecipeRecomputeService
             ->select('foodalchemist_supplier_items.*')
             ->addSelect('s.gp_id AS _preis_gp_id')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'aktiver_preis') // Spec 82 3a
+            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $team))   // Rückfall eingestellter Artikel (27.10.)
             ->get()
+            ->each(fn ($la) => $this->effektivPreis($la))
             ->groupBy(fn ($la) => (int) $la->_preis_gp_id);
 
         foreach ($gpIds as $gpId) {
@@ -1329,8 +1355,11 @@ class RecipeRecomputeService
                     ->map(fn ($la) => ((float) $la->aktiver_preis) / FoodAlchemistSupplierItem::mengeVon($la) / $stueckG)
                     ->values();
             }
+            $this->letzterPreisGenutzt = false;
+            $lead = $this->preisProGrammFuer($gp);
             $result[(int) $gp->id] = [
-                'lead' => $this->preisProGrammFuer($gp),
+                'lead' => $lead,
+                'lead_letzter' => $lead !== null && $this->letzterPreisGenutzt,   // Lead-Preis aus dem letzten Preis eines eingestellten Artikels (27.10.)
                 'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
                 'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
                 // €/Stk direkt: eine Stück-Zeile braucht KEIN Gewicht, um bepreist zu sein
@@ -1386,6 +1415,8 @@ class RecipeRecomputeService
             if (in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null) {
                 $pg = $this->preise->preisProGramm($la, (float) $la->aktiver_preis);
                 if ($pg !== null) {
+                    $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || $la->preis_quelle === 'letzter_eingestellt';
+
                     return [$pg, EkPriceBasis::Lead];
                 }
             }
@@ -1399,11 +1430,14 @@ class RecipeRecomputeService
                 if ($pg !== null) {
                     $summe += $pg;
                     $n++;
+                    $letzteImAvg = ($letzteImAvg ?? false) || $la->preis_quelle === 'letzter_eingestellt';
                 }
             }
         }
 
         if ($n > 0) {
+            $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || ($letzteImAvg ?? false);
+
             return [$summe / $n, EkPriceBasis::Avg];
         }
 
@@ -1435,6 +1469,8 @@ class RecipeRecomputeService
     {
         foreach ($this->preisKandidaten($gp) as $la) {
             if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
+                $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || $la->preis_quelle === 'letzter_eingestellt';
+
                 return [(float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la), EkPriceBasis::Lead];
             }
         }
@@ -1445,7 +1481,11 @@ class RecipeRecomputeService
             if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
                 $summe += (float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la);
                 $n++;
+                $letzteImAvg = ($letzteImAvg ?? false) || $la->preis_quelle === 'letzter_eingestellt';
             }
+        }
+        if ($n > 0) {
+            $this->letzterPreisGenutzt = $this->letzterPreisGenutzt || ($letzteImAvg ?? false);
         }
 
         return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
@@ -1527,13 +1567,40 @@ class RecipeRecomputeService
         return $this->leadPrefCache[$key] ??= \Platform\FoodAlchemist\Support\LeadOverlay::fuer($this->recomputeTeam, [(int) $gp->id])[(int) $gp->id] ?? [];
     }
 
+    /** Wurde beim letzten Preis-Pfad ein letzter Preis eines eingestellten Artikels verwendet? (zutatKosten setzt zurück und liest aus) */
+    private bool $letzterPreisGenutzt = false;
+
+    private static ?bool $letzterPreisSpalte = null;
+
+    private static function hatLetzterPreisSpalte(): bool
+    {
+        return self::$letzterPreisSpalte ??= \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_recipes', 'ek_n_letzter_preis');
+    }
+
+    /**
+     * Rückfall (Dominique 27.10.): hat ein eingestellter Artikel keinen aktiven Preis, rechnet das EK mit seinem letzten bekannten Preis — gekennzeichnet über
+     * `preis_quelle` (aktiv | letzter_eingestellt). `aktiver_preis` trägt danach den Rechenpreis; bestellbare Artikel bleiben unberührt (letzter_preis ist dort NULL).
+     */
+    private function effektivPreis(FoodAlchemistSupplierItem $la): void
+    {
+        if ($la->aktiver_preis === null && $la->letzter_preis !== null) {
+            $la->setAttribute('aktiver_preis', $la->letzter_preis);
+            $la->setAttribute('preis_quelle', 'letzter_eingestellt');
+        } else {
+            $la->setAttribute('preis_quelle', $la->aktiver_preis !== null ? 'aktiv' : null);
+        }
+    }
+
     private function alleAktivenLas(FoodAlchemistGp $gp): Collection
     {
         $prefs = $this->leadPrefs($gp);
-
-        return $this->laMitPreis($gp)->filter(
+        $las = $this->laMitPreis($gp)->filter(
             fn ($la) => ! $la->is_discontinued && ! ($prefs[$la->id]['locked'] ?? false),
         );
+        // Vorrang (27.10.): gibt es Artikel mit aktivem Preis, zählt der letzte Preis eingestellter Artikel im Durchschnitt nicht mit
+        $mitAktivem = $las->contains(fn ($la) => $la->preis_quelle === 'aktiv');
+
+        return $mitAktivem ? $las->filter(fn ($la) => $la->preis_quelle !== 'letzter_eingestellt') : $las;
     }
 
     /** LAs des GP inkl. Aktiv-Preis (memoisiert pro Pipeline-Lauf). */
@@ -1551,7 +1618,9 @@ class RecipeRecomputeService
             ->select('foodalchemist_supplier_items.*')
             // Spec 82 3a: Preise des Rechen-Teams (Team → Vorfahren → global); ohne Team nur Listenpreis.
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $this->recomputeTeam)->toBase(), 'aktiver_preis')
-            ->get();
+            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $this->recomputeTeam))   // Rückfall eingestellter Artikel (27.10.)
+            ->get()
+            ->each(fn ($la) => $this->effektivPreis($la));
     }
 
     private function rangZuText(?int $rang): string

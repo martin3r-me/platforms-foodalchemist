@@ -296,15 +296,16 @@ class InventurService
             if ($suche !== '' && ! str_contains(mb_strtolower($name), mb_strtolower($suche))) {
                 continue;
             }
-            $preis = $s->recipe !== null
-                ? app(EigenproduktionService::class)->preisJeBasis($s->recipe)
-                : $this->preisJeBasis($besitzer, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
+            [$preis, $preisLetzter] = $s->recipe !== null
+                ? [app(EigenproduktionService::class)->preisJeBasis($s->recipe), false]
+                : $this->preisJeBasisMitQuelle($besitzer, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
             $menge = (float) $s->qty_base;
             $rows[] = [
                 'stock_id' => (int) $s->id, 'gp_id' => $s->gp_id !== null ? (int) $s->gp_id : null, 'name' => $name,
                 'lagerort' => (string) ($s->location?->name ?? '—'), 'base_unit' => $s->base_unit, 'menge' => $menge,
                 'anzeige' => $this->inventory->displayQuantity($menge, $s->base_unit),
                 'preis' => $preis, 'wert' => $preis !== null ? round($menge * $preis, 2) : null,
+                'preis_letzter' => $preisLetzter,   // Rückfall 27.10.: Wert aus dem letzten Preis eines eingestellten Artikels
                 'zuletzt' => isset($zuletzt[$s->id]) ? Carbon::parse($zuletzt[$s->id])->format('d.m.Y') : null,
                 'zuletzt_iso' => isset($zuletzt[$s->id]) ? Carbon::parse($zuletzt[$s->id])->toDateString() : null,
                 'location_id' => (int) $s->inventory_location_id,
@@ -467,23 +468,38 @@ class InventurService
     /** Bewertung: aktueller EK je Basiseinheit (GP: Lead/Durchschnitt; Artikel: aktiver Preis ÷ Inhalt). */
     public function preisJeBasis(Team $team, ?FoodAlchemistGp $gp, ?int $supplierItemId, string $baseUnit): ?float
     {
+        return $this->preisJeBasisMitQuelle($team, $gp, $supplierItemId, $baseUnit)[0];
+    }
+
+    /**
+     * Wie {@see preisJeBasis}, dazu ob der Preis aus dem letzten bekannten Preis eines eingestellten Artikels stammt (Rückfall 27.10.: sonst wäre der
+     * Bestandswert 0). Das Kennzeichen zeigt die Bestandsliste an.
+     *
+     * @return array{0: ?float, 1: bool}
+     */
+    public function preisJeBasisMitQuelle(Team $team, ?FoodAlchemistGp $gp, ?int $supplierItemId, string $baseUnit): array
+    {
         if ($gp !== null) {
             $preis = $baseUnit === 'Stk' ? $this->recompute->preisProStueckPublic($gp, $team) : $this->recompute->preisProGrammPublic($gp, $team);
 
-            return $preis !== null ? round($preis, 6) : null;
+            return [$preis !== null ? round($preis, 6) : null, $preis !== null && $this->recompute->letzterPreisGenutzt()];
         }
         if ($supplierItemId === null) {
-            return null;
+            return [null, false];
         }
         $item = FoodAlchemistSupplierItem::find($supplierItemId);
-        $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team) : null; // Spec 82 3a
+        $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team)?->price : null; // Spec 82 3a
+        $letzter = false;
+        if ($item !== null && $price === null && ($lp = app(PriceService::class)->letzterPreisFuer($item->id, $team)) !== null) {
+            [$price, $letzter] = [$lp['preis'], true];
+        }
         $menge = $item !== null ? FoodAlchemistSupplierItem::mengeVon($item) : null;   // korrigierte Menge vor Necta-qty
         if ($item === null || $price === null || (float) $menge <= 0) {
-            return null;
+            return [null, false];
         }
-        $jeEinheit = (float) $price->price / $menge;   // € je kg/l/Stk
+        $jeEinheit = (float) $price / $menge;   // € je kg/l/Stk
 
-        return round($baseUnit === 'Stk' ? $jeEinheit : $jeEinheit / 1000, 6);
+        return [round($baseUnit === 'Stk' ? $jeEinheit : $jeEinheit / 1000, 6), $letzter];
     }
 
     public function basisEinheit(string $unitCode): string

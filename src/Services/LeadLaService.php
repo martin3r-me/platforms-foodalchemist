@@ -132,7 +132,7 @@ class LeadLaService
                     LeadLaStrategie::PrioritaetsKette => ($pos = array_search((int) $la->supplier_id, $prioritaeten, true)) !== false ? $pos : PHP_INT_MAX,
                 },
                 $la->is_discontinued ? 1 : 0,                              // Stufe 1
-                $la->hat_aktiven_preis ? 0 : 1,                            // Stufe 2
+                $la->hat_aktiven_preis ? 0 : ($la->hat_letzten_preis ? 1 : 2),   // Stufe 2: aktiv vor letztem Preis (eingestellt) vor ohne (27.10.)
                 $la->vergleichspreis_wert === null ? 1 : 0,                // Stufe 3: NULLS LAST (A-2!)
                 $la->vergleichspreis_wert ?? PHP_FLOAT_MAX,
                 mb_strtolower((string) $la->supplier_name),                // Stufe 4
@@ -196,7 +196,7 @@ class LeadLaService
                         $out['unveraendert']++;
                         continue;
                     }
-                    if (! $neu->hat_aktiven_preis) {
+                    if (! $neu->hat_aktiven_preis && ! $neu->hat_letzten_preis) {   // letzter Preis eines eingestellten Artikels zählt als Preis (27.10.), gekennzeichnet
                         $out['ohne_preis']++;
                         continue;
                     }
@@ -216,6 +216,7 @@ class LeadLaService
                         'neu_lieferant' => $neu->supplier_name,
                         'neu_vergleichspreis' => $neu->vergleichspreis_wert,
                         'neu_ist_stamm' => (bool) $neu->ist_stamm,
+                        'neu_preis_quelle' => $neu->preis_quelle,
                     ];
                 }
             });
@@ -394,6 +395,10 @@ class LeadLaService
             'la_id' => (int) $la->id,
             'supplier' => $la->supplier_name,
             'vergleichspreis' => $la->vergleichspreis_wert,
+            // Rückfall 27.10.: Quelle des Preises (aktiv | letzter_eingestellt) samt Datum — der letzte Preis ist nie ein normaler Preis
+            'preis_quelle' => $la->preis_quelle,
+            'letzter_preis_ab' => $la->hat_letzten_preis ? $la->letzter_preis_ab : null,
+            'eingestellt_seit' => $la->hat_letzten_preis ? $la->lieferstatus_seit : null,
             'ist_stamm' => (bool) $la->ist_stamm,
             'locked' => (bool) $la->locked,
             'gepinnt' => (bool) $la->gepinnt,
@@ -686,15 +691,10 @@ class LeadLaService
             ->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
+            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $sicht))   // Rückfall eingestellter Artikel (27.10.)
             ->get();
 
-        return $las->each(function ($la) {
-            // scopeAktiv (GL-11 I3) liefert nur standard_ek/aktion ⇒ Subquery-Treffer == „hat aktiven Preis" (Stufe 2)
-            $la->setAttribute('hat_aktiven_preis', $la->aktiver_preis !== null);
-            $vp = $la->aktiver_preis !== null ? $this->preise->vergleichspreis($la, (float) $la->aktiver_preis) : null;
-            $la->setAttribute('vergleichspreis', $vp);
-            $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);   // qty NULL ⇒ NULL ⇒ ans Ende (A-2)
-        });
+        return $las->each(fn ($la) => $this->preisAnnotieren($la));
     }
 
     /**
@@ -714,16 +714,31 @@ class LeadLaService
             ->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', 's.gp_id AS _gp_id')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
+            ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $sicht))   // Rückfall eingestellter Artikel (27.10.)
             ->get();
 
-        $las->each(function ($la) {
-            $la->setAttribute('hat_aktiven_preis', $la->aktiver_preis !== null);
-            $vp = $la->aktiver_preis !== null ? $this->preise->vergleichspreis($la, (float) $la->aktiver_preis) : null;
-            $la->setAttribute('vergleichspreis', $vp);
-            $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);
-        });
+        $las->each(fn ($la) => $this->preisAnnotieren($la));
 
         return $las->groupBy(fn ($la) => (int) $la->_gp_id)->map(fn ($grp) => $grp->values())->all();
+    }
+
+    /**
+     * Preis-Annotation eines Kandidaten (Einzel- und Bulk-Pfad gleich): aktiver Preis (scopeAktiv, GL-11 I3) bzw. — nur für eingestellte Artikel — der letzte
+     * bekannte Preis (Dominique 27.10.). `preis_effektiv` speist den Vergleichspreis; `hat_aktiven_preis` bleibt streng, damit ein bestellbarer Artikel mit
+     * aktivem Preis immer vor einem eingestellten mit letztem Preis steht (Stufe 2 in {@see sortiere}).
+     */
+    private function preisAnnotieren(FoodAlchemistSupplierItem $la): void
+    {
+        $hatAktiven = $la->aktiver_preis !== null;
+        $hatLetzten = ! $hatAktiven && $la->letzter_preis !== null;
+        $effektiv = $hatAktiven ? (float) $la->aktiver_preis : ($hatLetzten ? (float) $la->letzter_preis : null);
+        $la->setAttribute('hat_aktiven_preis', $hatAktiven);
+        $la->setAttribute('hat_letzten_preis', $hatLetzten);
+        $la->setAttribute('preis_effektiv', $effektiv);
+        $la->setAttribute('preis_quelle', $hatAktiven ? 'aktiv' : ($hatLetzten ? 'letzter_eingestellt' : null));
+        $vp = $effektiv !== null ? $this->preise->vergleichspreis($la, $effektiv) : null;
+        $la->setAttribute('vergleichspreis', $vp);
+        $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);   // qty NULL ⇒ NULL ⇒ ans Ende (A-2)
     }
 
     private function gehoertZuGp(FoodAlchemistGp $gp, int $laId): bool

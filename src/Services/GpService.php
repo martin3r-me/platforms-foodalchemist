@@ -180,12 +180,15 @@ class GpService
                 $item = $structure->item;
                 // M2-04: Aktiv-Preis-Regel zentral im PriceService (GL-11 §3.3 — eine Stelle!)
                 $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team) : null; // Spec 82 3a
+                // Rückfall (27.10.): eingestellter Artikel ohne aktiven Preis → letzter bekannter Preis mit Kennzeichen; `price` bleibt der aktive (oder null)
+                $letzter = $price === null && $item !== null ? app(PriceService::class)->letzterPreisFuer($item->id, $team) : null;
 
                 return (object) [
                     'structure' => $structure,
                     'item' => $item,
                     'supplier' => $item?->supplier,
                     'price' => $price,
+                    'letzter_preis' => $letzter,
                 ];
             })
             ->sortBy(fn ($la) => $la->supplier?->name ?? '~')
@@ -312,6 +315,8 @@ class GpService
             ->select('foodalchemist_gps.*', 'lead.unit_code AS lead_unit_code')
             ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('lead').' AS lead_qty')   // korrigierte Menge vor Necta-qty
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis') // Spec 82 3a
+            ->addSelect('lead.lieferstatus_seit AS lead_eingestellt_seit')
+            ->tap(fn ($q) => app(PriceService::class)->mitLetztemPreis($q, 'lead.id', $team))   // Rückfall: letzter Preis eines eingestellten Leads (27.10.)
             ->with('commodity_group')
             ->orderBy('foodalchemist_gps.name');
 
@@ -335,6 +340,12 @@ class GpService
             : collect();
 
         $zeilen->each(function ($gp) use ($preise, $rezepteAktiv, $raenge, $muetter, $rezeptCounts) {
+            // Kein aktiver Preis, Lead eingestellt → letzter bekannter Preis, gekennzeichnet (nie still als normaler Preis)
+            $gp->setAttribute('lead_letzter', null);
+            if ($gp->lead_preis === null && $gp->letzter_preis !== null) {
+                $gp->setAttribute('lead_preis', $gp->letzter_preis);
+                $gp->setAttribute('lead_letzter', PriceService::letzterPreisKennzeichen($gp->letzter_preis_ab, $gp->lead_eingestellt_seit));
+            }
             $gp->setAttribute('lead_vergleichspreis', $gp->lead_preis !== null
                 ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
                 : null);

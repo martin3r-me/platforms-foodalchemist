@@ -151,6 +151,10 @@
                                 </td>
                                 @if(in_array('warengruppe', $spalten, true))<td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '–' }}</td>@endif
                                 @if(in_array('leadpreis', $spalten, true))<td class="num" data-lead-preis>
+                                    @if($gp->lead_letzter)
+                                        {{-- Rückfall 27.10.: letzter bekannter Preis eines eingestellten Leads, immer gekennzeichnet --}}
+                                        <x-fa::badge :tone="$gp->lead_letzter['warnung'] ? 'warn' : 'neutral'" title="{{ $gp->lead_letzter['text'] }}" data-letzter-preis>letzter Preis</x-fa::badge>
+                                    @endif
                                     @if($gp->lead_vergleichspreis)
                                         <x-fa::money :value="$gp->lead_vergleichspreis['value']" :per="\Illuminate\Support\Str::after($gp->lead_vergleichspreis['unit'], '€/')" />
                                     @elseif($gp->lead_preis !== null)

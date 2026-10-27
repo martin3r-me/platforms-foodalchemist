@@ -85,7 +85,8 @@
                 <x-foodalchemist::kpi-tiles marker="la-editor-kpis" :cols="5" :tiles="[
                     ['kpi' => 'ek', 'label' => 'Einkaufspreis je ' . $bestellEinheit, 'tone' => 'accent',
                      'title' => 'Gültiger Einkaufspreis, netto, je ' . $bestellEinheit,
-                     'value' => $aktivPreis !== null ? number_format($aktivPreis, 2, ',', '.') . ' €' : 'Preis fehlt'],
+                     'value' => $aktivPreis !== null ? number_format($aktivPreis, 2, ',', '.') . ' €'
+                        : (($letzterPreis ?? null) !== null ? 'letzter Preis ' . number_format($letzterPreis['preis'], 2, ',', '.') . ' €' : 'Preis fehlt')],
                     ['kpi' => 'vergleichspreis', 'label' => $vergleichspreis !== null ? 'Preis je ' . $einheitKurz($vergleichspreis['unit']) : 'Preis je kg',
                      'title' => 'Auf die Kalkulationseinheit umgerechnet',
                      'tone' => $vergleichspreis === null && $aktivPreis !== null ? 'warn' : null,
@@ -223,6 +224,12 @@
                             <span class="{{ $leise }}">entspricht <x-fa::money :value="$vergleichspreis['value']" :per="$einheitKurz($vergleichspreis['unit'])" /></span>
                         @elseif($aktivPreis !== null)
                             <x-fa::signal tone="warn" title="Ohne Inhalt und Kalkulationseinheit kein Preis je kg, l oder Stück">Menge fehlt für den Preis je kg</x-fa::signal>
+                        @endif
+                        @if(($letzterPreis ?? null) !== null)
+                            {{-- Rückfall 27.10.: Kalkulation und Lead-Wahl nutzen den letzten bekannten Preis, solange der Artikel eingestellt ist --}}
+                            <x-fa::badge :tone="$letzterPreis['warnung'] ? 'warn' : 'neutral'" title="{{ $letzterPreis['text'] }}" data-letzter-preis>
+                                letzter Preis <x-fa::money :value="$letzterPreis['preis']" />
+                            </x-fa::badge>
                         @endif
                         {{-- Aktion = reine Information (Entscheid 16.10.2026): Kalkulation bleibt beim Einkaufspreis oben --}}
                         @if($aktion !== null)

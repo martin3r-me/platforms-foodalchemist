@@ -24,7 +24,8 @@ class GpLeadGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
     {
         return 'Zeigt die Lead-Lieferant-Situation eines Grundprodukts: gesetzter + effektiver '
             . 'Lead-LA, Heuristik-Vorschlag (pickLeadLa), Ausweich-/Zweitquellen (Rangliste ab Rang 2) '
-            . 'und die Begründung eines etwaigen manuellen Overrides. Read-only. Setzen via gp_lead.PUT.';
+            . 'und die Begründung eines etwaigen manuellen Overrides. Je Artikel preis_quelle (aktiv | letzter_eingestellt = letzter bekannter Preis eines in Necta '
+            . 'eingestellten Artikels, mit letzter_preis_ab und eingestellt_seit; ein Artikel mit aktivem Preis steht immer davor). Read-only. Setzen via gp_lead.PUT.';
     }
 
     public function getSchema(): array

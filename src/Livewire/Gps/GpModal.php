@@ -1244,6 +1244,8 @@ class GpModal extends Component
         // ohnehin schwerere Detail-Panel-Kinder.
         $leadLa = $gp?->leadLa;
         $leadPreis = $leadLa !== null ? $preise->activeFor($leadLa->id, Auth::user()?->currentTeamRelation) : null; // Spec 82 3a
+        // Rückfall (27.10.): Lead eingestellt, kein aktiver Preis → letzter bekannter Preis mit Kennzeichen
+        $leadLetzter = $leadLa !== null && $leadPreis === null ? $preise->letzterPreisFuer($leadLa->id, Auth::user()?->currentTeamRelation) : null;
 
         // Layer: Mutter-GP-Name fürs Derivat-Feld team-gescopet im Component laden
         // (Blade zeigt nur die Variable, statt selbst ::find() ungescopet auszuführen).
@@ -1265,6 +1267,7 @@ class GpModal extends Component
             'neu' => $this->gpId === null,
             'leadLa' => $leadLa,
             'leadPreis' => $leadPreis,
+            'leadLetzter' => $leadLetzter,
             'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
             'vorschauName' => $name,
             'vorschauSlug' => $slug,

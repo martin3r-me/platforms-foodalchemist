@@ -429,6 +429,8 @@ class ItemModal extends Component
             'allergenAngenommen' => $item !== null ? array_keys(array_filter(\Platform\FoodAlchemist\Support\AllergenAnnahme::zeile(
                 $item->allergens, $item->supplier_id !== null ? (int) $item->supplier_id : null), fn ($f) => $f['angenommen'])) : [],
             'aktiverPreis' => $aktiv,
+            // Rückfall 27.10.: eingestellter Artikel ohne aktiven Preis → letzter bekannter Preis (nur Anzeige, gekennzeichnet)
+            'letzterPreis' => $item !== null && $aktiv === null ? $preise->letzterPreisFuer($item->id, $team) : null,
             'aktion' => $item !== null ? app(\Platform\FoodAlchemist\Services\AktionspreisService::class)->aktivFuer($team, $item) : null,
             'vergleichspreis' => $item !== null && $aktiv !== null
                 ? $preise->vergleichspreis($item, (float) $aktiv->price)

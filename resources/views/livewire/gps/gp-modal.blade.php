@@ -90,16 +90,20 @@
             @php
                 $lasPflicht = (bool) ($gp->requires_la ?? true);
                 $nLas = (int) ($gp->n_las_total ?? 0);
-                $hatPreis = $leadPreis?->price !== null;
+                $hatPreis = $leadPreis?->price !== null || ($leadLetzter ?? null) !== null;
+                $lp = $leadPreis?->price ?? ($leadLetzter['preis'] ?? null);
                 $konfidenz = $allergenKonfidenz['confidence'] ?? null;
                 $kennzahlen = [
                     [
                         'kpi' => 'lead-preis', 'label' => 'Preis (Lead)',
                         'value' => $hatPreis
-                            ? number_format((float) $leadPreis->price, 2, ',', '.') . ' € / ' . ($leadLa->ordering_unit ?? $leadLa->unit_code ?? 'Einheit')
+                            ? number_format((float) $lp, 2, ',', '.') . ' € / ' . ($leadLa->ordering_unit ?? $leadLa->unit_code ?? 'Einheit')
                             : ($lasPflicht ? 'Preis fehlt' : 'entfällt'),
                         'primary' => $hatPreis,
-                        'tone' => ! $hatPreis && $lasPflicht ? 'crit' : null,
+                        'tone' => ! $hatPreis && $lasPflicht ? 'crit' : (($leadLetzter['warnung'] ?? false) ? 'warn' : null),
+                        // Rückfall 27.10.: letzter bekannter Preis eines eingestellten Leads — nie still als normaler Preis
+                        'hint' => ($leadLetzter ?? null) !== null ? 'letzter Preis' : null,
+                        'hint_title' => $leadLetzter['text'] ?? null,
                         'title' => $leadLa?->designation ?? 'Kein Lead-Artikel gesetzt',
                     ],
                     [

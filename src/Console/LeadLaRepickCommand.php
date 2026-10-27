@@ -65,23 +65,32 @@ class LeadLaRepickCommand extends Command
 
             $ok = 0;      // Lead löst bereits auf → unangetastet
             $fix = 0;     // Lead neu gesetzt (bzw. würde) → löst jetzt auf
+            $fixLetzter = 0;   // Lead neu gesetzt, löst nur über den letzten Preis eines eingestellten Artikels auf (27.10.)
+            $okLetzter = 0;    // Lead bleibt, löst nur über den letzten Preis auf (kein Artikel mit aktivem Preis)
             $park = 0;    // kein bepreister LA → echte Lücke
             $betroffen = 0;
 
-            $q->orderBy('id')->chunkById($limit !== null ? $limit : 200, function ($gps) use (&$ok, &$fix, &$park, &$betroffen, $lead, $preise, $team, $apply) {
+            $q->orderBy('id')->chunkById($limit !== null ? $limit : 200, function ($gps) use (&$ok, &$fix, &$fixLetzter, &$okLetzter, &$park, &$betroffen, $lead, $preise, $team, $apply) {
                 foreach ($gps as $gp) {
                     $betroffen++;
-                    if ($this->loestAuf($gp->lead_la_supplier_item_id, $preise, $team)) {
+                    $alt = $this->loestAuf($gp->lead_la_supplier_item_id, $preise, $team);
+                    if ($alt === 'aktiv') {
                         $ok++;
 
                         continue;
                     }
+                    // Vorrang (27.10.): ein Artikel mit aktivem Preis schlägt den letzten Preis eines eingestellten — die Rangliste sortiert so
                     $neu = $lead->pickLeadLa($gp, $team);
-                    if ($neu !== null && $neu !== $gp->lead_la_supplier_item_id && $this->loestAuf($neu, $preise, $team)) {
-                        $fix++;
+                    $wie = $neu !== null ? $this->loestAuf($neu, $preise, $team) : null;
+                    if ($neu !== null && $neu === $gp->lead_la_supplier_item_id && $wie === 'letzter') {
+                        $okLetzter++;
+                    } elseif ($neu !== null && $neu !== $gp->lead_la_supplier_item_id && $wie !== null) {
+                        $wie === 'aktiv' ? $fix++ : $fixLetzter++;
                         if ($apply) {
                             $gp->update(['lead_la_supplier_item_id' => $neu]);
                         }
+                    } elseif ($alt === 'letzter') {
+                        $okLetzter++;
                     } else {
                         $park++;
                     }
@@ -95,6 +104,8 @@ class LeadLaRepickCommand extends Command
                 [
                     ['Lead löst bereits auf (unangetastet)', $ok],
                     ["Lead neu {$verb}", $fix],
+                    ["Lead neu {$verb}, nur letzter Preis (Artikel eingestellt)", $fixLetzter],
+                    ['Lead löst nur über letzten Preis auf (Artikel eingestellt, unangetastet)', $okLetzter],
                     ['Park — kein bepreister LA (echte Lücke → Sourcing)', $park],
                 ]
             );
@@ -104,17 +115,21 @@ class LeadLaRepickCommand extends Command
     }
 
     /**
-     * True, wenn der LA einen aktiven Preis > 0 hat (kanonisch via PriceService). Das Team MUSS mit: ohne Team sieht activeFor() nur
+     * 'aktiv', wenn der LA einen aktiven Preis > 0 hat (kanonisch via PriceService); 'letzter', wenn er eingestellt ist und nur einen letzten bekannten
+     * Preis hat (Rückfall 27.10.); sonst null. Das Team MUSS mit: ohne Team sieht activeFor() nur
      * Besitzer-/globale Listenpreise und keine globalen Stamm-Artikel (stamm_paket) — auf io (Artikel global, Preise Team 1) hätte
      * jeder Lead als „nicht aufgelöst“ gegolten (Befund 27.10.2026: Park 6.511 / löst auf 0).
      */
-    private function loestAuf(?int $laId, PriceService $preise, Team $team): bool
+    private function loestAuf(?int $laId, PriceService $preise, Team $team): ?string
     {
         if ($laId === null) {
-            return false;
+            return null;
         }
         $p = $preise->activeFor($laId, $team);
+        if ($p !== null && (float) $p->price > 0) {
+            return 'aktiv';
+        }
 
-        return $p !== null && (float) $p->price > 0;
+        return $preise->letzterPreisFuer($laId, $team) !== null ? 'letzter' : null;
     }
 }
