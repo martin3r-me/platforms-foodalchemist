@@ -88,6 +88,10 @@ Route::get('/lieferanten/necta-pruefaelle', \Platform\FoodAlchemist\Livewire\Sup
 Route::get('/lieferanten/marke-offen', \Platform\FoodAlchemist\Livewire\Suppliers\MarkeOffen::class)
     ->name('foodalchemist.suppliers.marke-offen');
 
+/** Lieferanten → Marken (Dominique 27.10.): alle Marken-Kürzel zentral; lesen für alle, ändern nur Plattform-/Master-Admin. */
+Route::get('/lieferanten/marken', \Platform\FoodAlchemist\Livewire\Suppliers\Marken::class)
+    ->name('foodalchemist.suppliers.marken');
+
 /**
  * Spec 32: Die beiden Einkaufs-Auswertungen sind ins Controlling-Zentrum gewandert
  * (Preisvergleich → Tab „Preise", Optimierung → Tab „Wareneinsatz"). Die Routen bleiben

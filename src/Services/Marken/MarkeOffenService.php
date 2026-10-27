@@ -134,45 +134,69 @@ class MarkeOffenService
                 app(PlattformProtokoll::class)->schreibe('marke_kuerzel_zugeordnet', ['kuerzel' => $k, 'marke' => trim($marke), 'supplier_id' => $supplierId,
                     'position' => $position, 'typ' => $typ], $user, $eintrag);
             }
-            $gpIds = $this->gpIdsMitKuerzel($supplierId, $k, $position);
-            $zaehler = [self::FALL_GERENDERT => 0, self::FALL_TEILEN => 0, self::FALL_B => 0, self::FALL_OHNE_ARTIKEL => 0];
-            $ergebnis = [];
-            $team = $this->team($user);
-            foreach (FoodAlchemistGp::ohneTeamSicht('marken-nachlauf: globale Stamm-GPs')->whereIn('id', $gpIds)->where('marke_offen', true)->orderBy('id')->get() as $gp) {
-                $artikel = FoodAlchemistSupplierItem::ohneTeamSicht('marken-nachlauf: Artikel des GP')->with('supplier')
-                    ->whereIn('id', DB::table('foodalchemist_supplier_item_structures')->where('gp_id', $gp->id)->pluck('supplier_item_id'))->get();
-                $marken = [];
-                $ohneMarke = false;
-                foreach ($artikel as $la) {
-                    $m = $this->marken->fuer($la)->marke;
-                    if ($m === null && $trockenlauf && $this->traegtKuerzel($la, $supplierId, $k, $position)) {
-                        $m = trim($marke);
-                    }
-                    $m === null ? $ohneMarke = true : $marken[mb_strtolower($m)] = $m;
-                }
-                $fall = match (true) {
-                    $artikel->isEmpty() => self::FALL_OHNE_ARTIKEL,
-                    count($marken) > 1 => self::FALL_TEILEN,
-                    $ohneMarke || $marken === [] => self::FALL_B,
-                    default => self::FALL_GERENDERT,
-                };
-                $nameNeu = null;
-                if ($fall === self::FALL_GERENDERT) {
-                    $neueMarke = (string) reset($marken);
-                    $nameNeu = $this->nameMitMarke((string) $gp->name, $neueMarke);
-                    if (! $trockenlauf) {
-                        $vorher = ['name' => $gp->name, 'zusatz' => $gp->zusatz, 'marke_offen' => (bool) $gp->marke_offen];
-                        $this->naming->updateGp($team, $gp, ['name' => $nameNeu, 'zusatz' => $neueMarke, 'hauptzutat' => (string) $gp->main_ingredient_display,
-                            'condition' => $gp->condition, 'commodity_group_code' => (string) $gp->commodity_group_code, 'sub_category' => $gp->sub_category]);
-                        app(PlattformProtokoll::class)->schreibe('gp_marke_nachgerendert', ['vorher' => $vorher, 'name_neu' => $nameNeu, 'zusatz_neu' => $neueMarke,
-                            'kuerzel' => $k], $user, $gp);
-                    }
-                }
-                $zaehler[$fall]++;
-                $ergebnis[] = ['id' => (int) $gp->id, 'name_alt' => (string) $gp->name, 'name_neu' => $nameNeu, 'fall' => $fall, 'marken' => array_values($marken)];
-            }
-            return ['kuerzel' => $k, 'marke' => trim($marke), 'trockenlauf' => $trockenlauf, 'zaehler' => $zaehler, 'gps' => $ergebnis];
+
+            return ['marke' => trim($marke)] + $this->nachrendernOhnePruefung($user, $supplierId, $k, $position, $trockenlauf, $trockenlauf ? trim($marke) : null);
         });
+    }
+
+    /**
+     * Neu-Rendern der marke_offen-GPs, deren Artikel dieses Kürzel an dieser Position tragen — für ein schon gepflegtes Kürzel (Seite „Lieferanten → Marken“
+     * nach dem Ändern, MCP supplier_marken.NACHRENDERN). Gleiche strenge Logik wie beim Zuordnen: nur genau eine Marke über ALLE Artikel. Recht: darfVerwaltung.
+     *
+     * @return array{kuerzel: string, trockenlauf: bool, zaehler: array<string, int>, gps: list<array{id: int, name_alt: string, name_neu: ?string, fall: string, marken: list<string>}>}
+     */
+    public function nachrendern(?User $user, ?int $supplierId, string $kuerzel, string $position = FoodAlchemistSupplierMarke::POSITION_ANFANG, bool $trockenlauf = false): array
+    {
+        if (! $this->pflege->darf($user)) {
+            throw new \Platform\FoodAlchemist\Exceptions\FaRechtFehltException(\Platform\FoodAlchemist\Enums\FaRolle::Admin, null,
+                'Marke-offen-GPs neu benennen (nur Plattform-Admin und Admin im Master-Team)');
+        }
+
+        return DB::transaction(fn () => $this->nachrendernOhnePruefung($user, $supplierId, MarkenPflegeService::normKuerzel($kuerzel), $position, $trockenlauf, null));
+    }
+
+    /** Kern von zuordnen/nachrendern. `$angenommeneMarke`: im Trockenlauf von zuordnen gilt das Kürzel als schon gepflegt (Vorschau). */
+    private function nachrendernOhnePruefung(?User $user, ?int $supplierId, string $k, string $position, bool $trockenlauf, ?string $angenommeneMarke): array
+    {
+        $gpIds = $this->gpIdsMitKuerzel($supplierId, $k, $position);
+        $zaehler = [self::FALL_GERENDERT => 0, self::FALL_TEILEN => 0, self::FALL_B => 0, self::FALL_OHNE_ARTIKEL => 0];
+        $ergebnis = [];
+        $team = $this->team($user);
+        foreach (FoodAlchemistGp::ohneTeamSicht('marken-nachlauf: globale Stamm-GPs')->whereIn('id', $gpIds)->where('marke_offen', true)->orderBy('id')->get() as $gp) {
+            $artikel = FoodAlchemistSupplierItem::ohneTeamSicht('marken-nachlauf: Artikel des GP')->with('supplier')
+                ->whereIn('id', DB::table('foodalchemist_supplier_item_structures')->where('gp_id', $gp->id)->pluck('supplier_item_id'))->get();
+            $marken = [];
+            $ohneMarke = false;
+            foreach ($artikel as $la) {
+                $m = $this->marken->fuer($la)->marke;
+                if ($m === null && $angenommeneMarke !== null && $this->traegtKuerzel($la, $supplierId, $k, $position)) {
+                    $m = $angenommeneMarke;
+                }
+                $m === null ? $ohneMarke = true : $marken[mb_strtolower($m)] = $m;
+            }
+            $fall = match (true) {
+                $artikel->isEmpty() => self::FALL_OHNE_ARTIKEL,
+                count($marken) > 1 => self::FALL_TEILEN,
+                $ohneMarke || $marken === [] => self::FALL_B,
+                default => self::FALL_GERENDERT,
+            };
+            $nameNeu = null;
+            if ($fall === self::FALL_GERENDERT) {
+                $neueMarke = (string) reset($marken);
+                $nameNeu = $this->nameMitMarke((string) $gp->name, $neueMarke);
+                if (! $trockenlauf) {
+                    $vorher = ['name' => $gp->name, 'zusatz' => $gp->zusatz, 'marke_offen' => (bool) $gp->marke_offen];
+                    $this->naming->updateGp($team, $gp, ['name' => $nameNeu, 'zusatz' => $neueMarke, 'hauptzutat' => (string) $gp->main_ingredient_display,
+                        'condition' => $gp->condition, 'commodity_group_code' => (string) $gp->commodity_group_code, 'sub_category' => $gp->sub_category]);
+                    app(PlattformProtokoll::class)->schreibe('gp_marke_nachgerendert', ['vorher' => $vorher, 'name_neu' => $nameNeu, 'zusatz_neu' => $neueMarke,
+                        'kuerzel' => $k], $user, $gp);
+                }
+            }
+            $zaehler[$fall]++;
+            $ergebnis[] = ['id' => (int) $gp->id, 'name_alt' => (string) $gp->name, 'name_neu' => $nameNeu, 'fall' => $fall, 'marken' => array_values($marken)];
+        }
+
+        return ['kuerzel' => $k, 'trockenlauf' => $trockenlauf, 'zaehler' => $zaehler, 'gps' => $ergebnis];
     }
 
     /**

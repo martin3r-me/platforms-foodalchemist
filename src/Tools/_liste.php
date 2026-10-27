@@ -584,7 +584,9 @@ return [
     \Platform\FoodAlchemist\Tools\SupplierInvoicesPutTool::class,
     \Platform\FoodAlchemist\Tools\SupplierInvoicesStornoTool::class,
     \Platform\FoodAlchemist\Tools\SupplierMarkenGetTool::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
+    \Platform\FoodAlchemist\Tools\SupplierMarkenNachrendernTool::class,   // Lieferanten → Marken: Marke-offen-GPs neu benennen
     \Platform\FoodAlchemist\Tools\SupplierMarkenPutTool::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3
+    \Platform\FoodAlchemist\Tools\SupplierMarkenZusammenfuehrenTool::class,   // Lieferanten → Marken: für alle zusammenführen
     \Platform\FoodAlchemist\Tools\SupplierRebateGetTool::class,
     \Platform\FoodAlchemist\Tools\SupplierRebatePutTool::class,
     \Platform\FoodAlchemist\Tools\SuppliersDeactivateTool::class,
