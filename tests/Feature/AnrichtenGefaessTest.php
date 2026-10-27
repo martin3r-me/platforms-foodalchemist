@@ -220,6 +220,14 @@ it('VK-Modal: Spalte Gefäß, wirksamer Typ aus dem Gefäß, Übersteuerung sich
     expect($html)->toContain('data-dar-uebersteuert')->toContain('Gefäß sagt Glas')->toContain('data-dar-fuellmenge-warnung');
 });
 
+it('VK-Modal: Gefäß-Auswahl findet Geschirr-GPs auch unter dem alten Unterkategorie-Namen (Übergang bis zum Datenlauf, 27.10.)', function () {
+    $alt = gefaessGp($this->rootTeam, 'Weckglas: Glas, 140 ml', 5.00, 12.0, 'Geschirr & Ausstattung');
+    $deko = gefaessGp($this->rootTeam, 'Windlicht: Glas', 3.00, 12.0, NonFoodRegeln::SUB_DEKO);
+    $ids = Livewire::test(VkModal::class)->call('oeffnen', $this->dar->recipe_id)->viewData('gefaessGps')->pluck('id')->all();
+
+    expect($ids)->toContain($this->glas->id)->toContain($alt->id)->not->toContain($deko->id);
+});
+
 it('Concepter-Reiter „Anrichten“: nur lesend — Darreichung, Gefäß, Typ, Zubehör mit Kosten; kein Haupt-/Alternativ-Geschirr mehr', function () {
     $this->svc->aktualisieren($this->rootTeam, $this->dar->id, ['vessel_gp_id' => $this->glas->id]);
     $deckel = gefaessGp($this->rootTeam, 'Deckel', 2.40);

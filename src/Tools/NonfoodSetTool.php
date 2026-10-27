@@ -70,7 +70,7 @@ class NonfoodSetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'category' => 'action', 'tags' => ['foodalchemist', 'nonfood', 'artikel', 'write'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write', 'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'], 'related_tools' => ['foodalchemist.nonfood.PRUEFLISTE'],
-            'examples' => ['Artikel 4711 ist Non-Food (Reinigung & Hygiene).', 'Artikel 4712 ist doch ein Lebensmittel.'],
+            'examples' => ['Artikel 4711 ist Non-Food (16.1 Reinigung & Hygiene).', 'Artikel 4712 ist doch ein Lebensmittel.'],
         ];
     }
 }

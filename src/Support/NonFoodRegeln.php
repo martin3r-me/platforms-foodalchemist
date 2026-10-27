@@ -17,25 +17,56 @@ namespace Platform\FoodAlchemist\Support;
  */
 final class NonFoodRegeln
 {
-    public const SUB_REINIGUNG = 'Reinigung & Hygiene';
+    // Unterkategorien mit Regelwerk-Nummer (§8.18.3, Dominique 27.10.2026); die alten Namen ohne Nummer bildet {@see kanonisch} ab.
+    public const SUB_REINIGUNG = '16.1 Reinigung & Hygiene';
 
-    public const SUB_EINWEG = 'Einweg & Verpackung';
+    public const SUB_EINWEG = '16.2 Einweg & Verpackung';
 
-    public const SUB_KUECHE = 'Küchenbedarf & Kleingeräte';
+    public const SUB_KUECHE = '16.3 Küchenbedarf & Kleingeräte';
 
-    public const SUB_KLEIDUNG = 'Arbeitskleidung & Schutz';
+    public const SUB_KLEIDUNG = '16.4 Arbeitskleidung & Schutz';
 
-    public const SUB_DEKO = 'Deko & Tischkultur';
-
-    public const SUB_BUERO = 'Büro & Sonstiges';
+    public const SUB_DEKO = '16.5 Deko & Tischkultur';
 
     /** Gekauftes UND gemietetes Geschirr hängen am selben Non-Food-GP (Dominique 2026-10-16): Teller, Tassen, Gläser, Besteck, Platten. */
-    public const SUB_GESCHIRR = 'Geschirr & Ausstattung';
+    public const SUB_GESCHIRR = '16.6 Geschirr & Ausstattung';
+
+    public const SUB_BUERO = '16.7 Büro & Sonstiges';
+
+    /**
+     * Alte Namen ohne Nummer → neuer Name. Übergangsschutz zwischen Deploy und Datenlauf (Klaus benennt supplier_item_nonfood.subkategorie,
+     * gps.sub_category und die Unterkategorie-Zeilen um): Lesen und Validieren bilden alte Werte ab, statt sie zu verwerfen.
+     */
+    public const ALIAS = [
+        'Reinigung & Hygiene' => self::SUB_REINIGUNG,
+        'Einweg & Verpackung' => self::SUB_EINWEG,
+        'Küchenbedarf & Kleingeräte' => self::SUB_KUECHE,
+        'Arbeitskleidung & Schutz' => self::SUB_KLEIDUNG,
+        'Deko & Tischkultur' => self::SUB_DEKO,
+        'Geschirr & Ausstattung' => self::SUB_GESCHIRR,
+        'Büro & Sonstiges' => self::SUB_BUERO,
+    ];
 
     /** Warengruppen-Code und Name der Non-Food-Warengruppe. */
     public const WG_CODE = '16';
 
     public const WG_NAME = '16 Non-Food';
+
+    /** Alter Name → neuer (sonst unverändert, auch unbekannte Werte — die prüft der Aufrufer). */
+    public static function kanonisch(?string $name): ?string
+    {
+        return $name === null ? null : (self::ALIAS[trim($name)] ?? $name);
+    }
+
+    /**
+     * Neuer Name samt seinen alten Schreibweisen — für Abfragen auf gespeicherte Werte im Übergang (z. B. gps.sub_category).
+     *
+     * @return list<string>
+     */
+    public static function mitAlias(string $neu): array
+    {
+        return array_values(array_merge([$neu], array_keys(array_filter(self::ALIAS, fn ($n) => $n === $neu))));
+    }
 
     /** @return list<string> */
     public static function unterkategorien(): array

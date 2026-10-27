@@ -453,7 +453,7 @@
                                 <th>Preisklasse</th>
                                 <th>Preis</th>
                                 <th>MwSt</th>
-                                <th title="Gefäß der Form (Non-Food, Geschirr & Ausstattung); der Servier-Typ kommt aus dem Gefäß">Gefäß</th>
+                                <th title="Gefäß der Form (Non-Food, 16.6 Geschirr & Ausstattung); der Servier-Typ kommt aus dem Gefäß">Gefäß</th>
                                 <th class="text-right">EK je Einheit</th>
                                 <th class="text-right">VK netto</th>
                                 <th class="text-right" title="Wareneinsatz: EK ÷ VK netto">Wareneinsatz</th>
