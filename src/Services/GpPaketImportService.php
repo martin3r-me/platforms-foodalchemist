@@ -462,6 +462,10 @@ class GpPaketImportService
             // 6) Anker (über PairingService wie gp_anchors.IMPORT)
             $this->anker->schreibe($P, $plan['ankerGp'], $master, $proto, $plan['listen']['anker_abgelehnt']);
 
+            // 6b) 27.10.2026: neue GPs ohne Paket-Anker/-Profil ziehen beides von einigen Geschwistern nach (kostenlos, ohne KI).
+            //     Am GP hängend, nicht im Protokoll: der Rückweg entfernt die GPs selbst.
+            $proto['geschwister'] = app(GpAromaService::class)->geschwisterNachziehen(array_column($proto['gps_neu'], 'id'));
+
             // 7) Stand-Hashes (Hand-Änderungen beim nächsten Lauf erkennen)
             $ids = [];
             foreach ($P as $key => $g) {

@@ -71,8 +71,12 @@ class BulkEnrichService
      * sichtbar) ist Standard. `allergene` und `naehrwerte` sind KEIN Standard mehr — Allergene,
      * Nährwerte und Zusatzstoffe kommen aus den Lieferantenartikeln (GL-01 §4.3); die KI-Schätzung
      * bleibt als explizit gewählter Schritt für LA-lose GPs (`SCHRITTE_GP_EXPLIZIT`).
+     *
+     * 27.10.2026: `sensorik` = Geschmacksprofil des rohen GP ({@see GpAromaService}). Läuft nur, wenn das Profil fehlt (kein
+     * Doppelbezahlen); einige Geschwister derselben Hauptzutat/desselben Zustands gehen vor der KI. `anker` nimmt ebenso zuerst
+     * die einige Anker-Menge der Geschwister (ohne KI-Call), erst dann die KI aus dem Vokabular.
      */
-    public const SCHRITTE_GP = ['condition', 'tags', 'anker'];
+    public const SCHRITTE_GP = ['condition', 'tags', 'anker', 'sensorik'];
 
     /** Nur auf ausdrückliche Wahl (LA-lose GPs) — nie im „alles anreichern"-Lauf. */
     // 'allergene' entfernt (Dominique 2026-10-13): Allergene und Zusatzstoffe kommen nur aus den Lieferantenartikeln.
@@ -899,12 +903,34 @@ class BulkEnrichService
         }
     }
 
+    /**
+     * 27.10.2026: Anker/Profil für GPs SYNCHRON nachziehen und sofort übernehmen — Anlage-Job und Backfill. Lauf-Zeile als Audit-Spur
+     * (`quelle`), Override-First je Zeile wie „Alle übernehmen". Wirft nicht für einzelne GPs (Fehler landen am Vorschlag).
+     *
+     * @param  list<int>  $gpIds
+     * @param  list<string>  $schritte  Teilmenge von anker, sensorik
+     * @return array{run_id: int, geprueft: int, uebernommen: int, offen: int}
+     */
+    public function nachziehenGp(Team $team, array $gpIds, array $schritte, string $quelle): array
+    {
+        $runId = $this->laufAnlegen($team, count($gpIds), BulkRunType::EnrichGp, ['schritte' => array_values($schritte), 'quelle' => $quelle]);
+        foreach ($gpIds as $gpId) {
+            $this->verarbeiteGp($team, $runId, (int) $gpId, $schritte);
+        }
+
+        return ['run_id' => $runId, 'geprueft' => count($gpIds),
+            'uebernommen' => $this->alleUebernehmenGp($team, $runId), 'offen' => $this->offeneGpVorschlaege($team, $runId)];
+    }
+
     /** Job-Kern: ein GP × Schritte → Vorschläge (kein Fach-Write). */
     public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte): void
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($gpId);
         $fehler = false;
         foreach ($gp === null ? [] : $schritte as $feld) {
+            if ($feld === 'sensorik' && ! app(GpAromaService::class)->profilFehlt($gp->id)) {
+                continue;                                              // Profil da → nichts schätzen, nichts bezahlen
+            }
             try {
                 $vorschlag = $this->proposeGpFeld($team, $gp, $feld);
                 // V-072: hier zählt zusätzlich `[]` als leer — der Rezept-Zwilling kennt
@@ -933,6 +959,21 @@ class BulkEnrichService
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
     private function proposeGpFeld(Team $team, FoodAlchemistGp $gp, string $feld): array
     {
+        $aroma = app(GpAromaService::class);
+        if ($feld === 'anker' && ! $aroma->hatAnker($gp->id) && ($g = $aroma->geschwisterAnker($gp))['status'] === 'einig') {
+            return ['value' => ['geschwister' => $g['anker']], 'confidence' => 1.0, 'call_log_id' => null,
+                'reasoning' => "Einige Anker von {$g['geschwister']} Geschwister-GP(s) derselben Hauptzutat"];
+        }
+        if ($feld === 'sensorik') {
+            if (($g = $aroma->geschwisterProfil($gp))['status'] === 'einig') {
+                return ['value' => ['werte' => $g['werte'], 'texturen' => [], 'quelle' => 'geschwister'], 'confidence' => 1.0, 'call_log_id' => null,
+                    'reasoning' => "Einiges Profil von {$g['geschwister']} Geschwister-GP(s) (gleiche Hauptzutat, gleicher Zustand, gleiche Verarbeitung)"];
+            }
+            $v = $aroma->schaetze($gp);
+
+            return ['value' => $v === null ? null : ['werte' => $v['werte'], 'texturen' => $v['texturen'], 'quelle' => 'ai'],
+                'confidence' => $v['confidence'] ?? null, 'reasoning' => $v['reasoning'] ?? null, 'call_log_id' => $v['call_log_id'] ?? null];
+        }
         $basis = ['name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name];
         $vokabular = $feld === 'anker' ? $this->gpAnkerKandidaten($gp) : [];
 
@@ -1043,6 +1084,11 @@ class BulkEnrichService
                 $gp->update([...$update, 'allergens_confidence' => $prop->confidence]);
                 $ok = true;
             }
+        } elseif ($prop->field === 'anker' && is_array($wert) && is_array($wert['geschwister'] ?? null)) {
+            $ok = app(GpAromaService::class)->ankerVonGeschwistern($gp) > 0;      // prüft frisch: nur ohne Anker, nur wenn noch einig
+        } elseif ($prop->field === 'sensorik' && is_array($wert) && is_array($wert['werte'] ?? null)) {
+            $ok = app(GpAromaService::class)->speichereProfil($gp->id, $wert['werte'], ($wert['quelle'] ?? 'ai') === 'geschwister' ? 'geschwister' : 'ai',
+                $prop->confidence !== null ? (float) $prop->confidence : null, $prop->reasoning, is_array($wert['texturen'] ?? null) ? $wert['texturen'] : []);
         } elseif ($prop->field === 'anker' && is_array($wert) && is_string($wert['anchor_slug'] ?? null)) {
             // Override-First: ein manuell gesetzter Kern-Anker (Inv. 3) blockt die KI-Inferenz komplett.
             $manuell = DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)

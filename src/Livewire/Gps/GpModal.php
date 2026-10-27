@@ -31,6 +31,7 @@ class GpModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatGpAromaKi;            // Aroma-Reiter: Anker + Profil per KI
 
     /** Spec 65: Sperre gilt dem GP — dasselbe Ziel wie die eingebetteten GP-Detail-Karteien und die Detailspalte. */
     protected function sperrZiel(): ?array
@@ -519,61 +520,19 @@ class GpModal extends Component
             : 'Vorschlag im Formular: '.implode(', ', $gesetzt).'. Speichern übernimmt.';
     }
 
-    /**
-     * KI-Knopf „Anker vorschlagen" (Dominique 2026-10-12): Kern-Anker aus dem Vokabular, sofort gesetzt
-     * (wie das Verknüpfen von Hand), aber mit ehrlicher Provenienz `ai_inferred` + Konfidenz —
-     * Handarbeit (manual) bleibt geschützt, der Vorschlag ersetzt sie nicht.
-     */
-    public function ankerKiVorschlagen(BulkEnrichService $bulk, \Platform\FoodAlchemist\Services\PairingService $pairing): void
+    // KI-Knopf „Anker vorschlagen" + „Mit KI schätzen" (Profil) → Trait HatGpAromaKi (ein Weg mit der Detail-Ansicht)
+
+    protected function aromaGp(): ?FoodAlchemistGp
     {
-        $this->gpAnkerFehler = null;
-        $this->hinweis = null;
         $team = $this->team();
-        if ($team === null || $this->gpId === null) {
-            return;
-        }
-        $gp = FoodAlchemistGp::visibleToTeam($team)->find($this->gpId);
-        if ($gp === null) {
-            return;
-        }
-        try {
-            $v = $bulk->gpAnkerVorschlag($team, $gp);
-        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException) {
-            $this->gpAnkerFehler = 'KI derzeit nicht verfügbar.';
 
-            return;
-        } catch (\Throwable $e) {
-            $this->gpAnkerFehler = $e->getMessage();
+        return $team !== null && $this->gpId !== null ? FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($this->gpId) : null;
+    }
 
-            return;
-        }
-        $slug = $v['value']['anchor_slug'] ?? null;
-        if ($slug === null) {
-            $this->gpAnkerFehler = 'KI fand keinen passenden Anker im Vokabular.';
-
-            return;
-        }
-        if ($slug === 'neutral') {
-            $this->hinweis = 'KI: kein Aroma-Träger (neutral) — kein Anker gesetzt.';
-
-            return;
-        }
-        $ankerId = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-            ->where('slug', $slug)->whereNull('deleted_at')->value('id');
-        if ($ankerId === null) {
-            $this->gpAnkerFehler = "Anker „{$slug}\" ist nicht im Vokabular.";
-
-            return;
-        }
-        try {
-            $pairing->setGpAnkerInference($team, $gp->id, (int) $ankerId, (float) ($v['confidence'] ?? 0.5),
-                'GP-Editor: KI-Vorschlag aus dem Anker-Vokabular'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''));
-        } catch (\RuntimeException $e) {
-            $this->gpAnkerFehler = $e->getMessage();
-
-            return;
-        }
-        $this->hinweis = "Anker „{$slug}\" per KI gesetzt (Konfidenz ".round((float) ($v['confidence'] ?? 0) * 100).' %).';
+    protected function aromaMeldung(?string $fehler, ?string $hinweis = null): void
+    {
+        $this->gpAnkerFehler = $fehler;
+        $this->hinweis = $hinweis;
     }
 
     public function formenKiSchaetzen(\Platform\FoodAlchemist\Services\GpFormService $forms): void

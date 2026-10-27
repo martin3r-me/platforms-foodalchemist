@@ -95,6 +95,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\GpUmhaengenCommand::class,
                 \Platform\FoodAlchemist\Console\AbgleichEvalCommand::class,   // Abgleich-Dienst: Eval (schreibt nie, zurückgerollte Transaktion)
                 \Platform\FoodAlchemist\Console\GpPaketImportCommand::class,   // E2: GP-Paket → io (global, stamm_paket)
+                \Platform\FoodAlchemist\Console\GpAromaBackfillCommand::class,   // 27.10.2026: Anker + Geschmacksprofil für Lücken (Geschwister, dann KI)
                 \Platform\FoodAlchemist\Console\GpStammPurgeCommand::class,   // Neu-Import: globalen GP-Stamm hart löschen (Trockenlauf, Riegel, Backup-Nachweis)
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde
@@ -477,6 +478,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Migrationen durch sind). Ungefährlich: die Observer feuern nur auf Model-
         // Events (nie während Migrationen), und queueGp/deleteGp no-oppen ohne Provider.
         \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpAromaObserver::class);   // 27.10.2026: Anker + Profil auf allen Anlagewegen
         // Spec 67: neuer/klassifizierter GP → Stellplatz-Vorschlag im Standardlager des Teams
         \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpLagerObserver::class);
         \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::observe(\Platform\FoodAlchemist\Observers\RecipeEmbeddingObserver::class);

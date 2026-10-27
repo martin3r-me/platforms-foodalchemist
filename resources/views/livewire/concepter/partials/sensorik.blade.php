@@ -17,7 +17,22 @@
             @elseif($sQuelle === 'manual')
                 <x-fa::badge tone="info" icon="heroicon-m-pencil">Von Hand gesetzt, gegart</x-fa::badge>
             @elseif($sQuelle === 'gp')
+                @php $gpProfil = $sensorik['gp_profil'] ?? ['fehlt' => false, 'quelle' => null, 'confidence' => null]; @endphp
                 <x-fa::badge>Grundprodukt, Rohprofil</x-fa::badge>
+                @if($gpProfil['fehlt'])
+                    <x-fa::badge tone="warn" icon="heroicon-m-exclamation-triangle" data-gp-profil-fehlt>Profil fehlt</x-fa::badge>
+                @else
+                    @php
+                        $gpQuelleText = match ($gpProfil['quelle']) {
+                            'ai' => 'von der KI geschätzt', 'geschwister' => 'von Grundprodukten derselben Hauptzutat übernommen',
+                            'manual' => 'von Hand gesetzt', 'rule' => 'regelbasiert (alt)', 'gemini' => 'aus dem alten Import', default => 'Quelle unbekannt',
+                        };
+                        if ($gpProfil['confidence'] !== null && $gpProfil['quelle'] === 'ai') {
+                            $gpQuelleText .= ', Sicherheit ' . number_format($gpProfil['confidence'] * 100, 0, ',', '.') . ' %';
+                        }
+                    @endphp
+                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-gp-profil-quelle="{{ $gpProfil['quelle'] }}">{{ $gpQuelleText }}</span>
+                @endif
             @else
                 <x-fa::badge tone="warn">Aus den Rohzutaten geschätzt</x-fa::badge>
                 @if(isset($sensorik['abdeckung']))<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $sensorik['abdeckung']['mit'] }} von {{ $sensorik['abdeckung']['gesamt'] }} Grundprodukten mit Daten, noch nicht von der KI bewertet</span>@endif
@@ -44,7 +59,14 @@
                 </div>
                 <div class="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 content-start">
                     <div class="flex flex-col gap-3">
-                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack nach dem Garen je Achse von 0 bis 1. Zeigen auf eine Achse nennt zusätzlich den Wert der Aroma-Anker.</p>
+                        @if($sQuelle === 'gp')
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack des Grundprodukts, wie es eingekauft wird, je Achse von 0 bis 1.</p>
+                            @if($gpProfil['fehlt'])
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-gp-profil-fehlt-text>Sauer, bitter, umami und scharf sind noch nicht bewertet. Ohne Profil stehen sie auf 0.</p>
+                            @endif
+                        @else
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack nach dem Garen je Achse von 0 bis 1. Zeigen auf eine Achse nennt zusätzlich den Wert der Aroma-Anker.</p>
+                        @endif
                         {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (Nährwerte der Lieferantenartikel), nicht geschätzt. --}}
                         @if(count($sensorik['erdung'] ?? []))
                             <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ok-soft)] px-3 py-2">
@@ -67,7 +89,8 @@
                         @if(count($sensorik['dominant']) || count($sensorik['luecken']))
                             <div class="flex flex-wrap gap-1.5">
                                 @foreach($sensorik['dominant'] as $d)<x-fa::badge tone="ok">dominant: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
-                                @foreach($sensorik['luecken'] as $d)<x-fa::badge tone="warn">Lücke: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
+                                {{-- Am Grundprodukt ist ein Wert < 0,3 keine Lücke (eine Zitrone ist nicht süß), nur schwach (Dominique 27.10.2026). --}}
+                                @foreach($sensorik['luecken'] as $d)<x-fa::badge :tone="$sQuelle === 'gp' ? 'neutral' : 'warn'">{{ $sQuelle === 'gp' ? 'schwach' : 'Lücke' }}: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
                             </div>
                         @endif
                         <div class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]">

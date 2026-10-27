@@ -513,10 +513,33 @@
         </x-fa::section>
         @endif
 
+        {{-- 27.10.2026 (Dominique): Geschmacksprofil + KI-Knöpfe auch hier, nicht nur im GP-Dialog. Derselbe Weg (HatGpAromaKi). --}}
+        @if($section === null && $gp !== null)
+        <x-fa::section variant="plain" title="Geschmack" icon="heroicon-o-beaker" data-gp-panel-geschmack>
+            <x-slot:actions>
+                @if($kannKuratieren)
+                    <x-foodalchemist::ki-action action="sensorikKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="Mit KI schätzen"
+                        title="Schätzt sauer, bitter, umami, scharf und die Achsen ohne Messwert. Vorschau, gespeichert wird erst mit Übernehmen."
+                        data-gp-sensorik-ki busy="Wird geschätzt …" />
+                @endif
+            </x-slot:actions>
+            @include('foodalchemist::livewire.gps.partials.aroma-vorschau')
+            @include('foodalchemist::livewire.concepter.partials.sensorik')
+        </x-fa::section>
+        @endif
+
         {{-- Spec 53 Paket J: Aroma-Anker als Chip, Klick zeigt weitere Grundprodukte mit diesem Anker.
-             Pflege des Ankers selbst im GP-Dialog, Kartei Sensorik & Pairing. --}}
-        @if($section === null && $gpAnker->isNotEmpty())
+             Seit 27.10.2026 immer sichtbar (auch ohne Anker) mit „Anker vorschlagen" (Geschwister zuerst, dann KI). --}}
+        @if($section === null && $gp !== null)
         <x-fa::section variant="plain" title="Aroma-Anker" icon="heroicon-o-sparkles" data-gp-panel-anker>
+            <x-slot:actions>
+                <x-foodalchemist::ki-action action="ankerKiVorschlagen" variant="ai" icon="heroicon-o-sparkles" label="Anker vorschlagen"
+                    title="Übernimmt die Anker einiger Grundprodukte derselben Hauptzutat, sonst bestimmt die KI den Haupt-Anker aus dem Vokabular"
+                    data-gp-anker-ki busy="Wird bestimmt …" flash="Anker gesetzt" />
+            </x-slot:actions>
+            @if($gpAnker->isEmpty())
+                <p class="{{ $leise }}" data-gp-anker-leer>Noch kein Aroma-Anker.</p>
+            @endif
             <div class="flex flex-wrap gap-1.5">
                 @foreach($gpAnker as $a)
                     <a href="#" role="button" wire:key="pa-{{ $a->id }}" wire:click.prevent="ankerNetzUmschalten({{ $a->id }})"
