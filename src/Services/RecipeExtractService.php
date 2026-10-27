@@ -29,8 +29,8 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  */
 class RecipeExtractService
 {
-    /** §4: maximale Verschachtelungstiefe (Parent + Komponenten + deren Stubs). */
-    private const MAX_TIEFE = 3;
+    /** §4: Komponenten-Ebenen unter dem Rezept (K1 → K1.2 → K1.2.1); darunter nur noch Stub-Zeilen. */
+    public const MAX_TIEFE = 3;
 
     public function __construct(
         private AiGatewayService $ai,
@@ -109,14 +109,22 @@ class RecipeExtractService
      * (geerdet), verknüpft sie im Parent per sub_rezept_id, und legt dann den Parent geerdet an.
      *
      * @param  array{typ?: string, name?: string, zutaten?: array, preparation?: string, komponenten?: array}  $extrakt
+     * @param  array  $parameter  Rezept-Leitplanken (bio_pref, frische, convenience …) wie in der Kaskade — 27.10.: vorher immer leer
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array, sub_recipes: list<array{id:int,name:string}>}
      */
-    public function legeAn(Team $team, array $extrakt, ?bool $vkModusOverride = null, int $tiefe = 0): array
+    public function legeAn(Team $team, array $extrakt, ?bool $vkModusOverride = null, int $tiefe = 0, array $parameter = []): array
     {
         $vkModus = $vkModusOverride ?? (($extrakt['typ'] ?? 'basisrezept') === 'gericht');
-        $zutaten = array_values(array_filter((array) ($extrakt['zutaten'] ?? []), 'is_array'));
-        // Ab der Tiefen-Grenze keine weitere Verschachtelung mehr auflösen (§4).
-        $komponenten = $tiefe >= self::MAX_TIEFE - 1
+        $zutaten = array_map(function (array $z) {
+            // 27.10.: deutsche Zahl auch hier (MCP-Weg ohne Vorschau) — der Generator liest sonst „2.000“ per (float) als 2
+            if (array_key_exists('quantity', $z) && ($q = \Platform\FoodAlchemist\Support\DeutscheZahl::alsFloat($z['quantity'])) !== null) {
+                $z['quantity'] = $q;
+            }
+
+            return $z;
+        }, array_values(array_filter((array) ($extrakt['zutaten'] ?? []), 'is_array')));
+        // Ab der Tiefen-Grenze keine weitere Verschachtelung mehr auflösen (§4): Komponenten auf Ebene 1–3 unter dem Rezept.
+        $komponenten = $tiefe >= self::MAX_TIEFE
             ? []
             : array_values(array_filter((array) ($extrakt['komponenten'] ?? []), 'is_array'));
 
@@ -125,16 +133,16 @@ class RecipeExtractService
         foreach ($komponenten as $k) {
             $kName = trim((string) ($k['name'] ?? ''));
             $kZutaten = array_values(array_filter((array) ($k['zutaten'] ?? []), 'is_array'));
-            if ($kName === '' || $kZutaten === []) {
-                continue;   // reine Namensnennung ohne Zutaten → unten als sub_rezept-Stub-Zeile
+            if ($kName === '' || ($kZutaten === [] && array_filter((array) ($k['komponenten'] ?? []), 'is_array') === [])) {
+                continue;   // reine Namensnennung ohne Zutaten und ohne Unter-Komponenten → unten als sub_rezept-Stub-Zeile
             }
             $subRes = $this->legeAn($team, [
                 'typ' => 'basisrezept',
                 'name' => $kName,
                 'zutaten' => $kZutaten,
                 'preparation' => (string) ($k['preparation'] ?? ''),
-                'komponenten' => [],
-            ], false, $tiefe + 1);
+                'komponenten' => (array) ($k['komponenten'] ?? []),   // 27.10.: Unter-Komponenten weiterreichen (vorher [] → nur eine Ebene)
+            ], false, $tiefe + 1, $parameter);
             $subId = (int) $subRes['recipe']->id;
             $subInfo[] = ['id' => $subId, 'name' => $kName];
 
@@ -153,6 +161,25 @@ class RecipeExtractService
             }
         }
 
+        // 2b. Basiskomponenten (Dominique 27.10. d): „Geflügelfond“ ohne Zukauf-Signal ist ein Unterrezept — ohne Basisrezept im Bestand
+        //     als Stub anlegen und verknüpfen (Regelwerk Basisrezepte §4 F4.1: Auto-Stub, Eltern bleibt Entwurf), nie ein Zukauf-GP.
+        $stubs = [];
+        $lp = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($parameter);
+        $matcher = app(IngredientMatchService::class);
+        foreach ($zutaten as $i => $z) {
+            $text = trim((string) ($z['text'] ?? $z['name'] ?? ''));
+            if ($text === '' || ! empty($z['sub_rezept_id']) || ! $matcher->basiskomponenteOhneZukauf($team, $text, $lp['convenience'])) {
+                continue;
+            }
+            $t = $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience']);
+            if (($t['basiskomponente'] ?? null) !== 'stub') {
+                continue;   // Basisrezept im Bestand (auch zur Prüfung) — der Generator bindet bzw. legt es zur Prüfung vor
+            }
+            $stub = app(RecipeService::class)->createSubRecipeStub($team, $text);
+            $zutaten[$i] += ['sub_rezept_id' => (int) $stub['recipe']->id, 'sub_rezept' => true, 'sub_rezept_eigen' => true];
+            $stubs[] = ['id' => (int) $stub['recipe']->id, 'name' => (string) $stub['recipe']->name, 'neu' => $stub['neu']];
+        }
+
         // 3. Parent geerdet anlegen (kiRezeptOverride = kein LLM, aber voller Resolver/Recompute).
         $name = trim((string) ($extrakt['name'] ?? '')) ?: 'Importiertes Rezept';
         $override = [
@@ -164,9 +191,10 @@ class RecipeExtractService
             throw new \RuntimeException("Rezept «{$name}» hat keine Zutaten — nichts zu erden.");
         }
         $result = $this->generator->generiere(
-            $team, $name, [], kiRezeptOverride: $override, vkModus: $vkModus, createdVia: 'import',
+            $team, $name, $parameter, kiRezeptOverride: $override, vkModus: $vkModus, createdVia: 'import',
         );
         $result['sub_recipes'] = $subInfo;
+        $result['stubs'] = $stubs;
 
         return $result;
     }

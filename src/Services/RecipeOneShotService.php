@@ -95,14 +95,14 @@ class RecipeOneShotService
      *
      * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array, coverage?: array}
      */
-    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
+    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null, array $leitplanken = []): array
     {
         \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2: zentral für Job, Kaskade und MCP
         return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe,
-            fn () => $this->anreichernImLauf($team, $recipe, $zielVk, $completeCoverage, $refresh, $shouldStop));
+            fn () => $this->anreichernImLauf($team, $recipe, $zielVk, $completeCoverage, $refresh, $shouldStop, $leitplanken));
     }
 
-    private function anreichernImLauf(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
+    private function anreichernImLauf(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null, array $leitplanken = []): array
     {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
         // #4: `refresh` = bewusster „Alles anreichern"-Klick im Editor → auch gefüllte, nicht-manuelle
@@ -161,7 +161,7 @@ class RecipeOneShotService
         if ($completeCoverage) {
             // T5 (Top-Down-Abschluss »GPs aus LAs«): fehlende GPs ZUERST minten, damit die
             // Wirtschaftlichkeit unten mit vollständigem EK rechnet.
-            $ergebnis['gp_mint'] = $this->minteFehlendeGps($team, $recipe->fresh() ?? $recipe);
+            $ergebnis['gp_mint'] = $this->minteFehlendeGps($team, $recipe->fresh() ?? $recipe, $leitplanken);
         }
         $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe->fresh() ?? $recipe);
         $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe->fresh() ?? $recipe, $zielVk);
@@ -183,7 +183,8 @@ class RecipeOneShotService
      *
      * @return array{status: string, minted: int, ohne_la: int, anker?: ?array, fehler?: string}
      */
-    public function minteFehlendeGps(Team $team, FoodAlchemistRecipe $recipe): array
+    /** @param  array  $leitplanken  Rezept-Leitplanken (bio_pref/frische/convenience) für die Bestandssuche vor jedem Mint (27.10.) */
+    public function minteFehlendeGps(Team $team, FoodAlchemistRecipe $recipe, array $leitplanken = []): array
     {
         try {
             $offene = $recipe->ingredients()
@@ -217,12 +218,14 @@ class RecipeOneShotService
                 // Spec 80 B4: eine Basisrezept-Zeile („Püree: Petersilienwurzel") ohne Kaskaden-Dependency (Einzel-
                 // Generierung, Tiefen-/Step-Budget, von Hand offen gelassen) bleibt eine Lücke. Vorher mintete die
                 // Anreicherung — seit Paket 10 also der Freigabeknopf — sie still auf eine Rohware.
-                if ($heuristik->istBasisrezeptZeile($text)) {
+                // Dominique 27.10. (d): auch eine Basiskomponente ohne Zukauf-Signal („Geflügelfond“) wird nie auf ein Zukauf-GP gemintet
+                if ($heuristik->istBasisrezeptZeile($text) || app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)
+                    ->basiskomponenteOhneZukauf($team, $text, \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken)['convenience'])) {
                     $basisrezeptLuecken++;
 
                     continue;
                 }
-                $gp = $mint->mintFromLa($team, $text);
+                $gp = $mint->mintFromLa($team, $text, leitplanken: $leitplanken);
                 if ($gp !== null) {
                     $zut->gp_id = $gp->id;
                     $zut->save();

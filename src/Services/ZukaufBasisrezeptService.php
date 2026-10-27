@@ -53,7 +53,7 @@ final class ZukaufBasisrezeptService
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
             return null;
         }
@@ -74,7 +74,7 @@ final class ZukaufBasisrezeptService
             return null;
         }
         // Auf den reinen Warennamen matchen: mit Typ-Präfix ist die Zeile eine Basisrezept-Zeile und träfe kein GP.
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
             return null;
         }
@@ -105,7 +105,7 @@ final class ZukaufBasisrezeptService
         if ($zeile === '' || app(MatchHeuristics::class)->istBasisrezeptZeile($zeile)) {
             return null;   // eine Basisrezept-Zeile („Brühe: Gemüse“) ist kein Warenname
         }
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $zeile, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $zeile, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
             return null;
         }
@@ -139,7 +139,7 @@ final class ZukaufBasisrezeptService
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
             return null;
         }
@@ -243,7 +243,7 @@ final class ZukaufBasisrezeptService
         if ($bezeichnung === '') {
             return false;
         }
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) === 'gp' && IngredientMatchService::istAutomatischVerdrahtbar($t)
             && ($gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id'])) !== null) {
             return self::istBrotGp($gp);
@@ -320,7 +320,7 @@ final class ZukaufBasisrezeptService
         if ($menge * (in_array($einheit, ['kg', 'l'], true) ? 1000 : 1) > 0.1 * $basisGramm) {
             return null;   // mehr als eine Zugabe: die KI baut ein anderes Produkt (300 ml Traubenkernöl auf 400 ml Kernöl)
         }
-        $t = app(IngredientMatchService::class)->matchIngredient($team, $text, null, 'gp_first');
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $text, null, 'gp_first', basisVariante: false);
         if (($t['target'] ?? null) !== 'gp' || ! IngredientMatchService::istAutomatischVerdrahtbar($t)) {
             return null;
         }

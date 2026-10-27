@@ -224,25 +224,9 @@ class RecipeGeneratorService
         // conversion“ im Schritt-Spiegel, das Gericht scheiterte nach dem KI-Call. Liste → nummerierter Text.
         $kiRezept['preparation'] = self::zubereitungAlsText($kiRezept['preparation'] ?? null);
 
-        // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool)
-        // VK-Modus: Komponenten = Basisrezepte zuerst (D-6 — Zutaten sind GPs UND/ODER Basisrezepte)
-        $convenience = $parameter['convenience'] ?? 'standard';
-        $mode = $vkModus || in_array($convenience, ['from_scratch', 'teil_convenience'], true) ? 'sub_recipe_first' : 'gp_first';
-        $preferRaw = $convenience === 'from_scratch';
-        $pref = match ($parameter['frische'] ?? null) {
-            'frisch' => 'fresh_first',
-            'tk' => 'frozen_first',
-            'konserve', 'behandelt' => 'preserved_first',   // behandelt = gepökelt/geräuchert/luftgetrocknet (v3.6 §9)
-            default => 'fresh_first',
-        };
-        // Bio dreiwertig: bio_pref (bio|conventional|neutral) gewinnt — „egal" ⇒ neutral (Adjustment 0),
-        // damit Bio-GPs nicht ungewollt bestraft werden. Fallback auf den Bool `bio` (MCP-Pfad, 4.4r).
-        $bio = match ($parameter['bio_pref'] ?? null) {
-            'bio' => 'bio',
-            'neutral' => 'neutral',
-            'conventional' => 'conventional',
-            default => ($parameter['bio'] ?? false) ? 'bio' : 'conventional',
-        };
+        // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool; VK-Modus: Basisrezepte zuerst, D-6) — EINE Abbildung,
+        // seit 27.10. auch für Rezept-Import und Mint/Bestand ({@see Matching\MatchLeitplanken})
+        ['convenience' => $convenience, 'mode' => $mode, 'preferRaw' => $preferRaw, 'pref' => $pref, 'bio' => $bio] = Matching\MatchLeitplanken::aus($parameter, $vkModus);
 
         $melde('Zutaten werden zugeordnet …');
 
@@ -386,7 +370,7 @@ class RecipeGeneratorService
                 }
                 $direktArtikel = $vkModus && ! $brotImGericht && ($kleinstmenge !== null || $this->heuristik->istDirektArtikelKandidat($text));
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
-                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
+                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience);
 
                 // Band-Gate (2026-08-06, Rahmeis-in-Tomatensuppe): FuzzyLow heißt laut
                 // GL-04 §4.1 wörtlich „Review nötig" — der Generator ist aber der teuerste
@@ -414,8 +398,8 @@ class RecipeGeneratorService
                 // deckt die Kurzform »Gel:«, die kein Substring-Marker trifft (Symptom E, Ginger-Beer-Gel).
                 $prefixSub = ! $direktArtikel && $this->heuristik->hatSubZubereitungsPraefix($text);
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
-                // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
-                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true) || $brotImGericht);
+                // auch einen GP-Treffer. Dominique 27.10. (d): mit Zukauf-Signal („Geflügelfond Pulver (Knorr)“) oder Convenience-Leitplanke darf es Zukauf-GP sein.
+                $strongSub = ! $direktArtikel && ((($nameHalbfabrikat || $prefixSub) && $this->matcher->basiskomponenteOhneZukauf($team, $text, $convenience)) || ($llmSub === true) || $brotImGericht);
                 // Teller-Rolle im VK-Gericht (T4, Vokabular gericht.teller_rolle) — Convenience-
                 // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
                 // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden
@@ -1169,9 +1153,9 @@ class RecipeGeneratorService
         $gp = FoodAlchemistGp::query()->visibleToTeam($team)
             ->whereIn('status', ['approved', 'tentative'])
             ->where('is_platzhalter', false)
-            ->whereKey($id)->first(['id', 'name', 'condition']);
+            ->whereKey($id)->first(['id', 'name', 'condition', 'commodity_group_code', 'sub_category', 'main_ingredient_display', 'zusatz']);
 
-        return $gp !== null && $this->matcher->acceptsProductForm($text, $gp->name, $gp->condition) ? $id : null;
+        return $gp !== null && $this->matcher->acceptsProductForm($text, $gp->name, $gp->condition, $gp) ? $id : null;
     }
 
     /**
@@ -1506,8 +1490,8 @@ class RecipeGeneratorService
 
     private function einheitId(Team $team, string $slug): int
     {
-        $slug = mb_strtolower(trim($slug)) ?: 'g';
-        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', $slug)->first()
+        // 27.10.: „Stück“, „Stk.“, „Zweige“ → Vokabular (vorher nur der Slug, alles andere still Gramm) — EinheitAusText
+        $unit = (($id = \Platform\FoodAlchemist\Support\EinheitAusText::id($team, $slug ?: 'g')) !== null ? FoodAlchemistVocabEinheit::find($id) : null)
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->first()
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->orderBy('id')->first();
         if ($unit === null) {

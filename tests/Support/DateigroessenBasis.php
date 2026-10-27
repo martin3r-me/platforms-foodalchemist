@@ -7,7 +7,7 @@
 return [
     'src/Services/OrderService.php' => [3739, 'C2 Bestell-Cluster (Spec 85 §6)'],
     'src/Livewire/Planung/Index.php' => [3427, 'C1 PR-1 … PR-5 (Spec 85 §5)'],
-    'src/Services/PlanningCascadeService.php' => [3543, 'nach Stufen schneiden (Spec 85 §9)'],
+    'src/Services/PlanningCascadeService.php' => [3542, 'nach Stufen schneiden (Spec 85 §9)'],
     'src/Services/SpeiseplanService.php' => [2875, 'Lifecycle / Aushang / Auswertung (Spec 85 §9)'],
     'src/Services/FoodbookService.php' => [2412, 'mit C4 (Spec 85 §8/§9)'],
     'src/Services/PairingService.php' => [2591, 'Lesen / Bewerten / Pflege (Spec 85 §9)'],
@@ -22,6 +22,6 @@ return [
     'src/Services/ConceptService.php' => [1535, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Services/RecipeService.php' => [1526, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Livewire/Verkauf/VkModal.php' => [1542, 'C6 Darreichung / Regeneration (Spec 85 §9)'],
-    'src/Services/RecipeGeneratorService.php' => [1544, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
+    'src/Services/RecipeGeneratorService.php' => [1528, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Livewire/Produktion/Tagesplan.php' => [1528, 'C6 Feedback / Anleitung (Spec 85 §9)'],
 ];

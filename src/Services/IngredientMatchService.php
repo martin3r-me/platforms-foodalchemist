@@ -50,6 +50,9 @@ class IngredientMatchService
     /** Query-Tokens des laufenden Aufrufs — für den Tiebreak „weniger fremde Eigenschaften“. */
     private array $tiebreakQuery = [];
 
+    /** Hauptzutat-Schutz: Terminologie-Alias-Tokens der laufenden Zeile (je matchIngredient einmal, null = noch nicht geladen). */
+    private ?array $aliasTokens = null;
+
     /**
      * @return array{target: string, status: MatchBand, gp_id: ?int, gp_name: ?string,
      *               recipe_id: ?int, recipe_name: ?string, score: float}
@@ -77,6 +80,8 @@ class IngredientMatchService
         string $pref = 'neutral',
         bool $preferRaw = false,
         string $bio = 'neutral',
+        bool $basisVariante = true,   // 27.10.: Basisvarianten-Regel (Bindung); reine Erkennung (Zukauf/Teilfertig) schaltet sie ab
+        string $convenience = 'standard',   // 27.10. (d): Convenience-Leitplanke — teil/voll erlaubt das Zukauf-GP für Basiskomponenten
     ): array {
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
@@ -91,6 +96,13 @@ class IngredientMatchService
         $this->currentIngredientName = $ingredientName;
         $this->tiebreakMemo = [];
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
+        $this->aliasTokens = null;
+        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
+        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13)
+        $this->basisKomponente = $basisVariante && $this->basiskomponenteOhneZukauf($team, $ingredientName, $convenience);
+        if ($this->basisKomponente) {
+            $mode = 'sub_recipe_first';
+        }
 
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
         if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
@@ -108,7 +120,10 @@ class IngredientMatchService
         // 4.4s — §5-Default-GP-Alias (sichere Degradation)
         if (($aliasName = $this->heuristik->defaultGpAlias($queryTokens, $preferRaw)) !== null) {
             $ziel = $this->resolveGpByName($team, $aliasName);
-            if ($ziel !== null && $this->acceptsProductForm($ingredientName, $ziel['name'], $ziel['condition'])) {
+            // 27.10. (Pfeffer weiss: ganz → gemahlen): nennt die Zeile ausdrücklich eine Form, die das Default-GP nicht trägt, entscheidet der Pool
+            $queryForm = $this->engine->produktForm($ingredientName)['form'];
+            if ($ziel !== null && $this->acceptsProductForm($ingredientName, $ziel['name'], $ziel['condition'])
+                && ($queryForm === null || in_array($queryForm, $this->engine->tokenize($ziel['name']), true))) {
                 return [
                     'target' => 'gp', 'status' => MatchBand::fuerScore(MatchHeuristics::DEFAULT_GP_ALIAS_SCORE),
                     'gp_id' => $ziel['id'], 'gp_name' => $ziel['name'],
@@ -184,14 +199,101 @@ class IngredientMatchService
             }
         }
 
+        // 27.10. (Dominique: Freitext aus Internetrezept, Kundenzettel, Foto): Menge/Einheit vorn, Füllwörter („gutes“, „zum Braten“), Klammern
+        // und Plural (Lorbeerblaetter) — wie die Fallbacks darüber nur unter der Schwelle, bestehende Treffer bleiben unberührt.
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
+            foreach ([...\Platform\FoodAlchemist\Support\ZutatFreitext::varianten($ingredientName), $ingredientName] as $variante) {
+                $vt = $this->engine->ingredientTokens($variante);
+                foreach (array_unique([implode(' ', $vt), implode(' ', array_map(\Platform\FoodAlchemist\Support\ZutatFreitext::lemma(...), $vt))]) as $folge) {
+                    if ($folge === '' || $folge === implode(' ', $queryTokens)) {
+                        continue;
+                    }
+                    $kandidat = $this->poolLauf($team, explode(' ', $folge), $querySlug, $mode, $pref, $preferRaw, $bio);
+                    if ($kandidat['score'] > $final['score']) {
+                        $final = $kandidat;
+                    }
+                }
+            }
+        }
+
+        if ($this->basisKomponente) {
+            return $this->alsBasiskomponente($team, $ingredientName, $final, $pref, $bio);
+        }
+
+        // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : $final;
+            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio) : $final);
+    }
+
+    /** Basiskomponenten-Lauf (27.10. d) der aktuellen Entscheidung — steuert poolLauf und den Abschluss. */
+    private bool $basisKomponente = false;
+
+    /** Zukauf-Signale einer Basiskomponenten-Zeile (Kurator 27.10. d): Einkaufsform, Konzentrat, Glas, „Zukauf“/„fertig“. */
+    private const ZUKAUF_SIGNAL = ['pulver', 'paste', 'konzentrat', 'glas', 'zukauf', 'fertig', 'fertigprodukt', 'instant', 'granulat', 'tk', 'convenience'];
+
+    /** @var array<int, list<string>> bekannte Marken (GP-Klammer-Zusatz) je Team, normalisiert */
+    private array $markenCache = [];
+
+    /**
+     * Basiskomponente ohne Zukauf-Signal und ohne Convenience-Leitplanke (Dominique 27.10. d) → Unterrezept bzw. Stub, kein Zukauf-GP.
+     * Zukauf-Signal: Pulver/Paste/Konzentrat/Glas/„Zukauf“/„fertig“, eine Einkaufsform (TK, trocken, konserviert) oder eine bekannte Marke.
+     */
+    public function basiskomponenteOhneZukauf(Team $team, string $text, string $convenience = 'standard'): bool
+    {
+        if (in_array($convenience, ['teil_convenience', 'voll_convenience'], true) || ! $this->heuristik->istBasiskomponente($text)) {
+            return false;
+        }
+        $tokens = $this->engine->tokenize($text);
+        if (array_filter($tokens, fn ($t) => in_array($t, self::ZUKAUF_SIGNAL, true) || str_ends_with($t, 'pulver') || str_ends_with($t, 'konzentrat')) !== []
+            || in_array($this->engine->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
+            return false;
+        }
+        // Markenname in Klammern („Geflügelfond (Knorr)“): bekannt aus dem Klammer-Zusatz der GPs
+        if (preg_match_all('/\(([^)]+)\)/u', $text, $m) > 0) {
+            $marken = $this->markenCache[$team->id] ??= FoodAlchemistGp::visibleToTeam($team)->whereNotNull('zusatz')->where('zusatz', '!=', '')
+                ->distinct()->pluck('zusatz')->map(fn ($z) => implode(' ', $this->engine->tokenize((string) $z)))->filter()->values()->all();
+            foreach ($m[1] as $klammer) {
+                if (in_array(implode(' ', $this->engine->tokenize($klammer)), $marken, true)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Abschluss einer Basiskomponenten-Zeile: Basisrezept-Treffer bleibt (`basiskomponente` = rezept); ein GP aus der Rohware/Würzware
+     * (nicht WG 13 Convenience & Komponenten, nicht WG 09 Teige/Backwaren) war ein Fehlalarm des Typ-Worts (Sojasauce, Crème fraîche, Spargel) und läuft normal weiter;
+     * sonst kein Zukauf-GP — FuzzyLow (Review mit Vorschlag) bzw. offen, `basiskomponente` = stub (Regelwerk Basisrezepte §4 F4.1).
+     */
+    private function alsBasiskomponente(Team $team, string $ingredientName, array $final, string $pref, string $bio): array
+    {
+        $ok = $final['score'] >= MatchHeuristics::MIN_MATCH_SCORE;
+        if ($ok && ($final['target'] ?? null) === 'sub_recipe') {
+            return $final + ['basiskomponente' => 'rezept'];
+        }
+        if ($ok && ($final['target'] ?? null) === 'gp'
+            && ! in_array((string) FoodAlchemistGp::query()->whereKey((int) $final['gp_id'])->value('commodity_group_code'), ['13', '09'], true)) {
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio);
+        }
+
+        return ($ok && ($final['target'] ?? null) === 'gp' ? ['status' => MatchBand::FuzzyLow] + $final : $this->noMatch($final['score'])) + ['basiskomponente' => 'stub'];
     }
 
     /** 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2) — v1-Kernlauf. */
     private function poolLauf(Team $team, array $queryTokens, ?string $querySlug, string $mode, string $pref, bool $preferRaw, string $bio): array
     {
+        // 27.10. (d): Basiskomponente — ein Basisrezept ab der Sub-Schwelle gewinnt immer, auch ohne Halbfabrikat-Marker (Marinade, Teig, Creme)
+        if ($this->basisKomponente) {
+            $subBest = $this->bestSubrecipeMatch($team, $queryTokens, $querySlug);
+            if (($subBest['score'] ?? 0.0) >= MatchHeuristics::SUB_PRIORITY_THRESHOLD) {
+                return $subBest;
+            }
+
+            return $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio) ?? $subBest ?? $this->noMatch(0.0);
+        }
         if ($this->heuristik->queryIstHalbfabrikat($queryTokens)) {
             $subBest = $this->bestSubrecipeMatch($team, $queryTokens, $querySlug);
             $gpBest = $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio);
@@ -330,7 +432,7 @@ class IngredientMatchService
         // bleiben unberührt, es kann nur MEHR gefunden werden.
         $lex = [];
         foreach ($this->poolMitEngenSonden($team, $poolTokens, $queryTokens, $querySlug) as $gp) {
-            if (! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition)) {
+            if (! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition, $gp)) {
                 continue;
             }
             $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);   // Marken-Klammer zählt nicht (wie bestGpMatch)
@@ -401,8 +503,8 @@ class IngredientMatchService
         $gpMissing = array_values(array_filter($gpIds, static fn ($id) => ! isset($lex["gp\0$id"])));
         if ($gpMissing !== []) {
             foreach (FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])
-                ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name', 'condition']) as $g) {
-                if (! $this->acceptsProductForm($ingredientName, $g->name, $g->condition)) {
+                ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name', 'condition', 'commodity_group_code', 'sub_category', 'main_ingredient_display', 'zusatz']) as $g) {
+                if (! $this->acceptsProductForm($ingredientName, $g->name, $g->condition, $g)) {
                     continue;
                 }
                 $names["gp\0{$g->id}"] = $g->name;
@@ -533,11 +635,16 @@ class IngredientMatchService
      * frisch, „getrocknete Tomaten" nicht auf konserviert (vorher fielen trocken UND
      * konserviert in dieselbe Prüfung, siehe {@see TokenEngine::produktForm()}).
      */
-    public function acceptsProductForm(string $query, string $name, ?string $condition): bool
+    public function acceptsProductForm(string $query, string $name, ?string $condition, ?FoodAlchemistGp $gp = null): bool
     {
         $zustand = $this->engine->produktForm($query)['zustand'];
         if ($zustand === null) {
             return true;   // kein expliziter §9-Zustand im Query ⇒ nichts zu gaten, Score entscheidet
+        }
+        // 27.10. (Rapsöl, Apfelessig): Öle, Essige, Sirupe und Getränke tragen kein Zustandswort (GP v3.8) — ein „trocken“/„frisch“/„konserviert“
+        // in der Zutat darf sie nicht ausschließen. Vorher fiel „Rapsoel …: trocken, raffiniert“ dadurch auf „Salz: raffiniert, trocken“.
+        if ($gp !== null && trim((string) $condition) === '' && $this->ohneZustandGp($gp)) {
+            return true;
         }
         if (trim((string) $condition) !== '') {
             if (mb_strtolower(trim($condition)) === mb_strtolower($zustand)) {
@@ -559,6 +666,31 @@ class IngredientMatchService
         return $gpZustand !== null && mb_strtolower($gpZustand) === mb_strtolower($zustand);
     }
 
+    /** GP aus einer Warengruppe ohne Zustandswort (WG 11 Öle/Essig, Sirupe, trinkfertige Getränke — GpNamingService::ohneZustandswort). */
+    private function ohneZustandGp(FoodAlchemistGp $gp): bool
+    {
+        return (string) $gp->commodity_group_code === '11' || $this->naming()->ohneZustandswort(['commodity_group_code' => $gp->commodity_group_code,
+            'sub_category' => $gp->sub_category, 'hauptzutat' => $this->hauptzutatText($gp), 'condition' => null]);
+    }
+
+    private function hauptzutatText(FoodAlchemistGp $gp): string
+    {
+        $name = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);
+
+        return trim((string) ($gp->main_ingredient_display ?: (preg_match('/^(.*?):(?=\s|$)/u', $name, $m) === 1 ? $m[1] : $name)));
+    }
+
+    /** 27.10.: Hauptzutat-Schutz — kein Treffer, wenn die Hauptzutat des GP nicht in der Zutat vorkommt (Apfelessig ≠ Apfelmus). */
+    private function hauptzutatPasst(FoodAlchemistGp $gp, array $passTokens = []): bool
+    {
+        $alternativen = array_map(fn ($a) => array_values(array_filter($this->engine->tokenize($a), fn ($t) => ! $this->engine->istReinesMerkmal($t)
+            && ! $this->engine->isCutFormToken($t))), preg_split('/\s+\/\s+/u', $this->hauptzutatText($gp)) ?: []);
+        // Zutat-Seite: Originalzeile + Tokens dieses Pool-Laufs (Freitext-/Decompound-Fallback) + Terminologie-Aliase (Porree ↔ Lauch, Tamari → Sojasauce)
+        $this->aliasTokens ??= array_merge([], ...array_map(fn ($p) => $this->engine->tokenize((string) $p), $this->terminology->aliasPhrasesFor($this->currentIngredientName)));
+
+        return \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst(array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens])), $alternativen);
+    }
+
     // ── Pool-Scans ───────────────────────────────────────────────────────
 
     private function bestGpMatch(Team $team, array $queryTokens, ?string $querySlug, string $pref, bool $preferRaw, string $bio): ?array
@@ -575,9 +707,10 @@ class IngredientMatchService
             if ($queryForm !== null && ! $this->heuristik->nenntDerivatForm((string) $gp->name, $queryForm)) {
                 continue;
             }
-            if (! $this->acceptsProductForm($this->currentIngredientName, $gp->name, $gp->condition)
-                || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
-                continue;   // S2: Anti-Marker nie als Entscheidung
+            if (! $this->acceptsProductForm($this->currentIngredientName, $gp->name, $gp->condition, $gp)
+                || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)
+                || ! $this->hauptzutatPasst($gp, $queryTokens)) {
+                continue;   // S2: Anti-Marker nie als Entscheidung; 27.10.: andere Hauptzutat nie als Entscheidung
             }
             // Lauf 91 (demo): „Grapefruitsaft" → Derivat „Grapefruitsaft: frisch, Zeste" (Kopf-Floor 0,9). Ein §11.2-Derivat
             // ist nur gemeint, wenn die Zeile seine Form nennt („Grapefruitzeste") — sonst ist es ein anderes Produkt.
@@ -589,7 +722,10 @@ class IngredientMatchService
             // (marke_offen) hat keinen Vorteil (Kurator 26.10.). Namensflags (Bio …) bleiben und entscheiden wie bisher im Varianten-Rang.
             $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);
             $combined = trim($scoreName . ' ' . ($gp->main_ingredient_display ?? ''));
-            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
+            // 27.10. (d): nennt die Zeile genau die Marke dieses GP („Geflügelfond Pulver (Knorr)“), fehlt das Marken-Wort im Score nicht
+            $marke = trim((string) $gp->zusatz) === '' ? [] : $this->engine->tokenize((string) $gp->zusatz);
+            $qTokens = $marke !== [] && array_diff($marke, $queryTokens) === [] && array_diff($queryTokens, $marke) !== [] ? array_values(array_diff($queryTokens, $marke)) : $queryTokens;
+            $score = $this->scoreMitFloor($qTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
 
             $take = false;
             if ($best === null) {
@@ -912,7 +1048,7 @@ class IngredientMatchService
 
         return $query->orderBy('id')->limit(300)
             ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat', 'status',
-                'zusatz', 'lead_la_supplier_item_id', 'commodity_group_code']);   // Marken-Varianten: Score ohne Klammer, Tiebreak Stamm-Lieferant
+                'zusatz', 'lead_la_supplier_item_id', 'commodity_group_code', 'sub_category']);   // Marken-Varianten: Score ohne Klammer, Tiebreak Stamm-Lieferant; sub_category: Zustands-Gate
     }
 
     /** Typ aus dem Präfix eines Namens, nur wenn er im Typ-Vokabular steht (sonst null). */

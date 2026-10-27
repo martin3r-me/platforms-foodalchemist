@@ -54,7 +54,7 @@
                     <x-fa::badge tone="accent">{{ count($importVorschau['zutaten']) }} Zutaten</x-fa::badge>
                 @endif
                 @if(!empty($importVorschau['komponenten']))
-                    <x-fa::badge tone="accent">{{ count($importVorschau['komponenten']) }} Komponenten</x-fa::badge>
+                    <x-fa::badge tone="accent">{{ count($komponentenFlach) }} Komponenten</x-fa::badge>
                 @endif
             </x-slot:actions>
             <div class="flex flex-col gap-4">
@@ -68,6 +68,24 @@
                             <option value="gericht">Gericht</option>
                         </x-fa::select>
                     </x-fa::field>
+                </div>
+                {{-- Abgleich-Leitplanken nur für diesen Import (27.10.): womit die Zutaten gegen den GP-Bestand abgeglichen werden --}}
+                <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-import-abgleich>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-import-abgleich-text>
+                        Abgleich: <span class="font-medium text-[var(--fa-ink)]">{{ $abgleichOptionen['bio'][$abgleichBio] ?? $abgleichBio }} · {{ $abgleichOptionen['frische'][$abgleichFrische] ?? $abgleichFrische }} · {{ $abgleichOptionen['convenience'][$abgleichConvenience] ?? 'Keine Vorgabe' }}</span>
+                        <span class="text-[var(--fa-ink-3)]">({{ $abgleichAusSession ? 'aus der Planungs-Session' : 'Standard' }}, nur für diesen Import änderbar)</span>
+                    </p>
+                    <div class="flex flex-wrap items-end gap-3">
+                        <x-fa::field label="Bio" for="import-abgleich-bio" class="w-44">
+                            <x-fa::select id="import-abgleich-bio" size="sm" wire:model.live="abgleichBio" :options="$abgleichOptionen['bio']" data-import-abgleich-bio />
+                        </x-fa::field>
+                        <x-fa::field label="Frische" for="import-abgleich-frische" class="w-52">
+                            <x-fa::select id="import-abgleich-frische" size="sm" wire:model.live="abgleichFrische" :options="$abgleichOptionen['frische']" data-import-abgleich-frische />
+                        </x-fa::field>
+                        <x-fa::field label="Eigenleistung" for="import-abgleich-convenience" class="w-48">
+                            <x-fa::select id="import-abgleich-convenience" size="sm" wire:model.live="abgleichConvenience" :options="$abgleichOptionen['convenience']" data-import-abgleich-convenience />
+                        </x-fa::field>
+                    </div>
                 </div>
                 <div class="flex flex-col gap-1.5">
                     <div class="flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
@@ -86,10 +104,10 @@
                     <div class="flex flex-col gap-1.5">
                         <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Erkannte Komponenten <span class="font-normal text-[var(--fa-ink-3)]">· werden als Unterrezepte angelegt</span></p>
                         <ul class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
-                            @foreach($importVorschau['komponenten'] as $ki => $k)
-                                <li class="flex items-center justify-between gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)]" wire:key="ikomp-{{ $ki }}">
-                                    <span class="font-medium text-[var(--fa-ink)]">{{ ($k['name'] ?? '') !== '' ? $k['name'] : 'Komponente ohne Namen' }}</span>
-                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ count($k['zutaten'] ?? []) }} Zutaten</span>
+                            @foreach($komponentenFlach as $ki => $k)
+                                <li class="flex items-center justify-between gap-2 py-1.5 pr-3 text-[length:var(--fa-text-md)] {{ [1 => 'pl-3', 2 => 'pl-7', 3 => 'pl-11'][$k['ebene']] ?? 'pl-11' }}" wire:key="ikomp-{{ $ki }}" data-import-komponente="{{ $k['ebene'] }}">
+                                    <span class="font-medium text-[var(--fa-ink)]">@if($k['ebene'] > 1)<span class="text-[var(--fa-ink-3)]">↳ </span>@endif{{ $k['name'] !== '' ? $k['name'] : 'Komponente ohne Namen' }}</span>
+                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $k['zutaten'] }} Zutaten</span>
                                 </li>
                             @endforeach
                         </ul>

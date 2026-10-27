@@ -179,6 +179,96 @@ class MatchHeuristics
         return false;
     }
 
+    /**
+     * Dominique 27.10. (d): Basiskomponenten — Gruppen des Rezepttyp-Vokabulars (§1.2, Regel `basisrezept.1.2.typ`), deren Zeile im
+     * Rezepttext meist ein Unterrezept meint (Fond, Jus, Sauce, Dressing, Marinade, Püree, Gel, Creme, Teig …).
+     */
+    public const BASISKOMPONENTE_GRUPPEN = ['Fonds & Reduktionen', 'Saucen', 'Dressings', 'Süße Saucen', 'Beizen & Marinaden', 'Pürees & Marken',
+        'Geleen & Gele', 'Mousses & Espumas', 'Cremes & Cremaux', 'Teige & Backwaren'];
+
+    /**
+     * Typen dieser Gruppen, die als Wort meist Kaufware benennen: Mark (Tomatenmark, Apfelmark §3 F3.2), Essenz (s. SUB_SAUCEN_MARKER),
+     * Curry, Brot/Backwaren, Rub/Würzpaste/Lake, Sirup/Glasur; Blätterteig/Filo/Yufka werden gekauft. Dazu §3: Kartoffel-/Topinambur-Püree = GP.
+     */
+    private const BASISKOMPONENTE_AUSNAHMEN = ['mark', 'essenz', 'curry', 'brot', 'focaccia', 'brioche', 'biskuit', 'macaron', 'rub', 'wuerzpaste',
+        'lake', 'sirup', 'glasur', 'blaetterteig', 'filoteig', 'yufkateig', 'strudelteig', 'kartoffelpueree', 'topinamburpueree'];
+
+    /** Regelwerk Basisrezepte §3: Frucht-Pürees sind Zukauf (Boiron-TK-Default), kein Unterrezept. */
+    private const FRUCHT_PUEREE = ['frucht', 'mango', 'himbeer', 'aprikose', 'banane', 'cassis', 'passionsfrucht', 'sauerkirsch', 'yuzu', 'kalamansi',
+        'brombeer', 'kokos', 'erdbeer', 'pfirsich', 'birne', 'ananas', 'limette', 'mandarine', 'guave', 'melone', 'rhabarber', 'marone',
+        'bergamotte', 'blutorange', 'apfel'];   // Apfel: §3 F3.2 (Apfelmark/-püree ist Industrieprodukt)
+
+    /**
+     * Fertige Würzsaucen aus dem Bestand (WG 10 + Asia-Saucen in WG 13: Soja, Fisch, Austern, Hoisin, Sweet Chili, Sriracha, Tabasco, Worcester,
+     * Ketjap/Kecap, Ponzu, Teriyaki) — Kaufware, kein Unterrezept (Messung 27.10.: „Austernsauce“, „Sweet-Chili-Sauce“ wurden Stub).
+     */
+    private const KONDIMENT = ['soja', 'fisch', 'austern', 'oyster', 'hoisin', 'hoi', 'sweet', 'sriracha', 'tabasco', 'worcester', 'worcestershire',
+        'ketjap', 'kecap', 'ponzu', 'teriyaki'];
+
+    /** Molkerei-Ware mit Typ-Wort im Namen: Crème fraîche, Crème double. */
+    private const MOLKEREI_CREME = ['fraiche', 'double'];
+
+    /** Zusätzliche Schreibweisen, die das Vokabular nicht führt. */
+    private const BASISKOMPONENTE_SYNONYME = ['sosse'];
+
+    /** @var list<string>|null */
+    private ?array $basisKomponentenTypen = null;
+
+    /**
+     * Ist die Zeile eine Basiskomponente (Dominique 27.10. d)? Typ-Wort als eigenes Wort oder als Grundwort im Kompositum
+     * („Geflügelfond“, „Kalbsjus“, „Pizzateig“); Wörter unter 4 Zeichen (Gel, Jus, Sud) als eigenes Wort bzw. über die Halbfabrikat-Marker.
+     */
+    public function istBasiskomponente(string $name): bool
+    {
+        $tokens = array_map(self::ohneAkzent(...), $this->engine->tokenize($name));
+        $pueree = array_filter($tokens, fn ($t) => str_ends_with($t, 'pueree'));
+        if (array_intersect($tokens, [...self::BASISKOMPONENTE_AUSNAHMEN, ...self::MOLKEREI_CREME, ...self::KONDIMENT]) !== []
+            || array_filter($tokens, fn ($t) => array_filter(self::KONDIMENT, fn ($k) => mb_strlen($k) >= 4 && str_starts_with($t, $k) && (str_ends_with($t, 'sauce') || str_ends_with($t, 'sosse'))) !== []) !== []
+            || ($pueree !== [] && (array_intersect($tokens, ['kartoffel', 'topinambur', ...self::FRUCHT_PUEREE]) !== []
+                || array_filter($pueree, fn ($t) => array_filter(self::FRUCHT_PUEREE, fn ($f) => str_starts_with($t, $f)) !== []) !== []))) {
+            return false;
+        }
+        if ($this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name)) {
+            return true;
+        }
+        foreach ($tokens as $t) {
+            foreach ($this->basisKomponentenTypen() as $typ) {
+                if ($t === $typ || (mb_strlen($typ) >= 4 && str_ends_with($t, $typ))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Akzente der Lehnwörter weg (Crème → creme, Béarnaise → bearnaise) — tokenize lässt sie stehen. */
+    private static function ohneAkzent(string $t): string
+    {
+        return strtr($t, ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'à' => 'a', 'â' => 'a', 'î' => 'i', 'ô' => 'o', 'û' => 'u', 'ç' => 'c']);
+    }
+
+    /** @return list<string> Typ-Wörter (TokenEngine-normalisiert) der Basiskomponenten-Gruppen, ohne Ausnahmen */
+    private function basisKomponentenTypen(): array
+    {
+        if ($this->basisKomponentenTypen !== null) {
+            return $this->basisKomponentenTypen;
+        }
+        $typen = self::BASISKOMPONENTE_SYNONYME;
+        foreach (\Platform\FoodAlchemist\Support\RezeptTypVokabular::tabelle() as $gruppe => $werte) {
+            if (in_array($gruppe, self::BASISKOMPONENTE_GRUPPEN, true)) {
+                foreach ($werte as $w) {
+                    $tok = array_map(self::ohneAkzent(...), $this->engine->tokenize($w));
+                    if (count($tok) === 1 && ! in_array($tok[0], self::BASISKOMPONENTE_AUSNAHMEN, true)) {
+                        $typen[] = $tok[0];
+                    }
+                }
+            }
+        }
+
+        return $this->basisKomponentenTypen = array_values(array_unique($typen));
+    }
+
     /** D5 2026-08-18 — »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; prüft NUR das Label vor dem ersten Doppelpunkt. */
     public function hatSubZubereitungsPraefix(string $name): bool
     {
