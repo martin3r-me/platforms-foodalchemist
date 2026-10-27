@@ -213,3 +213,16 @@ it('genanntes Merkmal muss der Treffer tragen — „extra vergine“, „Type 5
         // „gegart“ ist Küchenarbeit der Zeile, kein Merkmal
         ->and(($this->auto)('1000 g Kartoffeln (im Meersalz gegart)'))->toBe($kartoffel->id);
 });
+
+it('genanntes Merkmal bleibt, auch wenn das passende GP noch etwas Ungenanntes trägt — Review dort, nie das GP ohne Merkmal (wie io-Daten)', function () {
+    $t = $this->rootTeam->id;
+    bvGp($t, 'Rapsöl', 'rapsoel', null, '11', '11.1 Öle');
+    $ev = bvGp($t, 'Rapsöl: kaltgepresst / (Bio)', 'rapsoel', null, '11', '11.1 Öle', ['bio' => 'bio']);
+    bvGp($t, 'Kalbsfilet: frisch', 'kalbsfilet', 'frisch', '04', '04.2 Kalb');
+    $mitte = bvGp($t, 'Kalbsfilet: Mittelstück, frisch, Niederlande', 'kalbsfilet', 'frisch', '04', '04.2 Kalb');
+
+    $oel = ($this->m)('Rapsöl kaltgepresst');
+    $filet = ($this->m)('Kalbsfilet: frisch, Mittelstueck');
+    expect($oel['status'])->toBe(MatchBand::FuzzyLow)->and($oel['gp_id'])->toBe($ev->id)          // nicht „Rapsöl“
+        ->and($filet['status'])->toBe(MatchBand::FuzzyLow)->and($filet['gp_id'])->toBe($mitte->id); // nicht „Kalbsfilet: frisch“
+});

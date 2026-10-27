@@ -75,6 +75,13 @@ it('Typ-Wort in Kaufware ist keine Basiskomponente: Würzsauce, Crème fraîche,
         ->and($heuristik->istBasiskomponente('Vanillecreme'))->toBeTrue();
 });
 
+it('Typ-Wort, aber Ware außerhalb WG 13/09 (Balsamicocreme, Essig/Öl): normaler Abgleich, automatisch', function () {
+    $creme = ($this->gp)('Balsamicocreme: flüssig', 'balsamicocreme', null, '11');
+    $r = ($this->m)('Balsamicocreme');
+
+    expect($r['gp_id'])->toBe($creme->id)->and(IngredientMatchService::istAutomatischVerdrahtbar($r))->toBeTrue()->and($r)->not->toHaveKey('basiskomponente');
+});
+
 it('Import: Geflügelfond ohne Basisrezept wird als Stub angelegt und verknüpft, mit Zukauf-Signal ans GP gebunden', function () {
     Queue::fake();
     $res = app(RecipeExtractService::class)->legeAn($this->rootTeam, ['typ' => 'basisrezept', 'name' => 'Geflügelrahmsauce Test', 'preparation' => 'Kochen.',
