@@ -52,6 +52,7 @@ class PlattformProtokoll
         'support_zugriff' => 'Zugriff im Support-Zugang',
         'marke_kuerzel_zugeordnet' => 'Marken-Kürzel zugeordnet (Marken-Nachlauf)',   // Plan GP-Stamm 3g
         'gp_marke_nachgerendert' => 'GP-Name mit Marke neu gerendert (Marken-Nachlauf)',
+        'marke_kuerzel_gesperrt' => 'Wort als „Kein Kürzel“ gesperrt (Marken-Nachlauf)',
     ];
 
     /**

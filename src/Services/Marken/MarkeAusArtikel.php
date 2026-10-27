@@ -97,6 +97,9 @@ class MarkeAusArtikel
         foreach (self::kuerzelWoerter($bezeichnung) as ['kuerzel' => $k, 'roh' => $roh, 'position' => $position]) {
             $istEigen = isset($eigen[$position][$k]);
             $eintrag = $eigen[$position][$k] ?? $karte['global'][$position][$k] ?? null;
+            if (($eintrag['typ'] ?? null) === FoodAlchemistSupplierMarke::TYP_SPERRE) {
+                continue;   // „Kein Kürzel“: nie eine Marke — eine Lieferanten-Sperre verdeckt auch ein globales Kürzel gleichen Namens
+            }
             if ($eintrag !== null && ($bester === null || $eintrag['vorrang'] > $bester['vorrang'])) {
                 $bester = ['marke' => $eintrag['marke'], 'roh' => $roh, 'typ' => $eintrag['typ'], 'eigen' => $istEigen, 'vorrang' => $eintrag['vorrang']];
             }

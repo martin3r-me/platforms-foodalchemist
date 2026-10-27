@@ -31,8 +31,8 @@
             @forelse($marken as $m)
                 <div class="flex items-center gap-3 py-1.5 border-b border-[var(--fa-line)] last:border-b-0" wire:key="lm-marke-{{ $m->id }}" data-lm-marke="{{ $m->kuerzel }}">
                     <span class="w-24 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $m->kuerzel }}</span>
-                    <span class="flex-1 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $m->marke }}</span>
-                    <x-fa::badge :tone="$m->typ === 'eigenmarke' ? 'info' : 'neutral'">{{ $m->typ === 'eigenmarke' ? 'Eigenmarke' : 'Herstellermarke' }}</x-fa::badge>
+                    <span class="flex-1 text-[length:var(--fa-text-md)] {{ $m->typ === 'sperre' ? 'text-[var(--fa-ink-3)]' : 'text-[var(--fa-ink)]' }}">{{ $m->typ === 'sperre' ? 'nie eine Marke' : $m->marke }}</span>
+                    <x-fa::badge :tone="match ($m->typ) { 'eigenmarke' => 'info', 'sperre' => 'warn', default => 'neutral' }">{{ match ($m->typ) { 'eigenmarke' => 'Eigenmarke', 'sperre' => 'Kein Kürzel', default => 'Herstellermarke' } }}</x-fa::badge>
                     <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $m->position === 'ende' ? 'am Ende' : 'am Anfang' }}@if($m->vorrang > 0) · Vorrang {{ $m->vorrang }}@endif</span>
                     @if($darf)
                         <x-fa::button size="sm" variant="ghost" icon="heroicon-m-trash" wire:click="markeLoeschen({{ \Illuminate\Support\Js::from($m->kuerzel) }})"

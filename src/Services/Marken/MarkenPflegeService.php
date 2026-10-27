@@ -48,8 +48,8 @@ class MarkenPflegeService
         if (in_array($k, MarkeAusArtikel::SPERRWOERTER, true)) {
             throw new \RuntimeException('„' . mb_strtoupper($k) . '“ ist eine Zertifizierung, keine Marke.');
         }
-        if (! in_array($typ, [FoodAlchemistSupplierMarke::TYP_EIGENMARKE, FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE], true)) {
-            throw new \RuntimeException('Typ muss eigenmarke oder herstellermarke sein.');
+        if (! in_array($typ, [FoodAlchemistSupplierMarke::TYP_EIGENMARKE, FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE, FoodAlchemistSupplierMarke::TYP_SPERRE], true)) {
+            throw new \RuntimeException('Typ muss eigenmarke, herstellermarke oder sperre sein.');
         }
         if (! in_array($position, [FoodAlchemistSupplierMarke::POSITION_ANFANG, FoodAlchemistSupplierMarke::POSITION_ENDE], true)) {
             throw new \RuntimeException('Position muss anfang (erste drei Wörter) oder ende (letztes Wort) sein.');
@@ -64,6 +64,18 @@ class MarkenPflegeService
 
         return $zeile;
     }
+
+    /**
+     * „Kein Kürzel“ (Marken-Nachlauf, Dominique 27.10.): das Wort an dieser Position ist bei diesem Lieferanten (bzw. global) nie eine Marke. Eintrag mit
+     * typ sperre — die Nachlauf-Liste zeigt es nicht mehr, MarkeAusArtikel nutzt es nie. Rückgängig über kuerzelEntfernen (Lieferanten-Block).
+     */
+    public function sperren(?User $user, ?int $supplierId, string $kuerzel, string $position = FoodAlchemistSupplierMarke::POSITION_ANFANG): FoodAlchemistSupplierMarke
+    {
+        return $this->kuerzelSetzen($user, $supplierId, $kuerzel, self::SPERR_MARKE, FoodAlchemistSupplierMarke::TYP_SPERRE, $position, 0);
+    }
+
+    /** Platzhalter in der Spalte `marke` (NOT NULL) einer Sperre — erscheint nie in einer Klammer. */
+    public const SPERR_MARKE = '(kein Kürzel)';
 
     public function kuerzelEntfernen(?User $user, ?int $supplierId, string $kuerzel): bool
     {

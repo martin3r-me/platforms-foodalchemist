@@ -29,6 +29,10 @@ class MarkeOffenService
         'aus', 'von', 'vom', 'zum', 'zur', 'für', 'fuer', 'der', 'die', 'das', 'den', 'dem', 'ein', 'eine', 'fr', 'frisch', 'gek', 'gef', 'dose', 'glas', 'eimer',
         'beutel', 'btl', 'sack', 'art', 'geb', 'veg', 'hot', 'fl', 'fla', 'krt', 'ktn', 'pack', 'stück', 'stck', 'tray', 'vak', 'ger', 'geg', 'fein', 'grob', 'xl', 'xxl', 'mini', 'gross', 'groß'];
 
+    /** Präpositionen und Füllwörter, auch fremdsprachige aus Produktnamen („Cremoso de Guacamole“) — nie ein Kürzel (Dominique 27.10.). */
+    public const FUELLWOERTER = ['de', 'del', 'della', 'di', 'da', 'la', 'le', 'les', 'el', 'il', 'lo', 'al', 'alla', 'en', 'et', 'au', 'aux', 'du', 'des',
+        'con', 'y', 'e', 'a', 'of', 'the', 'and', 'with', 'met', 'van', 'het', 'zonder', 'voor', 'op', 'nach', 'art', 'ohne', 'oder', 'zu', 'bei', 'ins', 'vom', 'zum'];
+
     /** Ergebnis-Fälle je GP beim Zuordnen. */
     public const FALL_GERENDERT = 'gerendert';
 
@@ -40,6 +44,9 @@ class MarkeOffenService
 
     /** @var array<string, array<string, array<string, true>>> bekannte Kürzel je Lieferant (je liste()-Aufruf neu geladen) */
     private array $bekannt = [];
+
+    /** @var array<string, true>|null Wörter (≥ 3 Buchstaben) aus den Hauptzutaten aller GPs — je liste()-Aufruf neu geladen */
+    private ?array $hauptzutatWoerter = null;
 
     public function __construct(
         private readonly MarkeAusArtikel $marken,
@@ -57,6 +64,7 @@ class MarkeOffenService
     public function liste(?int $supplierId = null): array
     {
         $this->bekannt = [];
+        $this->hauptzutatWoerter = null;
         $artikel = $this->offeneArtikel($supplierId);
         $endeLieferanten = FoodAlchemistSupplierMarke::query()->where('position', FoodAlchemistSupplierMarke::POSITION_ENDE)
             ->whereNotNull('supplier_id')->distinct()->pluck('supplier_id')->map(fn ($id) => (int) $id)->all();
@@ -64,7 +72,8 @@ class MarkeOffenService
         $gpsOffen = [];
         foreach ($artikel as $a) {
             $gpsOffen[$a->gp_id] = true;
-            foreach ($this->kandidaten((string) $a->designation, $a->supplier_id !== null ? (int) $a->supplier_id : null, $endeLieferanten) as $k) {
+            foreach ($this->kandidaten((string) $a->designation, $a->supplier_id !== null ? (int) $a->supplier_id : null, $endeLieferanten,
+                trim($a->gp_haupt . ' ' . $a->gp_name)) as $k) {
                 $schluessel = ($a->supplier_id ?? 'alle') . '|' . $k['position'] . '|' . $k['kuerzel'];
                 $g = $gruppen[$schluessel] ?? ['schluessel' => $schluessel, 'supplier_id' => $a->supplier_id !== null ? (int) $a->supplier_id : null,
                     'lieferant' => (string) ($a->lieferant ?? '—'), 'rolle' => $a->rolle, 'kuerzel' => $k['kuerzel'], 'roh' => $k['roh'], 'position' => $k['position'],
@@ -187,7 +196,7 @@ class MarkeOffenService
      * @param  list<int>  $endeLieferanten
      * @return list<array{kuerzel: string, roh: string, position: string}>
      */
-    public function kandidaten(string $bezeichnung, ?int $supplierId, array $endeLieferanten = []): array
+    public function kandidaten(string $bezeichnung, ?int $supplierId, array $endeLieferanten = [], string $gpText = ''): array
     {
         $bekannt = $this->bekannteKuerzel($supplierId);
         $gemischt = $bezeichnung !== mb_strtoupper($bezeichnung);
@@ -200,13 +209,69 @@ class MarkeOffenService
             $roh = rtrim($w['roh'], '.');
             $kuerzelArtig = str_ends_with($w['roh'], '.') || mb_strlen($k) <= 4 || str_contains($k, '&')
                 || ($gemischt && mb_strlen($roh) <= 6 && $roh === mb_strtoupper($roh));
-            if (! $kuerzelArtig || mb_strlen($k) < 2 || in_array($k, self::STOPPWOERTER, true) || isset($bekannt[$w['position']][$k])) {
+            if (! $kuerzelArtig || mb_strlen($k) < 2 || in_array($k, self::STOPPWOERTER, true) || in_array($k, self::FUELLWOERTER, true)
+                || isset($bekannt[$w['position']][$k]) || $this->istHauptzutatWort($k, str_ends_with($w['roh'], '.'), $gpText)) {
                 continue;
             }
             $out[$w['position'] . '|' . $k] = $w;
         }
 
         return array_values($out);
+    }
+
+    /**
+     * Vorfilter (Dominique 27.10., ohne zu raten): ein Wort, das als Hauptzutat bzw. als Wort in der Hauptzutat eines GP vorkommt (Käse, Jus, Mix), ist
+     * kein Markenkürzel. Abgekürzt mit Punkt (≥ 3 Buchstaben, „Dess.“, „Häh.“): Präfix eines Worts aus Hauptzutat oder Name DES EIGENEN GP — gegen alle
+     * GPs fielen sonst echte Kürzel weg, die zufällig ein Wortanfang sind (Göt. ↔ Götterspeise, Dal. ↔ Dal, Messung lokal 27.10.).
+     */
+    private function istHauptzutatWort(string $kuerzel, bool $mitPunkt, string $gpText = ''): bool
+    {
+        if ($this->hauptzutatWoerter === null) {
+            $this->hauptzutatWoerter = [];
+            foreach (DB::table('foodalchemist_gps')->whereNull('deleted_at')->whereNotNull('main_ingredient_display')->distinct()->pluck('main_ingredient_display') as $h) {
+                foreach (preg_split('/[^\p{L}]+/u', mb_strtolower((string) $h), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $wort) {
+                    if (mb_strlen($wort) >= 3) {
+                        $this->hauptzutatWoerter[$wort] = true;
+                    }
+                }
+            }
+        }
+        if (isset($this->hauptzutatWoerter[$kuerzel])) {
+            return true;
+        }
+        if ($mitPunkt && mb_strlen($kuerzel) >= 3) {
+            foreach (preg_split('/[^\p{L}]+/u', mb_strtolower($gpText), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $wort) {
+                if (mb_strlen($wort) > mb_strlen($kuerzel) && str_starts_with($wort, $kuerzel)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * „Kein Kürzel“ (Dominique 27.10.): Sperr-Eintrag über MarkenPflegeService — der Kandidat verschwindet dauerhaft aus der Liste, MarkeAusArtikel nutzt das
+     * Wort nie als Marke. `trockenlauf`: nichts schreiben, nur die betroffenen GPs/Artikel zählen. Rückgängig über den Lieferanten-Block.
+     *
+     * @return array{kuerzel: string, supplier_id: ?int, position: string, trockenlauf: bool, gps: int, artikel: int}
+     */
+    public function sperren(?User $user, ?int $supplierId, string $kuerzel, string $position = FoodAlchemistSupplierMarke::POSITION_ANFANG, bool $trockenlauf = false): array
+    {
+        $k = MarkenPflegeService::normKuerzel($kuerzel);
+        if (! $this->pflege->darf($user)) {
+            throw new \Platform\FoodAlchemist\Exceptions\FaRechtFehltException(\Platform\FoodAlchemist\Enums\FaRolle::Admin, null,
+                'Marken-Kürzel sperren (nur Plattform-Admin und Admin im Master-Team)');
+        }
+        $gruppe = collect($this->liste($supplierId)['gruppen'])->first(fn ($g) => $g['kuerzel'] === $k && $g['position'] === $position && $g['supplier_id'] === $supplierId);
+        if (! $trockenlauf) {
+            $eintrag = $this->pflege->sperren($user, $supplierId, $k, $position);
+            app(PlattformProtokoll::class)->schreibe('marke_kuerzel_gesperrt', ['kuerzel' => $k, 'supplier_id' => $supplierId, 'position' => $position,
+                'gps' => $gruppe['gps'] ?? 0, 'artikel' => $gruppe['artikel'] ?? 0], $user, $eintrag);
+        }
+
+        return ['kuerzel' => $k, 'supplier_id' => $supplierId, 'position' => $position, 'trockenlauf' => $trockenlauf,
+            'gps' => (int) ($gruppe['gps'] ?? 0), 'artikel' => (int) ($gruppe['artikel'] ?? 0)];
     }
 
     /** @return \Illuminate\Support\Collection<int, object{gp_id: int, designation: string, supplier_id: ?int, lieferant: ?string, rolle: ?string, id: int}> */
@@ -219,7 +284,7 @@ class MarkeOffenService
             ->where('g.marke_offen', true)->whereNull('g.deleted_at')->whereNull('i.deleted_at')
             ->when($supplierId !== null, fn ($q) => $q->where('i.supplier_id', $supplierId))
             ->orderBy('g.id')->orderBy('i.id')
-            ->get(['g.id as gp_id', 'i.id', 'i.designation', 'i.supplier_id', 's.name as lieferant', 's.rolle']);
+            ->get(['g.id as gp_id', 'g.main_ingredient_display as gp_haupt', 'g.name as gp_name', 'i.id', 'i.designation', 'i.supplier_id', 's.name as lieferant', 's.rolle']);
         if ($zeilen->isEmpty()) {
             return $zeilen;
         }

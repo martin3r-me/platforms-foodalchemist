@@ -55,6 +55,26 @@ class MarkeOffen extends Component
         $this->ergebnis = [];
     }
 
+    /** „Kein Kürzel“ (Dominique 27.10.): das Wort ist bei diesem Lieferanten an dieser Position nie eine Marke — verschwindet dauerhaft aus der Liste. */
+    public function keinKuerzel(string $schluessel): void
+    {
+        abort_unless(app(MarkenPflegeService::class)->darf(Auth::user()), 403, 'Marken-Kürzel sperren nur Plattform-Admin und Master-Admin.');
+        $this->fehler = null;
+        $this->meldung = null;
+        [$supplierId, $position, $kuerzel] = $this->teile($schluessel);
+        try {
+            $r = app(MarkeOffenService::class)->sperren(Auth::user(), $supplierId, $kuerzel, $position);
+        } catch (FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->meldung = '„' . $r['kuerzel'] . '“ ist als „Kein Kürzel“ gesperrt (' . $r['gps'] . ' GP). Rückgängig im Lieferanten unter „Marke & Rolle“.';
+        if ($this->offen === $schluessel) {
+            $this->offen = null;
+        }
+    }
+
     public function vorschau(): void
     {
         $this->ausfuehren(true);
