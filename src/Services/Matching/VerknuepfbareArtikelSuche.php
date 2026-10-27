@@ -20,7 +20,10 @@ use Platform\FoodAlchemist\Support\Suche;
  * Marke aus supplier_marken, deren Kürzel in der Bezeichnung steht („Hi Taste“ findet Chefs-Artikel mit „HT“). Ein Marken-Treffer zählt wie
  * „jedes Wort als ganzes Wort“ und steht dort hinter den Bezeichnungs-Treffern, aber vor reinen Teilstring-Treffern („hi“ in „Chicken“).
  *
- * Reihenfolge: Relevanz (Wort am Anfang der Bezeichnung ohne führende Gebindeangabe > ganzes Wort > Teilstring) → Lieferanten-Rang
+ * Artikel inaktiver Lieferanten bleiben draußen (Kurator 27.10.: „Handelshof Mönchengladbach“ inaktiv neben „… EDI“ — sonst jeder Artikel doppelt).
+ *
+ * Reihenfolge: Relevanz (Wort am Anfang der Bezeichnung ohne führende Gebindeangabe > ganzes Wort > Teilstring) → mit aktivem Preis der Team-Sicht
+ * vor ohne (Necta liefert bei Chefs/Edna/Broscheit/Delta den ganzen Katalog, Preise nur fürs gelistete Sortiment) → Lieferanten-Rang
  * des Teams (Prioritätskette aus den Einkaufs-Einstellungen, dann Stamm-Lieferanten) → Bezeichnung. Die Datenbank liefert bis zu
  * {@see KANDIDATEN} Treffer grob vorsortiert (Wortanfang zuerst), die Feinsortierung läuft hier. Jeder Treffer trägt Gebinde und
  * Preis in der Preis-Sicht des Teams.
@@ -69,11 +72,11 @@ class VerknuepfbareArtikelSuche
                 $sid = (int) $la->supplier_id;
                 $la->setAttribute('lieferanten_rang', isset($prio[$sid]) ? $prio[$sid] : (isset($stamm[$sid]) ? 10_000 : 20_000));
             })
-            ->sortBy(fn ($la) => [$la->relevanz, $la->ueber_marke ? 1 : 0, $la->lieferanten_rang, $this->ohneGebinde((string) $la->designation), (int) $la->id])
+            ->sortBy(fn ($la) => [$la->relevanz, $la->aktiver_preis === null ? 1 : 0, $la->ueber_marke ? 1 : 0, $la->lieferanten_rang, $this->ohneGebinde((string) $la->designation), (int) $la->id])
             ->take($limit)
             ->values();
 
-        $this->mitGebindeUndPreis($treffer, $team);
+        $this->mitGebinde($treffer);
 
         return ['treffer' => $treffer, 'weitere' => max(0, $kandidaten->count() - $treffer->count()), 'mehr_als' => $mehrAls];
     }
@@ -109,6 +112,7 @@ class VerknuepfbareArtikelSuche
             })
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
+            ->where(fn ($w) => $w->whereNull('sup.is_inactive')->orWhere('sup.is_inactive', false))   // inaktive Lieferanten nicht anbieten
             ->lieferbar();   // eingestellte Artikel (Necta, nicht bestellbar) nicht zum Verknüpfen anbieten
         $text = mb_strtolower(trim($suche));
         $query->where(function ($w) use ($suche, $text, $marken) {
@@ -137,10 +141,12 @@ class VerknuepfbareArtikelSuche
         }
 
         return $query
+            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
+            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'aktiver_preis')   // Preis der Team-Sicht
             ->orderByRaw('CASE WHEN ' . implode(' OR ', $anfang) . ' THEN 0 ELSE 1 END', $bindungen)
+            ->orderByRaw('CASE WHEN aktiver_preis IS NULL THEN 1 ELSE 0 END')
             ->orderBy('foodalchemist_supplier_items.id')
             ->limit(self::KANDIDATEN + 1)
-            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
             ->get();
     }
 
@@ -194,21 +200,13 @@ class VerknuepfbareArtikelSuche
         return $summe;
     }
 
-    /** Gebinde („1 l“, „0,2 l“) und Preis der Team-Sicht (eine Abfrage für alle Treffer). */
-    private function mitGebindeUndPreis(Collection $treffer, Team $team): void
+    /** Gebinde („1 l“, „0,2 l“) für die Trefferzeile — der Preis kommt schon aus der Kandidaten-Abfrage. */
+    private function mitGebinde(Collection $treffer): void
     {
-        if ($treffer->isEmpty()) {
-            return;
-        }
-        $preise = FoodAlchemistSupplierItem::query()->whereKey($treffer->pluck('id')->all())
-            ->select('foodalchemist_supplier_items.id')
-            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'p')
-            ->pluck('p', 'id');
         foreach ($treffer as $la) {
             $menge = FoodAlchemistSupplierItem::mengeVon($la);
             $la->setAttribute('gebinde_text', $menge !== null && $menge > 0 && $la->unit_code
                 ? rtrim(rtrim(number_format($menge, 3, ',', '.'), '0'), ',') . ' ' . $la->unit_code : null);
-            $la->setAttribute('aktiver_preis', $preise[$la->id] ?? null);
         }
     }
 }

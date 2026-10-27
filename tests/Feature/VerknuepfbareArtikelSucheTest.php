@@ -102,6 +102,29 @@ it('Marke: Kürzel aus supplier_marken (lieferantengebunden) und Necta-brand, Ma
     expect(($this->namen)('hi taste'))->toBe(['Hi Taste Sauce Curry', 'Nudelsuppe', 'TK HT Bami Goreng 6x400g', 'Chicken Taste Pulver']);
 });
 
+it('Artikel inaktiver Lieferanten erscheinen nicht (Handelshof neben Handelshof EDI)', function () {
+    $alt = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Handelshof Mönchengladbach', 'is_inactive' => true]);
+    $edi = FoodAlchemistSupplier::create(['team_id' => null, 'name' => 'Handelshof Mönchengladbach EDI']);
+    ($this->la)($alt, '0,2 Apfelsaft klar MW');
+    $neu = ($this->la)($edi, '0,2 Apfelsaft klar MW');
+
+    expect(($this->suche)('apfelsaft')['treffer']->pluck('id')->all())->toBe([$neu->id]);
+});
+
+it('mit Preis der Team-Sicht vor ohne Preis — innerhalb gleicher Wortstufe, vor dem Lieferanten-Rang; schlechtere Wortstufe bleibt hinten', function () {
+    $preis = fn ($la, $team, float $p) => DB::table('foodalchemist_prices')->insert(['uuid' => (string) Str::uuid(), 'supplier_item_id' => $la->id, 'team_id' => $team->id,
+        'status' => '0', 'price' => $p, 'is_blocked' => false, 'status_valid_from' => '2026-10-22 00:00:00', 'created_at' => now(), 'updated_at' => now()]);
+    $ohne = ($this->la)($this->chefs, 'Apfelsaft klar');              // Prioritäts-Lieferant, aber ohne Preis
+    $mit = ($this->la)($this->fako, 'Apfelsaft trüb');
+    $wort = ($this->la)($this->fako, 'Happy Day Apfelsaft');          // mit Preis, aber nur „ganzes Wort“
+    $preis($mit, $this->rootTeam, 1.10);
+    $preis($wort, $this->rootTeam, 0.90);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['lead_la_prioritaeten' => [$this->chefs->id]]);
+
+    expect(($this->suche)('apfelsaft')['treffer']->pluck('id')->all())->toBe([$mit->id, $ohne->id, $wort->id])
+        ->and(($this->suche)('apfelsaft', $this->childB)['treffer']->pluck('id')->all())->toBe([$ohne->id, $mit->id, $wort->id]);   // fremde Sicht: kein Preis, Rang zählt
+});
+
 it('Gebinde und Preis in der Preis-Sicht des Teams (Mandantenpreis nie bei fremdem Team)', function () {
     $la = ($this->la)($this->fako, 'Apfelsaft klar', ['qty' => 0.2]);
     DB::table('foodalchemist_prices')->insert(['uuid' => (string) Str::uuid(), 'supplier_item_id' => $la->id, 'team_id' => $this->childA->id, 'status' => '0',
