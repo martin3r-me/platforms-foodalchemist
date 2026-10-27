@@ -49,6 +49,10 @@ final class BasisVariante
     private const TEILSTUECKE = ['mittelstueck', 'kopfstueck', 'schwanzstueck', 'kopf', 'ruecken', 'keule', 'brust', 'huefte', 'oberschale',
         'unterschale', 'nuss', 'schulter', 'nacken', 'bauch', 'seite', 'lende', 'haxe'];
 
+    /** Zubereitungswörter der Zeile (MatchHeuristics::ZUBEREITUNG_MARKER-Verben + gegart/gekocht/geschält) — Küchenarbeit, nie genanntes Merkmal. */
+    private const ZUBEREITUNG = ['gegart', 'gekocht', 'geschaelt', 'ausgedaempft', 'sautiert', 'gebraten', 'gebacken', 'geschmort', 'gegrillt',
+        'frittiert', 'pochiert', 'glasiert', 'mariniert', 'paniert', 'gratiniert', 'blanchiert', 'gedaempft', 'geduenstet', 'karamellisiert', 'confiert'];
+
     /** Zukauf-Signal der aktuellen Zeile (§2 F2.1), je pruefe() gesetzt. */
     private bool $zukauf = false;
 
@@ -102,6 +106,9 @@ final class BasisVariante
         // Fleisch-Teilstück (Dominique 27.10. c): ein genanntes Teilstück ist eine genannte Variante — Geschwister ohne dieses Teilstück
         // scheiden aus („Rinderfilet: frisch, Mittelstück“ ist nie „Rinderfilet: frisch“). Volle Tokens: ingredientTokens kann Zuschnitt-Wörter verlieren.
         $teil = (string) $gewaehlt->commodity_group_code === '04' ? array_values(array_intersect($this->engine->tokenize($zutat), self::TEILSTUECKE)) : [];
+        // Ebenso jedes andere genannte Merkmal der Geschwister (Messung 27.10.: „Olivenöl extra vergine“ → Olivenöl, „Kartoffeln mehlig“ → ohne
+        // Kochtyp, „Weizenmehl Type 550“ → Type 405): was der Text aus Geschmack/Verarbeitung/Pflichtangabe nennt, muss der Treffer tragen
+        $teil = array_values(array_unique([...$teil, ...$this->benannteMerkmale($zutat, $geschwister)]));
         if ($teil !== []) {
             $geschwister = $geschwister->filter(fn ($g) => array_diff($teil, $this->engine->tokenize((string) $g->name)) === [])->values();
             if (! $geschwister->contains('id', $gewaehlt->id)) {
@@ -226,6 +233,41 @@ final class BasisVariante
         }
 
         return $tokens !== [];
+    }
+
+    /**
+     * Merkmal-Wörter, die der Text nennt und die bei mindestens einem Geschwister in Geschmack, Verarbeitung oder Pflichtangabe stehen —
+     * ohne §2-Küchenarbeit und Naturform. Zahlen nur als Mehl-Type („Type 550“) oder Prozent („30 %“), nie die Menge der Zeile.
+     *
+     * @return list<string>
+     */
+    private function benannteMerkmale(string $zutat, $geschwister): array
+    {
+        $merkmal = [];
+        foreach ($geschwister as $g) {
+            $f = $this->naming->felderAusName((string) $g->name, true);
+            foreach (['flavor', 'processing', 'pflichtangabe'] as $feld) {
+                foreach ($this->engine->tokenize((string) ($f[$feld] ?? '')) as $t) {
+                    $merkmal[$t] = true;
+                }
+            }
+        }
+        $text = $this->engine->tokenize($zutat);
+        $zahlen = preg_match_all('/\b(?:type|tipo)\s*(\d+)|(\d+(?:[.,]\d+)?)\s*%/iu', $zutat, $m) > 0 ? array_filter([...$m[1], ...$m[2]]) : [];
+        $out = [];
+        foreach ($text as $t) {
+            // Zubereitung in der Zeile („im Meersalz gegart“, „geschält, gekocht“) ist Küchenarbeit, kein Einkaufsmerkmal (§2)
+            if (! isset($merkmal[$t]) || in_array($t, [...self::PARA2_SUFFIXE, ...self::ZUBEREITUNG], true) || array_key_exists($t, self::NATURFORM)
+                || (mb_strlen($t) < 3 && ! is_numeric($t))) {
+                continue;
+            }
+            if (is_numeric($t) && ! in_array($t, array_map(fn ($z) => implode('', $this->engine->tokenize((string) $z)), $zahlen), true)) {
+                continue;
+            }
+            $out[] = $t;
+        }
+
+        return $out;
     }
 
     /** Gibt es die Ware auch frisch (Ingwer-Knolle, frischer Rosmarin, Tomate)? Dann ist Pulver/gemahlen keine Naturform. */

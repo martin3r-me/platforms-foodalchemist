@@ -194,3 +194,22 @@ it('(a) Pulver/gemahlen ist keine Naturform, wenn es die Ware frisch gibt — un
         ->and(($this->auto)('Getrocknete Tomaten'))->toBeNull()          // nicht „Tomate: Pulver“
         ->and(($this->auto)('Haselnüsse'))->toBeNull();                  // Nüsse: gemahlen bleibt Variante
 });
+
+it('genanntes Merkmal muss der Treffer tragen — „extra vergine“, „Type 550“, Kochtyp; Zubereitung in der Zeile zählt nicht (Messung 27.10.)', function () {
+    $t = $this->rootTeam->id;
+    bvGp($t, 'Olivenöl', 'olivenoel', null, '11', '11.1 Öle');
+    $ev = bvGp($t, 'Olivenöl: extra vergine', 'olivenoel', null, '11', '11.1 Öle');
+    bvGp($t, 'Dinkelmehl: trocken, Type 630', 'dinkelmehl', 'trocken', '07', '07.2 Getreide');
+    $t1050 = bvGp($t, 'Dinkelmehl: trocken, Type 1050 / (Bio)', 'dinkelmehl', 'trocken', '07', '07.2 Getreide', ['bio' => 'bio']);
+    $kartoffel = bvGp($t, 'Kartoffel: frisch', 'kartoffel', 'frisch', '01', '01.2 Wurzelgemüse');
+    $mehlig = bvGp($t, 'Kartoffel: frisch, mehlig', 'kartoffel', 'frisch', '01', '01.2 Wurzelgemüse');
+    bvGp($t, 'Kartoffel: gegart, frisch, vakuumiert', 'kartoffel', 'frisch', '01', '01.2 Wurzelgemüse');
+
+    $mehl = ($this->m)('550 g Dinkelmehl Type 1050');
+    expect(($this->auto)('Olivenöl extra vergine'))->toBe($ev->id)
+        // Type 1050 gibt es nur als Bio → Review auf diesem GP, nie die andere Type
+        ->and($mehl['status'])->toBe(MatchBand::FuzzyLow)->and($mehl['gp_id'])->toBe($t1050->id)
+        ->and(($this->auto)('Kartoffeln mehlig'))->toBe($mehlig->id)
+        // „gegart“ ist Küchenarbeit der Zeile, kein Merkmal
+        ->and(($this->auto)('1000 g Kartoffeln (im Meersalz gegart)'))->toBe($kartoffel->id);
+});
