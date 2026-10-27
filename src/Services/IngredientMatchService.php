@@ -610,8 +610,7 @@ class IngredientMatchService
         // Zutat-Seite: Originalzeile + Tokens dieses Pool-Laufs (Freitext-/Decompound-Fallback) + Terminologie-Aliase (Porree ↔ Lauch, Tamari → Sojasauce)
         $this->aliasTokens ??= array_merge([], ...array_map(fn ($p) => $this->engine->tokenize((string) $p), $this->terminology->aliasPhrasesFor($this->currentIngredientName)));
 
-        return \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst(array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens])), $alternativen,
-            array_values(array_filter($passTokens ?: $this->tiebreakQuery, fn ($t) => ! $this->engine->istReinesMerkmal($t) && ! $this->engine->isCutFormToken($t))));
+        return \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst(array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens])), $alternativen);
     }
 
     // ── Pool-Scans ───────────────────────────────────────────────────────

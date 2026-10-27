@@ -51,7 +51,6 @@ it('alte GP-Schreibweise und freier Text treffen das Bestands-GP', function (str
     'frisches Rapsöl' => ['frisches Rapsöl', 'raps'],
     'Rapsöl zum Braten' => ['Rapsöl zum Braten', 'raps'],
     'Öl (Raps)' => ['Öl (Raps)', 'raps'],
-    'weiße Pfefferkörner' => ['weiße Pfefferkörner', 'pganz'],
     'Apfelessig naturtrüb' => ['Apfelessig naturtrüb', 'essig'],
     'Menge und Füllwort vorn' => ['2 EL gutes Rapsöl', 'raps'],
 ]);
@@ -60,11 +59,21 @@ it('„Zuckerrübensirup (Grafschafter)“ trifft einen Zuckerrübensirup, nie e
     expect(($this->treffer)('Zuckerrübensirup (Grafschafter)'))->toBeIn([$this->bestand['ruebe']->id, $this->bestand['gold']->id]);
 });
 
+it('„weiße Pfefferkörner“: Pfeffer weiß ganz oder offen — nie ein anderes GP („richtiges Bestands-GP bzw. offen“)', function () {
+    expect(($this->treffer)('weiße Pfefferkörner'))->toBeIn([null, $this->bestand['pganz']->id]);
+});
+
 it('Hauptzutat-Schutz: ohne Apfelessig im Bestand bleibt „Apfelessig: konserviert“ offen — nie Apfelmus oder Dressing', function () {
     $this->bestand['essig']->delete();
 
     expect(($this->treffer)('Apfelessig: konserviert'))->toBeNull()
         ->and(($this->treffer)('Ruebenkraut'))->not->toBe($this->bestand['gold']->id);
+});
+
+it('Hauptzutat-Schutz: ohne Rapsöl im Bestand bleibt der alte Rapsöl-Name offen — nie „Salz: raffiniert, trocken“ (Fall io)', function () {
+    $this->bestand['raps']->delete();
+
+    expect(($this->treffer)('Rapsoel / Pflanzenoel: trocken, raffiniert'))->toBeNull();
 });
 
 it('Kein Mint, wenn ein Bestands-GP passt: mintFromLa liefert das Bestands-GP, kein neues GP entsteht', function () {

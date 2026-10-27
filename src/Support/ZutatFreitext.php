@@ -62,7 +62,7 @@ final class ZutatFreitext
      * @param  list<string>  $zutatTokens   TokenEngine-Tokens der Zutat
      * @param  list<list<string>>  $alternativen  tragende TokenEngine-Tokens je Hauptzutat-Alternative des GP (Aufrufer filtert Form/Zustand)
      */
-    public static function hauptzutatPasst(array $zutatTokens, array $alternativen, array $kernTokens = []): bool
+    public static function hauptzutatPasst(array $zutatTokens, array $alternativen): bool
     {
         $alternativen = array_values(array_filter($alternativen));
         if ($alternativen === [] || $zutatTokens === []) {
@@ -73,14 +73,7 @@ final class ZutatFreitext
         if ($alternativen === []) {
             return true;   // keine tragenden Wörter
         }
-        // (b) volle Deckung: jedes tragende Wort der Zutat steht in der Hauptzutat („Granny Smith“ ⊂ „Apfel Granny Smith“, „Hickory Smoke“)
-        $kern = array_values(array_filter($kernTokens, fn ($q) => mb_strlen($q) >= 3 && ! is_numeric($q)
-            && preg_match('/^(?:' . self::EINHEITEN . ')$/u', $q) !== 1 && ! in_array($q, [...self::NEBENWOERTER, ...self::FUELLWOERTER], true)));
         foreach ($alternativen as $alt) {
-            if ($kern !== [] && array_filter($kern, fn ($q) => array_filter($alt, fn ($t) => $t === $q || self::lemma($t) === self::lemma($q)
-                || (min(mb_strlen($t), mb_strlen($q)) >= 4 && (str_starts_with($t, $q) || str_starts_with($q, $t)))) === []) === []) {   // ohne Wortende: Kabeljaufilet ≠ Lachs-Filet
-                return true;
-            }
             // Kopfwort = erstes tragende Wort („Lachs-Filet“ → lachs, „Pfeffer weiß“ → pfeffer); (a) dazu die Hauptzutat als ein Wort
             // („Rinder-Flank-Steak“ → rinderflanksteak ⊃ flanksteak, „Mangalitza-Speckfett“ ⊃ speckfett)
             foreach (array_unique([$alt[0], implode('', $alt)]) as $i => $t) {
