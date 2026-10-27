@@ -284,3 +284,14 @@ it('Backfill: KI-Teil mit --limit füllt nur Lücken und schreibt ein Protokoll'
         ->and(count($this->aufrufe['gp.sensorik']))->toBe(1)
         ->and(glob($ber.'/*_aroma_protokoll.jsonl'))->toHaveCount(1);
 });
+
+it('Backfill-Trockenlauf schätzt die Kosten aus dem Mittel der letzten Calls', function () {
+    ($this->gp)('Limette', 'limette');
+    foreach ([0.002, 0.004] as $usd) {
+        DB::table('foodalchemist_ai_call_log')->insert(['uuid' => (string) Str::uuid7(), 'feature' => 'gp.sensorik', 'model' => 'test',
+            'tokens_in' => 1000, 'tokens_out' => 200, 'kosten_usd' => $usd, 'usd_eur' => 1.0, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'profil'])->assertExitCode(0)
+        ->expectsOutputToContain('gp.sensorik: Ø 0,0030 € je Call');
+});

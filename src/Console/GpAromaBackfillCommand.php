@@ -100,9 +100,14 @@ class GpAromaBackfillCommand extends Command
         $limit = (int) $this->option('limit');
         $nAnker = $limit > 0 ? min($limit, $kiAnker) : $kiAnker;
         $nProfil = $limit > 0 ? min($limit, $kiProfil) : $kiProfil;
-        $kosten = $this->kosten('gp.anker', $nAnker) + $this->kosten('gp.sensorik', $nProfil);
-        $this->line(sprintf('Kostenschätzung KI-Teil%s: %d Anker-Calls + %d Profil-Calls ≈ %s € (%s)', $limit > 0 ? " (--limit={$limit})" : '',
-            $nAnker, $nProfil, number_format($kosten['eur'], 2, ',', '.'), $kosten['basis']));
+        $teile = [$this->kosten('gp.anker', $nAnker), $this->kosten('gp.sensorik', $nProfil)];
+        $eur = array_sum(array_column($teile, 'eur'));
+        $this->line(sprintf('Kostenschätzung KI-Teil%s: %d Anker-Calls + %d Profil-Calls ≈ %s · Tokens ≈ %s in / %s out', $limit > 0 ? " (--limit={$limit})" : '',
+            $nAnker, $nProfil, in_array(null, array_column($teile, 'eur'), true) ? 'nicht in € schätzbar (keine Preisdaten im Call-Log)' : number_format($eur, 2, ',', '.').' €',
+            number_format(array_sum(array_column($teile, 'tin')), 0, ',', '.'), number_format(array_sum(array_column($teile, 'tout')), 0, ',', '.')));
+        foreach ($teile as $t) {
+            $this->line('  · '.$t['basis']);
+        }
         if ($apply) {
             $this->info("Geschwister übernommen: {$geschrieben['anker']} Anker, {$geschrieben['profil']} Profile.");
         }
@@ -183,27 +188,31 @@ class GpAromaBackfillCommand extends Command
             ->where('g.is_platzhalter', false)->whereIn('g.status', ['approved', 'tentative'])->orderBy('g.id');
     }
 
-    /** @return array{eur: float, basis: string} */
+    /** @return array{eur: ?float, tin: float, tout: float, basis: string} eur = null: keine Preisdaten */
     private function kosten(string $feature, int $n): array
     {
         if ($n === 0) {
-            return ['eur' => 0.0, 'basis' => 'keine Calls'];
+            return ['eur' => 0.0, 'tin' => 0.0, 'tout' => 0.0, 'basis' => "{$feature}: keine Calls"];
         }
         $h = DB::table('foodalchemist_ai_call_log')->where('feature', $feature)->whereNull('error')->orderByDesc('id')->limit(200)
             ->selectRaw('COUNT(*) AS n, AVG(kosten_usd * COALESCE(usd_eur, 0.92)) AS eur, AVG(tokens_in) AS tin, AVG(tokens_out) AS tout')->first();
-        if ($h !== null && (int) $h->n > 0 && $h->eur !== null) {
-            return ['eur' => $n * (float) $h->eur, 'basis' => "{$feature}: Ø ".number_format((float) $h->eur, 4, ',', '.')." € aus {$h->n} Calls"];
+        $mitHistorie = $h !== null && (int) $h->n > 0 && $h->tin !== null;
+        $tin = $mitHistorie ? (float) $h->tin : self::ANNAHME[$feature]['in'];
+        $tout = $mitHistorie ? (float) $h->tout : self::ANNAHME[$feature]['out'];
+        $herkunft = $mitHistorie ? "Ø aus {$h->n} Calls" : 'Annahme ohne Call-Historie';
+        if ($mitHistorie && $h->eur !== null) {
+            return ['eur' => $n * (float) $h->eur, 'tin' => $n * $tin, 'tout' => $n * $tout,
+                'basis' => "{$feature}: Ø ".number_format((float) $h->eur, 4, ',', '.')." € je Call ({$herkunft})"];
         }
-        // Ohne Kosten-Historie: Token-Mittel bzw. -Annahme × Preis der Klasse (Preis je Mio. aus dem letzten Call irgendeines Features)
-        $tin = $h !== null && (int) $h->n > 0 ? (float) $h->tin : self::ANNAHME[$feature]['in'];
-        $tout = $h !== null && (int) $h->n > 0 ? (float) $h->tout : self::ANNAHME[$feature]['out'];
+        // Ohne Kosten-Historie des Features: Token × Preis je Mio. aus dem jüngsten bepreisten Call (gleiches Modell vorausgesetzt).
         $preis = DB::table('foodalchemist_ai_call_log')->whereNotNull('preis_in_mio')->orderByDesc('id')->first(['preis_in_mio', 'preis_out_mio', 'usd_eur', 'model']);
         if ($preis === null) {
-            return ['eur' => 0.0, 'basis' => "{$feature}: keine Preisdaten — Token-Schätzung ".round($tin).' in / '.round($tout).' out je Call'];
+            return ['eur' => null, 'tin' => $n * $tin, 'tout' => $n * $tout, 'basis' => "{$feature}: ".round($tin).' in / '.round($tout)." out je Call ({$herkunft}), kein Preis bekannt"];
         }
         $eur = ($tin * (float) $preis->preis_in_mio + $tout * (float) $preis->preis_out_mio) / 1_000_000 * (float) ($preis->usd_eur ?: 0.92);
 
-        return ['eur' => $n * $eur, 'basis' => "{$feature}: ".round($tin).'/'.round($tout).' Token × Preis '.$preis->model.' (Annahme)'];
+        return ['eur' => $n * $eur, 'tin' => $n * $tin, 'tout' => $n * $tout,
+            'basis' => "{$feature}: ".round($tin).'/'.round($tout)." Token je Call ({$herkunft}) × Preis {$preis->model}"];
     }
 
     private function nutzer(): ?User
