@@ -80,6 +80,7 @@ class IngredientMatchService
         string $pref = 'neutral',
         bool $preferRaw = false,
         string $bio = 'neutral',
+        bool $basisVariante = true,   // 27.10.: Basisvarianten-Regel (Bindung); reine Erkennung (Zukauf/Teilfertig) schaltet sie ab
     ): array {
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
@@ -211,7 +212,7 @@ class IngredientMatchService
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio);
+            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio) : $final);
     }
 
     /** 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2) — v1-Kernlauf. */

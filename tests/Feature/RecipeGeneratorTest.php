@@ -48,7 +48,7 @@ beforeEach(function () {
 
 it('DoD M4-14: Bestand wird gebunden, fehlende Basisrezepte und GPs bleiben zur Bestätigung offen', function () {
     ($this->mkGpMitPreis)('Schalotten: frisch, ganz', 'schalotten', 4.00);
-    ($this->mkGpMitPreis)('Rotwein: trocken, Spätburgunder', 'rotwein', 6.00);
+    ($this->mkGpMitPreis)('Rotwein: trocken'   /* 27.10.: ohne ungenannte Rebsorte (Basisvariante) */, 'rotwein', 6.00);
 
     $resultat = $this->svc->generiere($this->rootTeam, 'Dunkle Rotwein-Schalotten-Reduktion', [
         'convenience' => 'from_scratch', 'frische' => 'frisch',
@@ -703,7 +703,7 @@ it('Kaskade: generator_ms schließt die vor generiere() gebaute Kontextzeit ein 
 it('verwirft gp_id UND sub_rezept_id bei Dosentomaten — Fuzzy-Fallback findet die konservierte GP', function () {
     $fresh = ($this->mkGpMitPreis)('Tomaten: frisch, ganz', 'tomaten', 3.0);
     $fresh->update(['condition' => 'frisch']);
-    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert, stückig', 'tomaten', 2.0);
+    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert'   /* 27.10.: ohne ungenannten Zuschnitt (Basisvariante) */, 'tomaten', 2.0);
     $canned->update(['condition' => 'konserviert']);
     // Ein fremdes, existierendes Basisrezept — strukturell unpassend für eine ROHWARE mit
     // explizitem §9-Zustand, aber ohne den Zustands-Guard würde validiereProposedSub es
@@ -865,7 +865,7 @@ it('#102-Nebenbefund: offene Aroma-Treiber-Zeile ohne Bestandstreffer wird zum B
 });
 
 it('#102-Nebenbefund: eine Zeile MIT GP-Treffer bleibt GP, egal welche Rolle (garnitur)', function () {
-    $gp = ($this->mkGpMitPreis)('Petersilienöl: kaltgepresst', 'petersilienoel', 4.0);
+    $gp = ($this->mkGpMitPreis)('Petersilienöl'   /* 27.10.: ohne ungenannte Verarbeitung (Basisvariante) */, 'petersilienoel', 4.0);
 
     $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
         'name' => 'Teller: Garnitur-GP-Test',

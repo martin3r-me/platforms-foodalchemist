@@ -56,10 +56,12 @@ class LaFirstGpService
             // Leitplanken des Laufs (Bio/Frische/Convenience, Kurator 27.10.) — dieselbe Abbildung wie der Generator; ohne: konventionell, frisch
             $lp = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken);
             $bestand = app(IngredientMatchService::class)->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio']);
+            $bestandMoeglich = false;
             if (($bestand['target'] ?? null) === 'gp' && ($bestand['gp_id'] ?? null) !== null) {
-                return IngredientMatchService::istAutomatischVerdrahtbar($bestand)
-                    ? FoodAlchemistGp::visibleToTeam($team)->find((int) $bestand['gp_id'])
-                    : null;
+                if (IngredientMatchService::istAutomatischVerdrahtbar($bestand)) {
+                    return FoodAlchemistGp::visibleToTeam($team)->find((int) $bestand['gp_id']);
+                }
+                $bestandMoeglich = true;   // FuzzyLow: Wiederverwendung über gemappte LA/EAN-Brücke unten bleibt, nur KEIN Neu-Anlegen
             }
 
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
@@ -122,6 +124,9 @@ class LaFirstGpService
             // Dedup-first: existiert schon ein passendes GP (gp_key/Jaccard) → wiederverwenden.
             $guard = $naming->anlageGuard($team, $naming->buildGpKey($naming->slugify($hauptzutat), null, null), $hauptzutat);
             $neuAngelegt = ! ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null);
+            if ($neuAngelegt && $bestandMoeglich) {
+                return null;   // ein Bestands-GP kommt in Frage (Review) — kein zweites GP daneben anlegen
+            }
             $gp = $neuAngelegt
                 ? $naming->createGp($team, ['hauptzutat' => $hauptzutat])     // wirft bei §6-Verstoß → catch → null
                 : $guard['vorhandenes_gp'];
