@@ -18,9 +18,11 @@ beforeEach(function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     config(['foodalchemist.semantic_search.enabled' => false]);
     $this->nr = 0;
+    // Warengruppe nach §3 (wichtig für die WG-gebundenen Regeln: Frischware 01–03, gemahlen-Zukauf 10/12.3/15.8)
+    $wg = ['rohrohrzucker' => '09', 'rinderbruehe' => '13', 'schalotte' => '01', 'basilikum' => '03', 'sahne' => '06', 'zwiebel' => '01', 'joghurt' => '06'];
     $this->gp = fn (string $name, string $slug, ?string $zustand, ?string $zusatz = null, ?string $bio = null) => FoodAlchemistGp::create([
         'team_id' => $this->rootTeam->id, 'name' => $name, 'gp_key' => 'bv-' . (++$this->nr) . '||', 'status' => 'approved', 'requires_la' => true,
-        'commodity_group_code' => '01', 'condition' => $zustand, 'main_ingredient_slug' => $slug, 'zusatz' => $zusatz, 'bio' => $bio]);
+        'commodity_group_code' => $wg[$slug] ?? '01', 'condition' => $zustand, 'main_ingredient_slug' => $slug, 'zusatz' => $zusatz, 'bio' => $bio]);
     $this->g = [
         'zuckerBio' => ($this->gp)('Rohrohrzucker: trocken / (Bio)', 'rohrohrzucker', 'trocken', null, 'bio'),
         'bruehe' => ($this->gp)('Rinderbrühe: Pulver, trocken / (Knorr)', 'rinderbruehe', 'trocken', 'Knorr'),

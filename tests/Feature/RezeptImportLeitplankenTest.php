@@ -27,7 +27,7 @@ beforeEach(function () {
     $this->nr = 0;
     $this->gp = fn (string $name, string $slug, string $zustand, ?string $bio = null) => FoodAlchemistGp::create([
         'team_id' => $this->rootTeam->id, 'name' => $name, 'gp_key' => 'il-' . (++$this->nr) . '||', 'status' => 'approved', 'requires_la' => true,
-        'commodity_group_code' => '01', 'condition' => $zustand, 'main_ingredient_slug' => $slug, 'bio' => $bio]);
+        'commodity_group_code' => $slug === 'rohrohrzucker' ? '09' : '01', 'condition' => $zustand, 'main_ingredient_slug' => $slug, 'bio' => $bio]);
     $this->g = [
         'zucker' => ($this->gp)('Rohrohrzucker: trocken', 'rohrohrzucker', 'trocken'),
         'zuckerBio' => ($this->gp)('Rohrohrzucker: trocken / (Bio)', 'rohrohrzucker', 'trocken', 'bio'),
