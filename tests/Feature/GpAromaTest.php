@@ -295,3 +295,42 @@ it('Backfill-Trockenlauf schätzt die Kosten aus dem Mittel der letzten Calls', 
     $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'profil'])->assertExitCode(0)
         ->expectsOutputToContain('gp.sensorik: Ø 0,0030 € je Call');
 });
+
+// ── Fund io 27.10.2026: globaler Basis-Stamm ist für alle nur lesbar ──
+
+it('globales Basis-Stamm-GP gilt als nicht pflegbar: keine Geschwister-Übernahme, im Backfill gesondert gezählt', function () {
+    $master = \Platform\Core\Models\Team::create(['name' => 'BHG.DIGITAL', 'user_id' => 1, 'personal_team' => false]);
+    config(['foodalchemist.master_team_id' => $master->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    $global = fn (string $name, string $klasse) => FoodAlchemistGp::create(['team_id' => null, 'gp_key' => Str::slug($name), 'name' => $name,
+        'main_ingredient_slug' => 'sonnenblumenhack', 'status' => 'approved', 'stamm_class' => $klasse]);
+    $vorlage = $global('Sonnenblumen-Hack: TK', 'stamm_paket');
+    DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) Str::uuid7(), 'team_id' => $master->id, 'gp_id' => $vorlage->id,
+        'anchor_id' => $this->anker['pineapple'], 'role' => 'kern', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
+
+    $basis = $global('Sonnenblumen-Hack: TK / (Bio) / (Vegan)', 'basis');
+    $paket = $global('Sonnenblumen-Hack: TK / (Bio)', 'stamm_paket');
+    $svc = app(GpAromaService::class);
+
+    expect($svc->pflegbar($basis))->toBeFalse()->and($svc->pflegbar($paket))->toBeTrue()
+        ->and(($this->ankerVon)($basis->id))->toHaveCount(0)                       // keine Exception, kein Versuch
+        ->and(($this->ankerVon)($paket->id)->pluck('source')->all())->toBe(['geschwister']);
+
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'anker'])->assertExitCode(0)
+        ->expectsOutputToContain('nicht pflegbar (Basis-Stamm)');
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'anker', '--apply' => true, '--nur-geschwister' => true])->assertExitCode(0)
+        ->doesntExpectOutputToContain('Geerbt');                                     // io: 43 × „GP-Anker kann nur das Besitzer-Team ändern“
+});
+
+it('Backfill --limit streut den KI-Teil reihum über die Warengruppen', function () {
+    ($this->ki)(['gp.sensorik' => ['geschmack' => array_fill_keys(SensorikService::DIMS, 0.2)]]);
+    foreach (['11', '11', '11', '11', '02', '05'] as $i => $wg) {
+        ($this->gp)("GP {$i}", "slug{$i}", ['commodity_group_code' => $wg]);
+    }
+
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'profil', '--apply' => true, '--admin' => $this->user->email, '--pause' => 0, '--limit' => 3])
+        ->assertExitCode(0);
+
+    $wgs = DB::table('foodalchemist_gp_taste_vectors AS t')->join('foodalchemist_gps AS g', 'g.id', '=', 't.gp_id')->pluck('g.commodity_group_code')->sort()->values()->all();
+    expect($wgs)->toBe(['02', '05', '11']);
+});
