@@ -21,11 +21,22 @@ final class BasisVariante
     private const PARA2_SUFFIXE = ['brunoise', 'wuerfel', 'gewuerfelt', 'gehackt', 'geschnitten', 'gerieben', 'geroestet', 'blanchiert', 'gestiftelt',
         'gemahlen', 'pueriert', 'scheiben', 'streifen'];
 
+    /** Dominique 27.10.: „gemahlen“ ist bei Gewürzen (WG 10), Nüssen/Saaten (12.3) und Kaffee (15.8) Zukauf, sonst Küchenarbeit nach §2. */
+    private const GEMAHLEN_ZUKAUF_WG = ['10'];
+
+    private const GEMAHLEN_ZUKAUF_SUB = ['12.3', '15.8'];
+
+    /** Dominique 27.10.: Gemüse (inkl. Pilze), Obst, Kräuter — ohne Zustand im Text und ohne Frisch-Basis keine haltbare Einzelvariante automatisch. */
+    private const FRISCHWARE_WG = ['01', '02', '03'];
+
     /** §2 F2.1: Convenience-Zukauf erkennbar — dann ist die Schnittware gemeint („Zwiebelwürfel TK“, „vorgeschnitten“, Dose). */
     private const PARA2_ZUKAUF = ['vorgeschnitten', 'vorgegart', 'vorgekocht', 'schnittware', 'fertig', 'convenience'];
 
     /** Zukauf-Signal der aktuellen Zeile (§2 F2.1), je pruefe() gesetzt. */
     private bool $zukauf = false;
+
+    /** „gemahlen“ ist beim gerade geprüften GP Zukauf (je ungenannt() gesetzt). */
+    private bool $gemahlenZukauf = false;
 
     public function __construct(private TokenEngine $engine, private GpNamingService $naming)
     {
@@ -42,7 +53,7 @@ final class BasisVariante
         if (($treffer['target'] ?? null) !== 'gp' || ! in_array($band, [MatchBand::Exact, MatchBand::FuzzyHigh], true) || empty($treffer['gp_id'])) {
             return $treffer;
         }
-        $spalten = ['id', 'name', 'zusatz', 'bio', 'condition', 'main_ingredient_slug'];
+        $spalten = ['id', 'name', 'zusatz', 'bio', 'condition', 'main_ingredient_slug', 'commodity_group_code', 'sub_category'];
         $gewaehlt = FoodAlchemistGp::visibleToTeam($team)->find((int) $treffer['gp_id'], $spalten);
         if ($gewaehlt === null) {
             return $treffer;
@@ -56,20 +67,26 @@ final class BasisVariante
                 ->where('main_ingredient_slug', $gewaehlt->main_ingredient_slug)->orderBy('id')->get($spalten);
         // Leitplanke Bio (Session/Import): Bio ist dann keine ungenannte Variante, sondern gewollt — und hat Vorrang
         $bioGewollt = $bio === 'bio';
-        // Nennt die Zeile die Variante des Treffers ausdrücklich (Zuschnitt mit Zukauf-Signal, Marke, Bio, Fettstufe …), bleibt er
-        if ($this->ungenannt($gewaehlt, $query, $bioGewollt) === [] && $this->traegtVariante($gewaehlt) && ! ($bioGewollt && ! $this->istBio($gewaehlt))) {
-            return $treffer;
-        }
-        $basis = $geschwister->filter(fn ($g) => $this->ungenannt($g, $query, $bioGewollt) === []);
-        if ($qZustand !== null) {
-            $basis = $basis->filter(fn ($g) => mb_strtolower((string) $g->condition) === mb_strtolower($qZustand) || trim((string) $g->condition) === '');
-        }
         // Zustand nach Leitplanke (frisch | TK | konserviert/behandelt), ohne Leitplanke frisch — sofern die Ware ihn hat
         $wunsch = match ($pref) {
             'frozen_first' => ['tk'],
             'preserved_first' => ['konserviert', ...array_map('mb_strtolower', GpNamingService::BEHANDLUNG)],
             default => ['frisch'],
         };
+        // Nüsse/Saaten „geröstet“ (Dominique 27.10.): roh UND geröstet im Bestand → Review; nur eine Form → die nehmen
+        if (in_array('geroestet', $query, true) && $this->istSub($gewaehlt, '12.3') && $this->hatGeroestet($gewaehlt)) {
+            $roh = $geschwister->first(fn ($g) => $g->id !== $gewaehlt->id && ! $this->hatGeroestet($g) && $this->ungenannt($g, $query, $bioGewollt) === []);
+
+            return $roh === null ? $treffer : ['status' => MatchBand::FuzzyLow, 'variante_offen' => ['geröstet oder roh']] + $treffer;
+        }
+        // Nennt die Zeile die Variante des Treffers ausdrücklich (Zuschnitt mit Zukauf-Signal, Marke, Bio, Fettstufe …), bleibt er
+        if ($this->ungenannt($gewaehlt, $query, $bioGewollt) === [] && $this->traegtVariante($gewaehlt) && ! ($bioGewollt && ! $this->istBio($gewaehlt))) {
+            return $this->haltbarPruefen($treffer, $gewaehlt, $geschwister, $query, $qZustand, $bioGewollt, $wunsch);
+        }
+        $basis = $geschwister->filter(fn ($g) => $this->ungenannt($g, $query, $bioGewollt) === []);
+        if ($qZustand !== null) {
+            $basis = $basis->filter(fn ($g) => mb_strtolower((string) $g->condition) === mb_strtolower($qZustand) || trim((string) $g->condition) === '');
+        }
         $bevorzugt = $basis->filter(fn ($g) => in_array(mb_strtolower((string) $g->condition), $wunsch, true));
         if ($qZustand === null && $bevorzugt->isNotEmpty()) {
             $basis = $bevorzugt;
@@ -80,15 +97,50 @@ final class BasisVariante
         }
 
         if ($basis->contains('id', $gewaehlt->id)) {
-            return $treffer;   // der Treffer ist selbst eine Basisvariante (bei Bio-Leitplanke: die Bio-Basis, wenn es sie gibt)
+            // der Treffer ist selbst eine Basisvariante (bei Bio-Leitplanke: die Bio-Basis, wenn es sie gibt)
+            return $this->haltbarPruefen($treffer, $gewaehlt, $geschwister, $query, $qZustand, $bioGewollt, $wunsch);
         }
         if ($basis->count() === 1) {
             $b = $basis->first();
 
-            return ['gp_id' => (int) $b->id, 'gp_name' => (string) $b->name] + $treffer;
+            return $this->haltbarPruefen(['gp_id' => (int) $b->id, 'gp_name' => (string) $b->name] + $treffer, $b, $geschwister, $query, $qZustand, $bioGewollt, $wunsch);
         }
 
         return ['status' => MatchBand::FuzzyLow, 'variante_offen' => $this->ungenannt($gewaehlt, $query, $bioGewollt)] + $treffer;
+    }
+
+    /**
+     * Haltbare Einzelvariante (Dominique 27.10.): Gemüse/Pilze/Obst/Kräuter, Text ohne Zustand, Treffer nicht frisch und keine frische
+     * Basisvariante im Bestand → Review („Steinpilze“ → nicht automatisch „Steinpilz: trocken“; „Steinpilze getrocknet“ bleibt exact).
+     */
+    private function haltbarPruefen(array $treffer, FoodAlchemistGp $gp, $geschwister, array $query, ?string $qZustand, bool $bioGewollt, array $wunsch): array
+    {
+        $zustand = mb_strtolower(trim((string) $gp->condition));
+        // Text nennt den Zustand, Leitplanke wünscht genau diesen (frische=tk → TK-Gemüse), frisch, ohne Zustand oder keine Frischware → bleibt
+        if ($qZustand !== null || $zustand === '' || $zustand === 'frisch' || in_array($zustand, $wunsch, true)
+            || ! in_array((string) $gp->commodity_group_code, self::FRISCHWARE_WG, true)) {
+            return $treffer;
+        }
+        $frischeBasis = $geschwister->first(fn ($g) => mb_strtolower((string) $g->condition) === 'frisch' && $this->ungenannt($g, $query, $bioGewollt) === []);
+
+        return $frischeBasis !== null ? $treffer : ['status' => MatchBand::FuzzyLow, 'variante_offen' => ['Zustand: ' . $gp->condition . ' (kein frisches GP)']] + $treffer;
+    }
+
+    private function istSub(FoodAlchemistGp $gp, string $sub): bool
+    {
+        return str_starts_with(trim((string) $gp->sub_category), $sub);
+    }
+
+    private function hatGeroestet(FoodAlchemistGp $gp): bool
+    {
+        return in_array('geroestet', $this->engine->tokenize((string) $gp->name), true);
+    }
+
+    /** „gemahlen“ ist bei dieser Ware Zukauf (Gewürze, Nüsse/Saaten, Kaffee)? */
+    private function gemahlenIstZukauf(FoodAlchemistGp $gp): bool
+    {
+        return in_array((string) $gp->commodity_group_code, self::GEMAHLEN_ZUKAUF_WG, true)
+            || array_filter(self::GEMAHLEN_ZUKAUF_SUB, fn ($s) => $this->istSub($gp, $s)) !== [];
     }
 
     /** Trägt das GP überhaupt eine Variante (außer Zustand und „ganz“)? */
@@ -117,6 +169,7 @@ final class BasisVariante
      */
     public function ungenannt(FoodAlchemistGp $gp, array $query, bool $bioGewollt = false): array
     {
+        $this->gemahlenZukauf = $this->gemahlenIstZukauf($gp);
         $f = $this->naming->felderAusName((string) $gp->name, true);
         $offen = [];
         if (! $bioGewollt && (mb_strtolower((string) $gp->bio) === 'bio' || $f['bio']) && ! in_array('bio', $query, true)) {
@@ -142,7 +195,8 @@ final class BasisVariante
     private function genannt(string $wert, array $query): bool
     {
         $tokens = $this->engine->tokenize($wert);
-        if (! $this->zukauf && array_intersect($tokens, self::PARA2_SUFFIXE) !== []) {
+        $para2 = $this->gemahlenZukauf ? array_diff(self::PARA2_SUFFIXE, ['gemahlen']) : self::PARA2_SUFFIXE;
+        if (! $this->zukauf && array_intersect($tokens, $para2) !== []) {
             return false;
         }
         foreach ($tokens as $t) {

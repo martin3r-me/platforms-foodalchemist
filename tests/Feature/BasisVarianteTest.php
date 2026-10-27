@@ -77,3 +77,44 @@ it('§2 Verarbeitungs-Reduktion: Küchen-Zuschnitt führt auf die Roh-Form, Schn
     'Zwiebelwürfel 10 mm (TK) → Schnittware TK' => ['Zwiebel Würfel 10 mm (TK)', 'zwiebelTk'],
     'Zwiebelwürfel vorgeschnitten → Schnittware' => ['Zwiebel Würfel 10 mm vorgeschnitten', 'zwiebelTk'],
 ]);
+
+/** Dominique 27.10. — eigene Ware mit Warengruppe/Unterkategorie. */
+function bvGp(string $name, string $slug, ?string $zustand, string $wg, ?string $sub = null): FoodAlchemistGp
+{
+    return FoodAlchemistGp::create(['team_id' => test()->rootTeam->id, 'name' => $name, 'gp_key' => 'bvw-' . bin2hex(random_bytes(4)) . '||', 'status' => 'approved',
+        'requires_la' => true, 'commodity_group_code' => $wg, 'sub_category' => $sub, 'condition' => $zustand, 'main_ingredient_slug' => $slug]);
+}
+
+it('„gemahlen“ ist bei Gewürzen und Nüssen Zukauf (Variante genannt), „geröstet“ bei Gewürzen Küchenarbeit → Roh-Form', function () {
+    $kkGemahlen = bvGp('Kreuzkümmel: gemahlen, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
+    bvGp('Kreuzkümmel: ganz, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
+    $mandelGemahlen = bvGp('Mandel: gemahlen, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
+    bvGp('Mandel: ganz, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
+    $korianderGanz = bvGp('Korianderkorn: ganz, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
+    bvGp('Korianderkorn: geröstet, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
+
+    $kk = ($this->m)('Kreuzkümmel gemahlen');
+    $ma = ($this->m)('Mandeln gemahlen');
+    expect($kk['gp_id'])->toBe($kkGemahlen->id)->and($kk)->not->toHaveKey('variante_offen')
+        ->and($ma['gp_id'])->toBe($mandelGemahlen->id)->and($ma)->not->toHaveKey('variante_offen')
+        ->and(($this->m)('Korianderkorn geröstet')['gp_id'])->toBe($korianderGanz->id);
+});
+
+it('Nüsse „geröstet“: roh UND geröstet im Bestand → Review, nur geröstet → das', function () {
+    bvGp('Erdnuss: geröstet, trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+    bvGp('Erdnuss: trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+    $nurGeroestet = bvGp('Haselnuss: geröstet, trocken', 'haselnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+
+    expect(($this->m)('Erdnüsse geröstet')['status'])->toBe(MatchBand::FuzzyLow)
+        ->and(($this->auto)('Haselnüsse geröstet'))->toBe($nurGeroestet->id);
+});
+
+it('haltbare Einzelvariante: Steinpilze ohne Frisch-GP → Review, „getrocknet“ genannt → automatisch; trockene Ware (Linsen) ausgenommen', function () {
+    $steinpilz = bvGp('Steinpilz: trocken', 'steinpilz', 'trocken', '01', '01.6 Pilze');
+    $linsen = bvGp('Linse: trocken', 'linse', 'trocken', '07');
+
+    expect(($this->auto)('Steinpilze'))->toBeNull()
+        ->and(($this->m)('Steinpilze')['gp_id'])->toBe($steinpilz->id)                          // Shortlist bleibt
+        ->and(($this->auto)('Steinpilze getrocknet'))->toBe($steinpilz->id)
+        ->and(($this->auto)('Linsen'))->toBe($linsen->id);
+});
