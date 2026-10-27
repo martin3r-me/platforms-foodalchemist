@@ -69,12 +69,18 @@ class GpAromaBackfillCommand extends Command
         $istOhneProfil = array_flip($ohneProfil);
 
         // ── Geschwister-Teil (kostenlos) ──
-        $gAnker = ['einig' => 0, 'uneinig' => 0, 'keine' => 0];
-        $gProfil = ['einig' => 0, 'uneinig' => 0, 'keine' => 0];
+        $gAnker = ['einig' => 0, 'uneinig' => 0, 'keine' => 0, 'gesperrt' => 0];
+        $gProfil = ['einig' => 0, 'uneinig' => 0, 'keine' => 0, 'gesperrt' => 0];
         $apply = (bool) $this->option('apply');
         $geschrieben = ['anker' => 0, 'profil' => 0];
         foreach (array_chunk($alle, 500) as $chunk) {
             foreach (FoodAlchemistGp::whereIn('id', $chunk)->get() as $gp) {
+                if (! $aroma->pflegbar($gp)) {                       // globaler Basis-Stamm: für alle nur lesbar → weder Geschwister noch KI
+                    $gAnker['gesperrt'] += isset($istOhneAnker[$gp->id]) ? 1 : 0;
+                    $gProfil['gesperrt'] += isset($istOhneProfil[$gp->id]) ? 1 : 0;
+
+                    continue;
+                }
                 if (isset($istOhneAnker[$gp->id])) {
                     $gAnker[$aroma->geschwisterAnker($gp)['status']]++;
                 }
@@ -93,9 +99,9 @@ class GpAromaBackfillCommand extends Command
         }
         $kiAnker = $gAnker['uneinig'] + $gAnker['keine'];
         $kiProfil = $gProfil['uneinig'] + $gProfil['keine'];
-        $this->table(['', 'Lücke', 'Geschwister einig', 'Geschwister uneinig', 'ohne Geschwister', '→ KI'], [
-            ['Anker', count($ohneAnker), $gAnker['einig'], $gAnker['uneinig'], $gAnker['keine'], $kiAnker],
-            ['Profil', count($ohneProfil), $gProfil['einig'], $gProfil['uneinig'], $gProfil['keine'], $kiProfil],
+        $this->table(['', 'Lücke', 'nicht pflegbar (Basis-Stamm)', 'Geschwister einig', 'Geschwister uneinig', 'ohne Geschwister', '→ KI'], [
+            ['Anker', count($ohneAnker), $gAnker['gesperrt'], $gAnker['einig'], $gAnker['uneinig'], $gAnker['keine'], $kiAnker],
+            ['Profil', count($ohneProfil), $gProfil['gesperrt'], $gProfil['einig'], $gProfil['uneinig'], $gProfil['keine'], $kiProfil],
         ]);
         $limit = (int) $this->option('limit');
         $nAnker = $limit > 0 ? min($limit, $kiAnker) : $kiAnker;
@@ -131,6 +137,16 @@ class GpAromaBackfillCommand extends Command
         }
         $offen = array_values(array_unique(array_merge($nur !== 'profil' ? $this->ohneAnker() : [], $nur !== 'anker' ? $this->ohneProfil() : [])));
         sort($offen);
+        $eigene = [];                                                // nur, was dieses Team pflegen darf — sonst zählt --limit Leerläufe mit
+        foreach (array_chunk($offen, 500) as $chunk) {
+            foreach (FoodAlchemistGp::whereIn('id', $chunk)->get() as $gp) {
+                if ($gp->isOwnedBy($team)) {
+                    $eigene[] = (int) $gp->id;
+                }
+            }
+        }
+        sort($eigene);
+        $offen = $this->streueNachWg($eigene);                       // eine --limit-Messung soll alle Warengruppen treffen, nicht nur die ersten IDs
         if ($limit > 0) {
             $offen = array_slice($offen, 0, $limit);
         }
@@ -180,6 +196,36 @@ class GpAromaBackfillCommand extends Command
         return $this->basis()->leftJoin('foodalchemist_gp_taste_vectors AS t', 't.gp_id', '=', 'g.id')
             ->where(fn ($q) => $q->whereNull('t.id')->orWhere(fn ($w) => $w->whereRaw("({$summe}) = 0")->where(fn ($s) => $s->whereNull('t.source')->orWhere('t.source', '!=', 'manual'))))
             ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /**
+     * Reihum je Warengruppe (Fund io 27.10.2026: die ersten 50 IDs waren fast nur WG 11 Öle/Essige — als Kostenmessung nicht
+     * repräsentativ). Innerhalb der WG bleibt die ID-Reihenfolge, damit ein Neustart dieselbe Folge nimmt.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function streueNachWg(array $ids): array
+    {
+        $wg = [];
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $wg += DB::table('foodalchemist_gps')->whereIn('id', $chunk)->pluck('commodity_group_code', 'id')->all();
+        }
+        $gruppen = [];
+        foreach ($ids as $id) {
+            $gruppen[(string) ($wg[$id] ?? '')][] = $id;
+        }
+        ksort($gruppen);
+        $out = [];
+        for ($i = 0; count($out) < count($ids); $i++) {
+            foreach ($gruppen as $liste) {
+                if (isset($liste[$i])) {
+                    $out[] = $liste[$i];
+                }
+            }
+        }
+
+        return $out;
     }
 
     private function basis(): \Illuminate\Database\Query\Builder

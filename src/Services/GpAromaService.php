@@ -80,6 +80,19 @@ class GpAromaService
         return $id !== null ? Team::find($id) : null;
     }
 
+    /**
+     * Darf der Besitzer dieses GP überhaupt pflegen? Globale GPs außerhalb des Stamm-Pakets (stamm_class ≠ stamm_paket) sind nach
+     * Spec 82 für ALLE nur lesbar, auch für den Master ({@see \Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy::isOwnedBy()}).
+     * Fund io 27.10.2026: 43 solche GPs galten bei jedem Backfill wieder als „Geschwister einig" und scheiterten dann am Guard
+     * von setGpAnker. Profil wie Anker: wer den Anker nicht pflegen darf, bekommt auch kein Profil geschrieben.
+     */
+    public function pflegbar(FoodAlchemistGp $gp): bool
+    {
+        $team = $this->besitzerTeam($gp);
+
+        return $team !== null && app(PairingService::class)->darfAnkerPflegen($gp, $team);
+    }
+
     // ── Geschwister ────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -119,7 +132,7 @@ class GpAromaService
     /** Übernimmt einige Geschwister-Anker. Nur ohne vorhandenen Anker. Rückgabe: Anzahl gesetzter Anker. */
     public function ankerVonGeschwistern(FoodAlchemistGp $gp): int
     {
-        if (! $this->anreicherbar($gp) || $this->hatAnker($gp->id)) {
+        if (! $this->anreicherbar($gp) || $this->hatAnker($gp->id) || ! $this->pflegbar($gp)) {
             return 0;
         }
         $g = $this->geschwisterAnker($gp);
@@ -304,7 +317,7 @@ class GpAromaService
     /** Profil von einigen Geschwistern übernehmen (kostenlos). Nur, wenn das Profil fehlt. */
     public function profilVonGeschwistern(FoodAlchemistGp $gp): bool
     {
-        if (! $this->anreicherbar($gp) || ! $this->profilFehlt($gp->id)) {
+        if (! $this->anreicherbar($gp) || ! $this->profilFehlt($gp->id) || ! $this->pflegbar($gp)) {
             return false;
         }
         $g = $this->geschwisterProfil($gp);
