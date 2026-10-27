@@ -68,15 +68,17 @@ final class ZutatFreitext
         if ($alternativen === [] || $zutatTokens === []) {
             return true;   // nichts zu prüfen
         }
-        $alternativen = array_values(array_filter(array_map(fn ($alt) => array_values(array_filter($alt, fn ($t) => mb_strlen($t) >= 3
-            && ! in_array($t, self::NEBENWOERTER, true))), $alternativen)));
+        // Eine Hauptzutat mit Bindewort („Zwiebel in Aceto Balsamico“, „Karamell mit Fleur de Sel“) ist kein Kompositum — dort zählt nur das Kopfwort
+        $alternativen = array_values(array_filter(array_map(fn ($alt) => ['phrase' => array_intersect($alt, self::BINDEWOERTER) !== [],
+            'w' => array_values(array_filter($alt, fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::NEBENWOERTER, true)))], $alternativen),
+            fn ($a) => $a['w'] !== []));
         if ($alternativen === []) {
             return true;   // keine tragenden Wörter
         }
-        foreach ($alternativen as $alt) {
+        foreach ($alternativen as ['phrase' => $phrase, 'w' => $alt]) {
             // Kopfwort = erstes tragende Wort („Lachs-Filet“ → lachs, „Pfeffer weiß“ → pfeffer); (a) dazu die Hauptzutat als ein Wort
             // („Rinder-Flank-Steak“ → rinderflanksteak ⊃ flanksteak, „Mangalitza-Speckfett“ ⊃ speckfett)
-            foreach (array_unique([$alt[0], implode('', $alt)]) as $i => $t) {
+            foreach (array_unique($phrase ? [$alt[0]] : [$alt[0], implode('', $alt)]) as $i => $t) {
                 foreach ($zutatTokens as $q) {
                     if (($i === 0 || mb_strlen($q) >= 6) && self::wortPasst($t, $q)) {   // Kompositum nur mit tragendem Wort (nicht „filet“ aus dem Decompound)
                         return true;
@@ -87,6 +89,8 @@ final class ZutatFreitext
 
         return false;
     }
+
+    private const BINDEWOERTER = ['in', 'im', 'mit', 'und', 'aus', 'auf', 'an', 'am', 'von', 'vom', 'nach'];
 
     /** Füll- und Farbwörter in Hauptzutaten („ohne Knochen und Haut“, „Bohnen weiß“, „Schwarze Olive“) — kein Kopfwort. */
     private const NEBENWOERTER = ['ohne', 'mit', 'und', 'oder', 'aus', 'von', 'vom', 'der', 'die', 'das', 'den', 'dem', 'des', 'nach', 'art',
