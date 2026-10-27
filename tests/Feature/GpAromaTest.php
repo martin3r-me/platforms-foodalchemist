@@ -224,7 +224,7 @@ it('Detail-Ansicht: ohne Profil „Profil fehlt" und beide KI-Knöpfe; Schätzen
         ->assertSeeHtml('data-gp-profil-fehlt')
         ->assertSeeHtml('data-ki-action="sensorikKiSchaetzen"')
         ->assertSeeHtml('data-ki-action="ankerKiVorschlagen"')
-        ->assertDontSee('Lücke:')
+        ->assertDontSee('Lücke:')->assertDontSee('schwach:')          // unbewertet ist keine Schwäche
         ->call('sensorikKiSchaetzen')
         ->assertSeeHtml('data-gp-sensorik-vorschau');
     expect(DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->exists())->toBeFalse();
