@@ -69,9 +69,12 @@ it('gp_first_prefers_konzentrat_gp + subrecipe_first_prefers_basisrezept', funct
     ($this->mkGp)('Kalbsfond: konserviert, Konzentrat', 'kalbsfond');
     ($this->mkSub)('Heller Kalbsfond', 1);
 
-    $gpFirst = ($this->match)('Kalbsfond', 'kalbsfond', 'gp_first');
+    // Dominique 27.10. (d): „Kalbsfond“ ohne Zukauf-Signal ist Basiskomponente — Basisrezept zuerst, auch im gp_first-Lauf.
+    // Das Konzentrat-GP gewinnt nur mit Zukauf-Signal in der Zeile.
+    $gpFirst = ($this->match)('Kalbsfond Konzentrat', 'kalbsfond', 'gp_first');
     expect($gpFirst['target'])->toBe('gp')
-        ->and($gpFirst['gp_name'])->toBe('Kalbsfond: konserviert, Konzentrat');
+        ->and($gpFirst['gp_name'])->toBe('Kalbsfond: konserviert, Konzentrat')
+        ->and(($this->match)('Kalbsfond', 'kalbsfond', 'gp_first')['target'])->toBe('sub_recipe');
 
     $subFirst = ($this->match)('Kalbsfond', 'kalbsfond', 'sub_recipe_first');
     expect($subFirst['target'])->toBe('sub_recipe')
@@ -91,7 +94,8 @@ it('gpfirst_weak_sub_does_not_override_gp', function () {
     ($this->mkGp)('Kalbsfond: konserviert, Konzentrat', 'kalbsfond');
     ($this->mkSub)('Heller Kalbsfond', 1);
 
-    $m = ($this->match)('Kalbsfond', 'kalbsfond', 'gp_first');
+    // 27.10. (d): gilt nur noch mit Zukauf-Signal („Konzentrat“) — ohne ist „Kalbsfond“ Basiskomponente und das Basisrezept gewinnt
+    $m = ($this->match)('Kalbsfond Konzentrat', 'kalbsfond', 'gp_first');
     expect($m['target'])->toBe('gp');
 });
 

@@ -196,7 +196,14 @@ class MatchHeuristics
     /** Regelwerk Basisrezepte §3: Frucht-Pürees sind Zukauf (Boiron-TK-Default), kein Unterrezept. */
     private const FRUCHT_PUEREE = ['frucht', 'mango', 'himbeer', 'aprikose', 'banane', 'cassis', 'passionsfrucht', 'sauerkirsch', 'yuzu', 'kalamansi',
         'brombeer', 'kokos', 'erdbeer', 'pfirsich', 'birne', 'ananas', 'limette', 'mandarine', 'guave', 'melone', 'rhabarber', 'marone',
-        'bergamotte', 'blutorange'];
+        'bergamotte', 'blutorange', 'apfel'];   // Apfel: §3 F3.2 (Apfelmark/-püree ist Industrieprodukt)
+
+    /**
+     * Fertige Würzsaucen aus dem Bestand (WG 10 + Asia-Saucen in WG 13: Soja, Fisch, Austern, Hoisin, Sweet Chili, Sriracha, Tabasco, Worcester,
+     * Ketjap/Kecap, Ponzu, Teriyaki) — Kaufware, kein Unterrezept (Messung 27.10.: „Austernsauce“, „Sweet-Chili-Sauce“ wurden Stub).
+     */
+    private const KONDIMENT = ['soja', 'fisch', 'austern', 'oyster', 'hoisin', 'hoi', 'sweet', 'sriracha', 'tabasco', 'worcester', 'worcestershire',
+        'ketjap', 'kecap', 'ponzu', 'teriyaki'];
 
     /** Molkerei-Ware mit Typ-Wort im Namen: Crème fraîche, Crème double. */
     private const MOLKEREI_CREME = ['fraiche', 'double'];
@@ -215,7 +222,8 @@ class MatchHeuristics
     {
         $tokens = array_map(self::ohneAkzent(...), $this->engine->tokenize($name));
         $pueree = array_filter($tokens, fn ($t) => str_ends_with($t, 'pueree'));
-        if (array_intersect($tokens, [...self::BASISKOMPONENTE_AUSNAHMEN, ...self::MOLKEREI_CREME]) !== []
+        if (array_intersect($tokens, [...self::BASISKOMPONENTE_AUSNAHMEN, ...self::MOLKEREI_CREME, ...self::KONDIMENT]) !== []
+            || array_filter($tokens, fn ($t) => array_filter(self::KONDIMENT, fn ($k) => mb_strlen($k) >= 4 && str_starts_with($t, $k) && (str_ends_with($t, 'sauce') || str_ends_with($t, 'sosse'))) !== []) !== []
             || ($pueree !== [] && (array_intersect($tokens, ['kartoffel', 'topinambur', ...self::FRUCHT_PUEREE]) !== []
                 || array_filter($pueree, fn ($t) => array_filter(self::FRUCHT_PUEREE, fn ($f) => str_starts_with($t, $f)) !== []) !== []))) {
             return false;
