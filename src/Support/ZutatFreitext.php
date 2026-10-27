@@ -48,7 +48,10 @@ final class ZutatFreitext
         // „frisches Rapsöl“: ohne §9-Zustandswort (das Zustands-Gate prüft weiter gegen den Originaltext)
         $ohneZustand = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/(?<![\p{L}])(?:frisch|tiefgek(?:ü|ue)hlt|tk|trocken|getrocknet|konserviert)\p{L}*/iu', ' ', $ohneKlammer)));
 
-        return array_values(array_unique(array_filter([$kompositum, $ohneKlammer, $klammerAlsWort, $ohneZustand], fn ($v) => $v !== '' && $v !== trim($text))));
+        // Regelwerk Basisrezepte §2: Küchen-Verarbeitung („Schalotten, in Brunoise“, „Karotten geschnitten“) → Roh-Form
+        $ohneVerarbeitung = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/(?<![\p{L}])(?:(?:in|als)\s+)?(?:brunoise|w(?:ü|ue)rfel\p{L}*|gew(?:ü|ue)rfelt|gehackt|geschnitten|gerieben|ger(?:ö|oe)stet|blanchiert|gestiftelt|gemahlen|p(?:ü|ue)riert|scheiben|streifen)(?![\p{L}])/iu', ' ', $ohneZustand)), " \t,");
+
+        return array_values(array_unique(array_filter([$kompositum, $ohneKlammer, $klammerAlsWort, $ohneZustand, $ohneVerarbeitung], fn ($v) => $v !== '' && $v !== trim($text))));
     }
 
     /**
