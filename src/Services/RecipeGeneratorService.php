@@ -1169,9 +1169,9 @@ class RecipeGeneratorService
         $gp = FoodAlchemistGp::query()->visibleToTeam($team)
             ->whereIn('status', ['approved', 'tentative'])
             ->where('is_platzhalter', false)
-            ->whereKey($id)->first(['id', 'name', 'condition']);
+            ->whereKey($id)->first(['id', 'name', 'condition', 'commodity_group_code', 'sub_category', 'main_ingredient_display', 'zusatz']);
 
-        return $gp !== null && $this->matcher->acceptsProductForm($text, $gp->name, $gp->condition) ? $id : null;
+        return $gp !== null && $this->matcher->acceptsProductForm($text, $gp->name, $gp->condition, $gp) ? $id : null;
     }
 
     /**
