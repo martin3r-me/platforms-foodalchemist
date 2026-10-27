@@ -150,3 +150,33 @@ it('GP-Detail zeigt Treffer mit Gebinde und Preis und den Hinweis auf weitere; G
         ->assertSeeHtml('data-gp-la-results')->assertSee('0,2 l')->assertSee('3 weitere Treffer, Suche verfeinern.')
         ->assertSeeHtml('Bezeichnung, Artikelnummer oder Marke');
 });
+
+it('Tempo-Wächter (io 27.10.): Kandidaten-Abfrage schmal und ohne is_discontinued-Index-Bedingung, volle Artikel nur für die Treffer', function () {
+    foreach (range(1, 3) as $i) {
+        ($this->la)($this->fako, "Apfelsaft Sorte {$i}", ['qty' => 0.2]);
+    }
+    $abfragen = [];
+    DB::listen(function ($q) use (&$abfragen) {
+        $abfragen[] = $q->sql;
+    });
+    $treffer = ($this->suche)('apfelsaft')['treffer'];
+    $kandidaten = collect($abfragen)->first(fn ($sql) => str_contains($sql, 'LIKE') && str_contains($sql, 'foodalchemist_supplier_item_structures'));
+
+    // EXPLAIN läuft im SQLite-Testlauf nicht: geprüft wird die Formulierung, die MySQL vom Index abhält (lokal belegt: ref → ALL, 0,33 → 0,18 s)
+    expect($kandidaten)->not->toBeNull()
+        ->and($kandidaten)->toContain('is_discontinued <> 1')
+        ->and($kandidaten)->not->toContain('"is_discontinued" = ?')
+        ->and($kandidaten)->not->toContain('"foodalchemist_supplier_items".*')
+        ->and($treffer->first()->gebinde_text)->toBe('0,2 l')                 // qty/unit_code kommen nur über das Nachladen
+        ->and($treffer->first()->unit_code)->toBe('l');
+});
+
+it('lieferbar(vollscan) liefert dieselben Zeilen wie lieferbar()', function () {
+    ($this->la)($this->fako, 'Apfelsaft frei');
+    ($this->la)($this->fako, 'Apfelsaft ausgelistet', ['is_discontinued' => true]);
+    ($this->la)($this->fako, 'Apfelsaft eingestellt', ['lieferstatus' => 'eingestellt', 'lieferstatus_quelle' => 'necta']);
+
+    expect(FoodAlchemistSupplierItem::query()->lieferbar(vollscan: true)->pluck('id')->sort()->values()->all())
+        ->toBe(FoodAlchemistSupplierItem::query()->lieferbar()->pluck('id')->sort()->values()->all())
+        ->and(FoodAlchemistSupplierItem::query()->lieferbar(vollscan: true)->count())->toBe(1);
+});

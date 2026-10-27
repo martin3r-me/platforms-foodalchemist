@@ -27,12 +27,15 @@ class FoodAlchemistSupplierItem extends Model
     /**
      * Lieferbar = nicht von Hand ausgelistet UND nicht von Necta eingestellt (status 2 ohne Preis, 16.10.2026). „Läuft aus“ bleibt
      * lieferbar (letzter Preis gilt weiter).
+     *
+     * $vollscan (Suche „Artikel verknüpfen“, 27.10.): `is_discontinued <> 1` statt `= 0` — gleiche Zeilen (Spalte NOT NULL), aber MySQL nimmt dann nicht den
+     * is_discontinued-Index, der bei ~100 % aktiven Artikeln fast die ganze Tabelle über PK-Lookups liest (io: ref, 176.841 rows) statt sie einmal zu scannen.
      */
-    public function scopeLieferbar(\Illuminate\Database\Eloquent\Builder $q): \Illuminate\Database\Eloquent\Builder
+    public function scopeLieferbar(\Illuminate\Database\Eloquent\Builder $q, bool $vollscan = false): \Illuminate\Database\Eloquent\Builder
     {
         $t = $q->getModel()->getTable();
 
-        return $q->where("{$t}.is_discontinued", false)
+        return $q->when($vollscan, fn ($w) => $w->whereRaw("{$t}.is_discontinued <> 1"), fn ($w) => $w->where("{$t}.is_discontinued", false))
             ->where(fn ($w) => $w->whereNull("{$t}.lieferstatus")->orWhere("{$t}.lieferstatus", '!=', 'eingestellt'));
     }
 

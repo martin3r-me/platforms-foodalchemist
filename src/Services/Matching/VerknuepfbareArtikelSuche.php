@@ -76,6 +76,7 @@ class VerknuepfbareArtikelSuche
             ->take($limit)
             ->values();
 
+        $treffer = $this->vollNachladen($treffer);
         $this->mitGebinde($treffer);
 
         return ['treffer' => $treffer, 'weitere' => max(0, $kandidaten->count() - $treffer->count()), 'mehr_als' => $mehrAls];
@@ -113,7 +114,7 @@ class VerknuepfbareArtikelSuche
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
             ->where(fn ($w) => $w->whereNull('sup.is_inactive')->orWhere('sup.is_inactive', false))   // inaktive Lieferanten nicht anbieten
-            ->lieferbar();   // eingestellte Artikel (Necta, nicht bestellbar) nicht zum Verknüpfen anbieten
+            ->lieferbar(vollscan: true);   // eingestellte Artikel (Necta, nicht bestellbar) nicht anbieten; ohne den nutzlosen is_discontinued-Index
         $text = mb_strtolower(trim($suche));
         $query->where(function ($w) use ($suche, $text, $marken) {
             $w->where(fn ($t) => Suche::likeAny($t, ['foodalchemist_supplier_items.designation', "COALESCE(foodalchemist_supplier_items.article_number, '')"], $suche))
@@ -141,7 +142,9 @@ class VerknuepfbareArtikelSuche
         }
 
         return $query
-            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
+            // schmal (io 27.10.: der Filesort schleppte sonst ganze Zeilen); volle Modelle lädt {@see vollNachladen} nur für die Treffer
+            ->select('foodalchemist_supplier_items.id', 'foodalchemist_supplier_items.supplier_id', 'foodalchemist_supplier_items.designation',
+                'foodalchemist_supplier_items.article_number', 'foodalchemist_supplier_items.brand', 'sup.name AS supplier_name')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'aktiver_preis')   // Preis der Team-Sicht
             ->orderByRaw('CASE WHEN ' . implode(' OR ', $anfang) . ' THEN 0 ELSE 1 END', $bindungen)
             ->orderByRaw('CASE WHEN aktiver_preis IS NULL THEN 1 ELSE 0 END')
@@ -198,6 +201,24 @@ class VerknuepfbareArtikelSuche
         }
 
         return $summe;
+    }
+
+    /** Volle Artikel nur für die angezeigten Treffer (eine Abfrage per PK), Reihenfolge und Such-Attribute bleiben. */
+    private function vollNachladen(Collection $treffer): Collection
+    {
+        $voll = FoodAlchemistSupplierItem::query()->whereKey($treffer->pluck('id')->all())->get()->keyBy('id');
+
+        return $treffer->map(function ($schmal) use ($voll) {
+            $la = $voll->get($schmal->id);
+            if ($la === null) {
+                return null;   // zwischen den Abfragen gelöscht
+            }
+            foreach (['supplier_name', 'aktiver_preis', 'relevanz', 'ueber_marke', 'lieferanten_rang'] as $feld) {
+                $la->setAttribute($feld, $schmal->getAttribute($feld));
+            }
+
+            return $la;
+        })->filter()->values();
     }
 
     /** Gebinde („1 l“, „0,2 l“) für die Trefferzeile — der Preis kommt schon aus der Kandidaten-Abfrage. */
