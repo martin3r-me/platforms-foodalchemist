@@ -35,6 +35,12 @@ class FoodAlchemistSupplierItemNonfood extends Model
         'ki_versucht_at' => 'datetime',
     ];
 
+    /** Gespeicherter alter Unterkategorie-Name ohne Nummer liest sich als neuer (Übergang bis zum Datenlauf, 27.10.2026). */
+    protected function subkategorie(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::get(fn (?string $wert) => \Platform\FoodAlchemist\Support\NonFoodRegeln::kanonisch($wert));
+    }
+
     public function item(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id')->ohneTeamSicht('verweis');

@@ -1492,7 +1492,7 @@ class VkModal extends Component
                 : [],
             'gefaessGps' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->nonFood()->whereNotIn('status', ['rejected', 'merged'])
-                    ->where('sub_category', \Platform\FoodAlchemist\Support\NonFoodRegeln::SUB_GESCHIRR)->orderBy('name')->limit(300)->get(['id', 'name'])
+                    ->whereIn('sub_category', \Platform\FoodAlchemist\Support\NonFoodRegeln::mitAlias(\Platform\FoodAlchemist\Support\NonFoodRegeln::SUB_GESCHIRR))->orderBy('name')->limit(300)->get(['id', 'name'])
                 : collect(),
             'behaelterVorschau' => $this->behaelterVorschau(),
             'behaelterVorschauPax' => self::VORSCHAU_PORTIONEN,

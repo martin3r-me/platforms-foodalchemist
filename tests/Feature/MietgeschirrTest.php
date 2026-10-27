@@ -25,7 +25,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * Mietgeschirr als normaler Artikel (PR B): Pfand (netto, nur Beleg) und Mietdauer am LIEFERANTENARTIKEL, Maße am GRUNDPRODUKT (nur WG 16;
- * gespeichert in mm, gesagt in cm/ml/l), Größe im Namen „Produkt: Eigenschaft, Größe“, Unterkategorie „Geschirr & Ausstattung“.
+ * gespeichert in mm, gesagt in cm/ml/l), Größe im Namen „Produkt: Eigenschaft, Größe“, Unterkategorie „16.6 Geschirr & Ausstattung“.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -154,7 +154,7 @@ it('Artikel-Modal: Pfand/Mietdauer erscheinen bei Non-Food-GP oder vorhandenen W
     expect(Livewire::test(ItemModal::class)->call('oeffnen', $laButter->id)->html())->toContain('data-la-miete');
 });
 
-it('Unterkategorie „Geschirr & Ausstattung“: starke Wörter sind Non-Food mit dieser Unterkategorie, mehrdeutige (Tasse, Teller) nur unklar', function () {
+it('Unterkategorie „16.6 Geschirr & Ausstattung“: starke Wörter sind Non-Food mit dieser Unterkategorie, mehrdeutige (Tasse, Teller) nur unklar', function () {
     $b = fn (string $t) => NonFoodRegeln::bewerte(['bezeichnung' => $t, 'hat_food_daten' => false]);
 
     expect($b('Speiseteller flach weiß 28 cm')['subkategorie'])->toBe(NonFoodRegeln::SUB_GESCHIRR)

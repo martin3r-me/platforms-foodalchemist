@@ -83,7 +83,8 @@ class NonFoodKiBatchJob implements ShouldQueue
                 continue;
             }
             $konfidenz = max(0.0, min(1.0, (float) ($u['konfidenz'] ?? 0)));
-            $sub = in_array($u['unterkategorie'] ?? null, NonFoodRegeln::unterkategorien(), true) ? $u['unterkategorie'] : null;
+            $sub = NonFoodRegeln::kanonisch(is_string($u['unterkategorie'] ?? null) ? $u['unterkategorie'] : null);   // alter Name ohne Nummer → neu
+            $sub = in_array($sub, NonFoodRegeln::unterkategorien(), true) ? $sub : null;
             $z->konfidenz = $konfidenz;
             // Der Grund kommt nur bei UNSICHEREN Urteilen (knappe Antwort, Auftrag 2): ohne grund steht „KI: sicher“ bzw. „KI: unsicher“
             $grund = trim((string) ($u['grund'] ?? ''));

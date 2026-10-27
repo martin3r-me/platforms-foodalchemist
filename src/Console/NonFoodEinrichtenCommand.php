@@ -7,7 +7,7 @@ use Platform\FoodAlchemist\Services\NonFoodService;
 use Platform\FoodAlchemist\Support\NonFoodRegeln;
 
 /**
- * Legt die Warengruppe 16 „Non-Food“ mit ihren sechs Unterkategorien an (Dominique 2026-10-16).
+ * Legt die Warengruppe 16 „Non-Food“ mit ihren sieben Unterkategorien an (nummeriert nach §8.18.3, 27.10.) (Dominique 2026-10-16).
  *
  * Bewusst ein KOMMANDO, keine Migration (Spec 82 §6): Stammdaten gehören in kein `migrate`. Idempotent; Dry-Run ist der Default.
  * Plattform-Basis 18.10.: Warengruppen sind global — kein Ziel-Team mehr; --team wird nur noch geduldet und ignoriert.
@@ -35,7 +35,10 @@ class NonFoodEinrichtenCommand extends Command
         foreach ($r['unterkategorien_angelegt'] as $name) {
             $this->line('  Unterkategorie '.$name.' — '.($apply ? 'angelegt' : 'würde angelegt'));
         }
-        if ($r['unterkategorien_angelegt'] === []) {
+        foreach ($r['umzubenennen'] as $alt => $neu) {
+            $this->line('  Unterkategorie „'.$alt.'“ steht noch unter altem Namen — nicht doppelt angelegt, Umbenennung auf „'.$neu.'“ macht der Datenlauf');
+        }
+        if ($r['unterkategorien_angelegt'] === [] && $r['umzubenennen'] === []) {
             $this->line('  alle Unterkategorien waren schon da');
         }
 

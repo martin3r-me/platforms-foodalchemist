@@ -126,6 +126,7 @@ class NonFoodService
      */
     public function setzeManuell(FoodAlchemistSupplierItem $item, ?bool $nonfood, ?string $subkategorie = null): ?FoodAlchemistSupplierItemNonfood
     {
+        $subkategorie = NonFoodRegeln::kanonisch($subkategorie);   // alter Name ohne Nummer (Übergang 27.10.) wird abgebildet, nicht verworfen
         if ($subkategorie !== null && $subkategorie !== '' && ! in_array($subkategorie, NonFoodRegeln::unterkategorien(), true)) {
             throw new RuntimeException('Unbekannte Unterkategorie „'.$subkategorie.'“.');
         }
@@ -157,7 +158,10 @@ class NonFoodService
      * Plattform-Basis 18.10.: Warengruppen und Sub-Kategorien sind global (team_id NULL). Geprüft wird gegen die globalen Zeilen und
      * gegen Master-Reste vor dem Umzug (plattform-basis-heben), damit nie eine zweite WG 16 entsteht.
      *
-     * @return array{wg_angelegt:bool, unterkategorien_angelegt:list<string>}
+     * Nummerierte Namen (27.10.): Steht eine Unterkategorie noch unter ihrem alten Namen, gilt sie als vorhanden (keine Dublette) und wird
+     * als „umzubenennen“ gemeldet — die Umbenennung selbst macht der Datenlauf.
+     *
+     * @return array{wg_angelegt:bool, unterkategorien_angelegt:list<string>, umzubenennen:array<string, string>}
      */
     public function einrichten(bool $schreiben): array
     {
@@ -165,7 +169,7 @@ class NonFoodService
         $basis = fn (string $modell) => $modell::ohneTeamSicht('eindeutigkeit')
             ->where(fn ($q) => $q->whereNull('team_id')->when($master !== null, fn ($q) => $q->orWhere('team_id', $master)));
 
-        $out = ['wg_angelegt' => false, 'unterkategorien_angelegt' => []];
+        $out = ['wg_angelegt' => false, 'unterkategorien_angelegt' => [], 'umzubenennen' => []];
         $wg = $basis(FoodAlchemistLookupWarengruppe::class)->where('code', NonFoodRegeln::WG_CODE)->first();
         if ($wg === null) {
             $out['wg_angelegt'] = true;
@@ -177,6 +181,12 @@ class NonFoodService
         $vorhanden = $basis(FoodAlchemistWarengruppeSubkategorie::class)->where('commodity_group_code', NonFoodRegeln::WG_CODE)->pluck('name')->all();
         foreach (NonFoodRegeln::unterkategorien() as $i => $name) {
             if (in_array($name, $vorhanden, true)) {
+                continue;
+            }
+            $alt = array_values(array_intersect(NonFoodRegeln::mitAlias($name), $vorhanden));
+            if ($alt !== []) {
+                $out['umzubenennen'][$alt[0]] = $name;
+
                 continue;
             }
             $out['unterkategorien_angelegt'][] = $name;
