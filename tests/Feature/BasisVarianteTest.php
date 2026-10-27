@@ -181,3 +181,16 @@ it('(c) Fleisch-Teilstück ist eine genannte Variante, keine Küchenarbeit', fun
         ->and($herkunft['status'])->toBe(MatchBand::FuzzyLow)->and($herkunft['gp_id'])->toBe($lammMitte->id)
         ->and(($this->auto)('Lammrücken'))->toBe($lamm->id);
 });
+
+it('(a) Pulver/gemahlen ist keine Naturform, wenn es die Ware frisch gibt — und nie bei Nüssen (Messung 27.10.)', function () {
+    $t = $this->rootTeam->id;
+    bvGp($t, 'Ingwer: gemahlen, trocken', 'ingwer', 'trocken', '10', '10.1 Gewürze');
+    $knolle = bvGp($t, 'Ingwer: Knolle, frisch', 'ingwer', 'frisch', '01', '01.2 Wurzelgemüse');
+    bvGp($t, 'Tomate: Pulver, trocken', 'tomate', 'trocken', '10', '10.1 Gewürze');
+    bvGp($t, 'Tomate: ganz, frisch', 'tomate', 'frisch', '01', '01.1 Fruchtgemüse');
+    bvGp($t, 'Haselnuss: gemahlen, trocken', 'haselnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+
+    expect(($this->auto)('Ingwer'))->toBe($knolle->id)                    // nicht das Pulver
+        ->and(($this->auto)('Getrocknete Tomaten'))->toBeNull()          // nicht „Tomate: Pulver“
+        ->and(($this->auto)('Haselnüsse'))->toBeNull();                  // Nüsse: gemahlen bleibt Variante
+});

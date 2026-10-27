@@ -34,10 +34,16 @@ final class BasisVariante
 
     /**
      * Dominique 27.10. (a): Naturform der Ware — beim einzigen Kandidaten kein Grund für den Review (Agar → Pulver, Meersalz → grob).
-     * Wert → Bedingung am GP: null = immer; 'gewuerz' = „gemahlen“ ist Zukauf (WG 10/12.3/15.8) oder Pulverware; 'salz'/'passata' = Hauptzutat.
+     * Wert → Bedingung am GP: null = immer; 'pulverware' = Hauptzutat ist Pulver („Chilipulver“) oder Gewürz/Bindemittel ohne frische Form im
+     * Bestand (Messung 27.10.: „Ingwer“ → gemahlen, „Getrocknete Tomaten“ → Pulver, „Kaffee“ → gemahlen waren falsch); 'salz'/'passata' = Hauptzutat.
      */
-    private const NATURFORM = ['pulver' => null, 'pulverfoermig' => null, 'fluessig' => null, 'knolle' => null, 'wurzel' => null,
-        'gemahlen' => 'gewuerz', 'grob' => 'salz', 'fein' => 'salz', 'pueriert' => 'passata'];
+    private const NATURFORM = ['pulver' => 'pulverware', 'pulverfoermig' => 'pulverware', 'fluessig' => null, 'knolle' => null, 'wurzel' => null, 'ganz' => null,
+        'gemahlen' => 'pulverware', 'grob' => 'salz', 'fein' => 'salz', 'pueriert' => 'passata'];
+
+    /** @var array<string, bool> Slug → gibt es eine frische Form (Request-Cache) */
+    private array $frischform = [];
+
+    private ?Team $team = null;
 
     /** Dominique 27.10. (c): Fleisch-Teilstücke (WG 04, Bestand + Kurator-Liste) sind genannte Varianten, keine Küchenarbeit nach §2. */
     private const TEILSTUECKE = ['mittelstueck', 'kopfstueck', 'schwanzstueck', 'kopf', 'ruecken', 'keule', 'brust', 'huefte', 'oberschale',
@@ -64,6 +70,7 @@ final class BasisVariante
         if (($treffer['target'] ?? null) !== 'gp' || ! in_array($band, [MatchBand::Exact, MatchBand::FuzzyHigh], true) || empty($treffer['gp_id'])) {
             return $treffer;
         }
+        $this->team = $team;
         $spalten = ['id', 'name', 'zusatz', 'bio', 'condition', 'main_ingredient_slug', 'commodity_group_code', 'sub_category'];
         $gewaehlt = FoodAlchemistGp::visibleToTeam($team)->find((int) $treffer['gp_id'], $spalten);
         if ($gewaehlt === null) {
@@ -177,10 +184,11 @@ final class BasisVariante
         return array_values(array_filter($this->ungenannt($gp, $query, $bioGewollt), function (string $eintrag) use ($gp) {
             [$art, $wert] = array_pad(explode(': ', $eintrag, 2), 2, '');
 
+            // die Naturform steht je nach Namen in Geschmack, Verarbeitung, Zuschnitt oder Pflichtangabe („Ingwer: Knolle, frisch“ → Geschmack)
             return ! match ($art) {
+                'Bio', 'Marke', 'Portion' => false,
                 'Pflichtangabe' => $this->pflichtangabeWeich($gp, $wert) || $this->naturform($gp, $wert),
-                'Verarbeitung', 'Zuschnitt' => $this->naturform($gp, $wert),
-                default => false,
+                default => $this->naturform($gp, $wert),
             };
         }));
     }
@@ -205,7 +213,10 @@ final class BasisVariante
             }
             $ok = match (self::NATURFORM[$t]) {
                 null => true,
-                'gewuerz' => $this->gemahlenIstZukauf($gp) || str_contains($haupt, 'pulver'),
+                'pulverware' => str_contains($haupt, 'pulver')
+                    // Gewürze (WG 10) und Back-/Bindemittel (WG 12 ohne Nüsse 12.3 — Nüsse sind ganz die Basis) ohne frische Form
+                    || (((string) $gp->commodity_group_code === '10' || ((string) $gp->commodity_group_code === '12' && ! $this->istSub($gp, '12.3')))
+                        && ! $this->hatFrischform($gp)),
                 'salz' => str_contains($haupt, 'salz'),
                 'passata' => str_contains($haupt, 'passata') || str_contains($haupt, 'passiert'),
             };
@@ -215,6 +226,18 @@ final class BasisVariante
         }
 
         return $tokens !== [];
+    }
+
+    /** Gibt es die Ware auch frisch (Ingwer-Knolle, frischer Rosmarin, Tomate)? Dann ist Pulver/gemahlen keine Naturform. */
+    private function hatFrischform(FoodAlchemistGp $gp): bool
+    {
+        $slug = (string) $gp->main_ingredient_slug;
+        if ($slug === '' || $this->team === null) {
+            return false;
+        }
+
+        return $this->frischform[$this->team->id . '|' . $slug] ??= FoodAlchemistGp::visibleToTeam($this->team)->where('main_ingredient_slug', $slug)
+            ->whereIn('status', ['approved', 'tentative'])->whereRaw('LOWER(`condition`) = ?', ['frisch'])->exists();
     }
 
     /** Hauptzutat (Teil vor dem Doppelpunkt, ohne Marken-/Flag-Klammer), normalisiert. */
