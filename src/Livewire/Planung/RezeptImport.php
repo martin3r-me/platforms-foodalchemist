@@ -101,15 +101,7 @@ class RezeptImport extends Component
                 'unit' => (string) ($z['unit'] ?? ''),
                 'sub_rezept' => (bool) ($z['sub_rezept'] ?? false),
             ], array_values(array_filter((array) ($extrakt['zutaten'] ?? []), 'is_array')))),
-            'komponenten' => array_values(array_map(fn ($k) => [
-                'name' => (string) ($k['name'] ?? ''),
-                'preparation' => (string) ($k['preparation'] ?? ''),
-                'zutaten' => array_values(array_map(fn ($z) => [
-                    'text' => (string) ($z['text'] ?? $z['name'] ?? ''),
-                    'quantity' => (string) ($z['quantity'] ?? ''),
-                    'unit' => (string) ($z['unit'] ?? ''),
-                ], array_values(array_filter((array) ($k['zutaten'] ?? []), 'is_array')))),
-            ], array_values(array_filter((array) ($extrakt['komponenten'] ?? []), 'is_array')))),
+            'komponenten' => $this->vorschauKomponenten((array) ($extrakt['komponenten'] ?? [])),
         ];
         $this->importStep = 'vorschau';
     }
@@ -135,11 +127,7 @@ class RezeptImport extends Component
             'name' => (string) ($this->importVorschau['name'] ?? ''),
             'preparation' => (string) ($this->importVorschau['preparation'] ?? ''),
             'zutaten' => $this->importZutatenRein($this->importVorschau['zutaten'] ?? []),
-            'komponenten' => array_values(array_map(fn ($k) => [
-                'name' => (string) ($k['name'] ?? ''),
-                'preparation' => (string) ($k['preparation'] ?? ''),
-                'zutaten' => $this->importZutatenRein($k['zutaten'] ?? []),
-            ], (array) ($this->importVorschau['komponenten'] ?? []))),
+            'komponenten' => $this->komponentenRein((array) ($this->importVorschau['komponenten'] ?? [])),
         ];
         try {
             $res = $svc->legeAn($team, $extrakt, $this->importTyp === 'gericht');
@@ -191,9 +179,9 @@ class RezeptImport extends Component
                 continue;
             }
             $zeile = ['text' => $text];
-            $q = trim((string) ($z['quantity'] ?? ''));
-            if ($q !== '' && is_numeric(str_replace(',', '.', $q))) {
-                $zeile['quantity'] = (float) str_replace(',', '.', $q);
+            // 27.10.: deutsche Zahl — „2.000“ ist zweitausend (vorher str_replace(',', '.') → 2.0)
+            if (($q = \Platform\FoodAlchemist\Support\DeutscheZahl::alsFloat($z['quantity'] ?? null)) !== null) {
+                $zeile['quantity'] = $q;
             }
             $u = trim((string) ($z['unit'] ?? ''));
             if ($u !== '') {
@@ -208,6 +196,49 @@ class RezeptImport extends Component
         return $out;
     }
 
+    /**
+     * Komponenten des Extrakts für die Vorschau — verschachtelt bis §4 (3 Ebenen unter dem Rezept; Kurator 27.10.: vorher nur eine Ebene,
+     * K1.1/K1.2.1/K2.7 gingen verloren und wurden später als Rohware gematcht). Mengen bleiben Text (die Vorschau zeigt, was die Quelle sagt).
+     */
+    private function vorschauKomponenten(array $liste, int $ebene = 1): array
+    {
+        return array_values(array_map(fn ($k) => [
+            'name' => (string) ($k['name'] ?? ''),
+            'preparation' => (string) ($k['preparation'] ?? ''),
+            'zutaten' => array_values(array_map(fn ($z) => [
+                'text' => (string) ($z['text'] ?? $z['name'] ?? ''),
+                'quantity' => (string) ($z['quantity'] ?? ''),
+                'unit' => (string) ($z['unit'] ?? ''),
+                'sub_rezept' => (bool) ($z['sub_rezept'] ?? false),
+            ], array_values(array_filter((array) ($k['zutaten'] ?? []), 'is_array')))),
+            'komponenten' => $ebene < \Platform\FoodAlchemist\Services\RecipeExtractService::MAX_TIEFE
+                ? $this->vorschauKomponenten((array) ($k['komponenten'] ?? []), $ebene + 1) : [],
+        ], array_values(array_filter($liste, 'is_array'))));
+    }
+
+    /** Vorschau-Komponenten → Extrakt für legeAn (rekursiv, Zutaten wie oben bereinigt). */
+    private function komponentenRein(array $liste): array
+    {
+        return array_values(array_map(fn ($k) => [
+            'name' => (string) ($k['name'] ?? ''),
+            'preparation' => (string) ($k['preparation'] ?? ''),
+            'zutaten' => $this->importZutatenRein((array) ($k['zutaten'] ?? [])),
+            'komponenten' => $this->komponentenRein((array) ($k['komponenten'] ?? [])),
+        ], array_values(array_filter($liste, 'is_array'))));
+    }
+
+    /** Für die Anzeige: alle Komponenten flach mit Ebene (1 = direkt unter dem Rezept). */
+    private function komponentenFlach(array $liste, int $ebene = 1): array
+    {
+        $out = [];
+        foreach (array_values(array_filter($liste, 'is_array')) as $k) {
+            $out[] = ['name' => (string) ($k['name'] ?? ''), 'zutaten' => count((array) ($k['zutaten'] ?? [])), 'ebene' => $ebene];
+            array_push($out, ...$this->komponentenFlach((array) ($k['komponenten'] ?? []), $ebene + 1));
+        }
+
+        return $out;
+    }
+
     private function team(): ?Team
     {
         return Auth::user()?->currentTeamRelation;
@@ -215,6 +246,8 @@ class RezeptImport extends Component
 
     public function render()
     {
-        return view('foodalchemist::livewire.planung.rezept-import');
+        return view('foodalchemist::livewire.planung.rezept-import', [
+            'komponentenFlach' => $this->komponentenFlach((array) ($this->importVorschau['komponenten'] ?? [])),
+        ]);
     }
 }

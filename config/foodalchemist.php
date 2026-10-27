@@ -1976,12 +1976,17 @@ return [
                 . 'führt der Text eigenständige Komponenten MIT eigenen Zutaten (z. B. »Für die Sauce: …«, '
                 . '»Für das Püree: …«), gib sie als `komponenten` aus (je ein Sub-Rezept), NICHT flach '
                 . 'aufgelöst; eine nur namentlich genannte Komponente ohne eigene Zutaten markierst du in '
-                . 'der Zutatenzeile mit `sub_rezept: true`. Übernimm Mengen/Einheiten wörtlich (unbekannt '
-                . '⇒ weglassen, NICHT schätzen). Liegt ein Foto oder Scan bei (quelle = bild), steht der Rezepttext '
+                . 'der Zutatenzeile mit `sub_rezept: true`. Hat eine Komponente selbst Unter-Komponenten (z. B. '
+                . '»K1.2 Kruste« mit »K1.2.1 Grundkruste«, Nummerierung oder Einrückung im Quelltext), gib sie verschachtelt '
+                . 'in deren `komponenten` aus — bis zu 3 Ebenen unter dem Rezept, nie flach in die Elternkomponente aufgelöst. '
+                . 'Übernimm Mengen/Einheiten wörtlich (unbekannt '
+                . '⇒ weglassen, NICHT schätzen): `quantity` als TEXT genau wie in der Quelle geschrieben (»2.000«, »2,5«, »1/2«) — '
+                . 'NICHT in eine Zahl umrechnen; `unit` wörtlich (»Stück«, »Zweig«, »EL«, »ml«). Liegt ein Foto oder Scan bei (quelle = bild), steht der Rezepttext '
                 . 'DORT: lies ihn wörtlich ab, auch Step-by-Step-Schritte und Bildunterschriften; Unleserliches '
                 . 'weglassen. werte = {typ (gericht|basisrezept), name, '
                 . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
-                . 'komponenten: [{name, zutaten: [{text, quantity, unit}], preparation}] (leer, wenn keine)}.',
+                . 'komponenten: [{name, zutaten: [{text, quantity, unit, sub_rezept}], preparation, komponenten: [… gleiche Form, '
+                . 'leer, wenn keine]}] (leer, wenn keine)}.',
         ],
         // Produktpass am Lieferantenartikel (Bauauftrag Kurator 16.10.2026): PDF/Foto des Produktpasses bzw. Datenblatts
         // TREU lesen. Nichts raten, nichts schätzen — was nicht im Dokument steht, kommt nicht in die Antwort. Die

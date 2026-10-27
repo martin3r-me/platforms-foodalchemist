@@ -1506,8 +1506,8 @@ class RecipeGeneratorService
 
     private function einheitId(Team $team, string $slug): int
     {
-        $slug = mb_strtolower(trim($slug)) ?: 'g';
-        $unit = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', $slug)->first()
+        // 27.10.: „Stück“, „Stk.“, „Zweige“ → Vokabular (vorher nur der Slug, alles andere still Gramm) — EinheitAusText
+        $unit = (($id = \Platform\FoodAlchemist\Support\EinheitAusText::id($team, $slug ?: 'g')) !== null ? FoodAlchemistVocabEinheit::find($id) : null)
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->first()
             ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->orderBy('id')->first();
         if ($unit === null) {

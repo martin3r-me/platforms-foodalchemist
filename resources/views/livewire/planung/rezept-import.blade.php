@@ -54,7 +54,7 @@
                     <x-fa::badge tone="accent">{{ count($importVorschau['zutaten']) }} Zutaten</x-fa::badge>
                 @endif
                 @if(!empty($importVorschau['komponenten']))
-                    <x-fa::badge tone="accent">{{ count($importVorschau['komponenten']) }} Komponenten</x-fa::badge>
+                    <x-fa::badge tone="accent">{{ count($komponentenFlach) }} Komponenten</x-fa::badge>
                 @endif
             </x-slot:actions>
             <div class="flex flex-col gap-4">
@@ -86,10 +86,10 @@
                     <div class="flex flex-col gap-1.5">
                         <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Erkannte Komponenten <span class="font-normal text-[var(--fa-ink-3)]">· werden als Unterrezepte angelegt</span></p>
                         <ul class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
-                            @foreach($importVorschau['komponenten'] as $ki => $k)
-                                <li class="flex items-center justify-between gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)]" wire:key="ikomp-{{ $ki }}">
-                                    <span class="font-medium text-[var(--fa-ink)]">{{ ($k['name'] ?? '') !== '' ? $k['name'] : 'Komponente ohne Namen' }}</span>
-                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ count($k['zutaten'] ?? []) }} Zutaten</span>
+                            @foreach($komponentenFlach as $ki => $k)
+                                <li class="flex items-center justify-between gap-2 py-1.5 pr-3 text-[length:var(--fa-text-md)] {{ [1 => 'pl-3', 2 => 'pl-7', 3 => 'pl-11'][$k['ebene']] ?? 'pl-11' }}" wire:key="ikomp-{{ $ki }}" data-import-komponente="{{ $k['ebene'] }}">
+                                    <span class="font-medium text-[var(--fa-ink)]">@if($k['ebene'] > 1)<span class="text-[var(--fa-ink-3)]">↳ </span>@endif{{ $k['name'] !== '' ? $k['name'] : 'Komponente ohne Namen' }}</span>
+                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $k['zutaten'] }} Zutaten</span>
                                 </li>
                             @endforeach
                         </ul>
