@@ -58,3 +58,19 @@ it('Portion „250 g“ ohne gp.portion: kommt aus „Felder aus dem Namen über
         ->set('builder.portion', '')
         ->assertDontSeeHtml('entspricht der Gebindemenge');
 });
+
+it('§7.1-Warnung: bei Bestelleinheit Stück ist die Menge das Stückgewicht, nicht das Gebinde — kein Fehlalarm (Base Ananas 35 g, 40 Stück)', function () {
+    $lieferant = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Achenbach Test']);
+    $la = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $lieferant->id,
+        'designation' => 'Base Ananas', 'article_number' => 'B1']);
+    $la->forceFill(['qty' => 0.035, 'unit_code' => 'kg', 'ordering_unit' => 'STK', 'packaging_unit' => 'SCH', 'qty_ordering_per_packaging' => 40])->save();
+    $gp = $this->makeGp($this->rootTeam, 'Ananas: TK, 35 g pro Stück');
+    $gp->forceFill(['lead_la_supplier_item_id' => $la->id])->save();
+
+    Livewire::test(GpModal::class)->call('oeffnen', $gp->id)
+        ->set('builder.portion', '35 g')
+        ->assertDontSeeHtml('entspricht der Gebindemenge')                   // 35 g = ein Stück
+        ->set('builder.portion', '1,4 kg')
+        ->assertSeeHtml('entspricht der Gebindemenge');                      // 40 × 35 g = die Schachtel
+});
+

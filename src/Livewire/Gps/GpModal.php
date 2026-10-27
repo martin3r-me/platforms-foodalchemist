@@ -1117,12 +1117,20 @@ class GpModal extends Component
         if ($la === null || $la->qty === null) {
             return null;
         }
-
-        return match (mb_strtolower((string) $la->unit_code)) {
+        $gramm = match (mb_strtolower((string) $la->unit_code)) {
             'kg' => (float) $la->qty * 1000,
             'g' => (float) $la->qty,
             default => null,
         };
+        // Bestelleinheit Stück („Base Ananas“: 0,035 kg je STK, 40 STK je Schachtel): qty ist das Stückgewicht, nicht das Gebinde —
+        // das Gebinde ist Stückgewicht × Stück je Verpackung, ohne Stückzahl gibt es keins (Dominique 27.10.: Fehlalarm §7.1)
+        if ($gramm !== null && in_array(mb_strtoupper(trim((string) $la->ordering_unit)), ['STK', 'ST', 'STCK', 'STÜCK', 'STUECK', 'PCE', 'PC', 'PCS'], true)) {
+            $stueck = (float) ($la->qty_ordering_per_packaging ?? 0);
+
+            return $stueck > 1 ? $gramm * $stueck : null;
+        }
+
+        return $gramm;
     }
 
     /** Wert des Felds „Gewicht oder Portion" in Gramm („180 g", „0,66 kg"), sonst null. */
