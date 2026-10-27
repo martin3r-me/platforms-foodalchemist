@@ -41,18 +41,28 @@ class MarkeOffen extends Component
         abort_unless(MasterTeam::istMaster(Auth::user()?->currentTeamRelation), 403, 'Den Marken-Nachlauf bearbeitet das Master-Team.');
     }
 
+    /** Gruppe des offenen Formulars (bleibt sichtbar, auch wenn sie nach dem Zuordnen aus der Liste fällt — die Meldung steht im Formular). */
+    public array $offenGruppe = [];
+
     public function oeffnen(string $schluessel): void
     {
         $this->offen = $schluessel;
-        $this->form = ['marke' => '', 'typ' => FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE, 'geltung' => 'lieferant', 'vorrang' => 0];
+        $this->offenGruppe = collect(app(MarkeOffenService::class)->liste()['gruppen'])->firstWhere('schluessel', $schluessel) ?? [];
+        // Standards (Dominique 27.10.): gilt für diesen Lieferanten; Händler → Eigenmarke, sonst Herstellermarke
+        $typ = ($this->offenGruppe['rolle'] ?? null) === 'haendler' ? FoodAlchemistSupplierMarke::TYP_EIGENMARKE : FoodAlchemistSupplierMarke::TYP_HERSTELLERMARKE;
+        $this->form = ['marke' => '', 'typ' => $typ, 'geltung' => ($this->offenGruppe['supplier_id'] ?? null) !== null ? 'lieferant' : 'alle', 'vorrang' => 0];
         $this->ergebnis = [];
         $this->fehler = null;
+        $this->meldung = null;
     }
 
     public function schliessen(): void
     {
         $this->offen = null;
+        $this->offenGruppe = [];
         $this->ergebnis = [];
+        $this->fehler = null;
+        $this->meldung = null;
     }
 
     /** „Kein Kürzel“ (Dominique 27.10.): das Wort ist bei diesem Lieferanten an dieser Position nie eine Marke — verschwindet dauerhaft aus der Liste. */
@@ -91,6 +101,11 @@ class MarkeOffen extends Component
         $this->fehler = null;
         $this->meldung = null;
         [$supplierId, $position, $kuerzel] = $this->teile((string) $this->offen);
+        if (trim((string) $this->form['marke']) === '') {
+            $this->fehler = 'Bitte die Marke eintragen, wie sie in der Klammer stehen soll.';
+
+            return;
+        }
         try {
             $this->ergebnis = app(MarkeOffenService::class)->zuordnen(Auth::user(), $this->form['geltung'] === 'alle' ? null : $supplierId, $kuerzel,
                 (string) $this->form['marke'], (string) $this->form['typ'], $position, (int) $this->form['vorrang'], $trockenlauf);
@@ -103,7 +118,7 @@ class MarkeOffen extends Component
             $z = $this->ergebnis['zaehler'];
             $this->meldung = '„' . $this->ergebnis['kuerzel'] . '“ → ' . $this->ergebnis['marke'] . ': ' . $z['gerendert'] . ' GP neu benannt, '
                 . $z['teilen'] . ' teilen, ' . $z['fall_b'] . ' Fall B (Artikel ohne Marke).';
-            $this->offen = null;
+            // Formular bleibt offen: die Meldung steht dort, wo geklickt wurde (Dominique 27.10.), auch wenn die Gruppe jetzt aus der Liste fällt
         }
     }
 
@@ -121,6 +136,9 @@ class MarkeOffen extends Component
         $gruppen = $this->lieferant !== null ? array_values(array_filter($liste['gruppen'], fn ($g) => $g['supplier_id'] === $this->lieferant)) : $liste['gruppen'];
         if (($s = mb_strtolower(trim($this->suche))) !== '') {
             $gruppen = array_values(array_filter($gruppen, fn ($g) => str_contains(mb_strtolower($g['kuerzel'] . ' ' . $g['lieferant'] . ' ' . implode(' ', $g['beispiele'])), $s)));
+        }
+        if ($this->offen !== null && $this->offenGruppe !== [] && ! collect($gruppen)->contains('schluessel', $this->offen)) {
+            array_unshift($gruppen, $this->offenGruppe + ['erledigt' => true]);   // nach dem Zuordnen: Zeile mit Formular und Meldung oben halten
         }
         $lieferanten = collect($liste['gruppen'])->groupBy('supplier_id')
             ->map(fn ($g) => ['id' => $g->first()['supplier_id'], 'name' => $g->first()['lieferant'], 'n' => $g->count()])->sortBy('name')->values()->all();

@@ -68,7 +68,7 @@
                                 @foreach($gruppen as $g)
                                     <tr wire:key="mo-{{ $g['schluessel'] }}" data-marke-offen-gruppe="{{ $g['schluessel'] }}">
                                         <td class="whitespace-nowrap">
-                                            <span class="font-mono font-medium">{{ $g['roh'] }}</span>
+                                            <span class="font-mono font-medium">{{ $g['roh'] }}</span>@if($g['erledigt'] ?? false) <x-fa::badge tone="ok" data-gruppe-erledigt>zugeordnet</x-fa::badge>@endif
                                             <div class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $g['position'] === 'ende' ? 'am Ende' : 'am Anfang' }}</div>
                                         </td>
                                         <td>{{ $g['lieferant'] }}</td>
@@ -90,7 +90,7 @@
                                                 <div class="flex flex-col gap-3 py-2" data-kuerzel-zuordnen-form>
                                                     <div class="flex flex-wrap items-end gap-3">
                                                         <x-fa::field label="Marke (Schreibweise in der Klammer)" for="mo-marke">
-                                                            <x-fa::input id="mo-marke" size="sm" wire:model="form.marke" placeholder="z. B. Bake & Bite" data-mo-marke />
+                                                            <x-fa::input id="mo-marke" size="sm" wire:model.live.debounce.250ms="form.marke" placeholder="Markenname wie auf dem Artikel" required data-mo-marke />
                                                         </x-fa::field>
                                                         <x-fa::field label="Typ" for="mo-typ">
                                                             <x-fa::select id="mo-typ" size="sm" wire:model="form.typ" :options="['herstellermarke' => 'Herstellermarke', 'eigenmarke' => 'Eigenmarke des Händlers']" />
@@ -102,11 +102,19 @@
                                                             <x-fa::input id="mo-vorrang" size="sm" type="number" min="0" max="9" numeric wire:model="form.vorrang" />
                                                         </x-fa::field>
                                                     </div>
+                                                    @if($meldung)
+                                                        <div class="flex gap-2"><x-fa::button size="sm" variant="ghost" wire:click="schliessen" data-kuerzel-fertig>Schließen</x-fa::button></div>
+                                                    @else
                                                     <div class="flex gap-2">
-                                                        <x-fa::button size="sm" variant="ghost" wire:click="vorschau" data-kuerzel-vorschau>Vorschau</x-fa::button>
-                                                        <x-fa::button size="sm" variant="primary" wire:click="zuordnen" data-kuerzel-zuordnen>Zuordnen und GPs neu benennen</x-fa::button>
+                                                        @php($ohneMarke = trim((string) ($form['marke'] ?? '')) === '')
+                                                        <x-fa::button size="sm" variant="ghost" wire:click="vorschau" :disabled="$ohneMarke" data-kuerzel-vorschau>Vorschau</x-fa::button>
+                                                        <x-fa::button size="sm" variant="primary" wire:click="zuordnen" :disabled="$ohneMarke" title="{{ $ohneMarke ? 'Erst die Marke eintragen' : '' }}" data-kuerzel-zuordnen>Zuordnen und GPs neu benennen</x-fa::button>
                                                         <x-fa::button size="sm" variant="ghost" wire:click="schliessen">Abbrechen</x-fa::button>
                                                     </div>
+                                                    @endif
+                                                    {{-- Meldungen am Formular (zusätzlich oben): dort, wo geklickt wurde --}}
+                                                    @if($fehler)<x-fa::notice tone="crit" data-form-fehler>{{ $fehler }}</x-fa::notice>@endif
+                                                    @if($meldung)<x-fa::notice tone="ok" data-form-meldung>{{ $meldung }}</x-fa::notice>@endif
                                                     @if(($ergebnis['trockenlauf'] ?? false) && ($ergebnis['gps'] ?? []) !== [])
                                                         <ul class="flex flex-col gap-1 text-[length:var(--fa-text-sm)]" data-kuerzel-vorschau-liste>
                                                             @foreach($ergebnis['gps'] as $gp)
