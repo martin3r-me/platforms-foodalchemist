@@ -117,12 +117,12 @@ it('mit Preis der Team-Sicht vor ohne Preis — innerhalb gleicher Wortstufe, vo
     $ohne = ($this->la)($this->chefs, 'Apfelsaft klar');              // Prioritäts-Lieferant, aber ohne Preis
     $mit = ($this->la)($this->fako, 'Apfelsaft trüb');
     $wort = ($this->la)($this->fako, 'Happy Day Apfelsaft');          // mit Preis, aber nur „ganzes Wort“
-    $preis($mit, $this->rootTeam, 1.10);
-    $preis($wort, $this->rootTeam, 0.90);
-    app(TeamSettingsService::class)->update($this->rootTeam, ['lead_la_prioritaeten' => [$this->chefs->id]]);
+    $preis($mit, $this->childA, 1.10);                                 // Teampreise von Kind A (Eltern-Preise sähe auch Kind B)
+    $preis($wort, $this->childA, 0.90);
+    app(TeamSettingsService::class)->update($this->childA, ['lead_la_prioritaeten' => [$this->chefs->id]]);
 
-    expect(($this->suche)('apfelsaft')['treffer']->pluck('id')->all())->toBe([$mit->id, $ohne->id, $wort->id])
-        ->and(($this->suche)('apfelsaft', $this->childB)['treffer']->pluck('id')->all())->toBe([$ohne->id, $mit->id, $wort->id]);   // fremde Sicht: kein Preis, Rang zählt
+    expect(($this->suche)('apfelsaft', $this->childA)['treffer']->pluck('id')->all())->toBe([$mit->id, $ohne->id, $wort->id])
+        ->and(($this->suche)('apfelsaft', $this->childB)['treffer']->pluck('id')->all())->toBe([$ohne->id, $mit->id, $wort->id]);   // fremde Sicht: kein Preis, Name entscheidet
 });
 
 it('Gebinde und Preis in der Preis-Sicht des Teams (Mandantenpreis nie bei fremdem Team)', function () {
