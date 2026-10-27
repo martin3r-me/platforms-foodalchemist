@@ -2084,15 +2084,16 @@ class PairingService
     // Spec 60 · P3 entfallen. Manuell kuratierte Äquivalente (ComponentEquivalentService) werden geboostet (Inv. 3: manual
     // gewinnt). Der eigentliche Tausch bleibt tauscheZutat (Allergen-/swap_locked-Guards dort).
 
-    /** Listen-EK (indikativ) der Lead-LA eines GP — aktive Preiszeile (valid_to NULL). Null wenn keine. */
-    private function gpLeadListenEk(?int $leadLaId): ?float
+    /**
+     * EK (indikativ) der Lead-LA eines GP in der Preis-Sicht des anfragenden Teams (PriceService::activeFor). Null wenn keiner.
+     * Vorher Listenpreis ohne Team — seit dem Master-Listenpreis für globale Artikel (Bugfix 27.10.) hätte ein Mandant so BHG-Konditionen gesehen.
+     */
+    private function gpLeadListenEk(?int $leadLaId, Team $team): ?float
     {
         if ($leadLaId === null) {
             return null;
         }
-        $p = app(PriceService::class)->nurListenpreis(DB::table('foodalchemist_prices'))   // Spec 82 3a
-            ->where('supplier_item_id', $leadLaId)->whereNull('valid_to')->whereNull('deleted_at')
-            ->orderByDesc('id')->value('price');
+        $p = app(PriceService::class)->activeFor($leadLaId, $team)?->price;
 
         return $p !== null ? (float) $p : null;
     }
@@ -2255,7 +2256,7 @@ class PairingService
         // ── Anreicherung nur der Top-N (teure Schritte: Allergene, Preis, Kohäsion) ──
         $agg = app(GpAggregateService::class);
         $sourceAllergene = $agg->allergene($sourceGp);
-        $sourceEk = $this->gpLeadListenEk($sourceGp->lead_la_supplier_item_id !== null ? (int) $sourceGp->lead_la_supplier_item_id : null);
+        $sourceEk = $this->gpLeadListenEk($sourceGp->lead_la_supplier_item_id !== null ? (int) $sourceGp->lead_la_supplier_item_id : null, $team);
 
         if ($recipe !== null) {
             $context['base_cohesion'] = $this->recipeCohesion($recipe)['score'];
@@ -2283,7 +2284,7 @@ class PairingService
             }
 
             // Cost-Achse (R6.3): indikativer Listen-EK der jeweiligen Lead-LA (NICHT mengennormalisiert).
-            $candEk = $this->gpLeadListenEk($c['lead_la_supplier_item_id']);
+            $candEk = $this->gpLeadListenEk($c['lead_la_supplier_item_id'], $team);
             $cost = [
                 'source_listen_ek' => $sourceEk,
                 'candidate_listen_ek' => $candEk,
