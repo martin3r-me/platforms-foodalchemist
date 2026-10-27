@@ -21,6 +21,9 @@ class FoodAlchemistSupplierMarke extends Model
 
     public const TYP_HERSTELLERMARKE = 'herstellermarke';
 
+    /** „Kein Kürzel“ (Marken-Nachlauf, Dominique 27.10.): das Wort ist nie eine Marke — wie MSC, aber je Lieferant/Position gepflegt. */
+    public const TYP_SPERRE = 'sperre';
+
     public const POSITION_ANFANG = 'anfang';
 
     public const POSITION_ENDE = 'ende';

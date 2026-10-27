@@ -78,6 +78,9 @@
                                         <td class="whitespace-nowrap text-right">
                                             @if($darfZuordnen && $offen !== $g['schluessel'])
                                                 <x-fa::button size="sm" variant="secondary" wire:click="oeffnen({{ \Illuminate\Support\Js::from($g['schluessel']) }})" data-kuerzel-zuordnen-oeffnen>Kürzel zuordnen</x-fa::button>
+                                                <x-fa::button size="sm" variant="ghost" wire:click="keinKuerzel({{ \Illuminate\Support\Js::from($g['schluessel']) }})"
+                                                    wire:confirm="{{ $g['roh'] }} ist bei {{ $g['lieferant'] }} kein Markenkürzel? Es verschwindet aus der Liste und wird nie als Marke genutzt."
+                                                    title="Wort ist keine Marke (z. B. Abkürzung eines Lebensmittels): dauerhaft aus der Liste nehmen" data-kein-kuerzel>Kein Kürzel</x-fa::button>
                                             @endif
                                         </td>
                                     </tr>
