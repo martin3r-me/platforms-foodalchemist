@@ -29,8 +29,9 @@ beforeEach(function () {
     $this->actingAs($this->mandant);
 });
 
-it('Lieferanten-Index: ohne Auswahl der Knopf „Marken“, mit Auswahl der Eintrag „Marken“ im „…“-Menü, gefiltert auf den Lieferanten — auch ohne Bearbeiten-Recht', function () {
-    Livewire::test(Index::class)->assertSeeHtml('data-link-marken')->assertDontSeeHtml('data-link-marken-lieferant');
+it('Lieferanten-Index: ohne Auswahl (globale Suche) der Knopf „Marken“, mit Auswahl der Eintrag „Marken“ im „…“-Menü, gefiltert auf den Lieferanten — auch ohne Bearbeiten-Recht', function () {
+    // Ohne Auswahl heißt praktisch: globale Suche (sonst wählt der Index den ersten Lieferanten selbst) — dort der Knopf „Marken“, kein Menü-Eintrag
+    Livewire::withQueryParams(['q' => 'Henglein'])->test(Index::class)->assertSeeHtml('data-link-marken')->assertDontSeeHtml('data-link-marken-lieferant');
 
     $url = route('foodalchemist.suppliers.marken', ['lieferant' => $this->hh->id]);
     $html = Livewire::withQueryParams(['lieferant' => $this->hh->id])->test(Index::class)->html();
@@ -45,5 +46,5 @@ it('Marken-Seite mit ?lieferant=X zeigt nur die Kürzel dieses Lieferanten', fun
         ->assertSee('Henglein')
         ->assertDontSee('Base Culinar');
 
-    Livewire::test(Marken::class)->assertSee('Henglein')->assertSee('Base Culinar');   // ohne Filter beide
+    Livewire::withQueryParams([])->test(Marken::class)->assertSee('Henglein')->assertSee('Base Culinar');   // ohne Filter beide (withQueryParams wirkt sonst nach)
 });
