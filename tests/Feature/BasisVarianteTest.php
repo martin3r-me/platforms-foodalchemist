@@ -79,19 +79,19 @@ it('§2 Verarbeitungs-Reduktion: Küchen-Zuschnitt führt auf die Roh-Form, Schn
 ]);
 
 /** Dominique 27.10. — eigene Ware mit Warengruppe/Unterkategorie. */
-function bvGp(string $name, string $slug, ?string $zustand, string $wg, ?string $sub = null): FoodAlchemistGp
+function bvGp(int $teamId, string $name, string $slug, ?string $zustand, string $wg, ?string $sub = null): FoodAlchemistGp
 {
-    return FoodAlchemistGp::create(['team_id' => test()->rootTeam->id, 'name' => $name, 'gp_key' => 'bvw-' . bin2hex(random_bytes(4)) . '||', 'status' => 'approved',
+    return FoodAlchemistGp::create(['team_id' => $teamId, 'name' => $name, 'gp_key' => 'bvw-' . bin2hex(random_bytes(4)) . '||', 'status' => 'approved',
         'requires_la' => true, 'commodity_group_code' => $wg, 'sub_category' => $sub, 'condition' => $zustand, 'main_ingredient_slug' => $slug]);
 }
 
 it('„gemahlen“ ist bei Gewürzen und Nüssen Zukauf (Variante genannt), „geröstet“ bei Gewürzen Küchenarbeit → Roh-Form', function () {
-    $kkGemahlen = bvGp('Kreuzkümmel: gemahlen, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
-    bvGp('Kreuzkümmel: ganz, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
-    $mandelGemahlen = bvGp('Mandel: gemahlen, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
-    bvGp('Mandel: ganz, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
-    $korianderGanz = bvGp('Korianderkorn: ganz, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
-    bvGp('Korianderkorn: geröstet, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
+    $kkGemahlen = bvGp($this->rootTeam->id, 'Kreuzkümmel: gemahlen, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
+    bvGp($this->rootTeam->id, 'Kreuzkümmel: ganz, trocken', 'kreuzkuemmel', 'trocken', '10', '10.1 Gewürze');
+    $mandelGemahlen = bvGp($this->rootTeam->id, 'Mandel: gemahlen, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
+    bvGp($this->rootTeam->id, 'Mandel: ganz, trocken', 'mandel', 'trocken', '12', '12.3 Nüsse & Saaten');
+    $korianderGanz = bvGp($this->rootTeam->id, 'Korianderkorn: ganz, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
+    bvGp($this->rootTeam->id, 'Korianderkorn: geröstet, trocken', 'korianderkorn', 'trocken', '10', '10.1 Gewürze');
 
     $kk = ($this->m)('Kreuzkümmel gemahlen');
     $ma = ($this->m)('Mandeln gemahlen');
@@ -101,17 +101,17 @@ it('„gemahlen“ ist bei Gewürzen und Nüssen Zukauf (Variante genannt), „g
 });
 
 it('Nüsse „geröstet“: roh UND geröstet im Bestand → Review, nur geröstet → das', function () {
-    bvGp('Erdnuss: geröstet, trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
-    bvGp('Erdnuss: trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
-    $nurGeroestet = bvGp('Haselnuss: geröstet, trocken', 'haselnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+    bvGp($this->rootTeam->id, 'Erdnuss: geröstet, trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+    bvGp($this->rootTeam->id, 'Erdnuss: trocken', 'erdnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
+    $nurGeroestet = bvGp($this->rootTeam->id, 'Haselnuss: geröstet, trocken', 'haselnuss', 'trocken', '12', '12.3 Nüsse & Saaten');
 
     expect(($this->m)('Erdnüsse geröstet')['status'])->toBe(MatchBand::FuzzyLow)
         ->and(($this->auto)('Haselnüsse geröstet'))->toBe($nurGeroestet->id);
 });
 
 it('haltbare Einzelvariante: Steinpilze ohne Frisch-GP → Review, „getrocknet“ genannt → automatisch; trockene Ware (Linsen) ausgenommen', function () {
-    $steinpilz = bvGp('Steinpilz: trocken', 'steinpilz', 'trocken', '01', '01.6 Pilze');
-    $linsen = bvGp('Linse: trocken', 'linse', 'trocken', '07');
+    $steinpilz = bvGp($this->rootTeam->id, 'Steinpilz: trocken', 'steinpilz', 'trocken', '01', '01.6 Pilze');
+    $linsen = bvGp($this->rootTeam->id, 'Linse: trocken', 'linse', 'trocken', '07');
 
     expect(($this->auto)('Steinpilze'))->toBeNull()
         ->and(($this->m)('Steinpilze')['gp_id'])->toBe($steinpilz->id)                          // Shortlist bleibt
