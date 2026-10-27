@@ -2085,8 +2085,7 @@ class PairingService
     // gewinnt). Der eigentliche Tausch bleibt tauscheZutat (Allergen-/swap_locked-Guards dort).
 
     /**
-     * EK (indikativ) der Lead-LA eines GP in der Preis-Sicht des anfragenden Teams (PriceService::activeFor). Null wenn keiner.
-     * Vorher Listenpreis ohne Team — seit dem Master-Listenpreis für globale Artikel (Bugfix 27.10.) hätte ein Mandant so BHG-Konditionen gesehen.
+     * EK (indikativ) der Lead-LA in der Preis-Sicht des anfragenden Teams (PriceService::activeFor), null wenn keiner; ohne Team sähe ein Mandant seit dem Master-Listenpreis (27.10.) BHG-Konditionen.
      */
     private function gpLeadListenEk(?int $leadLaId, Team $team): ?float
     {
