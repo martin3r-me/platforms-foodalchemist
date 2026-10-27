@@ -315,6 +315,8 @@ it('globales Basis-Stamm-GP gilt als nicht pflegbar: keine Geschwister-Übernahm
     expect($svc->pflegbar($basis))->toBeFalse()->and($svc->pflegbar($paket))->toBeTrue()
         ->and(($this->ankerVon)($basis->id))->toHaveCount(0)                       // keine Exception, kein Versuch
         ->and(($this->ankerVon)($paket->id)->pluck('source')->all())->toBe(['geschwister']);
+    expect($svc->ankerVonGeschwistern($basis))->toBe(0)                              // direkt (Knopf/Job): kein Versuch, keine Exception
+        ->and($svc->profilVonGeschwistern($basis))->toBeFalse();
 
     $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'anker'])->assertExitCode(0)
         ->expectsOutputToContain('nicht pflegbar (Basis-Stamm)');
