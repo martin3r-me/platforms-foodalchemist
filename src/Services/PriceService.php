@@ -187,6 +187,116 @@ class PriceService
         return $this->orderAktiv($this->preisSichtFuer($q, $team))->limit(1);
     }
 
+    /** Letzter Preis eines eingestellten Artikels: ab diesem Alter (Monate nach „gültig ab“) wird das Kennzeichen als Warnung gezeigt (Kurator 27.10.). */
+    public const LETZTER_PREIS_WARN_MONATE = 12;
+
+    /**
+     * Rückfall „letzter bekannter Preis“ (Dominique 27.10.2026): Necta stellt die Preiszeile eines eingestellten Artikels auf status '2' ohne Preis um,
+     * der Wert steht dann nur noch in `foodalchemist_price_history` (Messung Klaus io 27.10.: prices 0 von 1.261, Historie 935). Subquery mit dem
+     * neuesten Stand > 0 — nur für Artikel mit lieferstatus „eingestellt“, nie für bestellbare.
+     *
+     * Bewusst NICHT in activeFor/activePriceSubquery: Bestellung, Import-Vergleich und Preis-Signale sehen weiter nur aktive Preise. Konsumenten, deren EK
+     * für Kalkulation/Anzeige zählt, holen den Rückfall ausdrücklich dazu ({@see mitLetztemPreis}) und kennzeichnen ihn.
+     *
+     * Stand-Regeln wie die Preislinie (PreisVerlaufService): Normalpreis (status '0'/leer) bzw. — nur in Kopien von FA-Preiszeilen (quelle ≠ necta_historie) —
+     * '2' MIT Preis (läuft aus, der letzte Normalpreis gilt weiter); keine Aktion ('A'), nicht gesperrt, nicht als Erfassungsfehler ausgeblendet. Sicht wie
+     * {@see preisSichtFuer}: mit Team die Preis-Kette (eigenes Team zuerst), dann der Listenpreis des Besitzers, zuletzt global; ohne Team nur Listenpreis.
+     * Datum = `status_valid_from` (Necta validFrom, Beginn der Gültigkeit); ohne Datum rankt der Stand nach den datierten.
+     *
+     * @param  string  $spalte  price | status_valid_from
+     */
+    public function letzterPreisSubquery(string $outerColumn = 'foodalchemist_supplier_items.id', ?Team $team = null, string $spalte = 'price'): \Illuminate\Database\Query\Builder
+    {
+        $q = DB::table('foodalchemist_price_history as lp')->select("lp.{$spalte}")->whereColumn('lp.supplier_item_id', $outerColumn)
+            ->whereExists(fn ($e) => $e->selectRaw('1')->from('foodalchemist_supplier_items as lp_si')
+                ->whereColumn('lp_si.id', $outerColumn)->where('lp_si.lieferstatus', 'eingestellt'));
+
+        return $this->letzterPreisBedingung($q, $team)->limit(1);
+    }
+
+    /**
+     * Einzelweg zu {@see letzterPreisSubquery}: letzter bekannter Preis eines eingestellten Artikels samt Datum und Kennzeichen, sonst null.
+     *
+     * @return array{preis: float, ab: ?string, eingestellt_seit: ?string, warnung: bool, text: string}|null
+     */
+    public function letzterPreisFuer(int $supplierItemId, ?Team $team = null): ?array
+    {
+        $item = DB::table('foodalchemist_supplier_items')->where('id', $supplierItemId)->first(['lieferstatus', 'lieferstatus_seit']);
+        if ($item?->lieferstatus !== 'eingestellt') {
+            return null;
+        }
+        $seit = $item->lieferstatus_seit;
+        $z = $this->letzterPreisBedingung(DB::table('foodalchemist_price_history as lp')->where('lp.supplier_item_id', $supplierItemId), $team)
+            ->first(['lp.price', 'lp.status_valid_from']);
+        if ($z === null) {
+            return null;
+        }
+
+        return ['preis' => (float) $z->price] + self::letzterPreisKennzeichen($z->status_valid_from, $seit);
+    }
+
+    /**
+     * Hängt an eine Artikel-Query die Spalten `letzter_preis` und `letzter_preis_ab` (Rückfall für eingestellte Artikel). `$outerColumn` = Artikel-ID-Spalte.
+     *
+     * @template T of Builder|\Illuminate\Database\Query\Builder
+     * @param  T  $query
+     * @return T
+     */
+    public function mitLetztemPreis(Builder|\Illuminate\Database\Query\Builder $query, string $outerColumn = 'foodalchemist_supplier_items.id', ?Team $team = null): Builder|\Illuminate\Database\Query\Builder
+    {
+        return $query->selectSub($this->letzterPreisSubquery($outerColumn, $team), 'letzter_preis')
+            ->selectSub($this->letzterPreisSubquery($outerColumn, $team, 'status_valid_from'), 'letzter_preis_ab');
+    }
+
+    /**
+     * Kennzeichen eines letzten Preises für jede Anzeige: „letzter bekannter Preis, gültig ab …“ — Warnung, wenn älter als
+     * {@see LETZTER_PREIS_WARN_MONATE} Monate oder ohne Datum (Kurator 27.10.).
+     *
+     * @return array{ab: ?string, eingestellt_seit: ?string, warnung: bool, text: string}
+     */
+    public static function letzterPreisKennzeichen(?string $ab, ?string $eingestelltSeit): array
+    {
+        $abC = $ab !== null ? \Illuminate\Support\Carbon::parse($ab) : null;
+        $warnung = $abC === null || $abC->lt(now()->subMonths(self::LETZTER_PREIS_WARN_MONATE));
+        $datum = fn (?\Illuminate\Support\Carbon $d) => $d?->timezone('Europe/Berlin')->format('d.m.Y');
+        $text = 'letzter bekannter Preis' . ($abC !== null ? ', gültig ab ' . $datum($abC) : ' (Datum unbekannt)')
+            . ' · Artikel eingestellt' . ($eingestelltSeit !== null ? ' seit ' . $datum(\Illuminate\Support\Carbon::parse($eingestelltSeit)) : '')
+            . ($abC !== null && $warnung ? ' · älter als ' . self::LETZTER_PREIS_WARN_MONATE . ' Monate' : '');
+
+        return ['ab' => $abC?->toDateTimeString(), 'eingestellt_seit' => $eingestelltSeit, 'warnung' => $warnung, 'text' => $text];
+    }
+
+    /** Gemeinsame Stand- und Sicht-Bedingung des letzten Preises (Alias lp = price_history), samt Rangordnung. */
+    private function letzterPreisBedingung(\Illuminate\Database\Query\Builder $q, ?Team $team): \Illuminate\Database\Query\Builder
+    {
+        $q->where('lp.price', '>', 0)
+            ->where(fn ($w) => $w->whereNull('lp.is_blocked')->orWhere('lp.is_blocked', false))
+            ->where(fn ($w) => $w->whereNull('lp.status')->orWhereIn('lp.status', ['0', ''])
+                ->orWhere(fn ($z) => $z->where('lp.status', '2')->where('lp.quelle', '!=', 'necta_historie')))
+            ->where(fn ($w) => $w->whereNull('lp.ausgeblendet_at')->orWhereNull('lp.ausgeblendet_preis')->orWhereRaw('ABS(lp.ausgeblendet_preis - lp.price) >= 0.00005'));
+        $besitzer = '(SELECT si_lpb.team_id FROM foodalchemist_supplier_items si_lpb WHERE si_lpb.id = lp.supplier_item_id)';
+        if ($team === null) {
+            $this->nurListenpreis($q, 'lp');
+            $q->orderByRaw('lp.team_id IS NULL ASC');
+        } else {
+            $this->stammFilter($q, 'lp', $team);
+            $kette = self::preisKette($team);
+            $sichtbar = FoodAlchemistPrice::teamAncestryIds($team);
+            $inKette = implode(',', array_fill(0, count($kette), '?'));
+            $inSicht = implode(',', array_fill(0, count($sichtbar), '?'));
+            $q->where(fn ($w) => $w->whereNull('lp.team_id')->orWhereRaw("lp.team_id IN ({$inKette})", $kette)
+                ->orWhereRaw("(lp.team_id IN ({$inSicht}) AND lp.team_id = {$besitzer})", $sichtbar));
+            $faelle = implode(' ', array_fill(0, count($kette), 'WHEN ? THEN ?'));
+            $bindings = [];
+            foreach ($kette as $rang => $teamId) {
+                array_push($bindings, $teamId, $rang);
+            }
+            $q->orderByRaw("CASE WHEN lp.team_id IS NULL THEN ? ELSE (CASE lp.team_id {$faelle} ELSE ? END) END", [count($kette) + 1, ...$bindings, count($kette)]);
+        }
+
+        return $q->orderByRaw('lp.status_valid_from IS NULL ASC')->orderByDesc('lp.status_valid_from')->orderByDesc('lp.id');
+    }
+
     /**
      * Preis-Trend je Item: aktuell vs. vorheriger aktiver Preis (gleiche Aktiv-Ordnung
      * wie activeFor, Offset 1 — Append-only stempelt den Vorgänger mit valid_to). Bulk

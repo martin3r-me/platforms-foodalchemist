@@ -43,9 +43,23 @@ class ReportExportService
         }
         $key = $this->preisTeam->id.':'.$la->id;
 
-        return array_key_exists($key, $this->preisMemo)
-            ? $this->preisMemo[$key]
-            : $this->preisMemo[$key] = app(PriceService::class)->activeFor((int) $la->id, $this->preisTeam);
+        if (array_key_exists($key, $this->preisMemo)) {
+            return $this->preisMemo[$key];
+        }
+        $p = app(PriceService::class)->activeFor((int) $la->id, $this->preisTeam);
+        if ($p === null && ($lp = app(PriceService::class)->letzterPreisFuer((int) $la->id, $this->preisTeam)) !== null) {
+            // Rückfall 27.10.: letzter bekannter Preis eines eingestellten Artikels — nicht gespeichert, nur für den Bericht, Quelle sichtbar
+            $p = (new \Platform\FoodAlchemist\Models\FoodAlchemistPrice)->forceFill(['price' => $lp['preis']]);
+            $p->setAttribute('preis_quelle', 'letzter_eingestellt');
+        }
+
+        return $this->preisMemo[$key] = $p;
+    }
+
+    /** Preisquelle für die Berichtsspalte: aktiv | letzter_eingestellt | null (kein Preis). */
+    private static function preisQuelle(?\Platform\FoodAlchemist\Models\FoodAlchemistPrice $p): ?string
+    {
+        return $p === null || $p->price === null ? null : ($p->getAttribute('preis_quelle') ?? 'aktiv');
     }
 
     /** @return array<string, bool|string> */
@@ -596,6 +610,7 @@ class ReportExportService
                         'qty' => FoodAlchemistSupplierItem::mengeVon($lead),   // korrigierte Menge vor Necta-qty
                         'unit_code' => $lead->unit_code,
                         'price' => $price?->price,
+                        'preis_quelle' => self::preisQuelle($price),
                     ] : null,
                     'tags' => $gp->setTags(),
                     'deklaration' => $this->gpDeklaration($gp),
@@ -629,6 +644,7 @@ class ReportExportService
         $items = FoodAlchemistSupplierItem::visibleToTeam($team)->where('foodalchemist_supplier_items.supplier_id', $supplier->id)
             ->select('foodalchemist_supplier_items.*')
             ->selectSub(app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team), 'aktiver_preis')
+            ->tap(fn ($q) => app(PriceService::class)->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $team))   // Rückfall eingestellter Artikel (27.10.)
             ->with(['structure.gp:id,name,lead_la_supplier_item_id'])
             ->orderBy('designation')->get();
         // dieselbe Form wie FoodAlchemistPrice::price (Cast decimal:4), damit der Bericht byte-gleich bleibt
@@ -658,7 +674,8 @@ class ReportExportService
                         'qty' => FoodAlchemistSupplierItem::mengeVon($item),
                         'unit_code' => $item->unit_code,
                         'is_discontinued' => (bool) $item->is_discontinued,
-                        'price' => $preisForm($item->aktiver_preis),   // Spec 84: Preis-Riegel (Unterabfrage über preisSichtFuer)
+                        'price' => $preisForm($item->aktiver_preis ?? $item->letzter_preis),   // Spec 84: Preis-Riegel; Rückfall letzter Preis (27.10.)
+                        'preis_quelle' => $item->aktiver_preis !== null ? 'aktiv' : ($item->letzter_preis !== null ? 'letzter_eingestellt' : null),
                         'gp' => $item->structure?->gp?->name,
                         'is_lead' => $item->structure?->gp !== null
                             && (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id,
@@ -1121,6 +1138,7 @@ class ReportExportService
                 'supplier' => $lead->supplier?->name,
                 'price' => $price?->price,
                 'price_partial' => $price?->price_partial,
+                'preis_quelle' => self::preisQuelle($price),
             ] : null,
         ];
     }

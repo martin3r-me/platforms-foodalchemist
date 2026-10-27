@@ -65,7 +65,7 @@
                                         <td>{{ $r['stellplatz'] ?? '' }}@if($r['stellplatz'] === null)<span class="{{ $leise }}">–</span>@endif</td>
                                         <td class="text-right tabular-nums {{ $r['menge'] < 0 ? 'text-[var(--fa-crit)]' : '' }}">{{ $r['anzeige'] }}</td>
                                         <td class="text-right tabular-nums">@if($r['preis'] !== null){{ number_format($r['preis'] * ($r['base_unit'] === 'Stk' ? 1 : 1000), 2, ',', '.') }} €@else<span class="{{ $leise }}">–</span>@endif</td>
-                                        <td class="text-right"><x-fa::money :value="$r['wert']" missing="ohne Preis" /></td>
+                                        <td class="text-right"><x-fa::money :value="$r['wert']" missing="ohne Preis" />@if($r['preis_letzter'] ?? false)<x-fa::badge tone="warn" class="ml-1" title="Bewertet mit dem letzten bekannten Preis, der Artikel ist eingestellt" data-letzter-preis>letzter Preis</x-fa::badge>@endif</td>
                                         <td class="{{ $leise }}">{{ $r['zuletzt'] ?? '–' }}</td>
                                     </tr>
                                 @endforeach

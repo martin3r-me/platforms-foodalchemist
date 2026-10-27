@@ -356,9 +356,14 @@
                                 @endif
                             </div>
                             <div class="shrink-0 text-right" data-la-preis>
-                                @if($la->aktiver_preis !== null)
+                                @if($la->aktiver_preis !== null || ($la->hat_letzten_preis ?? false))
+                                    @if($la->aktiver_preis === null)
+                                        {{-- Rückfall 27.10.: letzter bekannter Preis eines eingestellten Artikels, immer gekennzeichnet --}}
+                                        @php $lpk = \Platform\FoodAlchemist\Services\PriceService::letzterPreisKennzeichen($la->letzter_preis_ab, $la->lieferstatus_seit); @endphp
+                                        <x-fa::badge :tone="$lpk['warnung'] ? 'warn' : 'neutral'" title="{{ $lpk['text'] }}" data-letzter-preis>letzter Preis</x-fa::badge>
+                                    @endif
                                     <p class="flex items-center justify-end gap-1 text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">
-                                        <x-fa::money :value="$la->aktiver_preis" />
+                                        <x-fa::money :value="$la->aktiver_preis ?? $la->preis_effektiv" />
                                         @isset($preisTrend[$la->id])
                                             @if($preisTrend[$la->id]['plausibel'])
                                                 @php

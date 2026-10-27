@@ -593,9 +593,11 @@ class IngredientEditor extends Component
                 $ekProG = null;
                 $ekProStk = null;
                 $varianten = ['min' => null, 'avg' => null];
+                $ekLetzter = false;
                 if ($z->gp !== null) {
                     $gpPreise = $preisVarianten[(int) $z->gp->id] ?? ['lead' => null, 'min' => null, 'avg' => null, 'stk' => null];
                     $ekProG = $gpPreise['lead'];
+                    $ekLetzter = (bool) ($gpPreise['lead_letzter'] ?? false);   // Rückfall 27.10.: Kennzeichen an der Zeile
                     $ekProStk = $gpPreise['stk'] ?? null;
                     $varianten = ['min' => $gpPreise['min'], 'avg' => $gpPreise['avg']];
                 } elseif ($z->referencedRecipe?->ek_per_kg_eur !== null) {
@@ -636,6 +638,7 @@ class IngredientEditor extends Component
                     'is_value_relevant' => (bool) $z->is_value_relevant,
                     'lineage' => $z->match_method?->value,
                     'ek_pro_g' => $ekProG,
+                    'ek_letzter' => $ekLetzter,
                     'ek_pro_g_min' => $varianten['min'],
                     'ek_pro_g_avg' => $varianten['avg'],
                     // g/Stück fürs Live-Rechnen bei Zähl-Einheiten — GP: hinterlegtes

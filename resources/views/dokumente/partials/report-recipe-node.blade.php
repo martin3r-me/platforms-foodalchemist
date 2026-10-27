@@ -299,7 +299,7 @@
                                         {{ $la['supplier'] ?? '—' }} · {{ $la['article_number'] ?? '—' }}<br>
                                         <span class="muted">{{ $la['designation'] ?? '—' }}</span>
                                         @if(($la['price'] ?? null) !== null)
-                                            <br>{{ $money($la['price'], 2) }} / Kolli{{ ($la['qty'] ?? null) ? ' (' . $num($la['qty'], 3) . ' ' . ($la['unit_code'] ?? '') . ')' : '' }}
+                                            <br>{{ $money($la['price'], 2) }} / Kolli{{ ($la['qty'] ?? null) ? ' (' . $num($la['qty'], 3) . ' ' . ($la['unit_code'] ?? '') . ')' : '' }}{{ ($la['preis_quelle'] ?? null) === 'letzter_eingestellt' ? ' · letzter Preis, Artikel eingestellt' : '' }}
                                         @endif
                                     @else
                                         —

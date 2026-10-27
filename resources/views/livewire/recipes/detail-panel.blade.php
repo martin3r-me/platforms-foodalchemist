@@ -117,6 +117,7 @@
             $priced = $k !== null ? $k['n_priced'] : $rezept->ek_n_ingredients_priced;
             $ptotal = $k !== null ? $k['n_total'] : $rezept->ek_n_ingredients_total;
             $vollstaendig = $priced !== null && $ptotal !== null && $ptotal > 0 && $priced >= $ptotal;
+            $nLetzter = $k === null ? (int) ($rezept->ek_n_letzter_preis ?? 0) : (int) ($k['n_letzter'] ?? 0);
             // Auflage 4: eine Teilsumme ist nie ein Preis — „ab …" statt einer vollständigen Zahl
             $ab = $vollstaendig ? '' : 'ab ';
             // Kennzahlen (Kosten): EK je kg ist die eine Hauptzahl. Fehlende Werte werden gezeigt, nicht geschätzt.
@@ -125,7 +126,9 @@
                     'label' => 'EK je kg',
                     'value' => $ekKg !== null ? $ab . $zahl($ekKg) . ' €' : 'Preis fehlt',
                     'primary' => $ekKg !== null,
-                    'tone' => $ekKg === null ? 'crit' : null,
+                    'tone' => $ekKg === null ? 'crit' : ($nLetzter > 0 ? 'warn' : null),
+                    // Rückfall 27.10.: EK enthält letzte Preise eingestellter Artikel — nie still als normaler Preis
+                    'hint' => $nLetzter > 0 ? 'enthält ' . $nLetzter . ' ' . ($nLetzter === 1 ? 'letzten Preis' : 'letzte Preise') . ' eingestellter Artikel' : null,
                     'kpi' => 'ek-kg',
                 ],
                 [

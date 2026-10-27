@@ -26,7 +26,7 @@ class LeadLaRepickTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return 'Wählt die Lead-Lieferantenartikel der EIGENEN Grundprodukte nach aktueller Lead-LA-Strategie '
             . 'und Stamm-Lieferanten-Matrix neu. Strategie-/Matrix-Änderungen allein ändern keinen bestehenden '
             . 'Lead — erst dieses Tool (oder der Knopf in den Einkauf-Einstellungen). dry_run=true (Default) '
-            . 'liefert nur die Vorschau: Wechsel je GP (bisher/neu, Vergleichspreis, Anzahl Rezepte) plus Zähler. '
+            . 'liefert nur die Vorschau: Wechsel je GP (bisher/neu, Vergleichspreis, neu_preis_quelle aktiv | letzter_eingestellt, Anzahl Rezepte) plus Zähler. '
             . 'Manuell gesetzte Leads und Kandidaten ohne Preis bleiben. dry_run=false übernimmt alle Wechsel '
             . 'oder nur gp_ids und rechnet die nutzenden Rezepte neu. Der Lead ist global — er gilt für alle Teams.';
     }

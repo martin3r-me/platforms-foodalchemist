@@ -252,6 +252,8 @@
                         <x-fa::badge tone="crit" x-show="preisFehlt(zeile)" x-cloak title="Kein Preis hinterlegt, diese Zutat fehlt im Wareneinsatz" data-ek-unpriced>Preis fehlt</x-fa::badge>
                         <span x-show="!preisFehlt(zeile)" x-text="ekAnzeige(zeile)"
                               :class="ohnePreis(zeile) || zeilenEk(zeile) === null ? 'text-[var(--fa-ink-3)]' : 'font-medium text-[var(--fa-ink)]'"></span>
+                        {{-- Rückfall 27.10.: Lead-Preis ist der letzte bekannte Preis eines eingestellten Artikels --}}
+                        <span x-show="zeile.ek_letzter" x-cloak class="ml-1 text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" title="letzter bekannter Preis · Artikel eingestellt" data-ek-letzter>letzter Preis</span>
                     </td>
                     <td class="num text-[var(--fa-ink-2)]" data-zeilen-ek-min>
                         <span x-text="ekAnzeige(zeile, 'ek_pro_g_min')"></span>

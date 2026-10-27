@@ -286,7 +286,7 @@
                         $kachel('Lieferant', $lead['supplier'] ?? null),
                         $kachel('Artikel-Nr.', $lead['article_number'] ?? null),
                         $kachel('Gebinde', trim(($lead['packaging_unit'] ?? '') . ' ' . (($lead['qty'] ?? null) !== null ? $zahl($lead['qty']) : '') . ' ' . ($lead['unit_code'] ?? ''))),
-                        $kachel('Preis', ($lead['price'] ?? null) !== null ? $money($lead['price']) : null),
+                        $kachel('Preis', ($lead['price'] ?? null) !== null ? $money($lead['price']) . (($lead['preis_quelle'] ?? null) === 'letzter_eingestellt' ? ' (letzter Preis, Artikel eingestellt)' : '') : null),
                         $kachel('Bezeichnung', $lead['designation'] ?? null, 'wide'),
                     ]) !!}
                 @else
@@ -353,7 +353,7 @@
             <section>
                 <h2>Artikel</h2>
                 <table>
-                    <thead><tr><th width="11%">Art.-Nr.</th><th width="25%">Bezeichnung</th><th width="11%">Gebinde</th><th width="10%" class="num">Preis</th><th>Grundprodukt</th><th width="13%">Hauptartikel</th><th width="10%">Status</th></tr></thead>
+                    <thead><tr><th width="11%">Art.-Nr.</th><th width="25%">Bezeichnung</th><th width="11%">Gebinde</th><th width="10%" class="num">Preis</th><th width="9%">Preisquelle</th><th>Grundprodukt</th><th width="13%">Hauptartikel</th><th width="10%">Status</th></tr></thead>
                     <tbody>
                         @forelse($supplier['items'] as $item)
                             <tr>
@@ -361,12 +361,13 @@
                                 <td>{{ $item['designation'] ?? '—' }}</td>
                                 <td>{{ trim(($item['packaging_unit'] ?? '') . ' ' . (($item['qty'] ?? null) !== null ? $zahl($item['qty']) : '') . ' ' . ($item['unit_code'] ?? '')) ?: '—' }}</td>
                                 <td class="num">{{ $money($item['price'] ?? null) }}</td>
+                                <td>{{ match ($item['preis_quelle'] ?? null) { 'aktiv' => 'aktuell', 'letzter_eingestellt' => 'letzter Preis', default => '—' } }}</td>
                                 <td>{{ $item['gp'] ?? '—' }}</td>
                                 <td>{{ $item['is_lead'] ? 'ja' : '—' }}</td>
                                 <td>{{ $item['is_discontinued'] ? 'ausgelistet' : 'aktiv' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="muted">Keine Artikel.</td></tr>
+                            <tr><td colspan="8" class="muted">Keine Artikel.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
