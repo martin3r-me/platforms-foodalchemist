@@ -81,6 +81,7 @@ class IngredientMatchService
         bool $preferRaw = false,
         string $bio = 'neutral',
         bool $basisVariante = true,   // 27.10.: Basisvarianten-Regel (Bindung); reine Erkennung (Zukauf/Teilfertig) schaltet sie ab
+        string $convenience = 'standard',   // 27.10. (d): Convenience-Leitplanke — teil/voll erlaubt das Zukauf-GP für Basiskomponenten
     ): array {
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
@@ -96,6 +97,12 @@ class IngredientMatchService
         $this->tiebreakMemo = [];
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $this->aliasTokens = null;
+        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
+        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13)
+        $this->basisKomponente = $basisVariante && $this->basiskomponenteOhneZukauf($team, $ingredientName, $convenience);
+        if ($this->basisKomponente) {
+            $mode = 'sub_recipe_first';
+        }
 
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
         if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
@@ -209,15 +216,84 @@ class IngredientMatchService
             }
         }
 
+        if ($this->basisKomponente) {
+            return $this->alsBasiskomponente($team, $ingredientName, $final, $pref, $bio);
+        }
+
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
             : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio) : $final);
     }
 
+    /** Basiskomponenten-Lauf (27.10. d) der aktuellen Entscheidung — steuert poolLauf und den Abschluss. */
+    private bool $basisKomponente = false;
+
+    /** Zukauf-Signale einer Basiskomponenten-Zeile (Kurator 27.10. d): Einkaufsform, Konzentrat, Glas, „Zukauf“/„fertig“. */
+    private const ZUKAUF_SIGNAL = ['pulver', 'paste', 'konzentrat', 'glas', 'zukauf', 'fertig', 'fertigprodukt', 'instant', 'granulat', 'tk', 'convenience'];
+
+    /** @var array<int, list<string>> bekannte Marken (GP-Klammer-Zusatz) je Team, normalisiert */
+    private array $markenCache = [];
+
+    /**
+     * Basiskomponente ohne Zukauf-Signal und ohne Convenience-Leitplanke (Dominique 27.10. d) → Unterrezept bzw. Stub, kein Zukauf-GP.
+     * Zukauf-Signal: Pulver/Paste/Konzentrat/Glas/„Zukauf“/„fertig“, eine Einkaufsform (TK, trocken, konserviert) oder eine bekannte Marke.
+     */
+    public function basiskomponenteOhneZukauf(Team $team, string $text, string $convenience = 'standard'): bool
+    {
+        if (in_array($convenience, ['teil_convenience', 'voll_convenience'], true) || ! $this->heuristik->istBasiskomponente($text)) {
+            return false;
+        }
+        $tokens = $this->engine->tokenize($text);
+        if (array_filter($tokens, fn ($t) => in_array($t, self::ZUKAUF_SIGNAL, true) || str_ends_with($t, 'pulver') || str_ends_with($t, 'konzentrat')) !== []
+            || in_array($this->engine->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
+            return false;
+        }
+        // Markenname in Klammern („Geflügelfond (Knorr)“): bekannt aus dem Klammer-Zusatz der GPs
+        if (preg_match_all('/\(([^)]+)\)/u', $text, $m) > 0) {
+            $marken = $this->markenCache[$team->id] ??= FoodAlchemistGp::visibleToTeam($team)->whereNotNull('zusatz')->where('zusatz', '!=', '')
+                ->distinct()->pluck('zusatz')->map(fn ($z) => implode(' ', $this->engine->tokenize((string) $z)))->filter()->values()->all();
+            foreach ($m[1] as $klammer) {
+                if (in_array(implode(' ', $this->engine->tokenize($klammer)), $marken, true)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Abschluss einer Basiskomponenten-Zeile: Basisrezept-Treffer bleibt (`basiskomponente` = rezept); ein GP aus der Rohware/Würzware
+     * (nicht WG 13 Convenience & Komponenten, nicht WG 09 Teige/Backwaren) war ein Fehlalarm des Typ-Worts (Sojasauce, Crème fraîche, Spargel) und läuft normal weiter;
+     * sonst kein Zukauf-GP — FuzzyLow (Review mit Vorschlag) bzw. offen, `basiskomponente` = stub (Regelwerk Basisrezepte §4 F4.1).
+     */
+    private function alsBasiskomponente(Team $team, string $ingredientName, array $final, string $pref, string $bio): array
+    {
+        $ok = $final['score'] >= MatchHeuristics::MIN_MATCH_SCORE;
+        if ($ok && ($final['target'] ?? null) === 'sub_recipe') {
+            return $final + ['basiskomponente' => 'rezept'];
+        }
+        if ($ok && ($final['target'] ?? null) === 'gp'
+            && ! in_array((string) FoodAlchemistGp::query()->whereKey((int) $final['gp_id'])->value('commodity_group_code'), ['13', '09'], true)) {
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio);
+        }
+
+        return ($ok && ($final['target'] ?? null) === 'gp' ? ['status' => MatchBand::FuzzyLow] + $final : $this->noMatch($final['score'])) + ['basiskomponente' => 'stub'];
+    }
+
     /** 4.4k/l — Pool-Priorität (Halbfabrikat-Gate × Modus, §4.2) — v1-Kernlauf. */
     private function poolLauf(Team $team, array $queryTokens, ?string $querySlug, string $mode, string $pref, bool $preferRaw, string $bio): array
     {
+        // 27.10. (d): Basiskomponente — ein Basisrezept ab der Sub-Schwelle gewinnt immer, auch ohne Halbfabrikat-Marker (Marinade, Teig, Creme)
+        if ($this->basisKomponente) {
+            $subBest = $this->bestSubrecipeMatch($team, $queryTokens, $querySlug);
+            if (($subBest['score'] ?? 0.0) >= MatchHeuristics::SUB_PRIORITY_THRESHOLD) {
+                return $subBest;
+            }
+
+            return $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio) ?? $subBest ?? $this->noMatch(0.0);
+        }
         if ($this->heuristik->queryIstHalbfabrikat($queryTokens)) {
             $subBest = $this->bestSubrecipeMatch($team, $queryTokens, $querySlug);
             $gpBest = $this->bestGpMatch($team, $queryTokens, $querySlug, $pref, $preferRaw, $bio);
@@ -646,7 +722,10 @@ class IngredientMatchService
             // (marke_offen) hat keinen Vorteil (Kurator 26.10.). Namensflags (Bio …) bleiben und entscheiden wie bisher im Varianten-Rang.
             $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);
             $combined = trim($scoreName . ' ' . ($gp->main_ingredient_display ?? ''));
-            $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
+            // 27.10. (d): nennt die Zeile genau die Marke dieses GP („Geflügelfond Pulver (Knorr)“), fehlt das Marken-Wort im Score nicht
+            $marke = trim((string) $gp->zusatz) === '' ? [] : $this->engine->tokenize((string) $gp->zusatz);
+            $qTokens = $marke !== [] && array_diff($marke, $queryTokens) === [] && array_diff($queryTokens, $marke) !== [] ? array_values(array_diff($queryTokens, $marke)) : $queryTokens;
+            $score = $this->scoreMitFloor($qTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
 
             $take = false;
             if ($best === null) {

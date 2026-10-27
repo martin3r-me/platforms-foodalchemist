@@ -54,11 +54,12 @@ it('ohne genannte Variante: nie automatisch Bio, Marke oder Zuschnitt — Basisv
 ]);
 
 it('Review statt Automatik trägt die offene Variante mit', function () {
-    $r = ($this->m)('Rinderbrühe');
+    // 27.10. (d): „Rinderbrühe“ ist seitdem Basiskomponente (Unterrezept/Stub) — die Varianten-Begründung zeigt Rohrohrzucker (nur Bio im Bestand)
+    $r = ($this->m)('Rohrohrzucker');
 
     expect($r['status'])->toBe(MatchBand::FuzzyLow)
-        ->and($r['gp_id'])->toBe($this->g['bruehe']->id)                       // die Shortlist bleibt, nur nicht automatisch
-        ->and(implode(' ', $r['variante_offen'] ?? []))->toContain('Marke: Knorr');
+        ->and($r['gp_id'])->toBe($this->g['zuckerBio']->id)                    // die Shortlist bleibt, nur nicht automatisch
+        ->and($r['variante_offen'] ?? [])->toBe(['Bio']);
 });
 
 it('nennt der Text die Variante, gewinnt sie und die Regel stuft nicht herab', function (string $text, string $erwartet) {
@@ -81,10 +82,10 @@ it('§2 Verarbeitungs-Reduktion: Küchen-Zuschnitt führt auf die Roh-Form, Schn
 ]);
 
 /** Dominique 27.10. — eigene Ware mit Warengruppe/Unterkategorie. */
-function bvGp(int $teamId, string $name, string $slug, ?string $zustand, string $wg, ?string $sub = null): FoodAlchemistGp
+function bvGp(int $teamId, string $name, string $slug, ?string $zustand, string $wg, ?string $sub = null, array $extra = []): FoodAlchemistGp
 {
     return FoodAlchemistGp::create(['team_id' => $teamId, 'name' => $name, 'gp_key' => 'bvw-' . bin2hex(random_bytes(4)) . '||', 'status' => 'approved',
-        'requires_la' => true, 'commodity_group_code' => $wg, 'sub_category' => $sub, 'condition' => $zustand, 'main_ingredient_slug' => $slug]);
+        'requires_la' => true, 'commodity_group_code' => $wg, 'sub_category' => $sub, 'condition' => $zustand, 'main_ingredient_slug' => $slug] + $extra);
 }
 
 it('„gemahlen“ ist bei Gewürzen und Nüssen Zukauf (Variante genannt), „geröstet“ bei Gewürzen Küchenarbeit → Roh-Form', function () {
@@ -126,4 +127,57 @@ it('Geschwister nur mit derselben Hauptzutat — „Zitronengraspulver“ wird n
     bvGp($this->rootTeam->id, 'Zitronengras: frisch', 'zitronengras', 'frisch', '03', '03.1 Kräuter');
 
     expect(($this->m)('Zitronengraspulver')['gp_id'])->toBe($pulver->id);
+});
+
+it('(a) einziger Kandidat, Unterschied nur Naturform oder §8-Pflichtangabe → automatisch', function () {
+    $t = $this->rootTeam->id;
+    $mehl = bvGp($t, 'Weizenmehl: trocken, Type 405', 'weizenmehl', 'trocken', '07', '07.2 Getreide');
+    bvGp($t, 'Weizenmehl: trocken, Type 550 / (Bio)', 'weizenmehl', 'trocken', '07', '07.2 Getreide', ['bio' => 'bio']);
+    $agar = bvGp($t, 'Agar Agar: Pulver, trocken', 'agar_agar', 'trocken', '12', '12.2 Bindemittel');
+    $milch = bvGp($t, 'Vollmilch: frisch, 3,5 % Fett', 'vollmilch', 'frisch', '06', '06.1 Milchprodukte');
+    $muskat = bvGp($t, 'Muskat: gemahlen, trocken', 'muskat', 'trocken', '10', '10.1 Gewürze');
+    bvGp($t, 'Muskat: gemahlen, trocken / (Bio)', 'muskat', 'trocken', '10', '10.1 Gewürze', ['bio' => 'bio']);
+    $salz = bvGp($t, 'Meersalz: grob, trocken', 'meersalz', 'trocken', '10', '10.5 Salze');
+    bvGp($t, 'Meersalz: geräuchert, trocken', 'meersalz', 'trocken', '10', '10.5 Salze');
+    $kondens = bvGp($t, 'Kondensmilch: konserviert, extra süß', 'kondensmilch', 'konserviert', '06', '06.1 Milchprodukte');
+
+    expect(($this->auto)('Weizenmehl'))->toBe($mehl->id)
+        ->and(($this->auto)('Agar-Agar'))->toBe($agar->id)
+        ->and(($this->auto)('Vollmilch'))->toBe($milch->id)
+        ->and(($this->auto)('Muskat'))->toBe($muskat->id)
+        ->and(($this->auto)('Meersalz'))->toBe($salz->id)
+        ->and(($this->auto)('Kondensmilch'))->toBe($kondens->id);
+});
+
+it('(a) mehrere Kandidaten, die sich nur in der Pflichtangabe unterscheiden → Review; (b) Bio/Marke/Sorte/Herkunft auch einzeln → Review', function () {
+    $t = $this->rootTeam->id;
+    bvGp($t, 'Sauerrahm: frisch, 10 % Fett', 'sauerrahm', 'frisch', '06', '06.1 Milchprodukte');
+    bvGp($t, 'Sauerrahm: frisch, 20 % Fett', 'sauerrahm', 'frisch', '06', '06.1 Milchprodukte');
+    bvGp($t, 'Rote Bete Saft: konserviert / (Bio)', 'rote_bete_saft', 'konserviert', '15', null, ['bio' => 'bio']);
+    bvGp($t, 'Rotwein: konserviert, Spätburgunder', 'rotwein', 'konserviert', '15');
+    bvGp($t, 'Dashi: trocken / (Fueki)', 'dashi', 'trocken', '10', '10.1 Gewürze', ['zusatz' => 'Fueki']);
+
+    expect(($this->m)('Sauerrahm')['status'])->toBe(MatchBand::FuzzyLow)
+        ->and(($this->auto)('Rote Bete Saft'))->toBeNull()
+        ->and(($this->auto)('Rotwein'))->toBeNull()
+        ->and(($this->auto)('Dashi'))->toBeNull();
+});
+
+it('(c) Fleisch-Teilstück ist eine genannte Variante, keine Küchenarbeit', function () {
+    $t = $this->rootTeam->id;
+    bvGp($t, 'Rinderfilet: frisch', 'rinderfilet', 'frisch', '04', '04.1 Rind');
+    $mitte = bvGp($t, 'Rinderfilet: Mittelstück, frisch', 'rinderfilet', 'frisch', '04', '04.1 Rind');
+    bvGp($t, 'Kalbsrücken: frisch', 'kalbsruecken', 'frisch', '04', '04.1 Kalb');
+    $lammMitte = bvGp($t, 'Lammrücken: Mittelstück, frisch, Neuseeland', 'lammruecken', 'frisch', '04', '04.3 Lamm');
+    $lamm = bvGp($t, 'Lammrücken: frisch', 'lammruecken', 'frisch', '04', '04.3 Lamm');
+
+    $ohneGp = ($this->m)('Kalbsrücken Mittelstück');
+    $herkunft = ($this->m)('Lammrücken Mittelstück');
+    expect(($this->auto)('Rinderfilet: frisch, Mittelstueck'))->toBe($mitte->id)
+        ->and(($this->auto)('Rinderfilet Mittelstück'))->toBe($mitte->id)
+        // kein GP mit dem Teilstück → Review, nie das Stück ohne Teilstück
+        ->and($ohneGp['status'])->toBe(MatchBand::FuzzyLow)
+        // Teilstück nur mit ungenannter Herkunft → Review auf dem Teilstück-GP, nicht „Lammrücken: frisch“
+        ->and($herkunft['status'])->toBe(MatchBand::FuzzyLow)->and($herkunft['gp_id'])->toBe($lammMitte->id)
+        ->and(($this->auto)('Lammrücken'))->toBe($lamm->id);
 });

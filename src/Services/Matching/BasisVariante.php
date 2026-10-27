@@ -32,6 +32,17 @@ final class BasisVariante
     /** §2 F2.1: Convenience-Zukauf erkennbar — dann ist die Schnittware gemeint („Zwiebelwürfel TK“, „vorgeschnitten“, Dose). */
     private const PARA2_ZUKAUF = ['vorgeschnitten', 'vorgegart', 'vorgekocht', 'schnittware', 'fertig', 'convenience'];
 
+    /**
+     * Dominique 27.10. (a): Naturform der Ware — beim einzigen Kandidaten kein Grund für den Review (Agar → Pulver, Meersalz → grob).
+     * Wert → Bedingung am GP: null = immer; 'gewuerz' = „gemahlen“ ist Zukauf (WG 10/12.3/15.8) oder Pulverware; 'salz'/'passata' = Hauptzutat.
+     */
+    private const NATURFORM = ['pulver' => null, 'pulverfoermig' => null, 'fluessig' => null, 'knolle' => null, 'wurzel' => null,
+        'gemahlen' => 'gewuerz', 'grob' => 'salz', 'fein' => 'salz', 'pueriert' => 'passata'];
+
+    /** Dominique 27.10. (c): Fleisch-Teilstücke (WG 04, Bestand + Kurator-Liste) sind genannte Varianten, keine Küchenarbeit nach §2. */
+    private const TEILSTUECKE = ['mittelstueck', 'kopfstueck', 'schwanzstueck', 'kopf', 'ruecken', 'keule', 'brust', 'huefte', 'oberschale',
+        'unterschale', 'nuss', 'schulter', 'nacken', 'bauch', 'seite', 'lende', 'haxe'];
+
     /** Zukauf-Signal der aktuellen Zeile (§2 F2.1), je pruefe() gesetzt. */
     private bool $zukauf = false;
 
@@ -81,21 +92,49 @@ final class BasisVariante
 
             return $roh === null ? $treffer : ['status' => MatchBand::FuzzyLow, 'variante_offen' => ['geröstet oder roh']] + $treffer;
         }
+        // Fleisch-Teilstück (Dominique 27.10. c): ein genanntes Teilstück ist eine genannte Variante — Geschwister ohne dieses Teilstück
+        // scheiden aus („Rinderfilet: frisch, Mittelstück“ ist nie „Rinderfilet: frisch“). Volle Tokens: ingredientTokens kann Zuschnitt-Wörter verlieren.
+        $teil = (string) $gewaehlt->commodity_group_code === '04' ? array_values(array_intersect($this->engine->tokenize($zutat), self::TEILSTUECKE)) : [];
+        if ($teil !== []) {
+            $geschwister = $geschwister->filter(fn ($g) => array_diff($teil, $this->engine->tokenize((string) $g->name)) === [])->values();
+            if (! $geschwister->contains('id', $gewaehlt->id)) {
+                $sauber = $geschwister->filter(fn ($g) => $this->hart($g, $query, $bioGewollt) === [])->values();
+                if ($sauber->count() === 1) {
+                    $b = $sauber->first();
+
+                    return ['gp_id' => (int) $b->id, 'gp_name' => (string) $b->name] + $treffer;
+                }
+                $vorschlag = $geschwister->first();
+
+                return ['status' => MatchBand::FuzzyLow, 'variante_offen' => $vorschlag === null ? ['Teilstück: ' . implode(' ', $teil) . ' (kein GP)']
+                    : $this->ungenannt($vorschlag, $query, $bioGewollt)] + ($vorschlag === null ? [] : ['gp_id' => (int) $vorschlag->id, 'gp_name' => (string) $vorschlag->name]) + $treffer;
+            }
+        }
         // Nennt die Zeile die Variante des Treffers ausdrücklich (Zuschnitt mit Zukauf-Signal, Marke, Bio, Fettstufe …), bleibt er
         if ($this->ungenannt($gewaehlt, $query, $bioGewollt) === [] && $this->traegtVariante($gewaehlt) && ! ($bioGewollt && ! $this->istBio($gewaehlt))) {
             return $this->haltbarPruefen($treffer, $gewaehlt, $geschwister, $query, $qZustand, $bioGewollt, $wunsch);
         }
-        $basis = $geschwister->filter(fn ($g) => $this->ungenannt($g, $query, $bioGewollt) === []);
-        if ($qZustand !== null) {
-            $basis = $basis->filter(fn ($g) => mb_strtolower((string) $g->condition) === mb_strtolower($qZustand) || trim((string) $g->condition) === '');
-        }
-        $bevorzugt = $basis->filter(fn ($g) => in_array(mb_strtolower((string) $g->condition), $wunsch, true));
-        if ($qZustand === null && $bevorzugt->isNotEmpty()) {
-            $basis = $bevorzugt;
-        }
-        $bioBasis = $basis->filter(fn ($g) => $this->istBio($g));
-        if ($bioGewollt && $bioBasis->isNotEmpty()) {
-            $basis = $bioBasis;
+        $waehle = function (callable $offen) use ($geschwister, $qZustand, $wunsch, $bioGewollt) {
+            $basis = $geschwister->filter(fn ($g) => $offen($g) === []);
+            if ($qZustand !== null) {
+                $basis = $basis->filter(fn ($g) => mb_strtolower((string) $g->condition) === mb_strtolower($qZustand) || trim((string) $g->condition) === '');
+            }
+            $bevorzugt = $basis->filter(fn ($g) => in_array(mb_strtolower((string) $g->condition), $wunsch, true));
+            if ($qZustand === null && $bevorzugt->isNotEmpty()) {
+                $basis = $bevorzugt;
+            }
+            $bioBasis = $basis->filter(fn ($g) => $this->istBio($g));
+
+            return $bioGewollt && $bioBasis->isNotEmpty() ? $bioBasis : $basis;
+        };
+        $basis = $waehle(fn ($g) => $this->ungenannt($g, $query, $bioGewollt));
+        // (a) keine Basis ohne jedes Merkmal: Naturform (Pulver, gemahlen, grob …) und §8-Pflichtangabe (Mehl-Type, Fettstufe, Kakao-%)
+        // zählen beim EINZIGEN Kandidaten nicht als Variante; mehrere solche Kandidaten → Review (der §5-Default lief vorher)
+        if ($basis->isEmpty()) {
+            $basis = $waehle(fn ($g) => $this->hart($g, $query, $bioGewollt));
+            if ($basis->count() > 1) {
+                return ['status' => MatchBand::FuzzyLow, 'variante_offen' => $this->ungenannt($gewaehlt, $query, $bioGewollt)] + $treffer;
+            }
         }
 
         if ($basis->contains('id', $gewaehlt->id)) {
@@ -126,6 +165,56 @@ final class BasisVariante
         $frischeBasis = $geschwister->first(fn ($g) => mb_strtolower((string) $g->condition) === 'frisch' && $this->ungenannt($g, $query, $bioGewollt) === []);
 
         return $frischeBasis !== null ? $treffer : ['status' => MatchBand::FuzzyLow, 'variante_offen' => ['Zustand: ' . $gp->condition . ' (kein frisches GP)']] + $treffer;
+    }
+
+    /**
+     * Ungenannte Merkmale ohne Naturform und §8-Pflichtangabe (Dominique 27.10. a) — was bleibt, ist Bio, Marke, Sorte, Herkunft, Zuschnitt …
+     *
+     * @return list<string>
+     */
+    private function hart(FoodAlchemistGp $gp, array $query, bool $bioGewollt): array
+    {
+        return array_values(array_filter($this->ungenannt($gp, $query, $bioGewollt), function (string $eintrag) use ($gp) {
+            [$art, $wert] = array_pad(explode(': ', $eintrag, 2), 2, '');
+
+            return ! match ($art) {
+                'Pflichtangabe' => $this->pflichtangabeWeich($gp, $wert) || $this->naturform($gp, $wert),
+                'Verarbeitung', 'Zuschnitt' => $this->naturform($gp, $wert),
+                default => false,
+            };
+        }));
+    }
+
+    /** §8.11 Mehl-Type, §8.1 Fettstufe, §8.10 Kakaoanteil; Zucker-Angabe nur bei Milchprodukten (Kondensmilch „extra süß“). */
+    private function pflichtangabeWeich(FoodAlchemistGp $gp, string $wert): bool
+    {
+        $w = mb_strtolower(trim($wert));
+
+        return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$/u', $w)
+            || ((string) $gp->commodity_group_code === '06' && in_array($w, ['extra süß', 'gezuckert', 'gesüßt'], true));
+    }
+
+    /** Jedes Wort des Werts ist eine Naturform dieser Ware. */
+    private function naturform(FoodAlchemistGp $gp, string $wert): bool
+    {
+        $tokens = $this->engine->tokenize($wert);
+        $haupt = $this->hauptzutat($gp);
+        foreach ($tokens as $t) {
+            if (! array_key_exists($t, self::NATURFORM)) {
+                return false;
+            }
+            $ok = match (self::NATURFORM[$t]) {
+                null => true,
+                'gewuerz' => $this->gemahlenIstZukauf($gp) || str_contains($haupt, 'pulver'),
+                'salz' => str_contains($haupt, 'salz'),
+                'passata' => str_contains($haupt, 'passata') || str_contains($haupt, 'passiert'),
+            };
+            if (! $ok) {
+                return false;
+            }
+        }
+
+        return $tokens !== [];
     }
 
     /** Hauptzutat (Teil vor dem Doppelpunkt, ohne Marken-/Flag-Klammer), normalisiert. */

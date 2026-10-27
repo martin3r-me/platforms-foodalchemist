@@ -370,7 +370,7 @@ class RecipeGeneratorService
                 }
                 $direktArtikel = $vkModus && ! $brotImGericht && ($kleinstmenge !== null || $this->heuristik->istDirektArtikelKandidat($text));
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
-                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
+                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience);
 
                 // Band-Gate (2026-08-06, Rahmeis-in-Tomatensuppe): FuzzyLow heißt laut
                 // GL-04 §4.1 wörtlich „Review nötig" — der Generator ist aber der teuerste
@@ -398,8 +398,8 @@ class RecipeGeneratorService
                 // deckt die Kurzform »Gel:«, die kein Substring-Marker trifft (Symptom E, Ginger-Beer-Gel).
                 $prefixSub = ! $direktArtikel && $this->heuristik->hatSubZubereitungsPraefix($text);
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
-                // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
-                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true) || $brotImGericht);
+                // auch einen GP-Treffer. Dominique 27.10. (d): mit Zukauf-Signal („Geflügelfond Pulver (Knorr)“) oder Convenience-Leitplanke darf es Zukauf-GP sein.
+                $strongSub = ! $direktArtikel && ((($nameHalbfabrikat || $prefixSub) && $this->matcher->basiskomponenteOhneZukauf($team, $text, $convenience)) || ($llmSub === true) || $brotImGericht);
                 // Teller-Rolle im VK-Gericht (T4, Vokabular gericht.teller_rolle) — Convenience-
                 // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
                 // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden

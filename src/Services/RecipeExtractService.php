@@ -161,6 +161,25 @@ class RecipeExtractService
             }
         }
 
+        // 2b. Basiskomponenten (Dominique 27.10. d): „Geflügelfond“ ohne Zukauf-Signal ist ein Unterrezept — ohne Basisrezept im Bestand
+        //     als Stub anlegen und verknüpfen (Regelwerk Basisrezepte §4 F4.1: Auto-Stub, Eltern bleibt Entwurf), nie ein Zukauf-GP.
+        $stubs = [];
+        $lp = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($parameter);
+        $matcher = app(IngredientMatchService::class);
+        foreach ($zutaten as $i => $z) {
+            $text = trim((string) ($z['text'] ?? $z['name'] ?? ''));
+            if ($text === '' || ! empty($z['sub_rezept_id']) || ! $matcher->basiskomponenteOhneZukauf($team, $text, $lp['convenience'])) {
+                continue;
+            }
+            $t = $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience']);
+            if (($t['basiskomponente'] ?? null) !== 'stub') {
+                continue;   // Basisrezept im Bestand (auch zur Prüfung) — der Generator bindet bzw. legt es zur Prüfung vor
+            }
+            $stub = app(RecipeService::class)->createSubRecipeStub($team, $text);
+            $zutaten[$i] += ['sub_rezept_id' => (int) $stub['recipe']->id, 'sub_rezept' => true, 'sub_rezept_eigen' => true];
+            $stubs[] = ['id' => (int) $stub['recipe']->id, 'name' => (string) $stub['recipe']->name, 'neu' => $stub['neu']];
+        }
+
         // 3. Parent geerdet anlegen (kiRezeptOverride = kein LLM, aber voller Resolver/Recompute).
         $name = trim((string) ($extrakt['name'] ?? '')) ?: 'Importiertes Rezept';
         $override = [
@@ -175,6 +194,7 @@ class RecipeExtractService
             $team, $name, $parameter, kiRezeptOverride: $override, vkModus: $vkModus, createdVia: 'import',
         );
         $result['sub_recipes'] = $subInfo;
+        $result['stubs'] = $stubs;
 
         return $result;
     }

@@ -218,7 +218,9 @@ class RecipeOneShotService
                 // Spec 80 B4: eine Basisrezept-Zeile („Püree: Petersilienwurzel") ohne Kaskaden-Dependency (Einzel-
                 // Generierung, Tiefen-/Step-Budget, von Hand offen gelassen) bleibt eine Lücke. Vorher mintete die
                 // Anreicherung — seit Paket 10 also der Freigabeknopf — sie still auf eine Rohware.
-                if ($heuristik->istBasisrezeptZeile($text)) {
+                // Dominique 27.10. (d): auch eine Basiskomponente ohne Zukauf-Signal („Geflügelfond“) wird nie auf ein Zukauf-GP gemintet
+                if ($heuristik->istBasisrezeptZeile($text) || app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)
+                    ->basiskomponenteOhneZukauf($team, $text, \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken)['convenience'])) {
                     $basisrezeptLuecken++;
 
                     continue;

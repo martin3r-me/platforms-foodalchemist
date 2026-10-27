@@ -55,7 +55,7 @@ class LaFirstGpService
             // Bestands-GP; FuzzyLow → kein Mint und keine stille Bindung (Zeile bleibt offen, Review mit Shortlist). Mint nur ohne Bestandstreffer.
             // Leitplanken des Laufs (Bio/Frische/Convenience, Kurator 27.10.) — dieselbe Abbildung wie der Generator; ohne: konventionell, frisch
             $lp = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken);
-            $bestand = app(IngredientMatchService::class)->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio']);
+            $bestand = app(IngredientMatchService::class)->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience']);
             $bestandMoeglich = false;
             if (($bestand['target'] ?? null) === 'gp' && ($bestand['gp_id'] ?? null) !== null) {
                 if (IngredientMatchService::istAutomatischVerdrahtbar($bestand)) {
