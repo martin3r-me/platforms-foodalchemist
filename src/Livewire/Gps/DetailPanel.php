@@ -22,6 +22,7 @@ use Platform\FoodAlchemist\Support\Curate;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatGpAromaKi;            // Aroma: Anker + Profil per KI (ein Weg mit dem GP-Dialog)
 
     /** Spec 65: gleiche Sperre wie der GP-Editor (Ziel gp) — auch eingebettet als Kartei im GP-Dialog. */
     protected function sperrZiel(): ?array
@@ -388,6 +389,19 @@ class DetailPanel extends Component
     }
 
     /** Curate-Gate + frisches GP — KI-Schätzung ist eine globale Katalog-Aktion (D1). */
+    protected function aromaGp(): ?FoodAlchemistGp
+    {
+        $team = Auth::user()?->currentTeamRelation;
+
+        return $team !== null && $this->gpId !== null ? FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($this->gpId) : null;
+    }
+
+    protected function aromaMeldung(?string $fehler, ?string $hinweis = null): void
+    {
+        $this->fehler = $fehler;
+        $this->hinweis = $hinweis;
+    }
+
     private function kuratierbaresGp(): ?FoodAlchemistGp
     {
         $this->fehler = null;
@@ -591,6 +605,8 @@ class DetailPanel extends Component
                 : collect(),
             // Spec 53 Paket J: Aroma-Anker als Chip + „weitere GPs mit diesem Anker" (Reverse-Lookup,
             // kein Graph — s. PR-Body für die spätere Anker-zentrierte Netz-Idee).
+            // 27.10.2026: Geschmacksprofil (Rohprofil) auch in der Detail-Ansicht — mit „Mit KI schätzen" + „Anker vorschlagen"
+            'sensorik' => ($gp !== null && $vollmodus) ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($gp->id) : null,
             'gpAnker' => ($gp !== null && $vollmodus)
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->gpAnkerAlle($gp->id)
                 : collect(),

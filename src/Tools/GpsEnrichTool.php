@@ -47,7 +47,7 @@ class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'felder' => [
                     'type' => 'array',
                     'items' => ['type' => 'string', 'enum' => self::FELDER],
-                    'description' => 'Optional: Teilmenge der Anreicherungs-Felder. Weggelassen = Standard (condition, tags, anker); naehrwerte nur explizit. Allergene und Zusatzstoffe kommen ausschließlich aus den Lieferantenartikeln.',
+                    'description' => 'Optional: Teilmenge der Anreicherungs-Felder. Weggelassen = Standard (condition, tags, anker, sensorik — sensorik nur bei fehlendem Geschmacksprofil, anker/sensorik zuerst von einigen Geschwister-GPs); naehrwerte nur explizit. Allergene und Zusatzstoffe kommen ausschließlich aus den Lieferantenartikeln.',
                 ],
             ],
             'required' => ['gp_id'],

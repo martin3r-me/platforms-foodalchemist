@@ -145,7 +145,20 @@ class SensorikService
     /** Sensorik eines einzelnen Grundprodukts (eigener Roh-Vektor — für ein GP korrekt). */
     public function fuerGp(int $gpId): array
     {
-        return $this->auswertung([(int) $gpId], 'gp');
+        $out = $this->auswertung([(int) $gpId], 'gp');
+        // 27.10.2026: Ohne gespeichertes Profil sind sauer/bitter/umami/scharf NICHT bewertet (0 heißt hier „weiß niemand"),
+        // die Anzeige sagt dann „Profil fehlt" statt Schwächen zu melden. Quelle sichtbar (KI / Geschwister / alter Import / Hand).
+        $t = DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gpId)->first(['source', 'ai_confidence']);
+        $out['gp_profil'] = [
+            'fehlt' => app(GpAromaService::class)->profilFehlt((int) $gpId),
+            'quelle' => $t?->source,
+            'confidence' => $t?->ai_confidence !== null ? (float) $t->ai_confidence : null,
+        ];
+        if ($out['gp_profil']['fehlt']) {
+            $out['luecken'] = [];                    // unbewertet ist keine Schwäche
+        }
+
+        return $out;
     }
 
     // ── B: Gericht als KOMPOSITION (statt Blend) + Rollen-Soll-Check ─────────

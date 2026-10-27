@@ -1750,6 +1750,23 @@ return [
             'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
                 . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
         ],
+        // Kurator/Dominique 27.10.2026: Geschmacksprofil des ROHEN Grundprodukts. Salzig/Suess/Fettig misst der Code aus den
+        // LA-Naehrwerten (SensorikService::erdungBulk) — geschaetzt wird NUR, was zu_schaetzen nennt (immer sauer/bitter/umami/
+        // scharf, dazu Etikett-Achsen ohne Messwert). Gemessene Werte stehen als Fakt im Kontext und werden nie ersetzt.
+        'gp.sensorik' => [
+            'klasse' => 'mittel',
+            'max_tokens' => 800,
+            'task' => 'Bewerte das Grundprodukt so, wie es EINGEKAUFT wird (roh bzw. im angegebenen Zustand/der angegebenen '
+                . 'Verarbeitung — geraeuchert, eingelegt, getrocknet, geroestet, TK aendern den Geschmack; nicht die spaetere '
+                . 'Zubereitung). Schaetze NUR die Achsen aus zu_schaetzen, je 0.0-1.0, konservativ: 0 = nicht wahrnehmbar, '
+                . '0.3 = deutlich, 0.6 = praegend, 0.9 = dominant (Zitrone sauer ~0.9, Tomate sauer ~0.4 / umami ~0.5, '
+                . 'Radicchio bitter ~0.7, Chili scharf ~0.9, Parmesan umami ~0.9). Die Werte in gemessen sind aus Naehrwerten '
+                . 'GEMESSEN — als Fakt nehmen, nicht wiederholen. kern_anker, geschmacksbild_aus_dossier (ungepruefter Entwurf, '
+                . 'nur als Hinweis) und nachbarn (andere Grundprodukte derselben Hauptzutat) sind Anker fuer die Einordnung. '
+                . 'Nur wenn texturen_schaetzen wahr ist: 1-3 texturen-slugs NUR aus knusprig,cremig,saftig,zaeh,gel,fluessig,'
+                . 'koernig,weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet 0.0-1.0), sonst leere Liste: '
+                . 'werte = {geschmack: {<achse aus zu_schaetzen>: wert}, texturen: [{slug, intensitaet}]}.',
+        ],
         'gp.la_suggest' => [
             'klasse' => 'mittel',
             'task' => 'Ordne die unzugeordneten Lieferanten-Artikel dem passenden Grundprodukt '
