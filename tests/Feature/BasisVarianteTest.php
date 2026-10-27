@@ -120,3 +120,10 @@ it('haltbare Einzelvariante: Steinpilze ohne Frisch-GP → Review, „getrocknet
         ->and(($this->auto)('Steinpilze getrocknet'))->toBe($steinpilz->id)
         ->and(($this->auto)('Linsen'))->toBe($linsen->id);
 });
+
+it('Geschwister nur mit derselben Hauptzutat — „Zitronengraspulver“ wird nicht gegen frisches Zitronengras getauscht', function () {
+    $pulver = bvGp($this->rootTeam->id, 'Zitronengraspulver: trocken', 'zitronengras', 'trocken', '10', '10.1 Gewürze');
+    bvGp($this->rootTeam->id, 'Zitronengras: frisch', 'zitronengras', 'frisch', '03', '03.1 Kräuter');
+
+    expect(($this->m)('Zitronengraspulver')['gp_id'])->toBe($pulver->id);
+});

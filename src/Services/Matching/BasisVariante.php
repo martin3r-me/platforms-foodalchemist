@@ -64,7 +64,9 @@ final class BasisVariante
         $this->zukauf = in_array($qZustand, ['TK', 'konserviert'], true) || array_intersect($query, self::PARA2_ZUKAUF) !== [];
         $geschwister = (string) $gewaehlt->main_ingredient_slug === '' ? collect([$gewaehlt])
             : FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
-                ->where('main_ingredient_slug', $gewaehlt->main_ingredient_slug)->orderBy('id')->get($spalten);
+                ->where('main_ingredient_slug', $gewaehlt->main_ingredient_slug)->orderBy('id')->get($spalten)
+                // gleicher Slug reicht nicht: „Zitronengraspulver“ ist ein anderes Produkt als „Zitronengras“ — nur dieselbe Hauptzutat ist Geschwister
+                ->filter(fn ($g) => $this->hauptzutat($g) === $this->hauptzutat($gewaehlt))->values();
         // Leitplanke Bio (Session/Import): Bio ist dann keine ungenannte Variante, sondern gewollt — und hat Vorrang
         $bioGewollt = $bio === 'bio';
         // Zustand nach Leitplanke (frisch | TK | konserviert/behandelt), ohne Leitplanke frisch — sofern die Ware ihn hat
@@ -124,6 +126,12 @@ final class BasisVariante
         $frischeBasis = $geschwister->first(fn ($g) => mb_strtolower((string) $g->condition) === 'frisch' && $this->ungenannt($g, $query, $bioGewollt) === []);
 
         return $frischeBasis !== null ? $treffer : ['status' => MatchBand::FuzzyLow, 'variante_offen' => ['Zustand: ' . $gp->condition . ' (kein frisches GP)']] + $treffer;
+    }
+
+    /** Hauptzutat (Teil vor dem Doppelpunkt, ohne Marken-/Flag-Klammer), normalisiert. */
+    private function hauptzutat(FoodAlchemistGp $gp): string
+    {
+        return implode(' ', $this->engine->tokenize((string) $this->naming->felderAusName($this->naming->nameOhneMarke((string) $gp->name, $gp->zusatz))['hauptzutat']));
     }
 
     private function istSub(FoodAlchemistGp $gp, string $sub): bool
