@@ -101,7 +101,8 @@ it('(5) Menge/Einheit vor dem §5-Default abschneiden — „200 g Sahne“ wie 
 
     $kokos = ($this->gp)('Kokosmilch: konserviert, 17 % Fett', 'kokosmilch', 'konserviert', '11');
     expect(($this->auto)('Kokosmilch'))->toBe($kokos->id)                // einziger Kandidat, Fettstufe weich (Regel a)
-        ->and(($this->auto)('Kokosmilch (5 %)'))->toBeNull();            // Text nennt 5 % → nicht die 17 %
+        ->and(($this->auto)('Kokosmilch (5 %)'))->toBeNull()             // Text nennt 5 % → nicht die 17 %
+        ->and(($this->auto)('Kokosmilch 17,1 %'))->toBe($kokos->id);     // gleicher Wert, andere Schreibweise (Toleranz 0,2, §7.4a)
 });
 
 it('(6) „TK“ ist Zukauf-Signal einer Basiskomponente — TK-Pizzateig → GP, Pizzateig ohne Signal → Stub', function () {

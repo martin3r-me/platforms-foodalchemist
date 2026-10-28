@@ -134,8 +134,7 @@ class IngredientMatchService
             // 28.10. (Nachmessung „100 ml Milch (1,5 %)“ → 3,5 %): ein genannter Prozent-/Type-Wert, den das Default-GP nicht trägt, entscheidet der Pool
             if ($ziel !== null && $this->acceptsProductForm($ingredientName, $ziel['name'], $ziel['condition'])
                 && ($queryForm === null || in_array($queryForm, $this->engine->tokenize($ziel['name']), true))
-                && array_diff(\Platform\FoodAlchemist\Support\ZutatFreitext::wertangaben($ingredientName),
-                    \Platform\FoodAlchemist\Support\ZutatFreitext::wertangaben((string) $ziel['name'])) === []) {
+                && ! \Platform\FoodAlchemist\Support\ZutatFreitext::fremdeWertangaben($ingredientName, (string) $ziel['name'])) {
                 return [
                     'target' => 'gp', 'status' => MatchBand::fuerScore(MatchHeuristics::DEFAULT_GP_ALIAS_SCORE),
                     'gp_id' => $ziel['id'], 'gp_name' => $ziel['name'],

@@ -232,7 +232,7 @@ final class BasisVariante
     {
         $w = mb_strtolower(trim($wert));
         // nennt der Text selbst einen anderen Prozent-/Type-Wert („Milch (1,5 %)“), ist die Pflichtangabe des GP nicht weich (Nachmessung 28.10.)
-        if (array_diff(ZutatFreitext::wertangaben($this->zutat), ZutatFreitext::wertangaben($w)) !== []) {
+        if (ZutatFreitext::fremdeWertangaben($this->zutat, $w)) {
             return false;
         }
 

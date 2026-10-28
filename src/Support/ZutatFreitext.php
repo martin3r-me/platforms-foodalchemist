@@ -58,6 +58,25 @@ final class ZutatFreitext
         return array_values(array_unique($out));
     }
 
+    /**
+     * Nennt der Text Prozent-/Type-Werte, die der Kandidat nicht trägt? Prozent mit Toleranz 0,2 (Handelsklasse, „35 %“ ≈ „35,01 %“ — §7.4a),
+     * Type exakt.
+     */
+    public static function fremdeWertangaben(string $text, string $kandidat): bool
+    {
+        $k = self::wertangaben($kandidat);
+        foreach (self::wertangaben($text) as $v) {
+            $passt = str_ends_with($v, '%')
+                ? array_filter($k, fn ($x) => str_ends_with($x, '%') && abs((float) $x - (float) $v) <= 0.2) !== []
+                : in_array($v, $k, true);
+            if (! $passt) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Einheit Stück in der Zeile („0,5 Stk. Zimt“, „2 Stangen Zimt“) oder als eigene Einheit (Import: unit = „Stück“)? */
     public static function stueckEinheit(string $text, ?string $einheit = null): bool
     {
