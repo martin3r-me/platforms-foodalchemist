@@ -96,8 +96,12 @@ it('(5) Menge/Einheit vor dem §5-Default abschneiden — „200 g Sahne“ wie 
         ->and(($this->auto)('200 g Sahne'))->toBe($sahne30->id)
         // genannte Fettstufe schlägt den Default (Nachmessung: „100 ml Milch (1,5 %)“ ging auf 3,5 %)
         ->and(($this->m)('100 ml Sahne (15 %)')['gp_id'])->toBe($sahne15->id)
-        // genannte Fettstufe, die es nicht gibt → nie automatisch eine andere (Regel a gilt dann nicht)
+        // genannte Fettstufe, die es nicht gibt → nie automatisch eine andere (Regel a gilt dann nicht, auch beim einzigen Kandidaten)
         ->and(($this->auto)('100 ml Sahne (10 %)'))->toBeNull();
+
+    $kokos = ($this->gp)('Kokosmilch: konserviert, 17 % Fett', 'kokosmilch', 'konserviert', '11');
+    expect(($this->auto)('Kokosmilch'))->toBe($kokos->id)                // einziger Kandidat, Fettstufe weich (Regel a)
+        ->and(($this->auto)('Kokosmilch (5 %)'))->toBeNull();            // Text nennt 5 % → nicht die 17 %
 });
 
 it('(6) „TK“ ist Zukauf-Signal einer Basiskomponente — TK-Pizzateig → GP, Pizzateig ohne Signal → Stub', function () {
