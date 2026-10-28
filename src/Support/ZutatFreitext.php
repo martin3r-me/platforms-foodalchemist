@@ -36,6 +36,28 @@ final class ZutatFreitext
         return trim((string) preg_replace('/^\s*(?:ca\.?\s*)?[\d.,\/½¼¾\s-]+\s*(?:(?:' . self::EINHEITEN . ')\.?(?![\p{L}]))?\s*/iu', '', trim($text)));   // „2 EL “, „500 g “
     }
 
+    /**
+     * Prozent- und Type-Werte eines Texts, normalisiert („Milch (1,5 %)“ → ['1.5%'], „Type 550“ → ['type550']).
+     *
+     * @return list<string>
+     */
+    public static function wertangaben(string $text): array
+    {
+        $out = [];
+        if (preg_match_all('/(\d+(?:[.,]\d+)?)\s*%/u', $text, $m) > 0) {
+            foreach ($m[1] as $v) {
+                $out[] = rtrim(rtrim(str_replace(',', '.', $v), '0'), '.') . '%';
+            }
+        }
+        if (preg_match_all('/\b(?:type|tipo)\s*(\d+)/iu', $text, $m) > 0) {
+            foreach ($m[1] as $v) {
+                $out[] = 'type' . $v;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
     /** Einheit Stück in der Zeile („0,5 Stk. Zimt“, „2 Stangen Zimt“) oder als eigene Einheit (Import: unit = „Stück“)? */
     public static function stueckEinheit(string $text, ?string $einheit = null): bool
     {

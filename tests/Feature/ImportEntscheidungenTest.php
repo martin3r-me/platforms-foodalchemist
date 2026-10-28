@@ -91,8 +91,13 @@ it('(5) Menge/Einheit vor dem §5-Default abschneiden — „200 g Sahne“ wie 
     $sahne30 = ($this->gp)('Sahne: konserviert, 30 % Fett', 'sahne', 'konserviert', '06');
     ($this->gp)('Sahne: konserviert, 15 % Fett', 'sahne', 'konserviert', '06');
 
+    $sahne15 = FoodAlchemistGp::where('name', 'Sahne: konserviert, 15 % Fett')->first();
     expect(($this->auto)('Sahne'))->toBe($sahne30->id)
-        ->and(($this->auto)('200 g Sahne'))->toBe($sahne30->id);
+        ->and(($this->auto)('200 g Sahne'))->toBe($sahne30->id)
+        // genannte Fettstufe schlägt den Default (Nachmessung: „100 ml Milch (1,5 %)“ ging auf 3,5 %)
+        ->and(($this->m)('100 ml Sahne (15 %)')['gp_id'])->toBe($sahne15->id)
+        // genannte Fettstufe, die es nicht gibt → nie automatisch eine andere (Regel a gilt dann nicht)
+        ->and(($this->auto)('100 ml Sahne (10 %)'))->toBeNull();
 });
 
 it('(6) „TK“ ist Zukauf-Signal einer Basiskomponente — TK-Pizzateig → GP, Pizzateig ohne Signal → Stub', function () {

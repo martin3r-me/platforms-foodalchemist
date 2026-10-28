@@ -45,6 +45,9 @@ final class BasisVariante
 
     private ?Team $team = null;
 
+    /** Zutatentext der aktuellen Prüfung (für genannte Prozent-/Type-Werte). */
+    private string $zutat = '';
+
     /** Kurator 28.10. (2): ganze Gewürzform — bei Einheit Stück genannt. */
     private const GANZFORM = ['ganz', 'ganze', 'stange', 'stangen', 'schote', 'schoten', 'blatt', 'blaetter', 'stern', 'sterne', 'korn', 'koerner'];
 
@@ -81,6 +84,7 @@ final class BasisVariante
             return $treffer;
         }
         $this->team = $team;
+        $this->zutat = $zutat;
         $spalten = ['id', 'name', 'zusatz', 'bio', 'condition', 'main_ingredient_slug', 'commodity_group_code', 'sub_category'];
         $gewaehlt = FoodAlchemistGp::visibleToTeam($team)->find((int) $treffer['gp_id'], $spalten);
         if ($gewaehlt === null) {
@@ -227,6 +231,10 @@ final class BasisVariante
     private function pflichtangabeWeich(FoodAlchemistGp $gp, string $wert): bool
     {
         $w = mb_strtolower(trim($wert));
+        // nennt der Text selbst einen anderen Prozent-/Type-Wert („Milch (1,5 %)“), ist die Pflichtangabe des GP nicht weich (Nachmessung 28.10.)
+        if (array_diff(ZutatFreitext::wertangaben($this->zutat), ZutatFreitext::wertangaben($w)) !== []) {
+            return false;
+        }
 
         // §8.2 Eiergröße wie Mehl-Type/Fettstufe; die Haltungsform (Bodenhaltung, Freiland) bleibt ein hartes Merkmal
         return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$|^größe\s*(s|m|l|xl)$/u', $w)
