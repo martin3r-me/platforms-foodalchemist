@@ -30,6 +30,21 @@ final class ZutatFreitext
         return strtr($t, ['ae' => 'a', 'oe' => 'o', 'ue' => 'u']);   // Umlaut-Plural: blaett → blatt, koern → korn
     }
 
+    /** Führende Menge + Einheit weg („200 g Sahne“ → „Sahne“, „2 EL Öl“ → „Öl“) — Kurator 28.10.: sonst trifft der §5-Default nicht. */
+    public static function ohneMenge(string $text): string
+    {
+        return trim((string) preg_replace('/^\s*(?:ca\.?\s*)?[\d.,\/½¼¾\s-]+\s*(?:(?:' . self::EINHEITEN . ')\.?(?![\p{L}]))?\s*/iu', '', trim($text)));   // „2 EL “, „500 g “
+    }
+
+    /** Einheit Stück in der Zeile („0,5 Stk. Zimt“, „2 Stangen Zimt“) oder als eigene Einheit (Import: unit = „Stück“)? */
+    public static function stueckEinheit(string $text, ?string $einheit = null): bool
+    {
+        $muster = '/^(?:stk|st|stck|stueck|stück|stange|stangen|schote|schoten|blatt|blätter|blaetter|stern|sterne|pce|pcs)\.?$/iu';
+
+        return ($einheit !== null && preg_match($muster, trim($einheit)) === 1)
+            || preg_match('/^\s*(?:ca\.?\s*)?[\d.,\/½¼¾\s-]+\s*(?:stk|st|stck|stueck|stück|stange|stangen|schote|schoten|blatt|blätter|blaetter|stern|sterne)\.?(?![\p{L}])/iu', $text) === 1;
+    }
+
     /**
      * Bereinigte Varianten des Freitexts (ohne das Original), in Prüfreihenfolge.
      *
@@ -37,8 +52,7 @@ final class ZutatFreitext
      */
     public static function varianten(string $text): array
     {
-        $s = trim($text);
-        $s = (string) preg_replace('/^\s*(?:ca\.?\s*)?[\d.,\/½¼¾\s-]+\s*(?:(?:' . self::EINHEITEN . ')\.?(?![\p{L}]))?\s*/iu', '', $s);   // „2 EL “, „500 g “
+        $s = self::ohneMenge($text);
         $s = (string) preg_replace('/\s+(?:zum|zur|für|zu|nach)\s+.*$/iu', '', $s);                                               // „zum Braten“, „nach Geschmack“
         $s = (string) preg_replace('/(?<![\p{L}])(?:' . implode('|', self::FUELLWOERTER) . ')\.?(?![\p{L}])/iu', ' ', $s);
         $ohneKlammer = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/\([^)]*\)/u', ' ', $s)));

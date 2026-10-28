@@ -37,13 +37,19 @@ final class BasisVariante
      * Wert → Bedingung am GP: null = immer; 'pulverware' = Hauptzutat ist Pulver („Chilipulver“) oder Gewürz/Bindemittel ohne frische Form im
      * Bestand (Messung 27.10.: „Ingwer“ → gemahlen, „Getrocknete Tomaten“ → Pulver, „Kaffee“ → gemahlen waren falsch); 'salz'/'passata' = Hauptzutat.
      */
-    private const NATURFORM = ['pulver' => 'pulverware', 'pulverfoermig' => 'pulverware', 'fluessig' => null, 'knolle' => null, 'wurzel' => null, 'ganz' => null,
+    private const NATURFORM = ['pulver' => 'pulverware', 'pulverfoermig' => 'pulverware', 'fluessig' => 'kein_ei', 'knolle' => null, 'wurzel' => null, 'ganz' => null,
         'gemahlen' => 'pulverware', 'grob' => 'salz', 'fein' => 'salz', 'pueriert' => 'passata'];
 
     /** @var array<string, bool> Slug → gibt es eine frische Form (Request-Cache) */
     private array $frischform = [];
 
     private ?Team $team = null;
+
+    /** Kurator 28.10. (2): ganze Gewürzform — bei Einheit Stück genannt. */
+    private const GANZFORM = ['ganz', 'ganze', 'stange', 'stangen', 'schote', 'schoten', 'blatt', 'blaetter', 'stern', 'sterne', 'korn', 'koerner'];
+
+    /** Gemahlene/zerkleinerte Gewürzform. */
+    private const ZERKLEINERT = ['gemahlen', 'pulver', 'gerebelt', 'geschrotet', 'flocken', 'granulat'];
 
     /** Dominique 27.10. (c): Fleisch-Teilstücke (WG 04, Bestand + Kurator-Liste) sind genannte Varianten, keine Küchenarbeit nach §2. */
     private const TEILSTUECKE = ['mittelstueck', 'kopfstueck', 'schwanzstueck', 'kopf', 'ruecken', 'keule', 'brust', 'huefte', 'oberschale',
@@ -67,7 +73,7 @@ final class BasisVariante
      * @param  array  $treffer  Ergebnis von matchIngredient (target/status/gp_id/gp_name/score …)
      * @return array  derselbe Treffer, ggf. auf die Basisvariante umgehängt oder auf FuzzyLow herabgestuft (+ 'variante_offen')
      */
-    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional'): array
+    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional', ?string $einheit = null): array
     {
         $band = $treffer['status'] ?? null;
         $band = is_string($band) ? MatchBand::tryFrom($band) : $band;
@@ -124,6 +130,21 @@ final class BasisVariante
                     : $this->ungenannt($vorschlag, $query, $bioGewollt)] + ($vorschlag === null ? [] : ['gp_id' => (int) $vorschlag->id, 'gp_name' => (string) $vorschlag->name]) + $treffer;
             }
         }
+        // Kurator 28.10. (2): Gewürz mit Einheit Stück (Zimt, Sternanis, Vanille, Lorbeer) meint die ganze Form — nie gemahlen; ohne ganze Form Review
+        if ((string) $gewaehlt->commodity_group_code === '10' && ZutatFreitext::stueckEinheit($zutat, $einheit)) {
+            $ganz = $geschwister->reject(fn ($g) => $this->istZerkleinert($g))->values();
+            $sauber = $ganz->filter(fn ($g) => array_filter($this->hart($g, $query, $bioGewollt),
+                fn ($e) => array_diff($this->engine->tokenize(explode(': ', $e, 2)[1] ?? $e), self::GANZFORM) !== []) === [])->values();
+            if ($sauber->count() === 1) {
+                $b = $sauber->first();
+
+                return ['gp_id' => (int) $b->id, 'gp_name' => (string) $b->name] + $treffer;
+            }
+            $vorschlag = $ganz->first();
+
+            return ['status' => MatchBand::FuzzyLow, 'variante_offen' => [$vorschlag === null ? 'ganze Form fehlt' : 'ganze Form: mehrere Kandidaten']]
+                + ($vorschlag === null ? [] : ['gp_id' => (int) $vorschlag->id, 'gp_name' => (string) $vorschlag->name]) + $treffer;
+        }
         // Nennt die Zeile die Variante des Treffers ausdrücklich (Zuschnitt mit Zukauf-Signal, Marke, Bio, Fettstufe …), bleibt er
         if ($this->ungenannt($gewaehlt, $query, $bioGewollt) === [] && $this->traegtVariante($gewaehlt) && ! ($bioGewollt && ! $this->istBio($gewaehlt))) {
             return $this->haltbarPruefen($treffer, $gewaehlt, $geschwister, $query, $qZustand, $bioGewollt, $wunsch);
@@ -173,7 +194,9 @@ final class BasisVariante
         $zustand = mb_strtolower(trim((string) $gp->condition));
         // Text nennt den Zustand, Leitplanke wünscht genau diesen (frische=tk → TK-Gemüse), frisch, ohne Zustand oder keine Frischware → bleibt
         if ($qZustand !== null || $zustand === '' || $zustand === 'frisch' || in_array($zustand, $wunsch, true)
-            || ! in_array((string) $gp->commodity_group_code, self::FRISCHWARE_WG, true)) {
+            || ! in_array((string) $gp->commodity_group_code, self::FRISCHWARE_WG, true)
+            // zugekauftes Püree/Mus/Mark (§8.17, Basisrezepte §3) ist ein eigenes Produkt, keine haltbare Variante frischer Ware
+            || preg_match('/(?:pueree|puree|mus|mark)(?:\s|$)/', $this->hauptzutat($gp)) === 1) {
             return $treffer;
         }
         $frischeBasis = $geschwister->first(fn ($g) => mb_strtolower((string) $g->condition) === 'frisch' && $this->ungenannt($g, $query, $bioGewollt) === []);
@@ -200,12 +223,13 @@ final class BasisVariante
         }));
     }
 
-    /** §8.11 Mehl-Type, §8.1 Fettstufe, §8.10 Kakaoanteil; Zucker-Angabe nur bei Milchprodukten (Kondensmilch „extra süß“). */
+    /** §8.11 Mehl-Type, §8.1 Fettstufe, §8.10 Kakaoanteil, §8.2 Eiergröße; Zucker-Angabe nur bei Milchprodukten (Kondensmilch „extra süß“). */
     private function pflichtangabeWeich(FoodAlchemistGp $gp, string $wert): bool
     {
         $w = mb_strtolower(trim($wert));
 
-        return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$/u', $w)
+        // §8.2 Eiergröße wie Mehl-Type/Fettstufe; die Haltungsform (Bodenhaltung, Freiland) bleibt ein hartes Merkmal
+        return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$|^größe\s*(s|m|l|xl)$/u', $w)
             || ((string) $gp->commodity_group_code === '06' && in_array($w, ['extra süß', 'gezuckert', 'gesüßt'], true));
     }
 
@@ -225,6 +249,8 @@ final class BasisVariante
                     || (((string) $gp->commodity_group_code === '10' || ((string) $gp->commodity_group_code === '12' && ! $this->istSub($gp, '12.3')))
                         && ! $this->hatFrischform($gp)),
                 'salz' => str_contains($haupt, 'salz'),
+                // Kurator 28.10. (1): bei Eiern ist „flüssig“ das Flüssigei, keine Naturform
+                'kein_ei' => preg_match('/(?:^|\s)(?:voll)?ei(?:er|gelb|weiss|klar)?(?:\s|$)/', $haupt) !== 1,
                 'passata' => str_contains($haupt, 'passata') || str_contains($haupt, 'passiert'),
             };
             if (! $ok) {
@@ -268,6 +294,11 @@ final class BasisVariante
         }
 
         return $out;
+    }
+
+    private function istZerkleinert(FoodAlchemistGp $gp): bool
+    {
+        return array_intersect($this->engine->tokenize((string) $gp->name), self::ZERKLEINERT) !== [] || str_contains($this->hauptzutat($gp), 'pulver');
     }
 
     /** Gibt es die Ware auch frisch (Ingwer-Knolle, frischer Rosmarin, Tomate)? Dann ist Pulver/gemahlen keine Naturform. */

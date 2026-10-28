@@ -370,7 +370,7 @@ class RecipeGeneratorService
                 }
                 $direktArtikel = $vkModus && ! $brotImGericht && ($kleinstmenge !== null || $this->heuristik->istDirektArtikelKandidat($text));
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
-                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience);
+                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience, einheit: isset($z['unit']) ? (string) $z['unit'] : null);
 
                 // Band-Gate (2026-08-06, Rahmeis-in-Tomatensuppe): FuzzyLow heißt laut
                 // GL-04 §4.1 wörtlich „Review nötig" — der Generator ist aber der teuerste
