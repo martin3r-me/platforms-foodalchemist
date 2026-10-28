@@ -101,8 +101,13 @@ it('(5) Menge/Einheit vor dem §5-Default abschneiden — „200 g Sahne“ wie 
 
     $kokos = ($this->gp)('Kokosmilch: konserviert, 17 % Fett', 'kokosmilch', 'konserviert', '11');
     expect(($this->auto)('Kokosmilch'))->toBe($kokos->id)                // einziger Kandidat, Fettstufe weich (Regel a)
-        ->and(($this->auto)('Kokosmilch (5 %)'))->toBeNull()             // Text nennt 5 % → nicht die 17 %
-        ->and(($this->auto)('Kokosmilch 17,1 %'))->toBe($kokos->id);     // gleicher Wert, andere Schreibweise (Toleranz 0,2, §7.4a)
+        ->and(($this->auto)('Kokosmilch (5 %)'))->toBeNull();            // Text nennt 5 % → nicht die 17 %
+
+    // Toleranz 0,2 (§7.4a Handelsklasse, Nachmessung „Schlagsahne 35 %“ ≈ GP „35,01 %“)
+    $kondens = ($this->gp)('Kondensmilch: konserviert, 7,5 % Fett', 'kondensmilch', 'konserviert', '06');
+    expect(($this->auto)('Kondensmilch 7,4 %'))->toBe($kondens->id)
+        ->and(\Platform\FoodAlchemist\Support\ZutatFreitext::fremdeWertangaben('Sahne 35 %', 'Sahne: konserviert, 35,01 % Fett'))->toBeFalse()
+        ->and(\Platform\FoodAlchemist\Support\ZutatFreitext::fremdeWertangaben('Sahne 30 %', 'Sahne: konserviert, 35,01 % Fett'))->toBeTrue();
 });
 
 it('(6) „TK“ ist Zukauf-Signal einer Basiskomponente — TK-Pizzateig → GP, Pizzateig ohne Signal → Stub', function () {
