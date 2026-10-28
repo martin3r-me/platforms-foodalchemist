@@ -49,7 +49,7 @@
 @endphp
 
 <div x-data="{ act: null }" class="relative" data-geschmack-radar>
-    <svg viewBox="0 0 300 300" class="w-full max-w-[360px] mx-auto overflow-visible" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Geschmacksprofil">
+    <svg viewBox="0 0 300 300" class="w-full {{ ($radarBreit ?? false) ? 'max-w-lg' : 'max-w-[360px]' }} mx-auto overflow-visible" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Geschmacksprofil">
         {{-- Gitter-Ringe --}}
         @foreach($rings as $lv)
             <circle class="fill-none {{ $lv == 1.0 ? 'stroke-[var(--fa-line-strong)]' : 'stroke-[var(--fa-line)]' }}"
