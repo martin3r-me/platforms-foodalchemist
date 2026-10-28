@@ -31,6 +31,9 @@ class MarkeAusArtikel
     /** Warengruppen, die nie Rezepturware sind: Wurst (§8.13), Getränke (§5 Ausnahme 1). */
     public const NIE_REZEPTURWARE_WG = ['04', '15'];
 
+    /** Getränke tragen die Marke als Klammer-Zusatz wie Rezepturware (Dominique 28.10.: „Ananassaft: 1 l / (Happy Day)“), bleiben aber rezepturware = false. */
+    public const MARKE_IN_KLAMMER_WG = ['15'];
+
     /** @var array<string, array<string, array<string, array{marke: string, vorrang: int, typ: string}>>>|null  'global' bzw. supplier_id → position → kuerzel → Eintrag */
     private ?array $karte = null;
 
@@ -147,6 +150,15 @@ class MarkeAusArtikel
     public static function markeOffen(?bool $rezepturware, ?string $zusatz): bool
     {
         return $rezepturware === true && trim((string) $zusatz) === '';
+    }
+
+    /**
+     * Gehört die Marke aus MarkeAusArtikel in die Klammer? Rezepturware (§5 Ausnahme 3) und Getränke (WG 15, Dominique 28.10.). Ohne belegte Marke bleibt
+     * die Klammer leer; bei Getränken ist das ein generisches Getränk, kein `marke_offen` ({@see markeOffen()} gilt nur für Rezepturware).
+     */
+    public static function markeInKlammer(?bool $rezepturware, ?string $warengruppe): bool
+    {
+        return $rezepturware === true || in_array((string) $warengruppe, self::MARKE_IN_KLAMMER_WG, true);
     }
 
     /** Dreiwertig aus Formular/MCP/KI: null/'' = nicht entschieden, sonst ja/nein ('1', '0', true, false, 'true', 'false'). */

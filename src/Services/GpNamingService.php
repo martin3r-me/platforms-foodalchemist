@@ -238,6 +238,60 @@ class GpNamingService
         return '';
     }
 
+    /**
+     * Getränke (WG 15, Dominique 28.10.): Marke als Klammer-Zusatz statt im Namen, Füllmenge nach §7.1a in der Pflichtangabe, kein Zustandswort.
+     * Die Marke kommt nur aus dem Artikel (MarkeAusArtikel) — ohne belegte Marke bleibt die Klammer leer (generisches Getränk). Steht die Marke noch
+     * in der Hauptzutat („Happy Day Ananassaft“), fällt sie dort heraus. Fehlt die Füllmenge, kommt sie aus dem Artikeltext („Pk1,0l“ → „1 l“).
+     *
+     * @param  array<string, mixed>  $felder  hauptzutat, zusatz, pflichtangabe …
+     * @param  list<string|null>  $quelltexte  Bezeichnung, Vermarktungsname
+     * @return array<string, mixed>
+     */
+    public function getraenkFelder(array $felder, ?string $marke, array $quelltexte): array
+    {
+        $marke = $this->bereinigeZusatz($marke);
+        if ($marke !== '') {
+            $haupt = trim((string) preg_replace('/(?<![\p{L}])' . preg_quote($marke, '/') . '(?![\p{L}])/iu', ' ', (string) ($felder['hauptzutat'] ?? '')));
+            $haupt = trim((string) preg_replace('/\s{2,}/u', ' ', $haupt), " \t-–,");
+            if ($haupt !== '') {
+                $felder['hauptzutat'] = $haupt;
+            }
+            if (trim((string) ($felder['zusatz'] ?? '')) === '') {
+                $felder['zusatz'] = $marke;
+            }
+        }
+        $pflicht = trim((string) ($felder['pflichtangabe'] ?? ''));
+        if (self::fuellmenge($pflicht) === null) {
+            foreach ($quelltexte as $text) {
+                if (($menge = self::fuellmenge((string) $text)) !== null) {
+                    $felder['pflichtangabe'] = $pflicht === '' ? $menge : $pflicht . ', ' . $menge;
+                    break;
+                }
+            }
+        }
+
+        return $felder;
+    }
+
+    /** Füllmenge eines Getränks in Litern nach §7.1a („Pk1,0l“ → „1 l“, „330 ml“ → „0,33 l“, „0,75L“ → „0,75 l“), sonst null. */
+    public static function fuellmenge(string $text): ?string
+    {
+        if (preg_match('/(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(l|ltr|liter|ml|cl)(?![\p{L}])/iu', $text, $m) !== 1) {
+            return null;
+        }
+        $wert = (float) str_replace(',', '.', $m[1]);
+        $wert = match (mb_strtolower($m[2])) {
+            'ml' => $wert / 1000,
+            'cl' => $wert / 100,
+            default => $wert,
+        };
+        if ($wert <= 0) {
+            return null;
+        }
+
+        return str_replace('.', ',', rtrim(rtrim(number_format($wert, 3, '.', ''), '0'), '.')) . ' l';
+    }
+
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
     public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form, ?string $flavor = null, ?string $zusatz = null): string
     {
