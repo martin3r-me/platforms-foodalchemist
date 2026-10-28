@@ -32,6 +32,7 @@ class GpAromaBackfillCommand extends Command
         {--apply : schreiben (ohne: Trockenlauf mit Zählung und Kostenschätzung)}
         {--nur-geschwister : nur den kostenlosen Geschwister-Teil, keine KI}
         {--limit=0 : höchstens so viele GPs in den KI-Teil (0 = alle)}
+        {--anbieter=plattform : plattform (OpenAI über den Core) | extern (legt KI-Aufträge an, ein MCP-Client beantwortet sie über ki_auftraege.*, danach denselben Lauf wiederholen)}
         {--chunk=25 : GPs je Paket im KI-Teil}
         {--pause=3 : Sekunden Pause zwischen den Paketen}
         {--vergleich=0 : N GPs mit vorhandenem Profil neu schätzen, NICHT speichern, alt/neu als CSV}
@@ -150,6 +151,7 @@ class GpAromaBackfillCommand extends Command
         if ($limit > 0) {
             $offen = array_slice($offen, 0, $limit);
         }
+        $extern = $this->option('anbieter') === 'extern';
         $protokoll = "{$bericht}/{$stempel}_aroma_protokoll.jsonl";
         $n = 0;
         foreach (array_chunk($offen, max(1, (int) $this->option('chunk'))) as $i => $chunk) {
@@ -167,7 +169,9 @@ class GpAromaBackfillCommand extends Command
                     continue;                                            // inzwischen gefüllt (Wiederaufnahme)
                 }
                 try {
-                    $r = $bulk->nachziehenGp($team, [$gpId], $schritte, 'backfill');
+                    $r = $extern
+                        ? app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->within(fn () => $bulk->nachziehenGp($team, [$gpId], $schritte, 'backfill'))
+                        : $bulk->nachziehenGp($team, [$gpId], $schritte, 'backfill');
                 } catch (\Throwable $e) {
                     $r = ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
                 }
@@ -177,6 +181,10 @@ class GpAromaBackfillCommand extends Command
             $this->line("Paket ".($i + 1).": {$n} GPs bearbeitet");
         }
         $this->info("KI-Teil fertig: {$n} GPs. Protokoll: {$protokoll}");
+        if ($extern) {
+            $offenA = DB::table('foodalchemist_ki_auftraege')->where('team_id', $team->id)->where('status', 'offen')->count();
+            $this->comment("Externer Weg: {$offenA} offene KI-Aufträge (ki_auftraege.GET → ANTWORT), danach diesen Befehl erneut ausführen — beantwortete Aufträge werden dabei übernommen.");
+        }
 
         return self::SUCCESS;
     }

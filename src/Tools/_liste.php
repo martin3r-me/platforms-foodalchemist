@@ -231,6 +231,8 @@ return [
     \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
+    \Platform\FoodAlchemist\Tools\KiAuftraegeAntwortTool::class,   // #1002 externer KI-Weg
+    \Platform\FoodAlchemist\Tools\KiAuftraegeGetTool::class,
     \Platform\FoodAlchemist\Tools\KiKlassenGetTool::class,
     \Platform\FoodAlchemist\Tools\KiKlassenPutTool::class,
     \Platform\FoodAlchemist\Tools\KiVerbrauchGetTool::class,   // KI-Abrechnung 23.10.: Verbrauch des eigenen Teams

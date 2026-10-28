@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Support\KiAbrechnung;
 use Platform\FoodAlchemist\Support\KiKlassen;
 use Platform\Core\Services\LLMProviderRegistry;
 use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
+use Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException;
 use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use RuntimeException;
 
@@ -428,7 +429,7 @@ class AiGatewayService
             $versucheGemacht = $versuch + 1;
             $fehler = null;
             try {
-                $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
+                $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature], $promptKey, $audit);
                 $this->addUsage($usageGesamt, (array) ($antwort['usage'] ?? []));
                 $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
                 $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
@@ -447,6 +448,9 @@ class AiGatewayService
                 $fehler = $e;
                 $parsed = null;
                 $letzterRerollGrund = $this->rerollGrund($e);
+                if ($e instanceof KiAuftragAusstehendException) {
+                    break;                                           // #1002: kein Re-Roll gegen einen wartenden Auftrag
+                }
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -459,6 +463,9 @@ class AiGatewayService
         $promptParts['versuche'] = $versucheGemacht;
         if ($websuche && $antwort !== null) {   // Spec 85 I5-8: Kosten der Websuche sichtbar (je Suchaufruf berechnet der Provider extra)
             $promptParts['websuche'] = ['quellen' => count((array) ($antwort['sources'] ?? [])), 'aufrufe' => count((array) ($antwort['web_search_calls'] ?? []))];
+        }
+        if (is_array($antwort) && ($antwort['extern'] ?? false)) {
+            $promptParts['quelle'] = 'mcp';                          // #1002: Lineage source=mcp, Anbieter/Modell stehen in model
         }
         if ($versucheGemacht > 1) {
             $promptParts['reroll_grund'] = $letzterRerollGrund;
@@ -1015,8 +1022,14 @@ class AiGatewayService
             .class_basename($provider::class).'. Text einfügen oder den Plattform-Provider auf OpenAI stellen.');
     }
 
-    private function chatMitBackoff(array $messages, array $options): array
+    /** @param array<string, mixed> $audit */
+    private function chatMitBackoff(array $messages, array $options, ?string $feature = null, array $audit = []): array
     {
+        // #1002: externer Modus — EIN Provider-Punkt; davor liegt der komplette Prompt-Aufbau, danach dieselbe Prüfung
+        if ($feature !== null && app(KiExternModus::class)->aktiv()) {
+            return app(KiAuftragService::class)->antwortOderAuftrag($feature, $messages, $options, $audit);
+        }
+
         $treppe = config('foodalchemist.ai.backoff', [1, 3, 10]);
         $fallback = config('foodalchemist.ai.fallback_model');
 
