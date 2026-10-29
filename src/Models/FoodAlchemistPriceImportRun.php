@@ -16,6 +16,10 @@ class FoodAlchemistPriceImportRun extends Model
 {
     use HasUuidV7, LogsActivity, SoftDeletes;
 
+    public const ART_PREISLISTE = 'preisliste';
+
+    public const ART_STAMMDATEN = 'stammdaten';
+
     protected $table = 'foodalchemist_price_import_runs';
 
     protected $guarded = ['id'];

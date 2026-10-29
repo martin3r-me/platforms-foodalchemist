@@ -222,7 +222,7 @@ class Index extends Component
 
         return view('foodalchemist::livewire.preislisten.index', [
             'darf' => $this->darf(),
-            'laeufe' => $team !== null ? $svc->laeufe($team) : collect(),
+            'laeufe' => $team !== null ? $svc->laeufe($team)->where('art', 'preisliste')->values() : collect(),
             'lieferanten' => $team !== null ? FoodAlchemistSupplier::visibleToTeam($team)->where('is_inactive', false)->orderBy('name')->get(['id', 'name']) : collect(),
             'lauf' => $lauf,
             'pruefliste' => $lauf !== null ? $svc->pruefliste($lauf)->take(500) : collect(),

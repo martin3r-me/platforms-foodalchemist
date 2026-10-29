@@ -38,5 +38,14 @@ class FoodAlchemistPriceImportLine extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['price' => 'decimal:4', 'valid_from' => 'date'];
+    /** Stammdaten-Läufe (art=stammdaten): die Zeile ist geprüft, das Ergebnis steht in `aktion`. */
+    public const STATUS_GEPRUEFT = 'geprueft';
+
+    public const AKTION_NEU = 'neu';
+    public const AKTION_AENDERT = 'aendert';
+    public const AKTION_UNVERAENDERT = 'unveraendert';
+    public const AKTION_KONFLIKT = 'konflikt';
+    public const AKTION_FEHLER = 'fehler';
+
+    protected $casts = ['price' => 'decimal:4', 'valid_from' => 'date', 'daten' => 'array', 'diff' => 'array', 'hinweise' => 'array', 'allergene_bestaetigt' => 'boolean'];
 }

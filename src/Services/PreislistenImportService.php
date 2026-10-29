@@ -182,6 +182,9 @@ class PreislistenImportService
         if ((int) $run->team_id !== (int) $team->id) {
             throw new \RuntimeException('Dieser Lauf gehört einem anderen Team.');
         }
+        if ($run->art !== FoodAlchemistPriceImportRun::ART_PREISLISTE) {
+            throw new \RuntimeException('Ein Stammdaten-Lauf wird nicht als Preisliste angewendet — die Übernahme je Zeile folgt in der Prüfliste.');
+        }
 
         $heute = Carbon::today();
         $bilanz = ['angewendet' => 0, 'unveraendert' => 0, 'zukuenftig' => 0, 'fehler' => 0];
@@ -412,7 +415,7 @@ class PreislistenImportService
     }
 
     /** @return array{kopf: list<string>, zeilen: array<int, list<string>>} Zeilen-Schlüssel = Zeilennummer in der Datei */
-    private function lies(string $pfad, ?string $endung = null): array
+    public function lies(string $pfad, ?string $endung = null): array
     {
         if (! is_file($pfad) || ! is_readable($pfad)) {
             throw new \RuntimeException('Datei nicht lesbar.');

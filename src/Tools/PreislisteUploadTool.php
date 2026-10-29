@@ -10,6 +10,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Services\PreislistenImportService;
+use Platform\FoodAlchemist\Services\Stammdaten\StammdatenImportService;
 
 /**
  * Spec 82 §3 / Schritt 4d, Stufe 2 · Preisliste des eigenen Teams abgleichen (CSV oder Excel als Base64).
@@ -26,6 +27,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Gleicht eine Preisliste des eigenen Teams gegen die sichtbaren Artikel ab (Artikelnummer + Lieferant, danach EAN) und legt einen Lauf an. '
+            .'art=stammdaten prüft statt Preisen die ganzen Artikel-Stammdaten (neu | ändert | Konflikt | Fehler je Zeile, Allergene und Nährwerte mit Soll/Ist) und schreibt NICHTS. '
             .'Datei als content_base64 (CSV mit ; , Tab oder | oder Excel .xlsx/.ods, bis 10 MB) plus filename (nur Endung und Anzeigename). '
             .'Lieferant: supplier_id oder eine Lieferant-Spalte in der Datei. mapping {feld: Überschrift|Spaltenindex} überschreibt die Erkennung '
             .'(Felder: supplier, article_number, ean, designation, unit, price, valid_from). Es wird KEIN Preis geschrieben und KEIN Artikel angelegt; '
@@ -39,6 +41,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
             'content_base64' => ['type' => 'string'],
             'supplier_id' => ['type' => 'integer'],
             'mapping' => ['type' => 'object'],
+            'art' => ['type' => 'string', 'enum' => ['preisliste', 'stammdaten'], 'description' => 'preisliste (Standard) | stammdaten: Artikel-Stammdaten (Vorlage: preisliste.VORLAGE_GET art=stammdaten). Stammdaten legen nur eine Prüfliste an, nichts geht in den Bestand.'],
         ], 'required' => ['filename', 'content_base64']];
     }
 
@@ -65,14 +68,16 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
             $tmp = tempnam(sys_get_temp_dir(), 'preisliste');   // vom System erzeugt, nie aus der Eingabe
             try {
                 file_put_contents($tmp, $roh);
-                $run = $svc->stage($team, $tmp, (array) ($arguments['mapping'] ?? []),
-                    isset($arguments['supplier_id']) ? (int) $arguments['supplier_id'] : null, $context->user?->id, $endung, $name);
+                $supplier = isset($arguments['supplier_id']) ? (int) $arguments['supplier_id'] : null;
+                $run = ($arguments['art'] ?? 'preisliste') === 'stammdaten'
+                    ? app(StammdatenImportService::class)->stage($team, $tmp, $supplier, $context->user?->id, $endung, $name)
+                    : $svc->stage($team, $tmp, (array) ($arguments['mapping'] ?? []), $supplier, $context->user?->id, $endung, $name);
             } finally {
                 @unlink($tmp);
             }
 
-            return ['lauf_id' => $run->id, 'datei' => $run->filename, 'zaehler' => $run->counts, 'preise_geschrieben' => 0,
-                'hinweis' => 'Nur abgeglichen. Mit preisliste.APPLY (lauf_id) werden die Treffer als Teampreise übernommen, die Prüfliste steht in preisliste_laeufe.GET.'];
+            return ['lauf_id' => $run->id, 'art' => $run->art, 'datei' => $run->filename, 'zaehler' => $run->counts, 'preise_geschrieben' => 0,
+                'hinweis' => $run->art === 'stammdaten' ? 'Nur geprüft, nichts im Bestand geändert. Die Prüfliste steht in preisliste_laeufe.GET (run_id, optional aktion).' : 'Nur abgeglichen. Mit preisliste.APPLY (lauf_id) werden die Treffer als Teampreise übernommen, die Prüfliste steht in preisliste_laeufe.GET.'];
         });
     }
 
