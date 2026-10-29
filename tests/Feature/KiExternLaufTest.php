@@ -156,6 +156,26 @@ it('Wache: Queue-Dispatch und Cache-Schreiben im externen Rumpf werden gemeldet 
     expect(KiExternLauf::$nebenwirkungen)->toBe([]);
 });
 
+it('legeAn: ein Verweis auf einen zurückgerollten Wissens-Lauf wird entfernt, ein bestehender (UUID) bleibt', function () {
+    $lauf = (string) \Symfony\Component\Uid\UuidV7::generate();
+    DB::table('foodalchemist_knowledge_runs')->insert(['id' => $lauf, 'team_id' => $this->rootTeam->id, 'snapshot_hash' => str_repeat('a', 64),
+        'snapshot' => '[]', 'created_at' => now()]);
+    $weg = (string) \Symfony\Component\Uid\UuidV7::generate();
+    $zeile = fn (string $uuid, ?string $run) => ['uuid' => $uuid, 'team_id' => $this->rootTeam->id, 'feature' => 'recipe.description', 'messages_hash' => $uuid,
+        'messages' => '[]', 'knowledge_run_id' => $run, 'status' => 'offen', 'laeuft_ab_at' => now()->addHour(), 'created_at' => now(), 'updated_at' => now()];
+
+    $this->ki->legeAn([$zeile('h-weg', $weg), $zeile('h-da', $lauf)]);
+
+    expect(DB::table('foodalchemist_ki_auftraege')->where('uuid', 'h-weg')->value('knowledge_run_id'))->toBeNull()
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('uuid', 'h-da')->value('knowledge_run_id'))->toBe($lauf);
+});
+
+it('knowledge_run_id der Aufträge ist eine UUID-Spalte (BIGINT scheitert auf MySQL: „Data truncated")', function () {
+    $typ = collect(Schema::getColumns('foodalchemist_ki_auftraege'))->firstWhere('name', 'knowledge_run_id');
+
+    expect(strtolower((string) ($typ['type_name'] ?? '')))->toBeIn(['char', 'varchar', 'uuid', 'text'], 'war BIGINT; die Migration 2026_11_22_120000 macht daraus eine UUID');
+});
+
 it('Aufträge ohne Nutzlast (Backfill, Tool-Hülle) lösen keine Wiederholung aus', function () {
     $tool = app(ToolRegistry::class)->get('foodalchemist.gps.ENRICH');   // nur um den Registry-Zugriff zu belegen
     expect($tool)->not->toBeNull();
