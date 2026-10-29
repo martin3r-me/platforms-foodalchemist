@@ -85,7 +85,7 @@ class StammdatenImport extends Component
         $this->laufId = $lauf->id;
         $this->filter = '';
         $this->datei = null;
-        if ($lauf->status === 'zuordnung_noetig') {
+        if ($lauf->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
             $this->zuordnungVorbereiten($lauf);
             $this->meldung = 'Die Spalten dieser Datei wurden nicht (vollständig) erkannt — bitte unten zuordnen. Es wurde nichts in den Bestand geschrieben.';
 
@@ -103,7 +103,7 @@ class StammdatenImport extends Component
         $lauf = $team !== null ? Lauf::where('team_id', $team->id)->where('art', Lauf::ART_STAMMDATEN)->find($id) : null;
         $this->laufId = $lauf?->id;
         $this->filter = '';
-        if ($lauf?->status === 'zuordnung_noetig') {
+        if ($lauf?->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
             $this->zuordnungVorbereiten($lauf);
         }
     }

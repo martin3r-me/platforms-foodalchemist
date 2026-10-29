@@ -3,6 +3,9 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -10,7 +13,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistImportZuordnung extends Model
 {
-    use HasUuidV7;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_import_zuordnungen';
 

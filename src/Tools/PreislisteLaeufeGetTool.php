@@ -40,7 +40,7 @@ class PreislisteLaeufeGetTool extends WareneingangTool implements ToolContract, 
             }
             $run = $svc->lauf($team, (int) $arguments['run_id']) ?? throw new \Illuminate\Database\Eloquent\ModelNotFoundException();
             $limit = max(1, min(1000, (int) ($arguments['limit'] ?? 200)));
-            if ($run->status === 'zuordnung_noetig') {
+            if ($run->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
                 return ['lauf' => ['id' => $run->id, 'art' => $run->art, 'status' => $run->status, 'datei' => $run->filename, 'zaehler' => $run->counts],
                     'zuordnung_noetig' => ['grund' => $run->mapping['grund'] ?? null, 'kopf' => $run->mapping['kopf'] ?? [], 'vorschau' => $run->mapping['vorschau'] ?? []], 'pruefliste' => []];
             }

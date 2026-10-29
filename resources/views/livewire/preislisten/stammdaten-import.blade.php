@@ -57,7 +57,7 @@
         </x-fa::section>
     @endif
 
-    @if($lauf && $lauf->status === 'zuordnung_noetig')
+    @if($lauf && $lauf->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG)
         <x-fa::section title="Zuordnung nötig: {{ $lauf->filename }}" icon="heroicon-o-arrows-right-left" data-stammdaten-zuordnung>
             <p class="{{ $leise }} mb-3">{{ $lauf->mapping['grund'] ?? 'Die Spalten wurden nicht erkannt.' }} Ordne die Spalten deiner Datei den Feldern zu; nicht benötigte Spalten bleiben auf „nicht verwenden“.</p>
             <div class="grid gap-2 grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))]">

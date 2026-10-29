@@ -109,9 +109,10 @@ it('ohne Lieferant-Spalte und ohne Standard-Lieferant: Fehler vor dem Anlegen ei
     expect(Lauf::count())->toBe(0);
 });
 
-it('Pflichtspalten fehlen ⇒ Fehler, kein Lauf', function () {
-    expect(fn () => $this->svc->stage($this->team, ($this->csv)("Lieferant;Marke\nHanos;X\n")))->toThrow(\RuntimeException::class);
-    expect(Lauf::count())->toBe(0);
+it('Pflichtspalten fehlen ⇒ kein Fehler, der Lauf wartet auf die Zuordnung (1a2); keine Zeilen', function () {
+    $lauf = $this->svc->stage($this->team, ($this->csv)("Lieferant;Marke\nHanos;X\n"));
+
+    expect($lauf->status)->toBe('zuordnung_noetig')->and($lauf->mapping['grund'])->toContain('Pflicht-Spalte')->and(Zeile::count())->toBe(0);
 });
 
 it('geerbter Artikel des Eltern-Teams ⇒ Konflikt (D1), kein Schreiben', function () {

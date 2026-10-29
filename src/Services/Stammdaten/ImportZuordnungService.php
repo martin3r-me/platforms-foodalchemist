@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun as Lauf;
  */
 class ImportZuordnungService
 {
-    public const STATUS_ZUORDNUNG_NOETIG = 'zuordnung_noetig';
+    public const STATUS_ZUORDNUNG_NOETIG = Lauf::STATUS_ZUORDNUNG_NOETIG;
 
     private const ORDNER = 'fa-import';
 
@@ -127,7 +127,7 @@ class ImportZuordnungService
     /** Temp-Kopie der abgelegten Datei zum Einlesen (Aufrufer löscht sie). */
     public function datei(Lauf $lauf): string
     {
-        if ($lauf->status !== self::STATUS_ZUORDNUNG_NOETIG || $lauf->datei_pfad === null || ! str_starts_with($lauf->datei_pfad, self::ORDNER . '/')
+        if ($lauf->status !== Lauf::STATUS_ZUORDNUNG_NOETIG || $lauf->datei_pfad === null || ! str_starts_with($lauf->datei_pfad, self::ORDNER . '/')
             || ! Storage::disk('local')->exists($lauf->datei_pfad)) {
             throw new \RuntimeException('Zu diesem Lauf gibt es keine wartende Datei (nicht „Zuordnung nötig“ oder schon verworfen).');
         }

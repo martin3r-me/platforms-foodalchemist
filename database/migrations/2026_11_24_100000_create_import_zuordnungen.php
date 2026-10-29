@@ -26,6 +26,7 @@ return new class extends Migration
             $table->json('kopf')->nullable()->comment('Kopfzeile des letzten Uploads (Originaltext)');
             $table->timestamp('zuletzt_benutzt_at')->nullable();
             $table->timestamps();
+            $table->softDeletes();
             $table->unique(['team_id', 'supplier_id', 'art'], 'fa_import_zuordnung_uq');
         });
 

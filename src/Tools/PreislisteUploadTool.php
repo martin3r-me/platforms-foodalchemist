@@ -77,7 +77,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
                 @unlink($tmp);
             }
 
-            if ($run->status === 'zuordnung_noetig') {
+            if ($run->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
                 return ['lauf_id' => $run->id, 'art' => $run->art, 'status' => 'zuordnung_noetig', 'datei' => $run->filename, 'grund' => $run->mapping['grund'] ?? null,
                     'kopf' => $run->mapping['kopf'] ?? [], 'vorschau' => $run->mapping['vorschau'] ?? [], 'preise_geschrieben' => 0,
                     'hinweis' => 'Die Spalten wurden nicht erkannt. Mit preisliste.ZUORDNEN (run_id, mapping, merken) zuordnen; die Datei wartet im Lauf.'];

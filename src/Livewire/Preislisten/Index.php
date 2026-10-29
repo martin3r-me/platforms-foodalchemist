@@ -128,7 +128,7 @@ class Index extends Component
 
             return;
         }
-        if ($run->status === 'zuordnung_noetig') {
+        if ($run->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
             app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class)->verwerfen($run);
             $this->fehler = 'Die Pflichtspalten (Preis und Artikelnummer oder EAN) sind noch nicht zugeordnet — bitte oben zuordnen.';
 
