@@ -233,7 +233,7 @@ Route::get('/formate/{id}/report', function (int $id, \Platform\FoodAlchemist\Se
         }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
-            ->download('Format-Report-' . $id . '.pdf');
+            ->download(\Platform\FoodAlchemist\Services\ReportExportService::pdfDateiname($data['name'] ?? '', 'Format-Report-' . $id));
     }
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
@@ -256,7 +256,7 @@ Route::get('/rezepte/{id}/dokument', function (int $id, \Platform\FoodAlchemist\
         }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
-            ->download(($data['typ'] === 'gericht' ? 'Gericht-' : 'Basisrezept-') . $id . '.pdf');
+            ->download(\Platform\FoodAlchemist\Services\ReportExportService::pdfDateiname($data['name'] ?? '', ($data['typ'] === 'gericht' ? 'Gericht-' : 'Basisrezept-') . $id));
     }
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
@@ -274,7 +274,7 @@ Route::get('/concepts/{id}/dokument', function (int $id, \Platform\FoodAlchemist
         }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
-            ->download('Concept-' . $id . '.pdf');
+            ->download(\Platform\FoodAlchemist\Services\ReportExportService::pdfDateiname($data['name'] ?? '', 'Concept-' . $id));
     }
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
@@ -422,7 +422,7 @@ Route::get('/foodbooks/{id}/report', function (int $id, \Platform\FoodAlchemist\
         }
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
-            ->download('Foodbook-Report-' . $id . '.pdf');
+            ->download(\Platform\FoodAlchemist\Services\ReportExportService::pdfDateiname($data['name'] ?? '', 'Foodbook-Report-' . $id));
     }
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
