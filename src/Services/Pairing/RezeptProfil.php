@@ -79,8 +79,16 @@ final class RezeptProfil
     /** Textur-Vokabular → Achse (nur lieferbare Textur-Achsen; kühlend/wärmend/körnig … haben keine Achse). */
     private const TEXTUR_ACHSE = ['knusprig' => 'knusprig', 'cremig' => 'cremig', 'saftig' => 'saftig', 'weich' => 'weich'];
 
-    /** Sensorik-Dimension → Achse; nur die aus Nährwerten belegten. */
+    /** Sensorik-Dimension → Achse; nur die aus Nährwerten belegten (Roh-Fallback ohne gegartes Profil). */
     private const SENSORIK_BELEGT = ['suess' => 'suesse', 'salzig' => 'salz', 'fettig' => 'fett'];
+
+    /**
+     * K4a (Kurator für Dominique, 29.10.2026: „Wahrnehmung gewinnt"): Sensorik-Dimension → Achse für alle 7 Geschmacksachsen.
+     * Hat das Rezept ein GEGARTES Profil (KI oder Hand), ersetzt dessen Wahrnehmung die Anker-Stufe auf diesen Achsen — auch nach
+     * unten (Roastbeef: Pfeffer-Anker Schärfe ●●○, gegart wahrgenommen 0,15 → ●○○). Frische bleibt Anker-Wissen (keine Sensorik-Achse).
+     */
+    private const WAHRNEHMUNG_ACHSE = ['suess' => 'suesse', 'salzig' => 'salz', 'fettig' => 'fett', 'sauer' => 'saeure',
+        'bitter' => 'bitter', 'umami' => 'umami', 'scharf' => 'schaerfe'];
 
     /** @var array<int, array<string, mixed>> */
     private array $cache = [];
@@ -165,6 +173,16 @@ final class RezeptProfil
             'eigenschaften' => $eigenschaften,
             'offene_bedarfe' => $this->offeneBedarfe($anteile, $eigenschaften),
         ];
+    }
+
+    /**
+     * Profil frisch rechnen, OHNE zu speichern oder zu cachen (Messung vorher/nachher, {@see \Platform\FoodAlchemist\Console\RezeptLueckenVergleichCommand}).
+     *
+     * @return array<string, mixed>
+     */
+    public function berechne(int $recipeId): array
+    {
+        return $this->rechne($recipeId, 1, []);
     }
 
     /** Für Tests und Neuaufbau: Speicher-Cache leeren. */
@@ -325,11 +343,23 @@ final class RezeptProfil
                 $out[$achse] = ['stufe' => $wert, 'quelle' => 'ki_textur'];
             }
         }
-        $sensorik = $this->sensorik->fuerRezept($recipeId)['geschmack'] ?? [];
-        foreach (self::SENSORIK_BELEGT as $dim => $achse) {
-            $wert = round(3 * (float) ($sensorik[$dim] ?? 0), 2);
-            if ($wert > 0 && $wert > ($out[$achse]['stufe'] ?? -1)) {
-                $out[$achse] = ['stufe' => $wert, 'quelle' => 'sensorik'];
+        $s = $this->sensorik->fuerRezept($recipeId);
+        $sensorik = $s['geschmack'] ?? [];
+        if (in_array($s['source'] ?? null, ['ki', 'manual'], true)) {
+            foreach (self::WAHRNEHMUNG_ACHSE as $dim => $achse) {
+                $wert = round(3 * (float) ($sensorik[$dim] ?? 0), 2);
+                if ($wert > 0) {
+                    $out[$achse] = ['stufe' => $wert, 'quelle' => 'wahrnehmung'];
+                } else {
+                    unset($out[$achse]);                               // gegart nicht wahrnehmbar → liefert die Achse nicht
+                }
+            }
+        } else {
+            foreach (self::SENSORIK_BELEGT as $dim => $achse) {
+                $wert = round(3 * (float) ($sensorik[$dim] ?? 0), 2);
+                if ($wert > 0 && $wert > ($out[$achse]['stufe'] ?? -1)) {
+                    $out[$achse] = ['stufe' => $wert, 'quelle' => 'sensorik'];
+                }
             }
         }
         ksort($out);

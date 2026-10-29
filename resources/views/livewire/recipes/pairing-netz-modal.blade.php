@@ -16,7 +16,7 @@
     $istGericht = ($netz['meta']['art'] ?? null) === 'gericht';
     $chips = $istGericht
         ? ['stern3' => ['#fcd34d', 'passt dazu'], 'kontrast' => ['#22d3ee', 'deckt offenen Bedarf']]
-        : ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast']];
+        : ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Passt als Kontrast']];
 @endphp
 <x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz" :title-name="$zentrumNode['label'] ?? null" size="max-w-7xl" dark-canvas>
     @if($zentrumNode === null)

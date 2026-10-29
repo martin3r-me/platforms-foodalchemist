@@ -113,7 +113,19 @@ final class Kombinationslogik
      */
     public function analysiere(FoodAlchemistRecipe $gericht): array
     {
-        return $this->analysiereBestandteile($this->bestandteile($gericht));
+        return $this->analysiereBestandteile($this->bestandteile($gericht), $this->tellerEigenschaften($gericht));
+    }
+
+    /**
+     * K1 (Kurator für Dominique, 29.10.2026): was das Rezept selbst liefert („Liefert", Stufe ≥ 2 — inkl. Wahrnehmung des gegarten
+     * Profils), deckt den Bedarf seiner Bestandteile. Vorher zählte nur die Spannung zwischen zwei Bestandteilen: ein Roastbeef mit
+     * „Liefert Salz ●●○" meldete trotzdem „Salz fehlt für Roastbeef vom Rind". Gilt für Gericht und Basisrezept.
+     *
+     * @return array<string, array{stufe: float, quelle: string}>
+     */
+    public function tellerEigenschaften(FoodAlchemistRecipe $rezept): array
+    {
+        return $this->profil->fuer((int) $rezept->id)['eigenschaften'] ?? [];
     }
 
     /**
@@ -142,9 +154,11 @@ final class Kombinationslogik
      * Composer-Auswahl). Jeder Bestandteil trägt ein Profil oder ist unbekannt.
      *
      * @param  list<array{schluessel: string, label: string, recipe_id: ?int, rolle: ?string, profil: ?array}>  $teile
+     * @param  array<string, array{stufe: float, quelle: string}>  $teller  Eigenschaften des ganzen Rezepts ({@see tellerEigenschaften});
+     *                                                                     leer = Auswahl ohne Rezept (Composer, Generator-Plan)
      * @return array{bestandteile: list<array>, aussagen: list<Aussage>, offene_bedarfe: list<array>, zusammenfassung: array<string, int>}
      */
-    public function analysiereBestandteile(array $teile): array
+    public function analysiereBestandteile(array $teile, array $teller = []): array
     {
         $aussagen = [];
         $mit = array_values(array_filter($teile, fn ($t) => $t['profil'] !== null));
@@ -193,7 +207,10 @@ final class Kombinationslogik
         $offen = [];
         foreach ($mit as $t) {
             foreach ($t['profil']['offene_bedarfe'] as $b) {
-                if (isset($gedeckt[$t['schluessel'].'|'.$b['achse']])) {
+                // vom Rezept selbst gedeckt — außer „über die Zubereitung": den deckt nur der Bestandteil selbst (Knusper der Croutons ≠
+                // geröstete Kartoffel), dieselbe Regel wie {@see RezeptGraph::spannung}
+                $vomRezept = ($b['deckung'] ?? null) !== BedarfDeckung::Zubereitung->value && (float) ($teller[$b['achse']]['stufe'] ?? 0) >= 2;
+                if (isset($gedeckt[$t['schluessel'].'|'.$b['achse']]) || $vomRezept) {
                     continue;
                 }
                 $alt = $offen[$b['achse']] ?? null;
@@ -468,6 +485,9 @@ final class Kombinationslogik
     {
         $istGericht = (bool) $rezept->is_sales_recipe;
         $analyse = $this->analysiere($rezept);
+        if (! $istGericht) {
+            $analyse = $this->alsKontrast($analyse);
+        }
         $out = $this->ausgabe($analyse, $istGericht ? 'gericht' : 'basisrezept');
         if (! $istGericht) {
             $p = $this->profil->fuer((int) $rezept->id);
@@ -607,6 +627,20 @@ final class Kombinationslogik
     }
 
     /** @return array<string, mixed> */
+    /**
+     * K2 (Dominique, 29.10.2026): Lücken gibt es nur bei Gerichten. Im Basisrezept ist ein offener Bedarf keine Lücke, sondern ein
+     * Hinweis, was als Kontrast dazu passt — gleicher Typ (Oberfläche, Netz, MCP lesen ihn weiter), anderer Satz.
+     */
+    private function alsKontrast(array $analyse): array
+    {
+        $analyse['aussagen'] = array_map(fn (Aussage $a) => $a->typ === AussageTyp::BedarfOffen
+            ? new Aussage($a->typ, $a->grundlage, (string) preg_replace('/^(Es fehlt |Es könnte fehlen: )/u', 'Passt als Kontrast: ', $a->text),
+                $a->bestandteile, $a->achse, $a->wert)
+            : $a, $analyse['aussagen']);
+
+        return $analyse;
+    }
+
     private function ausgabe(array $analyse, string $art): array
     {
         $gruppen = [];
@@ -622,7 +656,7 @@ final class Kombinationslogik
         $fehlt = array_map(fn ($b) => Achse::from($b['achse'])->label(), $analyse['offene_bedarfe']);
         $satz = count($teile).' Bestandteile · '
             .($z['harmoniert'] ?? 0).' harmonieren · '.($z['spannung'] ?? 0).' Spannung'
-            .($fehlt !== [] ? ' · fehlt: '.implode(', ', $fehlt) : '')
+            .($fehlt !== [] ? ($art === 'basisrezept' ? ' · passt als Kontrast: ' : ' · fehlt: ').implode(', ', $fehlt) : '')
             .(($z['konflikt'] ?? 0) > 0 ? ' · '.$z['konflikt'].' Konflikt' : '')
             .(($z['unbekannt'] ?? 0) > 0 ? ' · '.$z['unbekannt'].' ohne Aroma' : '');
 

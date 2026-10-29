@@ -44,7 +44,7 @@
         return match ($x['typ']) {
             'spannung' => $a0 && $a1 ? [$achse($x), $a1.' → '.$a0] : [null, $x['text']],
             'konflikt' => $a0 && $a1 ? [null, $a0.' ↔ '.$a1] : [null, $x['text']],
-            'bedarf_offen' => [$achse($x), ($a0 ? 'für '.$a0 : $x['text']).(str_starts_with($x['text'], 'Es fehlt') ? '' : ' · könnte fehlen')
+            'bedarf_offen' => [$achse($x), ($a0 ? 'für '.$a0 : $x['text']).(str_starts_with($x['text'], 'Es fehlt') || str_starts_with($x['text'], 'Passt als Kontrast') ? '' : ' · könnte fehlen')
                 .(preg_match('/ – (über die Zubereitung|Partner oder Zubereitung)$/u', $x['text'], $m) ? ' · '.$m[1] : '')],
             'unbekannt' => [null, $a0 ?? $x['text']],
             'hinweis' => [null, ($a0 && $a1 ? $a0.' + '.$a1.' · ' : '').$hinweisRest($x)],
@@ -58,7 +58,8 @@
     $auswahl = ($daten['art'] ?? null) === 'auswahl';
     $gruppen = [
         'konflikt' => ['Konflikt', true, 'crit'],
-        'bedarf_offen' => $auswahl ? ['Fehlt noch', false, null] : ['Es fehlt', true, 'warn'],
+        // Lücken nur beim Gericht (Dominique 29.10.2026); im Basisrezept ist es ein Kontrast-Hinweis, eingeklappt, ohne Ampel.
+        'bedarf_offen' => $auswahl ? ['Fehlt noch', false, null] : (($daten['art'] ?? null) === 'basisrezept' ? ['Passt als Kontrast', false, null] : ['Es fehlt', true, 'warn']),
         'harmoniert' => ['Harmonie (gemessen)', false, null],
         'spannung' => ['Spannung', false, null],
         'kombination' => ['Klassiker', false, null],
