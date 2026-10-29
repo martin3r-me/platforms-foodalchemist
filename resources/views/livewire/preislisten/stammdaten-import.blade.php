@@ -1,8 +1,10 @@
 {{-- Stammdaten-Import, Stufe 1a — Vorlage, Upload, Prüfliste (lesend). Nichts geht in den Bestand; die Übernahme je Zeile folgt in Stufe 1b.
      Handy: Zeilen als Karten, Tabelle erst ab md (#1003). --}}
 @php
+    $Z = \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportLine::class;
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $ton = ['neu' => 'info', 'aendert' => 'accent', 'unveraendert' => 'neutral', 'konflikt' => 'warn', 'fehler' => 'crit'];
+    $ton['verworfen'] = 'neutral';
     $text = ['neu' => 'Neu', 'aendert' => 'Ändert', 'unveraendert' => 'Unverändert', 'konflikt' => 'Konflikt', 'fehler' => 'Fehler'];
 @endphp
 
@@ -81,6 +83,14 @@
                     <x-fa::button size="sm" :variant="$filter === $k ? 'primary' : 'ghost'" wire:click="$set('filter', '{{ $k }}')" wire:key="sd-f-{{ $k }}" data-stammdaten-filter-knopf="{{ $k }}">{{ $label }}</x-fa::button>
                 @endforeach
             </div>
+            @if($darf)
+                @php $vorgemerkt = $pruefliste->where('entscheidung', 'uebernehmen')->where('status', $Z::STATUS_GEPRUEFT)->count(); @endphp
+                <div class="mb-3 flex flex-wrap items-center gap-2" data-stammdaten-aktionen>
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-check" wire:click="unkritischVormerken" data-stammdaten-unkritisch>Alle neuen ohne Allergen-Änderung vormerken</x-fa::button>
+                    <x-fa::button size="sm" variant="primary" icon="heroicon-m-check" wire:click="uebernehmen" :disabled="$vorgemerkt === 0"
+                        wire:confirm="{{ $vorgemerkt }} vorgemerkte Zeilen in den Bestand übernehmen? Allergene werden nur geschrieben, wo du sie bestätigt hast." data-stammdaten-uebernehmen>{{ $vorgemerkt }} vorgemerkte übernehmen</x-fa::button>
+                </div>
+            @endif
             @if($pruefliste->isEmpty())
                 <x-fa::empty compact icon="heroicon-o-check-circle" title="Keine Zeilen">Für diesen Filter gibt es keine Zeilen.</x-fa::empty>
             @else
@@ -88,7 +98,8 @@
                     @foreach($pruefliste as $z)
                         <details wire:key="sd-z-{{ $z->id }}" class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-stammdaten-zeile="{{ $z->aktion }}">
                             <summary class="flex cursor-pointer flex-wrap items-center gap-2">
-                                <x-fa::badge :tone="$ton[$z->aktion] ?? 'neutral'">{{ $text[$z->aktion] ?? $z->aktion }}</x-fa::badge>
+                                <x-fa::badge :tone="$ton[$z->status === $Z::STATUS_VERWORFEN ? 'verworfen' : $z->aktion] ?? 'neutral'">{{ $z->status === $Z::STATUS_ANGEWENDET ? 'Übernommen' : ($z->status === $Z::STATUS_VERWORFEN ? 'Verworfen' : ($text[$z->aktion] ?? $z->aktion)) }}</x-fa::badge>
+                                @if($z->entscheidung === 'uebernehmen' && $z->status === $Z::STATUS_GEPRUEFT)<x-fa::badge tone="ok" data-stammdaten-vorgemerkt>vorgemerkt</x-fa::badge>@endif
                                 <span class="tabular-nums {{ $leise }}">Zeile {{ $z->row_nr }}</span>
                                 <span class="min-w-0 flex-1 truncate font-medium text-[var(--fa-ink)]">{{ $z->designation ?? '–' }}</span>
                                 <span class="{{ $leise }}">{{ $z->supplier_name }} · {{ $z->article_number ?? $z->ean ?? 'ohne Nr.' }}</span>
@@ -98,6 +109,15 @@
                                 @foreach((array) $z->hinweise as $h)
                                     <p class="{{ in_array($h['stufe'] ?? '', ['fehler', 'konflikt'], true) ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-warn)]' }}" data-stammdaten-hinweis-zeile="{{ $h['code'] ?? '' }}">{{ $h['text'] ?? '' }}</p>
                                 @endforeach
+                                @if($darf && $z->status === $Z::STATUS_GEPRUEFT && in_array($z->aktion, ['neu', 'aendert', 'konflikt'], true))
+                                    <div class="flex flex-wrap items-center gap-2 pt-1" data-stammdaten-entscheidung="{{ $z->id }}">
+                                        <x-fa::button size="sm" variant="primary" wire:click="entscheiden({{ $z->id }}, 'uebernehmen')" data-stammdaten-zeile-uebernehmen>Übernehmen</x-fa::button>
+                                        <x-fa::button size="sm" variant="ghost" wire:click="entscheiden({{ $z->id }}, 'verwerfen')" data-stammdaten-zeile-verwerfen>Verwerfen</x-fa::button>
+                                        @if(! empty($z->diff['allergene']))
+                                            <label class="flex items-center gap-1.5 text-[length:var(--fa-text-md)]"><input type="checkbox" wire:click="allergeneBestaetigen({{ $z->id }}, {{ $z->allergene_bestaetigt ? 'false' : 'true' }})" @checked($z->allergene_bestaetigt) data-stammdaten-allergene-bestaetigt /> Allergene bestätigen (sonst werden sie nicht geschrieben)</label>
+                                        @endif
+                                    </div>
+                                @endif
                                 @foreach((array) $z->diff as $block => $felder)
                                     <div data-stammdaten-diff="{{ $block }}">
                                         <p class="{{ $leise }} font-medium">{{ ['felder' => 'Artikelfelder', 'preis' => 'Preis', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene', 'zusatzstoffe' => 'Zusatzstoffe'][$block] ?? $block }}</p>

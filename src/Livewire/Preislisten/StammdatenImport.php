@@ -108,6 +108,81 @@ class StammdatenImport extends Component
         }
     }
 
+    /** Entscheidung je Zeile (übernehmen | verwerfen | offen); Allergen-Bestätigung wird mit gesetzt. */
+    public function entscheiden(int $zeileId, string $entscheidung, ?bool $allergene = null): void
+    {
+        $this->fehler = $this->meldung = null;
+        [$team, $lauf] = $this->laufDesTeams();
+        if ($lauf === null) {
+            return;
+        }
+        try {
+            $e = ['id' => $zeileId, 'entscheidung' => $entscheidung];
+            if ($allergene !== null) {
+                $e['allergene_bestaetigt'] = $allergene;
+            }
+            app(\Platform\FoodAlchemist\Services\Stammdaten\StammdatenUebernahmeService::class)->entscheide($team, Auth::user(), $lauf, [$e]);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $ex) {
+            $this->fehler = $ex->getMessage();
+        }
+    }
+
+    public function allergeneBestaetigen(int $zeileId, bool $ja): void
+    {
+        $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportLine::where('team_id', $this->team()?->id)->find($zeileId);
+        if ($zeile !== null) {
+            $this->entscheiden($zeileId, $zeile->entscheidung, $ja);
+        }
+    }
+
+    public function unkritischVormerken(): void
+    {
+        $this->fehler = $this->meldung = null;
+        [$team, $lauf] = $this->laufDesTeams();
+        if ($lauf === null) {
+            return;
+        }
+        try {
+            $n = app(\Platform\FoodAlchemist\Services\Stammdaten\StammdatenUebernahmeService::class)->merkeUnkritischeVor($team, Auth::user(), $lauf);
+            $this->meldung = $n . ($n === 1 ? ' Zeile' : ' Zeilen') . ' zum Übernehmen vorgemerkt (ohne Allergen-Änderung).';
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $ex) {
+            $this->fehler = $ex->getMessage();
+        }
+    }
+
+    /** Vorgemerkte Zeilen in den Bestand schreiben (Bestätigung kommt aus der Oberfläche, wire:confirm). */
+    public function uebernehmen(): void
+    {
+        $this->fehler = $this->meldung = null;
+        [$team, $lauf] = $this->laufDesTeams();
+        if ($lauf === null) {
+            return;
+        }
+        try {
+            $b = app(\Platform\FoodAlchemist\Services\Stammdaten\StammdatenUebernahmeService::class)->uebernehmen($team, Auth::user(), $lauf);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $ex) {
+            $this->fehler = $ex->getMessage();
+
+            return;
+        }
+        $this->meldung = sprintf('%d Zeilen übernommen, %d blieben stehen (Grund steht an der Zeile). %d Rezepte neu berechnet.',
+            $b['angewendet'], count($b['uebersprungen']), (int) ($b['kette']['neu_berechnet'] ?? 0));
+    }
+
+    /** @return array{0: ?\Platform\Core\Models\Team, 1: ?Lauf} */
+    private function laufDesTeams(): array
+    {
+        $team = $this->team();
+        $lauf = $team !== null && $this->laufId !== null ? Lauf::where('team_id', $team->id)->where('art', Lauf::ART_STAMMDATEN)->find($this->laufId) : null;
+        if ($lauf === null || ! $this->darf()) {
+            $this->fehler = 'Stammdaten übernehmen darf nur das Haupt-Team des Kunden (Rolle Kuratieren).';
+
+            return [$team, null];
+        }
+
+        return [$team, $lauf];
+    }
+
     /** Gewählte Zuordnung anwenden: die wartende Datei wird mit ihr geprüft (und je Lieferant gemerkt). */
     public function zuordnen(): void
     {

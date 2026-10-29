@@ -41,6 +41,13 @@ class FoodAlchemistPriceImportLine extends Model
     /** Stammdaten-Läufe (art=stammdaten): die Zeile ist geprüft, das Ergebnis steht in `aktion`. */
     public const STATUS_GEPRUEFT = 'geprueft';
 
+    /** Prüfer hat die Zeile verworfen (1b): nichts wurde geschrieben. */
+    public const STATUS_VERWORFEN = 'verworfen';
+
+    public const ENTSCHEIDUNG_OFFEN = 'offen';
+    public const ENTSCHEIDUNG_UEBERNEHMEN = 'uebernehmen';
+    public const ENTSCHEIDUNG_VERWERFEN = 'verwerfen';
+
     public const AKTION_NEU = 'neu';
     public const AKTION_AENDERT = 'aendert';
     public const AKTION_UNVERAENDERT = 'unveraendert';
