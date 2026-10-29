@@ -47,6 +47,19 @@ class GpService
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
+        // MCP gps.LIST (Bestandsarbeit per MCP, 29.10.): weitere Filter, nur wenn gesetzt
+        if (($filters['sub_category'] ?? '') !== '') {
+            $query->where('sub_category', $filters['sub_category']);
+        }
+        if (isset($filters['marke_offen'])) {
+            $query->where('marke_offen', filter_var($filters['marke_offen'], FILTER_VALIDATE_BOOLEAN));   // auch "false" als Text
+        }
+        if (isset($filters['rezepturware'])) {   // ja | nein | offen (nicht entschieden)
+            $filters['rezepturware'] === 'offen' ? $query->whereNull('rezepturware') : $query->where('rezepturware', $filters['rezepturware'] === 'ja');
+        }
+        if (isset($filters['ohne_lead'])) {
+            filter_var($filters['ohne_lead'], FILTER_VALIDATE_BOOLEAN) ? $query->whereNull('lead_la_supplier_item_id') : $query->whereNotNull('lead_la_supplier_item_id');
+        }
 
         return $query
             ->orderBy('name')
