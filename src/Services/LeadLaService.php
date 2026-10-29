@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Support\DeklarationsProfil;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
@@ -20,6 +21,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
  *
  * Kaskade T1 als SORTIER-Kriterien (I3 — keine Filter; auch ein discontinued LA
  * ohne Preis wird Lead, wenn es keinen besseren gibt):
+ *  -1 Lieferant bestellbar (inaktiver/gesperrter Lieferant nie vor einem aktiven; nur Ausweich, wenn es sonst nichts gibt, und dann gekennzeichnet)
  *   0 Strategie-Stufe (M1-05: stamm_lieferant | guenstigster_preis | prioritaets_kette)
  *   1 Aktivität (aktiv vor discontinued)
  *   2 hat aktiven Preis (GL-11: standard_ek | aktion)
@@ -126,6 +128,7 @@ class LeadLaService
                 $la->setAttribute('gepinnt', (bool) ($pref['gepinnt'] ?? false));
             })
             ->sortBy(fn ($la) => [
+                $la->lieferant_inaktiv ? 1 : 0,                            // Stufe -1: inaktiver/gesperrter Lieferant nie vor einem aktiven (nur Ausweich, wenn es sonst nichts gibt)
                 match ($strategie) {                                       // Stufe 0 (V-27-Strategie)
                     LeadLaStrategie::GuenstigsterPreis => 0,
                     LeadLaStrategie::StammLieferant => $la->ist_stamm ? 0 : 1,
@@ -173,15 +176,18 @@ class LeadLaService
      * @return array{geprueft: int, unveraendert: int, ohne_preis: int, manuell_geschuetzt: int,
      *               wechsel: list<array<string, mixed>>}
      */
-    public function repickVorschau(Team $team, ?string $warengruppeCode = null, ?array $nurGpIds = null): array
+    public function repickVorschau(Team $team, ?string $warengruppeCode = null, ?array $nurGpIds = null, bool $nurInaktiveLieferanten = false): array
     {
-        $out = ['geprueft' => 0, 'unveraendert' => 0, 'ohne_preis' => 0, 'manuell_geschuetzt' => 0, 'wechsel' => []];
+        $out = ['geprueft' => 0, 'unveraendert' => 0, 'ohne_preis' => 0, 'manuell_geschuetzt' => 0, 'kein_aktiver_ersatz' => 0, 'wechsel' => []];
 
         FoodAlchemistGp::where('team_id', $team->id)
             ->where('status', 'approved')->where('requires_la', true)
             ->when($warengruppeCode !== null && $warengruppeCode !== '', fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
             ->when($nurGpIds !== null, fn ($q) => $q->whereIn('id', $nurGpIds))
-            ->chunkById(200, function ($gps) use ($team, &$out) {
+            ->when($nurInaktiveLieferanten, fn ($q) => $q->whereExists(fn ($e) => $e->selectRaw('1')   // nur GPs, deren Lead bei einem inaktiven/gesperrten Lieferanten liegt
+                ->from('foodalchemist_supplier_items AS lead_si')->join('foodalchemist_suppliers AS sup', 'sup.id', '=', 'lead_si.supplier_id')
+                ->whereColumn('lead_si.id', 'foodalchemist_gps.lead_la_supplier_item_id')->whereRaw(FoodAlchemistSupplier::nichtBestellbarSql())))
+            ->chunkById(200, function ($gps) use ($team, &$out, $nurInaktiveLieferanten) {
                 $ranglisten = $this->ranglisteBulk($gps, $team);
                 $manuell = FoodAlchemistGpLaPreference::whereIn('gp_id', $gps->pluck('id'))
                     ->whereNotNull('reason')->get(['gp_id', 'supplier_item_id'])
@@ -192,6 +198,10 @@ class LeadLaService
                     $kette = $ranglisten[(int) $gp->id] ?? collect();
                     $neu = $kette->first();
                     $alt = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
+                    if ($nurInaktiveLieferanten && $neu !== null && $neu->lieferant_inaktiv) {   // auch Rang 1 ist nicht bestellbar: es gibt keinen aktiven Ersatz
+                        $out['kein_aktiver_ersatz']++;
+                        continue;
+                    }
                     if ($neu === null || (int) $neu->id === $alt) {
                         $out['unveraendert']++;
                         continue;
@@ -217,6 +227,7 @@ class LeadLaService
                         'neu_vergleichspreis' => $neu->vergleichspreis_wert,
                         'neu_ist_stamm' => (bool) $neu->ist_stamm,
                         'neu_preis_quelle' => $neu->preis_quelle,
+                        'alt_lieferant_inaktiv' => (bool) ($altLa?->lieferant_inaktiv ?? false),
                     ];
                 }
             });
@@ -704,7 +715,7 @@ class LeadLaService
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->where('s.gp_id', $gp->id)
             ->whereNull('s.deleted_at')
-            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
+            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', DB::raw(FoodAlchemistSupplier::nichtBestellbarSql() . ' AS lieferant_inaktiv'))
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
             ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $sicht))   // Rückfall eingestellter Artikel (27.10.)
             ->get();
@@ -727,7 +738,7 @@ class LeadLaService
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereIn('s.gp_id', $gpIds)
             ->whereNull('s.deleted_at')
-            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', 's.gp_id AS _gp_id')
+            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', DB::raw(FoodAlchemistSupplier::nichtBestellbarSql() . ' AS lieferant_inaktiv'), 's.gp_id AS _gp_id')
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $sicht)->toBase(), 'aktiver_preis')
             ->tap(fn ($q) => $this->preise->mitLetztemPreis($q, 'foodalchemist_supplier_items.id', $sicht))   // Rückfall eingestellter Artikel (27.10.)
             ->get();
@@ -744,6 +755,7 @@ class LeadLaService
      */
     private function preisAnnotieren(FoodAlchemistSupplierItem $la): void
     {
+        $la->setAttribute('lieferant_inaktiv', (bool) $la->lieferant_inaktiv);   // Panel-Kennzeichen „Lieferant inaktiv“
         $hatAktiven = $la->aktiver_preis !== null;
         $hatLetzten = ! $hatAktiven && $la->letzter_preis !== null;
         $effektiv = $hatAktiven ? (float) $la->aktiver_preis : ($hatLetzten ? (float) $la->letzter_preis : null);
