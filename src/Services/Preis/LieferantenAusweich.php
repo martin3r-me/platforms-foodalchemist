@@ -3,8 +3,10 @@
 namespace Platform\FoodAlchemist\Services\Preis;
 
 use Illuminate\Support\Collection;
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
-use Platform\FoodAlchemist\Services\PriceService;
+use Platform\FoodAlchemist\Services\LeadLaService;
 
 /**
  * Inaktiver oder gesperrter Lieferant (Kurator 29.10.2026) — aus RecipeRecomputeService ausgelagert (Dateigrößen-Wächter, Spec 85 §9).
@@ -13,8 +15,6 @@ use Platform\FoodAlchemist\Services\PriceService;
  */
 class LieferantenAusweich
 {
-    public function __construct(private readonly PriceService $preise) {}
-
     public function uebergehen(?FoodAlchemistSupplierItem $la): bool
     {
         return $la !== null && (bool) ($la->lieferant_inaktiv ?? false);
@@ -28,10 +28,23 @@ class LieferantenAusweich
         return $ok->isNotEmpty() ? $ok->values() : $las;
     }
 
-    /** Günstigster freier Kandidat (bepreist, nicht eingestellt) eines bestellbaren Lieferanten; null, wenn es keinen gibt. */
-    public function beste(Collection $frei): ?FoodAlchemistSupplierItem
+    /**
+     * Ersatz-Lead, wenn der gesetzte Lead übergangen wird: erster Kandidat der Rangliste (Strategie, Stamm-Lieferant, Prioritäts-Kette bleiben wirksam —
+     * kein „günstigster“), der frei (nicht gesperrt, bepreist, nicht eingestellt = $frei) und bei einem bestellbaren Lieferanten ist. Null, wenn es keinen gibt.
+     */
+    public function ersatz(FoodAlchemistGp $gp, ?Team $team, Collection $frei): ?FoodAlchemistSupplierItem
     {
-        return $frei->filter(fn ($la) => ! $this->uebergehen($la))
-            ->sortBy(fn ($la) => $this->preise->vergleichspreis($la, (float) $la->aktiver_preis)['value'] ?? PHP_FLOAT_MAX)->first();
+        $team ??= $gp->team_id !== null ? Team::find($gp->team_id) : null;
+        if ($team === null) {
+            return $frei->first(fn ($la) => ! $this->uebergehen($la));
+        }
+        foreach (app(LeadLaService::class)->rangliste($gp, $team, null, true) as $kandidat) {
+            $la = $frei->firstWhere('id', $kandidat->id);
+            if ($la !== null && ! $this->uebergehen($la)) {
+                return $la;
+            }
+        }
+
+        return null;
     }
 }

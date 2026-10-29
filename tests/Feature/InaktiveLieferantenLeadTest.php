@@ -150,6 +150,23 @@ it('Recompute-EK: Lead bei inaktivem Lieferanten wird übergangen, der aktive Zw
     expect((float) $r->fresh()->ek_total_eur)->toBe(6.50);
 });
 
+it('Recompute-Ersatz folgt der Rangliste (Stamm-Lieferant), nicht dem günstigsten Kandidaten', function () {
+    $this->settings->update($this->rootTeam, ['lead_la_strategie' => 'stamm_lieferant']);
+    $stamm = ($this->lieferant)('Stamm aktiv');
+    app(\Platform\FoodAlchemist\Services\StammLieferantService::class)->setStamm($this->rootTeam, $stamm->id, '01');
+    $gp = ($this->gp)('Dressing');
+    $alt = ($this->la)($gp, $this->inaktiv, 1.00);
+    ($this->la)($gp, $stamm, 8.00);              // Rang 1 (Stamm), teurer
+    ($this->la)($gp, $this->aktiv, 3.00);        // Rang 2, günstiger — darf NICHT gewinnen
+    $gp->update(['lead_la_supplier_item_id' => $alt->id]);
+    $r = $this->makeRecipe($this->rootTeam, 'Salat');
+    $this->makeIngredient($r, 'Dressing', $gp->refresh(), '1000');
+
+    app(RecipeRecomputeService::class)->recomputePipeline($r->id);
+
+    expect((float) $r->fresh()->ek_total_eur)->toBe(8.00);
+});
+
 it('Gegenprobe Recompute: nur ein inaktiver Lieferant ⇒ sein Preis zählt weiter (Ausweich)', function () {
     $gp = ($this->gp)('Rarität');
     $nur = ($this->la)($gp, $this->inaktiv, 9.00);

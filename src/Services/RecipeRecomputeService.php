@@ -1453,7 +1453,7 @@ class RecipeRecomputeService
         }
         // 3. Lead team-gesperrt ODER Lieferant inaktiv/gesperrt ⇒ Ausweich; ohne Ausweich bleibt der Lead nur, wenn er nicht gesperrt ist
         $frei = $las->filter(fn ($la) => ! ($prefs[$la->id]['locked'] ?? false) && $la->aktiver_preis !== null && ! $la->is_discontinued);
-        $wahl = $gesperrt ? $frei->first() : $ausweich->beste($frei);
+        $wahl = $gesperrt ? $frei->first() : $ausweich->ersatz($gp, $this->recomputeTeam, $frei);
 
         return $wahl !== null ? (int) $wahl->id : ($gesperrt ? null : $global);
     }
