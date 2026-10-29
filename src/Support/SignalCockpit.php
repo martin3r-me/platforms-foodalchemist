@@ -178,6 +178,9 @@ final class SignalCockpit
             . 'und Kommentare stehen im Feedback-Tab des Rezepts.',
         'veraltete_preise' => 'Preise am Lieferantenartikel pflegen (Lieferanten → Artikel → Preise) oder den '
             . 'Katalog-Import laufen lassen — mit der nächsten gültigen Preiszeile verschwindet der Befund.',
+        'naehrwert_pruefen' => 'Wert am Artikel gegen Etikett oder Produktpass prüfen. Stimmt er, freigeben; der Artikel zählt dann wieder in den '
+            . 'GP-Nährwerten (foodalchemist.naehrwert_pruefung.ENTSCHEIDEN aktion=freigeben). Stimmt er nicht, korrigieren (aktion=korrigieren, werte={…}). '
+            . 'Das Signal schließt sich danach; ändern sich die Werte, wird neu geprüft.',
         'naehrwert_plausi' => 'Die gemeldete Nährwertangabe am Artikel gegen das Etikett prüfen und korrigieren '
             . '(Lieferanten → Artikel); die Rezept-Aggregate ziehen beim nächsten Recompute nach.',
         'widerspruch_wissen_graph' => 'R&D-Frage im Wissens-Modul: trägt der Beleg die Paarung, fehlt dem Anker-Graph '

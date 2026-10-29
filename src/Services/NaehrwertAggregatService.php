@@ -59,7 +59,7 @@ class NaehrwertAggregatService
      */
     public function zeilen(array $gpIds, array $felder): array
     {
-        $scharf = config('foodalchemist.naehrwert_pruefung.modus') === 'scharf';
+        $scharf = \Platform\FoodAlchemist\Support\NaehrwertPruefModus::istScharf();
         $out = [];
         foreach ($this->pruefung($gpIds, $scharf) as $gpId => $artikel) {
             foreach ($artikel as $a) {

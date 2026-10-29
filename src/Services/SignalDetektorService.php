@@ -69,6 +69,7 @@ class SignalDetektorService
             + $this->vertragsfristFaellig($team)
             + app(\Platform\FoodAlchemist\Services\Pairing\PairingSignale::class)->alle($team)   // Spec 60 · P8
             + $this->naehrwertPlausi($team)
+            + app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertSignalService::class)->laufen($team)   // Nährwert-Prüfung je Artikel (nur Modus scharf, gedrosselt)
             + $this->markenNachlauf($team)   // Plan GP-Stamm 3g (nur Master-Team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
 

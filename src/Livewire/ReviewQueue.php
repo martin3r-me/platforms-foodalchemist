@@ -71,7 +71,7 @@ class ReviewQueue extends Component
             SignalTyp::MargeUnterZiel, SignalTyp::WareneinsatzUeberZiel, SignalTyp::WareneinsatzIstAbweichung,
             SignalTyp::EkKetteUnvollstaendig, SignalTyp::VkAnpassungEmpfohlen, SignalTyp::VertragsfristFaellig,
             SignalTyp::SortimentsLuecke => 'preise',
-            SignalTyp::RezeptAllergenUnbelastbar, SignalTyp::NaehrwertPlausi => 'deklaration',
+            SignalTyp::RezeptAllergenUnbelastbar, SignalTyp::NaehrwertPlausi, SignalTyp::NaehrwertPruefen => 'deklaration',
             SignalTyp::DatenqualitaetGpLa, SignalTyp::KonformitaetGp, SignalTyp::KonformitaetLa,
             SignalTyp::AnkerFehlt, SignalTyp::MarkenNachlauf => 'datenqualitaet',
             SignalTyp::ServierformUnbestimmt => 'rezepte',

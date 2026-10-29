@@ -980,9 +980,13 @@ return [
      * modus: aus = die GP-Nährwerte rechnen ohne Prüfung · trocken = wie aus, Bericht per naehrwert_pruefung.GET ·
      * scharf = Artikel mit hartem Befund zählen nicht, eine eindeutige Einheiten-Probe wird beim Rechnen angewendet
      * (Rohwert bleibt gespeichert). Schwellen aus dem Trockenlauf 29.10. (lokal 6.282 Artikel, 3,1 % markiert).
+     * Wirksam ist {@see \Platform\FoodAlchemist\Support\NaehrwertPruefModus}: die Plattform-Einstellung (MCP naehrwert_pruefung.PUT,
+     * nur Master-Team) vor dieser env als Standard; `notaus` = true erzwingt „aus“, gleich was eingestellt ist.
      */
     'naehrwert_pruefung' => [
         'modus' => env('FOODALCHEMIST_NAEHRWERT_PRUEFUNG', 'aus'),
+        'notaus' => (bool) env('FOODALCHEMIST_NAEHRWERT_PRUEFUNG_NOTAUS', false),
+        'signale_je_lauf' => 25,                    // neue Signale „Nährwerte prüfen“ je Detektor-Lauf (kein Signal-Sturm)
         'summe_max_g' => 105,                       // H2: Fett+Eiweiß+KH+Ballast+Alkohol+Salz
         'energie' => ['abstand_kcal' => 60, 'anteil' => 0.30],                      // H4: Atwater 4/4/9 gegen kcal
         'kj' => ['min' => 3.8, 'max' => 4.6, 'abstand_kj' => 50, 'ab_kcal' => 20],  // H5 (Hinweis)

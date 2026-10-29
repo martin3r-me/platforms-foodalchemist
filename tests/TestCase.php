@@ -58,6 +58,7 @@ abstract class TestCase extends BaseTestCase
         // Grund" (stale Kette prüft eine Sichtbarkeit, die es zur Laufzeit nicht gibt).
         TeamAncestryRegistry::flushAll();
         \Platform\FoodAlchemist\Support\TeamSperre::flush();   // Spec 82 §13 C3: Sperr-Merker je Prozess, Team-Ids wiederholen sich je Test
+        \Platform\FoodAlchemist\Support\NaehrwertPruefModus::flush();   // Nährwert-Prüfung: Modus-Einstellung je Prozess gecacht
         \Platform\FoodAlchemist\Tests\Support\VkAltspaltenBruecke::registrieren();   // Spec 85 D-1 PR-C: Altspalten-Fixtures → Standard-Darreichung (Abbau per Sperrklinke)
     }
 

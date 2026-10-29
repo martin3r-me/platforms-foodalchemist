@@ -70,7 +70,8 @@ class NaehrwertPruefLaufService
         ksort($umrechnung);
 
         return ['bericht' => [
-            'modus' => (string) config('foodalchemist.naehrwert_pruefung.modus'),
+            'modus' => \Platform\FoodAlchemist\Support\NaehrwertPruefModus::aktuell(),
+            'modus_quelle' => \Platform\FoodAlchemist\Support\NaehrwertPruefModus::quelle(),
             'artikel_geprueft' => count($artikel),
             'artikel_markiert' => count($markiert),
             'artikel_umgerechnet' => count($umgerechnet),
