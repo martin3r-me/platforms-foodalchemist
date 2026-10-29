@@ -239,9 +239,10 @@ class GpNamingService
     }
 
     /**
-     * Getränke (WG 15, Dominique 28.10.): Marke als Klammer-Zusatz statt im Namen, Füllmenge nach §7.1a in der Pflichtangabe, kein Zustandswort.
-     * Die Marke kommt nur aus dem Artikel (MarkeAusArtikel) — ohne belegte Marke bleibt die Klammer leer (generisches Getränk). Steht die Marke noch
-     * in der Hauptzutat („Happy Day Ananassaft“), fällt sie dort heraus. Fehlt die Füllmenge, kommt sie aus dem Artikeltext („Pk1,0l“ → „1 l“).
+     * Getränke (WG 15, Dominique 28.10.): Gattungsname + Hersteller-Marke → Marke als Klammer-Zusatz („Ananassaft: 1 l / (Happy Day)“); Markenprodukt ohne
+     * eigenständigen Gattungsnamen → Marke bleibt der Name („Coca-Cola: 0,33 l“). Das entscheidet die KI je Artikel (gp.suggest), nicht der Code — im
+     * Zweifel Marke als Name. Der Nachlauf sorgt nur dafür, dass eine Klammer-Marke (zusatz = Marke des Artikels) nicht zusätzlich in der Hauptzutat
+     * steht, und setzt die Füllmenge nach §7.1a aus dem Artikeltext, wenn sie fehlt („Pk1,0l“ → „1 l“).
      *
      * @param  array<string, mixed>  $felder  hauptzutat, zusatz, pflichtangabe …
      * @param  list<string|null>  $quelltexte  Bezeichnung, Vermarktungsname
@@ -250,14 +251,11 @@ class GpNamingService
     public function getraenkFelder(array $felder, ?string $marke, array $quelltexte): array
     {
         $marke = $this->bereinigeZusatz($marke);
-        if ($marke !== '') {
+        if ($marke !== '' && mb_strtolower($this->bereinigeZusatz($felder['zusatz'] ?? '')) === mb_strtolower($marke)) {
             $haupt = trim((string) preg_replace('/(?<![\p{L}])' . preg_quote($marke, '/') . '(?![\p{L}])/iu', ' ', (string) ($felder['hauptzutat'] ?? '')));
             $haupt = trim((string) preg_replace('/\s{2,}/u', ' ', $haupt), " \t-–,");
             if ($haupt !== '') {
                 $felder['hauptzutat'] = $haupt;
-            }
-            if (trim((string) ($felder['zusatz'] ?? '')) === '') {
-                $felder['zusatz'] = $marke;
             }
         }
         $pflicht = trim((string) ($felder['pflichtangabe'] ?? ''));

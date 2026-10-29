@@ -98,11 +98,11 @@ class LaFelderService
         $f['marke_regel'] = $regel->toArray();
         $f['rezepturware'] = $nonFood ? false : MarkeAusArtikel::rezepturwareFuerWg($f['rezepturware'] ?? null, (string) ($f['commodity_group_code'] ?? ''));
         $wg = (string) ($f['commodity_group_code'] ?? '');
-        if (MarkeAusArtikel::markeInKlammer($f['rezepturware'], $wg) && trim((string) ($f['zusatz'] ?? '')) === '' && $regel->marke !== null) {
+        if ($f['rezepturware'] === true && trim((string) ($f['zusatz'] ?? '')) === '' && $regel->marke !== null) {
             $f['zusatz'] = $regel->marke;
         }
         if (! $nonFood && $wg === '15') {
-            // Getränke (Dominique 28.10.): Marke als Klammer-Zusatz statt im Namen, Füllmenge nach §7.1a
+            // Getränke (Dominique 28.10.): Klammer-Marke nur, wenn die KI Gattung + Marke erkannt hat; Füllmenge nach §7.1a
             $f = $this->naming->getraenkFelder($f, $regel->marke, [$la->designation, $la->marketing_name]);
         }
         $f['marke_offen'] = MarkeAusArtikel::markeOffen($f['rezepturware'], (string) ($f['zusatz'] ?? ''));

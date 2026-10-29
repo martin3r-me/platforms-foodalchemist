@@ -12,8 +12,9 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Getränke (WG 15, Entscheid Dominique 28.10.): Marke als Klammer-Zusatz statt im Namen („Ananassaft: 1 l / (Happy Day)“), Füllmenge nach §7.1a,
- * kein Zustandswort, rezepturware bleibt false. Ohne belegte Marke: Klammer leer, generisches Getränk (kein marke_offen). KI gemockt.
+ * Getränke (WG 15, Entscheid Dominique 28.10.): Gattungsname + Hersteller-Marke → Marke als Klammer-Zusatz („Ananassaft: 1 l / (Happy Day)“);
+ * Markenprodukt ohne eigenen Gattungsnamen → Marke bleibt der Name („Coca-Cola: 0,33 l“). Die KI entscheidet (gp.suggest), der Nachlauf hält die Marke
+ * nicht doppelt und setzt die Füllmenge nach §7.1a. rezepturware bleibt false; ohne Marke generisch (kein marke_offen). KI gemockt.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -29,24 +30,33 @@ beforeEach(function () {
     $this->name = fn (array $f) => $this->naming->renderGpName($f);
 });
 
-it('„Happy Day Ananassaft Pk1,0l“ → Ananassaft / 1 l / Happy Day — auch wenn die KI die Marke in die Hauptzutat schreibt', function () {
-    ($this->ki)(['hauptzutat' => 'Happy Day Ananassaft', 'commodity_group_code' => '15', 'pflichtangabe' => '', 'zusatz' => '', 'rezepturware' => true]);
+it('Gattungsname + Hersteller-Marke: „Happy Day Ananassaft Pk1,0l“ → „Ananassaft: 1 l / (Happy Day)“ — Marke nicht doppelt in der Hauptzutat', function () {
+    // die KI erkennt Gattung + Marke (zusatz), schreibt die Marke aber noch mit in die Hauptzutat; Füllmenge fehlt
+    ($this->ki)(['hauptzutat' => 'Happy Day Ananassaft', 'commodity_group_code' => '15', 'pflichtangabe' => '', 'zusatz' => 'Happy Day', 'rezepturware' => true]);
     $f = app(LaFelderService::class)->fuer($this->rootTeam, ($this->la)('Happy Day Ananassaft Pk1,0l', ['brand' => 'Happy Day']));
 
     expect([$f['hauptzutat'], $f['pflichtangabe'], $f['zusatz'], $f['rezepturware'], $f['marke_offen']])->toBe(['Ananassaft', '1 l', 'Happy Day', false, false])
         ->and(($this->name)($f))->toBe('Ananassaft: 1 l / (Happy Day)');
 });
 
-it('Bier mit vol-%: Marke in die Klammer, Vol-% und Gebinde bleiben in der Pflichtangabe', function () {
-    ($this->ki)(['hauptzutat' => 'Pils', 'commodity_group_code' => '15', 'pflichtangabe' => '4,9 vol-%, Flasche 0,33 l', 'zusatz' => '']);
+it('Markenprodukt ohne eigenen Gattungsnamen: „Coca-Cola“ bleibt der Name, keine Klammer — Füllmenge trotzdem gesetzt', function () {
+    ($this->ki)(['hauptzutat' => 'Coca-Cola', 'commodity_group_code' => '15', 'pflichtangabe' => '', 'zusatz' => '']);
+    $f = app(LaFelderService::class)->fuer($this->rootTeam, ($this->la)('Coca-Cola 0,33l Dose', ['brand' => 'Coca-Cola']));
+
+    expect([$f['hauptzutat'], $f['pflichtangabe'], $f['zusatz']])->toBe(['Coca-Cola', '0,33 l', ''])
+        ->and(($this->name)($f))->toBe('Coca-Cola: 0,33 l');
+});
+
+it('Bier mit vol-%: Vol-% und Gebinde bleiben in der Pflichtangabe, die Füllmenge wird nicht doppelt gesetzt', function () {
+    ($this->ki)(['hauptzutat' => 'Pils', 'commodity_group_code' => '15', 'pflichtangabe' => '4,9 vol-%, Flasche 0,33 l', 'zusatz' => 'Jever']);
     $f = app(LaFelderService::class)->fuer($this->rootTeam, ($this->la)('Jever Pils 4,9% 24x0,33l Fl.', ['brand' => 'Jever']));
 
     expect([$f['hauptzutat'], $f['pflichtangabe'], $f['zusatz']])->toBe(['Pils', '4,9 vol-%, Flasche 0,33 l', 'Jever'])
         ->and(($this->name)($f))->toBe('Pils: 4,9 vol-%, Flasche 0,33 l / (Jever)');
 });
 
-it('Wasser ohne Marke: Klammer leer, generisch (kein marke_offen), Füllmenge aus dem Artikel', function () {
-    ($this->ki)(['hauptzutat' => 'Tafelwasser', 'commodity_group_code' => '15', 'processing' => 'still', 'pflichtangabe' => '', 'zusatz' => '']);
+it('Wasser ohne Marke: Klammer leer, generisch (kein marke_offen), Füllmenge aus dem Artikel; eine erfundene Marke wird verworfen', function () {
+    ($this->ki)(['hauptzutat' => 'Tafelwasser', 'commodity_group_code' => '15', 'processing' => 'still', 'pflichtangabe' => '', 'zusatz' => 'Quellgold']);
     $f = app(LaFelderService::class)->fuer($this->rootTeam, ($this->la)('Tafelwasser still 0,75l'));
 
     expect([$f['hauptzutat'], $f['pflichtangabe'], $f['zusatz'], $f['marke_offen']])->toBe(['Tafelwasser', '0,75 l', '', false]);

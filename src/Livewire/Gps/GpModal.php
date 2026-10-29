@@ -894,14 +894,14 @@ class GpModal extends Component
         if ($rezeptur !== null) {
             $this->builder['rezepturware'] = $rezeptur ? '1' : '0';
         }
-        if ($zusatz === '' && \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::markeInKlammer($rezeptur, $wg) && $markeRegel !== null) {
-            $zusatz = (string) $markeRegel;   // Rezepturware und Getränke (Dominique 28.10.) tragen die Marke in der Klammer, auch wenn die KI sie ausließ
+        if ($zusatz === '' && $rezeptur === true && $markeRegel !== null) {
+            $zusatz = (string) $markeRegel;   // Rezepturware trägt die Marke in der Klammer, auch wenn die KI sie ausließ
         }
         if ($zusatz !== '') {
             $this->builder['zusatz'] = $zusatz;
         }
         if ($wg === '15') {
-            // Getränke: Marke raus aus der Hauptzutat, Füllmenge nach §7.1a in die Pflichtangabe
+            // Getränke: steht die Marke in der Klammer, nicht doppelt in der Hauptzutat; Füllmenge nach §7.1a in die Pflichtangabe
             $g = $naming->getraenkFelder(['hauptzutat' => $this->builder['hauptzutat'] ?? '', 'zusatz' => $this->builder['zusatz'] ?? '',
                 'pflichtangabe' => $this->builder['pflichtangabe'] ?? ''], $markeRegel,
                 $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)]);
@@ -1175,7 +1175,7 @@ class GpModal extends Component
         }
         $wg = trim((string) ($vorschlag->werte['commodity_group_code'] ?? '')) ?: (string) ($this->builder['commodity_group_code'] ?? '');
         if ($wg === '15') {
-            // Getränke (Dominique 28.10.): Marke als Klammer-Zusatz, Füllmenge nach §7.1a
+            // Getränke (Dominique 28.10.): Marke nicht doppelt (Klammer vs. Hauptzutat), Füllmenge nach §7.1a
             $felder = array_filter(app(GpNamingService::class)->getraenkFelder($felder, $marke, [trim($designation), $quellLa->marketing_name ?? null]),
                 fn ($v) => trim((string) $v) !== '');
         }
