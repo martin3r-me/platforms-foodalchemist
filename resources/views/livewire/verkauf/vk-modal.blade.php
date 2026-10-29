@@ -171,14 +171,14 @@
 
     {{-- Älterer Anreicherungslauf (falls noch offen); der Knopf nutzt inzwischen den Einzel-Lauf. --}}
     @if($bulkRun !== null)
-        <div @if($bulkRun->status === 'running') wire:poll.2s @endif data-vk-anreichern-status>
+        <div @if($bulkRun->laeuft()) wire:poll.2s @endif data-vk-anreichern-status>
             <x-fa::notice tone="info">
-                @if($bulkRun->status === 'running')
+                @if($bulkRun->laeuft())
                     Anreicherung läuft …
                 @else
                     <span>{{ $bulkOffen }} {{ $bulkOffen === 1 ? 'Vorschlag' : 'Vorschläge' }} offen</span>@if($bulkRun->failed > 0)<span>, {{ $bulkRun->failed }} Fehler</span>@endif
                 @endif
-                @if($bulkRun->status !== 'running')
+                @if(! $bulkRun->laeuft())
                     <x-slot:actions>
                         <x-fa::button size="sm" icon="heroicon-m-check" wire:click="bulkAlleUebernehmen" data-vk-anreichern-uebernehmen>Alle übernehmen</x-fa::button>
                     </x-slot:actions>

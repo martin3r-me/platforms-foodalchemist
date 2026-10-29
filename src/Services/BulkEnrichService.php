@@ -862,13 +862,33 @@ class BulkEnrichService
     /** Startet einen GP-Anreicherungs-Lauf (Job queued; Sandbox/Tests: sync). */
     public function starteGp(Team $team, array $gpIds, array $schritte = self::SCHRITTE_GP, bool $extern = false): int
     {
-        $ids = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)->pluck('id')->all();
+        $ids = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+        // 29.10.2026: kein zweiter Lauf für dieselben GPs, solange einer läuft (io: Doppelklick → zwei Läufe, doppelte Vorschläge)
+        $laufend = $this->laufenderGpLauf($team, $ids, $schritte);
+        if ($laufend !== null) {
+            return $laufend;
+        }
         // #1002: `extern` steht im Lauf-Kontext (Audit) und am Job — der Worker legt dann KI-Aufträge an statt OpenAI zu rufen
-        $runId = $this->laufAnlegen($team, count($ids), BulkRunType::EnrichGp, ['schritte' => array_values($schritte)] + ($extern ? ['extern' => true] : []));
+        $runId = $this->laufAnlegen($team, count($ids), BulkRunType::EnrichGp, ['schritte' => array_values($schritte), 'gp_ids' => $ids] + ($extern ? ['extern' => true] : []));
 
         \Platform\FoodAlchemist\Jobs\BulkEnrichGpJob::dispatch($runId, $team->id, $ids, $schritte, $extern);
 
         return $runId;
+    }
+
+    /** Id eines noch laufenden GP-Laufs desselben Teams für dieselben GPs und Schritte, sonst null. */
+    private function laufenderGpLauf(Team $team, array $ids, array $schritte): ?int
+    {
+        $kandidaten = FoodAlchemistBulkRun::where('team_id', $team->id)->where('type', BulkRunType::EnrichGp)
+            ->where('status', BulkRunStatus::Running)->orderByDesc('id')->limit(20)->get();
+        foreach ($kandidaten as $lauf) {
+            $k = is_array($lauf->context) ? $lauf->context : [];
+            if ($lauf->laeuft() && ($k['gp_ids'] ?? null) === $ids && ($k['schritte'] ?? null) === array_values($schritte)) {
+                return (int) $lauf->id;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -946,6 +966,10 @@ class BulkEnrichService
                 // V-072: hier zählt zusätzlich `[]` als leer — der Rezept-Zwilling kennt
                 // den dritten Fall nicht. Bekannte Abweichung, eingefroren, nicht angeglichen.
                 $leer = $vorschlag['value'] === null || $vorschlag['value'] === '' || $vorschlag['value'] === [];
+                // 29.10.2026 (io, „Alles anreichern" → 0 Vorschläge, 0 Fehler): ein leerer KI-Wert endet nie mehr still als „Leer".
+                // Der Grund steht am Vorschlag und der Schritt zählt als Fehler des Laufs, damit die Oberfläche ihn zeigen kann.
+                $grund = $leer && array_key_exists('grund', $vorschlag) ? $vorschlag['grund'] : null;
+                $fehler = $fehler || $grund !== null;
                 FoodAlchemistBulkGpProposal::create([
                     'team_id' => $team->id, 'run_id' => $runId, 'gp_id' => $gp->id, 'field' => $feld,
                     'value' => $vorschlag['value'],
@@ -953,6 +977,7 @@ class BulkEnrichService
                     'reasoning' => $vorschlag['reasoning'],
                     'call_log_id' => $vorschlag['call_log_id'],
                     'status' => $leer ? BulkProposalStatus::Leer : BulkProposalStatus::Offen,
+                    'error' => $grund,
                 ]);
             } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
                 $ausstehend++;
@@ -987,7 +1012,8 @@ class BulkEnrichService
             $v = $aroma->schaetze($gp);
 
             return ['value' => $v === null ? null : ['werte' => $v['werte'], 'texturen' => $v['texturen'], 'quelle' => 'ai', 'neu' => $neuSchaetzen],
-                'confidence' => $v['confidence'] ?? null, 'reasoning' => $v['reasoning'] ?? null, 'call_log_id' => $v['call_log_id'] ?? null];
+                'confidence' => $v['confidence'] ?? null, 'reasoning' => $v['reasoning'] ?? null, 'call_log_id' => $v['call_log_id'] ?? null,
+                'grund' => $v === null ? 'KI lieferte kein vollständiges Geschmacksprofil' : null];
         }
         $basis = ['name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name];
         $vokabular = $feld === 'anker' ? $this->gpAnkerKandidaten($gp) : [];
@@ -1011,13 +1037,54 @@ class BulkEnrichService
         };
 
         $p = $this->ki->propose($key, $kontext, ['target_table' => 'foodalchemist_gps', 'target_id' => $gp->id]);
+        $wert = $extract($p->werte);
 
         return [
-            'value' => $extract($p->werte),
+            'value' => $wert,
             'confidence' => $p->confidence,
             'reasoning' => $p->reasoning,
             'call_log_id' => $p->callLogId,
+            'grund' => $wert === null || $wert === [] || $wert === '' ? $this->leerGrund($feld, $p->werte, $vokabular) : null,   // null = ausdrücklich „kein Wert"
         ];
+    }
+
+    /**
+     * Warum ein GP-Schritt keinen Wert hat — sichtbar statt still „Leer" (29.10.2026). Eine ganz leere Antwort weist auf den Provider
+     * bzw. den Queue-Worker (der Web-Knopf bekam für dasselbe GP sofort einen Anker), ein Slug außerhalb der Vorauswahl auf das Vokabular.
+     *
+     * @param  array<string, mixed>  $werte
+     * @param  list<string>  $vokabular
+     */
+    private function leerGrund(string $feld, array $werte, array $vokabular): ?string
+    {
+        if ($werte === []) {
+            return 'KI-Antwort ohne Werte (Provider bzw. Queue-Worker prüfen)';
+        }
+        // Ausdrücklich „kein Wert" ist eine Antwort, kein Fehler (Getränke tragen z. B. keinen Zustand, §7.1a)
+        $schluessel = ['condition' => 'condition', 'tags' => 'tags', 'allergene' => 'allergene', 'naehrwerte' => 'kcal'][$feld] ?? null;
+        if ($schluessel !== null && array_key_exists($schluessel, $werte)) {
+            return null;
+        }
+        if ($feld === 'anker') {
+            $slug = $werte['anchor_slug'] ?? null;
+
+            return is_string($slug) && $slug !== ''
+                ? 'KI wählte „'.mb_strimwidth($slug, 0, 60).'“, nicht in der Vorauswahl ('.count($vokabular).' Anker)'
+                : 'KI-Antwort ohne anchor_slug';
+        }
+
+        return 'KI-Antwort ohne Feld „'.$feld.'“';
+    }
+
+    /**
+     * Gründe der Schritte ohne Ergebnis eines GP-Laufs (Anzeige nach „Alles anreichern").
+     *
+     * @return list<array{field: string, error: string}>
+     */
+    public function gpLaufFehler(Team $team, int $runId): array
+    {
+        return FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('team_id', $team->id)->whereNotNull('error')
+            ->orderBy('id')->get(['field', 'error'])->map(fn ($p) => ['field' => (string) $p->field, 'error' => (string) $p->error])->all();
     }
 
     /**

@@ -151,8 +151,8 @@
                 $run = $bulkSvc->status(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId);
             @endphp
             @if($run !== null)
-                <div @if($run->status === 'running') wire:poll.2s @endif data-bulk-progress>
-                    @if($run->status === 'running')
+                <div @if($run->laeuft()) wire:poll.2s @endif data-bulk-progress>
+                    @if($run->laeuft())
                         <x-fa::notice tone="info">KI-Anreicherung läuft: {{ $run->done }} von {{ $run->total }} Rezepten.</x-fa::notice>
                     @else
                         <x-fa::notice :tone="$run->failed > 0 ? 'warn' : 'ok'" title="KI-Anreicherung fertig: {{ $run->done }} von {{ $run->total }}{{ $run->failed > 0 ? ', ' . $run->failed . ' Fehler' : '' }}">
