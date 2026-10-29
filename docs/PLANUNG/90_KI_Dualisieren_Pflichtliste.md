@@ -53,7 +53,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 28 | `src/Livewire/Verkauf/VkModal.php::kiRegeneration` | vk.regeneration | 1 | a | P2 | verkaufsrezepte.REVISE | offen |  |
 | 29 | `src/Services/AngebotService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
 | 30 | `src/Services/AngebotService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
-| 31 | `src/Services/BriefingLeitplankenService.php::ausBriefing` | planung.leitplanken | 1 | a | P2 | planung_leitplanken.EXTRACT, planung_kaskade.START, planung_vorschlag.POST | offen |  |
+| 31 | `src/Services/BriefingLeitplankenService.php::ausBriefing` | planung.leitplanken | 1 | a | P2 | planung_leitplanken.EXTRACT, planung_kaskade.START, planung_vorschlag.POST | angeschlossen | MCP-Umleitung planung_leitplanken.EXTRACT / planung_vorschlag.POST (Tabelle D, KiUmleitungTest). |
 | 32 | `src/Services/BulkEnrichService.php::proposeFeld` | dyn. $key (Rezept-Schritte) | 1 | b | P2 | recipes.ENRICH | angeschlossen | Keys über config-Prompt-Liste abgesichert Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 33 | `src/Services/BulkEnrichService.php::proposeDichteklasse` | recipe.dichteklasse | 1 | a | P2 | recipes.ENRICH | angeschlossen | Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 34 | `src/Services/BulkEnrichService.php::proposeRegeneration` | recipe.regeneration | 1 | a | P2 | recipes.ENRICH | angeschlossen | Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
@@ -64,7 +64,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 39 | `src/Services/ConceptGeneratorService.php::generiereAusBrief` | concept.brief_geruest | 1 | c | P2 | concepts.GENERATE | offen | Kaskade mit Schreibzugriffen dazwischen |
 | 40 | `src/Services/ConceptGeneratorService.php::fuelleCanvasAusPlan` | concept.plan | 1 | c | P2 | concepts.GENERATE | offen | Schleife über Slots, Schreiben je Slot |
 | 41 | `src/Services/ConceptGeneratorService.php::geruestAusBriefFuerOwner` | dyn. $promptKey (foodbook.grundgeruest, format.grundgeruest …) | 1 | b | P2 | 4 *_plan_from_brief-Tools | offen |  |
-| 42 | `src/Services/ConceptService.php::generateWording` | concept.wording | 1 | a | P2 | ConceptWordingGenerateTool | offen |  |
+| 42 | `src/Services/ConceptService.php::generateWording` | concept.wording | 1 | a | P2 | ConceptWordingGenerateTool | angeschlossen | MCP-Umleitung concept_wording.GENERATE (Tabelle D, KiUmleitungTest). |
 | 43 | `src/Services/Conformance/GpConformanceAdapter.php::revise` | gp.conformance_revise | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 44 | `src/Services/Conformance/RecipeConformanceAdapter.php::revise` | dyn. $promptKey | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 45 | `src/Services/ConformanceService.php::pruefeAdapter` | conformance.check | 1 | b | P2 | Zuordnung prüfen | offen |  |
@@ -91,9 +91,9 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 66 | `src/Services/RecipeOneShotService.php::stationVorschlag` | recipe.posten | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
 | 67 | `src/Services/RecipeOneShotService.php::stepGlied` | recipe.steps | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 68 | `src/Services/RecipeOneShotService.php::eignungsGlied` | recipe.sektor, recipe.level | 2 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | 2 propose in einer Methode Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
-| 69 | `src/Services/RecipeReviewService.php::pruefeImLauf` | dyn. $feature (recipe.review / vk.review) | 1 | b | P2 | RecipesReviewTool | offen |  |
-| 70 | `src/Services/RecipeReviseService.php::freitextVorschlag` | recipe.ueberarbeiten | 1 | a | P2 | RecipesReviseTool | offen |  |
-| 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | offen |  |
+| 69 | `src/Services/RecipeReviewService.php::pruefeImLauf` | dyn. $feature (recipe.review / vk.review) | 1 | b | P2 | RecipesReviewTool | angeschlossen | MCP-Umleitung recipes.REVIEW (Tabelle D, KiUmleitungTest). |
+| 70 | `src/Services/RecipeReviseService.php::freitextVorschlag` | recipe.ueberarbeiten | 1 | a | P2 | RecipesReviseTool | angeschlossen | MCP-Umleitung recipes.REVISE (Tabelle D, KiUmleitungTest). |
+| 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | angeschlossen | MCP-Umleitung verkaufsrezepte.REVISE (Tabelle D, KiUmleitungTest). |
 | 72 | `src/Services/ReplacementSuggestionService.php::forGp` | component.replacement_suggest | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 73 | `src/Services/SensorikService.php::schaetzeRezept` | recipe.sensorik | 1 | a | P2 | RecipeSensorikPostTool | angeschlossen | MCP-Umleitung (Tabelle D). 29.10.: KI-Aufruf aus `bewerteRezept` hierher gezogen (bewerteRezept = schaetzeRezept + Speichern; der Abnahme-Befehl `gp-sensorik-referenz` liest nur). Nährwerte als Fakt im Kontext, Grenzen nach der Antwort (Nachverarbeitung); Einstufung a; Backfill `--neu-schaetzen=rezept` |
 | 74 | `src/Services/SignalFixService.php::assist` | dyn. $plan (signal.*) | 1 | a | P2 | SignaleFixTool | offen |  |
@@ -187,3 +187,15 @@ Tabelle D, Nachtrag P2c-1:
 
 
 Tabelle D, Nachtrag P2c-2: Fund im Test — `BulkEnrichService::verarbeiteRezept` fängt Ausnahmen je Feld und legt dabei mehrere Aufträge je Lauf an (alle Glieder warten parallel, ein Rollback nimmt die Leer-Vorschläge zurück). Das ist im externen Lauf in Ordnung (ein Paket Aufträge je Runde), aber nicht schön: der GP-Zwilling `verarbeiteGp` kennt seit P1b einen eigenen Pfad ohne Leer-Vorschlag. Der Rezept-Zwilling bleibt unverändert (Plattformweg bytegleich).
+
+Tabelle D, Nachtrag P2c-3 (erste Charge, alle über die Tool-Hülle, je Tool ein Test in `KiUmleitungTest`):
+
+| Tool | Status | Begründung |
+|---|---|---|
+| `foodalchemist.recipes.REVIEW` | umgeleitet | read-only, ein `propose()` (`recipe.review`/`vk.review`) |
+| `foodalchemist.recipes.REVISE` | umgeleitet | ein `propose()` (`recipe.ueberarbeiten`), optional DB-Übernahme; Folge-Job `SensorikNachholen` erbt den Extern-Modus (P2c-1) |
+| `foodalchemist.verkaufsrezepte.REVISE` | umgeleitet | wie `recipes.REVISE` (`vk.ueberarbeiten`) |
+| `foodalchemist.planung_leitplanken.EXTRACT` | umgeleitet | ein `propose()` (`planung.leitplanken`), schreibt höchstens Regler der Sitzung |
+| `foodalchemist.planung_vorschlag.POST` | umgeleitet | wie oben, schreibt nichts. Das Tool fängt nur `InvalidArgumentException`: der Plattformweg mit dem Fake-Provider wirft „strukturell unbrauchbar“ — bekannt, kein Teil der Umleitung |
+| `foodalchemist.concept_wording.GENERATE` | umgeleitet | `propose()` je Slot/Kopf, danach DB-Schreiben |
+

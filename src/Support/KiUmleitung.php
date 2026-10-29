@@ -28,12 +28,18 @@ final class KiUmleitung
      * @var array<string, string>
      */
     public const TOOLS = [
+        'foodalchemist.concept_wording.GENERATE' => 'Ein propose() (concept.wording) je Slot/Kopf, danach DB-Schreiben der Texte (ConceptService::generateWording, keine Folge-Jobs).',
         'foodalchemist.gp_forms.ESTIMATE' => 'Ein propose() (gp.zaehl_einheiten), danach nur DB-Schreiben der Formen.',
         'foodalchemist.presentation_designs.GENERATE_CSS' => 'Ein propose() (praesentation.design_css), liefert nur den Vorschlag, schreibt nicht.',
+        'foodalchemist.planung_leitplanken.EXTRACT' => 'Ein propose() (planung.leitplanken), schreibt höchstens die Regler der Planungssitzung (DB).',
+        'foodalchemist.planung_vorschlag.POST' => 'Ein propose() (planung.leitplanken) über BriefingLeitplankenService, schreibt nichts (Vorschlag).',
         'foodalchemist.recipe_coherence.POST' => 'Ein propose() je Modus (vk.kohaerenz / vk.teller_heber), danach DB-Schreiben der Bewertung.',
         'foodalchemist.recipe_klasse.POST' => 'Ein propose() (vk.speisen_klasse), optional DB-Übernahme (accept). Das Tool fängt Throwable: darum meldet die Hülle über den Modus, nicht über die Ausnahme.',
         'foodalchemist.recipe_rollen.POST' => 'Ein propose() (vk.rollen), optional DB-Übernahme (accept).',
+        'foodalchemist.verkaufsrezepte.REVISE' => 'Ein propose() (vk.ueberarbeiten), optional DB-Übernahme (accept); Folge-Job SensorikNachholen erbt den Extern-Modus.',
         'foodalchemist.recipe_sensorik.POST' => 'Ein propose() (recipe.sensorik), danach DB-Schreiben des Profils.',
+        'foodalchemist.recipes.REVIEW' => 'Read-only: ein propose() (recipe.review / vk.review) über RecipeReviewService, schreibt nichts.',
+        'foodalchemist.recipes.REVISE' => 'Ein propose() (recipe.ueberarbeiten), optional DB-Übernahme (accept) über RecipeService — dessen Folge-Job SensorikNachholen erbt den Extern-Modus (P2c-1).',
         'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
 
