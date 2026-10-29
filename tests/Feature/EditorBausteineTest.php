@@ -60,7 +60,7 @@ it('editor-tabs rendert Leiste, Marker und die drei Morph-Sicherungen', function
     expect($html)->toContain('wire:key="t-7"');
 
     // Falle 3: Tab-Reset beim Öffnen, mit Guard für Einsatz außerhalb eines Modals
-    expect($html)->toContain("$watch('open'")
+    expect($html)->toContain('$watch(\'open\'')
         ->toContain("typeof open !== 'undefined'")
         ->not->toContain('x-effect');
 
