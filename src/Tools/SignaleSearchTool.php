@@ -29,7 +29,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         return [
             'type' => 'object',
             'properties' => [
-                'status' => ['type' => 'string', 'description' => 'offen (Default) | abgeschlossen | ignoriert | leer = alle'],
+                'status' => ['type' => 'string', 'enum' => [...array_column(\Platform\FoodAlchemist\Enums\SignalStatus::cases(), 'value'), ''], 'description' => 'offen (Default) | erledigt | ignoriert | leer = alle'],
                 // Aus dem Enum abgeleitet (seiteneffektfrei) — eine handgepflegte Liste war bereits
                 // auf 7 von 14 Typen zurückgefallen und hätte mit Spec 21 weiter driftet.
                 'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
@@ -44,6 +44,9 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
         }
 
         $outlet = null;
@@ -62,7 +65,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => $arguments['type'] ?? null,
         ], fn ($v) => $v !== null), $team, min(50, max(1, (int) ($arguments['limit'] ?? 20))), $outlet, $nurLane);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $treffer->total(),
             'active_outlet_id' => $outlet?->id,
             'offen_gesamt' => $svc->offeneCount($team, $outlet, $nurLane),
@@ -81,7 +84,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'zuletzt_gesehen' => $s->last_seen_at !== null ? (string) $s->last_seen_at : null,
                 'gesehen_zaehler' => (int) ($s->seen_count ?? 1),
             ])->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array

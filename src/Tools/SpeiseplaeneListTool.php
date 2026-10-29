@@ -27,7 +27,7 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
             'type' => 'object',
             'properties' => [
                 'search' => ['type' => 'string', 'description' => 'Freitext (Name).'],
-                'status' => ['type' => 'string', 'description' => 'Optionaler Status-Filter.'],
+                'status' => ['type' => 'string', 'enum' => array_column(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases(), 'value'), 'description' => 'Optionaler Status-Filter (leer = alle).'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
             ],
         ];
@@ -39,6 +39,9 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
+        }
         $filters = [];
         if (($search = trim((string) ($arguments['search'] ?? ''))) !== '') {
             $filters['search'] = $search;
@@ -49,7 +52,7 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
         $perPage = (int) ($arguments['per_page'] ?? 100);
         $page = app(SpeiseplanService::class)->paginateBrowser($filters, $team, $perPage > 0 ? $perPage : 100);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $page->total(),
             'speiseplaene' => collect($page->items())->map(fn ($p) => [
                 'id' => (int) $p->id, 'name' => $p->name,
@@ -57,7 +60,7 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
                 'cycle_weeks' => $p->cycle_weeks,
                 'crm_company_id' => $p->crm_company_id !== null ? (int) $p->crm_company_id : null,
             ])->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array

@@ -61,7 +61,7 @@ class SpeiseplanService
             ->select($this->browserSpalten('foodalchemist_menu_plans'))
             ->withCount('entries')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $filters['search']))
-            ->orderBy('name')->paginate($perPage);
+            ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))->orderBy('name')->paginate($perPage);   // Spec 91 A2: status
     }
 
     /** Listen-Spalten OHNE große JSON-Blobs (Snapshots) → kein MySQL-„Out of sort memory". */

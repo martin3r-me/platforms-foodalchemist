@@ -35,7 +35,7 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
         return [
             'type' => 'object',
             'properties' => [
-                'status' => ['type' => 'string', 'description' => 'Optionaler Status (offen/erledigt/ignoriert). Leer = alle (Default).'],
+                'status' => ['type' => 'string', 'enum' => [...array_column(\Platform\FoodAlchemist\Enums\SignalStatus::cases(), 'value'), ''], 'description' => 'Optionaler Status (offen/erledigt/ignoriert). Leer = alle (Default).'],
                 // Aus dem Enum abgeleitet (seiteneffektfrei) — siehe SignaleSearchTool.
                 'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
@@ -51,6 +51,9 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
         }
         $page = max(1, (int) ($arguments['page'] ?? 1));
         $perPage = min(200, max(1, (int) ($arguments['per_page'] ?? 100)));
@@ -74,7 +77,7 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => $arguments['type'] ?? null,
         ], $team, $perPage, $outlet, $nurLane);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $treffer->total(),
             'page' => $treffer->currentPage(),
             'last_page' => $treffer->lastPage(),
@@ -94,7 +97,7 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'zuletzt_gesehen' => $s->last_seen_at !== null ? (string) $s->last_seen_at : null,
                 'gesehen_zaehler' => (int) ($s->seen_count ?? 1),
             ])->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array

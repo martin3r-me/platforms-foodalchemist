@@ -45,6 +45,9 @@ class RecipesSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
+        }
         $q = (string) $arguments['q'];
         $limit = min(50, max(1, (int) ($arguments['limit'] ?? 10)));
         $treffer = app(RecipeService::class)->paginateBrowser(
@@ -60,6 +63,7 @@ class RecipesSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         $semScores = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_RECIPE, array_column($recipes, 'id'), $limit);
         if ($semScores !== []) {
             $rows = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                ->when(($arguments['status'] ?? '') !== '', fn ($w) => $w->where('status', $arguments['status']))   // Spec 91 A4: Filter gilt auch semantisch
                 ->whereIn('id', array_keys($semScores))
                 ->get(['id', 'name', 'status', 'yield_kg', 'ek_total_eur'])->keyBy('id');
             arsort($semScores);
@@ -76,7 +80,7 @@ class RecipesSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
             }
         }
 
-        return ToolResult::success(['total' => count($recipes), 'recipes' => $recipes]);
+        return $this->erfolgMitWarnungen(['total' => count($recipes), 'recipes' => $recipes], $arguments);
     }
 
     public function getMetadata(): array

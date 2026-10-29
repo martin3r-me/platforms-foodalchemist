@@ -43,6 +43,14 @@ function spec91_gleichstand(): array
                 'ansicht' => 'Spaltenauswahl — MCP: felder=kurz|voll',
             ],
         ],
+        \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class => [
+            'filter' => ['search' => ['foodalchemist.speiseplaene.LIST', 'search']],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Plans (Detail via speiseplaene.GET), kein Listenfilter'],
+        ],
+        \Platform\FoodAlchemist\Livewire\Angebote\Index::class => [
+            'filter' => ['search' => ['foodalchemist.angebote.SEARCH', 'q'], 'statusFilter' => ['foodalchemist.angebote.SEARCH', 'status']],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Angebots (Detail via angebote.GET), kein Listenfilter'],
+        ],
     ];
 }
 
