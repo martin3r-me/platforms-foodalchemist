@@ -83,7 +83,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | offen | ANHANG (PDF/Bild): Entscheidung Punkt 5 |
 | 59 | `src/Services/RecipeBauartService.php::pruefe` | recipe.bauart | 1 | a | P2 | im Generator | offen |  |
 | 60 | `src/Services/RecipeExtractService.php::extrahiere` | recipe.extract | 1 | b | P2 | RecipesExtractTool | offen | ANHANG (Bild/PDF): Entscheidung Punkt 5 |
-| 61 | `src/Services/RecipeGeneratorService.php::generiereImLaufKern` | dyn. (vk.generator / recipe.generator) | 1 | c | P2 | RecipesGenerateTool, StubAusrezeptierenJob (Import-Hülle, 29.10.) | offen | Kaskade, mehrere propose + Schreiben |
+| 61 | `src/Services/RecipeGeneratorService.php::generiereImLaufKern` | dyn. (vk.generator / recipe.generator) | 1 | c | P2 | RecipesGenerateTool, StubAusrezeptierenJob (Import-Hülle, 29.10.) | angeschlossen | Kaskade, mehrere propose + Schreiben Tool-Weg: recipes.GENERATE extern (Tabelle D, KiExternGenerateTest). Job-Weg (GenerateRecipeJob/Planung) folgt in 2c-2. |
 | 62 | `src/Services/RecipeKomponentenPlanService.php::plane` | recipe.komponenten_plan | 1 | a | P2 | im Generator | offen |  |
 | 63 | `src/Services/RecipeOneShotService.php::fertigungsGlied` | recipe.production_depth | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 64 | `src/Services/RecipeOneShotService.php::eigenschaftenGlied` | recipe.eigenschaften | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
@@ -176,3 +176,12 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 Zähler (`KiAuftragService::zaehler`, im Backfill `--anbieter=extern` am Ende und im Protokoll): angelegt, beantwortet, verbraucht (je ab Lauf-Beginn), Bestand offen / beantwortet-liegt / abgelaufen, `verwaist` (abgelaufen + über 1 h beantwortet und unverbraucht) `doppelt` (verschiedene Prompts je Feature und Ziel; > 0 heißt: Fingerabdruck instabil oder Kontext hat sich geändert) und `wiederholt` (derselbe Prompt mehrfach: Re-Roll der Antwortprüfung `structural_retry`, bis 3 Versuche; erwartet, kein Fehler).
 
 Tabelle D, Nachtrag P2b: Nicht belegt bleiben in der Enrich-Kette `recipe.posten` (`stationVorschlag`) und `recipe.garverlust` (im Test nicht durchlaufen: keine Zutaten). Sie hängen am selben Job, sind mechanisch erfasst, aber nicht durch einen Test belegt. Zähler `wiederholt`: `recipe.steps` wurde im Test 3× mit gleichem Prompt beauftragt (Re-Roll der Antwortprüfung, die Test-Antwort war unbrauchbar) — erwartet.
+
+Tabelle D, Nachtrag P2c-1:
+
+| Tool / Job | Status | Begründung |
+|---|---|---|
+| `foodalchemist.recipes.GENERATE` | umgeleitet (Tool-Hülle) | synchron: Rezept, Zutaten und Matching entstehen im Aufruf; Transaktion, Rollback bis zur Antwort, mehrere KI-Glieder = mehrere Runden. Vergleichstest Plattform = MCP (`KiExternGenerateTest`) |
+| `SensorikNachholenJob` (Kind des Generators/der Rezept-Anlage) | `KiExternWiederholbar` | Fund: der Generator löst per `afterCommit` einen Job aus, der später den Plattform-Provider rief (`SensorikNachholen::ausloesen`). Jetzt erbt das Kind den Extern-Modus des auslösenden Laufs (`extern: KiExternModus::aktiv()`), legt einen eigenen Auftrag (`recipe.sensorik`, Lauf-Schlüssel `sensorik-nachholen:{team}:{rezept}`) an und ruft den Plattform-Provider nie (Test) |
+| `GenerateRecipeJob` / `EnrichGeneratedRecipeJob` / `ConformanceCheckJob` / Sub-Rezept-Kaskade | offen (2c-2) | Job-Weg der UI und der Planungs-Kaskade: Status `error` im Cache bei „wartet“, Folge-Jobs ohne `afterCommit`, Extern-Flag muss in die Kinder (`RecipeDependencyWorkflowService`) |
+
