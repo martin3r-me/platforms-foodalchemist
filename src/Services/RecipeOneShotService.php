@@ -219,13 +219,19 @@ class RecipeOneShotService
                 // Generierung, Tiefen-/Step-Budget, von Hand offen gelassen) bleibt eine Lücke. Vorher mintete die
                 // Anreicherung — seit Paket 10 also der Freigabeknopf — sie still auf eine Rohware.
                 // Dominique 27.10. (d): auch eine Basiskomponente ohne Zukauf-Signal („Geflügelfond“) wird nie auf ein Zukauf-GP gemintet
-                if ($heuristik->istBasisrezeptZeile($text) || app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)
-                    ->basiskomponenteOhneZukauf($team, $text, ...array_values(array_intersect_key(\Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken), ['convenience' => 1, 'zubereitung' => 1])))) {
+                // 29.10. (Branch 1b): die Leitplanken entscheiden selbst oder gekauft — 'zukauf' bindet das GP des Bestands, statt aus einem LA zu minten
+                $matcher = app(\Platform\FoodAlchemist\Services\IngredientMatchService::class);
+                $lp = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken);
+                $weg = $heuristik->istBasisrezeptZeile($text) ? 'basis' : $matcher->zubereitungsWeg($team, $text, $lp['convenience'], $lp['zubereitung']);
+                if ($weg === 'basis') {
                     $basisrezeptLuecken++;
 
                     continue;
                 }
-                $gp = $mint->mintFromLa($team, $text, leitplanken: $leitplanken);
+                $treffer = $weg === 'zukauf' ? $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience'], zubereitung: $lp['zubereitung']) : null;
+                $gp = $treffer !== null && \Platform\FoodAlchemist\Services\IngredientMatchService::istAutomatischVerdrahtbar($treffer) && ($treffer['target'] ?? null) === 'gp'
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::find((int) $treffer['gp_id'])
+                    : $mint->mintFromLa($team, $text, leitplanken: $leitplanken);
                 if ($gp !== null) {
                     $zut->gp_id = $gp->id;
                     $zut->save();
