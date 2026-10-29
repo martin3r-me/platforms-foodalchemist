@@ -143,3 +143,37 @@ it('MCP: recipes.PUT setzt und leert die Vorgabe, prüft Werte; recipes.GET lief
     $get = app(\Platform\FoodAlchemist\Tools\RecipesGetTool::class)->execute(['id' => $r->id], $ctx);
     expect($get->data)->toMatchArray(['vorgabe_convenience' => null, 'vorgabe_niveau' => 'klassisch']);
 });
+
+it('Ausrezeptieren (#621): die Hülle behält ihre Vorgabe — generiere mit stub_fuellen_id überschreibt sie nicht mit NULL', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $eltern = $this->makeRecipe($this->rootTeam, 'Rahmsauce Eltern', ['vorgabe_niveau' => 'gehoben']);
+    $stub = app(RecipeService::class)->createSubRecipeStub($this->rootTeam, 'Geflügelfond', $eltern->id)['recipe'];
+
+    $res = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class)->generiere($this->rootTeam, 'Unterrezept «Geflügelfond»', [
+        'stub_fuellen_id' => $stub->id, 'titel_vorgabe' => 'Geflügelfond',   // ohne Leitplanken: vorgabeAus hätte NULL geliefert
+    ], ['name' => 'Geflügelfond', 'zutaten' => [['text' => 'Hühnerknochen', 'quantity' => 1000, 'unit' => 'g']], 'preparation' => 'Auskochen.'],
+        createdVia: 'import_ki_unterrezept');
+
+    expect((int) $res['recipe']->id)->toBe((int) $stub->id)
+        ->and(($this->vorgabe)($stub))->toBe(['vorgabe_convenience' => null, 'vorgabe_niveau' => 'gehoben']);
+});
+
+it('Ausrezeptieren-Job: die Vorgabe der Hülle gewinnt vor den Import-Leitplanken, „level“ kommt beim Generator an', function () {
+    $stub = app(RecipeService::class)->createSubRecipeStub($this->rootTeam, 'Kalbsjus', vorgabe: ['vorgabe_niveau' => 'haute_cuisine'])['recipe'];
+    $ohne = app(RecipeService::class)->createSubRecipeStub($this->rootTeam, 'Wildjus')['recipe'];
+    $gesehen = [];
+    $this->mock(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class, function ($m) use (&$gesehen) {
+        $m->shouldReceive('generiere')->andReturnUsing(function ($team, $brief, $parameter) use (&$gesehen) {
+            $gesehen[(int) $parameter['stub_fuellen_id']] = $parameter;
+
+            return [];
+        });
+    });
+    $job = fn ($s) => app()->call([new \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob($this->rootTeam->id, $this->user->id, $s->id, null,
+        ['convenience' => 'teil_convenience', 'level' => 'klassisch', 'frische' => 'frisch']), 'handle']);
+    $job($stub);
+    $job($ohne);
+
+    expect($gesehen[$stub->id])->toMatchArray(['level' => 'haute_cuisine', 'convenience' => 'teil_convenience', 'frische' => 'frisch'])
+        ->and($gesehen[$ohne->id])->toMatchArray(['level' => 'klassisch', 'convenience' => 'teil_convenience']);
+});
