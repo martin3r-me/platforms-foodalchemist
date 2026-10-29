@@ -114,6 +114,17 @@ it('Signale nur im Besitzer-Team des Artikels', function () {
     expect(($this->signale)()->pluck('team_id')->unique()->all())->toBe([$this->rootTeam->id])->and(($this->signale)())->toHaveCount(2);
 });
 
+it('ein Signal schließt sich selbst, wenn die Quelle die Werte berichtigt (ohne Entscheidung)', function () {
+    config(['foodalchemist.naehrwert_pruefung.modus' => 'scharf']);
+    app(NaehrwertSignalService::class)->laufen($this->rootTeam);
+    FoodAlchemistItemNutritional::where('supplier_item_id', $this->kaputt->id)->update(['carbs_absorbable' => 2.9, 'energy_kcal' => 77]);   // z. B. Necta-Abgleich
+
+    app(NaehrwertSignalService::class)->laufen($this->rootTeam);
+
+    expect(($this->signale)()->pluck('ref_id')->all())->toBe([$this->mazola->id])
+        ->and(FoodAlchemistSignal::where('dedup_key', 'nw-la-' . $this->kaputt->id)->value('status'))->toBe(SignalStatus::Erledigt);
+});
+
 // ── freigeben / korrigieren ───────────────────────────────────────────────────────────
 
 it('freigeben: Artikel zählt wieder, Signal schließt; ändern sich die Werte, kommt es zurück', function () {
