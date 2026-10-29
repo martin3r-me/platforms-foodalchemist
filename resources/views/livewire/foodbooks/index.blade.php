@@ -45,7 +45,7 @@
 
     {{-- Laptop: w-72 statt w-80 — beide Seitenleisten zusammen geben der Mitte 64 px zurück. --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Foodbooks" width="w-72">
+        <x-foodalchemist::page-sidebar title="Foodbooks" width="w-72">
             <div class="p-3 flex flex-col gap-3">
                 <x-fa::input type="search" wire:model.live.debounce.300ms="search" placeholder="Foodbook oder Kunde suchen" aria-label="Foodbook oder Kunde suchen" class="w-full" />
                 {{-- Phasen-Filter entfernt (2026-08-31): die alte Foodbook-Statusmaschine ist tot (Planung
@@ -69,7 +69,7 @@
                 {{-- Kapitel-Navigation lebt im Editor-Modal (linke Navi-Spalte, Spec 29 / S8).
                      Die Seiten-Sidebar führt nur die Foodbook-Liste — kein doppelter Baum. --}}
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Rechtes Detail-Panel (nur lesen) — konsistent zu Speisekarte/Speiseplan. --}}

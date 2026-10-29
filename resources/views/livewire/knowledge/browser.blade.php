@@ -77,7 +77,7 @@
 
     {{-- LINKS: Suche, Filter, Dokumentliste --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Dokumente" width="w-80">
+        <x-foodalchemist::page-sidebar title="Dokumente" width="w-80">
             <div class="p-3 flex flex-col gap-3" data-wissen-liste>
                 {{-- Suche: der Platzhalter sagt, WAS gesucht wird; er schaltet mit „Bedeutung einbeziehen" mit. --}}
                 <div class="relative">
@@ -134,7 +134,7 @@
                     <div class="pt-2 border-t border-[var(--fa-line)]" data-wissen-seiten>{{ $docs->links('foodalchemist::components.fa.pagination') }}</div>
                 @endif
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- RECHTS: wofür wird dieses Wissen genutzt --}}

@@ -26,7 +26,7 @@
     </x-slot:navbar>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Formate" width="w-80">
+        <x-foodalchemist::page-sidebar title="Formate" width="w-80">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="format-suche" class="sr-only">Formate durchsuchen</label>
@@ -86,13 +86,13 @@
                     </div>
                 @endif
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte erst, wenn ein Format gewählt ist (vorher nahm der leere Hinweis Platz der Tabelle weg). --}}
     @if($selectedId !== null)
         <x-slot name="activity">
-            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_formate" side="right">
+            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_formate" side="right" :auswahl="(string) $selectedId">
                 <livewire:foodalchemist.formate.detail-panel :selected-id="$selectedId" key="formate-browser--formate.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>

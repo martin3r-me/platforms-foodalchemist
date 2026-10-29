@@ -19,7 +19,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Speisepläne" width="w-72">
+        <x-foodalchemist::page-sidebar title="Speisepläne" width="w-72">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="sp-suche" class="sr-only">Speisepläne durchsuchen</label>
@@ -41,7 +41,7 @@
                 </div>
                 <div class="pt-1">{{ $plaene->links('foodalchemist::components.fa.pagination') }}</div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Rechtes Detail-Panel (nur lesend) — konsistent zu Speisekarte/Foodbook --}}

@@ -21,7 +21,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Rollen" width="w-72">
+        <x-foodalchemist::page-sidebar title="Rollen" width="w-72">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="pakete-suche" class="sr-only">Pakete durchsuchen</label>
@@ -36,7 +36,7 @@
                     @endforeach
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     <x-slot name="activity">

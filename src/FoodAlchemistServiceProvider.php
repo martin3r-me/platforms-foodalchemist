@@ -415,6 +415,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $returnEarly(null);
         });
 
+        // #1003 Handy-Lesemodus serverseitig: Lese-Bereiche nehmen vom Handy nur Lese- und freigeschaltete Methoden an.
+        \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
+            if (! \Platform\FoodAlchemist\Support\HandyLesemodus::abgewiesen($component, (string) $method)) {
+                return;
+            }
+            $component->dispatch('fa-saved', message: \Platform\FoodAlchemist\Support\HandyLesemodus::MELDUNG, type: 'error');
+            $returnEarly(null);
+        });
+
         // GP-Regelwerk v3.7.1 §5 Ausnahme 3: Marken-Kürzel einmal je Anfrage laden (Karte im Dienst)
         $this->app->scoped(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class);
 

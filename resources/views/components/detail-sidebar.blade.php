@@ -17,6 +17,8 @@
     'minWidth' => 200,       // resize min in px
     'maxWidth' => 640,       // resize max in px
     'aufziehen' => false,    // Sprung per Link (?gp= / ?rezept=): beim Ankommen öffnen, auch wenn zuletzt zugeklappt
+    'auswahl' => false,      // Handy (#1003): gewählter Eintrag (id) bzw. null = nichts gewählt; false = Seite meldet nichts
+    'lesemodus' => true,     // Handy (#1003): Ändern-Aktionen aus (Support\HandyLesemodus); false z. B. in der Planung
 ])
 
 @php
@@ -28,28 +30,57 @@
         'w-80' => 320, 'w-96' => 384,
     ];
     $defaultWidthPx = $widthMap[$width] ?? 320;
+    // '-' = Seite meldet keine Auswahl (Handy: Leiste wie bisher per Antippen); '' = nichts gewählt.
+    $auswahlWert = $auswahl === false ? '-' : (string) ($auswahl ?? '');
 @endphp
 
 {{-- fa-pass 2026-10-05: unter 1536 px (Laptop) legt sich das offene Panel als Schublade ÜBER den Inhalt,
      statt ihn zusammenzudrücken (Concepter 1280 px: Mitte schrumpfte auf ~90 px). Im Fluss bleibt nur die
-     Rail-Breite. Ab 1536 px wie bisher daneben, aber höchstens 30 % der Fensterbreite. --}}
+     Rail-Breite. Ab 1536 px wie bisher daneben, aber höchstens 30 % der Fensterbreite.
+     Handy-Oberfläche (#1003, Entscheidung Support\HandyLesemodus::JS_MODUS: Touch-Gerät und schmal, nie ein
+     schmales Laptop-Fenster): ganze Breite über dem Inhalt. Meldet die Seite ihre Auswahl (data-fa-auswahl),
+     öffnet die Leiste beim Antippen eines Eintrags und ist ohne Auswahl ganz weg; Zurück schließt sie.
+     Der Handy-Zustand ist lokal und ändert die gespeicherte Computer-Einstellung nicht. --}}
 <div
     x-data="{
         scope: @js($scope),
         weit: window.matchMedia('(min-width: 96rem)').matches,
+        handy: {!! \Platform\FoodAlchemist\Support\HandyLesemodus::JS_MODUS !!}(),
+        auswahl: @js($auswahlWert),
+        handyOffen: false,
         vw: window.innerWidth,
         init() {
             const mq = window.matchMedia('(min-width: 96rem)');
             mq.addEventListener('change', (e) => { this.weit = e.matches; });
+            window.matchMedia('(hover: none) and (pointer: coarse) and (max-width: 47.99rem)').addEventListener('change', () => { this.handy = window.faHandyModus(); this.handyOffen = this.gewaehlt; });
             window.addEventListener('resize', () => { this.vw = window.innerWidth; });
-            if (@js((bool) $aufziehen) && ! this.open) this.setOpen(true);
+            this.handyOffen = this.gewaehlt;
+            // Handy-Lesemodus serverseitig: Livewire-Anfragen der Handy-Oberfläche tragen X-FA-Handy: 1 (Support\HandyLesemodus)
+            if (window.Livewire && ! window.faHandyKopfzeile) {
+                window.faHandyKopfzeile = true;
+                window.Livewire.hook('request', ({ options }) => {
+                    options.headers = options.headers || {};
+                    options.headers['X-FA-Handy'] = window.faHandyModus() ? '1' : '0';
+                });
+            }
+            new MutationObserver(() => {
+                this.auswahl = this.$el.dataset.faAuswahl ?? '-';
+                this.handyOffen = this.gewaehlt;
+            }).observe(this.$el, { attributes: true, attributeFilter: ['data-fa-auswahl'] });
+            if (@js((bool) $aufziehen) && ! this.handy && ! this.open) this.setOpen(true);
         },
+        get gewaehlt() { return this.auswahl !== '-' && this.auswahl !== ''; },
+        get handyLeiste() { return this.auswahl !== ''; },
         get schublade() { return this.open && ! this.weit; },
-        get breite() { return Math.min(this.width, Math.round(this.vw * (this.weit ? 0.3 : 0.9))); },
+        get breite() {
+            if (this.handy) return this.vw;
+            return Math.min(this.width, Math.round(this.vw * (this.weit ? 0.3 : 0.9)));
+        },
         defaultOpen: @js((bool) $defaultOpen),
         defaultWidth: {{ $defaultWidthPx }},
         resizing: false,
         get open() {
+            if (this.handy) return this.handyOffen;
             const v = this.$store.ui?.m(this.scope, 'open');
             return v === undefined ? this.defaultOpen : v;
         },
@@ -58,7 +89,10 @@
             const w = v === undefined ? this.defaultWidth : v;
             return Math.max({{ $minWidth }}, Math.min({{ $maxWidth }}, w));
         },
-        setOpen(v) { this.$store.ui?.mSet(this.scope, 'open', v); },
+        setOpen(v) {
+            if (this.handy) { this.handyOffen = v; return; }
+            this.$store.ui?.mSet(this.scope, 'open', v);
+        },
         startResize(e) {
             this.resizing = true;
             const startX = e.clientX;
@@ -81,16 +115,21 @@
             document.addEventListener('mouseup', onMouseUp);
         }
     }"
-    :style="(open && weit) ? ('width: ' + breite + 'px') : 'width: 44px'"
+    @keydown.escape.window="if (handy && handyOffen) setOpen(false)"
+    :style="handy ? (handyLeiste ? 'width: 44px' : 'width: 0px') : ((open && weit) ? ('width: ' + breite + 'px') : 'width: 44px')"
     :class="resizing ? '' : 'transition-all duration-200'"
     class="relative flex-shrink-0 h-full"
+    data-fa-auswahl="{{ $auswahlWert }}"
+    data-fa-detail-sidebar
+    @if($lesemodus) data-fa-handy-lesen @endif
     {{ $attributes }}
 >
   {{-- Dunkler Rahmen: Detail-Panels im Werkbank-Modus (wie Navigation, Chat-Leiste, Editoren). --}}
   <div
     data-fa-theme="dark"
+    x-show="! handy || handyLeiste"
     :style="open ? ('width: ' + breite + 'px') : 'width: 44px'"
-    :class="schublade ? 'absolute inset-y-0 {{ $side === 'right' ? 'right-0' : 'left-0' }} z-40 shadow-2xl' : 'relative h-full'"
+    :class="(handy && open) ? 'fixed inset-0 z-50' : (schublade ? 'absolute inset-y-0 {{ $side === 'right' ? 'right-0' : 'left-0' }} z-40 shadow-2xl' : 'relative h-full')"
     class="h-full bg-[var(--fa-ground)] overflow-x-hidden {{ $borderClass }}"
   >
     {{-- Collapsed Rail --}}
@@ -150,8 +189,10 @@
                 <button
                     type="button"
                     @click="setOpen(false)"
-                    class="ml-auto inline-flex items-center justify-center w-7 h-7 rounded-md text-[var(--ui-secondary)] hover:text-[var(--ui-primary)] hover:bg-[var(--ui-muted-10)] transition-colors flex-shrink-0"
-                    title="Einklappen"
+                    class="ml-auto inline-flex items-center justify-center rounded-md text-[var(--ui-secondary)] hover:text-[var(--ui-primary)] hover:bg-[var(--ui-muted-10)] transition-colors flex-shrink-0"
+                    :class="handy ? 'w-11 h-11' : 'w-7 h-7'"
+                    :title="handy ? 'Zurück zur Liste' : 'Einklappen'"
+                    data-fa-detail-schliessen
                 >
                     @if($side === 'right')
                         @svg('heroicon-o-chevron-double-right', 'w-4 h-4')
