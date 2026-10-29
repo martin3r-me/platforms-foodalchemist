@@ -501,7 +501,7 @@
                                 <td class="{{ $eingerueckt ? 'pl-6 text-[var(--fa-ink-2)]' : '' }}">{{ $label }}</td>
                                 <td class="num">
                                     @if($naehrwerte[$key]['avg'] !== null)<x-fa::menge :value="$naehrwerte[$key]['avg']" :unit="$unit" :decimals="$stellen" />
-                                        <span class="ml-1 {{ $leise }}" title="Mittel aus {{ $naehrwerte[$key]['n'] }} {{ $naehrwerte[$key]['n'] === 1 ? 'Artikel' : 'Artikeln' }}">({{ $naehrwerte[$key]['n'] }} Artikel)</span>
+                                        <span class="ml-1 {{ $leise }}" title="Median aus {{ $naehrwerte[$key]['n'] }} {{ $naehrwerte[$key]['n'] === 1 ? 'Artikel' : 'Artikeln' }}">({{ $naehrwerte[$key]['n'] }} Artikel)</span>
                                     @else<span class="text-[var(--fa-ink-3)]">–</span>@endif
                                 </td>
                             </tr>
