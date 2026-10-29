@@ -195,6 +195,7 @@ return [
     \Platform\FoodAlchemist\Tools\GpAnchorsGetTool::class,
     \Platform\FoodAlchemist\Tools\GpAnchorsImportTool::class,
     \Platform\FoodAlchemist\Tools\GpAnchorsPutTool::class,
+    \Platform\FoodAlchemist\Tools\GpAromaBackfillRunTool::class,
     \Platform\FoodAlchemist\Tools\GpEinkaufGetTool::class,
     \Platform\FoodAlchemist\Tools\GpEnrichResolveTool::class,
     \Platform\FoodAlchemist\Tools\GpFormsDeleteTool::class,
