@@ -83,3 +83,19 @@ it('Zukauf-Signal im Text gewinnt weiter vor den Leitplanken (Pulver, Marke, TK)
     ($this->gp)('Geflügelfond: Pulver', 'gefluegelfond', '13');
     expect(($this->weg)('Geflügelfond Pulver', ['level' => 'haute_cuisine'])[0])->not->toBe('stub');
 });
+
+it('Import: die Leitplanke der Planung erreicht die Stub-Entscheidung — klassisch mit Zukauf-GP kein Stub, ohne Leitplanke Stub mit Hinweis', function () {
+    \Illuminate\Support\Facades\Queue::fake();
+    \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    $gp = ($this->gp)('Geflügelfond', 'gefluegelfond');
+    $rezept = fn (string $name) => ['typ' => 'basisrezept', 'name' => $name, 'preparation' => 'Kochen.', 'zutaten' => [['text' => 'Geflügelfond', 'quantity' => '500', 'unit' => 'g']]];
+    $import = app(\Platform\FoodAlchemist\Services\RecipeExtractService::class);
+
+    $klassisch = $import->legeAn($this->rootTeam, $rezept('Rahmsauce klassisch'), parameter: ['level' => 'klassisch']);
+    $ohne = $import->legeAn($this->rootTeam, $rezept('Rahmsauce ohne Vorgabe'));
+
+    expect($klassisch['stubs'])->toBe([])
+        ->and($klassisch['recipe']->ingredients()->first()->gp_id)->toBe($gp->id)
+        ->and($ohne['stubs'])->toHaveCount(1)
+        ->and($ohne['stubs'][0]['hinweis'] ?? null)->toBe('Gibt es auch als Zukauf: Geflügelfond');
+});
