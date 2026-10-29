@@ -26,7 +26,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  *     über die Editor-Datei findet sie nach dem Refactor NICHT mehr (sie kommen jetzt aus
  *     dem Baustein) — nur der gerenderte Output beweist, dass nichts verloren ging.
  *  2. Die drei Livewire/Alpine-Fallen sind im Markup verdrahtet: wire:key (Element-Ersatz
- *     bei Datensatz-Wechsel), x-effect (Tab-Reset beim Öffnen) und EIN Alpine-Scope, der
+ *     bei Datensatz-Wechsel), $watch('open') (Tab-Reset beim Öffnen, nicht bei jedem Neuauswerten) und EIN Alpine-Scope, der
  *     Leiste und Panels umspannt. Ohne die desynct der aktive Tab unter Livewire-Morph.
  */
 beforeEach(function () {
@@ -60,8 +60,9 @@ it('editor-tabs rendert Leiste, Marker und die drei Morph-Sicherungen', function
     expect($html)->toContain('wire:key="t-7"');
 
     // Falle 3: Tab-Reset beim Öffnen, mit Guard für Einsatz außerhalb eines Modals
-    expect($html)->toContain('x-effect')
-        ->toContain("typeof open !== 'undefined'");
+    expect($html)->toContain("$watch('open'")
+        ->toContain("typeof open !== 'undefined'")
+        ->not->toContain('x-effect');
 
     // Start-Tab kommt aus :init, nicht aus dem ersten Schlüssel
     expect($html)->toContain("tab: 'zwei'")

@@ -11,7 +11,7 @@
     2. `wire:key` erzwingt Element-Ersatz beim Datensatz-Wechsel. Alpine wertet x-data bei
        morphdom NICHT neu aus → ohne Key bleibt der aktive Tab „stale" (Rezept B öffnet auf
        dem Tab von Rezept A).
-    3. `x-effect` setzt den Tab bei JEDEM Öffnen zurück (liest `open` aus dem Modal-Scope).
+    3. `$watch('open')` (x-init) setzt den Tab bei JEDEM Öffnen zurück (liest `open` aus dem Modal-Scope).
        Ohne das bleibt der zuletzt gewählte Tab beim erneuten Öffnen DESSELBEN Datensatzes
        stehen — der wire:key ersetzt das Element ja nur bei Wechsel.
 
@@ -83,9 +83,11 @@
 @else
     <div @if($wireKey) wire:key="{{ $wireKey }}" @endif
          x-data="{ tab: @js($startTab), visited: @js(array_values($visited)) }"
-         {{-- `open` existiert nur im Modal-Scope — Guard, damit der Baustein auch außerhalb eines
+         {{-- Reset nur beim ÜBERGANG auf open=true ($watch), nicht bei jedem Neuauswerten: ein x-effect lief nach dem Roundtrip des ersten Reiter-Besuchs
+              (visitAction) erneut und setzte den Tab auf «Aufbau» zurück — der Nutzer musste den Reiter ein zweites Mal klicken.
+              `open` existiert nur im Modal-Scope — Guard, damit der Baustein auch außerhalb eines
               Modals (Panel, Seite) ohne Alpine-Fehler läuft. --}}
-         x-effect="if (typeof open !== 'undefined' && open) tab = @js($startTab)"
+         x-init="if (typeof open !== 'undefined') $watch('open', (offen) => { if (offen) tab = @js($startTab) })"
          data-fa-editor-tabs @if($marker) data-{{ $marker }}-tabs @endif>
 
         {{-- Eine einzige Lasche ist keine Navigation, sondern Rauschen (z. B. GP-Neuanlage, die
