@@ -242,7 +242,8 @@ class GpNamingService
      * Getränke (WG 15, Dominique 28.10.): Gattungsname + Hersteller-Marke → Marke als Klammer-Zusatz („Ananassaft: 1 l / (Happy Day)“); Markenprodukt ohne
      * eigenständigen Gattungsnamen → Marke bleibt der Name („Coca-Cola: 0,33 l“). Das entscheidet die KI je Artikel (gp.suggest), nicht der Code — im
      * Zweifel Marke als Name. Der Nachlauf sorgt nur dafür, dass eine Klammer-Marke (zusatz = Marke des Artikels) nicht zusätzlich in der Hauptzutat
-     * steht, und setzt die Füllmenge nach §7.1a aus dem Artikeltext, wenn sie fehlt („Pk1,0l“ → „1 l“).
+     * steht, und setzt Gebinde-Art mit Material + Füllmenge nach §7.1a aus dem Artikeltext, wenn sie fehlen („Pk1,0l“ → „Tetra Pak 1 l“; Entscheid
+     * Dominique 29.10.: Glas und PET sind zwei GPs, „Flasche“ ohne Material wird zur Glas-/PET-Flasche, sobald der Artikel das Material belegt).
      *
      * @param  array<string, mixed>  $felder  hauptzutat, zusatz, pflichtangabe …
      * @param  list<string|null>  $quelltexte  Bezeichnung, Vermarktungsname
@@ -259,16 +260,47 @@ class GpNamingService
             }
         }
         $pflicht = trim((string) ($felder['pflichtangabe'] ?? ''));
-        if (self::fuellmenge($pflicht) === null) {
-            foreach ($quelltexte as $text) {
-                if (($menge = self::fuellmenge((string) $text)) !== null) {
-                    $felder['pflichtangabe'] = $pflicht === '' ? $menge : $pflicht . ', ' . $menge;
-                    break;
-                }
-            }
+        $text = implode(' ', array_filter(array_map('strval', $quelltexte)));
+        $gebinde = self::gebindeArt($text);
+        if ($gebinde !== null && preg_match('/(?<![\p{L}-])Flasche(?![\p{L}])/u', $pflicht) === 1 && str_ends_with($gebinde, 'flasche')) {
+            // „Flasche 0,33 l“ aus der KI + Material im Artikel → „Glasflasche 0,33 l“ bzw. „PET-Flasche 0,33 l“
+            $pflicht = (string) preg_replace('/(?<![\p{L}-])Flasche(?![\p{L}])/u', $gebinde, $pflicht, 1);
         }
+        $hatGebinde = preg_match('/' . self::GEBINDE_MUSTER . '/u', $pflicht) === 1;
+        if (self::fuellmenge($pflicht) === null && ($menge = self::fuellmenge($text)) !== null) {
+            $teil = $gebinde !== null && ! $hatGebinde ? $gebinde . ' ' . $menge : $menge;
+            $pflicht = $pflicht === '' ? $teil : $pflicht . ', ' . $teil;
+        } elseif ($gebinde !== null && ! $hatGebinde && ($menge = self::fuellmenge($pflicht)) !== null) {
+            // Füllmenge steht schon da, das Gebinde fehlt: davor setzen („1 l“ → „Tetra Pak 1 l“)
+            $pflicht = (string) preg_replace('/(?<![\d.,])(' . preg_quote(str_replace(' l', '', $menge), '/') . '\s*l)(?![\p{L}])/u', $gebinde . ' $1', $pflicht, 1);
+        }
+        $felder['pflichtangabe'] = $pflicht;
 
         return $felder;
+    }
+
+    /** Gebinde-Arten bei Getränken (§7.1a, v3.8.2): mit Material, weil Glas/PET/Tetra fachlich zählt. */
+    private const GEBINDE_MUSTER = '(?:Glasflasche|PET-Flasche|Tetra Pak|Dose|Fass|Bag-in-Box)';
+
+    /**
+     * Gebinde-Art mit Material aus dem Artikeltext — nur, was belegt ist, sonst null (kein Material erfinden): PET → PET-Flasche, Glas/MW/EW → Glasflasche,
+     * Pk/Tetra → Tetra Pak, Dose/Ds → Dose, KEG/Fass → Fass, BiB → Bag-in-Box. PET schlägt MW/EW (Mehrweg gibt es auch in PET); „Fl.“ allein ist kein Material.
+     */
+    public static function gebindeArt(string $text): ?string
+    {
+        $t = ' ' . mb_strtolower($text) . ' ';
+        $wort = fn (string $m) => preg_match('/(?<![\p{L}])(?:' . $m . ')(?![\p{L}])/u', $t) === 1;
+
+        // Reihenfolge und Wörter wie das Vorschlagsskript der GP-Bereinigung (00_INBOX/_GP_Cleanup/io_getraenke_marke, $gebinde) — beide leiten gleich ab
+        return match (true) {
+            $wort('pet|petfl|kunststoff') || str_contains($t, 'pet-') => 'PET-Flasche',
+            $wort('glas|glasflasche|glasfl|mw|ew|mehrweg|einweg') => 'Glasflasche',
+            $wort('tetra|tetrapak|tetra pak|tp|pk') => 'Tetra Pak',
+            $wort('dose|dosen|ds|can') => 'Dose',
+            $wort('fass|fässer|faesser|keg') => 'Fass',
+            $wort('bib|bag in box|bag-in-box') => 'Bag-in-Box',
+            default => null,
+        };
     }
 
     /** Füllmenge eines Getränks in Litern nach §7.1a („Pk1,0l“ → „1 l“, „330 ml“ → „0,33 l“, „0,75L“ → „0,75 l“), sonst null. */
