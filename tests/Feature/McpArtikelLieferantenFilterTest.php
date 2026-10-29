@@ -28,7 +28,7 @@ beforeEach(function () {
     config(['foodalchemist.semantic_search.enabled' => false]);
     app(SupplierGroupService::class)->einrichten(true);
     $t = $this->rootTeam->id;
-    $this->hanos = FoodAlchemistSupplier::create(['team_id' => $t, 'name' => 'Hanos', 'group_id' => FoodAlchemistSupplierGroup::where('code', 'LM')->value('id')]);
+    $this->hanos = FoodAlchemistSupplier::create(['team_id' => $t, 'name' => 'Hanos', 'rolle' => 'haendler', 'group_id' => FoodAlchemistSupplierGroup::where('code', 'LM')->value('id')]);
     $this->kluth = FoodAlchemistSupplier::create(['team_id' => $t, 'name' => 'Kluth', 'rolle' => 'offen']);
     $this->verleih = FoodAlchemistSupplier::create(['team_id' => $t, 'name' => 'Zeltverleih', 'group_id' => FoodAlchemistSupplierGroup::where('code', 'VERLEIH')->value('id')]);
     $la = fn ($sup, string $name, array $extra = []) => FoodAlchemistSupplierItem::create(array_merge(['team_id' => $t, 'supplier_id' => $sup->id,
