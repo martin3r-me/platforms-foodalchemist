@@ -1534,7 +1534,7 @@ class VkModal extends Component
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
                 ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept, $team)
                 : [],
-            'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
+            'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id, true) : null,
             'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,
             'pairing' => $rezept !== null && $this->pairingGeladen ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,
         ]);

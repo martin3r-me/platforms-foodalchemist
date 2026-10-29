@@ -1750,22 +1750,25 @@ return [
             'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
                 . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
         ],
-        // Kurator/Dominique 27.10.2026: Geschmacksprofil des ROHEN Grundprodukts. Salzig/Suess/Fettig misst der Code aus den
-        // LA-Naehrwerten (SensorikService::erdungBulk) — geschaetzt wird NUR, was zu_schaetzen nennt (immer sauer/bitter/umami/
-        // scharf, dazu Etikett-Achsen ohne Messwert). Gemessene Werte stehen als Fakt im Kontext und werden nie ersetzt.
+        // Kurator/Dominique 27.10.2026, umgebaut 29.10.2026: Geschmacksprofil des ROHEN Grundprodukts = WAHRNEHMUNG auf allen 7 Achsen.
+        // Zucker/Salz/Fett stehen als Fakt in `naehrwerte` (g/100 g aus den LA); `konzentration_ohne_maskierung` ist nur ein Hinweis.
+        // Nach der Antwort setzt der Code Grenzen (FSA „hoch" / EU „arm", SensorikService::begrenze) und schreibt Eingriffe in die Begruendung.
         'gp.sensorik' => [
             'klasse' => 'mittel',
             'max_tokens' => 800,
             'task' => 'Bewerte das Grundprodukt so, wie es EINGEKAUFT wird (roh bzw. im angegebenen Zustand/der angegebenen '
                 . 'Verarbeitung — geraeuchert, eingelegt, getrocknet, geroestet, TK aendern den Geschmack; nicht die spaetere '
-                . 'Zubereitung). Schaetze NUR die Achsen aus zu_schaetzen, je 0.0-1.0, konservativ: 0 = nicht wahrnehmbar, '
-                . '0.3 = deutlich, 0.6 = praegend, 0.9 = dominant (Zitrone sauer ~0.9, Tomate sauer ~0.4 / umami ~0.5, '
-                . 'Radicchio bitter ~0.7, Chili scharf ~0.9, Parmesan umami ~0.9). Die Werte in gemessen sind aus Naehrwerten '
-                . 'GEMESSEN — als Fakt nehmen, nicht wiederholen. kern_anker, geschmacksbild_aus_dossier (ungepruefter Entwurf, '
-                . 'nur als Hinweis) und nachbarn (andere Grundprodukte derselben Hauptzutat) sind Anker fuer die Einordnung. '
+                . 'Zubereitung). Bewerte, wie das Produkt SCHMECKT, nicht wie viel drin ist: alle Achsen aus zu_schaetzen, je 0.0-1.0, '
+                . 'konservativ: 0 = nicht wahrnehmbar, 0.3 = deutlich, 0.6 = praegend, 0.9 = dominant (Zitrone sauer ~0.9, Tomate sauer '
+                . '~0.4 / umami ~0.5, Radicchio bitter ~0.7, Chili scharf ~0.9, Parmesan umami ~0.9). Die Werte in naehrwerte '
+                . '(Zucker, Salz, Fett in g/100 g) sind FAKTEN aus dem Etikett und begruenden deine Einstufung; beruecksichtige Maskierung '
+                . '(viel Zucker ueberdeckt Salz, Saeure daempft Suesse, Fett mildert Bitter). konzentration_ohne_maskierung ist nur ein '
+                . 'Hinweis, wie der Gehalt allein wirken wuerde. Weichst du deutlich davon ab, begruende das in einem Satz. '
+                . 'kern_anker, geschmacksbild_aus_dossier (ungepruefter Entwurf, nur als Hinweis) und nachbarn (andere Grundprodukte '
+                . 'derselben Hauptzutat, mit allen 7 Achsen) sind Anker fuer die Einordnung. '
                 . 'Nur wenn texturen_schaetzen wahr ist: 1-3 texturen-slugs NUR aus knusprig,cremig,saftig,zaeh,gel,fluessig,'
                 . 'koernig,weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet 0.0-1.0), sonst leere Liste: '
-                . 'werte = {geschmack: {<achse aus zu_schaetzen>: wert}, texturen: [{slug, intensitaet}]}.',
+                . 'werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf: wert}, texturen: [{slug, intensitaet}]}.',
         ],
         'gp.la_suggest' => [
             'klasse' => 'mittel',
@@ -1868,15 +1871,17 @@ return [
             'klasse' => 'mittel',
             'task' => 'Bewerte das FERTIG ZUBEREITETE Gericht sensorisch — wie es nach der Zubereitung auf dem '
                 . 'Teller schmeckt/sich anfuehlt, NICHT die rohen Zutaten. Der Kontext liefert zu jeder Zutat ihr '
-                . 'ROH-Profil + Menge (g) + %-Anteil — nimm das als FAKTEN-Anker und wende die ZUBEREITUNG als '
-                . 'Transformation an: (a) NUR wenn tatsaechlich erhitzt Schaerfe mildern und Suesse/Umami/Roest '
-                . 'aufbauen — roh/kalt erhaelt Schaerfe und Frische voll; (b) Menge zaehlt — eine Spur (<0.3 %) '
-                . 'kaum spuerbar, gut gewuerzt ~0.8-1 %; Salz und Saeure SAETTIGEN (oben flacht die Wahrnehmung ab); '
-                . '(c) spaet zugegebene oder kalte Saeure/Salz bleiben erhalten. Jede Geschmacks-Dimension 0.0-1.0 '
-                . '(konservativ, meist 1-3 Dimensionen deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,'
-                . 'zaeh,gel,fluessig,koernig,weich,schnittfest,pastoes,kalt_fest,kuehlend,waermend (intensitaet '
-                . '0.0-1.0, 1-3 Eintraege): werte = {geschmack: {suess,salzig,sauer,bitter,umami,fettig,scharf}, '
-                . 'texturen: [{slug, intensitaet}]}.',
+                . 'Wahrnehmungsprofil (Sub-Rezepte: ihr gegartes Profil), Menge (g), %-Anteil und die Naehrwerte als FAKT '
+                . '([Naehrwert: Salz/Zucker/Fett g/100 g]), dazu eine Summenzeile mit den Rezept-Naehrwerten je 100 g. Nimm das als '
+                . 'Anker und bewerte, wie das FERTIGE Gericht schmeckt: (a) Ueberdeckung im Gericht beruecksichtigen (Zuckerguss '
+                . 'ueberdeckt Salz im Teig, Saeure daempft Suesse, Fett mildert Bitter) — ein Wert aus einer Zutat gilt nicht fest, '
+                . 'er wird vom Gericht ueberlagert; (b) Menge zaehlt — eine Spur (<0.3 %) kaum spuerbar, gut gewuerzt ~0.8-1 %; '
+                . 'Salz und Saeure SAETTIGEN (oben flacht die Wahrnehmung ab); (c) NUR wenn tatsaechlich erhitzt Schaerfe mildern '
+                . 'und Suesse/Umami/Roest aufbauen — roh/kalt erhaelt Schaerfe und Frische voll; spaet zugegebene oder kalte '
+                . 'Saeure/Salz bleiben erhalten. Jede Geschmacks-Dimension 0.0-1.0 (konservativ, meist 1-3 Dimensionen '
+                . 'deutlich >0); texturen-slugs NUR aus: knusprig,cremig,saftig,zaeh,gel,fluessig,koernig,weich,schnittfest,'
+                . 'pastoes,kalt_fest,kuehlend,waermend (intensitaet 0.0-1.0, 1-3 Eintraege): werte = {geschmack: '
+                . '{suess,salzig,sauer,bitter,umami,fettig,scharf}, texturen: [{slug, intensitaet}]}.',
         ],
         'recipe.review' => [
             'klasse' => 'stark',                                            // Spec 03 L6 — Copilot-Pruefpass, read-only

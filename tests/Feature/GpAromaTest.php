@@ -20,7 +20,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * 27.10.2026 (Dominique/Kurator): neue GPs bekommen Kern-Anker und Geschmacksprofil. Geschwister derselben Hauptzutat zuerst
- * (kostenlos), dann KI — die KI schätzt nur die NICHT gemessenen Achsen. Nur Lücken, manuell bleibt, alle Anlagewege.
+ * (kostenlos), dann KI — die KI schätzt die Wahrnehmung auf allen 7 Achsen. Nur Lücken, manuell bleibt, alle Anlagewege.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -55,11 +55,11 @@ beforeEach(function () {
             $mock->shouldReceive('stempleAccepted', 'stempleRejected')->andReturnNull();
         });
     };
-    /** Erdung stubben: salzig/süß/fettig „gemessen" ohne LA-Fixtures. */
-    $this->gemessen = function (array $dims) {
+    /** Nährwerte stubben: Konzentrationswert + Gehalt (g/100 g, Standard 10 = löst keine Grenze aus) ohne LA-Fixtures. */
+    $this->gemessen = function (array $dims, float $gehalt = 10.0) {
         $s = Mockery::mock(SensorikService::class)->makePartial();
         $s->shouldReceive('erdungBulk')->andReturnUsing(fn (array $ids) => collect($ids)->mapWithKeys(fn ($id) => [(int) $id => collect($dims)
-            ->map(fn ($w) => ['wert' => $w, 'basis' => 'Test'])->all()])->all());
+            ->map(fn ($w) => ['wert' => $w, 'gehalt' => $gehalt, 'anzahl' => 1, 'basis' => 'Test'])->all()])->all());
         app()->instance(SensorikService::class, $s);
     };
 });
@@ -121,10 +121,10 @@ it('Geschwister-Profil mit zu großer Spannweite gilt als uneinig', function () 
     expect(app(GpAromaService::class)->geschwisterProfil(($this->gp)('Ananas neu'))['status'])->toBe('uneinig');
 });
 
-// ── KI-Schätzung: nur nicht gemessene Achsen ──
+// ── KI-Schätzung: Wahrnehmung auf allen 7 Achsen, Nährwerte als Fakt (Dominique 29.10.2026) ──
 
-it('KI schätzt nur die nicht gemessenen Achsen, gemessene werden als Messwert gespeichert', function () {
-    ($this->gemessen)(['suess' => 0.57]);
+it('KI schätzt alle 7 Achsen, die Nährwerte stehen als Fakt im Kontext und überschreiben nichts', function () {
+    ($this->gemessen)(['suess' => 0.57]);                                       // Konzentration 0,57 bei 10 g Zucker
     ($this->ki)(['gp.sensorik' => ['geschmack' => ['suess' => 0.1, 'salzig' => 0, 'sauer' => 0.45, 'bitter' => 0.05, 'umami' => 0, 'fettig' => 0, 'scharf' => 0],
         'texturen' => [['slug' => 'saftig', 'intensitaet' => 0.8]]]]);
     DB::table('foodalchemist_vocab_textures')->insert(['slug' => 'saftig', 'display_de' => 'saftig', 'sort_order' => 1, 'created_at' => now(), 'updated_at' => now()]);
@@ -132,13 +132,71 @@ it('KI schätzt nur die nicht gemessenen Achsen, gemessene werden als Messwert g
 
     $v = app(GpAromaService::class)->schaetze($gp);
 
-    expect($this->aufrufe['gp.sensorik'][0]['zu_schaetzen'])->toBe(['salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'])
-        ->and($this->aufrufe['gp.sensorik'][0]['gemessen'])->toBe(['suess' => 0.57])
-        ->and($v['werte'])->not->toHaveKey('suess');
+    expect($this->aufrufe['gp.sensorik'][0]['zu_schaetzen'])->toBe(SensorikService::DIMS)
+        ->and($this->aufrufe['gp.sensorik'][0]['naehrwerte'])->toBe(['zucker_g_je_100g' => 10.0])
+        ->and($this->aufrufe['gp.sensorik'][0]['konzentration_ohne_maskierung'])->toBe(['suess' => 0.57])
+        ->and($this->aufrufe['gp.sensorik'][0])->not->toHaveKey('gemessen')
+        ->and($v['werte']['suess'])->toBe(0.1);                                  // der KI-Wert, nicht der Kurvenwert
     app(GpAromaService::class)->speichereProfil($gp->id, $v['werte'], 'ai', $v['confidence'], $v['reasoning'], $v['texturen']);
     $t = DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->first();
-    expect((float) $t->suess)->toBe(0.57)->and((float) $t->sauer)->toBe(0.45)->and($t->source)->toBe('ai')
+    expect((float) $t->suess)->toBe(0.1)->and((float) $t->sauer)->toBe(0.45)->and($t->source)->toBe('ai')
         ->and(DB::table('foodalchemist_gp_textures')->where('gp_id', $gp->id)->where('source', 'ai')->count())->toBe(1);
+});
+
+it('Amerikaner: Salz 1,2 g und Zucker 21 g, die KI sagt salzig 0,1 → gespeichert 0,1, die Grundlage zeigt 1,2 g', function () {
+    ($this->gemessen)(['salzig' => 0.54], 1.2);
+    ($this->ki)(['gp.sensorik' => ['geschmack' => ['suess' => 0.7, 'salzig' => 0.1, 'sauer' => 0, 'bitter' => 0, 'umami' => 0, 'fettig' => 0.3, 'scharf' => 0], 'texturen' => []]]);
+    $gp = ($this->gp)('Amerikaner mit Zuckerguss: TK', 'amerikaner');
+
+    $v = app(GpAromaService::class)->schaetze($gp);
+    app(GpAromaService::class)->speichereProfil($gp->id, $v['werte'], 'ai', 0.7, $v['reasoning']);
+
+    expect((float) DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->value('salzig'))->toBe(0.1)   // 1,2 g liegt unter der Schwelle 1,5
+        ->and($v['eingriffe'])->toBe([])
+        ->and($this->aufrufe['gp.sensorik'][0]['naehrwerte'])->toBe(['salz_g_je_100g' => 1.2]);
+    // Lesen: das Profil gewinnt, die Nährwerte bleiben Grundlage — die alte Überlagerung hätte 0,54 gezeigt
+    $s = app(SensorikService::class)->vektorenFuerGps([$gp->id])[$gp->id];
+    expect($s['werte']['salzig'])->toBe(0.1)->and($s['messung']['salzig']['gehalt'])->toBe(1.2)->and($s['messung']['salzig']['vorlaeufig'])->toBeFalse();
+});
+
+it('Grenzen nach der KI-Antwort: Untergrenze bei „hoch", Obergrenze bei „arm", Süße ohne Obergrenze', function () {
+    $s = app(SensorikService::class);
+    $roh = array_fill_keys(SensorikService::DIMS, 0.0);
+
+    // Untergrenze: Salz 2,4 g und KI 0,05 → 0,30 mit Hinweis
+    $r = $s->begrenze(['salzig' => 0.05] + $roh, ['salzig' => 2.4]);
+    expect($r['werte']['salzig'])->toBe(0.3)->and($r['eingriffe'][0])->toContain('[Grenze: salzig 0,05 → 0,30')->toContain('Salz 2,4 g/100 g');
+    // Gegenprobe: ohne Gehalt greift keine Grenze
+    expect($s->begrenze(['salzig' => 0.05] + $roh, [])['werte']['salzig'])->toBe(0.05);
+    // Fett und Zucker ab FSA „hoch"
+    expect($s->begrenze(['fettig' => 0.1] + $roh, ['fettig' => 17.5])['werte']['fettig'])->toBe(0.3)
+        ->and($s->begrenze(['suess' => 0.1] + $roh, ['suess' => 22.5])['werte']['suess'])->toBe(0.3);
+    // Obergrenze: Salz 0,1 g und KI 0,6 → 0,20; Fett < 3 g ebenso
+    expect($s->begrenze(['salzig' => 0.6] + $roh, ['salzig' => 0.1])['werte']['salzig'])->toBe(0.2)
+        ->and($s->begrenze(['fettig' => 0.6] + $roh, ['fettig' => 2.0])['werte']['fettig'])->toBe(0.2);
+    // Süße hat keine Obergrenze: Zucker 0 g und KI 0,8 bleibt 0,8 (Süßstoffe)
+    expect($s->begrenze(['suess' => 0.8] + $roh, ['suess' => 0.0])['werte']['suess'])->toBe(0.8);
+    // Zwischen den Schwellen darf die KI frei einstufen
+    expect($s->begrenze(['salzig' => 0.0] + $roh, ['salzig' => 1.2])['eingriffe'])->toBe([]);
+});
+
+it('speichereProfil wendet die Grenze mit den eigenen Nährwerten an, auch beim Geschwister-Weg, und schreibt den Eingriff in die Begründung', function () {
+    ($this->gemessen)(['salzig' => 0.7], 2.4);
+    $gp = ($this->gp)('Brezel: TK', 'brezel');
+
+    app(GpAromaService::class)->speichereProfil($gp->id, ['salzig' => 0.05, 'umami' => 0.2], 'geschwister', null, 'von Geschwistern');
+
+    $t = DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->first();
+    expect((float) $t->salzig)->toBe(0.3)->and($t->ai_reasoning)->toContain('[Grenze: salzig');
+});
+
+it('ohne Profil steht der Konzentrationswert vorläufig, gekennzeichnet', function () {
+    ($this->gemessen)(['salzig' => 0.74], 3.5);
+    $gp = ($this->gp)('Salzstangen', 'salzstange');
+
+    $v = app(SensorikService::class)->vektorenFuerGps([$gp->id])[$gp->id];
+
+    expect($v['werte']['salzig'])->toBe(0.74)->and($v['messung']['salzig']['vorlaeufig'])->toBeTrue();
 });
 
 it('speichereProfil überschreibt nie ein manuelles und ohne Freigabe kein vorhandenes Profil', function () {
@@ -245,11 +303,11 @@ it('mit Profil heißt ein Wert unter 0,3 „schwach", nicht „Lücke" — im GP
         ->assertSee('schwach: süß')->assertDontSee('Lücke:')->assertSeeHtml('data-gp-profil-quelle="ai"');
 });
 
-it('GP-Detail „Geschmack" (Dominique 28.10.): Radar oben, Tags darunter; Erklärtext, Messwert-Box und Crunch-Hinweis weg — der GP-Dialog bleibt', function () {
+it('GP-Detail „Geschmack" (Dominique 28.10.): Radar oben, Tags darunter; Erklärtext, Grundlage-Box und Crunch-Hinweis weg — der GP-Dialog bleibt', function () {
     $this->actingAs($this->user);
     $gp = ($this->gp)('Zitrone: frisch', 'zitrone');
     ($this->profil)($gp->id, ['sauer' => 0.9, 'suess' => 0.1]);
-    ($this->gemessen)(['suess' => 0.1]);                                        // Messwert-Box hätte Inhalt
+    ($this->gemessen)(['suess' => 0.1]);                                        // Grundlage-Box hätte Inhalt
     foreach (['cremig' => 'Cremig', 'fluessig' => 'Flüssig'] as $slug => $label) {   // zwei weiche Texturen → Crunch-Hinweis
         $v = DB::table('foodalchemist_vocab_textures')->insertGetId(['slug' => $slug, 'display_de' => $label, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('foodalchemist_gp_textures')->insert(['gp_id' => $gp->id, 'texture_vocab_id' => $v, 'intensity' => 1, 'created_at' => now(), 'updated_at' => now()]);
@@ -266,7 +324,7 @@ it('GP-Detail „Geschmack" (Dominique 28.10.): Radar oben, Tags darunter; Erkl�
         expect($tags)->toContain($tag);
     }
     expect(strpos($geschmack, 'data-sensorik-tags'))->toBeGreaterThan(strpos($geschmack, 'data-geschmack-radar'));   // unter dem Radar
-    foreach (['Die Fläche zeigt', 'Aus den Nährwerten der Lieferantenartikel gemessen', 'Crunch-Element', '>Textur<'] as $teil) {
+    foreach (['Die Fläche zeigt', 'Grundlage: Nährwerte der Lieferantenartikel', 'Crunch-Element', '>Textur<'] as $teil) {
         expect($geschmack)->not->toContain($teil);
         expect($dialog)->toContain($teil);                                      // GP-Dialog unverändert
     }
@@ -366,4 +424,76 @@ it('Backfill --limit streut den KI-Teil reihum über die Warengruppen', function
 
     $wgs = DB::table('foodalchemist_gp_taste_vectors AS t')->join('foodalchemist_gps AS g', 'g.id', '=', 't.gp_id')->pluck('g.commodity_group_code')->sort()->values()->all();
     expect($wgs)->toBe(['02', '05', '11']);
+});
+
+// ── Backfill --neu-schaetzen ──
+
+it('Backfill --neu-schaetzen schätzt vorhandene Profile der genannten Quellen neu, ein manuelles nie', function () {
+    ($this->ki)(['gp.sensorik' => ['geschmack' => array_fill_keys(SensorikService::DIMS, 0.2)]]);
+    $alt = ($this->gp)('Zitrone', 'zitrone');
+    ($this->profil)($alt->id, ['sauer' => 0.9, 'salzig' => 0.54], 'ai');
+    $hand = ($this->gp)('Limette', 'limette');
+    ($this->profil)($hand->id, ['sauer' => 0.8], 'manual');
+    $andere = ($this->gp)('Ananas', 'ananas');
+    ($this->profil)($andere->id, ['suess' => 0.7], 'gemini');                  // Quelle nicht genannt → bleibt
+    $ber = sys_get_temp_dir().'/gparoma_'.uniqid();
+
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'profil', '--apply' => true, '--admin' => $this->user->email, '--pause' => 0,
+        '--neu-schaetzen' => 'ai,manual_nie_genannt', '--bericht' => $ber])->assertExitCode(1);       // unbekannte Quelle → Fehler, nichts geschrieben
+    $this->artisan('foodalchemist:gp-aroma-backfill', ['--nur' => 'profil', '--apply' => true, '--admin' => $this->user->email, '--pause' => 0,
+        '--neu-schaetzen' => 'ai', '--bericht' => $ber])->assertExitCode(0);
+
+    $t = fn ($g) => DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $g->id)->first();
+    expect((float) $t($alt)->salzig)->toBe(0.2)->and((float) $t($alt)->sauer)->toBe(0.2)         // neu geschätzt, alter Messwert weg
+        ->and((float) $t($hand)->sauer)->toBe(0.8)->and($t($hand)->source)->toBe('manual')       // manuell nie
+        ->and($t($andere)->source)->toBe('gemini')
+        ->and(count($this->aufrufe['gp.sensorik']))->toBe(1);
+});
+
+// ── Rezept-Sensorik: Nährwerte als Fakt, Sub-Rezept-Profil im Kontext, Grenzen nach der Antwort ──
+
+it('Rezept-Sensorik: Kontext mit Nährwert-Fakt, Summenzeile und Sub-Rezept-Profil, kein „[gemessen]"; die Grenze greift nach der Antwort', function () {
+    ($this->gemessen)(['salzig' => 0.9], 98.0);                                 // jedes GP: Salz 98 g/100 g
+    ($this->ki)(['recipe.sensorik' => ['geschmack' => array_fill_keys(SensorikService::DIMS, 0.0), 'texturen' => []]]);
+    $gp = ($this->gp)('Salz', 'salz');
+    $sub = $this->makeRecipe($this->rootTeam, 'Fond', ['is_sales_recipe' => false]);
+    DB::table('foodalchemist_recipe_taste_vectors')->insert(array_merge(array_fill_keys(SensorikService::DIMS, 0), ['umami' => 0.7,
+        'recipe_id' => $sub->id, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]));
+    $r = $this->makeRecipe($this->rootTeam, 'Fleisch: Roastbeef', ['is_sales_recipe' => false]);
+    $this->makeIngredient($r, 'Salz', $gp, '16', 1);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $r->team_id, 'recipe_id' => $r->id, 'referenced_recipe_id' => $sub->id,
+        'raw_text' => 'Fond', 'quantity' => '400', 'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 2]);
+
+    $res = app(SensorikService::class)->bewerteRezept($r->id);
+
+    $kontext = $this->aufrufe['recipe.sensorik'][0]['zutaten_geerdet'];
+    expect($res['status'])->toBe('bewertet')
+        ->and($kontext)->toContain('[Nährwert: Salz 98,0 g/100 g]')->toContain('Summe Rezept je 100 g')
+        ->and($kontext)->toContain('Sub-Rezept, gegart: Umami 0.7')->not->toContain('[gemessen')
+        // Der Gehalt ist nur für 16 von 416 g bekannt (< 80 %): keine Grenze, die KI-Einstufung 0 bleibt
+        ->and((float) DB::table('foodalchemist_recipe_taste_vectors')->where('recipe_id', $r->id)->value('salzig'))->toBe(0.0);
+});
+
+it('Rezept-Grenze: ist der Gehalt für die ganze Masse bekannt, gilt die Untergrenze und der Eingriff steht in der Begründung', function () {
+    ($this->gemessen)(['salzig' => 0.9], 2.4);                                  // alle Zutaten 2,4 g Salz/100 g → Rezept 2,4 g
+    ($this->ki)(['recipe.sensorik' => ['geschmack' => array_fill_keys(SensorikService::DIMS, 0.0), 'texturen' => []]]);
+    $r = $this->makeRecipe($this->rootTeam, 'Gebäck: Brezel', ['is_sales_recipe' => false]);
+    $this->makeIngredient($r, 'Teig', ($this->gp)('Teig', 'teig'), '500', 1);
+
+    $res = app(SensorikService::class)->bewerteRezept($r->id);
+
+    $t = DB::table('foodalchemist_recipe_taste_vectors')->where('recipe_id', $r->id)->first();
+    expect((float) $t->salzig)->toBe(0.3)->and($t->ai_reasoning)->toContain('[Grenze: salzig 0,00 → 0,30')
+        ->and($res['eingriffe'])->toHaveCount(1);
+});
+
+it('Referenz-Befehl (nur lesend): Amerikaner im Rahmen → Erfolg; Gegenprobe außerhalb der Spanne → Fehlschlag; nichts gespeichert', function () {
+    $gp = ($this->gp)('Amerikaner mit Zuckerguss: TK', 'amerikaner');
+    ($this->ki)(['gp.sensorik' => ['geschmack' => ['suess' => 0.7, 'salzig' => 0.1, 'sauer' => 0, 'bitter' => 0, 'umami' => 0, 'fettig' => 0.3, 'scharf' => 0], 'texturen' => []]]);
+    $this->artisan('foodalchemist:gp-sensorik-referenz', ['--admin' => $this->user->email, '--gp' => ["amerikaner:{$gp->id}"]])->assertExitCode(0);
+
+    ($this->ki)(['gp.sensorik' => ['geschmack' => ['suess' => 0.7, 'salzig' => 0.54, 'sauer' => 0, 'bitter' => 0, 'umami' => 0, 'fettig' => 0.3, 'scharf' => 0], 'texturen' => []]]);
+    $this->artisan('foodalchemist:gp-sensorik-referenz', ['--admin' => $this->user->email, '--gp' => ["amerikaner:{$gp->id}"]])->assertExitCode(1);
+
+    expect(DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->where('source', 'ai')->exists())->toBeFalse();
 });

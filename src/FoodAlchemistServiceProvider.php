@@ -97,6 +97,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\AbgleichEvalCommand::class,   // Abgleich-Dienst: Eval (schreibt nie, zurückgerollte Transaktion)
                 \Platform\FoodAlchemist\Console\GpPaketImportCommand::class,   // E2: GP-Paket → io (global, stamm_paket)
                 \Platform\FoodAlchemist\Console\GpAromaBackfillCommand::class,   // 27.10.2026: Anker + Geschmacksprofil für Lücken (Geschwister, dann KI)
+                \Platform\FoodAlchemist\Console\GpSensorikReferenzCommand::class,   // 29.10.2026: Live-Abnahme Wahrnehmung (nur lesend)
                 \Platform\FoodAlchemist\Console\GpStammPurgeCommand::class,   // Neu-Import: globalen GP-Stamm hart löschen (Trockenlauf, Riegel, Backup-Nachweis)
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde

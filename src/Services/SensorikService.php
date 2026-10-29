@@ -13,12 +13,11 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  *    geschätzt" markiert. Manueller Eintrag (source='manual') gewinnt immer.
  *  • Grundprodukt: eigener Roh-Vektor (das ist für ein GP korrekt — ein GP ist roh).
  *
- * ERDUNG (Salzig/Süß/Fettig): die drei Dimensionen, die auf dem Etikett STEHEN, werden nicht
- * geschätzt, sondern aus den LA-Nährwerten gerechnet (GL-08-Pfad wie GpAggregateService::
- * naehrwerte: Ø über nicht-ausgelistete LAs, Salz = sodium × 0.0025). Gemessen schlägt KI —
- * die KI-Schätzung bleibt nur für das, was kein Label hergibt (sauer/bitter/umami/scharf).
- * Passiert bei JEDEM Lesen, nichts wird gespiegelt: neue Nährwerte wirken sofort, und ein
- * kuratierter/manueller Vektor in der Tabelle wird nie überschrieben, nur überlagert.
+ * WAHRNEHMUNG (seit 29.10.2026): ein Profil beschreibt, wie das Produkt SCHMECKT, nicht wie viel drin ist. Salzig/Süß/Fettig
+ * stehen als Nährwerte (g/100 g, aus den LA, Salz = sodium × 0.0025) daneben, als Fakt und Grundlage. Die Kurve
+ * ({@see self::erdungBulk()}) liefert nur noch den Konzentrationswert ohne Maskierung: als Hinweis und — ohne
+ * gespeichertes Profil — als vorläufigen Wert. Die KI schätzt alle 7 Achsen; {@see self::begrenze()} fängt nach der
+ * Antwort klare Ausreißer ab (FSA „hoch" / EU „arm"). Gemessen überschreibt beim Lesen nichts mehr.
  *
  * Logik wie 232: MAX je Geschmacks-Dimension → Dominanz (≥0.6) / Lücke (<0.3); Textur-Monotonie
  * (überwiegend weich, kein Crunch) → Kontrast-Vorschläge aus dem GP-Bestand.
@@ -73,6 +72,19 @@ class SensorikService
     ];
 
     /**
+     * Plausibilitätsgrenzen für die KI-Wahrnehmung (Dominique 29.10.2026). Dieselben belegten Schwellen wie {@see self::KURVE}:
+     *  • unter  = Gehalt „hoch" (FSA-Front-of-Pack) ⇒ die Achse ist mindestens so stark;
+     *  • ober   = Gehalt „arm" (EU-VO 1924/2006) ⇒ die Achse ist höchstens so stark.
+     * Süße hat keine Obergrenze: Süßstoffe schmecken süß, ohne Zucker zu enthalten (Cola Zero).
+     * Schlägt die Grenze zu, ersetzt der Code den KI-Wert und schreibt den Eingriff in die Begründung.
+     */
+    public const GRENZEN = [
+        'salzig' => ['unter' => ['ab' => 1.5, 'min' => 0.30], 'ober' => ['unter' => 0.3, 'max' => 0.20]],
+        'fettig' => ['unter' => ['ab' => 17.5, 'min' => 0.30], 'ober' => ['unter' => 3.0, 'max' => 0.20]],
+        'suess' => ['unter' => ['ab' => 22.5, 'min' => 0.30], 'ober' => null],
+    ];
+
+    /**
      * Leer-Label-Guard: beim Necta-Import kamen Artikel ohne Nährwert-Angabe als lauter Nullen
      * an (9.385 Zeilen im Quellbestand). Solche Zeilen dürfen eine Dimension nicht auf 0 ziehen —
      * eine Zeile zählt nur, wenn irgendein Kernwert > 0 ist. (Salz pur: kcal 0, aber sodium > 0.)
@@ -85,12 +97,8 @@ class SensorikService
     private const LABEL_FELDER = ['energy_kcal', 'sodium', 'fat', 'sugar', 'protein', 'carbs_absorbable'];
 
     /**
-     * Ab dieser Abweichung gemessen↔geschätzt wird der Widerspruch ausgewiesen (LA-Daten prüfen).
-     * Asymmetrisch angewendet, weil der Datenfehler im Bestand asymmetrisch ist: ein zu HOHER
-     * Label-Wert ist fast immer echt (Salz/Zucker/Fett sind wirklich drin), ein stark zu NIEDRIGER
-     * ist das bekannte Import-Muster „nicht deklariert" (Praline mit 0,8 g Zucker/100 g, Margarine
-     * mit 0,01 g Fett). Darum: nach oben wird korrigiert und markiert, ein starker Absturz wird
-     * NICHT übernommen — die Schätzung bleibt stehen und der Widerspruch wird gemeldet.
+     * Ab dieser Abweichung Wahrnehmung↔Konzentration wird ein Hinweis angezeigt: Überdeckung (Zucker über Salz) ist gewollt,
+     * kann aber auch ein Altwert sein (Profile bis zum Neulauf tragen noch den früher eingespielten Messwert).
      */
     private const KONFLIKT_AB = 0.4;
 
@@ -115,9 +123,12 @@ class SensorikService
     }
 
     /**
-     * Sensorik eines Rezepts/Gerichts: KI-gegartes Profil wenn vorhanden, sonst Roh-Aggregat.
+     * Sensorik eines Rezepts/Gerichts: KI-gegartes Profil wenn vorhanden, sonst Roh-Aggregat
+     * (mengengewichtetes Mittel der Wahrnehmungsprofile; ohne Mengen MAX, gekennzeichnet).
+     * `$mitGrundlage` hängt die Rezept-Nährwerte (Zucker/Salz/Fett je 100 g) als `erdung` an — nur für die Anzeige,
+     * weil es Abfragen kostet.
      */
-    public function fuerRezept(int $recipeId): array
+    public function fuerRezept(int $recipeId, bool $mitGrundlage = false): array
     {
         $stored = DB::table('foodalchemist_recipe_taste_vectors')->where('recipe_id', $recipeId)->first();
         if ($stored !== null) {
@@ -131,15 +142,202 @@ class SensorikService
                 ->selectRaw('v.slug, v.display_de, MAX(t.intensity) AS intensitaet')
                 ->groupBy('v.slug', 'v.display_de')->get();
 
-            return $this->montage(
+            $out = $this->montage(
                 $geschmack, $texRows,
                 $stored->source === 'manual' ? 'manual' : 'ki',
                 $stored->ai_confidence !== null ? (float) $stored->ai_confidence : null,
                 $stored->ai_reasoning,
             );
+        } else {
+            $out = $this->rohRezept($recipeId);
+        }
+        if ($mitGrundlage && ! ($out['leer'] ?? false)) {
+            $out['erdung'] = $this->rezeptGrundlage($recipeId);
         }
 
-        return $this->auswertung($this->gpIdsFromRecipes([$recipeId]), 'roh');
+        return $out;
+    }
+
+    /** Hinweis, wenn der Roh-Fallback ohne Mengen nur MAX kann. */
+    public const HINWEIS_OHNE_MENGEN = 'grob, ohne Mengen';
+
+    /** Rekursionstiefe für Sub-Rezepte im Roh-Fallback. */
+    private int $rohTiefe = 0;
+
+    /**
+     * Roh-Fallback für ein Rezept ohne gegartes Profil: mengengewichtetes Mittel der Wahrnehmungsprofile der Zutaten
+     * (Sub-Rezepte mit ihrem eigenen Profil). Damit dominiert eine Prise Salz nicht mehr das Rezept (Dominique 29.10.2026).
+     * Ohne jede Menge bleibt MAX je Achse, gekennzeichnet.
+     */
+    private function rohRezept(int $recipeId): array
+    {
+        $zeilen = array_values(array_filter($this->zutatenMitGramm($recipeId), fn ($z) => $z['gramm'] > 0));
+        $gpIds = $this->gpIdsFromRecipes([$recipeId]);
+        if ($zeilen === [] || $this->rohTiefe >= 3) {
+            $out = $this->auswertung($gpIds, 'roh');
+            if (! ($out['leer'] ?? false)) {
+                $out['hinweis'] = self::HINWEIS_OHNE_MENGEN;
+            }
+
+            return $out;
+        }
+        $vektoren = $this->vektorenFuerGps(array_column($zeilen, 'gp_id'));
+        $summe = array_fill_keys(self::DIMS, 0.0);
+        $gewicht = 0.0;
+        $mitDaten = 0;
+        $gesamt = 0;
+        foreach ($zeilen as $z) {
+            if ($z['gp_id'] !== null && isset($vektoren[$z['gp_id']])) {
+                $werte = $vektoren[$z['gp_id']]['werte'];
+                $mitDaten += $vektoren[$z['gp_id']]['hat_daten'] ? 1 : 0;
+                $gesamt++;
+            } elseif ($z['ref'] !== null) {
+                $this->rohTiefe++;
+                try {
+                    $sub = $this->fuerRezept($z['ref']);
+                } finally {
+                    $this->rohTiefe--;
+                }
+                if ($sub['leer'] ?? false) {
+                    continue;
+                }
+                $werte = $sub['geschmack'];
+                $gesamt++;
+                $mitDaten++;
+            } else {
+                continue;
+            }
+            foreach (self::DIMS as $d) {
+                $summe[$d] += $z['gramm'] * (float) ($werte[$d] ?? 0);
+            }
+            $gewicht += $z['gramm'];
+        }
+        if ($gewicht <= 0) {
+            return array_merge($this->auswertung($gpIds, 'roh'), ['hinweis' => self::HINWEIS_OHNE_MENGEN]);
+        }
+        $geschmack = [];
+        foreach (self::DIMS as $d) {
+            $geschmack[$d] = round($summe[$d] / $gewicht, 2);
+        }
+
+        return $this->montage($geschmack, $gpIds === [] ? collect() : $this->texturZeilen($gpIds), 'roh', null, null,
+            ['mit' => $mitDaten, 'gesamt' => $gesamt], []);
+    }
+
+    /**
+     * Zutaten eines Rezepts mit Menge in Gramm (Menge × Einheit g bzw. ml; 0 = keine Mengenangabe).
+     *
+     * @return list<array{gp_id: ?int, ref: ?int, name: string, gramm: float}>
+     */
+    private function zutatenMitGramm(int $recipeId): array
+    {
+        $rows = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
+            ->leftJoin('foodalchemist_recipes AS sr', 'sr.id', '=', 'ri.referenced_recipe_id')
+            ->leftJoin('foodalchemist_vocab_units AS e', 'e.id', '=', 'ri.unit_vocab_id')
+            ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->orderBy('ri.position')
+            ->get(['ri.gp_id', 'ri.referenced_recipe_id', 'ri.quantity', 'e.default_in_g', 'e.default_in_ml',
+                DB::raw('COALESCE(g.name, sr.name, ri.raw_text) AS name')]);
+        $out = [];
+        foreach ($rows as $r) {
+            $out[] = [
+                'gp_id' => $r->gp_id !== null ? (int) $r->gp_id : null,
+                'ref' => $r->referenced_recipe_id !== null ? (int) $r->referenced_recipe_id : null,
+                'name' => (string) ($r->name ?? ''),
+                'gramm' => $r->quantity !== null ? (float) $r->quantity * (float) ($r->default_in_g ?? $r->default_in_ml ?? 0) : 0.0,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Ab diesem Anteil der Masse mit bekanntem Gehalt gelten die Nährwert-Grenzen auch am Rezept. */
+    public const GRENZE_MIN_ABDECKUNG = 0.8;
+
+    /**
+     * Nährwerte des Rezepts je 100 g Zutatenmasse (Zucker, Salz, Fett) aus Menge × Gehalt der Zutaten (Sub-Rezepte rekursiv).
+     * `abdeckung[dim]` = Anteil der Masse, für den ein Gehalt bekannt ist; der Wert ist der Schnitt über die bekannte Masse.
+     *
+     * @return array{werte: array<string, ?float>, abdeckung: array<string, float>}
+     */
+    public function rezeptNaehrwerte(int $recipeId, int $tiefe = 0): array
+    {
+        $zeilen = array_values(array_filter($this->zutatenMitGramm($recipeId), fn ($z) => $z['gramm'] > 0));
+        $leer = ['werte' => array_fill_keys(array_keys(self::MESSBAR), null), 'abdeckung' => array_fill_keys(array_keys(self::MESSBAR), 0.0)];
+        if ($zeilen === []) {
+            return $leer;
+        }
+        $erdung = $this->erdungBulk(array_filter(array_column($zeilen, 'gp_id')));
+        $gesamt = array_sum(array_column($zeilen, 'gramm'));
+        $subs = [];
+        foreach ($zeilen as $z) {
+            if ($z['ref'] !== null && $tiefe < 3) {
+                $subs[$z['ref']] ??= $this->rezeptNaehrwerte($z['ref'], $tiefe + 1);
+            }
+        }
+        $out = $leer;
+        foreach (array_keys(self::MESSBAR) as $dim) {
+            $summe = 0.0;
+            $bekannt = 0.0;
+            foreach ($zeilen as $z) {
+                if ($z['gp_id'] !== null && isset($erdung[$z['gp_id']][$dim])) {
+                    $summe += $z['gramm'] * $erdung[$z['gp_id']][$dim]['gehalt'] / 100;
+                    $bekannt += $z['gramm'];
+                } elseif ($z['ref'] !== null && isset($subs[$z['ref']]) && ($subs[$z['ref']]['werte'][$dim] ?? null) !== null) {
+                    $anteil = $subs[$z['ref']]['abdeckung'][$dim];
+                    $summe += $z['gramm'] * $anteil * $subs[$z['ref']]['werte'][$dim] / 100;
+                    $bekannt += $z['gramm'] * $anteil;
+                }
+            }
+            if ($bekannt > 0) {
+                $out['werte'][$dim] = round($summe / $bekannt * 100, 2);
+                $out['abdeckung'][$dim] = round($bekannt / $gesamt, 3);
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Gehalt je Achse für die Grenzen am Rezept: nur Achsen, deren Gehalt für genug Masse bekannt ist.
+     *
+     * @return array<string, float>
+     */
+    private function rezeptGehaltFuerGrenzen(array $naehr): array
+    {
+        $out = [];
+        foreach ($naehr['werte'] as $dim => $wert) {
+            if ($wert !== null && $naehr['abdeckung'][$dim] >= self::GRENZE_MIN_ABDECKUNG) {
+                $out[$dim] = (float) $wert;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Anzeige-Grundlage am Rezept (gleiche Form wie am GP): „Salz 0,9 g/100 g · aus den Zutaten".
+     *
+     * @return array<string, array{basis: string, gehalt: float, vorlaeufig: bool, konflikt: ?string}>
+     */
+    private function rezeptGrundlage(int $recipeId): array
+    {
+        $naehr = $this->rezeptNaehrwerte($recipeId);
+        $out = [];
+        foreach ($naehr['werte'] as $dim => $wert) {
+            if ($wert === null) {
+                continue;
+            }
+            $anteil = (int) round($naehr['abdeckung'][$dim] * 100);
+            $out[$dim] = [
+                'basis' => self::MESSBAR[$dim]['label'] . ' ' . number_format($wert, 1, ',', '.') . ' g/100 g · aus den Zutaten',
+                'gehalt' => (float) $wert,
+                'vorlaeufig' => false,
+                'konflikt' => $anteil < (int) (self::GRENZE_MIN_ABDECKUNG * 100) ? "Nur für {$anteil} % der Masse bekannt." : null,
+            ];
+        }
+
+        return $out;
     }
 
     /** Sensorik eines einzelnen Grundprodukts (eigener Roh-Vektor — für ein GP korrekt). */
@@ -253,7 +451,7 @@ class SensorikService
      * GpAggregateService::naehrwerte: Ø über nicht-ausgelistete LAs, NULL fällt raus).
      * EINE Query für alle GPs — kein N+1 im Zutaten-Durchlauf.
      *
-     * @return array<int, array<string, array{wert: float, basis: string}>> [gp_id][dim]
+     * @return array<int, array<string, array{wert: float, gehalt: float, anzahl: int, basis: string}>> [gp_id][dim]
      */
     public function erdungBulk(array $gpIds): array
     {
@@ -302,7 +500,9 @@ class SensorikService
                     continue;                                 // kein Messwert ⇒ KI-Schätzung behalten
                 }
                 $dims[$dim] = [
-                    'wert' => $this->kurve($g, self::KURVE[$dim]),
+                    'wert' => $this->kurve($g, self::KURVE[$dim]),     // Konzentration ohne Maskierung — nur Hinweis, nie das Profil
+                    'gehalt' => $g,                                    // g/100 g, der Fakt
+                    'anzahl' => $anzahl[$m['groesse']],
                     'basis' => $m['label'] . ' ' . number_format($g, 1, ',', '.') . ' g/100 g'
                         . ($anzahl[$m['groesse']] > 1 ? ' · Ø ' . $anzahl[$m['groesse']] . ' LA' : ''),
                 ];
@@ -343,13 +543,47 @@ class SensorikService
     }
 
     /**
-     * Effektiver Roh-Vektor je GP: gespeicherter Vektor, messbare Dimensionen davon überlagert.
-     * `messung[dim]` dokumentiert je erdbarer Achse die Label-Basis, ob sie angewendet wurde und
-     * einen etwaigen Widerspruch zur Schätzung.
+     * Plausibilitätsgrenzen anwenden (siehe {@see self::GRENZEN}). `$gehalt` = Nährwerte g/100 g je Achse
+     * (`salzig` = Salz, `suess` = Zucker, `fettig` = Fett); Achsen ohne Gehalt bleiben unberührt.
+     *
+     * @param  array<string, float>  $werte
+     * @param  array<string, float>  $gehalt
+     * @return array{werte: array<string, float>, eingriffe: list<string>}
+     */
+    public function begrenze(array $werte, array $gehalt): array
+    {
+        $nf = fn (float $x, int $n = 2) => number_format($x, $n, ',', '.');
+        $eingriffe = [];
+        foreach (self::GRENZEN as $dim => $g) {
+            if (! isset($gehalt[$dim], $werte[$dim])) {
+                continue;
+            }
+            $wert = (float) $werte[$dim];
+            $neu = $wert;
+            if ($gehalt[$dim] >= $g['unter']['ab'] && $wert < $g['unter']['min']) {
+                $neu = $g['unter']['min'];
+            } elseif ($g['ober'] !== null && $gehalt[$dim] < $g['ober']['unter'] && $wert > $g['ober']['max']) {
+                $neu = $g['ober']['max'];
+            }
+            if ($neu !== $wert) {
+                $werte[$dim] = $neu;
+                $eingriffe[] = '[Grenze: ' . strtolower(self::DIM_LABEL[$dim]) . ' ' . $nf($wert) . ' → ' . $nf($neu)
+                    . ', ' . self::MESSBAR[$dim]['label'] . ' ' . $nf($gehalt[$dim], 1) . ' g/100 g]';
+            }
+        }
+
+        return ['werte' => $werte, 'eingriffe' => $eingriffe];
+    }
+
+    /**
+     * Effektiver Roh-Vektor je GP. Seit 29.10.2026 gilt: das gespeicherte Profil ist die WAHRNEHMUNG und gewinnt.
+     * Die Nährwerte bleiben als Grundlage in `messung[dim]` (Fakt, g/100 g) — überlagern tun sie nichts mehr.
+     * Nur OHNE Profil steht die Konzentration vorläufig als Wert (`vorlaeufig`), damit der Roh-Fallback der Rezepte
+     * für frische GPs nicht auf 0 fällt.
      *
      * @return array<int, array{
      *     werte: array<string, float>,
-     *     messung: array<string, array{basis: string, angewendet: bool, konflikt: ?string}>,
+     *     messung: array<string, array{basis: string, gehalt: float, vorlaeufig: bool, konflikt: ?string}>,
      *     hat_daten: bool
      * }>
      */
@@ -360,7 +594,7 @@ class SensorikService
             return [];
         }
         $gespeichert = DB::table('foodalchemist_gp_taste_vectors')->whereIn('gp_id', $gpIds)
-            ->get(array_merge(['gp_id'], self::DIMS))->keyBy('gp_id');
+            ->get(array_merge(['gp_id', 'source', 'ai_reasoning'], self::DIMS))->keyBy('gp_id');
         $gemessen = $this->erdungBulk($gpIds);
 
         $out = [];
@@ -370,28 +604,23 @@ class SensorikService
             foreach (self::DIMS as $d) {
                 $werte[$d] = round((float) ($row->{$d} ?? 0), 2);
             }
+            // Profil vorhanden = ein Eintrag mit mindestens einem Wert (lauter Nullen ist ein Import-Artefakt) oder von Hand gepflegt.
+            $hatProfil = $row !== null && ($row->source === 'manual' || array_sum($werte) > 0);
             $nf = fn (float $x) => number_format($x, 2, ',', '.');
             $messung = [];
             foreach ($gemessen[$gpId] ?? [] as $dim => $m) {
-                $delta = $row !== null ? $m['wert'] - $werte[$dim] : 0.0;
-
-                if ($delta <= -self::KONFLIKT_AB) {           // Absturz ⇒ Label unplausibel, nicht übernehmen
-                    $messung[$dim] = [
-                        'basis' => $m['basis'], 'angewendet' => false,
-                        'konflikt' => 'Label ergäbe nur ' . $nf($m['wert']) . ' — unplausibel, Schätzung '
-                            . $nf($werte[$dim]) . ' bleibt stehen',
-                    ];
-
-                    continue;
+                $konflikt = null;
+                if ($hatProfil) {
+                    if (str_contains((string) $row->ai_reasoning, '[Grenze:')) {
+                        $konflikt = 'Die Wahrnehmung wurde auf die Nährwert-Grenze gesetzt (Begründung am Profil).';
+                    } elseif (abs($m['wert'] - $werte[$dim]) >= self::KONFLIKT_AB) {
+                        $konflikt = 'Wahrnehmung ' . $nf($werte[$dim]) . ' liegt deutlich von der Konzentration (' . $nf($m['wert'])
+                            . ') entfernt — Überdeckung durch andere Zutaten oder ein Altwert.';
+                    }
+                } else {
+                    $werte[$dim] = $m['wert'];                    // vorläufig aus Nährwerten
                 }
-
-                $messung[$dim] = [
-                    'basis' => $m['basis'], 'angewendet' => true,
-                    'konflikt' => $delta >= self::KONFLIKT_AB
-                        ? 'deutlich über der Schätzung (' . $nf($werte[$dim]) . '). Zuordnung des Lieferantenartikels prüfen.'
-                        : null,
-                ];
-                $werte[$dim] = $m['wert'];                    // gemessen schlägt geschätzt
+                $messung[$dim] = ['basis' => $m['basis'], 'gehalt' => $m['gehalt'], 'vorlaeufig' => ! $hatProfil, 'konflikt' => $konflikt];
             }
             $out[$gpId] = [
                 'werte' => $werte,
@@ -403,7 +632,7 @@ class SensorikService
         return $out;
     }
 
-    /** Roh-Aggregat über eine GP-Menge (MAX je Dimension, wie 232) → Montage. */
+    /** Roh-Aggregat eines einzelnen GP (MAX = der eine Vektor selbst) → Montage. */
     private function auswertung(array $gpIds, string $source): array
     {
         if ($gpIds === []) {
@@ -411,34 +640,31 @@ class SensorikService
         }
         $vektoren = $this->vektorenFuerGps($gpIds);
 
-        // MAX je Dimension ÜBER die effektiven GP-Vektoren (erst erden, dann maxen — sonst würde
-        // ein GP ohne Nährwerte gegen den Messwert eines anderen GPs verlieren).
         $geschmack = array_fill_keys(self::DIMS, 0.0);
         $erdung = [];
         $mitDaten = 0;
         foreach ($vektoren as $v) {
             $mitDaten += $v['hat_daten'] ? 1 : 0;
             foreach (self::DIMS as $d) {
-                if ($v['werte'][$d] <= $geschmack[$d]) {
-                    continue;
-                }
-                $geschmack[$d] = $v['werte'][$d];
-                if (isset($v['messung'][$d])) {
-                    $erdung[$d] = $v['messung'][$d];
-                } else {
-                    unset($erdung[$d]);                       // führender Wert ist geschätzt, nicht gemessen
-                }
+                $geschmack[$d] = max($geschmack[$d], $v['werte'][$d]);
             }
         }
+        if (count($vektoren) === 1) {
+            $erdung = reset($vektoren)['messung'];             // Grundlage nur dort, wo sie eindeutig ist
+        }
 
-        $texRows = DB::table('foodalchemist_gp_textures AS t')
+        return $this->montage($geschmack, $this->texturZeilen($gpIds), $source, null, null,
+            ['mit' => $mitDaten, 'gesamt' => count($vektoren)], $erdung);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, object> */
+    private function texturZeilen(array $gpIds)
+    {
+        return DB::table('foodalchemist_gp_textures AS t')
             ->join('foodalchemist_vocab_textures AS v', 'v.id', '=', 't.texture_vocab_id')
             ->whereIn('t.gp_id', $gpIds)
             ->selectRaw('v.slug, v.display_de, MAX(t.intensity) AS intensitaet')
             ->groupBy('v.slug', 'v.display_de')->get();
-
-        return $this->montage($geschmack, $texRows, $source, null, null,
-            ['mit' => $mitDaten, 'gesamt' => count($vektoren)], $erdung);
     }
 
     /**
@@ -473,6 +699,7 @@ class SensorikService
             'textur' => $textur,
             'monotonie' => $monotonie,
             'vorschlaege' => [],                 // Diagnose-Schicht schlägt nichts vor (Kontrast = Anker-Graph)
+            'hinweis' => null,                   // z. B. „grob, ohne Mengen" (Roh-Fallback)
         ];
     }
 
@@ -512,18 +739,11 @@ class SensorikService
             }
         }
 
-        $proposal = app(AiGatewayService::class)->propose('recipe.sensorik', [
-            'name' => $recipe->name,
-            'zutaten_geerdet' => $this->groundingKontext($recipeId),     // Roh-Vektor + Menge(g) + %-Anteil je Zutat
-            'preparation' => $recipe->preparation ?: ($recipe->description ?: null),
-        ], ['target_table' => 'foodalchemist_recipe_taste_vectors', 'target_id' => $recipeId]);
-
-        $werte = $proposal->werte;
-        $geschmack = $werte['geschmack'] ?? null;
-        if (! is_array($geschmack)) {
+        $v = $this->schaetzeRezept($recipeId);
+        if ($v === null) {
             return ['status' => 'kein_ergebnis'];   // z. B. Fake-Provider in der Sandbox → nichts schreiben
         }
-        $this->speichereRezept($recipeId, $geschmack, $werte['texturen'] ?? [], $hash, $proposal->confidence, $proposal->reasoning);
+        $this->speichereRezept($recipeId, $v['geschmack'], $v['texturen'], $hash, $v['confidence'], $v['reasoning']);
         // Spec 60: Texturen fließen ins Aromenprofil — Profil + verwendende Rezepte nachziehen (best-effort)
         try {
             app(Pairing\RezeptProfil::class)->nachziehen($recipeId);
@@ -531,56 +751,111 @@ class SensorikService
             \Illuminate\Support\Facades\Log::warning("Aromenprofil nach Sensorik fehlgeschlagen ({$recipeId}): {$e->getMessage()}");
         }
 
-        return ['status' => 'bewertet', 'geschmack' => $geschmack, 'source' => 'ki'];
+        return ['status' => 'bewertet', 'geschmack' => $v['geschmack'], 'source' => 'ki', 'eingriffe' => $v['eingriffe']];
     }
 
     /**
-     * Grounding-Kontext für die KI: pro Zutat ROH-Profil (GP-Vektor) + Menge (g) + %-Anteil am
-     * Gesamtgewicht. Damit kennt die KI die Fakten (was, wie viel) und wendet nur die Zubereitung
-     * als Transformation an — statt aus dem Namen zu raten. Salzig/Süß/Fettig kommen dabei aus
-     * den LA-Nährwerten (gemessen, s. erdungBulk) und sind als „gemessen" ausgewiesen, damit die
-     * KI sie nicht gegen eine eigene Schätzung eintauscht.
+     * KI-Bewertung des gegarten Rezepts OHNE zu speichern (Abnahme-Befehl, {@see bewerteRezept}): Kontext mit Wahrnehmung + Nährwerten,
+     * danach die Grenzen auf die Rezept-Nährwerte je 100 g.
+     *
+     * @return array{geschmack: array<string, float>, texturen: array, eingriffe: list<string>, reasoning: ?string, confidence: ?float, naehrwerte: array}|null
      */
-    private function groundingKontext(int $recipeId): string
+    public function schaetzeRezept(int $recipeId): ?array
     {
-        $rows = DB::table('foodalchemist_recipe_ingredients AS ri')
-            ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
-            ->leftJoin('foodalchemist_recipes AS sr', 'sr.id', '=', 'ri.referenced_recipe_id')
-            ->leftJoin('foodalchemist_vocab_units AS e', 'e.id', '=', 'ri.unit_vocab_id')
-            ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->orderBy('ri.position')
-            ->get(['ri.gp_id', 'ri.quantity', 'e.default_in_g', 'e.default_in_ml',
-                DB::raw('COALESCE(g.name, sr.name, ri.raw_text) AS name')]);
-
-        $vektoren = $this->vektorenFuerGps($rows->pluck('gp_id')->filter()->all());
-
-        $gramm = [];
-        $total = 0.0;
-        foreach ($rows as $i => $r) {
-            $g = $r->quantity !== null ? (float) $r->quantity * (float) ($r->default_in_g ?? $r->default_in_ml ?? 0) : 0.0;
-            $gramm[$i] = $g;
-            $total += $g;
+        $recipe = DB::table('foodalchemist_recipes')->where('id', $recipeId)->whereNull('deleted_at')->first(['id', 'name', 'preparation', 'description']);
+        if ($recipe === null) {
+            return null;
         }
+        $naehr = $this->rezeptNaehrwerte($recipeId);
+        $proposal = app(AiGatewayService::class)->propose('recipe.sensorik', [
+            'name' => $recipe->name,
+            'zutaten_geerdet' => $this->groundingKontext($recipeId, $naehr),     // Wahrnehmung + Nährwerte als Fakt + Menge(g) + %-Anteil je Zutat
+            'preparation' => $recipe->preparation ?: ($recipe->description ?: null),
+        ], ['target_table' => 'foodalchemist_recipe_taste_vectors', 'target_id' => $recipeId]);
+        $geschmack = $proposal->werte['geschmack'] ?? null;
+        if (! is_array($geschmack)) {
+            return null;
+        }
+        // Grenzen nach der Antwort (Dominique 29.10.2026): dieselben belegten Schwellen wie am GP, auf die Rezept-Nährwerte je 100 g.
+        $begrenzt = $this->begrenze(array_map('floatval', array_intersect_key($geschmack, array_flip(self::DIMS))), $this->rezeptGehaltFuerGrenzen($naehr));
+        $begruendung = trim((string) $proposal->reasoning . ' ' . implode(' ', $begrenzt['eingriffe']));
+
+        return ['geschmack' => $begrenzt['werte'] + array_map('floatval', array_intersect_key($geschmack, array_flip(self::DIMS))),
+            'texturen' => is_array($proposal->werte['texturen'] ?? null) ? $proposal->werte['texturen'] : [],
+            'eingriffe' => $begrenzt['eingriffe'], 'reasoning' => $begruendung !== '' ? $begruendung : null,
+            'confidence' => $proposal->confidence, 'naehrwerte' => $naehr];
+    }
+
+    /**
+     * Grounding-Kontext für die KI: pro Zutat Wahrnehmungsprofil (GP-Profil bzw. gegartes Profil des Sub-Rezepts) + Nährwerte
+     * als FAKT + Menge (g) + %-Anteil am Gesamtgewicht, dazu eine Summenzeile mit den Rezept-Nährwerten je 100 g. Die KI bewertet,
+     * wie das fertige Gericht SCHMECKT (Überdeckung, Menge, Zubereitung) — die Nährwerte begründen, sie ersetzen nichts.
+     *
+     * @param  array{werte: array<string, ?float>, abdeckung: array<string, float>}|null  $naehr
+     */
+    private function groundingKontext(int $recipeId, ?array $naehr = null): string
+    {
+        $zeilen = $this->zutatenMitGramm($recipeId);
+        $vektoren = $this->vektorenFuerGps(array_column($zeilen, 'gp_id'));
+        $total = array_sum(array_column($zeilen, 'gramm'));
+        $nf = fn (float $x) => number_format($x, 1, ',', '.');
 
         $lines = [];
-        foreach ($rows as $i => $r) {
-            if (($r->name ?? '') === '') {
+        foreach ($zeilen as $z) {
+            if ($z['name'] === '') {
                 continue;
             }
-            $mengeTxt = $gramm[$i] > 0
-                ? ' ' . round($gramm[$i]) . 'g' . ($total > 0 ? ' (' . round($gramm[$i] / $total * 100, 1) . '%)' : '')
+            $mengeTxt = $z['gramm'] > 0
+                ? ' ' . round($z['gramm']) . 'g' . ($total > 0 ? ' (' . round($z['gramm'] / $total * 100, 1) . '%)' : '')
                 : '';
-            $v = $vektoren[(int) $r->gp_id] ?? null;
             $dims = [];
-            foreach (self::DIMS as $d) {
-                $val = round((float) ($v['werte'][$d] ?? 0), 2);
-                if ($val > 0) {
-                    $gemessen = ($v['messung'][$d]['angewendet'] ?? false)
-                        ? ' [gemessen: ' . $v['messung'][$d]['basis'] . ']' : '';
-                    $dims[] = self::DIM_LABEL[$d] . ' ' . $val . $gemessen;
+            $fakten = [];
+            $art = 'roh';
+            if ($z['gp_id'] !== null) {
+                $v = $vektoren[$z['gp_id']] ?? null;
+                foreach (self::DIMS as $d) {
+                    $val = round((float) ($v['werte'][$d] ?? 0), 2);
+                    if ($val > 0) {
+                        $dims[] = self::DIM_LABEL[$d] . ' ' . $val . (($v['messung'][$d]['vorlaeufig'] ?? false) ? ' (vorläufig aus Nährwerten)' : '');
+                    }
+                }
+                foreach ($v['messung'] ?? [] as $d => $m) {
+                    $fakten[] = self::MESSBAR[$d]['label'] . ' ' . $nf($m['gehalt']) . ' g/100 g';
+                }
+            } elseif ($z['ref'] !== null) {
+                $sub = $this->fuerRezept($z['ref']);
+                $art = ($sub['source'] ?? '') === 'roh' ? 'Sub-Rezept, roh geschätzt' : 'Sub-Rezept, gegart';
+                foreach (self::DIMS as $d) {
+                    $val = round((float) ($sub['geschmack'][$d] ?? 0), 2);
+                    if ($val > 0) {
+                        $dims[] = self::DIM_LABEL[$d] . ' ' . $val;
+                    }
+                }
+                $sn = $this->rezeptNaehrwerte($z['ref']);
+                foreach ($sn['werte'] as $d => $w) {
+                    if ($w !== null) {
+                        $fakten[] = self::MESSBAR[$d]['label'] . ' ' . $nf($w) . ' g/100 g';
+                    }
                 }
             }
-            $roh = $dims !== [] ? ' — roh: ' . implode(' / ', $dims) : '';
-            $lines[] = '- ' . $r->name . $mengeTxt . $roh;
+            $zeile = '- ' . $z['name'] . $mengeTxt;
+            if ($dims !== []) {
+                $zeile .= " — {$art}: " . implode(' / ', $dims);
+            }
+            if ($fakten !== []) {
+                $zeile .= ' [Nährwert: ' . implode(', ', $fakten) . ']';
+            }
+            $lines[] = $zeile;
+        }
+        $naehr ??= $this->rezeptNaehrwerte($recipeId);
+        $summe = [];
+        foreach ($naehr['werte'] as $d => $w) {
+            if ($w !== null) {
+                $summe[] = self::MESSBAR[$d]['label'] . ' ' . $nf($w) . ' g/100 g (für ' . (int) round($naehr['abdeckung'][$d] * 100) . ' % der Masse bekannt)';
+            }
+        }
+        if ($summe !== []) {
+            $lines[] = 'Summe Rezept je 100 g Zutatenmasse [Nährwert]: ' . implode(' · ', $summe);
         }
 
         return implode("\n", $lines);

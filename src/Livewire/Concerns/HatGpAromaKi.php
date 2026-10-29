@@ -93,7 +93,7 @@ trait HatGpAromaKi
         $this->aromaMeldung(null, "Anker „{$slug}\" per KI gesetzt (Konfidenz ".round((float) ($v['confidence'] ?? 0) * 100).' %).');
     }
 
-    /** „Mit KI schätzen": Vorschau der nicht gemessenen Achsen (+ Texturen, wenn keine da sind). Schreibt nichts. */
+    /** „Mit KI schätzen": Vorschau der Wahrnehmung auf allen 7 Achsen (+ Texturen, wenn keine da sind). Schreibt nichts. */
     public function sensorikKiSchaetzen(GpAromaService $aroma): void
     {
         $this->aromaMeldung(null);
@@ -165,7 +165,7 @@ trait HatGpAromaKi
         return $gp;
     }
 
-    /** Anzeige-Labels der Vorschau (gemessen / geschätzt je Achse). */
+    /** Anzeige-Zeilen der Vorschau: Wahrnehmung je Achse, dazu Konzentration/Nährwert als Grundlage. */
     public function sensorikVorschauZeilen(): array
     {
         $v = $this->sensorikVorschlag;
@@ -174,9 +174,8 @@ trait HatGpAromaKi
         }
         $zeilen = [];
         foreach (SensorikService::DIMS as $d) {
-            $zeilen[] = isset($v['gemessen'][$d])
-                ? ['label' => SensorikService::DIM_LABEL[$d], 'wert' => $v['gemessen'][$d], 'art' => 'gemessen']
-                : ['label' => SensorikService::DIM_LABEL[$d], 'wert' => $v['werte'][$d] ?? 0.0, 'art' => 'geschätzt'];
+            $zeilen[] = ['label' => SensorikService::DIM_LABEL[$d], 'wert' => $v['werte'][$d] ?? 0.0, 'art' => 'geschätzt',
+                'konzentration' => $v['konzentration'][$d] ?? null, 'naehrwert' => $v['naehrwerte'][$d] ?? null];
         }
 
         return $zeilen;
