@@ -77,6 +77,10 @@ final class FaBereiche
         ['projekt', 'projekte'],
         // bereichsfrei: Ansicht/Navigation, Läufe, Rechte-Pflege, Betriebs-Brille umschalten (nur Ansicht)
         ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
+        // #1002: KI-Aufträge (externer Weg) sind featureübergreifend wie Läufe — ein Auftrag entsteht nur aus einem Aufruf, der seinen Bereich
+        // schon passiert hat, und gehört dem Team (KiAuftragService filtert auf team_id). Je Bereich zuordnen hieße: Auftrag von gp.sensorik
+        // unter Stammdaten, von recipe.* unter Rezepte — das Tool selbst kennt nur die Liste.
+        ['ki_auftraege', null],
         // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung, Gebühren) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
         ['stamm_paket', null], ['paket_grundeinstellungen', null], ['master_team', null], ['mandant_export', null], ['equipment_standard', null], ['mandanten', null], ['plan_preise', null], ['plan_nutzung', null], ['support_zugang', null], ['ki_klassen', null], ['ki_verbrauch', null],   // Spec 84 §4.4 (E3): Rechte-Pflege des Mandanten, bereichsfrei wie die Zugriffsrechte
         // Spec 82 §8 / §13 B6: Abos (Bereich „Abos" im Master-Team)
