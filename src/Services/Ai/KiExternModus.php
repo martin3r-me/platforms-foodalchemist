@@ -16,6 +16,9 @@ final class KiExternModus
 
     private bool $sammeln = false;
 
+    /** @var array<string, mixed>|null Wiederholungs-Nutzlast des laufenden Job-Laufs (P2a), geht in jeden neu angelegten Auftrag */
+    private ?array $wiederholung = null;
+
     /** @var array<string, array<string, mixed>> uuid → Zeile (nur neue, noch nicht geschriebene Aufträge) */
     private array $vorgemerkt = [];
 
@@ -39,17 +42,26 @@ final class KiExternModus
     }
 
     /** Extern + Sammel-Modus; leert Merker vorher und nachher nicht — die Hülle liest sie nach dem Lauf mit {@see entnimm()}. */
-    public function withinSammelnd(callable $action): mixed
+    public function withinSammelnd(callable $action, ?array $wiederholung = null): mixed
     {
         $vorherSammeln = $this->sammeln;
+        $vorherWdh = $this->wiederholung;
         $this->sammeln = true;
+        $this->wiederholung = $wiederholung;
         $this->vorgemerkt = [];
         $this->wartet = [];
         try {
             return $this->within($action);
         } finally {
             $this->sammeln = $vorherSammeln;
+            $this->wiederholung = $vorherWdh;
         }
+    }
+
+    /** @return array<string, mixed>|null */
+    public function wiederholung(): ?array
+    {
+        return $this->wiederholung;
     }
 
     public function sammelt(): bool

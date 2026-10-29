@@ -66,6 +66,10 @@ class KiAuftragService
             'status' => 'offen', 'laeuft_ab_at' => now()->addHours(self::TTL_STUNDEN),
             'created_at' => now(), 'updated_at' => now(),
         ];
+        if (($wdh = $modus->wiederholung()) !== null) {              // P2a: Job-Lauf — ANTWORT darf ihn neu anstoßen
+            $zeile['wiederholung'] = json_encode($wdh, JSON_UNESCAPED_UNICODE);
+            $zeile['lauf_key'] = (string) ($wdh['lauf_key'] ?? '');
+        }
         if ($modus->sammelt()) {
             // MCP-Tool-Hülle: erst nach dem Rollback der Tool-Transaktion schreiben (legeAn), sonst rollt der Auftrag mit zurück
             $modus->merkeVor($zeile);
@@ -74,6 +78,56 @@ class KiAuftragService
         }
 
         throw new KiAuftragAusstehendException($uuid, $feature);
+    }
+
+    /** Wartet für dieses Ziel schon ein Lauf (offener oder beantworteter, noch nicht verbrauchter Auftrag)? Dann startet kein zweiter. */
+    public function laufAktiv(int $teamId, string $laufKey): bool
+    {
+        return DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $laufKey)
+            ->whereIn('status', ['offen', 'beantwortet'])->where('laeuft_ab_at', '>', now())->exists();
+    }
+
+    /**
+     * Startet die Job-Läufe neu, deren letzter offener Auftrag mit dieser Antwort-Runde beantwortet ist (P2a). Nur Klassen, die
+     * {@see KiExternWiederholbar} umsetzen; je Lauf höchstens einmal je Versuch.
+     *
+     * @param  list<string>  $uuids soeben beantwortete Aufträge
+     * @return list<array{lauf_key: string, job: string, versuch: int}>
+     */
+    public function stoesseWiederholungAn(int $teamId, array $uuids): array
+    {
+        $gestartet = [];
+        $rows = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->whereIn('uuid', $uuids)
+            ->where('status', 'beantwortet')->whereNotNull('wiederholung')->get()->groupBy('lauf_key');
+        foreach ($rows as $key => $_) {
+            $key = (string) $key;
+            if ($key === ''
+                || DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $key)->where('status', 'offen')
+                    ->where('laeuft_ab_at', '>', now())->exists()) {
+                continue;                                            // der Lauf wartet noch auf weitere Antworten
+            }
+            $alle = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $key)->where('status', 'beantwortet')
+                ->whereNotNull('wiederholung')->orderBy('id')->get()
+                ->map(fn ($r) => ['zeile' => $r, 'p' => json_decode((string) $r->wiederholung, true) ?: []]);
+            $maxV = (int) $alle->max(fn ($a) => (int) ($a['p']['versuch'] ?? 0));
+            $letzte = $alle->filter(fn ($a) => (int) ($a['p']['versuch'] ?? 0) === $maxV);
+            if ($letzte->contains(fn ($a) => isset($a['p']['gestartet_at']))) {
+                continue;                                            // für diesen Versuch schon angestoßen
+            }
+            $p = $letzte->last()['p'];
+            $klasse = $p['klasse'] ?? null;
+            if (! is_string($klasse) || ! class_exists($klasse) || ! is_subclass_of($klasse, KiExternWiederholbar::class)) {
+                continue;                                            // nie eine fremde Klasse aus der Datenbank instanziieren
+            }
+            foreach ($letzte as $a) {
+                DB::table('foodalchemist_ki_auftraege')->where('id', $a['zeile']->id)
+                    ->update(['wiederholung' => json_encode($a['p'] + ['gestartet_at' => now()->toIso8601String()], JSON_UNESCAPED_UNICODE)]);
+            }
+            dispatch($klasse::fromExternNutzlast((array) ($p['nutzlast'] ?? []), $maxV + 1));
+            $gestartet[] = ['lauf_key' => $key, 'job' => class_basename($klasse), 'versuch' => $maxV + 1];
+        }
+
+        return $gestartet;
     }
 
     /** @param list<array<string, mixed>> $zeilen vorgemerkte Aufträge — außerhalb jeder Tool-Transaktion aufrufen */

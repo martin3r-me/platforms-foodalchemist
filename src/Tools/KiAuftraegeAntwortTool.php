@@ -65,20 +65,26 @@ class KiAuftraegeAntwortTool extends FoodAlchemistTool implements ToolContract, 
         $service = app(KiAuftragService::class);
         $ergebnis = [];
         $ok = 0;
+        $angenommen = [];
         foreach ((array) ($arguments['antworten'] ?? []) as $a) {
             $id = (string) ($a['auftrag_id'] ?? '');
             try {
                 $service->beantworte((int) $team->id, $id, $a['werte'] ?? '', $anbieter, $modell);
                 $ergebnis[] = ['auftrag_id' => $id, 'status' => 'ok'];
+                $angenommen[] = $id;
                 $ok++;
             } catch (\Throwable $e) {
                 $ergebnis[] = ['auftrag_id' => $id, 'status' => 'abgelehnt', 'grund' => $e->getMessage()];
             }
         }
 
+        $neu = $service->stoesseWiederholungAn((int) $team->id, $angenommen);   // P2a: Job-Läufe starten sich selbst neu
+
         return ToolResult::success([
             'angenommen' => $ok, 'abgelehnt' => count($ergebnis) - $ok, 'ergebnisse' => $ergebnis,
-            'note' => 'Gespeichert sind nur die Antworten. Den ursprünglichen Lauf (Tool/Befehl) wiederholen, damit Prüfung und Übernahme laufen.',
+            'laeufe_neu_gestartet' => $neu,
+            'note' => 'Gespeichert sind nur die Antworten. Job-Läufe in „laeufe_neu_gestartet“ übernehmen sie selbst und können weitere Aufträge anlegen (ki_auftraege.GET). '
+                .'Für alle anderen Aufträge (Tool-Aufruf, Backfill) den ursprünglichen Lauf wiederholen, damit Prüfung und Übernahme laufen.',
         ]);
     }
 
