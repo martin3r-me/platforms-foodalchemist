@@ -469,7 +469,9 @@ it('default_gp_alias_full_set', function () {
         ->and($a('Pfeffer'))->toBe('Pfeffer schwarz: trocken, gemahlen')
         ->and($a('Schwarzer Pfeffer'))->toBe('Pfeffer schwarz: trocken, gemahlen')
         ->and($a('Weißer Pfeffer'))->toBe('Pfeffer weiss: trocken, gemahlen')
-        ->and($a('Petersilie'))->toBe('Petersilie glatt: frisch, gehackt');
+        // Entscheid Dominique 29.10.: Petersilie ohne Angabe ist ganz und frisch (gehackt nur, wenn der Text es sagt); Schlagsahne ist nicht der Sahne-Default
+        ->and($a('Petersilie'))->toBe('Petersilie glatt: frisch, ganz')
+        ->and($a('Schlagsahne'))->toBeNull();
 });
 
 it('default_gp_alias_generic_only_guards', function () {
