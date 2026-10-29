@@ -113,6 +113,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 83 | `src/Services/VoiceCommandService.php` → `AiGatewayService::callWithTools` | Voice-Agent (Tier-D-Tool-Loop) | c | P2 | — | Ausnahme (Vorschlag) | AGENTISCHER LOOP: Claude ist selbst der Loop, ruft MCP-Tools direkt. Ausnahme-Vorschlag |
 | 84 | `src/Services/RecipeImageService.php::generateAndStore` | Bildgenerierung (Core ImageGenerationService) | c | P2 | RecipeImageGenerateTool | Ausnahme (Vorschlag) | Ausnahme-Vorschlag: Claude erzeugt keine Bilder, bleibt Plattform |
 | 85 | `src/Services/Ai/SemanticRetrievalService.php`, `PoolEmbeddingService.php`, `KnowledgeEmbeddingService.php` | Embeddings (text-embedding-3-large) | — | — | — | Ausnahme (Vorschlag) | AUSNAHME (Entscheidung Dominique): bleibt OpenAI |
+| 86 | `src/Services/Websuche/CoreWebSucheTransport.php` (`include_web_search`, Eintrag auch in Tabelle A) | Websuche über den Plattform-Provider | b | P2 | — | offen | Entscheidung Punkt 5: Claude sucht selbst (extern) oder bleibt Plattform |
 
 ## Summen
 
