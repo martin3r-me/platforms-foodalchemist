@@ -97,7 +97,9 @@ it('(5) Menge/Einheit vor dem §5-Default abschneiden — „200 g Sahne“ wie 
         // genannte Fettstufe schlägt den Default (Nachmessung: „100 ml Milch (1,5 %)“ ging auf 3,5 %)
         ->and(($this->m)('100 ml Sahne (15 %)')['gp_id'])->toBe($sahne15->id)
         // genannte Fettstufe, die es nicht gibt → nie automatisch eine andere (Regel a gilt dann nicht, auch beim einzigen Kandidaten)
-        ->and(($this->auto)('100 ml Sahne (10 %)'))->toBeNull();
+        ->and(($this->auto)('100 ml Sahne (10 %)'))->toBeNull()
+        // „1,5 %“: die Zahlteile sind zu kurz für das Wort-Scoring, der §5-Default träfe „Sahne“ — der genannte Wert verhindert das (Fall „Milch (1,5 %)“)
+        ->and(($this->auto)('100 ml Sahne (1,5 %)'))->toBeNull();
 
     $kokos = ($this->gp)('Kokosmilch: konserviert, 17 % Fett', 'kokosmilch', 'konserviert', '11');
     expect(($this->auto)('Kokosmilch'))->toBe($kokos->id)                // einziger Kandidat, Fettstufe weich (Regel a)
