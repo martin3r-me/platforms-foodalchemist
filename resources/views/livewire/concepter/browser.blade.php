@@ -39,7 +39,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Filter" width="w-80">
+        <x-foodalchemist::page-sidebar title="Filter" width="w-80">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="concepter-suche" class="sr-only">{{ $istPakete ? 'Pakete durchsuchen' : 'Concepts durchsuchen' }}</label>
@@ -120,13 +120,13 @@
                     </div>
                 @endif
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte erst, wenn etwas gewählt ist (vorher nahm der leere Hinweis Platz der Tabelle weg). --}}
     @if($selectedId !== null)
         <x-slot name="activity">
-            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right">
+            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right" :auswahl="(string) $selectedId">
                 <livewire:foodalchemist.concepter.detail-panel :selected-id="$selectedId" :type="$tab" key="concepter-browser--concepter.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>

@@ -1109,7 +1109,7 @@
 
     @if(! $istWall)
         <x-slot name="sidebar">
-            <x-ui-page-sidebar title="Zeitraum und Posten" width="w-72">
+            <x-foodalchemist::page-sidebar title="Zeitraum und Posten" width="w-72">
                 <div class="p-3 space-y-5" data-tagesplanung-sidebar>
                     <div class="space-y-2" data-tagesplan-steuerung>
                         <p class="{{ $eyebrow }}">Zeitraum</p>
@@ -1157,7 +1157,7 @@
                         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Rechnet Vorlauftage so, dass kein Posten über Last läuft. Übernommen wird erst nach Bestätigung.</p>
                     </div>
                 </div>
-            </x-ui-page-sidebar>
+            </x-foodalchemist::page-sidebar>
         </x-slot>
 
         <x-slot name="activity">

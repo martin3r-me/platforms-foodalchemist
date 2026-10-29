@@ -56,7 +56,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Speisekarten" width="w-64">
+        <x-foodalchemist::page-sidebar title="Speisekarten" width="w-64">
             <div class="p-3 flex flex-col gap-2">
                 <x-fa::input type="search" wire:model.live.debounce.300ms="search" placeholder="Karte suchen" aria-label="Karte suchen" />
                 <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu" class="w-full" data-sk-neu>Neue Karte</x-fa::button>
@@ -76,7 +76,7 @@
                 </div>
                 <div class="pt-1">{{ $karten->links('foodalchemist::components.fa.pagination') }}</div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Rechtes Detail (nur lesend): Logo · Status, Datum, Nummer · Eckdaten der Auswahl --}}

@@ -28,7 +28,7 @@
 
     {{-- Zone links: Suche · Warengruppen-Baum mit Zahlen · Unterkategorien --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Warengruppen" width="w-80">
+        <x-foodalchemist::page-sidebar title="Warengruppen" width="w-80">
             <div class="p-3 flex flex-col gap-3" data-gp-baum>
                 <div class="relative">
                     <label for="gp-suche" class="sr-only">Grundprodukte durchsuchen</label>
@@ -57,13 +57,13 @@
                     @endforeach
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte immer vorhanden: nach dem Anlegen im Dialog wählt `gp-selected` das neue Grundprodukt
          direkt im Panel aus. Ohne gewähltes Grundprodukt zeigt das Panel einen Leerzustand. --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right" :aufziehen="$sprungDetail">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right" :auswahl="(string) $gpId" :aufziehen="$sprungDetail">
             <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" key="gps-browser--gps.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>

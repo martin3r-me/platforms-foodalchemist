@@ -102,7 +102,7 @@
 
     {{-- LINKS: Neue Planung, Suche, Filter, Liste nach Kategorie --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Planungen" width="w-80">
+        <x-foodalchemist::page-sidebar title="Planungen" width="w-80">
             <div class="p-3 flex flex-col gap-3">
                 <div class="flex items-center gap-2">
                     <x-fa::input wire:model="neuTitel" wire:keydown.enter="neuePlanung" placeholder="Neue Planung benennen" aria-label="Name der neuen Planung" class="flex-1 min-w-0" />
@@ -178,7 +178,7 @@
                     @endforelse
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- MITTE: Erstellen + Board --}}
@@ -385,7 +385,7 @@
 
     {{-- RECHTS: Details --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" :maxWidth="560" scope="activity_planung" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" :maxWidth="560" scope="activity_planung" side="right" :auswahl="(string) $active?->id" :lesemodus="false">
             {{-- Anatomie Detail-Panels (DESIGN.md): Kopf (Ergebnis-Name, Stand, „Im Editor öffnen", Verwerfen im Menü)
                  · offene Punkte · Fortschritt je Stufe. --}}
             <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">

@@ -23,7 +23,7 @@
 
     {{-- LINKS: Erfassen, Filter --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Trends" width="w-80">
+        <x-foodalchemist::page-sidebar title="Trends" width="w-80">
             <div class="p-3 flex flex-col gap-4" data-trend-filter>
                 <x-fa::button variant="primary" icon="heroicon-m-camera" wire:click="fundstueckOeffnen" data-fundstueck-ablegen>Fundstück ablegen</x-fa::button>
                 @if($darfKuratieren)
@@ -57,7 +57,7 @@
                     <p>Gefüllter Punkt = Trend, gestrichelter Kreis = Hype, Goldring = von der Mitarbeiterbefragung bestätigt. Je blasser, desto unsicherer die Belege.</p>
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- MITTE --}}

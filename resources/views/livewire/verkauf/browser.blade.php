@@ -21,7 +21,7 @@
     </x-slot:navbar>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Hauptgruppen" width="w-80">
+        <x-foodalchemist::page-sidebar title="Hauptgruppen" width="w-80">
             <div class="p-3 flex flex-col gap-3" data-vk-baum>
                 <div class="relative">
                     <label for="vk-suche" class="sr-only">Gerichte durchsuchen</label>
@@ -76,13 +76,13 @@
                     </div>
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte erst, wenn ein Gericht gewählt ist — vorher nahm der leere Hinweis Platz der Tabelle weg. --}}
     @if($recipeId !== null)
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right" :aufziehen="$sprungDetail">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right" :auswahl="(string) $recipeId" :aufziehen="$sprungDetail">
             <livewire:foodalchemist.verkauf.detail-panel :recipe-id="$recipeId" key="verkauf-browser--verkauf.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>

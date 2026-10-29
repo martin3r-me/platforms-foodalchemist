@@ -894,6 +894,12 @@ return [
      */
     'shell' => env('FOODALCHEMIST_SHELL', 'plattform'),
 
+    // #1003 Handy-Lesemodus: am Handy sind in Lese-Bereichen alle Ändern-Aktionen aus. Hier einzelne Aktionen
+    // (Schlüssel wie 'kopf.aktion', 'kopf.menue', 'ki.<methode>') gezielt wieder freischalten (Support\HandyLesemodus).
+    'handy' => [
+        'aendern_frei' => [],
+    ],
+
     // Spec 65 · Bearbeitungssperre: Editoren erst nach „Bearbeiten“ beschreibbar, Datensatz für andere gesperrt.
     // Notschalter FOODALCHEMIST_BEARBEITUNGSSPERRE=false → Verhalten wie vorher (Test-Grundlage schaltet aus).
     'bearbeitungssperre' => env('FOODALCHEMIST_BEARBEITUNGSSPERRE', true),

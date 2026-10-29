@@ -577,3 +577,14 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
    fa-Regeln schlagen jede Host-Ebene. */
 .fa-zeilen-aktionen { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); display: flex; opacity: 0; pointer-events: none; transition: opacity .15s; }
 .group:hover > .fa-zeilen-aktionen, .fa-zeilen-aktionen:focus-within { opacity: 1; pointer-events: auto; }
+
+/* Handy-Lesemodus (#1003): In Lese-Bereichen ([data-fa-handy-lesen], z. B. jede Detail-Leiste) sind auf der
+   Handy-Oberfläche alle Ändern-Aktionen ([data-fa-aendern]) aus, dafür steht der Hinweis „Am Computer bearbeiten“.
+   Handy-Oberfläche = <html data-fa-handy>, gesetzt von Support\HandyLesemodus::JS_MODUS (Touch-Gerät und schmal) —
+   bewusst KEINE Breiten-Abfrage, ein schmales Laptop-Fenster bleibt Desktop. Einzelne Aktionen schaltet
+   config('foodalchemist.handy.aendern_frei') zentral frei (data-fa-aendern-frei).
+   Ungeschichtet, damit es jede Utility (inline-flex …) schlägt. Tippflächen in Lese-Bereichen mindestens 44 px. */
+[data-fa-handy-hinweis] { display: none; }
+[data-fa-handy] [data-fa-handy-lesen] [data-fa-aendern]:not([data-fa-aendern-frei]) { display: none; }
+[data-fa-handy] [data-fa-handy-lesen] [data-fa-handy-hinweis] { display: flex; }
+[data-fa-handy] [data-fa-handy-lesen] :is(button, a[href], [role="button"], summary) { min-height: 44px; }

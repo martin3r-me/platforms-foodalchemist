@@ -80,6 +80,7 @@
     tabindex="0"
     @if($disabled) aria-disabled="true" @endif
     data-ki-action="{{ $wireAusdruck }}"
+    {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('ki.'.strtok($wireAusdruck, '(')) }}
     wire:loading.attr="disabled"
     wire:target="{{ $wireZiel }}"
     x-data="{ pending: false, ok: false, err: null }"

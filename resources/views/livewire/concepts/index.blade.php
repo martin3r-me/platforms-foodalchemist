@@ -23,7 +23,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Concepts" width="w-80">
+        <x-foodalchemist::page-sidebar title="Concepts" width="w-80">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="concepts-suche" class="sr-only">Concepts durchsuchen</label>
@@ -104,7 +104,7 @@
                     </div>
                 </details>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     <x-slot name="activity">

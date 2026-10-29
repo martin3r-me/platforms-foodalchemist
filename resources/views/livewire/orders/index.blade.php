@@ -73,7 +73,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Filter" width="w-72">
+        <x-foodalchemist::page-sidebar title="Filter" width="w-72">
             <div class="p-3 flex flex-col gap-4">
                 <div class="relative">
                     <label for="orders-suche" class="sr-only">Bestellungen durchsuchen</label>
@@ -128,11 +128,11 @@
                     </div>
                 @endif
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Bestellung" width="w-96" :maxWidth="760" scope="activity_orders" side="right">
+        <x-foodalchemist::detail-sidebar title="Bestellung" width="w-96" :maxWidth="760" scope="activity_orders" side="right" :auswahl="(string) $selectedOrderId">
             <livewire:foodalchemist.orders.detail-panel :order-id="$selectedOrderId" :key="'order-detail-'.($selectedOrderId ?? 'empty')" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>

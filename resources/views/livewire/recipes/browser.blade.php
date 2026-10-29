@@ -19,7 +19,7 @@
     </x-slot:navbar>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Hauptgruppen" width="w-80">
+        <x-foodalchemist::page-sidebar title="Hauptgruppen" width="w-80">
             <div class="p-3 flex flex-col gap-3" data-rezept-baum>
                 <div class="relative">
                     <label for="rezept-suche" class="sr-only">Rezepte durchsuchen</label>
@@ -80,13 +80,13 @@
                     @endif
                 </div>
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte erst, wenn ein Rezept gewählt ist — vorher nahm der leere Hinweis ~400 px der Tabelle weg. --}}
     @if($recipeId !== null)
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_recipes" side="right" :aufziehen="$sprungDetail">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_recipes" side="right" :auswahl="(string) $recipeId" :aufziehen="$sprungDetail">
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" key="recipes-browser--recipes.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>

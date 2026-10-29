@@ -41,7 +41,7 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Filter" width="w-72">
+        <x-foodalchemist::page-sidebar title="Filter" width="w-72">
             <div class="p-3 flex flex-col gap-3">
                 <div class="relative">
                     <label for="produktion-suche" class="sr-only">Aufträge durchsuchen</label>
@@ -90,7 +90,7 @@
                     </div>
                 @endif
             </div>
-        </x-ui-page-sidebar>
+        </x-foodalchemist::page-sidebar>
     </x-slot>
 
     {{-- Detail-Spalte erst, wenn ein Auftrag gewählt ist: auf dem Laptop fehlte der Tabelle sonst
@@ -99,7 +99,7 @@
     @if($orderId !== null)
         <x-slot name="activity">
             <x-foodalchemist::detail-sidebar title="Auftrag" width="w-80" :maxWidth="760"
-                                             scope="activity_produktion" side="right">
+                                             scope="activity_produktion" side="right" :auswahl="(string) $orderId">
                 <livewire:foodalchemist.produktion.detail-panel :order-id="$orderId" key="produktion-browser--produktion.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>
