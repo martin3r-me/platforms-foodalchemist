@@ -19,7 +19,7 @@ class KiExternLauf
     private static ?int $wacheFuer = null;
 
     /** Harmloses Cache-Rauschen der Plattform (Worker-Heartbeat, Wechselkurs) — kein Effekt, den ein Rollback bereuen müsste */
-    private const UNKRITISCHE_CACHE_KEYS = ['fa:worker:heartbeat', 'foodalchemist.wechselkurs.'];
+    private const UNKRITISCHE_CACHE_KEYS = ['fa:worker:heartbeat', 'foodalchemist.wechselkurs.', 'fa:recipe-gen:'];
 
     /** @var list<string> Nebenwirkungen des letzten externen Rumpfs (Queue-Dispatch, Cache-Schreiben, Mail) — für Tests und Log */
     public static array $nebenwirkungen = [];

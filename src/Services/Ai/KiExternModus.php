@@ -87,6 +87,12 @@ final class KiExternModus
         return null;
     }
 
+    /** Wartet der laufende Sammel-Lauf auf mindestens eine externe Antwort? (auch wenn ein Aufrufer die Ausnahme verschluckt hat) */
+    public function wartet(): bool
+    {
+        return $this->sammeln && $this->wartet !== [];
+    }
+
     public function meldeWartend(string $uuid, string $feature): void
     {
         $this->wartet[$uuid] = $feature;

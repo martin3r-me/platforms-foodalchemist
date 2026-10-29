@@ -269,7 +269,7 @@ class PlanningCascadeService
         // noch nicht freigegebenen Draft liefe dieselbe teure Coverage-Kette ein zweites Mal — darum im
         // staged-Modus unterdrücken. Nicht-gestuft (Direkt-Materialisierung) behält das Alt-Verhalten.
         $vorFreigabeAnreichern = $vollAnreichern && ! $staged;   // Spec 80 H: nicht gestufte Läufe haben kein Freigabe-Tor — dort bleibt es bewusst so
-        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern);
+        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern, extern: (bool) ($jobParams['_extern'] ?? false));
     }
 
     /**
