@@ -82,7 +82,13 @@ class IngredientMatchService
         string $bio = 'neutral',
         bool $basisVariante = true,   // 27.10.: Basisvarianten-Regel (Bindung); reine Erkennung (Zukauf/Teilfertig) schaltet sie ab
         string $convenience = 'standard',   // 27.10. (d): Convenience-Leitplanke — teil/voll erlaubt das Zukauf-GP für Basiskomponenten
+        ?string $einheit = null,            // 28.10.: Einheit der Zeile (Stück → ganze Gewürzform)
     ): array {
+        // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
+        if (preg_match('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', $ingredientName) === 1 && preg_match('/fl(?:ü|ue)ssig|pasteuris/iu', $ingredientName) !== 1) {
+            $ingredientName = (string) preg_replace('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', 'Eier', $ingredientName);
+        }
+        $this->einheit = $einheit;
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
 
@@ -104,8 +110,11 @@ class IngredientMatchService
             $mode = 'sub_recipe_first';
         }
 
+        // Kurator 28.10. (5): die Aliasse sehen die Zutat ohne Menge/Einheit („200 g Sahne“ trifft den §5-Default wie „Sahne“)
+        $aliasQuery = $this->engine->ingredientTokens(\Platform\FoodAlchemist\Support\ZutatFreitext::ohneMenge($ingredientName)) ?: $queryTokens;
+
         // 4.4n — §4-Default-Sub-Alias hat VORRANG (deterministisch, Existenz-Guard)
-        if (($aliasName = $this->heuristik->defaultSubAlias($queryTokens)) !== null) {
+        if (($aliasName = $this->heuristik->defaultSubAlias($aliasQuery)) !== null) {
             $ziel = $this->resolveSubByName($team, $aliasName);
             if ($ziel !== null) {
                 return [
@@ -118,12 +127,14 @@ class IngredientMatchService
         }
 
         // 4.4s — §5-Default-GP-Alias (sichere Degradation)
-        if (($aliasName = $this->heuristik->defaultGpAlias($queryTokens, $preferRaw)) !== null) {
+        if (($aliasName = $this->heuristik->defaultGpAlias($aliasQuery, $preferRaw)) !== null) {
             $ziel = $this->resolveGpByName($team, $aliasName);
             // 27.10. (Pfeffer weiss: ganz → gemahlen): nennt die Zeile ausdrücklich eine Form, die das Default-GP nicht trägt, entscheidet der Pool
             $queryForm = $this->engine->produktForm($ingredientName)['form'];
+            // 28.10. (Nachmessung „100 ml Milch (1,5 %)“ → 3,5 %): ein genannter Prozent-/Type-Wert, den das Default-GP nicht trägt, entscheidet der Pool
             if ($ziel !== null && $this->acceptsProductForm($ingredientName, $ziel['name'], $ziel['condition'])
-                && ($queryForm === null || in_array($queryForm, $this->engine->tokenize($ziel['name']), true))) {
+                && ($queryForm === null || in_array($queryForm, $this->engine->tokenize($ziel['name']), true))
+                && ! \Platform\FoodAlchemist\Support\ZutatFreitext::fremdeWertangaben($ingredientName, (string) $ziel['name'])) {
                 return [
                     'target' => 'gp', 'status' => MatchBand::fuerScore(MatchHeuristics::DEFAULT_GP_ALIAS_SCORE),
                     'gp_id' => $ziel['id'], 'gp_name' => $ziel['name'],
@@ -223,8 +234,17 @@ class IngredientMatchService
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio) : $final);
+            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit) : $final);
     }
+
+    /** Einheit der aktuellen Zeile (28.10.: Stück → ganze Gewürzform). */
+    private ?string $einheit = null;
+
+    /** @var array<int, list<list<string>>> Produktnamen je Team: Hauptzutat-Tokens trockener Fertigprodukte (WG 12/13) */
+    private array $produktnamenCache = [];
+
+    /** @var array<string, bool> Teil|Wort → Frucht im Bestand (WG 02) */
+    private array $fruchtCache = [];
 
     /** Basiskomponenten-Lauf (27.10. d) der aktuellen Entscheidung — steuert poolLauf und den Abschluss. */
     private bool $basisKomponente = false;
@@ -249,6 +269,14 @@ class IngredientMatchService
             || in_array($this->engine->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
             return false;
         }
+        // Regelwerk Basisrezepte §3 (Kurator 28.10.): Frucht-Püree ist immer Zukauf (Boiron-TK) — jede Frucht des Bestands (WG 02), nicht nur die Liste
+        if ($this->istFruchtPueree($team, $tokens)) {
+            return false;
+        }
+        // Produktname aus dem Bestand („Pro Espuma“): Hauptzutat eines trockenen Fertigprodukts (WG 12/13), mindestens zwei Wörter
+        if ($this->nenntProduktnamen($team, $tokens)) {
+            return false;
+        }
         // Markenname in Klammern („Geflügelfond (Knorr)“): bekannt aus dem Klammer-Zusatz der GPs
         if (preg_match_all('/\(([^)]+)\)/u', $text, $m) > 0) {
             $marken = $this->markenCache[$team->id] ??= FoodAlchemistGp::visibleToTeam($team)->whereNotNull('zusatz')->where('zusatz', '!=', '')
@@ -261,6 +289,49 @@ class IngredientMatchService
         }
 
         return true;
+    }
+
+    /** Püree aus einer Frucht des Bestands („Johannisbeerpüree“, „Püree: Mango“)? Gemüse-Püree bleibt Unterrezept (§3). */
+    private function istFruchtPueree(Team $team, array $tokens): bool
+    {
+        $pueree = array_values(array_filter($tokens, fn ($t) => str_ends_with($t, 'pueree') || str_ends_with($t, 'puree')));
+        if ($pueree === []) {
+            return false;
+        }
+        $kandidaten = [];
+        foreach ($pueree as $t) {
+            $kandidaten[] = preg_replace('/p(?:ue|u)ree$/', '', $t);
+        }
+        $kandidaten = [...$kandidaten, ...array_diff($tokens, $pueree)];   // „Püree: Mango“, „Mango-Püree“
+        foreach ($kandidaten as $k) {
+            foreach (array_unique([$k, preg_replace('/(?:en|n)$/', '', $k)]) as $wort) {
+                if (mb_strlen($wort) < 4) {
+                    continue;
+                }
+                if ($this->fruchtCache[$team->id . '|' . $wort] ??= FoodAlchemistGp::visibleToTeam($team)->where('commodity_group_code', '02')
+                    ->whereIn('status', ['approved', 'tentative'])->where('main_ingredient_slug', 'like', $wort . '%')->exists()) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Nennt die Zeile ein trockenes Fertigprodukt des Bestands (WG 12/13, Hauptzutat ab zwei Wörtern) — „Pro Espuma“? */
+    private function nenntProduktnamen(Team $team, array $tokens): bool
+    {
+        $produkte = $this->produktnamenCache[$team->id] ??= FoodAlchemistGp::visibleToTeam($team)->whereIn('commodity_group_code', ['12', '13'])
+            ->whereIn('status', ['approved', 'tentative'])->whereRaw('LOWER(`condition`) = ?', ['trocken'])->get(['name', 'zusatz'])
+            ->map(fn ($g) => $this->engine->tokenize((string) $this->naming()->felderAusName($this->naming()->nameOhneMarke((string) $g->name, $g->zusatz))['hauptzutat']))
+            ->filter(fn ($h) => count($h) >= 2)->values()->all();
+        foreach ($produkte as $h) {
+            if (array_diff($h, $tokens) === []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -276,7 +347,7 @@ class IngredientMatchService
         }
         if ($ok && ($final['target'] ?? null) === 'gp'
             && ! in_array((string) FoodAlchemistGp::query()->whereKey((int) $final['gp_id'])->value('commodity_group_code'), ['13', '09'], true)) {
-            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio);
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit);
         }
 
         return ($ok && ($final['target'] ?? null) === 'gp' ? ['status' => MatchBand::FuzzyLow] + $final : $this->noMatch($final['score'])) + ['basiskomponente' => 'stub'];
