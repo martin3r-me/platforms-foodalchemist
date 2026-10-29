@@ -169,6 +169,8 @@ class GpAromaBackfillCommand extends Command
             $offen = array_slice($offen, 0, $limit);
         }
         $extern = $this->option('anbieter') === 'extern';
+        $seit = now();
+        $ausstehend = 0;
         $protokoll = "{$bericht}/{$stempel}_aroma_protokoll.jsonl";
         $n = 0;
         foreach (array_chunk($offen, max(1, (int) $this->option('chunk'))) as $i => $chunk) {
@@ -192,6 +194,7 @@ class GpAromaBackfillCommand extends Command
                 } catch (\Throwable $e) {
                     $r = ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
                 }
+                $ausstehend += (int) ($r['ausstehend'] ?? 0);
                 File::append($protokoll, json_encode(['gp_id' => $gpId, 'schritte' => $schritte, 'zeit' => now()->toIso8601String()] + $r, JSON_UNESCAPED_UNICODE)."\n");
                 $n++;
             }
@@ -202,6 +205,10 @@ class GpAromaBackfillCommand extends Command
         }
         $this->info("KI-Teil fertig: {$n} GPs/Rezepte. Protokoll: {$protokoll}");
         if ($extern) {
+            $z = app(\Platform\FoodAlchemist\Services\Ai\KiAuftragService::class)->zaehler((int) $team->id, $seit);
+            File::append($protokoll, json_encode(['zaehler' => $z, 'ausstehend_schritte' => $ausstehend, 'zeit' => now()->toIso8601String()], JSON_UNESCAPED_UNICODE)."\n");
+            $this->line(sprintf('Aufträge dieses Laufs: %d angelegt, %d beantwortet, %d verbraucht · Bestand: %d offen, %d beantwortet-liegt, %d verwaist · doppelt: %d (Fingerabdruck instabil, wenn > 0)',
+                $z['angelegt'], $z['beantwortet'], $z['verbraucht'], $z['offen'], $z['liegt_beantwortet'], $z['verwaist'], $z['doppelt']));
             $offenA = DB::table('foodalchemist_ki_auftraege')->where('team_id', $team->id)->where('status', 'offen')->count();
             $this->comment("Externer Weg: {$offenA} offene KI-Aufträge (ki_auftraege.GET → ANTWORT), danach diesen Befehl erneut ausführen — beantwortete Aufträge werden dabei übernommen.");
         }

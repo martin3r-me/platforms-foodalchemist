@@ -43,7 +43,6 @@ final class KiUmleitung
      */
     public const AUSGENOMMEN = [
         'foodalchemist.concepts.GENERATE' => 'Klasse c: Kaskade, mehrere propose() mit Schreibzugriffen dazwischen (Phase 2).',
-        'foodalchemist.gps.ENRICH' => 'Queue-Dispatch: BulkEnrichService::starteGp legt einen Lauf an, propose() läuft im Worker außerhalb des Tool-Aufrufs. Braucht ein Extern-Flag am Lauf (Klasse c, Phase 1).',
         'foodalchemist.recipes.ENRICH' => 'Queue-Dispatch wie gps.ENRICH (Phase 2).',
         'foodalchemist.recipes.GENERATE' => 'Klasse c: Generator-Kaskade (Phase 2).',
     ];
@@ -64,6 +63,22 @@ final class KiUmleitung
     public static function vomExternenMcp(ToolContext $context): bool
     {
         return array_key_exists(self::HERKUNFT_MARKER, $context->metadata);
+    }
+
+    /**
+     * Tools, deren KI-Aufruf im Queue-Worker läuft (Lauf-Flag statt Hülle): Der externe MCP-Aufruf setzt `extern` am Lauf, der Worker
+     * legt dann KI-Aufträge an. Die Hülle (Transaktion/Rollback) greift hier nicht, der Tool-Aufruf selbst schreibt nur die Lauf-Zeile.
+     *
+     * @var array<string, string>
+     */
+    public const LAUF_FLAG = [
+        'foodalchemist.gps.ENRICH' => 'BulkEnrichService::starteGp(extern) → BulkEnrichGpJob setzt KiExternModus im Worker; verarbeiteGp legt bei „ausstehend“ keinen Leer-Vorschlag an.',
+    ];
+
+    /** Soll ein Lauf, den dieser Aufruf startet, extern laufen? (nur Aufruf über den externen MCP-Server, Schalter an) */
+    public static function externFuerLauf(ToolContext $context): bool
+    {
+        return (bool) config('foodalchemist.ai.mcp_extern', true) && self::vomExternenMcp($context);
     }
 
     public static function umleiten(string $toolName, ToolContext $context): bool

@@ -124,6 +124,39 @@ class KiAuftragService
         ]);
     }
 
+    /**
+     * Bilanz des externen Wegs (#1002): wie viele Aufträge entstanden, wie viele Antworten wirklich verbraucht wurden, was liegen blieb.
+     * `angelegt`/`beantwortet`/`verbraucht` zählen ab `$seit` (Lauf-Beginn); `offen`, `liegt_beantwortet`, `abgelaufen` sind Bestand.
+     * `doppelt` = Aufträge über dem ersten je (Feature, Ziel) ab `$seit` — wäre der Fingerabdruck instabil (andere Reihenfolge der Treffer,
+     * anderer Kontext), entstünden hier mehrere Aufträge für dasselbe Ziel. `verwaist` = abgelaufen + seit über 1 Stunde beantwortet, nie verbraucht.
+     *
+     * @return array<string, int>
+     */
+    public function zaehler(int $teamId, ?\DateTimeInterface $seit = null, ?string $feature = null): array
+    {
+        $basis = fn () => DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->when($feature, fn ($q) => $q->where('feature', $feature));
+        $ab = fn ($q, string $spalte) => $seit !== null ? $q->where($spalte, '>=', $seit) : $q;
+        $doppelt = 0;
+        $ab($basis()->whereNotNull('target_id'), 'created_at')->select('feature', 'target_table', 'target_id')->selectRaw('COUNT(*) AS n')
+            ->groupBy('feature', 'target_table', 'target_id')->havingRaw('COUNT(*) > 1')->get()
+            ->each(function ($z) use (&$doppelt) {
+                $doppelt += (int) $z->n - 1;
+            });
+        $abgelaufen = (int) $basis()->where('status', 'abgelaufen')->count();
+        $alt = (int) $basis()->where('status', 'beantwortet')->where('beantwortet_at', '<', now()->subHour())->count();
+
+        return [
+            'angelegt' => (int) $ab($basis(), 'created_at')->count(),
+            'beantwortet' => (int) $ab($basis()->whereNotNull('beantwortet_at'), 'beantwortet_at')->count(),
+            'verbraucht' => (int) $ab($basis()->where('status', 'verbraucht'), 'verbraucht_at')->count(),
+            'offen' => (int) $basis()->where('status', 'offen')->where('laeuft_ab_at', '>', now())->count(),
+            'liegt_beantwortet' => (int) $basis()->where('status', 'beantwortet')->count(),
+            'abgelaufen' => $abgelaufen,
+            'verwaist' => $abgelaufen + $alt,
+            'doppelt' => $doppelt,
+        ];
+    }
+
     public static function hash(array $messages): string
     {
         return hash('sha256', json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
