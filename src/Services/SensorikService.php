@@ -85,18 +85,6 @@ class SensorikService
     ];
 
     /**
-     * Leer-Label-Guard: beim Necta-Import kamen Artikel ohne Nährwert-Angabe als lauter Nullen
-     * an (9.385 Zeilen im Quellbestand). Solche Zeilen dürfen eine Dimension nicht auf 0 ziehen —
-     * eine Zeile zählt nur, wenn irgendein Kernwert > 0 ist. (Salz pur: kcal 0, aber sodium > 0.)
-     *
-     * Aus demselben Grund gilt je Nährstoff: eine exakte 0 ist KEINE Messung, sondern
-     * „nicht deklariert" (NULLIF in der Query). Sonst hätte z. B. „Cola: konserviert" mit einem
-     * 0-Zucker-Label seine kuratierte Süße 0.9 auf 0.0 verloren. Nach unten korrigiert die Erdung
-     * weiterhin — aber nur gegen eine echte, positive Zahl.
-     */
-    private const LABEL_FELDER = ['energy_kcal', 'sodium', 'fat', 'sugar', 'protein', 'carbs_absorbable'];
-
-    /**
      * Ab dieser Abweichung Wahrnehmung↔Konzentration wird ein Hinweis angezeigt: Überdeckung (Zucker über Salz) ist gewollt,
      * kann aber auch ein Altwert sein (Profile bis zum Neulauf tragen noch den früher eingespielten Messwert).
      */
@@ -452,8 +440,8 @@ class SensorikService
     // ── Erdung: messbare Dimensionen aus den LA-Nährwerten statt aus der KI ──
 
     /**
-     * Gemessene Dimensionen je GP aus den LA-Nährwerten (GL-08-Pfad, identisch zu
-     * GpAggregateService::naehrwerte: Ø über nicht-ausgelistete LAs, NULL fällt raus).
+     * Gemessene Dimensionen je GP aus den LA-Nährwerten (GL-08-Pfad, gleiche Regel wie
+     * GpAggregateService::naehrwerte: Median über nicht-ausgelistete LAs, 0 zählt, NULL fällt raus).
      * EINE Query für alle GPs — kein N+1 im Zutaten-Durchlauf.
      *
      * @return array<int, array<string, array{wert: float, gehalt: float, anzahl: int, basis: string}>> [gp_id][dim]
@@ -465,38 +453,22 @@ class SensorikService
             return [];
         }
 
-        $rows = DB::table('foodalchemist_item_nutritionals AS n')
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'n.supplier_item_id')
-            ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 'n.supplier_item_id')
-            ->whereIn('s.gp_id', $gpIds)
-            ->where('i.is_discontinued', false)
-            ->whereNull('n.deleted_at')->whereNull('s.deleted_at')->whereNull('i.deleted_at')
-            ->where(function ($q) {                          // Leer-Label-Guard
-                foreach (self::LABEL_FELDER as $f) {
-                    $q->orWhere("n.{$f}", '>', 0);
-                }
-            })
-            ->groupBy('s.gp_id')
-            // NULLIF(x,0): eine exakte 0 ist in diesem Bestand „nicht deklariert", keine Messung.
-            ->selectRaw('s.gp_id, AVG(NULLIF(n.sodium,0)) AS sodium, COUNT(NULLIF(n.sodium,0)) AS n_sodium, '
-                . 'AVG(NULLIF(n.fat,0)) AS fat, COUNT(NULLIF(n.fat,0)) AS n_fat, '
-                . 'AVG(NULLIF(n.sugar,0)) AS sugar, COUNT(NULLIF(n.sugar,0)) AS n_sugar, '
-                . 'AVG(NULLIF(n.carbs_absorbable,0)) AS carbs')
-            ->get();
+        // Leer-Label-Guard, 0 = Messwert, Median: {@see NaehrwertAggregatService} (gleiche Regel wie die Rezept-Nährwerte).
+        $kennwerte = app(NaehrwertAggregatService::class)->kennwerte($gpIds, ['sodium', 'fat', 'sugar', 'carbs_absorbable']);
 
         $out = [];
-        foreach ($rows as $r) {
+        foreach ($kennwerte as $gpId => $k) {
             $gehalt = [
-                'salt_g' => $r->sodium !== null ? (float) $r->sodium * 0.0025 : null,   // GL-08 §4.2
-                'sugar' => $r->sugar !== null ? (float) $r->sugar : null,
-                'fat' => $r->fat !== null ? (float) $r->fat : null,
+                'salt_g' => $k['sodium']['wert'] !== null ? $k['sodium']['wert'] * 0.0025 : null,   // GL-08 §4.2
+                'sugar' => $k['sugar']['wert'],
+                'fat' => $k['fat']['wert'],
             ];
             // LMIV: „davon Zucker" ist eine Teilmenge der Kohlenhydrate. Ist er größer, ist die
             // Zeile kaputt (106 Fälle im Bestand) → Zucker verwerfen statt falsch erden.
-            if ($gehalt['sugar'] !== null && $r->carbs !== null && $gehalt['sugar'] > (float) $r->carbs * 1.05 + 0.5) {
+            if ($gehalt['sugar'] !== null && $k['carbs_absorbable']['wert'] !== null && $gehalt['sugar'] > $k['carbs_absorbable']['wert'] * 1.05 + 0.5) {
                 $gehalt['sugar'] = null;
             }
-            $anzahl = ['salt_g' => (int) $r->n_sodium, 'sugar' => (int) $r->n_sugar, 'fat' => (int) $r->n_fat];
+            $anzahl = ['salt_g' => $k['sodium']['n'], 'sugar' => $k['sugar']['n'], 'fat' => $k['fat']['n']];
 
             $dims = [];
             foreach (self::MESSBAR as $dim => $m) {
@@ -509,11 +481,11 @@ class SensorikService
                     'gehalt' => $g,                                    // g/100 g, der Fakt
                     'anzahl' => $anzahl[$m['groesse']],
                     'basis' => $m['label'] . ' ' . number_format($g, 1, ',', '.') . ' g/100 g'
-                        . ($anzahl[$m['groesse']] > 1 ? ' · Ø ' . $anzahl[$m['groesse']] . ' LA' : ''),
+                        . ($anzahl[$m['groesse']] > 1 ? ' · Median ' . $anzahl[$m['groesse']] . ' LA' : ''),
                 ];
             }
             if ($dims !== []) {
-                $out[(int) $r->gp_id] = $dims;
+                $out[$gpId] = $dims;
             }
         }
 

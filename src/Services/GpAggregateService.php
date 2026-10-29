@@ -245,11 +245,11 @@ class GpAggregateService
     }
 
     /**
-     * Nährwert-Ø je 100 g (GL-08 GP-Pfad): je Nährstoff AVG über aktive LAs
-     * (is_discontinued=0), NULL-Werte fallen aus dem AVG (Invariante 5).
-     * Rückgabe: [kernwert => ['avg' => float|null, 'n' => int]] + 'salt_g' (sodium×0.0025).
-     */
-    /**
+     * Nährwerte je 100 g (GL-08 GP-Pfad) über die aktiven LAs, Regel {@see NaehrwertAggregatService}: Null-Zeilen
+     * (alle Kernwerte 0) zählen nicht, eine 0 in einer zählenden Zeile ist ein Messwert, NULL fällt raus, Kennwert = Median.
+     * Rückgabe: [kernwert => ['avg' => float|null, 'n' => int]] + 'salt_g' (sodium×0.0025). Der Schlüssel heißt aus
+     * Kompatibilität weiter `avg` (Rezept-Recompute, GP-Panel), trägt seit 10/2026 aber den Median.
+     *
      * $mitKiFallback (R10, NUR Panel-Anzeige): ohne LA-Daten die KI-/manuelle
      * Schätzschicht vom GP zurückgeben — die GL-08-Rezept-Aggregation ruft
      * bewusst OHNE Fallback (Schätzwerte verfälschen keine Rezept-Nährwerte).
@@ -257,26 +257,11 @@ class GpAggregateService
     public function naehrwerte(FoodAlchemistGp $gp, bool $mitKiFallback = false): array
     {
         $kerne = FoodAlchemistItemNutritional::KERNWERTE;
-
-        $selects = [];
-        foreach ($kerne as $k) {
-            $selects[] = "AVG(n.{$k}) AS avg_{$k}";               // SQL-AVG ignoriert NULL
-            $selects[] = "COUNT(n.{$k}) AS n_{$k}";               // COUNT(col) zählt nur NOT-NULL
-        }
-
-        $row = DB::table('foodalchemist_item_nutritionals AS n')
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'n.supplier_item_id')
-            ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 'n.supplier_item_id')
-            ->where('s.gp_id', $gp->id)
-            ->where('i.is_discontinued', false)
-            ->whereNull('n.deleted_at')->whereNull('s.deleted_at')->whereNull('i.deleted_at')
-            ->selectRaw(implode(', ', $selects))
-            ->first();
+        $kennwerte = app(NaehrwertAggregatService::class)->kennwerte([$gp->id], $kerne)[$gp->id] ?? [];
 
         $out = [];
         foreach ($kerne as $k) {
-            $avg = $row?->{"avg_{$k}"};
-            $out[$k] = ['avg' => $avg !== null ? (float) $avg : null, 'n' => (int) ($row?->{"n_{$k}"} ?? 0)];
+            $out[$k] = ['avg' => $kennwerte[$k]['wert'] ?? null, 'n' => $kennwerte[$k]['n'] ?? 0];
         }
         // Salz-Ableitung (GL-08 §4.2): Quelle sodium in mg/100g → g Salz/100g
         $out['salt_g'] = [

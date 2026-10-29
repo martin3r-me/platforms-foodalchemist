@@ -74,7 +74,7 @@ it('Achiote-Paste: ein Profil mit salzig 0,6 bleibt, die Grundlage zeigt 3,6 g S
     $s = $this->svc->fuerGp($gp->id);
 
     expect($s['geschmack']['salzig'])->toBe(0.6)
-        ->and($s['erdung']['salzig']['basis'])->toContain('Salz 3,6 g/100 g')->toContain('Ø 2 LA')
+        ->and($s['erdung']['salzig']['basis'])->toContain('Salz 3,6 g/100 g')->toContain('Median 2 LA')
         ->and($s['erdung']['salzig']['konflikt'])->toBeNull()
         ->and($s['geschmack']['umami'])->toBe(0.4)->and($s['geschmack']['sauer'])->toBe(0.3)
         ->and($s['erdung'])->not->toHaveKey('umami');
@@ -121,7 +121,9 @@ it('Leer-Label (alles 0) und ausgelistete LAs liefern keine Grundlage, das Profi
         ->and($s['geschmack']['salzig'])->toBe(0.7);
 });
 
-it('eine exakte 0 im Label ist keine Messung (Fall Cola: 0-Zucker-Label)', function () {
+it('eine exakte 0 im Label ist ein Messwert (Dominique 29.10.: Nullen sind oft echt); das Profil gewinnt trotzdem', function () {
+    // Bis 10/2026 galt jede 0 als „nicht deklariert“ (Fall Cola mit 0-Zucker-Label). Seit das Profil die Wahrnehmung trägt, ändert die
+    // Grundlage das Profil nicht mehr; ein falsch gepflegter Artikel ist Sache des Geschwister-Vergleichs, nicht des Wegwerfens jeder 0.
     $gp = $this->makeGp($this->rootTeam, 'Cola konserviert');
     ($this->setzeVektor)($gp->id, ['suess' => 0.9]);
     ($this->mkLa)($gp->id, ['sugar' => 0, 'carbs_absorbable' => 10.6, 'energy_kcal' => 42]);
@@ -129,10 +131,10 @@ it('eine exakte 0 im Label ist keine Messung (Fall Cola: 0-Zucker-Label)', funct
     $s = $this->svc->fuerGp($gp->id);
 
     expect($s['geschmack']['suess'])->toBe(0.9)
-        ->and($s['erdung'])->not->toHaveKey('suess');
+        ->and($s['erdung']['suess']['gehalt'])->toBe(0.0)->and($s['erdung']['suess']['basis'])->toBe('Zucker 0,0 g/100 g');
 
     ($this->mkLa)($gp->id, ['sugar' => 10.6, 'carbs_absorbable' => 10.6, 'energy_kcal' => 42]);
-    expect($this->svc->fuerGp($gp->id)['erdung']['suess']['basis'])->toContain('Zucker 10,6 g/100 g');
+    expect($this->svc->fuerGp($gp->id)['erdung']['suess']['basis'])->toContain('Zucker 5,3 g/100 g · Median 2 LA');
 });
 
 it('Zucker > Kohlenhydrate ist LMIV-widersprüchlich und wird verworfen', function () {
