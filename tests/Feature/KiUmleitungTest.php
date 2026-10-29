@@ -1,0 +1,188 @@
+<?php
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Contracts\ToolResult;
+use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Support\KiUmleitung;
+use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
+use Platform\FoodAlchemist\Tests\TestCase;
+
+uses(TestCase::class, SeedsTeamHierarchy::class);
+
+/**
+ * #1002 · Umleitung: ein MCP-Aufruf eines KI-Tools (FaRechteToolHuelle → KiUmleitung) liefert einen KI-Auftrag statt eines
+ * Provider-Calls. Je umgeleitetem Tool ein Test; dazu Transaktions-/Rollback-Verhalten.
+ */
+beforeEach(function () {
+    $this->seedTeamHierarchy();
+    $this->user = $this->makeUser($this->rootTeam);
+    $this->actingAs($this->user);
+    config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => [], 'foodalchemist.ai.mcp_extern' => true]);
+    $this->registry = app(ToolRegistry::class);
+    $this->kontext = new ToolContext($this->user, $this->rootTeam);
+    $this->vkId = $this->registry->get('foodalchemist.verkaufsrezepte.POST')->execute(['name' => 'HG: Umleitung'], $this->kontext)->data['id'];
+    $this->gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ei'], $this->kontext)->data['id'];
+    $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
+});
+
+/** Tool → [Argumente, erwartetes Feature]. Schlüssel müssen exakt Support/KiUmleitung::TOOLS entsprechen. */
+dataset('umgeleitete_tools', function () {
+    return [
+        'gp_forms.ESTIMATE' => ['foodalchemist.gp_forms.ESTIMATE', fn ($t) => ['gp_id' => $t->gpId], 'gp.zaehl_einheiten'],
+        'presentation_designs.GENERATE_CSS' => ['foodalchemist.presentation_designs.GENERATE_CSS', fn ($t) => ['brief' => 'Dunkel, edel'], 'praesentation.design_css'],
+        'recipe_coherence.POST' => ['foodalchemist.recipe_coherence.POST', fn ($t) => ['recipe_id' => $t->vkId, 'mode' => 'judge'], 'vk.kohaerenz'],
+        'recipe_klasse.POST' => ['foodalchemist.recipe_klasse.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.speisen_klasse'],
+        'recipe_rollen.POST' => ['foodalchemist.recipe_rollen.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.rollen'],
+        'recipe_sensorik.POST' => ['foodalchemist.recipe_sensorik.POST', fn ($t) => ['recipe_id' => $t->vkId], 'recipe.sensorik'],
+    ];
+});
+
+it('der Test deckt genau die umgeleiteten Tools ab', function () {
+    $ds = array_map(fn ($z) => $z[0], (function () {
+        return [
+            ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
+            ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
+        ];
+    })());
+    expect($ds)->toEqualCanonicalizing(array_keys(KiUmleitung::TOOLS));
+});
+
+it('Umleitung: Tool liefert einen KI-Auftrag statt eines Provider-Calls, kein zweiter bei Wiederholung', function (string $tool, Closure $args, string $feature) {
+    $lauf = fn () => $this->registry->get($tool)->execute($args($this), $this->kontext);
+
+    $r = $lauf();
+    expect($r->success)->toBeTrue($tool . ': ' . ($r->error ?? ''))
+        ->and($r->data['status'])->toBe('ki_auftrag_offen')
+        ->and($r->data['auftraege'])->toHaveCount(1)
+        ->and($r->data['auftraege'][0]['feature'])->toBe($feature);
+
+    $a = DB::table('foodalchemist_ki_auftraege')->get();
+    expect($a)->toHaveCount(1)
+        ->and($a[0]->status)->toBe('offen')
+        ->and($a[0]->uuid)->toBe($r->data['auftraege'][0]['auftrag_id'])
+        ->and((int) $a[0]->team_id)->toBe($this->rootTeam->id)
+        ->and(($this->ohneProviderCall)())->toBeTrue('Provider darf nicht gerufen werden');
+
+    $r2 = $lauf();
+    expect($r2->data['status'])->toBe('ki_auftrag_offen')
+        ->and($r2->data['auftraege'][0]['auftrag_id'])->toBe($r->data['auftraege'][0]['auftrag_id'])
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(1);
+})->with('umgeleitete_tools');
+
+it('Schalter aus: dasselbe Tool läuft über den Plattform-Provider, kein Auftrag', function (string $tool, Closure $args, string $feature) {
+    config(['foodalchemist.ai.mcp_extern' => false]);
+    $r = $this->registry->get($tool)->execute($args($this), $this->kontext);
+
+    expect($r->data['status'] ?? null)->not->toBe('ki_auftrag_offen')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
+})->with('umgeleitete_tools');
+
+it('nicht umgeleitete Tools (Klasse c / Queue) bleiben beim Plattform-Provider', function () {
+    foreach (array_keys(KiUmleitung::AUSGENOMMEN) as $tool) {
+        expect(KiUmleitung::umleiten($tool))->toBeFalse($tool)
+            ->and(KiUmleitung::TOOLS)->not->toHaveKey($tool);
+        expect(KiUmleitung::AUSGENOMMEN[$tool])->not->toBe('');
+    }
+});
+
+it('Rollback: Tool schreibt, fängt die Ausnahme (wie recipe_klasse.POST), Lauf wartet → kein Halbzustand, Auftrag existiert', function () {
+    Schema::create('ki_umleitung_probe', function ($t) {
+        $t->id();
+        $t->string('x')->nullable();
+    });
+    $gw = app(AiGatewayService::class);
+
+    $r = KiUmleitung::ausfuehren(function () use ($gw) {
+        DB::table('ki_umleitung_probe')->insert(['x' => 'a']);
+        try {
+            $gw->propose('recipe.description', ['description' => 'Klarer Fond.']);
+        } catch (\Throwable $e) {
+            return ToolResult::error($e->getMessage(), 'PROPOSE_FAILED');   // Tool verschluckt die Ausnahme
+        }
+
+        return ToolResult::success(['fertig' => true]);
+    });
+
+    expect($r->data['status'])->toBe('ki_auftrag_offen')
+        ->and(DB::table('ki_umleitung_probe')->count())->toBe(0, 'Halbzustand')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->count())->toBe(1);
+});
+
+it('Savepoint: Tool mit eigener Transaktion wird mit zurückgerollt, ohne die äußere zu brechen', function () {
+    Schema::create('ki_umleitung_probe', function ($t) {
+        $t->id();
+        $t->string('x')->nullable();
+    });
+    $gw = app(AiGatewayService::class);
+    $niveau = DB::transactionLevel();
+
+    $r = KiUmleitung::ausfuehren(function () use ($gw) {
+        DB::transaction(function () use ($gw) {
+            DB::table('ki_umleitung_probe')->insert(['x' => 'a']);
+            $gw->propose('recipe.description', ['description' => 'Klarer Fond.']);
+        });
+
+        return ToolResult::success([]);
+    });
+
+    expect($r->data['status'])->toBe('ki_auftrag_offen')
+        ->and(DB::table('ki_umleitung_probe')->count())->toBe(0)
+        ->and(DB::transactionLevel())->toBe($niveau, 'Transaktionsstand wiederhergestellt')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(1);
+});
+
+it('ohne Auftrag: Lauf wird committet, auch mit innerer Transaktion', function () {
+    Schema::create('ki_umleitung_probe', function ($t) {
+        $t->id();
+        $t->string('x')->nullable();
+    });
+    $niveau = DB::transactionLevel();
+
+    $r = KiUmleitung::ausfuehren(function () {
+        DB::transaction(fn () => DB::table('ki_umleitung_probe')->insert(['x' => 'a']));
+
+        return ToolResult::success(['ok' => 1]);
+    });
+
+    expect($r->data)->toBe(['ok' => 1])
+        ->and(DB::table('ki_umleitung_probe')->count())->toBe(1)
+        ->and(DB::transactionLevel())->toBe($niveau)
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
+});
+
+it('anderer Fehler im Tool: Rollback, Ausnahme bleibt', function () {
+    Schema::create('ki_umleitung_probe', function ($t) {
+        $t->id();
+        $t->string('x')->nullable();
+    });
+    $niveau = DB::transactionLevel();
+
+    expect(fn () => KiUmleitung::ausfuehren(function () {
+        DB::table('ki_umleitung_probe')->insert(['x' => 'a']);
+        throw new \LogicException('kaputt');
+    }))->toThrow(\LogicException::class);
+
+    expect(DB::table('ki_umleitung_probe')->count())->toBe(0)
+        ->and(DB::transactionLevel())->toBe($niveau);
+});
+
+it('Antwort holen: nach ANTWORT nimmt der wiederholte Tool-Aufruf die Antwort (Plattform-Prüfung, source=mcp)', function () {
+    $lauf = fn () => $this->registry->get('foodalchemist.recipe_klasse.POST')->execute(['recipe_id' => $this->vkId], $this->kontext);
+    $r = $lauf();
+    $id = $r->data['auftraege'][0]['auftrag_id'];
+
+    $ant = $this->registry->get('foodalchemist.ki_auftraege.ANTWORT')->execute([
+        'antworten' => [['auftrag_id' => $id, 'werte' => ['werte' => ['klasse_id' => null], 'confidence' => 0.4]]],
+        'anbieter' => 'anthropic', 'modell' => 'claude-opus-5-5',
+    ], $this->kontext);
+    expect($ant->data['angenommen'])->toBe(1);
+
+    $r2 = $lauf();
+    expect($r2->data['status'] ?? null)->not->toBe('ki_auftrag_offen')
+        ->and(DB::table('foodalchemist_ki_auftraege')->value('status'))->toBe('verbraucht');
+    $log = DB::table('foodalchemist_ai_call_log')->whereNull('error')->first();
+    expect(json_decode($log->prompt_parts, true)['quelle'])->toBe('mcp');
+});

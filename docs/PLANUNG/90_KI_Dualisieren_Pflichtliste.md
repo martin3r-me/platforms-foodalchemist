@@ -59,8 +59,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 34 | `src/Services/BulkEnrichService.php::proposeRegeneration` | recipe.regeneration | 1 | a | P2 | recipes.ENRICH | offen |  |
 | 35 | `src/Services/BulkEnrichService.php::proposeGarverlust` | recipe.garverlust | 1 | a | P2 | recipes.ENRICH | offen |  |
 | 36 | `src/Services/BulkEnrichService.php::proposeGpFeld` | dyn. $key (gp.condition, gp.tags, gp.anker, gp.sensorik, gp.allergene, gp.naehrwerte) | 1 | b | P1 | gps.ENRICH | offen | P1-Kern |
-| 37 | `src/Services/CoherenceService.php::judge` | vk.kohaerenz | 1 | a | P2 | recipe_coherence.POST | offen |  |
-| 38 | `src/Services/CoherenceService.php::tellerHeber` | vk.teller_heber | 1 | a | P2 | recipe_coherence.POST | offen |  |
+| 37 | `src/Services/CoherenceService.php::judge` | vk.kohaerenz | 1 | a | P2 | recipe_coherence.POST | angeschlossen | MCP-Umleitung (Tabelle D). |
+| 38 | `src/Services/CoherenceService.php::tellerHeber` | vk.teller_heber | 1 | a | P2 | recipe_coherence.POST | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 39 | `src/Services/ConceptGeneratorService.php::generiereAusBrief` | concept.brief_geruest | 1 | c | P2 | concepts.GENERATE | offen | Kaskade mit Schreibzugriffen dazwischen |
 | 40 | `src/Services/ConceptGeneratorService.php::fuelleCanvasAusPlan` | concept.plan | 1 | c | P2 | concepts.GENERATE | offen | Schleife über Slots, Schreiben je Slot |
 | 41 | `src/Services/ConceptGeneratorService.php::geruestAusBriefFuerOwner` | dyn. $promptKey (foodbook.grundgeruest, format.grundgeruest …) | 1 | b | P2 | 4 *_plan_from_brief-Tools | offen |  |
@@ -74,12 +74,12 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 49 | `src/Services/GpAbgleich/GpAbgleichService.php::entscheiderKi` | gp.la_abgleich | 1 | b | P2 | LaGpAbgleichTool | offen |  |
 | 50 | `src/Services/GpAbgleich/LaFelderService.php::fuer` | gp.suggest | 1 | a | P2 | LaGpAbgleichTool | offen |  |
 | 51 | `src/Services/GpAromaService.php::schaetze` | gp.sensorik | 1 | a | P1 | Backfill, gps.ENRICH | angeschlossen | Backfill ANGESCHLOSSEN (#611); Tool-Weg offen. 29.10.: 7 Achsen + Grenzen nach der Antwort (Nachverarbeitung beim Aufrufer, `SensorikService::begrenze`); Anzahl bleibt 1, Einstufung a, Backfill `--neu-schaetzen` |
-| 52 | `src/Services/GpFormService.php::estimateKi` | gp.zaehl_einheiten | 1 | a | P2 | GpFormsEstimateTool | offen |  |
+| 52 | `src/Services/GpFormService.php::estimateKi` | gp.zaehl_einheiten | 1 | a | P2 | GpFormsEstimateTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 53 | `src/Services/IdeenService.php::kiDivergenzConcept` | foodbook.kapitel_ideen | 1 | b | P2 | KapitelIdeen*Tool | offen |  |
 | 54 | `src/Services/IdeenService.php::kiDivergenzSession` | foodbook.kapitel_ideen | 1 | b | P2 | KapitelIdeen*Tool | offen |  |
 | 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | Zuordnung prüfen (offer_chapter/offer_block) | offen | Schleife über Kapitel |
 | 56 | `src/Services/Pairing/AnkerWissenAuslese.php::lese` | anker.wissen_auslese | 1 | a | P1 | Artisan AnkerWissenCommand | offen | Anker-Pfad |
-| 57 | `src/Services/PresentationDesignService.php::generateCss` | praesentation.design_css | 1 | a | P2 | PresentationDesignsGenerateCssTool | offen |  |
+| 57 | `src/Services/PresentationDesignService.php::generateCss` | praesentation.design_css | 1 | a | P2 | PresentationDesignsGenerateCssTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | offen | ANHANG (PDF/Bild): Entscheidung Punkt 5 |
 | 59 | `src/Services/RecipeBauartService.php::pruefe` | recipe.bauart | 1 | a | P2 | im Generator | offen |  |
 | 60 | `src/Services/RecipeExtractService.php::extrahiere` | recipe.extract | 1 | b | P2 | RecipesExtractTool | offen | ANHANG (Bild/PDF): Entscheidung Punkt 5 |
@@ -95,12 +95,12 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 70 | `src/Services/RecipeReviseService.php::freitextVorschlag` | recipe.ueberarbeiten | 1 | a | P2 | RecipesReviseTool | offen |  |
 | 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | offen |  |
 | 72 | `src/Services/ReplacementSuggestionService.php::forGp` | component.replacement_suggest | 1 | a | P2 | kein Tool (nur UI) | offen |  |
-| 73 | `src/Services/SensorikService.php::schaetzeRezept` | recipe.sensorik | 1 | a | P2 | RecipeSensorikPostTool | offen | 29.10.: KI-Aufruf aus `bewerteRezept` hierher gezogen (bewerteRezept = schaetzeRezept + Speichern; der Abnahme-Befehl `gp-sensorik-referenz` liest nur). Nährwerte als Fakt im Kontext, Grenzen nach der Antwort (Nachverarbeitung); Einstufung a; Backfill `--neu-schaetzen=rezept` |
+| 73 | `src/Services/SensorikService.php::schaetzeRezept` | recipe.sensorik | 1 | a | P2 | RecipeSensorikPostTool | angeschlossen | MCP-Umleitung (Tabelle D). 29.10.: KI-Aufruf aus `bewerteRezept` hierher gezogen (bewerteRezept = schaetzeRezept + Speichern; der Abnahme-Befehl `gp-sensorik-referenz` liest nur). Nährwerte als Fakt im Kontext, Grenzen nach der Antwort (Nachverarbeitung); Einstufung a; Backfill `--neu-schaetzen=rezept` |
 | 74 | `src/Services/SignalFixService.php::assist` | dyn. $plan (signal.*) | 1 | a | P2 | SignaleFixTool | offen |  |
 | 75 | `src/Services/SpeisekarteService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
 | 76 | `src/Services/SpeisekarteService.php::kiKartenText` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
-| 77 | `src/Services/SpeisenKlassenService.php::classify` | vk.speisen_klasse | 1 | a | P2 | RecipeKlassePostTool | offen |  |
-| 78 | `src/Services/SpeisenKlassenService.php::verteileRollen` | vk.rollen | 1 | a | P2 | RecipeRollenPostTool | offen |  |
+| 77 | `src/Services/SpeisenKlassenService.php::classify` | vk.speisen_klasse | 1 | a | P2 | RecipeKlassePostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
+| 78 | `src/Services/SpeisenKlassenService.php::verteileRollen` | vk.rollen | 1 | a | P2 | RecipeRollenPostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 79 | `src/Services/SpeiseplanService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 80 | `src/Services/TitelVorschlagService.php::titelVorschlag` | dyn. $promptKey (recipe.titel_vorschlag / vk.titel_vorschlag) | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 81 | `src/Services/Websuche/CoreWebSucheTransport.php::suche` | artikel.web_recherche (include_web_search) | 1 | b | P2 | kein Tool (nur UI) | offen | WEBSUCHE: eigener Weg, Entscheidung Punkt 5 |
@@ -141,3 +141,23 @@ Der Wächter verlangt, dass jeder Key aus `config/foodalchemist.php` (`ai.prompt
 | `gp.term_la_rank` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
 | `demo.echo` | Test-/Diagnoseprompt (`Spec85WebsucheTransportTest`, in `KiKlassenEinstellung` ausgeschlossen) | kein Produktivaufruf, bleibt Plattform |
 | `chat.message` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
+
+
+## D · MCP-Umleitung je Tool (`Support/KiUmleitung`)
+
+Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit Auftrags-ID statt eines Provider-Calls; der Client holt den Auftrag (`ki_auftraege.GET`), beantwortet ihn (`ANTWORT`) und wiederholt den Aufruf. Umgeleitet wird zentral in `FaRechteToolHuelle::execute`, nur für Tools aus `KiUmleitung::TOOLS`. Der Lauf steht in einer Transaktion: wartet er auf einen Auftrag, Rollback, danach Auftrag anlegen (kein Halbzustand). Der Rollback deckt nur die Datenbank: Tools mit Nebenwirkungen außerhalb der DB vor oder zwischen `propose()` bleiben Klasse c und ausgenommen. Schalter `foodalchemist.ai.mcp_extern` (Standard an). Je Tool ein Test in `tests/Feature/KiUmleitungTest.php`.
+
+| Tool | Status | Begründung |
+|---|---|---|
+| `foodalchemist.gp_forms.ESTIMATE` | umgeleitet | ein `propose()` (`gp.zaehl_einheiten`), danach nur DB-Schreiben |
+| `foodalchemist.presentation_designs.GENERATE_CSS` | umgeleitet | ein `propose()`, schreibt nicht |
+| `foodalchemist.recipe_coherence.POST` | umgeleitet | ein `propose()` je Modus, danach DB-Schreiben |
+| `foodalchemist.recipe_klasse.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme; fängt `Throwable`, darum meldet die Hülle über den Modus |
+| `foodalchemist.recipe_rollen.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme |
+| `foodalchemist.recipe_sensorik.POST` | umgeleitet | ein `propose()`, danach DB-Schreiben |
+| `foodalchemist.gps.ENRICH` | ausgenommen (Klasse c) | Queue-Dispatch: `propose()` läuft im Worker, braucht Extern-Flag am Lauf |
+| `foodalchemist.recipes.ENRICH` | ausgenommen (Klasse c) | Queue-Dispatch wie `gps.ENRICH` |
+| `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
+| `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
+| alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
+

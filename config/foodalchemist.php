@@ -556,6 +556,12 @@ return [
         'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
 
         /*
+         * #1002: MCP-Aufrufe der KI-Tools in Support/KiUmleitung::TOOLS liefern einen KI-Auftrag statt eines
+         * Plattform-Provider-Calls (der MCP-Client beantwortet ihn). Aus = alle Tools rufen wie bisher den Plattform-Provider.
+         */
+        'mcp_extern' => (bool) env('FOODALCHEMIST_AI_MCP_EXTERN', true),
+
+        /*
          * Output-Budget-Default (max_output_tokens). Der Core-OpenAiService fällt ohne
          * expliziten Wert auf 1000 zurück — für Reasoning-Modelle (gpt-5.x: ein Teil geht
          * für Reasoning-Tokens drauf) zu knapp, große Struktur-JSONs werden abgeschnitten.
