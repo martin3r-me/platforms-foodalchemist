@@ -183,6 +183,16 @@ class FoodAlchemistBulkRun extends Model
     }
 
     /**
+     * Läuft der Lauf gerade (und ist nicht verwaist)? Für Ansichten, die pollen. Fund 29.10.2026: `status` ist seit 22·H3a ein Enum —
+     * der Blade-Vergleich `status === 'running'` war seitdem immer falsch: kein Polling, sofort „fertig: 0 Vorschläge", und wer das
+     * sah, startete den Lauf ein zweites Mal (io: Runs 4582/4583 im Abstand von 12 s).
+     */
+    public function laeuft(): bool
+    {
+        return $this->status === BulkRunStatus::Running && ! $this->istVerwaist();
+    }
+
+    /**
      * Das Etikett, das ein Leser sehen soll — inklusive des Urteils über verwaiste Läufe.
      * `status->label()` bleibt die reine Spalten-Auskunft; wer den Lauf **anzeigt**, will
      * die hier.

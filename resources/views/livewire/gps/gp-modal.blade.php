@@ -144,8 +144,8 @@
 
     {{-- Anreichern-Lauf: Vorschläge landen nach „Alle übernehmen" in den Feldern --}}
     @if(! $neu && ($bulkRun ?? null) !== null)
-        <div @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
-            @if($bulkRun->status === 'running')
+        <div @if($bulkRun->laeuft()) wire:poll.2s @endif data-gp-anreichern-status>
+            @if($bulkRun->laeuft())
                 <x-fa::notice tone="info">Anreicherung läuft …</x-fa::notice>
             @else
                 <x-fa::notice tone="ok">
@@ -155,6 +155,14 @@
                         <x-fa::button size="sm" variant="ghost" wire:click="bulkVerwerfen">Schließen</x-fa::button>
                     </x-slot:actions>
                 </x-fa::notice>
+                {{-- 29.10.2026: Schritte ohne Ergebnis mit Grund zeigen, statt nur „0 Vorschläge" --}}
+                @if(($bulkFehler ?? []) !== [])
+                    @php $schrittLabel = ['condition' => 'Zustand', 'tags' => 'Merkmale', 'anker' => 'Aroma-Anker', 'sensorik' => 'Geschmack', 'naehrwerte' => 'Nährwerte', 'allergene' => 'Allergene']; @endphp
+                    <x-fa::notice tone="warn" data-gp-anreichern-fehler>
+                        {{ count($bulkFehler) }} {{ count($bulkFehler) === 1 ? 'Schritt' : 'Schritte' }} ohne Ergebnis:
+                        @foreach($bulkFehler as $f)<span class="block">{{ $schrittLabel[$f['field']] ?? $f['field'] }}: {{ $f['error'] }}</span>@endforeach
+                    </x-fa::notice>
+                @endif
             @endif
         </div>
     @endif

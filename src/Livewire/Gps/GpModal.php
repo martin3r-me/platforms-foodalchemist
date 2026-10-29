@@ -1299,6 +1299,7 @@ class GpModal extends Component
             'statusFaelle' => [GpStatus::Approved, GpStatus::Tentative, GpStatus::Rejected],
             'bulkRun' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null,
             'bulkOffen' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->offeneGpVorschlaege($team, $this->bulkRunId) : 0,
+            'bulkFehler' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->gpLaufFehler($team, $this->bulkRunId) : [],
             'zustandVocab' => GpNamingService::ZUSTAND_VOCAB,
             'derivatKandidaten' => $this->derivatSuche !== '' && $team !== null
                 ? \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $this->derivatSuche)->orderBy('name')->limit(6)->get()
