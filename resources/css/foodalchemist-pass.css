@@ -551,7 +551,7 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
    vorher Tailwind-Variante `wide:` (Viewport ≥ 1.800 px): die kannte der Host-Build auf demo nicht
    (kein --breakpoint-wide dort), und das Host-`grid-cols-1` schlug jede Modul-Variante (Sublayer).
    Eigene Klassen statt Utilities, damit kein Host-CSS dazwischenfunkt.
-   Schwelle 92 rem (1.472 px): Tabelle ≥ 979 px (Basisrezept) + 2 × 14 rem Seitenspalten + Abstände. */
+   Schwelle 100 rem (1.600 px): Tabelle ≥ 979 px (Basisrezept) + 2 × 18 rem Seitenspalten + Abstände. */
 .fa-zutaten-editor { container-type: inline-size; }
 .fa-zutaten-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; }
 .fa-zutaten-layout > .fa-zutaten-mitte { min-width: 0; }
@@ -560,13 +560,13 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
   .fa-zutaten-layout > aside { grid-column: 1; grid-row: 1; position: sticky; top: 0; }
   .fa-zutaten-layout > .fa-zutaten-mitte { grid-column: 2; grid-row: 1; }
 }
-@container (min-width: 92rem) {
-  .fa-zutaten-layout { grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr) minmax(14rem, 16rem); }
+@container (min-width: 100rem) {
+  .fa-zutaten-layout { grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr) minmax(18rem, 24rem); }
   .fa-zutaten-layout > aside[data-einfuegen="rez"] { grid-column: 3; }
   .fa-zutaten-layout .fa-zutaten-umschalter { display: none; }
 }
 /* Schmaler als die Schwelle: nur die gewählte Einfüge-Spalte (Umschalter), die andere ist passiv */
-@container not (min-width: 92rem) {
+@container not (min-width: 100rem) {
   .fa-zutaten-layout > aside.fa-zutaten-passiv { display: none; }
 }
 
