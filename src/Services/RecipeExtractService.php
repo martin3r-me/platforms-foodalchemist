@@ -104,6 +104,35 @@ class RecipeExtractService
         ]]), 'quelle' => 'scan'];
     }
 
+    /** Obergrenze automatisch ausrezeptierter Hüllen je Import (KI-Kosten): config foodalchemist.import.stubs_ausrezeptieren_max, 0 = aus. */
+    public const STUBS_AUSREZEPTIEREN_MAX = 5;
+
+    /**
+     * Stößt für NEUE Hüllen (nicht für gebundene Bestands-Rezepte) je einen {@see \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob} an.
+     *
+     * @param  list<array{id:int,name:string,neu:bool}>  $stubs
+     * @return array{0: list<array{id:int,name:string}>, 1: list<array{id:int,name:string}>} [gestartet, offen wegen Obergrenze]
+     */
+    private function ausrezeptieren(Team $team, array $stubs, int $elternId, array $parameter): array
+    {
+        $max = (int) config('foodalchemist.import.stubs_ausrezeptieren_max', self::STUBS_AUSREZEPTIEREN_MAX);
+        $neue = array_values(array_filter($stubs, static fn (array $s) => ! empty($s['neu'])));
+        $start = $max > 0 ? array_slice($neue, 0, $max) : [];
+        foreach ($start as $s) {
+            try {
+                \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $s['id'], $elternId, $parameter)
+                    ->onQueue(\Platform\FoodAlchemist\Support\Warteschlange::rezepte());
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Import] Ausrezeptieren nicht gestartet', ['stub' => $s['id'], 'error' => $e->getMessage()]);
+            }
+        }
+
+        return [
+            array_map(static fn (array $s) => ['id' => (int) $s['id'], 'name' => (string) $s['name']], $start),
+            array_map(static fn (array $s) => ['id' => (int) $s['id'], 'name' => (string) $s['name']], array_slice($neue, max(0, $max))),
+        ];
+    }
+
     /**
      * Schritt 2 — GEERDETE Anlage (rekursiv). Legt zuerst die Komponenten als Sub-Basisrezepte an
      * (geerdet), verknüpft sie im Parent per sub_rezept_id, und legt dann den Parent geerdet an.
@@ -195,6 +224,10 @@ class RecipeExtractService
         );
         $result['sub_recipes'] = $subInfo;
         $result['stubs'] = $stubs;
+        // Neue Hüllen im Hintergrund ausrezeptieren (nur oberste Ebene; Obergrenze je Import, der Rest bleibt für den Knopf). 0 = aus.
+        [$result['ausrezeptiert'], $result['ausrezeptieren_offen']] = $tiefe === 0
+            ? $this->ausrezeptieren($team, $stubs, (int) $result['recipe']->id, $parameter)
+            : [[], []];
 
         return $result;
     }
