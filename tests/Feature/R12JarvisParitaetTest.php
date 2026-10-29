@@ -125,3 +125,23 @@ it('GP-Panel: ✨ KI-Vorschlag findet unverknüpfte Token-Treffer, Klick verknü
         ->assertSet('laKandidaten', null);
     expect((int) DB::table('foodalchemist_supplier_item_structures')->where('supplier_item_id', $erster['id'])->value('gp_id'))->toBe($this->gp->id);
 });
+
+it('Artikel vorschlagen: Verarbeitungsprodukte mit der Hauptzutat im Namen sind keine Kandidaten (GP Schalotte: frisch)', function () {
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Schalotte: ganz, frisch', 'gp_key' => 'r12-schalotte||', 'status' => 'approved',
+        'requires_la' => true, 'commodity_group_code' => '02', 'condition' => 'frisch', 'main_ingredient_slug' => 'schalotte',
+    ]);
+    foreach (['Schalotten rund 5kg', 'Chutney Schalotte-Birne, GL (390 ML)', 'FRISCHKÄSEKUGEL M. SCHALOTTE 355G', 'Würzkaviar "Schalotte-Essig" 5mm', '*WF* ADS AUFSTRICH SCHALOTTE (33) 500G', 'Schalotten TK gewürfelt 2,5kg'] as $name) {
+        $item = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $this->supplier->id, 'designation' => $name]);
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $item->id, 'gp_id' => null]);
+    }
+
+    $namen = app(\Platform\FoodAlchemist\Services\LeadLaService::class)->kandidatenFuerGp($this->rootTeam, $gp)->pluck('designation')->all();
+
+    expect($namen)->toContain('Schalotten rund 5kg')
+        ->and($namen)->not->toContain('Chutney Schalotte-Birne, GL (390 ML)')
+        ->and($namen)->not->toContain('FRISCHKÄSEKUGEL M. SCHALOTTE 355G')
+        ->and($namen)->not->toContain('Würzkaviar "Schalotte-Essig" 5mm')
+        ->and($namen)->not->toContain('*WF* ADS AUFSTRICH SCHALOTTE (33) 500G')
+        ->and($namen)->not->toContain('Schalotten TK gewürfelt 2,5kg');
+});

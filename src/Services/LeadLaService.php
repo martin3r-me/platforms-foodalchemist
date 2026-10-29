@@ -559,7 +559,9 @@ class LeadLaService
         if ($tokens === []) {
             return $leitstelle->take($limit)->values();
         }
-        $alsWort = fn (string $name, string $token): bool => (bool) preg_match('/\b' . preg_quote($token, '/') . '\b/u', $name);
+        // GP-Namen stehen im Singular (§6.1 «Schalotte»), Artikel im Plural («SCHALOTTEN RUND KG»): Beugungsendung zulassen, sonst fielen genau die
+        // Rohware-Artikel durch und es blieben die Fertigprodukte mit dem Singular im Namen («Chutney Schalotte-Birne»).
+        $alsWort = fn (string $name, string $token): bool => (bool) preg_match('/\b' . preg_quote($token, '/') . '(?:n|en|s|e|er)?\b/u', $name);
 
         $query = FoodAlchemistSupplierItem::query()
             ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
@@ -590,7 +592,42 @@ class LeadLaService
             ->values();
 
         return $leitstelle->concat($lexikalisch)->unique('id')
+            ->reject(fn ($la) => $this->istVerarbeitetesProdukt($gp, (string) $la->designation))
             ->sortByDesc(fn ($la) => (float) $la->match_score)->take($limit)->values();
+    }
+
+    /**
+     * Wörter, die ein Fertig-/Verarbeitungsprodukt kennzeichnen («Schalotten-Birnen-Chutney», «Frischkäsekugel m. Schalotte», «Würzkaviar»).
+     * Der Namenstreffer allein gab 100 % für jeden Artikel, in dessen Name die Hauptzutat vorkommt (Dominique 29.10.: «Artikel vorschlagen» =
+     * «nur Müll»). Gilt NUR, wenn der GP-Name das Wort nicht selbst führt (GP «Tomatenmark» darf Tomatenmark-Artikel, GP «Senf» keine Dressings).
+     */
+    private const VERARBEITET = [
+        'aufstrich', 'chutney', 'kaviar', 'perlen', 'vinaigrette', 'dressing', 'pesto', 'essig', 'sauce', 'soße', 'sosse', 'marmelade',
+        'konfitüre', 'konfiture', 'likör', 'liqueur', 'schnaps', 'limonade', 'getränk', 'kugel', 'dip', 'cracker', 'chips', 'riegel', 'müsli',
+        'muesli', 'coupelle', 'frischkäse', 'relish', 'gelee', 'suppe', 'fertiggericht', 'tortelloni', 'ravioli', 'pizza', 'burger',
+    ];
+
+    /**
+     * Passt der Artikel offensichtlich nicht zum GP: Verarbeitungs-Wort, das der GP-Name nicht trägt, oder (frischer GP) ein Artikel mit
+     * Einkaufsform TK/trocken/konserviert. Bewusst nur harte Ausschlüsse — die Reihenfolge der Treffer bleibt der Score.
+     */
+    private function istVerarbeitetesProdukt(FoodAlchemistGp $gp, string $artikel): bool
+    {
+        $gpName = mb_strtolower((string) $gp->name);
+        $name = mb_strtolower($artikel);
+        foreach (self::VERARBEITET as $wort) {
+            if (str_contains($name, $wort) && ! str_contains($gpName, $wort)) {
+                return true;
+            }
+        }
+        if (mb_strtolower((string) ($gp->condition ?? '')) === 'frisch') {
+            $zustand = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->produktForm($artikel)['zustand'] ?? null;
+            if (in_array($zustand, ['TK', 'trocken', 'konserviert'], true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function sucheVerknuepfbare(Team $team, string $suche, int $limit = 20, ?string $warengruppe = null): Collection
