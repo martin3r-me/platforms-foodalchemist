@@ -16,6 +16,13 @@ class FoodAlchemistPriceImportRun extends Model
 {
     use HasUuidV7, LogsActivity, SoftDeletes;
 
+    public const ART_PREISLISTE = 'preisliste';
+
+    public const ART_STAMMDATEN = 'stammdaten';
+
+    /** Eigene Lieferanten-Datei: die Spalten wurden nicht erkannt, die Datei wartet auf die Zuordnung (1a2). */
+    public const STATUS_ZUORDNUNG_NOETIG = 'zuordnung_noetig';
+
     protected $table = 'foodalchemist_price_import_runs';
 
     protected $guarded = ['id'];

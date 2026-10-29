@@ -27,6 +27,8 @@
             <p class="{{ $leise }} pt-2" data-preisliste-vorlage-hinweis>{{ $vorlageHinweis }}</p>
         </x-fa::section>
 
+        <livewire:foodalchemist.preislisten.stammdaten-import />
+
         @if($fehler)<x-fa::notice tone="crit" data-preisliste-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-preisliste-meldung>{{ $meldung }}</x-fa::notice>@endif
 

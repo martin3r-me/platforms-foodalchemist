@@ -501,7 +501,7 @@ class FileArticleImportService
      * @param  array<int, true>  $bewegteItems  wird um Artikel mit geändertem Preis ergänzt (E4)
      * @return array<string, mixed>
      */
-    private function verarbeiteZeile(Team $team, int $supplierId, array $zeile, bool $apply, array &$bewegteItems): array
+    public function verarbeiteZeile(Team $team, int $supplierId, array $zeile, bool $apply, array &$bewegteItems): array
     {
         $w = $zeile['werte'];
         $befund = ['zeile' => $zeile['nr'], 'artikel' => $w['artikelnummer'] ?? '', 'bezeichnung' => $w['bezeichnung'] ?? ''];
@@ -739,7 +739,7 @@ class FileArticleImportService
      * @param  list<string>  $warnungen
      * @return array<string, mixed>
      */
-    private function detailWerte(array $w, string $kuerzel, array &$warnungen): array
+    public function detailWerte(array $w, string $kuerzel, array &$warnungen): array
     {
         $out = [];
         $salz = null;
@@ -1108,7 +1108,7 @@ class FileArticleImportService
      * dann hat der Lieferant vermutlich neu nummeriert, und die EAN ist die stabilere
      * Identität. Mehr als ein Treffer ist ein Fehler, keine Wahl.
      */
-    private function finde(Team $team, int $supplierId, ?string $artno, array $eans, ?string &$art): ?FoodAlchemistSupplierItem
+    public function finde(Team $team, int $supplierId, ?string $artno, array $eans, ?string &$art): ?FoodAlchemistSupplierItem
     {
         $basis = fn () => FoodAlchemistSupplierItem::visibleToTeam($team)->where('supplier_id', $supplierId);
 
@@ -1148,7 +1148,7 @@ class FileArticleImportService
      * @param  list<string>|null  $warnungen
      * @return array<string, mixed>
      */
-    private function mappeWerte(array $w, ?array &$warnungen): array
+    public function mappeWerte(array $w, ?array &$warnungen): array
     {
         $warnungen = [];
         $out = [];

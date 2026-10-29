@@ -128,6 +128,12 @@ class Index extends Component
 
             return;
         }
+        if ($run->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
+            app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class)->verwerfen($run);
+            $this->fehler = 'Die Pflichtspalten (Preis und Artikelnummer oder EAN) sind noch nicht zugeordnet — bitte oben zuordnen.';
+
+            return;
+        }
         $this->laufId = $run->id;
         $c = $run->counts ?? [];
         $this->meldung = sprintf('Abgeglichen: %d Zeilen, %d Treffer, %d zu prüfen. Es wurde noch kein Preis geschrieben.',
@@ -222,7 +228,7 @@ class Index extends Component
 
         return view('foodalchemist::livewire.preislisten.index', [
             'darf' => $this->darf(),
-            'laeufe' => $team !== null ? $svc->laeufe($team) : collect(),
+            'laeufe' => $team !== null ? $svc->laeufe($team)->where('art', 'preisliste')->values() : collect(),
             'lieferanten' => $team !== null ? FoodAlchemistSupplier::visibleToTeam($team)->where('is_inactive', false)->orderBy('name')->get(['id', 'name']) : collect(),
             'lauf' => $lauf,
             'pruefliste' => $lauf !== null ? $svc->pruefliste($lauf)->take(500) : collect(),

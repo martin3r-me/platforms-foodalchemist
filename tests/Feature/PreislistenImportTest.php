@@ -116,7 +116,9 @@ it('Spaltenzuordnung: automatisch über Synonyme, explizit über Mapping; fehlen
     $run2 = $this->svc->stage($this->team, ($this->csv)("Code;Betrag\n1001;4,5\n"), ['article_number' => 'Code', 'price' => 'Betrag'], $this->hanos->id);
     expect(($this->stati)($run2))->toBe([2 => 'treffer']);
 
-    expect(fn () => $this->svc->stage($this->team, ($this->csv)("Artikelnummer;Bemerkung\n1001;x\n"), [], $this->hanos->id))->toThrow(RuntimeException::class, 'Preis-Spalte');
+    // 1a2: fehlende Pflichtspalten sind kein Fehler mehr — der Lauf wartet auf die Zuordnung (Grund steht im Lauf)
+    $wartend = $this->svc->stage($this->team, ($this->csv)("Artikelnummer;Bemerkung\n1001;x\n"), [], $this->hanos->id);
+    expect($wartend->status)->toBe('zuordnung_noetig')->and($wartend->mapping['grund'])->toContain('Preis-Spalte');
     expect(fn () => $this->svc->stage($this->team, ($this->csv)("Artikelnummer;Preis\n1001;4\n"), []))->toThrow(RuntimeException::class, 'Lieferant');
 });
 
