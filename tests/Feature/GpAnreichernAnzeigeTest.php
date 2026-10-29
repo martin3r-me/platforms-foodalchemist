@@ -110,3 +110,21 @@ it('laeuft(): running ja, verwaist nein, fertig nein', function () {
     $lauf->update(['status' => BulkRunStatus::Done]);
     expect($lauf->fresh()->laeuft())->toBeFalse();
 });
+
+it('VK- und Rezept-Dialog pollen, solange ihr Anreicherungs-Lauf läuft (gleiche Enum-Falle)', function () {
+    $lauf = FoodAlchemistBulkRun::starte($this->rootTeam->id, BulkRunType::Enrich, 1, []);
+    $vk = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'vk-lauf',
+        'name' => '[HG] Senfrostbraten | Jus', 'status' => 'draft', 'is_sales_recipe' => true]);
+    $basis = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-lauf',
+        'name' => 'Jus: Kalb', 'status' => 'draft', 'is_sales_recipe' => false]);
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $vk->id)->set('bulkRunId', $lauf->id)
+        ->assertSeeHtml('data-vk-anreichern-status')->assertSeeHtml('wire:poll.2s')->assertSee('Anreicherung läuft')
+        ->assertDontSeeHtml('data-vk-anreichern-uebernehmen');
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::class)->call('oeffnen', $basis->id)->set('bulkRunId', $lauf->id)
+        ->assertSeeHtml('data-anreichern-status')->assertSee('Anreicherung läuft')->assertDontSeeHtml('data-anreichern-uebernehmen');
+
+    $lauf->update(['status' => BulkRunStatus::Done]);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $vk->id)->set('bulkRunId', $lauf->id)
+        ->assertSeeHtml('data-vk-anreichern-uebernehmen')->assertDontSee('Anreicherung läuft');
+});
