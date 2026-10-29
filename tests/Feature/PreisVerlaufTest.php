@@ -616,3 +616,26 @@ it('Artikel-Modal: Basiseinheit des Artikels gilt, fremde Einheit am Lead wird w
     $r = $this->svc->verlaufFuerLa($this->rootTeam, $kg->id, ...($this->fenster)('alles'));
     expect($r['einheit'])->toBe('€/kg')->and(array_column($r['linien'], 'la_id'))->toBe([$kg->id])->and($r['weggelassen'])->toBe(1);
 });
+
+it('Komponente: bei vielen Artikeln zeichnet die Ansicht nur die wichtigsten vor, der Rest bleibt in der Legende zuschaltbar', function () {
+    $gp = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'pv|viele', 'name' => 'Schalotte']);
+    $las = [];
+    foreach (range(1, 9) as $i) {
+        $la = ($this->la)('Lieferant ' . $i);
+        ($this->preis)($la, 2.0 + $i, '2026-01-01');
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
+        $las[] = $la;
+    }
+    $gp->update(['lead_la_supplier_item_id' => $las[8]->id, 'n_las_total' => 9]);   // der teuerste ist Lead → muss trotzdem sichtbar bleiben
+
+    $html = Livewire::test(Verlauf::class, ['modus' => 'gp', 'objektId' => $gp->id])->html();
+
+    expect(substr_count($html, 'data-preisverlauf-linie='))->toBe(9)                      // alle im DOM (zuschaltbar) …
+        ->and(substr_count($html, 'data-legende-schalter'))->toBe(9)
+        ->and($html)->toContain('data-preisverlauf-auswahlleiste')->toContain('data-preisverlauf-nur-wichtige')->toContain('data-preisverlauf-alle-zeigen')
+        ->and($html)->toContain('x-show="! aus.includes(');
+    // … aber vorab sind 3 ausgeblendet (6 sichtbar: Lead + 5 günstigste); der Lead steht nicht in der Aus-Liste
+    preg_match('/aus: JSON\.parse\(\'(\[[^\]]*\])\'\)/', html_entity_decode($html), $m);
+    $aus = json_decode($m[1] ?? '[]', true);
+    expect($aus)->toHaveCount(3)->and($aus)->not->toContain($las[8]->id);
+});

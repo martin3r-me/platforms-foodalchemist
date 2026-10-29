@@ -42,7 +42,20 @@
              Geometrie über Inline-Styles, damit sie nicht an der Tailwind-Kompilierung hängt. --}}
         @php
             $schrift = 'font-size: var(--fa-text-sm); color: var(--fa-ink-3); line-height: 1;';
+            // Viele Artikel („Alle Artikel des Grundprodukts"): nur die wichtigsten zeichnen — Lead/dieser Artikel immer, dazu die günstigsten bis
+            // MAX_SICHTBAR; der Rest bleibt in der Legende zuschaltbar. Die Farbpalette hat nur 6 Töne, mehr Linien sind nicht unterscheidbar.
+            $maxSichtbar = 6;
+            $alleIds = array_map(fn ($l) => (int) $l['la_id'], $diagramm['linien']);
+            $vorabAus = [];
+            if (count($diagramm['linien']) > $maxSichtbar) {
+                $pflicht = array_values(array_filter($diagramm['linien'], fn ($l) => $l['lead'] || $l['fokus']));
+                $rest = array_values(array_filter($diagramm['linien'], fn ($l) => ! ($l['lead'] || $l['fokus'])));
+                usort($rest, fn ($a, $b) => $a['aktuell'] <=> $b['aktuell']);
+                $sichtbar = array_map(fn ($l) => (int) $l['la_id'], [...$pflicht, ...array_slice($rest, 0, max(0, $maxSichtbar - count($pflicht)))]);
+                $vorabAus = array_values(array_diff($alleIds, $sichtbar));
+            }
         @endphp
+        <div x-data="{ fokus: null, aus: @js($vorabAus), alle: @js($alleIds), vorab: @js($vorabAus) }" class="flex flex-col gap-3" data-preisverlauf-auswahl>
         <div class="relative" x-data="{ tip: null, mx: 0, my: 0 }" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); grid-template-rows: {{ $diagramm['hoehe'] }}px 1.5rem; column-gap: 0.25rem; margin-top: 1.25rem;" data-preisverlauf-flaeche role="img"
              aria-label="Preisverlauf in {{ $diagramm['einheit'] }}">
             {{-- Jedes Kind explizit platziert: ein einzelnes explizit platziertes Kind (Marker-Labels, #427) drängte das SVG per
@@ -58,7 +71,7 @@
                     const r = $el.getBoundingClientRect();
                     const x = ($event.clientX - r.left) / r.width * 1000;
                     const treffer = [];
-                    $el.querySelectorAll('rect[data-tip]').forEach(e => { const a = parseFloat(e.getAttribute('x')); if (x >= a && x <= a + parseFloat(e.getAttribute('width'))) treffer.push(e.getAttribute('data-tip')); });
+                    $el.querySelectorAll('rect[data-tip]').forEach(e => { if (e.closest('g[data-preisverlauf-linie]')?.style.display === 'none') return; const a = parseFloat(e.getAttribute('x')); if (x >= a && x <= a + parseFloat(e.getAttribute('width'))) treffer.push(e.getAttribute('data-tip')); });
                     tip = treffer.length ? treffer.slice(0, 12).join('\n') + (treffer.length > 12 ? '\n+ ' + (treffer.length - 12) + ' weitere' : '') : null;
                     mx = $event.clientX - $root.getBoundingClientRect().left; my = $event.clientY - $root.getBoundingClientRect().top"
                  x-on:mouseleave="tip = null">
@@ -69,7 +82,8 @@
                     <line x1="{{ $a['x'] }}" x2="{{ $a['x'] }}" y1="0" y2="1000" stroke="var(--fa-line)" stroke-width="1" stroke-opacity="0.5" vector-effect="non-scaling-stroke" />
                 @endforeach
                 @foreach($diagramm['linien'] as $l)
-                    <g data-preisverlauf-linie="{{ $l['la_id'] }}" data-lead="{{ $l['lead'] ? '1' : '0' }}">
+                    <g data-preisverlauf-linie="{{ $l['la_id'] }}" data-lead="{{ $l['lead'] ? '1' : '0' }}"
+                       x-show="! aus.includes({{ (int) $l['la_id'] }})" :style="fokus !== null && fokus !== {{ (int) $l['la_id'] }} ? 'opacity: 0.12' : ''">
                         @if($l['luecken'] !== '')
                             <path d="{{ $l['luecken'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="1.25" stroke-dasharray="3 4" stroke-opacity="0.6" vector-effect="non-scaling-stroke" data-preisverlauf-luecke />
                         @endif
@@ -111,9 +125,27 @@
             </div>
         </div>
 
+        @if(count($diagramm['linien']) > 1)
+            <div class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-preisverlauf-auswahlleiste>
+                <span x-text="(alle.length - aus.length) + ' von ' + alle.length + ' Linien sichtbar'"></span>
+                @if(count($vorabAus) > 0)
+                    <button type="button" class="underline hover:text-[var(--fa-ink)]" x-on:click="aus = [...vorab]" data-preisverlauf-nur-wichtige>Nur die wichtigsten</button>
+                @endif
+                <button type="button" class="underline hover:text-[var(--fa-ink)]" x-on:click="aus = []" data-preisverlauf-alle-zeigen>Alle zeigen</button>
+                <button type="button" class="underline hover:text-[var(--fa-ink)]" x-on:click="aus = [...alle]" data-preisverlauf-keine-zeigen>Keine</button>
+                <span class="text-[var(--fa-ink-3)]">Mit der Maus über einen Eintrag fahren hebt seine Linie hervor.</span>
+            </div>
+        @endif
         <ul class="flex flex-col gap-1.5" data-preisverlauf-legende>
             @foreach($diagramm['linien'] as $l)
-                <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[length:var(--fa-text-sm)]" data-legende-la="{{ $l['la_id'] }}">
+                <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[length:var(--fa-text-sm)]" data-legende-la="{{ $l['la_id'] }}"
+                    x-on:mouseenter="fokus = {{ (int) $l['la_id'] }}" x-on:mouseleave="fokus = null"
+                    :class="aus.includes({{ (int) $l['la_id'] }}) ? 'opacity-50' : ''">
+                    @if(count($diagramm['linien']) > 1)
+                        <input type="checkbox" class="self-center accent-[var(--fa-accent)]" aria-label="Linie anzeigen" data-legende-schalter
+                               :checked="! aus.includes({{ (int) $l['la_id'] }})"
+                               x-on:change="aus.includes({{ (int) $l['la_id'] }}) ? aus = aus.filter(i => i !== {{ (int) $l['la_id'] }}) : aus.push({{ (int) $l['la_id'] }})" />
+                    @endif
                     <span class="inline-block h-0.5 w-5 shrink-0 self-center rounded" style="background: {{ $l['farbe'] }}; height: {{ $l['lead'] ? 3 : 2 }}px"></span>
                     <span class="font-medium text-[var(--fa-ink)]">{{ $l['lieferant'] ?? '–' }}</span>
                     <span class="text-[var(--fa-ink-2)]">{{ $l['artikel'] }}</span>
@@ -139,6 +171,7 @@
                 </li>
             @endforeach
         </ul>
+        </div>
         @if($daten['weggelassen'] > 0)
             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-preisverlauf-weggelassen>
                 {{ $daten['weggelassen'] }} Artikel nicht gezeigt: andere Basiseinheit als {{ $diagramm['einheit'] }} (nicht mischbar) oder ohne Mengenangabe.
