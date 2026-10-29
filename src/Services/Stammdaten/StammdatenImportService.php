@@ -128,20 +128,47 @@ class StammdatenImportService
     /**
      * Datei lesen, je Zeile gegen den Bestand prüfen, als Lauf ablegen. Schreibt nur Lauf und Zeilen.
      */
-    public function stage(Team $team, string $pfad, ?int $supplierId = null, ?int $userId = null, ?string $endung = null, ?string $dateiname = null, string $herkunft = 'user', ?int $linkId = null): Lauf
+    public function stage(Team $team, string $pfad, ?int $supplierId = null, ?int $userId = null, ?string $endung = null, ?string $dateiname = null, string $herkunft = 'user', ?int $linkId = null, array $mapping = [], bool $merken = true): Lauf
     {
         $datei = $this->liste->lies($pfad, $endung);
-        $eigene = $this->eigeneSpalten($datei['kopf']);
+        $zuo = app(ImportZuordnungService::class);
+        $originalKopf = $datei['kopf'];
 
         $standard = null;
         if ($supplierId !== null) {
             $standard = FoodAlchemistSupplier::visibleToTeam($team)->whereKey($supplierId)->first()
                 ?? throw new \RuntimeException('Lieferant nicht in der Team-Kette sichtbar (supplier prüfen).');
         }
+        $lieferanten = FoodAlchemistSupplier::visibleToTeam($team)->get(['id', 'name'])->groupBy(fn ($s) => $this->norm((string) $s->name));
+
+        // Zuordnung: ausdrücklich (Oberfläche/MCP) gewinnt, sonst die gemerkte des Lieferanten. Sie schreibt die Kopfzeile auf die Vorlagen-Namen um,
+        // danach läuft derselbe Leser wie ohne Zuordnung (keine zweite Spaltenerkennung).
+        $spalten = $mapping !== [] ? $zuo->ausFeldMapping($originalKopf, $mapping) : [];
+        $merkId = $standard?->id ?? $this->einzigerLieferant($originalKopf, $datei['zeilen'], $lieferanten);
+        $kopfHinweise = [];
+        if ($spalten === [] && $merkId !== null && ($gemerkt = $zuo->laden($team, $merkId, Lauf::ART_STAMMDATEN)) !== null) {
+            $angewendet = $zuo->anwenden($gemerkt, $originalKopf);
+            $spalten = $angewendet['spalten'];
+            $kopfHinweise = $angewendet['hinweise'];
+        }
+        $datei['kopf'] = $this->umbenennen($originalKopf, $spalten);
+        $eigene = $this->eigeneSpalten($datei['kopf']);
+
         if ($standard === null && ! isset($eigene['x:lieferant'])) {
             throw new \RuntimeException('Die Datei hat keine Lieferant-Spalte: Standard-Lieferant angeben (supplier).');
         }
-        $lieferanten = FoodAlchemistSupplier::visibleToTeam($team)->get(['id', 'name'])->groupBy(fn ($s) => $this->norm((string) $s->name));
+
+        // Kopf einmal prüfen (Pflichtspalten, Doppelbelegung). Fehlt etwas, ist das kein Fehler: der Lauf wartet auf die Zuordnung.
+        try {
+            $this->lesen($datei['kopf'], [], $eigene);
+        } catch (\RuntimeException $e) {
+            if (! preg_match('/Pflicht-Spalte|Weder „Artikel-Nr|Preis-Status/u', $e->getMessage())) {
+                throw $e;
+            }
+
+            return $zuo->zuordnungNoetig($team, Lauf::ART_STAMMDATEN, $pfad, $endung, $dateiname, $standard?->id ?? $merkId, $userId, $herkunft, $linkId,
+                ['kopf' => $originalKopf, 'zeilen' => $datei['zeilen']], $e->getMessage(), $spalten);
+        }
 
         // Zeilen nach Lieferant gruppieren; Lieferant unbekannt/mehrdeutig ⇒ Zeile mit Fehler, nie geraten.
         $gruppen = [];
@@ -162,16 +189,17 @@ class StammdatenImportService
             }
         }
 
-        // Kopf einmal prüfen (Pflichtspalten, Doppelbelegung) — auch wenn jede Zeile an einem unbekannten Lieferanten scheitert.
-        $this->lesen($datei['kopf'], [], $eigene);
+        if ($mapping !== [] && $merken && $merkId !== null) {
+            $zuo->speichern($team, $merkId, Lauf::ART_STAMMDATEN, $originalKopf, $spalten);
+        }
 
-        return DB::transaction(function () use ($team, $pfad, $dateiname, $datei, $eigene, $standard, $gruppen, $ohneLieferant, $userId, $herkunft, $linkId) {
+        return DB::transaction(function () use ($team, $pfad, $dateiname, $datei, $eigene, $standard, $gruppen, $ohneLieferant, $userId, $herkunft, $linkId, $spalten, $kopfHinweise) {
             $lauf = Lauf::create([
                 'team_id' => $team->id, 'supplier_id' => $standard?->id, 'filename' => basename($dateiname ?? $pfad), 'status' => 'staged',
-                'art' => Lauf::ART_STAMMDATEN, 'herkunft' => $herkunft, 'link_id' => $linkId, 'mapping' => ['eigene' => $eigene], 'created_by' => $userId,
+                'art' => Lauf::ART_STAMMDATEN, 'herkunft' => $herkunft, 'link_id' => $linkId, 'mapping' => ['eigene' => $eigene, 'spalten' => $spalten], 'created_by' => $userId,
             ]);
             $zaehler = ['zeilen' => 0, 'neu' => 0, 'aendert' => 0, 'unveraendert' => 0, 'konflikt' => 0, 'fehler' => 0];
-            $hinweise = [];
+            $hinweise = $kopfHinweise;
             $zeilen = [];
 
             foreach ($gruppen as $sid => $rows) {
@@ -208,7 +236,63 @@ class StammdatenImportService
             ->when($aktion !== null, fn ($q) => $q->where('aktion', $aktion))->orderBy('row_nr')->get();
     }
 
+    /**
+     * „Zuordnung nötig“ abschließen: aus der abgelegten Datei mit der gewählten Zuordnung neu prüfen. Der wartende Lauf wird danach entfernt.
+     *
+     * @param  array<string, string|int>  $mapping  Zielfeld (Vorlagen-Überschrift) ⇒ Überschrift|Spaltenindex
+     */
+    public function zuordnen(Team $team, Lauf $lauf, array $mapping, ?int $userId = null, bool $merken = true): Lauf
+    {
+        if ((int) $lauf->team_id !== (int) $team->id || $lauf->art !== Lauf::ART_STAMMDATEN) {
+            throw new \RuntimeException('Dieser Lauf gehört nicht zu diesem Team oder ist kein Stammdaten-Lauf.');
+        }
+        $zuo = app(ImportZuordnungService::class);
+        $tmp = $zuo->datei($lauf);
+        try {
+            $neu = $this->stage($team, $tmp, $lauf->supplier_id ? (int) $lauf->supplier_id : null, $userId, $lauf->datei_endung, $lauf->filename, $lauf->herkunft, $lauf->link_id, $mapping, $merken);
+        } finally {
+            @unlink($tmp);
+        }
+        if ($neu->status === ImportZuordnungService::STATUS_ZUORDNUNG_NOETIG) {
+            $zuo->verwerfen($neu);   // gleiche Datei liegt schon beim wartenden Lauf; kein zweites Exemplar
+            $lauf->update(['mapping' => $neu->mapping]);
+
+            throw new \RuntimeException('Die Zuordnung reicht noch nicht: ' . ($neu->mapping['grund'] ?? 'Pflichtspalten fehlen') . ' — weitere Spalten zuordnen.');
+        }
+        $zuo->verwerfen($lauf);
+
+        return $neu;
+    }
+
     // ---- intern -----------------------------------------------------------
+
+    /** Kopfzeile mit den zugeordneten Spalten auf die Vorlagen-Namen umschreiben (Index ⇒ Zielfeld). @param list<string> $kopf @param array<int, string> $spalten @return list<string> */
+    private function umbenennen(array $kopf, array $spalten): array
+    {
+        foreach ($spalten as $i => $ziel) {
+            if (isset($kopf[$i])) {
+                $kopf[$i] = $ziel;
+            }
+        }
+
+        return $kopf;
+    }
+
+    /** Genau ein (bekannter, sichtbarer) Lieferant in der Lieferant-Spalte ⇒ seine ID; sonst null. */
+    private function einzigerLieferant(array $kopf, array $zeilen, \Illuminate\Support\Collection $lieferanten): ?int
+    {
+        $idx = $this->eigeneSpalten($kopf)['x:lieferant'] ?? null;
+        if ($idx === null) {
+            return null;
+        }
+        $namen = collect($zeilen)->map(fn ($z) => $this->norm((string) ($z[$idx] ?? '')))->filter()->unique();
+        if ($namen->count() !== 1) {
+            return null;
+        }
+        $treffer = $lieferanten->get($namen->first(), collect());
+
+        return $treffer->count() === 1 ? (int) $treffer->first()->id : null;
+    }
 
     /**
      * Zeile gegen den Bestand prüfen (Trockenlauf des Artikel-Imports) und das Ergebnis als Zeilen-Daten liefern.

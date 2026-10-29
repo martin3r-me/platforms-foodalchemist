@@ -106,10 +106,33 @@ class PreislistenImportService
      *
      * @param  array<string, string|int>  $mapping  Zielfeld => Spaltenüberschrift oder Spaltenindex (leer = automatisch erkennen)
      */
-    public function stage(Team $team, string $pfad, array $mapping = [], ?int $supplierId = null, ?int $userId = null, ?string $endung = null, ?string $dateiname = null): FoodAlchemistPriceImportRun
+    public function stage(Team $team, string $pfad, array $mapping = [], ?int $supplierId = null, ?int $userId = null, ?string $endung = null, ?string $dateiname = null, bool $merken = true): FoodAlchemistPriceImportRun
     {
         $datei = $this->lies($pfad, $endung);
-        $zuordnung = $this->ordneSpalten($datei['kopf'], $mapping);
+        // Eigene Dateien ohne Vorlage (1a2): gemerkte Zuordnung des Lieferanten anwenden; reicht die Erkennung nicht, wartet der Lauf auf die Zuordnung.
+        $zuo = app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class);
+        $explizit = $mapping !== [];
+        $kopfHinweise = [];
+        if (! $explizit && $supplierId !== null && ($gemerkt = $zuo->laden($team, $supplierId, FoodAlchemistPriceImportRun::ART_PREISLISTE)) !== null) {
+            $a = $zuo->anwenden($gemerkt, $datei['kopf']);
+            foreach ($a['spalten'] as $i => $feld) {
+                $mapping[$feld] = $i;
+            }
+            $kopfHinweise = $a['hinweise'];
+        }
+        try {
+            $zuordnung = $this->ordneSpalten($datei['kopf'], $mapping);
+        } catch (\RuntimeException $e) {
+            if (! preg_match('/Keine Preis-Spalte|Weder Artikelnummer/u', $e->getMessage())) {
+                throw $e;
+            }
+
+            return $zuo->zuordnungNoetig($team, FoodAlchemistPriceImportRun::ART_PREISLISTE, $pfad, $endung, $dateiname, $supplierId, $userId, 'user', null, $datei,
+                $e->getMessage(), array_flip($this->ordneSpaltenLose($datei['kopf'])));
+        }
+        if ($explizit && $merken && $supplierId !== null) {
+            $zuo->speichern($team, $supplierId, FoodAlchemistPriceImportRun::ART_PREISLISTE, $datei['kopf'], array_flip($zuordnung));
+        }
 
         $standard = null;
         if ($supplierId !== null) {
@@ -123,7 +146,7 @@ class PreislistenImportService
         $lieferanten = FoodAlchemistSupplier::visibleToTeam($team)->get(['id', 'name'])
             ->groupBy(fn ($s) => $this->norm((string) $s->name));
 
-        return DB::transaction(function () use ($team, $pfad, $dateiname, $datei, $zuordnung, $standard, $lieferanten, $userId) {
+        return DB::transaction(function () use ($team, $pfad, $dateiname, $datei, $zuordnung, $standard, $lieferanten, $userId, $kopfHinweise) {
             $run = FoodAlchemistPriceImportRun::create([
                 'team_id' => $team->id,
                 'supplier_id' => $standard?->id,
@@ -154,10 +177,38 @@ class PreislistenImportService
                 $zaehler[$ergebnis['status']]++;
             }
 
-            $run->update(['counts' => $zaehler]);
+            $run->update(['counts' => $zaehler + ($kopfHinweise !== [] ? ['hinweise' => $kopfHinweise] : [])]);
 
             return $run->refresh();
         });
+    }
+
+    /**
+     * „Zuordnung nötig“ abschließen: die abgelegte Datei mit der gewählten Zuordnung abgleichen; der wartende Lauf wird danach entfernt.
+     *
+     * @param  array<string, string|int>  $mapping  Zielfeld ⇒ Überschrift|Spaltenindex
+     */
+    public function zuordnen(Team $team, FoodAlchemistPriceImportRun $lauf, array $mapping, ?int $userId = null, bool $merken = true): FoodAlchemistPriceImportRun
+    {
+        if ((int) $lauf->team_id !== (int) $team->id || $lauf->art !== FoodAlchemistPriceImportRun::ART_PREISLISTE) {
+            throw new \RuntimeException('Dieser Lauf gehört nicht zu diesem Team oder ist keine Preisliste.');
+        }
+        $zuo = app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class);
+        $tmp = $zuo->datei($lauf);
+        try {
+            $neu = $this->stage($team, $tmp, $mapping, $lauf->supplier_id ? (int) $lauf->supplier_id : null, $userId, $lauf->datei_endung, $lauf->filename, $merken);
+        } finally {
+            @unlink($tmp);
+        }
+        if ($neu->status === \Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::STATUS_ZUORDNUNG_NOETIG) {
+            $zuo->verwerfen($neu);
+            $lauf->update(['mapping' => $neu->mapping]);
+
+            throw new \RuntimeException('Die Zuordnung reicht noch nicht: ' . ($neu->mapping['grund'] ?? 'Pflichtspalten fehlen') . ' — weitere Spalten zuordnen.');
+        }
+        $zuo->verwerfen($lauf);
+
+        return $neu;
     }
 
     /**

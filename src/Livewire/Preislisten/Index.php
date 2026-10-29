@@ -128,6 +128,12 @@ class Index extends Component
 
             return;
         }
+        if ($run->status === 'zuordnung_noetig') {
+            app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class)->verwerfen($run);
+            $this->fehler = 'Die Pflichtspalten (Preis und Artikelnummer oder EAN) sind noch nicht zugeordnet — bitte oben zuordnen.';
+
+            return;
+        }
         $this->laufId = $run->id;
         $c = $run->counts ?? [];
         $this->meldung = sprintf('Abgeglichen: %d Zeilen, %d Treffer, %d zu prüfen. Es wurde noch kein Preis geschrieben.',

@@ -57,7 +57,24 @@
         </x-fa::section>
     @endif
 
-    @if($lauf)
+    @if($lauf && $lauf->status === 'zuordnung_noetig')
+        <x-fa::section title="Zuordnung nötig: {{ $lauf->filename }}" icon="heroicon-o-arrows-right-left" data-stammdaten-zuordnung>
+            <p class="{{ $leise }} mb-3">{{ $lauf->mapping['grund'] ?? 'Die Spalten wurden nicht erkannt.' }} Ordne die Spalten deiner Datei den Feldern zu; nicht benötigte Spalten bleiben auf „nicht verwenden“.</p>
+            <div class="grid gap-2 grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(18rem,1fr))]">
+                @foreach(($lauf->mapping['kopf'] ?? []) as $i => $kopf)
+                    <div wire:key="sd-zu-{{ $i }}" class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-2" data-stammdaten-zuordnung-spalte="{{ $i }}">
+                        <p class="font-medium text-[var(--fa-ink)]">{{ $kopf !== '' ? $kopf : 'Spalte ' . ($i + 1) }}</p>
+                        <p class="{{ $leise }} mb-1.5 truncate">{{ collect($lauf->mapping['vorschau'] ?? [])->map(fn ($z) => $z[$i] ?? '')->filter()->take(3)->implode(' · ') }}</p>
+                        <x-fa::select size="sm" wire:model="zuordnung.{{ $i }}" placeholder="– nicht verwenden –">
+                            @foreach($ziele as $ziel)<option value="{{ $ziel }}">{{ $ziel }}</option>@endforeach
+                        </x-fa::select>
+                    </div>
+                @endforeach
+            </div>
+            <label class="mt-3 flex items-center gap-2 text-[length:var(--fa-text-md)]"><input type="checkbox" wire:model="merken" data-stammdaten-merken /> Zuordnung für diesen Lieferanten merken und beim nächsten Upload anwenden</label>
+            <div class="pt-3"><x-fa::button variant="primary" icon="heroicon-m-arrows-right-left" wire:click="zuordnen" wire:loading.attr="disabled" data-stammdaten-zuordnen>Zuordnen und prüfen</x-fa::button></div>
+        </x-fa::section>
+    @elseif($lauf)
         <x-fa::section title="Prüfliste: {{ $lauf->filename }}" icon="heroicon-o-clipboard-document-check" :meta="$pruefliste->count()" data-stammdaten-pruefliste>
             <div class="mb-3 flex flex-wrap gap-1.5" data-stammdaten-filter>
                 @foreach(['' => 'Alle', 'neu' => 'Neu', 'aendert' => 'Ändert', 'konflikt' => 'Konflikt', 'fehler' => 'Fehler', 'unveraendert' => 'Unverändert'] as $k => $label)

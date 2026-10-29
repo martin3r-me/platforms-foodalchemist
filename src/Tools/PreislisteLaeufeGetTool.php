@@ -36,10 +36,14 @@ class PreislisteLaeufeGetTool extends WareneingangTool implements ToolContract, 
         return $this->ausfuehren($context, function (Team $team) use ($arguments) {
             $svc = app(PreislistenImportService::class);
             if (empty($arguments['run_id'])) {
-                return ['laeufe' => $svc->laeufe($team)->map(fn ($l) => ['id' => $l->id, 'art' => $l->art, 'datei' => $l->filename, 'angelegt' => $l->created_at?->toIso8601String(), 'zaehler' => $l->counts])->all()];
+                return ['laeufe' => $svc->laeufe($team)->map(fn ($l) => ['id' => $l->id, 'art' => $l->art, 'status' => $l->status, 'datei' => $l->filename, 'angelegt' => $l->created_at?->toIso8601String(), 'zaehler' => $l->counts])->all()];
             }
             $run = $svc->lauf($team, (int) $arguments['run_id']) ?? throw new \Illuminate\Database\Eloquent\ModelNotFoundException();
             $limit = max(1, min(1000, (int) ($arguments['limit'] ?? 200)));
+            if ($run->status === 'zuordnung_noetig') {
+                return ['lauf' => ['id' => $run->id, 'art' => $run->art, 'status' => $run->status, 'datei' => $run->filename, 'zaehler' => $run->counts],
+                    'zuordnung_noetig' => ['grund' => $run->mapping['grund'] ?? null, 'kopf' => $run->mapping['kopf'] ?? [], 'vorschau' => $run->mapping['vorschau'] ?? []], 'pruefliste' => []];
+            }
             if ($run->art === 'stammdaten') {
                 return [
                     'lauf' => ['id' => $run->id, 'art' => $run->art, 'datei' => $run->filename, 'herkunft' => $run->herkunft, 'zaehler' => $run->counts],

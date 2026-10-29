@@ -29,7 +29,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
         return 'Gleicht eine Preisliste des eigenen Teams gegen die sichtbaren Artikel ab (Artikelnummer + Lieferant, danach EAN) und legt einen Lauf an. '
             .'art=stammdaten prüft statt Preisen die ganzen Artikel-Stammdaten (neu | ändert | Konflikt | Fehler je Zeile, Allergene und Nährwerte mit Soll/Ist) und schreibt NICHTS. '
             .'Datei als content_base64 (CSV mit ; , Tab oder | oder Excel .xlsx/.ods, bis 10 MB) plus filename (nur Endung und Anzeigename). '
-            .'Lieferant: supplier_id oder eine Lieferant-Spalte in der Datei. mapping {feld: Überschrift|Spaltenindex} überschreibt die Erkennung '
+            .'Lieferant: supplier_id oder eine Lieferant-Spalte in der Datei. mapping {feld: Überschrift|Spaltenindex} überschreibt die Erkennung (bei art=stammdaten die Vorlagen-Überschriften wie "Bezeichnung"); eine gemerkte Zuordnung des Lieferanten wird automatisch angewendet, erkennt der Import zu wenig, entsteht ein Lauf im Status zuordnung_noetig (kein Fehler) → preisliste.ZUORDNEN '
             .'(Felder: supplier, article_number, ean, designation, unit, price, valid_from). Es wird KEIN Preis geschrieben und KEIN Artikel angelegt; '
             .'Zeilen ohne Treffer stehen in der Prüfliste (preisliste_laeufe.GET); übernommen werden die Treffer erst mit preisliste.APPLY. Nur das Haupt-Team des Kunden mit Rolle Kuratieren, sonst FORBIDDEN.';
     }
@@ -41,6 +41,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
             'content_base64' => ['type' => 'string'],
             'supplier_id' => ['type' => 'integer'],
             'mapping' => ['type' => 'object'],
+            'merken' => ['type' => 'boolean', 'description' => 'Mit mapping: Zuordnung für diesen Lieferanten merken und beim nächsten Upload anwenden (Standard true)'],
             'art' => ['type' => 'string', 'enum' => ['preisliste', 'stammdaten'], 'description' => 'preisliste (Standard) | stammdaten: Artikel-Stammdaten (Vorlage: preisliste.VORLAGE_GET art=stammdaten). Stammdaten legen nur eine Prüfliste an, nichts geht in den Bestand.'],
         ], 'required' => ['filename', 'content_base64']];
     }
@@ -70,10 +71,16 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
                 file_put_contents($tmp, $roh);
                 $supplier = isset($arguments['supplier_id']) ? (int) $arguments['supplier_id'] : null;
                 $run = ($arguments['art'] ?? 'preisliste') === 'stammdaten'
-                    ? app(StammdatenImportService::class)->stage($team, $tmp, $supplier, $context->user?->id, $endung, $name)
-                    : $svc->stage($team, $tmp, (array) ($arguments['mapping'] ?? []), $supplier, $context->user?->id, $endung, $name);
+                    ? app(StammdatenImportService::class)->stage($team, $tmp, $supplier, $context->user?->id, $endung, $name, 'user', null, (array) ($arguments['mapping'] ?? []), (bool) ($arguments['merken'] ?? true))
+                    : $svc->stage($team, $tmp, (array) ($arguments['mapping'] ?? []), $supplier, $context->user?->id, $endung, $name, (bool) ($arguments['merken'] ?? true));
             } finally {
                 @unlink($tmp);
+            }
+
+            if ($run->status === 'zuordnung_noetig') {
+                return ['lauf_id' => $run->id, 'art' => $run->art, 'status' => 'zuordnung_noetig', 'datei' => $run->filename, 'grund' => $run->mapping['grund'] ?? null,
+                    'kopf' => $run->mapping['kopf'] ?? [], 'vorschau' => $run->mapping['vorschau'] ?? [], 'preise_geschrieben' => 0,
+                    'hinweis' => 'Die Spalten wurden nicht erkannt. Mit preisliste.ZUORDNEN (run_id, mapping, merken) zuordnen; die Datei wartet im Lauf.'];
             }
 
             return ['lauf_id' => $run->id, 'art' => $run->art, 'datei' => $run->filename, 'zaehler' => $run->counts, 'preise_geschrieben' => 0,

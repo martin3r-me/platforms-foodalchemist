@@ -29,6 +29,11 @@ class StammdatenImport extends Component
     /** Filter der Prüfliste: '' = alle, sonst neu | aendert | konflikt | fehler | unveraendert. */
     public string $filter = '';
 
+    /** Zuordnung nötig: Spaltenindex ⇒ Vorlagen-Überschrift ('' = nicht verwenden). @var array<int, string> */
+    public array $zuordnung = [];
+
+    public bool $merken = true;
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -79,6 +84,13 @@ class StammdatenImport extends Component
         }
         $this->laufId = $lauf->id;
         $this->filter = '';
+        $this->datei = null;
+        if ($lauf->status === 'zuordnung_noetig') {
+            $this->zuordnungVorbereiten($lauf);
+            $this->meldung = 'Die Spalten dieser Datei wurden nicht (vollständig) erkannt — bitte unten zuordnen. Es wurde nichts in den Bestand geschrieben.';
+
+            return;
+        }
         $c = $lauf->counts ?? [];
         $this->meldung = sprintf('Geprüft: %d Zeilen — %d neu, %d ändern, %d Konflikte, %d Fehler. Es wurde nichts in den Bestand geschrieben.',
             $c['zeilen'] ?? 0, $c['neu'] ?? 0, $c['aendert'] ?? 0, $c['konflikt'] ?? 0, $c['fehler'] ?? 0);
@@ -88,8 +100,51 @@ class StammdatenImport extends Component
     public function laufWaehlen(int $id): void
     {
         $team = $this->team();
-        $this->laufId = $team !== null && Lauf::where('team_id', $team->id)->where('art', Lauf::ART_STAMMDATEN)->whereKey($id)->exists() ? $id : null;
+        $lauf = $team !== null ? Lauf::where('team_id', $team->id)->where('art', Lauf::ART_STAMMDATEN)->find($id) : null;
+        $this->laufId = $lauf?->id;
         $this->filter = '';
+        if ($lauf?->status === 'zuordnung_noetig') {
+            $this->zuordnungVorbereiten($lauf);
+        }
+    }
+
+    /** Gewählte Zuordnung anwenden: die wartende Datei wird mit ihr geprüft (und je Lieferant gemerkt). */
+    public function zuordnen(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $team = $this->team();
+        $lauf = $team !== null && $this->laufId !== null ? Lauf::where('team_id', $team->id)->where('art', Lauf::ART_STAMMDATEN)->find($this->laufId) : null;
+        if ($team === null || $lauf === null || ! $this->darf()) {
+            $this->fehler = 'Stammdaten importieren darf nur das Haupt-Team des Kunden (Rolle Kuratieren).';
+
+            return;
+        }
+        $mapping = [];
+        foreach ($this->zuordnung as $idx => $ziel) {
+            if ($ziel !== '' && $ziel !== null) {
+                $mapping[$ziel] = (int) $idx;
+            }
+        }
+        try {
+            $neu = app(StammdatenImportService::class)->zuordnen($team, $lauf, $mapping, Auth::id(), $this->merken);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->laufId = $neu->id;
+        $this->zuordnung = [];
+        $c = $neu->counts ?? [];
+        $this->meldung = sprintf('Geprüft: %d Zeilen — %d neu, %d ändern, %d Konflikte, %d Fehler. Es wurde nichts in den Bestand geschrieben.',
+            $c['zeilen'] ?? 0, $c['neu'] ?? 0, $c['aendert'] ?? 0, $c['konflikt'] ?? 0, $c['fehler'] ?? 0);
+    }
+
+    private function zuordnungVorbereiten(Lauf $lauf): void
+    {
+        $this->zuordnung = [];
+        foreach ((array) ($lauf->mapping['vorschlag'] ?? []) as $idx => $ziel) {
+            $this->zuordnung[(int) $idx] = (string) $ziel;
+        }
     }
 
     private function team(): ?\Platform\Core\Models\Team
@@ -133,6 +188,7 @@ class StammdatenImport extends Component
             'pruefliste' => $lauf !== null ? $svc->pruefliste($lauf, $this->filter !== '' ? $this->filter : null)->take(500) : collect(),
             'xlsxVorlage' => app(PreislistenImportService::class)->xlsxVerfuegbar(),
             'hinweis' => StammdatenImportService::HINWEIS,
+            'ziele' => array_values(array_unique(array_column(StammdatenImportService::VORLAGE, 0))),
         ]);
     }
 }
