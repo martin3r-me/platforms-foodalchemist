@@ -38,6 +38,7 @@ class LeadLaRepickTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'dry_run' => ['type' => 'boolean', 'default' => true, 'description' => 'true = nur Vorschau, nichts schreiben'],
                 'warengruppe' => ['type' => 'string', 'description' => 'Optional: nur GPs dieses WG-Codes (z. B. "01")'],
+                'nur_inaktive_lieferanten' => ['type' => 'boolean', 'default' => false, 'description' => 'true = nur GPs, deren Lead bei einem inaktiven oder gesperrten Lieferanten liegt (Zähler kein_aktiver_ersatz = es gibt keinen bestellbaren Ersatz)'],
                 'gp_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Optional (nur mit dry_run=false): nur diese GPs übernehmen'],
             ],
         ];
@@ -50,7 +51,7 @@ class LeadLaRepickTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $wg = isset($arguments['warengruppe']) && $arguments['warengruppe'] !== '' ? (string) $arguments['warengruppe'] : null;
-        $vorschau = app(LeadLaService::class)->repickVorschau($team, $wg);
+        $vorschau = app(LeadLaService::class)->repickVorschau($team, $wg, null, (bool) ($arguments['nur_inaktive_lieferanten'] ?? false));
 
         if ((bool) ($arguments['dry_run'] ?? true)) {
             return ToolResult::success(['dry_run' => true] + $vorschau);

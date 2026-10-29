@@ -15,6 +15,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\Preis\LetzterPreisService;
+use Platform\FoodAlchemist\Services\Preis\LieferantenAusweich;
 use Platform\FoodAlchemist\Services\Preis\LetzterPreisSpur;
 use Platform\FoodAlchemist\Services\Rezept\RezeptGraphService;
 
@@ -1434,33 +1435,27 @@ class RecipeRecomputeService
     private function effektiverLeadId(FoodAlchemistGp $gp): ?int
     {
         $global = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
-        if ($this->recomputeTeam === null) {
-            return $global;
-        }
-        $prefs = $this->leadPrefs($gp);
-        if ($prefs === []) {
-            return $global;                                        // kein Overlay ⇒ exakt wie heute
+        $prefs = $this->recomputeTeam === null ? [] : $this->leadPrefs($gp);
+        if ($global === null && $prefs === []) {
+            return null;
         }
         $las = $this->laMitPreis($gp);
-        $bepreist = fn (int $laId): bool => optional($las->firstWhere('id', $laId))->aktiver_preis !== null;
+        $ausweich = app(LieferantenAusweich::class);
 
-        foreach ($prefs as $laId => $p) {                          // 1. Team-Pin
-            if ($p['gepinnt'] && ! $p['locked'] && $bepreist($laId)) {
+        foreach ($prefs as $laId => $p) {                          // 1. Team-Pin (hart, auch auf inaktiven Lieferanten)
+            if ($p['gepinnt'] && ! $p['locked'] && optional($las->firstWhere('id', $laId))->aktiver_preis !== null) {
                 return $laId;
             }
         }
-        if ($global !== null && ! ($prefs[$global]['locked'] ?? false)) {   // 2. globaler Lead (nicht gesperrt)
+        $gesperrt = $global !== null && ($prefs[$global]['locked'] ?? false);
+        if ($global === null || (! $gesperrt && ! $ausweich->uebergehen($las->firstWhere('id', $global)))) {   // 2. globaler Lead
             return $global;
         }
-        if ($global !== null) {                                    // 3. globaler Lead gesperrt ⇒ Ausweich
-            foreach ($las as $la) {
-                if (! ($prefs[$la->id]['locked'] ?? false) && $la->aktiver_preis !== null && ! $la->is_discontinued) {
-                    return (int) $la->id;
-                }
-            }
-        }
+        // 3. Lead team-gesperrt ODER Lieferant inaktiv/gesperrt ⇒ Ausweich; ohne Ausweich bleibt der Lead nur, wenn er nicht gesperrt ist
+        $frei = $las->filter(fn ($la) => ! ($prefs[$la->id]['locked'] ?? false) && $la->aktiver_preis !== null && ! $la->is_discontinued);
+        $wahl = $gesperrt ? $frei->first() : $ausweich->ersatz($gp, $this->recomputeTeam, $frei);
 
-        return null;                                               // 4. AVG
+        return $wahl !== null ? (int) $wahl->id : ($gesperrt ? null : $global);
     }
 
     /**
@@ -1496,7 +1491,7 @@ class RecipeRecomputeService
     {
         $prefs = $this->leadPrefs($gp);
         // Vorrang (27.10.): mit aktiv bepreisten Artikeln zählt der letzte Preis eingestellter Artikel im Durchschnitt nicht mit
-        return app(LetzterPreisService::class)->vorrang($this->laMitPreis($gp)->filter(
+        return app(LetzterPreisService::class)->vorrang(app(LieferantenAusweich::class)->nurBestellbare($this->laMitPreis($gp))->filter(
             fn ($la) => ! $la->is_discontinued && ! ($prefs[$la->id]['locked'] ?? false),
         ));
     }
@@ -1512,8 +1507,9 @@ class RecipeRecomputeService
         return $this->laCache[$gp->id] ??= FoodAlchemistSupplierItem::query()
             ->when($this->recomputeTeam, fn ($q) => $q->visibleToTeam($this->recomputeTeam))
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
-            ->select('foodalchemist_supplier_items.*')
+            ->select('foodalchemist_supplier_items.*', \Illuminate\Support\Facades\DB::raw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplier::nichtBestellbarSql() . ' AS lieferant_inaktiv'))
             // Spec 82 3a: Preise des Rechen-Teams (Team → Vorfahren → global); ohne Team nur Listenpreis.
             ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $this->recomputeTeam)->toBase(), 'aktiver_preis')
             ->pipe(fn ($q) => app(LetzterPreisService::class)->laden($q, $this->recomputeTeam));   // Rückfall eingestellter Artikel (27.10.)

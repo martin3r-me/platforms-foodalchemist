@@ -38,6 +38,15 @@ class FoodAlchemistSupplier extends Model
         'rolle' => \Platform\FoodAlchemist\Enums\SupplierRolle::class,   // §5 Ausnahme 3
     ];
 
+    /**
+     * Nicht bestellbar = inaktiv ODER Beziehungs-Status „gesperrt“ (R9.1). Ein solcher Lieferant ist nie Lead und nie Preisquelle fürs EK, solange ein
+     * anderer Lieferant den GP beliefert; seine Artikel bleiben verknüpft (Historie, Allergene). SQL-Fragment für Joins mit Alias $alias.
+     */
+    public static function nichtBestellbarSql(string $alias = 'sup'): string
+    {
+        return "({$alias}.is_inactive = 1 OR {$alias}.status = 'gesperrt')";
+    }
+
     /** Hauptgruppe (Taxonomie); `branch` bleibt der Necta-Rohwert. */
     public function group(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
