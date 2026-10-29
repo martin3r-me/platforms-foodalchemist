@@ -124,20 +124,20 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 
 ## C · Prompt-Keys ohne eigene `propose()`-Stelle in Tabelle A (13)
 
-Der Wächter verlangt, dass jeder Key aus `config/foodalchemist.php` (`ai.prompts`) in dieser Datei steht. Diese 13 kommen in Tabelle A nicht als Literal vor. Status „zu klären“ heißt: beim Anschließen im Code nachweisen, wer den Key aufruft, oder als ungenutzt melden.
+Der Wächter verlangt, dass jeder Key aus `config/foodalchemist.php` (`ai.prompts`) in dieser Datei steht. Diese 13 kommen in Tabelle A nicht als Literal vor. Geklärt am 29.10. (Aufrufer per grep nachgewiesen): 7 Keys laufen über `SignalFixService::assist`, 5 sind tot, `demo.echo` ist ein Testprompt.
 
 | Prompt-Key | Vermuteter Aufrufer | Status |
 |---|---|---|
-| `signal.supplier_inquiry` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `signal.margin_levers` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `signal.vk_release_advice` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `signal.serving_form_suggest` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `signal.recipe_category_suggest` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `signal.recipe_naming_suggest` | `SignalFixService::assist` (dyn. `$plan`) | zu klären |
-| `price.plausi` | über `SignalCockpit` → `SignalFixService` | zu klären |
-| `gp.piece_default_g` | nur in `Regeln/RegelPromptBlock` gefunden, kein Aufrufer | zu klären |
-| `gp.domain` | kein Aufrufer im Literal gefunden | zu klären |
-| `gp.la_suggest` | kein Aufrufer im Literal gefunden | zu klären |
-| `gp.term_la_rank` | kein Aufrufer im Literal gefunden | zu klären |
-| `demo.echo` | Demo-/Testprompt | zu klären |
-| `chat.message` | kein Aufrufer im Literal gefunden | zu klären |
+| `signal.supplier_inquiry` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.margin_levers` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.vk_release_advice` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.serving_form_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.recipe_category_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.recipe_naming_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `price.plausi` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `gp.piece_default_g` | Config-Key, in `Regeln/RegelPromptBlock` als Regel-Ziel geführt; kein `propose()`-Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
+| `gp.domain` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
+| `gp.la_suggest` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
+| `gp.term_la_rank` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
+| `demo.echo` | Test-/Diagnoseprompt (`Spec85WebsucheTransportTest`, in `KiKlassenEinstellung` ausgeschlossen) | kein Produktivaufruf, bleibt Plattform |
+| `chat.message` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
