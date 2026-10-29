@@ -53,7 +53,15 @@
                     <span style="position: absolute; right: 0; top: {{ $a['y'] / 10 }}%; transform: translateY(-50%); {{ $schrift }}" class="tabular-nums">{{ $a['label'] }}</span>
                 @endforeach
             </div>
-            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" style="grid-column: 2; grid-row: 1;" data-preisverlauf-svg>
+            <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="block h-full w-full overflow-visible" style="grid-column: 2; grid-row: 1;" data-preisverlauf-svg
+                 x-on:mousemove="
+                    const r = $el.getBoundingClientRect();
+                    const x = ($event.clientX - r.left) / r.width * 1000;
+                    const treffer = [];
+                    $el.querySelectorAll('rect[data-tip]').forEach(e => { const a = parseFloat(e.getAttribute('x')); if (x >= a && x <= a + parseFloat(e.getAttribute('width'))) treffer.push(e.getAttribute('data-tip')); });
+                    tip = treffer.length ? treffer.slice(0, 12).join('\n') + (treffer.length > 12 ? '\n+ ' + (treffer.length - 12) + ' weitere' : '') : null;
+                    mx = $event.clientX - $root.getBoundingClientRect().left; my = $event.clientY - $root.getBoundingClientRect().top"
+                 x-on:mouseleave="tip = null">
                 @foreach($diagramm['achse_y'] as $a)
                     <line x1="0" x2="1000" y1="{{ $a['y'] }}" y2="{{ $a['y'] }}" stroke="var(--fa-line)" stroke-width="1" vector-effect="non-scaling-stroke" />
                 @endforeach
@@ -77,8 +85,7 @@
                         {{-- Hover: je Stand ein unsichtbares Band über die ganze Höhe, der Browser-Tooltip nennt Datum, Preis je Basiseinheit und Rohpreis je Gebinde --}}
                         @foreach($l['punkte'] as $p)
                             <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="{{ $p['verdacht'] ? 'var(--fa-warn)' : 'var(--fa-ink)' }}" fill-opacity="{{ $p['verdacht'] ? '0.18' : '0' }}" data-tip="{{ $p['tip'] }}" data-preisverlauf-band @if($p['verdacht']) data-verdacht="1" @endif
-                                  x-on:mousemove="tip = $el.getAttribute('data-tip'); mx = $event.clientX - $root.getBoundingClientRect().left; my = $event.clientY - $root.getBoundingClientRect().top"
-                                  x-on:mouseleave="tip = null" />
+                                  class="pointer-events-none" />
                         @endforeach
                     </g>
                 @endforeach
@@ -95,7 +102,7 @@
             {{-- Tooltip am Diagramm-Container (relative), an der Mausposition, an den Rändern geklemmt --}}
             <div x-show="tip" x-cloak x-text="tip" role="tooltip" data-preisverlauf-tooltip
                  x-bind:style="'left: ' + Math.max(0, Math.min(mx + 14, $root.clientWidth - $el.offsetWidth)) + 'px; top: ' + Math.max(0, my - 48) + 'px'"
-                 class="pointer-events-none absolute z-10 max-w-xs rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
+                 class="whitespace-pre-line pointer-events-none absolute z-10 max-w-sm rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
             <div style="grid-column: 1; grid-row: 2;"></div>
             <div class="relative" style="grid-column: 2; grid-row: 2;" data-preisverlauf-achse-x>
                 @foreach($diagramm['achse_x'] as $a)

@@ -10,10 +10,16 @@ namespace Platform\FoodAlchemist\Services\Matching;
  *  - convenience (from_scratch | teil_convenience | standard) → Pool-Modus und Rohware-Vorrang (A-1)
  *  - frische (frisch | tk | konserve | behandelt) → Zustands-Präferenz; ohne Angabe frisch zuerst
  *  - bio_pref (bio | conventional | neutral) gewinnt; sonst der Bool `bio` (MCP-Pfad, 4.4r); ohne Angabe konventionell
+ *  - zubereitung (eigen | zukauf | ohne, Dominique 29.10.): für jede Basiskomponente (Fond, Sauce, Gel, Pesto, „Öl:“ …; Zukauf nur mit GP im Bestand) —
+ *    Eigenleistung zuerst (from_scratch → eigen, teil/voll_convenience → zukauf), sonst Niveau (haute_cuisine/gehoben → eigen,
+ *    klassisch → zukauf); ohne beides gilt {@see OHNE_VORGABE}
  */
 final class MatchLeitplanken
 {
-    /** @return array{convenience: string, mode: string, preferRaw: bool, pref: string, bio: string} */
+    /** Weg ohne Leitplanke (Eigenleistung/Niveau) — die EINE Stelle (Kurator 29.10.: „Geflügelfond ist meistens ein Unterrezept“). */
+    public const OHNE_VORGABE = 'eigen';
+
+    /** @return array{convenience: string, mode: string, preferRaw: bool, pref: string, bio: string, zubereitung: string} */
     public static function aus(array $parameter, bool $vkModus = false): array
     {
         $convenience = (string) ($parameter['convenience'] ?? 'standard');
@@ -34,6 +40,21 @@ final class MatchLeitplanken
                 'conventional' => 'conventional',
                 default => ($parameter['bio'] ?? false) ? 'bio' : 'conventional',
             },
+            'zubereitung' => self::zubereitung($parameter),
         ];
+    }
+
+    /** eigen | zukauf | ohne — Eigenleistung (convenience) vor Niveau (level, Alt-Key niveau). */
+    public static function zubereitung(array $parameter): string
+    {
+        return match ($parameter['convenience'] ?? null) {
+            'from_scratch' => 'eigen',
+            'teil_convenience', 'voll_convenience' => 'zukauf',
+            default => match ($parameter['level'] ?? $parameter['niveau'] ?? null) {
+                'haute_cuisine', 'gehoben' => 'eigen',
+                'klassisch' => 'zukauf',
+                default => 'ohne',
+            },
+        };
     }
 }

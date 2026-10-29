@@ -126,6 +126,14 @@ class ReportExportService
         return $optionen;
     }
 
+    /** PDF-Dateiname aus dem Objektnamen (statt „Basisrezept-19.pdf"); Fallback bei leerem Namen. */
+    public static function pdfDateiname(string $name, string $fallback): string
+    {
+        $sauber = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('#[\\/:*?"<>|\x00-\x1F]#u', ' ', $name)));
+
+        return ($sauber !== '' ? mb_substr($sauber, 0, 120) : $fallback) . '.pdf';
+    }
+
     /** @return array<string, mixed> */
     public function rezeptDaten(Team $team, int $id, array $optionen): array
     {

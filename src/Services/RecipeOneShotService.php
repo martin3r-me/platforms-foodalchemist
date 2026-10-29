@@ -220,7 +220,7 @@ class RecipeOneShotService
                 // Anreicherung — seit Paket 10 also der Freigabeknopf — sie still auf eine Rohware.
                 // Dominique 27.10. (d): auch eine Basiskomponente ohne Zukauf-Signal („Geflügelfond“) wird nie auf ein Zukauf-GP gemintet
                 if ($heuristik->istBasisrezeptZeile($text) || app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)
-                    ->basiskomponenteOhneZukauf($team, $text, \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken)['convenience'])) {
+                    ->basiskomponenteOhneZukauf($team, $text, ...array_values(array_intersect_key(\Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::aus($leitplanken), ['convenience' => 1, 'zubereitung' => 1])))) {
                     $basisrezeptLuecken++;
 
                     continue;

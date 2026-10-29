@@ -94,3 +94,23 @@ it('Import: Geflügelfond ohne Basisrezept wird als Stub angelegt und verknüpft
         ->and($zeilen['Geflügelfond Pulver (Knorr)']->gp_id)->toBe($this->knorr->id)
         ->and($res['stubs'])->toHaveCount(1);
 });
+
+it('Aroma: Nussbutter (Typ-Präfix „Aromen & Öle“) wird beim Import zum Unterrezept-Stub, Kaufware-Aromen nicht', function () {
+    $h = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+
+    expect($h->istBasiskomponente('Aroma: Nussbutter'))->toBeTrue()
+        ->and($h->istBasiskomponente('Matte: Petersilie'))->toBeTrue()
+        ->and($h->istBasiskomponente('Vanillearoma'))->toBeFalse()
+        ->and($h->istBasiskomponente('Malzextrakt'))->toBeFalse();
+});
+
+it('Aromen-Präfix nur für Aroma, Aromaöl, Tinktur, Matte — „Extrakt:“ bleibt Kaufware, „Öl: neutral“ das Standard-GP (Dominique 29.10.)', function () {
+    $h = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+
+    expect($h->istBasiskomponente('Aroma: Nussbutter'))->toBeTrue()
+        ->and($h->istBasiskomponente('Aromaöl: Basilikum'))->toBeTrue()
+        ->and($h->istBasiskomponente('Tinktur: Rosmarin'))->toBeTrue()
+        ->and($h->istBasiskomponente('Extrakt: Vanille'))->toBeFalse()
+        // „Öl: Kräuter“ ist Zubereitung (D5) — ob selbst oder gekauft, entscheiden die Leitplanken; „Öl: neutral“ ist das Standard-GP (LeitplankenZubereitungTest)
+        ->and(app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)->zubereitungsWeg($this->rootTeam, 'Öl: neutral'))->toBeNull();
+});

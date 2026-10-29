@@ -83,6 +83,7 @@ class IngredientMatchService
         bool $basisVariante = true,   // 27.10.: Basisvarianten-Regel (Bindung); reine Erkennung (Zukauf/Teilfertig) schaltet sie ab
         string $convenience = 'standard',   // 27.10. (d): Convenience-Leitplanke — teil/voll erlaubt das Zukauf-GP für Basiskomponenten
         ?string $einheit = null,            // 28.10.: Einheit der Zeile (Stück → ganze Gewürzform)
+        ?string $zubereitung = null,        // 29.10.: eigen | zukauf | ohne aus den Leitplanken (MatchLeitplanken::zubereitung)
     ): array {
         // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
         if (preg_match('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', $ingredientName) === 1 && preg_match('/fl(?:ü|ue)ssig|pasteuris/iu', $ingredientName) !== 1) {
@@ -96,6 +97,10 @@ class IngredientMatchService
             return $this->noMatch(0.0);
         }
 
+        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
+        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13). VOR dem Zustand unten:
+        // die Zukauf-Prüfung ruft den Matcher für andere Texte („Petersilienmatte“) und setzt dabei denselben Zustand.
+        $weg = $basisVariante ? $this->zubereitungsWeg($team, $ingredientName, $convenience, $zubereitung) : null;
         // S2 (#507 Weg-2): die Pool-Scans dieser Entscheidung dürfen nie auf einer
         // bekannten Verwechslungs-Falle landen (Brie↛Bries etc.). Synchron gesetzt,
         // in bestGpMatch/bestSubrecipeMatch gelesen (kein Threading durch poolLauf).
@@ -103,9 +108,11 @@ class IngredientMatchService
         $this->tiebreakMemo = [];
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $this->aliasTokens = null;
-        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
-        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13)
-        $this->basisKomponente = $basisVariante && $this->basiskomponenteOhneZukauf($team, $ingredientName, $convenience);
+        if ($weg === 'zukauf' && $this->zukaufTreffer !== null) {   // 29.10.: Leitplanken wählen das Zukauf-GP, das die Prüfung gefunden hat (auch „Fond: Geflügel“ → „Geflügelfond“)
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit);
+        }
+        $this->basisKomponente = $weg === 'basis';
+        $zukaufHinweis = $this->basisKomponente ? $this->zukaufHinweis : null;
         if ($this->basisKomponente) {
             $mode = 'sub_recipe_first';
         }
@@ -228,7 +235,7 @@ class IngredientMatchService
         }
 
         if ($this->basisKomponente) {
-            return $this->alsBasiskomponente($team, $ingredientName, $final, $pref, $bio);
+            return $this->alsBasiskomponente($team, $ingredientName, $final, $pref, $bio) + ($zukaufHinweis !== null ? ['hinweis' => $zukaufHinweis] : []);
         }
 
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
@@ -259,9 +266,78 @@ class IngredientMatchService
      * Basiskomponente ohne Zukauf-Signal und ohne Convenience-Leitplanke (Dominique 27.10. d) → Unterrezept bzw. Stub, kein Zukauf-GP.
      * Zukauf-Signal: Pulver/Paste/Konzentrat/Glas/„Zukauf“/„fertig“, eine Einkaufsform (TK, trocken, konserviert) oder eine bekannte Marke.
      */
-    public function basiskomponenteOhneZukauf(Team $team, string $text, string $convenience = 'standard'): bool
+    public function basiskomponenteOhneZukauf(Team $team, string $text, string $convenience = 'standard', ?string $zubereitung = null): bool
     {
-        if (in_array($convenience, ['teil_convenience', 'voll_convenience'], true) || ! $this->heuristik->istBasiskomponente($text)) {
+        return $this->zubereitungsWeg($team, $text, $convenience, $zubereitung) === 'basis';
+    }
+
+    /** „Öl: neutral“ & Co. ist nie ein Unterrezept, sondern das §5-Standard-GP (Rapsöl). */
+    private const OEL_NEUTRAL = ['neutral', 'pflanzen', 'pflanzenoel', 'raps', 'rapsoel', 'speise', 'speiseoel', 'brat', 'bratoel', 'frittier', 'frittieroel', 'sonnenblumen', 'sonnenblumenoel'];
+
+    /** Hinweis „gibt es auch als Zukauf: …“ der letzten {@see zubereitungsWeg}-Entscheidung (nur ohne Leitplanke mit GP im Bestand). */
+    private ?string $zukaufHinweis = null;
+
+    /** Zukauf-GP-Treffer der letzten {@see zubereitungsWeg}-Entscheidung (Weg 'zukauf'). */
+    private ?array $zukaufTreffer = null;
+
+    /**
+     * Weg einer Zeile: null = keine Basiskomponente bzw. Zukauf-Signal, 'basis' = Unterrezept/Stub, 'zukauf' = Zukauf-GP im Bestand.
+     * Dominique 29.10.: „im Convenience-Bereich kannst du alles fertig kaufen“ — für JEDE Basiskomponente (Erkennung wie bisher, Ausnahmen
+     * bleiben) entscheiden die Leitplanken ({@see Matching\MatchLeitplanken::zubereitung}); die Grenze zieht allein der Bestand: Zukauf nur,
+     * wenn ein passendes GP da ist, sonst Unterrezept. Ohne Leitplanke {@see Matching\MatchLeitplanken::OHNE_VORGABE} + Hinweis aufs Zukauf-GP.
+     */
+    public function zubereitungsWeg(Team $team, string $text, string $convenience = 'standard', ?string $zubereitung = null): ?string
+    {
+        $this->zukaufHinweis = $this->zukaufTreffer = null;
+        $pos = mb_strpos($text, ':');
+        if ($pos !== false && $pos > 0 && $this->engine->tokenize(mb_substr($text, 0, $pos)) === ['oel']
+            && array_intersect($this->engine->tokenize(mb_substr($text, $pos + 1)), self::OEL_NEUTRAL) !== []) {
+            return null;
+        }
+        if (! $this->basisOhneZukaufSignal($team, $text)) {
+            return null;
+        }
+        $weg = $zubereitung ?? Matching\MatchLeitplanken::zubereitung(['convenience' => $convenience]);
+        $gp = $weg !== 'eigen' ? $this->zukaufGp($team, $text) : null;
+        if ($weg === 'ohne') {
+            $weg = Matching\MatchLeitplanken::OHNE_VORGABE;
+            $this->zukaufHinweis = $gp !== null && $weg !== 'zukauf' ? 'Gibt es auch als Zukauf: ' . ($gp['gp_name'] ?? 'GP #' . $gp['gp_id']) : null;
+        }
+
+        $this->zukaufTreffer = $weg === 'zukauf' ? $gp : null;
+
+        return $weg === 'zukauf' && $gp !== null ? 'zukauf' : 'basis';
+    }
+
+    /**
+     * Passendes Zukauf-GP im Bestand (ab MIN_MATCH_SCORE), reine Erkennung ohne Basisvarianten-Regel — keine Rekursion. Rezeptnamen-Syntax
+     * „Fond: Geflügel“ heißt als Ware meist „Geflügelfond“: Kompositum mit Fugenlaut mitprüfen (wie „Öl (Raps)“ → „Rapsöl“, ZutatFreitext).
+     */
+    private function zukaufGp(Team $team, string $text): ?array
+    {
+        $kandidaten = [$text];
+        if (preg_match('/^\s*(\p{L}+)\s*:\s*(\p{L}+)\s*$/u', $text, $m) === 1) {
+            foreach (['', 'n', 's', 'en'] as $fuge) {
+                $kandidaten[] = $m[2] . $fuge . mb_strtolower($m[1]);
+            }
+        }
+        $einheit = $this->einheit;
+        $treffer = null;
+        foreach ($kandidaten as $k) {
+            $t = $this->matchIngredient($team, $k, null, 'gp_first', basisVariante: false);
+            if (($t['target'] ?? null) === 'gp' && (float) ($t['score'] ?? 0) >= MatchHeuristics::MIN_MATCH_SCORE) {
+                $treffer = $t;
+                break;
+            }
+        }
+        $this->einheit = $einheit;
+
+        return $treffer;
+    }
+
+    private function basisOhneZukaufSignal(Team $team, string $text): bool
+    {
+        if (! $this->heuristik->istBasiskomponente($text)) {
             return false;
         }
         $tokens = $this->engine->tokenize($text);

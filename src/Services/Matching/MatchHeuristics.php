@@ -228,7 +228,7 @@ class MatchHeuristics
                 || array_filter($pueree, fn ($t) => array_filter(self::FRUCHT_PUEREE, fn ($f) => str_starts_with($t, $f)) !== []) !== []))) {
             return false;
         }
-        if ($this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name)) {
+        if ($this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name) || $this->hatAromenTypPraefix($name)) {
             return true;
         }
         foreach ($tokens as $t) {
@@ -267,6 +267,21 @@ class MatchHeuristics
         }
 
         return $this->basisKomponentenTypen = array_values(array_unique($typen));
+    }
+
+    /** Typen aus „Aromen & Öle“ (§1.2), die als Präfix ein Unterrezept sind — Öl und Extrakt bleiben Kaufware/GP (Dominique 29.10.). */
+    private const AROMEN_STUB_TYPEN = ['Aroma', 'Aromaöl', 'Tinktur', 'Matte'];
+
+    /**
+     * »Aroma: Nussbutter«, »Matte: Petersilie«, »Tinktur: …«, »Aromaöl: Basilikum« — Typ-Präfix ist die Rezeptnamen-Syntax, also ein Unterrezept.
+     * Bewusst NUR als Präfix, nicht als Grundwort: Vanillearoma, Malzextrakt, Raucharoma sind Kaufware. »Öl: neutral« und »Extrakt: Vanille« ebenso.
+     */
+    private function hatAromenTypPraefix(string $name): bool
+    {
+        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+        $typ = $praefix !== null ? \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) : null;
+
+        return $typ !== null && in_array($typ, self::AROMEN_STUB_TYPEN, true);
     }
 
     /** D5 2026-08-18 — »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; prüft NUR das Label vor dem ersten Doppelpunkt. */

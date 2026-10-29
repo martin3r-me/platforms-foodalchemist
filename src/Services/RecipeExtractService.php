@@ -168,16 +168,16 @@ class RecipeExtractService
         $matcher = app(IngredientMatchService::class);
         foreach ($zutaten as $i => $z) {
             $text = trim((string) ($z['text'] ?? $z['name'] ?? ''));
-            if ($text === '' || ! empty($z['sub_rezept_id']) || ! $matcher->basiskomponenteOhneZukauf($team, $text, $lp['convenience'])) {
+            if ($text === '' || ! empty($z['sub_rezept_id']) || ! $matcher->basiskomponenteOhneZukauf($team, $text, $lp['convenience'], $lp['zubereitung'])) {
                 continue;
             }
-            $t = $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience']);
+            $t = $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience'], zubereitung: $lp['zubereitung']);
             if (($t['basiskomponente'] ?? null) !== 'stub') {
                 continue;   // Basisrezept im Bestand (auch zur Prüfung) — der Generator bindet bzw. legt es zur Prüfung vor
             }
             $stub = app(RecipeService::class)->createSubRecipeStub($team, $text);
             $zutaten[$i] += ['sub_rezept_id' => (int) $stub['recipe']->id, 'sub_rezept' => true, 'sub_rezept_eigen' => true];
-            $stubs[] = ['id' => (int) $stub['recipe']->id, 'name' => (string) $stub['recipe']->name, 'neu' => $stub['neu']];
+            $stubs[] = ['id' => (int) $stub['recipe']->id, 'name' => (string) $stub['recipe']->name, 'neu' => $stub['neu']] + (isset($t['hinweis']) ? ['hinweis' => $t['hinweis']] : []);
         }
 
         // 3. Parent geerdet anlegen (kiRezeptOverride = kein LLM, aber voller Resolver/Recompute).
