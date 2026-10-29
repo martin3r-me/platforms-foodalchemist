@@ -103,3 +103,13 @@ it('Aroma: Nussbutter (Typ-Präfix „Aromen & Öle“) wird beim Import zum Unt
         ->and($h->istBasiskomponente('Vanillearoma'))->toBeFalse()
         ->and($h->istBasiskomponente('Malzextrakt'))->toBeFalse();
 });
+
+it('Aromen-Präfix nur für Aroma, Aromaöl, Tinktur, Matte — „Öl:“ und „Extrakt:“ bleiben Kaufware (Dominique 29.10.)', function () {
+    $h = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+
+    expect($h->istBasiskomponente('Aroma: Nussbutter'))->toBeTrue()
+        ->and($h->istBasiskomponente('Aromaöl: Basilikum'))->toBeTrue()
+        ->and($h->istBasiskomponente('Tinktur: Rosmarin'))->toBeTrue()
+        ->and($h->istBasiskomponente('Öl: neutral'))->toBeFalse()
+        ->and($h->istBasiskomponente('Extrakt: Vanille'))->toBeFalse();
+});
