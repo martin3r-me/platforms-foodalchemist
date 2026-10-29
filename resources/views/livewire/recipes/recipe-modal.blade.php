@@ -54,7 +54,7 @@
                             <div class="px-3 py-2 flex flex-col gap-1">
                                 <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
                                     title="Text, Eigenschaften, Produktionsplanung, Equipment, Schritte, Aromen, Pairings, Eignung und Sensorik in einem Lauf. KI-Fotos laufen separat, Ersatz bleibt eine bewusste Verknüpfung von Hand."
-                                    class="w-full justify-center" data-alles-anreichern busy="Wird angereichert …" flash="Angereichert" />
+                                    class="w-full justify-center" data-alles-anreichern busy="Wird gestartet …" flash="Gestartet" />
                                 <span class="{{ $hinweis }}">Füllt alle leeren Felder in einem Lauf. Von Hand Gepflegtes bleibt stehen.</span>
                             </div>
                             <div class="my-1 border-t border-[var(--fa-line)]"></div>
@@ -190,6 +190,12 @@
                 @endif
             </x-fa::notice>
         </div>
+    @endif
+
+    @if($anreicherungLaeuft)
+        <p wire:poll.3s="pruefeAnreicherung" class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-accent)]" data-anreicherung-laeuft>
+            @svg('heroicon-m-arrow-path', 'w-4 h-4 animate-spin') Anreicherung läuft im Hintergrund. Das Ergebnis erscheint hier, sobald alles durch ist …
+        </p>
     @endif
 
     <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />

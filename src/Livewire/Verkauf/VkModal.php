@@ -30,6 +30,7 @@ class VkModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatAnreicherungsLauf;
     use \Livewire\WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
 
@@ -1249,30 +1250,19 @@ class VkModal extends Component
             return;
         }
         try {
-            $recipe = app(SalesRecipeService::class)->detail($team, $this->recipeId);
-            if ($recipe === null) {
+            if (app(SalesRecipeService::class)->detail($team, $this->recipeId) === null) {
                 return;
             }
-            $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
-                ->anreichern($team, $recipe, completeCoverage: true, refresh: true);   // #4: expliziter Klick = Refresh auch gefüllter, nicht-manueller Felder
             $this->bulkRunId = null;
-            $this->oeffnen($this->recipeId);
-            $this->anreicherung = $anreicherung;
-            // #4 Kaskade: die Basisrezept-Komponenten des Gerichts im Hintergrund mit-anreichern
-            // (async via EnrichRecipeJob, refresh=true) — sonst Timeout bei mehrgliedrigen Gerichten.
-            $subIds = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
-            foreach ($subIds as $subId) {
-                \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::dispatch(
-                    $team->id, (int) (Auth::id() ?? 0), $subId, null, false, null, false, true,
-                );
-            }
-            if ($subIds !== []) {
-                $this->savedToast(count($subIds) . ' Komponente(n) werden im Hintergrund angereichert …');
-            }
-            $this->dispatch('vk-recipe-gespeichert');
+            $this->starteAnreicherung($team);   // Hintergrund-Job + Polling, s. HatAnreicherungsLauf
         } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor
+            $this->fehler = $e->getMessage();
         }
+    }
+
+    protected function anreicherungFertigEvent(): string
+    {
+        return 'vk-recipe-gespeichert';
     }
 
     // ── Spec 53 Bildstil-Dossier/Produktfoto-Knopf ────────────────────────

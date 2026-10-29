@@ -148,7 +148,8 @@ it('L1b: VK-Schritte auf einem Basisrezept erzeugen einen ehrlichen Fehler statt
 it('L1b: das VkModal fährt die Vollanreicherung direkt inkl. Coverage-Ergebnis', function () {
     $c = Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
-        ->call('allesAnreichern')
+        ->call('allesAnreichern')                 // Hintergrund-Job (Test-Queue läuft synchron) …
+        ->call('pruefeAnreicherung')              // … und das Poll-Ziel übernimmt das Ergebnis
         ->assertSet('fehler', null);
 
     expect($c->get('bulkRunId'))->toBeNull()

@@ -76,6 +76,20 @@ class EnrichRecipeJob implements ShouldQueue
         return "fa:enrich-produktfoto:{$teamId}:{$recipeId}";
     }
 
+    /**
+     * Cache-Schlüssel der Voll-Anreicherung OHNE Kaskaden-Step (Modal-Knopf „Alles anreichern", Rezept + Gericht): Status +
+     * Doppel-Enqueue-Guard + Ergebnis fürs Polling — dasselbe Muster wie {@see self::produktfotoCacheKey}. Vorher lief
+     * die Anreicherung synchron im Web-Request: acht KI-Calls hintereinander rissen das Request-Limit, abgeschnitten wurden
+     * die hinteren Glieder (Eignung/Niveau, Sensorik) — und der Fehler blieb unsichtbar.
+     */
+    public static function anreicherungCacheKey(int $teamId, int $recipeId): string
+    {
+        return "fa:enrich-alles:{$teamId}:{$recipeId}";
+    }
+
+    /** @var array<string, mixed>|null volles Ergebnis des One-Shot-Passes (nur für den Modal-Cache) */
+    private ?array $volltext = null;
+
     public function handle(RecipeOneShotService $oneShot): void
     {
         if ($this->kaskadeAbgebrochen()) {
@@ -117,6 +131,7 @@ class EnrichRecipeJob implements ShouldQueue
                     shouldStop: fn () => $this->kaskadeAbgebrochen(),
                     leitplanken: $this->leitplanken,
                 );
+                $this->volltext = $ergebnis;
                 if ($this->kaskadeAbgebrochen()) {
                     return;
                 }
@@ -314,6 +329,19 @@ class EnrichRecipeJob implements ShouldQueue
     private function markEnrich(string $status, ?string $error = null, ?array $coverage = null, ?int $dauerMs = null): void
     {
         if ($this->stepId === null) {
+            // Modal-Lauf ohne Kaskaden-Step: Status (+ Ergebnis) in den Cache, das Modal pollt ihn.
+            try {
+                Cache::put(self::anreicherungCacheKey($this->teamId, $this->recipeId), array_filter([
+                    'status' => $status,
+                    'error' => $error !== null ? Str::limit($error, 300) : null,
+                    'ergebnis' => $status === 'done' ? $this->volltext : null,
+                    'dauer_ms' => $dauerMs,
+                    'at' => now()->toIso8601String(),
+                ], fn ($v) => $v !== null), now()->addMinutes(30));
+            } catch (\Throwable) {
+                // Tracking ist Beiwerk — nie blockierend.
+            }
+
             return;
         }
         try {

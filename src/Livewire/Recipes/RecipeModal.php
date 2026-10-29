@@ -40,6 +40,7 @@ class RecipeModal extends Component
 {
     use HatRezeptCopilot;   // Spec 03 L6b
     use InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatAnreicherungsLauf;
     use TauschtRezept;      // Verwaltungs-Reiter: tauschen + löschen (dieselbe Mechanik wie im Panel)
     use WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
@@ -854,30 +855,19 @@ class RecipeModal extends Component
             return;
         }
         try {
-            $recipe = app(RecipeService::class)->detail($team, $this->recipeId);
-            if ($recipe === null) {
+            if (app(RecipeService::class)->detail($team, $this->recipeId) === null) {
                 return;
             }
-            $anreicherung = app(RecipeOneShotService::class)
-                ->anreichern($team, $recipe, completeCoverage: true, refresh: true);   // #4: expliziter Klick = Refresh auch gefüllter, nicht-manueller Felder
             $this->bulkRunId = null;
-            $this->oeffnen($this->recipeId);
-            $this->anreicherung = $anreicherung;
-            // #4 Kaskade: Sub-Basisrezepte im Hintergrund mit-anreichern (async via EnrichRecipeJob,
-            // refresh=true; synchron würde ein mehrgliedriges Gericht in einen Timeout laufen).
-            $subIds = app(RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
-            foreach ($subIds as $subId) {
-                EnrichRecipeJob::dispatch(
-                    $team->id, (int) (Auth::id() ?? 0), $subId, null, false, null, false, true,
-                );
-            }
-            if ($subIds !== []) {
-                $this->savedToast(count($subIds).' Komponente(n) werden im Hintergrund angereichert …');
-            }
-            $this->dispatch('recipe-gespeichert');
+            $this->starteAnreicherung($team);   // Hintergrund-Job + Polling, s. HatAnreicherungsLauf
         } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor
+            $this->fehler = $e->getMessage();
         }
+    }
+
+    protected function anreicherungFertigEvent(): string
+    {
+        return 'recipe-gespeichert';
     }
 
     // ── Spec 53 Bildstil-Dossier/Produktfoto-Knopf ────────────────────────
