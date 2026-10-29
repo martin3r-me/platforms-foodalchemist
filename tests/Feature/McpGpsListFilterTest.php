@@ -91,3 +91,10 @@ it('lead_lieferant_inaktiv: Lead beim inaktiven oder gesperrten Lieferanten (#63
         ->and(($this->ids)(['lead_lieferant_inaktiv' => 'false', 'commodity_group_code' => '07']))->toBe(($this->sortiert)($aktiv))
         ->and(($this->ids)(['lead_lieferant_inaktiv' => false]))->not->toContain($this->offen->id);   // ohne Lead: weder noch
 });
+
+it('unbekannter Filter wird gemeldet statt still verworfen (Spec 91)', function () {
+    $r = app(GpsListTool::class)->execute(['warengruppe' => '13'], $this->ctx);
+
+    expect($r->success)->toBeTrue()->and($r->data['warnungen'][0])->toContain("unbekannter Parameter 'warengruppe' ignoriert")->toContain('commodity_group_code')
+        ->and(app(GpsListTool::class)->execute(['commodity_group_code' => '13'], $this->ctx)->data)->not->toHaveKey('warnungen');
+});

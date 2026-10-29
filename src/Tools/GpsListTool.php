@@ -30,7 +30,7 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             . 'sub_category, status, marke_offen, rezepturware (ja|nein|offen), ohne_lead (true = kein Lead-Lieferantenartikel), '
             . 'ohne_la (true = keine aktive Lieferantenartikel-Struktur), nur_la_pflicht (true = nur GPs, die einen Artikel brauchen: requires_la, kein Derivat), '
             . 'lead_lieferant_inaktiv (true = Lead-Artikel beim inaktiven oder gesperrten Lieferanten, false = Lead bestellbar). '
-            . 'Details via foodalchemist.gps.GET, gezielte Suche via foodalchemist.gps.SEARCH.';
+            . 'Details via foodalchemist.gps.GET, gezielte Suche via foodalchemist.gps.SEARCH. Unbekannte Parameter stehen in warnungen.';
     }
 
     public function getSchema(): array
@@ -76,7 +76,7 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             $treffer->getCollection()->load('leadLa.supplier:id,name');
         }
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $treffer->total(),
             'page' => $treffer->currentPage(),
             'last_page' => $treffer->lastPage(),
@@ -90,7 +90,7 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
                 'lead_la' => $gp->leadLa !== null ? ['designation' => $gp->leadLa->designation, 'lieferant' => $gp->leadLa->supplier?->name] : null,
             ] : []))->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array
