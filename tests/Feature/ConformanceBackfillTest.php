@@ -49,7 +49,9 @@ it('Backfill --dry-run: stößt nichts an', function () use ($gp) {
     $this->artisan('foodalchemist:conformance-backfill', ['--team' => $this->rootTeam->id, '--dry-run' => true])
         ->assertExitCode(0);
 
-    Queue::assertNothingPushed();
+    // Der Backfill selbst stößt keinen Critic an. Das GP-Anlegen in der Fixture löst seit #606 den verzögerten
+    // GpAromaNachholenJob aus (GpAromaObserver) — das gehört nicht zum Backfill und wird hier nicht geprüft.
+    Queue::assertNotPushed(ConformanceCheckJob::class);
 });
 
 it('Backfill --limit: chunkt über alle Teams', function () use ($gp) {
