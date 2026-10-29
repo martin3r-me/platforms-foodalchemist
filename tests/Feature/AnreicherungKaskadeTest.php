@@ -90,6 +90,64 @@ it('#4: allesAnreichern dispatcht je Sub-Basisrezept einen EnrichRecipeJob mit r
         ->call('allesAnreichern')
         ->assertSet('fehler', null);
 
-    Queue::assertPushed(EnrichRecipeJob::class, 1);
+    // Wurzel (Hintergrund-Lauf mit voller Coverage, Modal pollt) + je Sub-Basisrezept ein Job
+    Queue::assertPushed(EnrichRecipeJob::class, 2);
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $parent->id && $job->refresh === true && $job->completeCoverage === true && $job->stepId === null);
     Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $komp->id && $job->refresh === true);
+});
+
+it('Alles anreichern läuft im Hintergrund: Modal pollt, zweiter Klick dispatcht nicht doppelt', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Einzel', ['status' => 'draft', 'is_sales_recipe' => false]);
+
+    $c = Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $r->id)
+        ->call('allesAnreichern')
+        ->assertSet('anreicherungLaeuft', true)
+        ->assertSet('anreicherung', null);
+    expect($c->html())->toContain('data-anreicherung-laeuft');
+
+    $c->call('allesAnreichern');
+    Queue::assertPushed(EnrichRecipeJob::class, 1);
+
+    // Job meldet Ergebnis in den Cache → Poll übernimmt es und beendet die Anzeige
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id, (int) $r->id),
+        ['status' => 'done', 'ergebnis' => ['uebernommen' => 3, 'schritte' => [], 'uebersprungen' => [], 'offen' => 0]], now()->addMinutes(5));
+    $c->call('pruefeAnreicherung')
+        ->assertSet('anreicherungLaeuft', false)
+        ->assertSet('anreicherung.uebernommen', 3);
+});
+
+it('Alles anreichern: ein fehlgeschlagener Hintergrund-Lauf wird als Fehler gezeigt', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Fehl', ['status' => 'draft', 'is_sales_recipe' => false]);
+
+    $c = Livewire::test(RecipeModal::class)->call('oeffnen', $r->id)->call('allesAnreichern');
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id, (int) $r->id),
+        ['status' => 'failed', 'error' => 'Timeout'], now()->addMinutes(5));
+    $c->call('pruefeAnreicherung')->assertSet('anreicherungLaeuft', false)->assertSet('fehler', 'Timeout');
+});
+
+it('Alles anreichern: der Cache-Stand gehört Team UND Rezept — ein Ergebnis eines anderen Mandanten für dieselbe Rezept-ID wird nicht übernommen', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Mandant', ['status' => 'draft', 'is_sales_recipe' => false]);
+    expect(EnrichRecipeJob::anreicherungCacheKey(1, 5))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(2, 5))
+        ->and(EnrichRecipeJob::anreicherungCacheKey(1, 5))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(1, 6));
+
+    $c = Livewire::test(RecipeModal::class)->call('oeffnen', $r->id)->call('allesAnreichern')->assertSet('anreicherungLaeuft', true);
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id + 1000, (int) $r->id),
+        ['status' => 'done', 'ergebnis' => ['uebernommen' => 9, 'schritte' => [], 'uebersprungen' => [], 'offen' => 0]], now()->addMinutes(5));
+    $c->call('pruefeAnreicherung')->assertSet('anreicherungLaeuft', true)->assertSet('anreicherung', null);   // fremdes Team: weiter warten, nichts übernommen
+});
+
+it('Alles anreichern: ein Auto-Enrich ohne refresh (nur Lücken) teilt den Cache-Stand nicht mit dem Klick (refresh)', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Modus', ['status' => 'draft', 'is_sales_recipe' => false]);
+    expect(EnrichRecipeJob::anreicherungCacheKey(1, 5, refresh: false))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(1, 5, refresh: true));
+
+    // ein laufender Lücken-Lauf (Auto-Enrich) blockiert den Klick nicht und wird nicht als dessen Ergebnis übernommen
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id, (int) $r->id, refresh: false),
+        ['status' => 'running', 'at' => now()->toIso8601String()], now()->addMinutes(5));
+    Livewire::test(RecipeModal::class)->call('oeffnen', $r->id)->call('allesAnreichern')->assertSet('anreicherungLaeuft', true);
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $r->id && $job->refresh === true);
 });
