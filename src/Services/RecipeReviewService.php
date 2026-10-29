@@ -273,7 +273,7 @@ class RecipeReviewService
                         break;
                     }
                     // Hard-Stop-Doktrin: nur ein echter Treffer macht den Befund anwendbar.
-                    $t = $matcher->matchIngredient($team, $text);
+                    $t = $matcher->matchIngredient($team, $text, ...\Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::matcherArgsFuerRezept($r));
                     if ($t['target'] === 'gp') {
                         $befund['kind'] = 'gp';
                         $befund['ziel'] = $t['gp_name'];

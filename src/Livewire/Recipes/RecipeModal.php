@@ -121,6 +121,7 @@ class RecipeModal extends Component
     private const LEER = [
         'name' => '', 'origin_source' => '', 'category_id' => null, 'hauptgruppe_id' => null,
         'taste_direction' => '', 'production_depth' => '', 'work_time_min' => null,
+        'vorgabe_convenience' => '', 'vorgabe_niveau' => '',   // 29.10.: Leitplanken-Vorgabe am Rezept (selbst oder gekauft)
         'temperature' => '', 'function' => '', 'status' => 'draft',
         'yield_kg_manual' => null, 'yield_pieces' => null, 'description' => '', 'preparation' => '',
         'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
@@ -224,6 +225,7 @@ class RecipeModal extends Component
                     'hauptgruppe_id' => $r->category?->main_group_id,
                     'taste_direction' => $r->taste_direction ?? '',
                     'production_depth' => $r->production_depth ?? '',
+                    'vorgabe_convenience' => $r->vorgabe_convenience ?? '', 'vorgabe_niveau' => $r->vorgabe_niveau ?? '',
                     'work_time_min' => $r->work_time_min,
                     'default_station_id' => $r->default_station_id,
                     'max_vorlauf_tage' => $r->max_vorlauf_tage,

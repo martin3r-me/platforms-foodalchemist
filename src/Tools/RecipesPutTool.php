@@ -24,7 +24,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     public function getDescription(): string
     {
         return 'Aktualisiert ein Rezept im Status stub/draft (Felder: name, description, preparation, '
-            . 'taste_direction, work_time_min, variable_work_time_min + variable_work_time_basis (Zeit je kg/Stück/Portion), yield_kg_manual, category_id). status="review" reicht '
+            . 'taste_direction, vorgabe_convenience, vorgabe_niveau, work_time_min, variable_work_time_min + variable_work_time_basis (Zeit je kg/Stück/Portion), yield_kg_manual, category_id). status="review" reicht '
             . 'den Entwurf zum menschlichen Review ein (einzige erlaubte Transition). Gepflegte Rezepte '
             . '(review/approved/archived) sind für den MCP-Pfad locked. '
             . '`preparation` (Markdown) wird beim Schreiben in Schritte geparst, ABER nur wenn das '
@@ -42,6 +42,11 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'description' => ['type' => 'string'],
                 'preparation' => ['type' => 'string'],
                 'taste_direction' => ['type' => 'string'],
+                // 29.10.: Leitplanken-Vorgabe am Rezept — entscheidet bei Basiskomponenten selbst oder gekauft; "" = keine Vorgabe
+                'vorgabe_convenience' => ['type' => 'string', 'enum' => ['', 'from_scratch', 'teil_convenience', 'voll_convenience'],
+                    'description' => 'Eigenleistung: from_scratch (alles selbst) | teil_convenience | voll_convenience; "" = keine Vorgabe (Standard: Unterrezept).'],
+                'vorgabe_niveau' => ['type' => 'string', 'enum' => ['', 'haute_cuisine', 'gehoben', 'klassisch'],
+                    'description' => 'Niveau: haute_cuisine | gehoben (selbst) | klassisch (Zukauf, wenn im Bestand); "" = keine Vorgabe. Eigenleistung geht vor.'],
                 'work_time_min' => ['type' => 'integer', 'description' => 'Aktive Arbeitszeit (min) je Koch-Vorgang'],
                 'setup_time_min' => ['type' => 'integer', 'description' => 'Rüstzeit (min), einmal je Produktionslauf'],
                 'standzeit_min' => ['type' => 'integer', 'description' => 'Passive Gar-/Standzeit (min) je Lauf — Durchlaufzeit, bindet keinen Posten'],
@@ -97,7 +102,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         $in = array_intersect_key($arguments, array_flip([
-            'name', 'description', 'preparation', 'taste_direction',
+            'name', 'description', 'preparation', 'taste_direction', 'vorgabe_convenience', 'vorgabe_niveau',
             'work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min', 'variable_work_time_basis', 'batch_max_kg', 'batch_max_pieces',
             'max_vorlauf_tage', 'default_station_id', 'yield_kg_manual', 'category_id',
             'storage_type', 'shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days', 'storage_types',

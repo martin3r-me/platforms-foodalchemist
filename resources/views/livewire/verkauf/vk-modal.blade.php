@@ -777,6 +777,15 @@
                         <x-fa::select id="vk-geschmack" wire:model="form.taste_direction" placeholder="nicht gesetzt"
                             :options="['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral']" />
                     </x-fa::field>
+                    {{-- Leitplanken-Vorgabe (29.10.): aus der Planung übernommen, hier änderbar — entscheidet bei Basiskomponenten selbst oder gekauft --}}
+                    <x-fa::field label="Vorgabe Eigenleistung" for="vk-vorgabe-convenience">
+                        <x-fa::select id="vk-vorgabe-convenience" wire:model="form.vorgabe_convenience" data-vorgabe-convenience
+                            :options="collect(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN)->firstWhere('field', 'convenience')['optionen']" />
+                    </x-fa::field>
+                    <x-fa::field label="Vorgabe Niveau" for="vk-vorgabe-niveau">
+                        <x-fa::select id="vk-vorgabe-niveau" wire:model="form.vorgabe_niveau" data-vorgabe-niveau
+                            :options="collect(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN)->firstWhere('field', 'level')['optionen']" />
+                    </x-fa::field>
                     <x-fa::field label="Fertigungstiefe" for="vk-tiefe">
                         <x-fa::select id="vk-tiefe" wire:model="form.production_depth" placeholder="unbestimmt"
                             :options="['from_scratch' => 'from scratch', 'teilfertig' => 'teilfertig', 'convenience' => 'Convenience']" />

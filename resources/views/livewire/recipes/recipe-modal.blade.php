@@ -589,6 +589,9 @@
                     @endforeach
                 </datalist>
             </x-fa::field>
+            {{-- Leitplanken-Vorgabe (29.10.): aus der Planung übernommen, hier änderbar — entscheidet bei Basiskomponenten selbst oder gekauft --}}
+            <x-fa::choice name="form.vorgabe_convenience" :live="false" label="Vorgabe Eigenleistung" :options="collect(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN)->firstWhere('field', 'convenience')['optionen']" data-vorgabe-convenience />
+            <x-fa::choice name="form.vorgabe_niveau" :live="false" label="Vorgabe Niveau" :options="collect(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN)->firstWhere('field', 'level')['optionen']" data-vorgabe-niveau />
             <x-fa::choice name="form.taste_direction" :live="false" label="Geschmacksrichtung" :options="['' => 'Keine Angabe', 'suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral']" />
             <div class="flex flex-col gap-1.5 min-w-0">
                 <x-fa::choice name="form.production_depth" :live="false" label="Fertigungstiefe" :options="['' => 'Keine Angabe', 'from_scratch' => 'selbst gemacht', 'teilfertig' => 'teilfertig', 'convenience' => 'Convenience']" />

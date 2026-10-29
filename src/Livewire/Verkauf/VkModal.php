@@ -160,7 +160,7 @@ class VkModal extends Component
             $this->form = [
                 'name' => $r->name,
                 'sales_wording_standard' => $r->sales_wording_standard,
-                'taste_direction' => $r->taste_direction,
+                'taste_direction' => $r->taste_direction, 'vorgabe_convenience' => $r->vorgabe_convenience, 'vorgabe_niveau' => $r->vorgabe_niveau,
                 'dish_class_id' => $r->dish_class_id,
                 // Preis-Wahrheit ist die Standard-Darreichung (Spec 85 D-1: die Rezeptspalte gibt es nicht mehr).
                 'markup_class_id' => $standardPresentation?->markup_class_id ?? $defaultMarkupClassId,
