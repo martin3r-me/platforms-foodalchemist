@@ -79,5 +79,8 @@ Embeddings (semantische Suche) und Bildgenerierung bleiben beim Plattform-Provid
 
 Noch zu prüfen (nach den weiteren Paketen): `konzept_anlegen_mcp`, `foodbook_anlegen_mcp`, `angebot_erstellen_mcp`, `speiseplan_erstellen_mcp`, `speisekarte_anlegen_mcp`, `trendradar_pflegen_mcp`, `preis_margen_monitoring_mcp`, `basisrezept_*` (Generator/Planung = P2b/c).
 
-## Offene Frage
-Der Kurator wünscht „Changelog-Zeile". `knowledge_canon.PUT` lehnt Dossiers mit `## Changelog` im Body ab. Die Workflow-Dossiers sind nicht im Kanon, die bestehenden haben keinen Changelog-Abschnitt. Vorschlag: nur `version` hochzählen (macht `knowledge.PUT` automatisch), die Änderungsnotiz in den Pflichtlisten-Commit statt in den Dossier-Body.
+## Entscheidungen (Kurator, 29.10.)
+
+- Versionierung: `version` hochzählen (macht `knowledge.PUT`), Änderungsnotiz im Commit, **kein** `## Changelog` im Body.
+- `presentation_designs.GENERATE_CSS` hat kein Workflow-Dossier: nur in der Tool-Liste von `workflow.ki_auftrag_beantworten_mcp` nennen, kein neues Dossier. (Die Tool-Liste im Dossier-Text ergänzen, sobald angelegt: `gps.ENRICH`, `gp_forms.ESTIMATE`, `recipe_sensorik.POST`, `recipe_klasse.POST`, `recipe_rollen.POST`, `recipe_coherence.POST`, `presentation_designs.GENERATE_CSS`.)
+- Anlegen/PUT auf io erst nach Go des Kurators und nach dem Deploy des jeweiligen Codes. 2a (Job-Mechanik) geht gemeinsam mit 2b in die nächste Runde.
