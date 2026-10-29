@@ -229,7 +229,7 @@ class RecipeOneShotService
 
                     continue;
                 }
-                $treffer = $weg === 'zukauf' ? $matcher->matchIngredient($team, $text, null, 'gp_first', $lp['pref'], $lp['preferRaw'], $lp['bio'], convenience: $lp['convenience'], zubereitung: $lp['zubereitung']) : null;
+                $treffer = $weg === 'zukauf' ? $matcher->zukaufTrefferFuer($team, $text, $lp['convenience'], $lp['zubereitung'], $lp['pref'], $lp['bio']) : null;
                 $gp = $treffer !== null && \Platform\FoodAlchemist\Services\IngredientMatchService::istAutomatischVerdrahtbar($treffer) && ($treffer['target'] ?? null) === 'gp'
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::find((int) $treffer['gp_id'])
                     : $mint->mintFromLa($team, $text, leitplanken: $leitplanken);
