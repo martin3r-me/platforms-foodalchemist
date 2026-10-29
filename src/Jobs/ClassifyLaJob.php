@@ -88,6 +88,11 @@ class ClassifyLaJob implements ShouldQueue
         $flavor = $naming->bereinigeFeld($werte['flavor'] ?? null);
         $zusatz = $naming->zusatzAusArtikel($werte['zusatz'] ?? null, [$designation, $la->marketing_name ?? null],
             app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($la)->marke);   // §6.6: nur exakt aus dem Artikel; §5 Ausn. 3: Marke aus MarkeAusArtikel
+        if (trim((string) ($werte['commodity_group_code'] ?? '')) === '15') {
+            // Getränke (Dominique 28.10.): steht die Marke in der Klammer, nicht doppelt in der Hauptzutat
+            $marke = app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($la)->marke;
+            ['hauptzutat' => $hauptzutat, 'zusatz' => $zusatz] = $naming->getraenkFelder(['hauptzutat' => $hauptzutat, 'zusatz' => $zusatz], $marke, [$designation, $la->marketing_name ?? null]);
+        }
         $condition = $naming->bereinigeFeld($werte['condition'] ?? null);
         $processing = $naming->bereinigeFeld($werte['processing'] ?? null);
         $form = $naming->bereinigeFeld($werte['form'] ?? null);

@@ -31,6 +31,7 @@ class MarkeAusArtikel
     /** Warengruppen, die nie Rezepturware sind: Wurst (§8.13), Getränke (§5 Ausnahme 1). */
     public const NIE_REZEPTURWARE_WG = ['04', '15'];
 
+
     /** @var array<string, array<string, array<string, array{marke: string, vorrang: int, typ: string}>>>|null  'global' bzw. supplier_id → position → kuerzel → Eintrag */
     private ?array $karte = null;
 

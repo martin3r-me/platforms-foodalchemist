@@ -80,7 +80,7 @@ class MerkmalsDiff
         }
 
         // Bio
-        // Getränke (WG 15, §5 Ausnahme 1 + §7.1a): Marke, Einzelgebinde und Füllmenge sind Teil der Ware (vol-% steht oben bei den Prozentwerten)
+        // Getränke (WG 15, §5 Ausnahme 1 + §7.1a): Marke (seit 28.10. als Klammer im Namen), Einzelgebinde und Füllmenge sind Teil der Ware (vol-% steht oben)
         $getraenk = (string) ($felder['commodity_group_code'] ?? '') === '15' || (string) $gp->commodity_group_code === '15';
         if ($getraenk || self::istMarkenSuessware($felder)) {
             $marke = trim((string) ($felder['marke'] ?? ''));

@@ -888,9 +888,9 @@ class GpModal extends Component
         $markeRegel = $quelle['marke_regel']['marke'] ?? null;
         $zusatz = $naming->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null,
             $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)], $markeRegel);
+        $wg = trim((string) ($vorschlag->werte['commodity_group_code'] ?? '')) ?: (string) ($this->builder['commodity_group_code'] ?? '');
         $rezeptur = \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::rezepturwareFuerWg(
-            \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($vorschlag->werte['rezepturware'] ?? null),
-            trim((string) ($vorschlag->werte['commodity_group_code'] ?? '')) ?: (string) ($this->builder['commodity_group_code'] ?? ''));   // createGp prüft die WG noch einmal
+            \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($vorschlag->werte['rezepturware'] ?? null), $wg);   // createGp prüft die WG noch einmal
         if ($rezeptur !== null) {
             $this->builder['rezepturware'] = $rezeptur ? '1' : '0';
         }
@@ -899,6 +899,13 @@ class GpModal extends Component
         }
         if ($zusatz !== '') {
             $this->builder['zusatz'] = $zusatz;
+        }
+        if ($wg === '15') {
+            // Getränke: steht die Marke in der Klammer, nicht doppelt in der Hauptzutat; Füllmenge nach §7.1a in die Pflichtangabe
+            $g = $naming->getraenkFelder(['hauptzutat' => $this->builder['hauptzutat'] ?? '', 'zusatz' => $this->builder['zusatz'] ?? '',
+                'pflichtangabe' => $this->builder['pflichtangabe'] ?? ''], $markeRegel,
+                $quelle !== null ? [$quelle['bezeichnung'] ?? null, $quelle['marketing_name'] ?? null] : [trim($this->kiRohtext)]);
+            $this->builder = [...$this->builder, ...$g];
         }
         // Nachlauf (Praxisfall „Delice Schokoladen-Mousse mit Cashew-Crème"): Hauptzutat nur belegte Kernwörter, Zustand hart aus der
         // Haltbarkeit, Form/Verarbeitung ohne Dublette zur Hauptzutat
@@ -1161,10 +1168,16 @@ class GpModal extends Component
                 $felder[$feld] = $wert;
             }
         }
-        $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)],
-            app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($quellLa)->marke);   // §5 Ausnahme 3
+        $marke = app(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class)->fuer($quellLa)->marke;
+        $zusatz = app(GpNamingService::class)->zusatzAusArtikel($vorschlag->werte['zusatz'] ?? null, [trim($designation)], $marke);   // §5 Ausnahme 3
         if ($zusatz !== '') {
             $felder['zusatz'] = $zusatz;
+        }
+        $wg = trim((string) ($vorschlag->werte['commodity_group_code'] ?? '')) ?: (string) ($this->builder['commodity_group_code'] ?? '');
+        if ($wg === '15') {
+            // Getränke (Dominique 28.10.): Marke nicht doppelt (Klammer vs. Hauptzutat), Füllmenge nach §7.1a
+            $felder = array_filter(app(GpNamingService::class)->getraenkFelder($felder, $marke, [trim($designation), $quellLa->marketing_name ?? null]),
+                fn ($v) => trim((string) $v) !== '');
         }
         $name = trim(app(GpNamingService::class)->renderGpName([...$this->builder, ...$felder]));
         if ($name === '') {

@@ -83,7 +83,7 @@ class LaFelderService
     }
 
     /**
-     * Einheitlicher Abschluss der Felder: Marke vom Artikel (nur für den Abgleich der Getränke, §5 Ausnahme 1 — nie aus der KI), Verarbeitung und Zuschnitt
+     * Einheitlicher Abschluss der Felder: Marke vom Artikel (für den Abgleich der Getränke — nie aus der KI; seit 28.10. steht sie bei Getränken in der Klammer), Verarbeitung und Zuschnitt
      * zusammenführen (§6: „gegart, Würfel 10 mm“ — der Namens-Renderer nimmt sonst nur eines von beiden), Zuschnittmaße kanonisch („10 x 10 mm“ → „10 mm“),
      * bei Non-Food die Warengruppe 16 erzwingen (§8.18.1: kein Zustand, keine Form).
      *
@@ -97,8 +97,13 @@ class LaFelderService
         $regel = $this->marken->fuer($la);
         $f['marke_regel'] = $regel->toArray();
         $f['rezepturware'] = $nonFood ? false : MarkeAusArtikel::rezepturwareFuerWg($f['rezepturware'] ?? null, (string) ($f['commodity_group_code'] ?? ''));
+        $wg = (string) ($f['commodity_group_code'] ?? '');
         if ($f['rezepturware'] === true && trim((string) ($f['zusatz'] ?? '')) === '' && $regel->marke !== null) {
             $f['zusatz'] = $regel->marke;
+        }
+        if (! $nonFood && $wg === '15') {
+            // Getränke (Dominique 28.10.): Klammer-Marke nur, wenn die KI Gattung + Marke erkannt hat; Füllmenge nach §7.1a
+            $f = $this->naming->getraenkFelder($f, $regel->marke, [$la->designation, $la->marketing_name]);
         }
         $f['marke_offen'] = MarkeAusArtikel::markeOffen($f['rezepturware'], (string) ($f['zusatz'] ?? ''));
         $f['processing'] = $this->kanonischeMasse((string) ($f['processing'] ?? ''));
