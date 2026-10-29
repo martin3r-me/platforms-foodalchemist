@@ -50,12 +50,13 @@ class KiVerbrauchGetTool extends FoodAlchemistTool implements ToolContract, Tool
             'ohne_preis' => $z['ohne_preis']];
 
         return ToolResult::success([
-            'von' => $von->toDateString(), 'bis' => $bis->toDateString(), 'ist_hauptteam' => $v['ist_haupt'],
+            'von' => $von->toDateString(), 'bis' => $bis->toDateString(), 'ist_hauptteam' => $v['ist_haupt'], 'plattform' => $v['plattform'],
             'summe' => $knapp($v['summe']),
             'je_art' => array_map($knapp, $v['klassen']),
             'je_standort' => array_map(fn ($s) => ['team_id' => $s['team_id']] + $knapp($s), $v['standorte']),
             'deckel' => $v['deckel'],
-            'hinweis' => 'Embeddings (Wissenssuche) werden noch nicht erfasst und fehlen im Betrag.',
+            'hinweis' => ($v['plattform'] ? 'Master-Team: gezählt werden die Plattform-Aufrufe (nicht abgerechnet), nicht der Verbrauch der Mandanten. ' : '')
+                .'Embeddings (Wissenssuche) werden noch nicht erfasst und fehlen im Betrag.',
         ]);
     }
 
