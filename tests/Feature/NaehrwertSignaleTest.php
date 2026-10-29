@@ -112,6 +112,11 @@ it('Signale nur im Besitzer-Team des Artikels', function () {
 
     app(NaehrwertSignalService::class)->laufen($this->rootTeam);
     expect(($this->signale)()->pluck('team_id')->unique()->all())->toBe([$this->rootTeam->id])->and(($this->signale)())->toHaveCount(2);
+
+    // Gegenrichtung: das Kind-Team sieht die GPs (und Artikel) des Eltern-Teams — Signale bekommt es nur für seinen eigenen Artikel
+    app(NaehrwertSignalService::class)->laufen($this->childA);
+    expect(($this->signale)()->where('team_id', $this->childA->id)->pluck('ref_id')->all())->toHaveCount(1)
+        ->not->toContain($this->mazola->id, $this->kaputt->id);
 });
 
 it('ein Signal schließt sich selbst, wenn die Quelle die Werte berichtigt (ohne Entscheidung)', function () {
