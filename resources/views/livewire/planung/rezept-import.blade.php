@@ -152,6 +152,17 @@
                 </p>
                 {{-- #6/Import: Verknüpfung mit Grundprodukten + Anreicherung laufen im Hintergrund (nicht mehr synchron per Knopf). --}}
                 <x-fa::signal tone="info">Grundprodukte, Beschreibung und Pairings werden im Hintergrund ergänzt.</x-fa::signal>
+                @if(!empty($importErgebnis['ausrezeptiert']))
+                    <x-fa::signal tone="info" data-import-ausrezeptiert>
+                        KI-Entwurf, bitte prüfen: {{ collect($importErgebnis['ausrezeptiert'])->pluck('name')->implode(', ') }} werden im Hintergrund als eigene Unterrezepte ausgearbeitet und bleiben Entwurf.
+                    </x-fa::signal>
+                @endif
+                @if(!empty($importErgebnis['ausrezeptieren_offen']))
+                    <x-fa::signal tone="warn" data-import-ausrezeptieren-offen>
+                        Noch leer: {{ collect($importErgebnis['ausrezeptieren_offen'])->pluck('name')->implode(', ') }}. Automatisch gibt es höchstens {{ \Platform\FoodAlchemist\Services\RecipeExtractService::STUBS_AUSREZEPTIEREN_MAX }} Unterrezepte je Import.
+                        <x-fa::button size="sm" variant="ghost" wire:click="unterrezepteAusrezeptieren" data-import-restliche-ausrezeptieren>Restliche ausrezeptieren</x-fa::button>
+                    </x-fa::signal>
+                @endif
                 <div class="flex flex-wrap items-center gap-2">
                     <x-fa::button variant="primary" icon="heroicon-o-queue-list" x-on:click="tab='worker'" data-import-zum-worker>Fortschritt ansehen</x-fa::button>
                     <x-fa::button variant="ghost" icon="heroicon-o-arrow-down-tray" wire:click="importReset">Weiteres Rezept importieren</x-fa::button>

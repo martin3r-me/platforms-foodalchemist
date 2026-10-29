@@ -232,7 +232,7 @@ class RecipeGeneratorService
 
         $matchingStarted = hrtime(true);
         $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde, &$timings) {
-            $recipe = $this->recipes->create($team, [
+            $recipe = ($stub = \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::huelle($team, $parameter, $vkModus)) !== null ? \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::alsEntwurf($stub, $kiRezept, $createdVia) : $this->recipes->create($team, [
                 // L5: getippter Titel (titel_vorgabe) ist der Namens-Anker — er gewinnt vor dem KI-Namen
                 // (der Mensch hat bewusst benannt). Immer defensiv normalisieren (Umbrüche/Whitespace raus,
                 // Länge gedeckelt), damit kein Brief-Text als Name in die varchar-Spalte rutscht.

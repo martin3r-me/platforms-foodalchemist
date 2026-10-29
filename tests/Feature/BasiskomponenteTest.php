@@ -114,3 +114,46 @@ it('Aromen-Präfix nur für Aroma, Aromaöl, Tinktur, Matte — „Extrakt:“ b
         // „Öl: Kräuter“ ist Zubereitung (D5) — ob selbst oder gekauft, entscheiden die Leitplanken; „Öl: neutral“ ist das Standard-GP (LeitplankenZubereitungTest)
         ->and(app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)->zubereitungsWeg($this->rootTeam, 'Öl: neutral'))->toBeNull();
 });
+
+it('Import: neue Unterrezept-Hüllen werden im Hintergrund ausrezeptiert (Job je Hülle, Eltern-Bezug), bleiben Entwurf', function () {
+    Queue::fake();
+    $res = app(RecipeExtractService::class)->legeAn($this->rootTeam, ['typ' => 'basisrezept', 'name' => 'Rahmsauce Stub', 'preparation' => 'Kochen.',
+        'zutaten' => [['text' => 'Geflügelfond', 'quantity' => '500', 'unit' => 'g']]]);
+
+    $stubId = (int) $res['stubs'][0]['id'];
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::class, 1);
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::class, fn ($j) => $j->stubId === $stubId && $j->elternId === (int) $res['recipe']->id);
+    expect($res['ausrezeptiert'])->toHaveCount(1)->and($res['ausrezeptieren_offen'])->toBe([]);
+});
+
+it('Import: Obergrenze je Import — der Rest bleibt als Hülle offen (Knopf), 0 schaltet das Ausrezeptieren ab', function () {
+    Queue::fake();
+    $in = ['typ' => 'basisrezept', 'name' => 'Zwei Hüllen', 'preparation' => 'Kochen.',
+        'zutaten' => [['text' => 'Geflügelfond', 'quantity' => '500', 'unit' => 'g'], ['text' => 'Kalbsjus', 'quantity' => '200', 'unit' => 'g']]];
+
+    config(['foodalchemist.import.stubs_ausrezeptieren_max' => 1]);
+    $res = app(RecipeExtractService::class)->legeAn($this->rootTeam, $in);
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::class, 1);
+    expect($res['stubs'])->toHaveCount(2)->and($res['ausrezeptiert'])->toHaveCount(1)->and($res['ausrezeptieren_offen'])->toHaveCount(1);
+
+    Queue::fake();
+    config(['foodalchemist.import.stubs_ausrezeptieren_max' => 0]);
+    $in['name'] = 'Null Hüllen';
+    app(RecipeExtractService::class)->legeAn($this->rootTeam, $in);
+    Queue::assertNotPushed(\Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::class);
+});
+
+it('Ausrezeptieren füllt die vorhandene Hülle (kein Duplikat), Status wird Entwurf', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $stub = app(\Platform\FoodAlchemist\Services\RecipeService::class)->createSubRecipeStub($this->rootTeam, 'Geflügelfond')['recipe'];
+
+    $res = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class)->generiere($this->rootTeam, 'Unterrezept «Geflügelfond»', [
+        'stub_fuellen_id' => $stub->id, 'titel_vorgabe' => 'Geflügelfond',
+    ], ['name' => 'Geflügelfond', 'zutaten' => [['text' => 'Hühnerknochen', 'quantity' => 1000, 'unit' => 'g'], ['text' => 'Wasser', 'quantity' => 2000, 'unit' => 'g']], 'preparation' => 'Auskochen.'],
+        createdVia: 'import_ki_unterrezept');
+
+    expect((int) $res['recipe']->id)->toBe((int) $stub->id)
+        ->and($stub->fresh()->status->value)->toBe('draft')
+        ->and($stub->fresh()->ingredients()->count())->toBe(2)
+        ->and(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->where('name', 'Geflügelfond')->count())->toBe(1);
+});

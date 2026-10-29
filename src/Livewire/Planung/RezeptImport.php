@@ -157,6 +157,8 @@ class RezeptImport extends Component
             'name' => (string) $recipe->name,
             'offen' => (int) ($recipe->n_ingredients_unmapped ?? 0),
             'sub_recipes' => $res['sub_recipes'] ?? [],
+            'ausrezeptiert' => $res['ausrezeptiert'] ?? [],
+            'ausrezeptieren_offen' => $res['ausrezeptieren_offen'] ?? [],
         ];
         // #6/Import (Dominique 2026-08-28): NICHT mehr synchron minten — die Aufgabe an den Worker
         // übergeben. Voll-Anreicherung inkl. LA-First-GP-Mint der offenen Zutaten läuft async und wird
@@ -175,6 +177,22 @@ class RezeptImport extends Component
         }
         $this->importStep = 'fertig';
         $this->dispatch('recipe-gespeichert');
+    }
+
+    /** Knopf „Restliche Unterrezepte ausrezeptieren": die wegen der Obergrenze offenen Hüllen jetzt im Hintergrund füllen. */
+    public function unterrezepteAusrezeptieren(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $offen = (array) ($this->importErgebnis['ausrezeptieren_offen'] ?? []);
+        if ($team === null || $offen === []) {
+            return;
+        }
+        foreach ($offen as $s) {
+            \Platform\FoodAlchemist\Jobs\StubAusrezeptierenJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $s['id'], (int) ($this->importErgebnis['recipe_id'] ?? 0) ?: null, $this->abgleichLeitplanken())
+                ->onQueue(\Platform\FoodAlchemist\Support\Warteschlange::rezepte());
+        }
+        $this->importErgebnis['ausrezeptiert'] = array_merge((array) ($this->importErgebnis['ausrezeptiert'] ?? []), $offen);
+        $this->importErgebnis['ausrezeptieren_offen'] = [];
     }
 
     public function importReset(): void
