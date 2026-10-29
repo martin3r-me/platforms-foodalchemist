@@ -32,7 +32,7 @@ enum Grundlage: string
         return match ($quelle) {
             'sensorik', 'naehrwert' => self::NaehrwertBelegt,
             'kategorie' => self::Regel,
-            'ki_textur' => self::KiEinschaetzung,
+            'ki_textur', 'wahrnehmung' => self::KiEinschaetzung,   // wahrnehmung = gegartes Sensorik-Profil (KI), K4a
             default => $status === WissensStatus::Geprueft->value ? self::DossierGeprueft : self::DossierEntwurf,
         };
     }

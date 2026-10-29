@@ -1,7 +1,7 @@
 {{-- Kompakte Pairing-Empfehlungen (read-only), rechts neben dem Geschmacks-Radar — nur recipe-Typ.
      Spec 60 · P10: aus derselben Rechnung wie Netz und „Passt das zusammen?".
        Gericht      Aromenprofil · passt dazu (Basisrezepte) · deckt offenen Bedarf (Basisrezepte)
-       Basisrezept  Aromenprofil · harmoniert (★★★) · Kontrast-Lieferanten · verwandte Basisrezepte
+       Basisrezept  Aromenprofil · harmoniert (★★★) · Passt als Kontrast · verwandte Basisrezepte (keine Lücken, Dominique 29.10.2026)
      Erwartet $pairing (PairingService::panelRecipe). Tokens ($pill/$variantPill) aus dem einbindenden Partial (Ui::maps()). --}}
 @php($pr = $pairing ?? [])
 @php($istRecipe = ($pr['type'] ?? null) === 'recipe')
@@ -47,7 +47,7 @@
         @endif
         @if(count($kontrast))
             <div>
-                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Kontrast (deckt offenen Bedarf)</h4>
+                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Passt als Kontrast</h4>
                 <div class="flex flex-wrap gap-1">
                     @foreach($kontrast as $c)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">{{ $c['name'] }} <span class="opacity-60">{{ $c['achse'] }}</span></span>@endforeach
                 </div>

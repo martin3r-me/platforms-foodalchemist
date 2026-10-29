@@ -187,3 +187,87 @@ it('KI-Texturen fließen ins Profil (ungeprüft gekennzeichnet) und decken als B
     $a = ($this->logik)()->analysiere($this->gericht->fresh());
     expect(($this->texte)($a['aussagen'], 'spannung'))->toContain('Spannung: Knusper von Garnitur: Kartoffelchips für Beilage: Rosmarinkartoffeln');
 });
+
+// ── K1/K2/K4a (Kurator für Dominique, 29.10.2026): Rezept deckt Bedarf, Lücken nur im Gericht, Wahrnehmung ersetzt Anker-Stufe ──
+
+it('K1 Gericht: was das Gericht selbst liefert (Stufe ≥ 2), deckt den Bedarf; Gegenprobe ohne Rezept-Deckung bleibt er offen', function () {
+    $vocab = DB::table('foodalchemist_vocab_textures')->where('slug', 'knusprig')->value('id')
+        ?? DB::table('foodalchemist_vocab_textures')->insertGetId(['slug' => 'knusprig', 'display_de' => 'Knusprig', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('foodalchemist_recipe_textures')->insert(['recipe_id' => $this->gericht->id, 'texture_vocab_id' => $vocab, 'intensity' => 0.9,
+        'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);          // Gericht liefert Knusper (KI-Textur → Stufe 2,7)
+    app(RezeptProfil::class)->vergiss();
+    $logik = ($this->logik)();
+
+    expect(array_column($logik->analysiere($this->gericht->fresh())['offene_bedarfe'], 'achse'))->toBe([])
+        ->and(array_column($logik->analysiereBestandteile($logik->bestandteile($this->gericht->fresh()))['offene_bedarfe'], 'achse'))->toBe(['knusprig'])
+        ->and($logik->daten($this->gericht->fresh())['zusammenfassung'])->not->toContain('fehlt:');
+});
+
+it('K2: im Basisrezept heißt ein offener Bedarf „Passt als Kontrast", im Gericht bleibt „Es fehlt"', function () {
+    $natur = ($this->basis)('Beilage: Kartoffeln natur', [['Kartoffeln: mehlig', 'potato', '400']], ['function' => 'Beilage']);
+    $logik = ($this->logik)();
+
+    $b = $logik->daten($natur->fresh());
+    $texte = array_column($b['aussagen']['bedarf_offen'] ?? [], 'text');
+    expect($b['art'])->toBe('basisrezept')
+        ->and($texte)->toContain('Passt als Kontrast: Säure (für Kartoffeln: mehlig)')
+        ->and(implode(' ', $texte))->not->toContain('fehlt')
+        ->and($b['zusammenfassung'])->toContain('passt als Kontrast: ')->not->toContain('fehlt:');
+    $html = Blade::render('<x-foodalchemist::kombination :daten="$d" />', ['d' => $b]);
+    expect($html)->toContain('Passt als Kontrast')->not->toContain('Es fehlt')->not->toContain('könnte fehlen');
+
+    $g = $logik->daten($this->gericht->fresh());
+    expect($g['art'])->toBe('gericht')
+        ->and(array_column($g['aussagen']['bedarf_offen'] ?? [], 'text'))->toBe(['Es könnte fehlen: Knusper (für Beilage: Rosmarinkartoffeln)'])
+        ->and(Blade::render('<x-foodalchemist::kombination :daten="$d" />', ['d' => $g]))->toContain('Es fehlt');
+});
+
+it('K1 Basisrezept (Fall Roastbeef „Salz fehlt" trotz „Liefert Salz"): die Wahrnehmung des gegarten Profils deckt den Bedarf', function () {
+    $natur = ($this->basis)('Beilage: Kartoffeln natur', [['Kartoffeln: mehlig', 'potato', '400']], ['function' => 'Beilage']);
+    $logik = ($this->logik)();
+    expect(array_column($logik->analysiere($natur->fresh())['offene_bedarfe'], 'achse'))->toContain('saeure');
+
+    DB::table('foodalchemist_recipe_taste_vectors')->insert(['recipe_id' => $natur->id, 'suess' => 0, 'salzig' => 0.3, 'sauer' => 0.8, 'bitter' => 0,
+        'umami' => 0.2, 'fettig' => 0, 'scharf' => 0, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+    $logik = ($this->logik)();                                                   // frische Instanz: das Profil hängt im Speicher-Cache
+
+    expect(array_column($logik->analysiere($natur->fresh())['offene_bedarfe'], 'achse'))->not->toContain('saeure');
+});
+
+it('K4a: das gegarte Profil ersetzt die Anker-Stufe auf den 7 Geschmacksachsen, auch nach unten; ohne gegartes Profil bleibt der Anker', function () {
+    DB::table('foodalchemist_vocab_pairing_anchors')->insert(['uuid' => (string) UuidV7::generate(), 'slug' => 'pepper',
+        'display_de' => 'Schwarzer Pfeffer', 'aroma_intensitaet' => 1.0, 'created_at' => now(), 'updated_at' => now()]);
+    $this->a['pepper'] = (int) DB::getPdo()->lastInsertId();
+    DB::table('foodalchemist_anchor_eigenschaften')->insert(['anchor_id' => $this->a['pepper'], 'achse' => 'schaerfe', 'stufe' => 3,
+        'quelle' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    $r = ($this->basis)('Würze: Pfefferkruste', [['Pfeffer: schwarz', 'pepper', '100']]);
+    $profil = app(RezeptProfil::class);
+
+    $profil->vergiss();
+    expect($profil->fuer($r->id)['eigenschaften']['schaerfe'])->toBe(['stufe' => 3.0, 'quelle' => 'dossier']);   // roh: Anker-Wissen
+
+    DB::table('foodalchemist_recipe_taste_vectors')->insert(['recipe_id' => $r->id, 'suess' => 0, 'salzig' => 0.7, 'sauer' => 0, 'bitter' => 0,
+        'umami' => 0, 'fettig' => 0, 'scharf' => 0.15, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+    $profil->vergiss();
+    $e = $profil->fuer($r->id)['eigenschaften'];
+    expect($e['schaerfe'])->toBe(['stufe' => 0.45, 'quelle' => 'wahrnehmung'])            // ●●● → ●○○
+        ->and($e['salz'])->toBe(['stufe' => 2.1, 'quelle' => 'wahrnehmung']);
+
+    DB::table('foodalchemist_recipe_taste_vectors')->where('recipe_id', $r->id)->update(['scharf' => 0]);
+    $profil->vergiss();
+    expect($profil->fuer($r->id)['eigenschaften'])->not->toHaveKey('schaerfe');            // gegart nicht wahrnehmbar
+});
+
+it('Messbefehl rezept-luecken-vergleich zählt Änderungen und schreibt nichts', function () {
+    $natur = ($this->basis)('Beilage: Kartoffeln natur', [['Kartoffeln: mehlig', 'potato', '400']], ['function' => 'Beilage']);
+    app(RezeptProfil::class)->fuer($natur->id);                                             // „vorher" gespeichert
+    DB::table('foodalchemist_recipe_taste_vectors')->insert(['recipe_id' => $natur->id, 'suess' => 0, 'salzig' => 0, 'sauer' => 0.8, 'bitter' => 0,
+        'umami' => 0, 'fettig' => 0, 'scharf' => 0, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+    $vorher = DB::table('foodalchemist_recipe_profile')->where('recipe_id', $natur->id)->value('eigenschaften');
+
+    $this->artisan('foodalchemist:rezept-luecken-vergleich', ['--rezept' => [$natur->id]])
+        ->expectsOutputToContain('Liefert neu: Säure 1')
+        ->assertExitCode(0);
+
+    expect(DB::table('foodalchemist_recipe_profile')->where('recipe_id', $natur->id)->value('eigenschaften'))->toBe($vorher);
+});
