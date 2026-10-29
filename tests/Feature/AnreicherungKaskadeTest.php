@@ -127,3 +127,15 @@ it('Alles anreichern: ein fehlgeschlagener Hintergrund-Lauf wird als Fehler geze
         ['status' => 'failed', 'error' => 'Timeout'], now()->addMinutes(5));
     $c->call('pruefeAnreicherung')->assertSet('anreicherungLaeuft', false)->assertSet('fehler', 'Timeout');
 });
+
+it('Alles anreichern: der Cache-Stand gehört Team UND Rezept — ein Ergebnis eines anderen Mandanten für dieselbe Rezept-ID wird nicht übernommen', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Mandant', ['status' => 'draft', 'is_sales_recipe' => false]);
+    expect(EnrichRecipeJob::anreicherungCacheKey(1, 5))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(2, 5))
+        ->and(EnrichRecipeJob::anreicherungCacheKey(1, 5))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(1, 6));
+
+    $c = Livewire::test(RecipeModal::class)->call('oeffnen', $r->id)->call('allesAnreichern')->assertSet('anreicherungLaeuft', true);
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id + 1000, (int) $r->id),
+        ['status' => 'done', 'ergebnis' => ['uebernommen' => 9, 'schritte' => [], 'uebersprungen' => [], 'offen' => 0]], now()->addMinutes(5));
+    $c->call('pruefeAnreicherung')->assertSet('anreicherungLaeuft', true)->assertSet('anreicherung', null);   // fremdes Team: weiter warten, nichts übernommen
+});
