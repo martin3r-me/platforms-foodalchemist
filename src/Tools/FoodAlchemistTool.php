@@ -55,6 +55,30 @@ abstract class FoodAlchemistTool
         return null;
     }
 
+    /**
+     * Spec 91 (MCP-Filter-Gleichstand): Der Core nimmt unbekannte Parameter still an (additionalProperties = true) — ein falsch geratener
+     * Filter lieferte dann ungefiltert, ohne Fehler. LIST/SEARCH-Tools ignorieren sie weiter, melden sie aber im Ergebnis als `warnungen`.
+     *
+     * @return list<string>
+     */
+    protected function parameterWarnungen(array $arguments): array
+    {
+        $erlaubt = method_exists($this, 'getSchema') ? array_keys($this->getSchema()['properties'] ?? []) : [];
+
+        return array_values(array_map(
+            fn ($k) => "unbekannter Parameter '{$k}' ignoriert – erlaubt: " . implode(', ', $erlaubt),
+            array_filter(array_keys($arguments), fn ($k) => ! in_array($k, $erlaubt, true)),
+        ));
+    }
+
+    /** Erfolg samt {@see parameterWarnungen} (Schlüssel `warnungen` nur, wenn es welche gibt). */
+    protected function erfolgMitWarnungen(array $daten, array $arguments): ToolResult
+    {
+        $warnungen = $this->parameterWarnungen($arguments);
+
+        return ToolResult::success($warnungen === [] ? $daten : $daten + ['warnungen' => $warnungen]);
+    }
+
     protected function team(ToolContext $context): ?Team
     {
         $team = $context->team;

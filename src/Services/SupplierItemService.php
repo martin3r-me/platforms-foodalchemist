@@ -67,18 +67,18 @@ class SupplierItemService
      * Sichtbare LAs nach IDs, in derselben Form wie searchGlobal (structure.gp eager,
      * aktiver_preis-Subquery) — damit von der Semantik nachgereichte Kandidaten im
      * LaCandidateFinder dieselbe Ranking-Sicht haben wie die lexikalischen. Reihenfolge
-     * egal (der Finder rankt selbst neu).
+     * egal (der Finder rankt selbst neu). `$filters` wie searchGlobal (artikel.SEARCH filtert den semantischen Pass genauso).
      *
      * @param  list<int>  $ids
      * @return \Illuminate\Database\Eloquent\Collection<int, FoodAlchemistSupplierItem>
      */
-    public function byIds(Team $team, array $ids): \Illuminate\Database\Eloquent\Collection
+    public function byIds(Team $team, array $ids, array $filters = []): \Illuminate\Database\Eloquent\Collection
     {
         if ($ids === []) {
             return FoodAlchemistSupplierItem::query()->whereRaw('1 = 0')->get();
         }
 
-        return $this->baseQuery($team, [])->whereIn('id', $ids)->get();
+        return $this->baseQuery($team, $filters)->whereIn('id', $ids)->get();
     }
 
     private function baseQuery(Team $team, array $filters): Builder
