@@ -145,3 +145,18 @@ it('Weitere Tools mit nullbaren Feldern laufen über den Executor: production_or
         expect($r->errorCode ?? null)->not->toBe('VALIDATION_ERROR_TYPE')->and(str_contains((string) ($r->error ?? ''), 'falschen Typ'))->toBeFalse();
     }
 });
+
+it('gps.LIST über den echten Executor: Filter (WG, Text-Boolean) und Paging laufen durchs Schema (29.10.)', function () {
+    foreach (['Kalbsjus', 'Bratensauce', 'Pesto'] as $i => $name) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => $name, 'gp_key' => 'gle-' . $i . '||',
+            'status' => 'approved', 'commodity_group_code' => '13', 'marke_offen' => $i === 1]);
+    }
+    \Platform\FoodAlchemist\Models\FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => 'Apfel', 'gp_key' => 'gle-x||', 'status' => 'approved', 'commodity_group_code' => '02']);
+
+    $seite = ($this->ausfuehren)('foodalchemist.gps.LIST', ['commodity_group_code' => '13', 'per_page' => 1, 'page' => 2]);
+    $offen = ($this->ausfuehren)('foodalchemist.gps.LIST', ['marke_offen' => true, 'felder' => 'voll']);
+
+    expect($seite->success)->toBeTrue()->and($seite->data['total'])->toBe(3)->and($seite->data['last_page'])->toBe(3)->and($seite->data['gps'])->toHaveCount(1)
+        ->and($offen->success)->toBeTrue()->and(array_column($offen->data['gps'], 'name'))->toBe(['Bratensauce'])
+        ->and($offen->data['gps'][0]['marke_offen'])->toBeTrue();
+});
