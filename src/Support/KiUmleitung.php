@@ -34,6 +34,7 @@ final class KiUmleitung
         'foodalchemist.recipe_klasse.POST' => 'Ein propose() (vk.speisen_klasse), optional DB-Übernahme (accept). Das Tool fängt Throwable: darum meldet die Hülle über den Modus, nicht über die Ausnahme.',
         'foodalchemist.recipe_rollen.POST' => 'Ein propose() (vk.rollen), optional DB-Übernahme (accept).',
         'foodalchemist.recipe_sensorik.POST' => 'Ein propose() (recipe.sensorik), danach DB-Schreiben des Profils.',
+        'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
 
     /**
@@ -43,8 +44,6 @@ final class KiUmleitung
      */
     public const AUSGENOMMEN = [
         'foodalchemist.concepts.GENERATE' => 'Klasse c: Kaskade, mehrere propose() mit Schreibzugriffen dazwischen (Phase 2).',
-        'foodalchemist.recipes.ENRICH' => 'Queue-Dispatch wie gps.ENRICH (Phase 2).',
-        'foodalchemist.recipes.GENERATE' => 'Klasse c: Generator-Kaskade (Phase 2).',
     ];
 
     /**
@@ -73,6 +72,7 @@ final class KiUmleitung
      */
     public const LAUF_FLAG = [
         'foodalchemist.gps.ENRICH' => 'BulkEnrichService::starteGp(extern) → BulkEnrichGpJob setzt KiExternModus im Worker; verarbeiteGp legt bei „ausstehend“ keinen Leer-Vorschlag an.',
+        'foodalchemist.recipes.ENRICH' => 'PlanningCascadeService::enrichBestehendesRezept(extern) → EnrichRecipeJob (KiExternWiederholbar, P2b): Sammel-Transaktion im Job, ANTWORT startet den Lauf neu.',
     ];
 
     /** Soll ein Lauf, den dieser Aufruf startet, extern laufen? (nur Aufruf über den externen MCP-Server, Schalter an) */
@@ -87,11 +87,12 @@ final class KiUmleitung
     }
 
     /** @param callable(): ToolResult $lauf */
-    public static function ausfuehren(callable $lauf): ToolResult
+    public static function ausfuehren(callable $lauf, string $toolName = 'tool'): ToolResult
     {
         $db = DB::connection();
         $modus = app(KiExternModus::class);
         $niveau = $db->transactionLevel();
+        \Platform\FoodAlchemist\Services\Ai\KiExternLauf::wacheStart();   // Nicht-DB-Nebenwirkungen vor dem Rollback sichtbar machen
         $db->beginTransaction();
         $ergebnis = null;
         $fehler = null;
@@ -100,6 +101,7 @@ final class KiUmleitung
         } catch (\Throwable $e) {
             $fehler = $e;
         }
+        \Platform\FoodAlchemist\Services\Ai\KiExternLauf::wacheEnde("tool:{$toolName}");
         $merker = $modus->entnimm();
 
         if ($merker['wartet'] === []) {

@@ -25,6 +25,30 @@ class KiExternLauf
     public static array $nebenwirkungen = [];
 
     /** Einmalig: Ereignisse, die ein Rollback nicht zurücknimmt. Nur aktiv, solange {@see $wache} gesetzt ist. */
+    /** Wache starten (Tool-Hülle und Job-Lauf teilen sie): ab hier werden Nicht-DB-Nebenwirkungen gesammelt. */
+    public static function wacheStart(): void
+    {
+        self::registriereWache();
+        self::$wache = [];
+    }
+
+    /**
+     * Wache beenden: liefert die Nebenwirkungen, hält sie in {@see $nebenwirkungen} fest und schreibt bei Funden einen Log-Eintrag.
+     *
+     * @return list<string>
+     */
+    public static function wacheEnde(string $key): array
+    {
+        self::$nebenwirkungen = self::$wache ?? [];
+        self::$wache = null;
+        if (self::$nebenwirkungen !== []) {
+            // Ein Rollback nimmt das nicht zurück: der Rumpf gehört auf DB::afterCommit / ->afterCommit() (Pflichtliste Tabelle D)
+            \Illuminate\Support\Facades\Log::error("[KI-extern] Nicht-DB-Nebenwirkung im externen Lauf [{$key}] vor dem Commit", ['nebenwirkungen' => self::$nebenwirkungen]);
+        }
+
+        return self::$nebenwirkungen;
+    }
+
     private static function registriereWache(): void
     {
         $dispatcher = app('events');
@@ -78,8 +102,7 @@ class KiExternLauf
         $modus = app(KiExternModus::class);
         $db = DB::connection();
         $niveau = $db->transactionLevel();
-        self::registriereWache();
-        self::$wache = [];
+        self::wacheStart();
         $db->beginTransaction();
         $fehler = null;
         try {
@@ -89,12 +112,7 @@ class KiExternLauf
         } catch (\Throwable $e) {
             $fehler = $e;
         }
-        self::$nebenwirkungen = self::$wache ?? [];
-        self::$wache = null;
-        if (self::$nebenwirkungen !== []) {
-            // Ein Rollback nimmt das nicht zurück: der Rumpf gehört auf DB::afterCommit / ->afterCommit() (Pflichtliste Tabelle D)
-            \Illuminate\Support\Facades\Log::error("[KI-extern] Nicht-DB-Nebenwirkung im externen Lauf [{$key}] vor dem Commit", ['nebenwirkungen' => self::$nebenwirkungen]);
-        }
+        self::wacheEnde($key);
         $merker = $modus->entnimm();
 
         if ($merker['wartet'] === []) {

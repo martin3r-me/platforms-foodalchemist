@@ -40,6 +40,7 @@ dataset('umgeleitete_tools', function () {
         'recipe_klasse.POST' => ['foodalchemist.recipe_klasse.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.speisen_klasse'],
         'recipe_rollen.POST' => ['foodalchemist.recipe_rollen.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.rollen'],
         'recipe_sensorik.POST' => ['foodalchemist.recipe_sensorik.POST', fn ($t) => ['recipe_id' => $t->vkId], 'recipe.sensorik'],
+        'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
 });
 
@@ -48,6 +49,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
         return [
             ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
+            ['foodalchemist.recipes.GENERATE'],
         ];
     })());
     expect($ds)->toEqualCanonicalizing(array_keys(KiUmleitung::TOOLS));
@@ -60,7 +62,11 @@ it('Umleitung: Tool liefert einen KI-Auftrag statt eines Provider-Calls, kein zw
     expect($r->success)->toBeTrue($tool . ': ' . ($r->error ?? ''))
         ->and($r->data['status'])->toBe('ki_auftrag_offen')
         ->and($r->data['auftraege'])->toHaveCount(1)
-        ->and($r->data['auftraege'][0]['feature'])->toBe($feature);
+        ->and($r->data['auftraege'][0]['feature'])->toBeString()->not->toBe('');
+    // '*' = der Tool-Lauf hat mehrere KI-Glieder, das erste Feature steht im Vergleichstest (KiExternGenerateTest)
+    if ($feature !== '*') {
+        expect($r->data['auftraege'][0]['feature'])->toBe($feature);
+    }
 
     $a = DB::table('foodalchemist_ki_auftraege')->get();
     expect($a)->toHaveCount(1)
@@ -136,6 +142,20 @@ it('nicht umgeleitete Tools (Klasse c / Queue) bleiben beim Plattform-Provider',
             ->and(KiUmleitung::TOOLS)->not->toHaveKey($tool);
         expect(KiUmleitung::AUSGENOMMEN[$tool])->not->toBe('');
     }
+});
+
+it('Wache in der Tool-Hülle: Cache-Schreiben vor dem Rollback wird gemeldet, harmloses Rauschen nicht', function () {
+    KiUmleitung::ausfuehren(function () {
+        \Illuminate\Support\Facades\Cache::put('zz-hat-wirkung', 1, 60);
+        \Illuminate\Support\Facades\Cache::put('fa:worker:heartbeat', 1, 60);
+
+        return ToolResult::success([]);
+    }, 'foodalchemist.test.TOOL');
+
+    expect(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::$nebenwirkungen)->toBe(['Cache::put zz-hat-wirkung']);
+
+    KiUmleitung::ausfuehren(fn () => ToolResult::success([]), 'foodalchemist.test.TOOL');
+    expect(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::$nebenwirkungen)->toBe([]);
 });
 
 it('Rollback: Tool schreibt, fängt die Ausnahme (wie recipe_klasse.POST), Lauf wartet → kein Halbzustand, Auftrag existiert', function () {
