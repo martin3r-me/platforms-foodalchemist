@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Support\KiUmleitung;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -22,7 +23,9 @@ beforeEach(function () {
     $this->actingAs($this->user);
     config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => [], 'foodalchemist.ai.mcp_extern' => true]);
     $this->registry = app(ToolRegistry::class);
-    $this->kontext = new ToolContext($this->user, $this->rootTeam);
+    // externer MCP-Server: der Core-Adapter setzt metadata['team_source'] immer; interne Wege (callWithTools, Core-Chat) bauen den Kontext ohne Metadaten
+    $this->kontext = new ToolContext($this->user, $this->rootTeam, ['team_source' => 'user_current']);
+    $this->internKontext = new ToolContext($this->user, $this->rootTeam);
     $this->vkId = $this->registry->get('foodalchemist.verkaufsrezepte.POST')->execute(['name' => 'HG: Umleitung'], $this->kontext)->data['id'];
     $this->gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ei'], $this->kontext)->data['id'];
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
@@ -80,9 +83,56 @@ it('Schalter aus: dasselbe Tool läuft über den Plattform-Provider, kein Auftra
         ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
 })->with('umgeleitete_tools');
 
+it('interner Weg (ToolContext ohne MCP-Herkunft): dasselbe Tool läuft über den Plattform-Provider, kein Auftrag', function (string $tool, Closure $args, string $feature) {
+    $r = $this->registry->get($tool)->execute($args($this), $this->internKontext);
+
+    expect($r->data['status'] ?? null)->not->toBe('ki_auftrag_offen')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
+})->with('umgeleitete_tools');
+
+it('Plattform-KI per callWithTools ruft ein umgeleitetes Tool: Provider wird gerufen, Ergebnis statt Auftrag', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public int $agent = 0;
+
+        public int $inner = 0;
+
+        public array $toolErgebnisse = [];
+
+        public int $gpId = 0;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $system = (string) ($messages[0]['content'] ?? '');
+            if (str_contains($system, 'Sprachassistent')) {   // der Agent-Loop selbst
+                $this->agent++;
+                $letzte = (string) end($messages)['content'];
+                if (str_contains($letzte, 'Tool-Ergebnis') || $this->agent > 1) {
+                    $this->toolErgebnisse[] = $letzte;
+
+                    return ['content' => '{"action":"final","text":"fertig"}', 'model' => 'fake-voice', 'usage' => []];
+                }
+
+                return ['content' => json_encode(['action' => 'tool', 'name' => 'foodalchemist.gp_forms.ESTIMATE', 'arguments' => ['gp_id' => $this->gpId]]), 'model' => 'fake-voice', 'usage' => []];
+            }
+            $this->inner++;                                   // das Tool ruft propose() → Provider
+
+            return parent::chat($messages, $options);
+        }
+    };
+    $spy->gpId = $this->gpId;
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(AiGatewayService::class)->callWithTools('Schätze die Formen', ['foodalchemist.gp_forms.ESTIMATE'], 3, []);
+
+    expect($spy->inner)->toBeGreaterThan(0, 'das Tool muss den Plattform-Provider rufen')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0)
+        ->and(implode(' ', $spy->toolErgebnisse))->not->toContain('ki_auftrag_offen');
+});
+
 it('nicht umgeleitete Tools (Klasse c / Queue) bleiben beim Plattform-Provider', function () {
     foreach (array_keys(KiUmleitung::AUSGENOMMEN) as $tool) {
-        expect(KiUmleitung::umleiten($tool))->toBeFalse($tool)
+        expect(KiUmleitung::umleiten($tool, $this->kontext))->toBeFalse($tool)
             ->and(KiUmleitung::TOOLS)->not->toHaveKey($tool);
         expect(KiUmleitung::AUSGENOMMEN[$tool])->not->toBe('');
     }

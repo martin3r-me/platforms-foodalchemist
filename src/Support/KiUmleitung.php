@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Support;
 
 use Illuminate\Support\Facades\DB;
+use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\Ai\KiAuftragService;
 use Platform\FoodAlchemist\Services\Ai\KiExternModus;
@@ -11,8 +12,9 @@ use Platform\FoodAlchemist\Services\Ai\KiExternModus;
  * #1002 · Umleitung: ein MCP-Aufruf eines KI-Tools läuft extern. Das Tool bekommt den KI-Auftrag statt eines OpenAI-Calls,
  * der Client beantwortet ihn (ki_auftraege.GET → ANTWORT) und wiederholt den Aufruf.
  *
- * Der Haken sitzt in {@see \Platform\FoodAlchemist\Tools\FaRechteToolHuelle} (wickelt jedes FA-Tool). Nur Tools in {@see TOOLS}
- * werden umgeleitet — jedes dort mit Begründung und eigenem Test (tests/Feature/KiUmleitungTest.php). Der Lauf steht in einer
+ * Der Haken sitzt in {@see \Platform\FoodAlchemist\Tools\FaRechteToolHuelle} (wickelt jedes FA-Tool). Nur Aufrufe über den externen
+ * MCP-Server ({@see vomExternenMcp}) und nur Tools in {@see TOOLS} werden umgeleitet — die Plattform-KI (callWithTools, Core-Chat)
+ * ruft dieselben Tools und bekommt weiter ihr Ergebnis — jedes dort mit Begründung und eigenem Test (tests/Feature/KiUmleitungTest.php). Der Lauf steht in einer
  * Transaktion: wartet er auf einen Auftrag, rollt sie zurück (kein Halbzustand), danach wird der Auftrag außerhalb der
  * Transaktion angelegt. Der Rollback deckt nur die Datenbank. Tools mit Nebenwirkungen außerhalb der DB vor oder zwischen
  * `propose()` (Queue-Dispatch, Qdrant/Embedding, Dateien, Events, Mails, Cache) sind Klasse c und stehen in {@see AUSGENOMMEN},
@@ -46,9 +48,22 @@ final class KiUmleitung
         'foodalchemist.recipes.GENERATE' => 'Klasse c: Generator-Kaskade (Phase 2).',
     ];
 
-    public static function umleiten(string $toolName): bool
+    /**
+     * Herkunfts-Marker: Der Core-MCP-Adapter (`Mcp\Adapters\ToolContractAdapter::createContextFromRequest`, auch für das
+     * Meta-Tool `execute`) setzt `metadata['team_source']` IMMER (mcp_session | user_current | none). Alle internen Wege
+     * bauen ihren ToolContext ohne Metadaten: `AiGatewayService::callWithTools` (Voice-/Tier-D-Loop), `VoiceModal`,
+     * Core-KI-Chat (`ToolContext::fromAuth()`), Flow-`ToolAutomation`. Nur ein Aufruf mit Marker kommt vom externen MCP-Server.
+     */
+    public const HERKUNFT_MARKER = 'team_source';
+
+    public static function vomExternenMcp(ToolContext $context): bool
     {
-        return isset(self::TOOLS[$toolName]) && (bool) config('foodalchemist.ai.mcp_extern', true);
+        return array_key_exists(self::HERKUNFT_MARKER, $context->metadata);
+    }
+
+    public static function umleiten(string $toolName, ToolContext $context): bool
+    {
+        return isset(self::TOOLS[$toolName]) && (bool) config('foodalchemist.ai.mcp_extern', true) && self::vomExternenMcp($context);
     }
 
     /** @param callable(): ToolResult $lauf */

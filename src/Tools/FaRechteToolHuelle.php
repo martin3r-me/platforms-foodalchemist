@@ -149,7 +149,7 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
         }
 
         // #1002: KI-Tools laufen per MCP extern (Auftrag statt OpenAI-Call), in Transaktion mit Rollback bis zur Antwort
-        if (\Platform\FoodAlchemist\Support\KiUmleitung::umleiten($this->getName())) {
+        if (\Platform\FoodAlchemist\Support\KiUmleitung::umleiten($this->getName(), $context)) {
             return \Platform\FoodAlchemist\Support\KiUmleitung::ausfuehren(fn () => $this->innen()->execute($arguments, $context));
         }
 

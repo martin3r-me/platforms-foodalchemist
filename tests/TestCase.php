@@ -48,7 +48,7 @@ abstract class TestCase extends BaseTestCase
         config(['foodalchemist.bearbeitungssperre' => false]);
 
         // #1002: Bestandstests prüfen den Plattformweg der KI-Tools — der externe MCP-Weg wird nur in KiUmleitungTest eingeschaltet.
-        config(['foodalchemist.ai.mcp_extern' => false]);
+        config(['foodalchemist.ai.mcp_extern' => (bool) env('FA_TEST_MCP_EXTERN', false)]);   // FA_TEST_MCP_EXTERN=1: ganze Suite mit eingeschaltetem Extern-Weg (Sicherheitsnetz)
 
         // Ancestry-Ketten aus früheren Tests desselben Prozesses verwerfen (V-048).
         // Bewusst hier und nicht als Handliste im Harness: der Cache ist eine Trait-Statik
