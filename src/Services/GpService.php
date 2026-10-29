@@ -60,6 +60,14 @@ class GpService
         if (isset($filters['ohne_lead'])) {
             filter_var($filters['ohne_lead'], FILTER_VALIDATE_BOOLEAN) ? $query->whereNull('lead_la_supplier_item_id') : $query->whereNotNull('lead_la_supplier_item_id');
         }
+        if (isset($filters['ohne_la'])) {   // Bestandsarbeit „GPs ohne Lieferantenartikel“: keine aktive LA-Struktur
+            $mitLa = fn ($q) => $q->select(\Illuminate\Support\Facades\DB::raw(1))->from('foodalchemist_supplier_item_structures AS la_s')
+                ->whereColumn('la_s.gp_id', 'foodalchemist_gps.id')->whereNull('la_s.deleted_at');
+            filter_var($filters['ohne_la'], FILTER_VALIDATE_BOOLEAN) ? $query->whereNotExists($mitLa) : $query->whereExists($mitLa);
+        }
+        if (isset($filters['nur_la_pflicht']) && filter_var($filters['nur_la_pflicht'], FILTER_VALIDATE_BOOLEAN)) {   // braucht einen LA: requires_la, kein Derivat
+            $query->where('requires_la', true)->where(fn ($w) => $w->whereNull('is_derivat')->orWhere('is_derivat', false));
+        }
 
         return $query
             ->orderBy('name')

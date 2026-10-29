@@ -57,3 +57,23 @@ it('felder=voll liefert WG, Unterkategorie, Zustand, Zusatz, Marke offen, Rezept
         ->and($voll[$this->offen->id]['lead_la'])->toBeNull()
         ->and(array_keys($kurz))->toBe(['id', 'name', 'status', 'main_ingredient_slug']);
 });
+
+it('ohne_la: GPs ohne aktive Lieferantenartikel-Struktur (gelöschte zählt nicht); nur_la_pflicht lässt Derivate und GPs ohne LA-Pflicht weg', function () {
+    $lieferant = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos']);
+    $struktur = fn (FoodAlchemistGp $gp, bool $geloescht = false) => \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')->insert([
+        'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->rootTeam->id, 'gp_id' => $gp->id,
+        'supplier_item_id' => FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $lieferant->id, 'designation' => 'Artikel ' . $gp->name, 'qty' => 1, 'unit_code' => 'kg'])->id,
+        'created_at' => now(), 'updated_at' => now(), 'deleted_at' => $geloescht ? now() : null]);
+    $struktur($this->jus);
+    $struktur($this->offen, geloescht: true);   // nur eine gelöschte Verknüpfung → gilt als ohne LA
+    $this->apfel->update(['requires_la' => false]);
+    $this->ungeklaert->update(['is_derivat' => true]);
+    foreach ([$this->jus, $this->offen] as $g) {
+        $g->update(['requires_la' => true]);
+    }
+
+    expect(($this->ids)(['ohne_la' => true]))->toBe(($this->sortiert)($this->offen, $this->apfel, $this->ungeklaert))
+        ->and(($this->ids)(['ohne_la' => 'false']))->toBe(($this->sortiert)($this->jus))
+        ->and(($this->ids)(['ohne_la' => true, 'nur_la_pflicht' => true]))->toBe(($this->sortiert)($this->offen))
+        ->and(($this->ids)(['nur_la_pflicht' => false]))->toHaveCount(4);   // false schränkt nicht ein
+});
