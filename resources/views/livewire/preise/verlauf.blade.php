@@ -85,7 +85,7 @@
                         {{-- Hover: je Stand ein unsichtbares Band über die ganze Höhe, der Browser-Tooltip nennt Datum, Preis je Basiseinheit und Rohpreis je Gebinde --}}
                         @foreach($l['punkte'] as $p)
                             <rect x="{{ $p['x'] }}" y="0" width="{{ $p['breite'] }}" height="1000" fill="{{ $p['verdacht'] ? 'var(--fa-warn)' : 'var(--fa-ink)' }}" fill-opacity="{{ $p['verdacht'] ? '0.18' : '0' }}" data-tip="{{ $p['tip'] }}" data-preisverlauf-band @if($p['verdacht']) data-verdacht="1" @endif
-                                  style="pointer-events: none;" />
+                                  class="pointer-events-none" />
                         @endforeach
                     </g>
                 @endforeach
@@ -102,7 +102,7 @@
             {{-- Tooltip am Diagramm-Container (relative), an der Mausposition, an den Rändern geklemmt --}}
             <div x-show="tip" x-cloak x-text="tip" role="tooltip" data-preisverlauf-tooltip
                  x-bind:style="'left: ' + Math.max(0, Math.min(mx + 14, $root.clientWidth - $el.offsetWidth)) + 'px; top: ' + Math.max(0, my - 48) + 'px'"
-                 style="white-space: pre-line;" class="pointer-events-none absolute z-10 max-w-sm rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
+                 class="whitespace-pre-line pointer-events-none absolute z-10 max-w-sm rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] shadow-lg"></div>
             <div style="grid-column: 1; grid-row: 2;"></div>
             <div class="relative" style="grid-column: 2; grid-row: 2;" data-preisverlauf-achse-x>
                 @foreach($diagramm['achse_x'] as $a)
