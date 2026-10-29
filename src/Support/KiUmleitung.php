@@ -56,6 +56,11 @@ final class KiUmleitung
      */
     public const HERKUNFT_MARKER = 'team_source';
 
+    /**
+     * Hängt am Core-Detail, dass nur `platform-core/src/Mcp/Adapters/ToolContractAdapter.php::createContextFromRequest()` den Key
+     * `team_source` setzt. Ändert der Core ihn, fällt die Umleitung fail-safe auf den Plattformweg zurück (kein Auftrag statt
+     * Ergebnis), und KiUmleitungTest wird rot.
+     */
     public static function vomExternenMcp(ToolContext $context): bool
     {
         return array_key_exists(self::HERKUNFT_MARKER, $context->metadata);
