@@ -139,3 +139,15 @@ it('Alles anreichern: der Cache-Stand gehört Team UND Rezept — ein Ergebnis e
         ['status' => 'done', 'ergebnis' => ['uebernommen' => 9, 'schritte' => [], 'uebersprungen' => [], 'offen' => 0]], now()->addMinutes(5));
     $c->call('pruefeAnreicherung')->assertSet('anreicherungLaeuft', true)->assertSet('anreicherung', null);   // fremdes Team: weiter warten, nichts übernommen
 });
+
+it('Alles anreichern: ein Auto-Enrich ohne refresh (nur Lücken) teilt den Cache-Stand nicht mit dem Klick (refresh)', function () {
+    Queue::fake();
+    $r = $this->makeRecipe($this->rootTeam, 'Modus', ['status' => 'draft', 'is_sales_recipe' => false]);
+    expect(EnrichRecipeJob::anreicherungCacheKey(1, 5, refresh: false))->not->toBe(EnrichRecipeJob::anreicherungCacheKey(1, 5, refresh: true));
+
+    // ein laufender Lücken-Lauf (Auto-Enrich) blockiert den Klick nicht und wird nicht als dessen Ergebnis übernommen
+    \Illuminate\Support\Facades\Cache::put(EnrichRecipeJob::anreicherungCacheKey((int) $this->rootTeam->id, (int) $r->id, refresh: false),
+        ['status' => 'running', 'at' => now()->toIso8601String()], now()->addMinutes(5));
+    Livewire::test(RecipeModal::class)->call('oeffnen', $r->id)->call('allesAnreichern')->assertSet('anreicherungLaeuft', true);
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $r->id && $job->refresh === true);
+});
