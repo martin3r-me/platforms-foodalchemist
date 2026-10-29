@@ -70,23 +70,26 @@ class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         }
 
         $svc = app(BulkEnrichService::class);
+        $extern = \Platform\FoodAlchemist\Support\KiUmleitung::externFuerLauf($context);   // #1002: per MCP → KI-Aufträge statt OpenAI
         $felder = $arguments['felder'] ?? null;
         if (is_array($felder) && $felder !== []) {
             $ungueltig = array_values(array_diff($felder, self::FELDER));
             if ($ungueltig !== []) {
                 return ToolResult::error('Unbekannte felder: ' . implode(', ', $ungueltig) . '. Erlaubt: ' . implode(', ', self::FELDER), 'VALIDATION_ERROR');
             }
-            $runId = $svc->starteGp($team, [(int) $gp->id], array_values($felder));
+            $runId = $svc->starteGp($team, [(int) $gp->id], array_values($felder), $extern);
         } else {
-            $runId = $svc->starteGp($team, [(int) $gp->id]);
+            $runId = $svc->starteGp($team, [(int) $gp->id], BulkEnrichService::SCHRITTE_GP, $extern);
         }
 
         return ToolResult::success([
             'run_id' => (int) $runId,
             'gp_id' => (int) $gp->id,
             'status' => 'queued',
-            'hinweis' => 'Vorschläge nach dem Lauf mit gp_enrich.RESOLVE übernehmen/verwerfen.',
-        ]);
+            'hinweis' => $extern
+                ? 'Extern: der Lauf legt KI-Aufträge an (ki_auftraege.GET → ANTWORT), danach gps.ENRICH für dieses GP erneut aufrufen — die Antworten werden verbraucht, dann Vorschläge mit gp_enrich.RESOLVE übernehmen/verwerfen.'
+                : 'Vorschläge nach dem Lauf mit gp_enrich.RESOLVE übernehmen/verwerfen.',
+        ] + ($extern ? ['extern' => true] : []));
     }
 
     public function getMetadata(): array

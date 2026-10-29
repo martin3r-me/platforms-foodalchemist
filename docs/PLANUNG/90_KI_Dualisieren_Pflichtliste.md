@@ -110,7 +110,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 
 | Nr | Stelle | Weg | Einst. | Phase | MCP-Einstieg | Status | Hinweis |
 |---|---|---|---|---|---|---|---|
-| 83 | `src/Services/VoiceCommandService.php` → `AiGatewayService::callWithTools` | Voice-Agent (Tier-D-Tool-Loop) | c | P2 | — | Ausnahme (Vorschlag) | AGENTISCHER LOOP: Claude ist selbst der Loop, ruft MCP-Tools direkt. Ausnahme-Vorschlag |
+| 83 | `src/Services/VoiceCommandService.php` → `AiGatewayService::callWithTools` | Voice-Agent (Tier-D-Tool-Loop) | c | P2 | — | Ausnahme (Vorschlag) | AGENTISCHER LOOP: Claude ist selbst der Loop, ruft MCP-Tools direkt. Ausnahme-Vorschlag. Dominique 29.10.: der Voice-Agent ist nur ein Gadget, Ausnahme unkritisch |
 | 84 | `src/Services/RecipeImageService.php::generateAndStore` | Bildgenerierung (Core ImageGenerationService) | c | P2 | RecipeImageGenerateTool | Ausnahme (Vorschlag) | Ausnahme-Vorschlag: Claude erzeugt keine Bilder, bleibt Plattform |
 | 85 | `src/Services/Ai/SemanticRetrievalService.php`, `PoolEmbeddingService.php`, `KnowledgeEmbeddingService.php` | Embeddings (text-embedding-3-large) | — | — | — | Ausnahme (Vorschlag) | AUSNAHME (Entscheidung Dominique): bleibt OpenAI |
 | 86 | `src/Services/Websuche/CoreWebSucheTransport.php` (`include_web_search`, Eintrag auch in Tabelle A) | Websuche über den Plattform-Provider | b | P2 | — | offen | Entscheidung Punkt 5: Claude sucht selbst (extern) oder bleibt Plattform |
@@ -155,9 +155,22 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.recipe_klasse.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme; fängt `Throwable`, darum meldet die Hülle über den Modus |
 | `foodalchemist.recipe_rollen.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme |
 | `foodalchemist.recipe_sensorik.POST` | umgeleitet | ein `propose()`, danach DB-Schreiben |
-| `foodalchemist.gps.ENRICH` | ausgenommen (Klasse c) | Queue-Dispatch: `propose()` läuft im Worker, braucht Extern-Flag am Lauf |
+| `foodalchemist.gps.ENRICH` | Lauf-Flag (`KiUmleitung::LAUF_FLAG`) | Queue: `propose()` läuft im Worker. Der externe MCP-Aufruf setzt `extern` am Lauf (`starteGp`) und am Job; der Worker legt KI-Aufträge an (ohne Leer-Vorschlag), nach ANTWORT den Aufruf wiederholen. Ohne MCP-Herkunft Plattformweg |
 | `foodalchemist.recipes.ENRICH` | ausgenommen (Klasse c) | Queue-Dispatch wie `gps.ENRICH` |
 | `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
 | `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
 
+
+## E · Fingerabdruck und Zähler (externer Weg)
+
+`messages_hash` = SHA-256 über alle Prompt-Nachrichten. Er ordnet die Antwort der Wiederholung zu; ändert sich der Prompt dazwischen, entsteht ein zweiter Auftrag und die erste Antwort bleibt unverbraucht.
+
+| Quelle der Instabilität | Stand |
+|---|---|
+| Anker-Vokabular (`BulkEnrichService::gpAnkerKandidaten`), unsortiertes `whereIn` | behoben: `orderBy('slug')`, Test `KiExternGpTest` |
+| Semantische Kandidaten (`KnowledgeEmbeddingService::searchAnkerSlugs`, OpenAI-Embedding) | offen: Ist OpenAI gesperrt, bleibt die Liste rein lexikalisch (anderer Hash als bei erreichbarem OpenAI). Auftrag und Wiederholung müssen im selben Zustand laufen |
+| Zeit/Zufall im Prompt | keine gefunden (Kern setzt `with_context=false`) |
+| Nachbar-GPs im Sensorik-Kontext (`orderBy g.name limit 3`) | Gleichstand bei gleichem Namen unbestimmt; erst nach der Sensorik-Umstellung (#617) betrachten |
+
+Zähler (`KiAuftragService::zaehler`, im Backfill `--anbieter=extern` am Ende und im Protokoll): angelegt, beantwortet, verbraucht (je ab Lauf-Beginn), Bestand offen / beantwortet-liegt / abgelaufen, `verwaist` (abgelaufen + über 1 h beantwortet und unverbraucht) und `doppelt` (mehrere Aufträge je Feature und Ziel; > 0 heißt: Fingerabdruck instabil).

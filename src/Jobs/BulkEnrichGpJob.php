@@ -28,6 +28,7 @@ class BulkEnrichGpJob implements ShouldQueue
         public int $teamId,
         public array $gpIds,
         public array $schritte,
+        public bool $extern = false,   // #1002: Lauf per MCP gestartet → KI-Aufträge statt Provider-Calls
     ) {
     }
 
@@ -39,9 +40,12 @@ class BulkEnrichGpJob implements ShouldQueue
 
             return;
         }
-        foreach ($this->gpIds as $gpId) {
-            $bulk->verarbeiteGp($team, $this->runId, (int) $gpId, $this->schritte);
-        }
+        $lauf = function () use ($bulk, $team): void {
+            foreach ($this->gpIds as $gpId) {
+                $bulk->verarbeiteGp($team, $this->runId, (int) $gpId, $this->schritte);
+            }
+        };
+        $this->extern ? app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->within($lauf) : $lauf();
     }
 
     /** 22·H3b · V-054 — wie {@see BulkEnrichJob::failed}: der Tod des Laufs als Ganzes. */

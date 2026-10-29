@@ -860,12 +860,13 @@ class BulkEnrichService
     // ── GP-Bulk-Autopilot (Pendant zum Rezept-Pfad, eigener Vorschlags-Speicher) ──
 
     /** Startet einen GP-Anreicherungs-Lauf (Job queued; Sandbox/Tests: sync). */
-    public function starteGp(Team $team, array $gpIds, array $schritte = self::SCHRITTE_GP): int
+    public function starteGp(Team $team, array $gpIds, array $schritte = self::SCHRITTE_GP, bool $extern = false): int
     {
         $ids = FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)->pluck('id')->all();
-        $runId = $this->laufAnlegen($team, count($ids), BulkRunType::EnrichGp, ['schritte' => array_values($schritte)]);
+        // #1002: `extern` steht im Lauf-Kontext (Audit) und am Job — der Worker legt dann KI-Aufträge an statt OpenAI zu rufen
+        $runId = $this->laufAnlegen($team, count($ids), BulkRunType::EnrichGp, ['schritte' => array_values($schritte)] + ($extern ? ['extern' => true] : []));
 
-        \Platform\FoodAlchemist\Jobs\BulkEnrichGpJob::dispatch($runId, $team->id, $ids, $schritte);
+        \Platform\FoodAlchemist\Jobs\BulkEnrichGpJob::dispatch($runId, $team->id, $ids, $schritte, $extern);
 
         return $runId;
     }
@@ -915,19 +916,26 @@ class BulkEnrichService
     public function nachziehenGp(Team $team, array $gpIds, array $schritte, string $quelle, bool $neuSchaetzen = false): array
     {
         $runId = $this->laufAnlegen($team, count($gpIds), BulkRunType::EnrichGp, ['schritte' => array_values($schritte), 'quelle' => $quelle]);
+        $ausstehend = 0;
         foreach ($gpIds as $gpId) {
-            $this->verarbeiteGp($team, $runId, (int) $gpId, $schritte, $neuSchaetzen);
+            $ausstehend += $this->verarbeiteGp($team, $runId, (int) $gpId, $schritte, $neuSchaetzen);
         }
 
-        return ['run_id' => $runId, 'geprueft' => count($gpIds),
+        return ['run_id' => $runId, 'geprueft' => count($gpIds), 'ausstehend' => $ausstehend,
             'uebernommen' => $this->alleUebernehmenGp($team, $runId), 'offen' => $this->offeneGpVorschlaege($team, $runId)];
     }
 
-    /** Job-Kern: ein GP × Schritte → Vorschläge (kein Fach-Write). */
-    public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte, bool $neuSchaetzen = false): void
+    /**
+     * Job-Kern: ein GP × Schritte → Vorschläge (kein Fach-Write).
+     *
+     * @return int Schritte, die auf eine externe KI-Antwort warten (#1002) — dafür entsteht KEIN Leer-Vorschlag mit Fehlertext:
+     *             der Lauf ist nicht gescheitert, er wird nach der Antwort wiederholt
+     */
+    public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte, bool $neuSchaetzen = false): int
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($gpId);
         $fehler = false;
+        $ausstehend = 0;
         foreach ($gp === null ? [] : $schritte as $feld) {
             if ($feld === 'sensorik' && ! app(GpAromaService::class)->profilFehlt($gp->id)
                 && (! $neuSchaetzen || DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->value('source') === 'manual')) {
@@ -946,6 +954,8 @@ class BulkEnrichService
                     'call_log_id' => $vorschlag['call_log_id'],
                     'status' => $leer ? BulkProposalStatus::Leer : BulkProposalStatus::Offen,
                 ]);
+            } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
+                $ausstehend++;
             } catch (\Throwable $e) {
                 $fehler = true;
                 FoodAlchemistBulkGpProposal::create([
@@ -956,6 +966,8 @@ class BulkEnrichService
         }
 
         $this->zaehleFortschritt($runId, $fehler || $gp === null);
+
+        return $ausstehend;
     }
 
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
@@ -1019,8 +1031,10 @@ class BulkEnrichService
     private function gpAnkerKandidaten(FoodAlchemistGp $gp): array
     {
         $ids = app(PairingService::class)->lexicalAnkerKandidaten((string) $gp->name);
+        // #1002: feste Reihenfolge (orderBy slug) — der Fingerabdruck des externen KI-Auftrags hängt an der Vokabular-Liste im Prompt,
+        // ein unsortiertes whereIn ließe dieselbe Anfrage je Lauf anders ausfallen (doppelte Aufträge)
         $slugs = $ids === [] ? [] : DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereIn('id', $ids)->whereNull('deleted_at')->pluck('slug')->all();
+            ->whereIn('id', $ids)->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
         try {
             $semantisch = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)
                 ->searchAnkerSlugs((string) $gp->name, 40);
