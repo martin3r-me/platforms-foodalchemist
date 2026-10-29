@@ -97,6 +97,10 @@ class IngredientMatchService
             return $this->noMatch(0.0);
         }
 
+        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
+        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13). VOR dem Zustand unten:
+        // die Zukauf-Prüfung ruft den Matcher für andere Texte („Petersilienmatte“) und setzt dabei denselben Zustand.
+        $weg = $basisVariante ? $this->zubereitungsWeg($team, $ingredientName, $convenience, $zubereitung) : null;
         // S2 (#507 Weg-2): die Pool-Scans dieser Entscheidung dürfen nie auf einer
         // bekannten Verwechslungs-Falle landen (Brie↛Bries etc.). Synchron gesetzt,
         // in bestGpMatch/bestSubrecipeMatch gelesen (kein Threading durch poolLauf).
@@ -104,9 +108,6 @@ class IngredientMatchService
         $this->tiebreakMemo = [];
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $this->aliasTokens = null;
-        // Dominique 27.10. (d): Basiskomponente (Fond, Jus, Sauce, Dressing, Teig …) ohne Zukauf-Signal = Unterrezept — zuerst den
-        // Basisrezept-Bestand (sub_recipe_first, auch im gp_first-Lauf), nie automatisch ein Zukauf-GP (WG 13)
-        $weg = $basisVariante ? $this->zubereitungsWeg($team, $ingredientName, $convenience, $zubereitung) : null;
         if ($weg === 'zukauf' && $this->zukaufTreffer !== null) {   // 29.10.: Leitplanken wählen das Zukauf-GP, das die Prüfung gefunden hat (auch „Fond: Geflügel“ → „Geflügelfond“)
             return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit);
         }
