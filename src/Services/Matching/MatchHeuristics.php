@@ -228,7 +228,7 @@ class MatchHeuristics
                 || array_filter($pueree, fn ($t) => array_filter(self::FRUCHT_PUEREE, fn ($f) => str_starts_with($t, $f)) !== []) !== []))) {
             return false;
         }
-        if ($this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name)) {
+        if ($this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name) || $this->hatAromenTypPraefix($name)) {
             return true;
         }
         foreach ($tokens as $t) {
@@ -267,6 +267,17 @@ class MatchHeuristics
         }
 
         return $this->basisKomponentenTypen = array_values(array_unique($typen));
+    }
+
+    /**
+     * »Aroma: Nussbutter«, »Matte: Petersilie«, »Tinktur: …« — Typ-Präfix aus der Vokabular-Gruppe „Aromen & Öle“ (§1.2) ist die
+     * Rezeptnamen-Syntax, also ein Unterrezept. Bewusst NUR als Präfix, nicht als Grundwort: Vanillearoma, Malzextrakt, Raucharoma sind Kaufware.
+     */
+    private function hatAromenTypPraefix(string $name): bool
+    {
+        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+
+        return $praefix !== null && in_array('Aromen & Öle', \Platform\FoodAlchemist\Support\RezeptTypVokabular::gruppenVon($praefix), true);
     }
 
     /** D5 2026-08-18 — »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; prüft NUR das Label vor dem ersten Doppelpunkt. */

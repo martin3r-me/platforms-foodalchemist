@@ -94,3 +94,12 @@ it('Import: Geflügelfond ohne Basisrezept wird als Stub angelegt und verknüpft
         ->and($zeilen['Geflügelfond Pulver (Knorr)']->gp_id)->toBe($this->knorr->id)
         ->and($res['stubs'])->toHaveCount(1);
 });
+
+it('Aroma: Nussbutter (Typ-Präfix „Aromen & Öle“) wird beim Import zum Unterrezept-Stub, Kaufware-Aromen nicht', function () {
+    $h = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+
+    expect($h->istBasiskomponente('Aroma: Nussbutter'))->toBeTrue()
+        ->and($h->istBasiskomponente('Matte: Petersilie'))->toBeTrue()
+        ->and($h->istBasiskomponente('Vanillearoma'))->toBeFalse()
+        ->and($h->istBasiskomponente('Malzextrakt'))->toBeFalse();
+});
