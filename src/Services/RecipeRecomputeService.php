@@ -571,9 +571,7 @@ class RecipeRecomputeService
      */
     public function zeilenKosten(FoodAlchemistRecipe $recipe, ?Team $team = null): array
     {
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
         $out = [];
@@ -595,9 +593,7 @@ class RecipeRecomputeService
      */
     public function zeilenKostenUndMassen(FoodAlchemistRecipe $recipe, ?Team $team = null): array
     {
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
         $out = [];
@@ -690,9 +686,7 @@ class RecipeRecomputeService
                 $this->kostenFuerTeam((int) $z->referenced_recipe_id, $team, $memo, $pfad);
             }
         }
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $this->garverlustWgCache = [];
         $this->putzverlustWgCache = [];
         $this->subKosten = [];
@@ -792,7 +786,7 @@ class RecipeRecomputeService
                 // dürfen LA-Lücken füllen — z.B. Speisesalz-LAs mit sodium, aber ohne kcal
                 // (Leit-Indikator schlug fehl → Salz trug 0 bei). KI-Schätzungen bleiben
                 // weiterhin Panel-only und verfälschen keine Rezept-Nährwerte.
-                $n = $this->gpAggregate->naehrwerte($z->gp, mitKiFallback: $z->gp->nutri_source === 'manual');
+                $n = $this->gpAggregate->naehrwerte($z->gp, mitKiFallback: $z->gp->nutri_source === 'manual', sicht: $this->recomputeTeam);
                 if ($n['energy_kcal']['avg'] !== null) {           // kcal = Leit-Indikator
                     $werte = [
                         'kcal' => $n['energy_kcal']['avg'],
@@ -1194,9 +1188,7 @@ class RecipeRecomputeService
     /** P-8-Picker (M4-08): €/g fürs Client-Live-Rechnen — dieselbe T3-Quelle. */
     public function preisProGrammPublic(FoodAlchemistGp $gp, ?Team $team = null): ?float
     {
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $this->spur()->zuruecksetzen();
 
         return $this->preisProGrammFuer($gp);
@@ -1211,9 +1203,7 @@ class RecipeRecomputeService
     /** Stk-Zwilling zu preisProGrammPublic: €/Stk fürs Client-Live-Rechnen bei Stück-Zeilen. */
     public function preisProStueckPublic(FoodAlchemistGp $gp, ?Team $team = null): ?float
     {
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $this->spur()->zuruecksetzen();
 
         return $this->preisProStueckFuer($gp);
@@ -1235,9 +1225,7 @@ class RecipeRecomputeService
             return [];
         }
 
-        $this->recomputeTeam = $team;
-        $this->laCache = [];
-        $this->leadPrefCache = [];
+        $this->fuerTeam($team);
         $gpIds = $gps->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         $las = FoodAlchemistSupplierItem::query()
@@ -1428,7 +1416,7 @@ class RecipeRecomputeService
      * re-ranken → Backward-Compat-Bruch). Präzedenz:
      *   1. Team-Pin (verknüpft + bepreist + nicht gesperrt)
      *   2. globaler Default-Lead, sofern nicht team-gesperrt            ← byte-identisch heute
-     *   3. globaler Lead gesperrt ⇒ erster nicht gesperrter, bepreister Kandidat
+     *   3. globaler Lead gesperrt oder übergangen (Lieferant inaktiv, fürs Team nicht sichtbar) ⇒ Ersatz nach Rangliste
      *   4. sonst NULL (AVG-Pfad)
      * Ohne Team ODER ohne Overlay ⇒ sofort die globale Spalte (heutiges Verhalten).
      */
@@ -1448,7 +1436,7 @@ class RecipeRecomputeService
             }
         }
         $gesperrt = $global !== null && ($prefs[$global]['locked'] ?? false);
-        if ($global === null || (! $gesperrt && ! $ausweich->uebergehen($las->firstWhere('id', $global)))) {   // 2. globaler Lead
+        if ($global === null || (! $gesperrt && ! $ausweich->leadUebergehen($las, $global, $this->recomputeTeam))) {   // 2. globaler Lead
             return $global;
         }
         // 3. Lead team-gesperrt ODER Lieferant inaktiv/gesperrt ⇒ Ausweich; ohne Ausweich bleibt der Lead nur, wenn er nicht gesperrt ist
@@ -1458,11 +1446,20 @@ class RecipeRecomputeService
         return $wahl !== null ? (int) $wahl->id : ($gesperrt ? null : $global);
     }
 
-    /**
-     * V-27-Team-Overlay (gp_la_preferences) des Recompute-Teams, je Lauf memoisiert.
-     *
-     * @return array<int, array{gepinnt: bool, locked: bool}>
-     */
+    /** Effektiver Lead eines GP für ein Team, gleiche Präzedenz wie das EK — für die Verleih-Prüfung der Darreichung (Lead-Sicht 29.10.). */
+    public function effektiverLeadFuer(FoodAlchemistGp $gp, ?Team $team): ?int
+    {
+        $this->fuerTeam($team);
+
+        return $this->effektiverLeadId($gp);
+    }
+
+    /** Rechen-Team setzen und die Memos des Laufs leeren (Preise, Pins). */
+    private function fuerTeam(?Team $team): void
+    {
+        [$this->recomputeTeam, $this->laCache, $this->leadPrefCache] = [$team, [], []];
+    }
+
     /**
      * Es zählen die Pins des Recompute-Teams (und mit Übernahme die des Hauptteams). Im gespeicherten Rezept-EK ist das der Besitzer; die Team-Kosten
      * (KostenCacheService::fuer → kostenFuerTeam) rechnen mit dem BETRACHTENDEN Team — dort wirkt der Leitartikel (Pin) eines

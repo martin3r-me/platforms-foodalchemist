@@ -162,6 +162,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\DataQualityCommand::class,
                 \Platform\FoodAlchemist\Console\LeadLaRepickCommand::class,
                 \Platform\FoodAlchemist\Console\LeadLaInaktiveCommand::class,
+                \Platform\FoodAlchemist\Console\LeadSichtNachlaufCommand::class,
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,
                 \Platform\FoodAlchemist\Console\GpAllergenBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\GpFormsEstimateCommand::class,

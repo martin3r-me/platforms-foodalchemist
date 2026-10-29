@@ -3,12 +3,15 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AllergenValue;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Support\AllergenAnnahme;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Support\StammPaket;
 
 /**
  * M3-04: GP-Ebene der Aggregations-GLs — die rezept-unabhängigen Bausteine,
@@ -40,7 +43,7 @@ class GpAggregateService
      */
     public function allergene(FoodAlchemistGp $gp): array
     {
-        [$laMax, $angenommen] = $this->laMax($this->laProfile($gp->id));
+        [$laMax, $angenommen] = $this->laMax($this->laProfile($gp));
         $mutterMax = null; // lazy — nur wenn ein Derivat-Feld ohne Override sie braucht
 
         $out = [];
@@ -96,7 +99,7 @@ class GpAggregateService
     /** Konfidenz aus dem eigenen LA-Profil des GP (ohne Derivat-Auflösung). */
     private function laKonfidenz(FoodAlchemistGp $gp): array
     {
-        $profile = $this->laProfile($gp->id);
+        $profile = $this->laProfile($gp);
         if ($profile->isEmpty()) {
             return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
         }
@@ -217,6 +220,7 @@ class GpAggregateService
                 ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'd.supplier_item_id')
                 ->where('s.gp_id', $gp->id)
                 ->whereNull('d.deleted_at')->whereNull('s.deleted_at')
+                ->tap(fn ($q) => $this->nurSichtbare($q, 's.supplier_item_id', $this->besitzerSicht($gp)))
                 ->selectRaw(implode(', ', array_map(fn ($f) => "MAX(d.{$f}) AS {$f}", $stoffe)))
                 ->first();
         } else {
@@ -231,6 +235,7 @@ class GpAggregateService
                     $j->on('d.supplier_item_id', '=', 's.supplier_item_id')->whereNull('d.deleted_at');
                 })
                 ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
+                ->tap(fn ($q) => $this->nurSichtbare($q, 's.supplier_item_id', $this->besitzerSicht($gp)))
                 ->selectRaw(implode(', ', array_map($spalte, $stoffe)))
                 ->first();
         }
@@ -253,11 +258,12 @@ class GpAggregateService
      * $mitKiFallback (R10, NUR Panel-Anzeige): ohne LA-Daten die KI-/manuelle
      * Schätzschicht vom GP zurückgeben — die GL-08-Rezept-Aggregation ruft
      * bewusst OHNE Fallback (Schätzwerte verfälschen keine Rezept-Nährwerte).
+     * $sicht (Lead-Sicht 29.10.2026): rechnet ein Mandant, zählen nur die Artikel, die er sieht; Master und ohne Team wie bisher.
      */
-    public function naehrwerte(FoodAlchemistGp $gp, bool $mitKiFallback = false): array
+    public function naehrwerte(FoodAlchemistGp $gp, bool $mitKiFallback = false, ?Team $sicht = null): array
     {
         $kerne = FoodAlchemistItemNutritional::KERNWERTE;
-        $kennwerte = app(NaehrwertAggregatService::class)->kennwerte([$gp->id], $kerne)[$gp->id] ?? [];
+        $kennwerte = app(NaehrwertAggregatService::class)->kennwerte([$gp->id], $kerne, $this->mandantSicht($sicht) ?? $this->besitzerSicht($gp))[$gp->id] ?? [];
 
         $out = [];
         foreach ($kerne as $k) {
@@ -327,7 +333,7 @@ class GpAggregateService
      */
     private function aufgeloesteWerte(FoodAlchemistGp $gp): array
     {
-        $laMax = $this->laMax($this->laProfile($gp->id))[0];
+        $laMax = $this->laMax($this->laProfile($gp))[0];
 
         $out = [];
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
@@ -401,7 +407,7 @@ class GpAggregateService
      */
     public function hatLaAllergenProfil(FoodAlchemistGp $gp): bool
     {
-        foreach ($this->laProfile((int) $gp->id) as $la) {
+        foreach ($this->laProfile($gp) as $la) {
             if (AllergenAnnahme::giltFuer($la->lieferant_id !== null ? (int) $la->lieferant_id : null)) {
                 return true;   // Spec 85: die Zeile eines Positiv-Lieferanten IST ein Profil (leer = angenommen nicht enthalten)
             }
@@ -415,14 +421,45 @@ class GpAggregateService
         return false;
     }
 
-    private function laProfile(int $gpId): \Illuminate\Support\Collection
+    private function laProfile(FoodAlchemistGp $gp): \Illuminate\Support\Collection
     {
         return FoodAlchemistItemAllergen::query()
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_item_allergens.supplier_item_id')
             ->leftJoin('foodalchemist_supplier_items AS i', 'i.id', '=', 'foodalchemist_item_allergens.supplier_item_id')
-            ->where('s.gp_id', $gpId)
+            ->where('s.gp_id', $gp->id)
             ->whereNull('s.deleted_at')
+            ->tap(fn ($q) => $this->nurSichtbare($q, 'foodalchemist_item_allergens.supplier_item_id', $this->besitzerSicht($gp)))
             ->select('foodalchemist_item_allergens.*', 'i.supplier_id AS lieferant_id')   // Spec 85: Lieferant für AllergenAnnahme
             ->get();
+    }
+
+    /**
+     * Lead-Sicht (Dominique 29.10.2026): Allergene und Zusatzstoffe eines TEAM-EIGENEN GP zählen nur die Artikel, die das Besitzer-Team sieht. Globale
+     * Stamm-GPs und GPs der Master-Kette bleiben bewusst ALL-MAX über alle Artikel (gleiche Allergene je GP sichert der Guard, Abweichung = Datenfehler).
+     */
+    private function besitzerSicht(FoodAlchemistGp $gp): ?Team
+    {
+        if ($gp->team_id === null) {
+            return null;
+        }
+
+        return $this->mandantSicht($this->besitzer[(int) $gp->team_id] ??= Team::find($gp->team_id));
+    }
+
+    /** @var array<int, ?Team> Besitzer-Team je team_id (Memo je Dienst-Instanz) */
+    private array $besitzer = [];
+
+    /** Sicht nur für Mandanten: das Master-Team (und seine Kette) sieht ohnehin alle Stamm-Lieferanten — dort kein Filter, Verhalten wie bisher. */
+    private function mandantSicht(?Team $team): ?Team
+    {
+        return $team !== null && ! StammPaket::sieheAlleLieferanten($team) ? $team : null;
+    }
+
+    /** Auf die für `$sicht` sichtbaren Artikel begrenzen (Stamm-Paket-Freischaltung, Team-Kette); ohne Sicht unverändert. */
+    private function nurSichtbare($query, string $laSpalte, ?Team $sicht): void
+    {
+        if ($sicht !== null) {
+            $query->whereIn($laSpalte, FoodAlchemistSupplierItem::visibleToTeam($sicht)->select('foodalchemist_supplier_items.id'));
+        }
     }
 }

@@ -3,9 +3,11 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
 use Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertBefund;
 use Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertPruefService;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
  * Nährwerte eines GP aus seinen Lieferantenartikeln — EINE Regel für Erdung (SensorikService) und Rezept/Panel
@@ -21,7 +23,8 @@ use Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertPruefService;
  *     (Einheit, Tippfehler, falsche Ware) verschiebt den Wert bei drei Artikeln nicht mehr. Bei zwei Artikeln ist
  *     der Median der Mittelwert.
  *
- * Nur aktive Artikel (nicht ausgelistet, nicht gelöscht, Verknüpfung nicht gelöscht).
+ * Nur aktive Artikel (nicht ausgelistet, nicht gelöscht, Verknüpfung nicht gelöscht). Mit `$sicht` nur die Artikel, die dieses Team sieht
+ * (Lead-Sicht 29.10.2026: ein Mandant rechnet nie mit Nährwerten von Ware, die er nicht beziehen kann); ohne Sicht alle.
  */
 class NaehrwertAggregatService
 {
@@ -35,10 +38,10 @@ class NaehrwertAggregatService
      * @param  list<string>  $felder  Spalten aus foodalchemist_item_nutritionals
      * @return array<int, array<string, array{wert: ?float, n: int}>> [gp_id][feld]; GPs ohne zählende Zeile fehlen
      */
-    public function kennwerte(array $gpIds, array $felder): array
+    public function kennwerte(array $gpIds, array $felder, ?Team $sicht = null): array
     {
         $out = [];
-        foreach ($this->zeilen($gpIds, $felder) as $gpId => $zeilen) {
+        foreach ($this->zeilen($gpIds, $felder, $sicht) as $gpId => $zeilen) {
             foreach ($felder as $f) {
                 $werte = array_values(array_filter(array_column($zeilen, $f), fn ($v) => $v !== null));
                 $out[$gpId][$f] = ['wert' => self::median($werte), 'n' => count($werte)];
@@ -57,11 +60,11 @@ class NaehrwertAggregatService
      * @param  list<string>  $felder
      * @return array<int, list<array<string, ?float>>>
      */
-    public function zeilen(array $gpIds, array $felder): array
+    public function zeilen(array $gpIds, array $felder, ?Team $sicht = null): array
     {
         $scharf = \Platform\FoodAlchemist\Support\NaehrwertPruefModus::istScharf();
         $out = [];
-        foreach ($this->pruefung($gpIds, $scharf) as $gpId => $artikel) {
+        foreach ($this->pruefung($gpIds, $scharf, $sicht) as $gpId => $artikel) {
             foreach ($artikel as $a) {
                 if ($scharf && ! $a['zaehlt']) {
                     continue;
@@ -79,10 +82,11 @@ class NaehrwertAggregatService
      * Grundlage für die Aggregation und den Trockenlauf.
      *
      * @param  list<int>  $gpIds
+     * @param  Team|null  $sicht  nur die Artikel, die dieses Team sieht (Mandanten-Sicht); null = alle
      * @return array<int, list<array{la_id: int, lieferant: ?string, bezeichnung: ?string, roh: array<string, ?float>, wirksam: array<string, ?float>,
      *     faktor: ?int, befunde: list<NaehrwertBefund>, freigegeben: bool, zaehlt: bool}>>
      */
-    public function pruefung(array $gpIds, bool $mitBefunden = true): array
+    public function pruefung(array $gpIds, bool $mitBefunden = true, ?Team $sicht = null): array
     {
         $gpIds = array_values(array_unique(array_filter(array_map('intval', $gpIds))));
         $spalten = array_values(array_unique(array_merge(FoodAlchemistItemNutritional::KERNWERTE, NaehrwertPruefService::FELDER, self::GUARD_FELDER)));
@@ -97,6 +101,7 @@ class NaehrwertAggregatService
                 ->whereIn('s.gp_id', $chunk)
                 ->where('i.is_discontinued', false)
                 ->whereNull('n.deleted_at')->whereNull('s.deleted_at')->whereNull('i.deleted_at')
+                ->when($sicht, fn ($q) => $q->whereIn('n.supplier_item_id', FoodAlchemistSupplierItem::visibleToTeam($sicht)->select('foodalchemist_supplier_items.id')))
                 ->where(function ($q) {                          // Leer-Label-Guard
                     foreach (self::GUARD_FELDER as $f) {
                         $q->orWhere("n.{$f}", '>', 0);
