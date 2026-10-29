@@ -77,3 +77,17 @@ it('ohne_la: GPs ohne aktive Lieferantenartikel-Struktur (gelöschte zählt nich
         ->and(($this->ids)(['ohne_la' => true, 'nur_la_pflicht' => true]))->toBe(($this->sortiert)($this->offen))
         ->and(($this->ids)(['nur_la_pflicht' => false]))->toHaveCount(4);   // false schränkt nicht ein
 });
+
+it('lead_lieferant_inaktiv: Lead beim inaktiven oder gesperrten Lieferanten (#632); false = bestellbarer Lead, GPs ohne Lead in keiner der beiden Mengen', function () {
+    $neu = fn (string $name, array $sup) => FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => $name, 'gp_key' => 'gl-' . bin2hex(random_bytes(4)) . '||',
+        'status' => 'approved', 'commodity_group_code' => '07', 'lead_la_supplier_item_id' => FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id,
+            'supplier_id' => FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Lieferant ' . $name] + $sup)->id,
+            'designation' => 'Artikel ' . $name, 'qty' => 1, 'unit_code' => 'kg'])->id]);
+    $inaktiv = $neu('Mehl', ['is_inactive' => true]);
+    $gesperrt = $neu('Zucker', ['status' => 'gesperrt']);
+    $aktiv = $neu('Salz', []);
+
+    expect(($this->ids)(['lead_lieferant_inaktiv' => true]))->toBe(($this->sortiert)($inaktiv, $gesperrt))
+        ->and(($this->ids)(['lead_lieferant_inaktiv' => 'false', 'commodity_group_code' => '07']))->toBe(($this->sortiert)($aktiv))
+        ->and(($this->ids)(['lead_lieferant_inaktiv' => false]))->not->toContain($this->offen->id);   // ohne Lead: weder noch
+});

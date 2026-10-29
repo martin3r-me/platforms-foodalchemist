@@ -65,6 +65,15 @@ class GpService
                 ->whereColumn('la_s.gp_id', 'foodalchemist_gps.id')->whereNull('la_s.deleted_at');
             filter_var($filters['ohne_la'], FILTER_VALIDATE_BOOLEAN) ? $query->whereNotExists($mitLa) : $query->whereExists($mitLa);
         }
+        if (isset($filters['lead_lieferant_inaktiv'])) {   // #632: Lead beim inaktiven/gesperrten Lieferanten — Kandidaten für den Lead-Repick
+            $leadInaktiv = fn ($q) => $q->select(\Illuminate\Support\Facades\DB::raw(1))->from('foodalchemist_supplier_items AS lead_li')
+                ->join('foodalchemist_suppliers AS sup', 'sup.id', '=', 'lead_li.supplier_id')
+                ->whereColumn('lead_li.id', 'foodalchemist_gps.lead_la_supplier_item_id')
+                ->whereRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplier::nichtBestellbarSql('sup'));
+            filter_var($filters['lead_lieferant_inaktiv'], FILTER_VALIDATE_BOOLEAN)
+                ? $query->whereExists($leadInaktiv)
+                : $query->whereNotNull('lead_la_supplier_item_id')->whereNotExists($leadInaktiv);
+        }
         if (isset($filters['nur_la_pflicht']) && filter_var($filters['nur_la_pflicht'], FILTER_VALIDATE_BOOLEAN)) {   // braucht einen LA: requires_la, kein Derivat
             $query->where('requires_la', true)->where(fn ($w) => $w->whereNull('is_derivat')->orWhere('is_derivat', false));
         }
