@@ -209,3 +209,20 @@ it('Rezept-Nährwerte je 100 g aus Menge × Gehalt der Zutaten, mit Abdeckung; d
         ->and($n['werte']['suess'])->toBeNull();
 });
 
+
+it('Lücken nur beim Gericht: Basisrezept mit süß 0 zeigt keine „Lücke: süß", die Dominanten bleiben; Gegenprobe Gericht', function () {
+    $zeile = ['suess' => 0, 'salzig' => 0.5, 'sauer' => 0, 'bitter' => 0, 'umami' => 0.8, 'fettig' => 0.5, 'scharf' => 0.15, 'source' => 'ai',
+        'created_at' => now(), 'updated_at' => now()];
+    $basis = $this->makeRecipe($this->rootTeam, 'Fleisch: Roastbeef', ['is_sales_recipe' => false]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Roastbeef mit Remoulade', ['is_sales_recipe' => true]);
+    DB::table('foodalchemist_recipe_taste_vectors')->insert([['recipe_id' => $basis->id] + $zeile, ['recipe_id' => $gericht->id] + $zeile]);
+
+    $b = $this->svc->fuerRezept($basis->id);
+    $g = $this->svc->fuerRezept($gericht->id);
+
+    expect($b['luecken'])->toBe([])->and($b['dominant'])->toBe(['umami'])
+        ->and($g['luecken'])->toContain('suess', 'sauer', 'bitter', 'scharf')->and($g['dominant'])->toBe(['umami']);
+    $html = fn (array $s) => view('foodalchemist::livewire.concepter.partials.sensorik', ['sensorik' => $s])->render();
+    expect($html($b))->not->toContain('Lücke:')->toContain('dominant: umami')
+        ->and($html($g))->toContain('Lücke: süß');
+});

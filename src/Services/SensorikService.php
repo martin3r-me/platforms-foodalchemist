@@ -154,6 +154,11 @@ class SensorikService
         if ($mitGrundlage && ! ($out['leer'] ?? false)) {
             $out['erdung'] = $this->rezeptGrundlage($recipeId);
         }
+        // Lücken nur bei Gerichten (Dominique 29.10.2026, Roastbeef): ein Basisrezept ist ein Baustein, ihm „fehlt" kein Geschmack.
+        // Die Dominanten bleiben. Am GP gilt seit #606 „schwach" statt „Lücke".
+        if (! ($out['leer'] ?? false) && ! (bool) DB::table('foodalchemist_recipes')->where('id', $recipeId)->value('is_sales_recipe')) {
+            $out['luecken'] = [];
+        }
 
         return $out;
     }
