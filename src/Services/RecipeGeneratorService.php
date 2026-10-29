@@ -370,7 +370,7 @@ class RecipeGeneratorService
                 }
                 $direktArtikel = $vkModus && ! $brotImGericht && ($kleinstmenge !== null || $this->heuristik->istDirektArtikelKandidat($text));
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
-                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience, einheit: isset($z['unit']) ? (string) $z['unit'] : null);
+                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio, convenience: $convenience, einheit: isset($z['unit']) ? (string) $z['unit'] : null, zubereitung: Matching\MatchLeitplanken::zubereitung($parameter));
 
                 // Band-Gate (2026-08-06, Rahmeis-in-Tomatensuppe): FuzzyLow heißt laut
                 // GL-04 §4.1 wörtlich „Review nötig" — der Generator ist aber der teuerste
@@ -399,7 +399,7 @@ class RecipeGeneratorService
                 $prefixSub = ! $direktArtikel && $this->heuristik->hatSubZubereitungsPraefix($text);
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer. Dominique 27.10. (d): mit Zukauf-Signal („Geflügelfond Pulver (Knorr)“) oder Convenience-Leitplanke darf es Zukauf-GP sein.
-                $strongSub = ! $direktArtikel && ((($nameHalbfabrikat || $prefixSub) && $this->matcher->basiskomponenteOhneZukauf($team, $text, $convenience)) || ($llmSub === true) || $brotImGericht);
+                $strongSub = ! $direktArtikel && ((($nameHalbfabrikat || $prefixSub) && $this->matcher->basiskomponenteOhneZukauf($team, $text, $convenience, Matching\MatchLeitplanken::zubereitung($parameter))) || ($llmSub === true) || $brotImGericht);
                 // Teller-Rolle im VK-Gericht (T4, Vokabular gericht.teller_rolle) — Convenience-
                 // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
                 // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden

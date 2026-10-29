@@ -120,7 +120,7 @@ it('(6) „TK“ ist Zukauf-Signal einer Basiskomponente — TK-Pizzateig → GP
         ->and(($this->m)('Pizzateig')['basiskomponente'] ?? null)->toBe('stub');
 });
 
-it('Anreicherung (minteFehlendeGps) mintet keine Basiskomponente ohne Zukauf-Signal — mit Convenience-Leitplanke schon', function () {
+it('Anreicherung (minteFehlendeGps) mintet keine Basiskomponente ohne Zukauf-Signal — mit Convenience-Leitplanke nur, wenn das Zukauf-GP im Bestand ist (29.10.)', function () {
     $lieferant = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
     FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $lieferant->id, 'designation' => 'Geflügelfond', 'qty' => 1.0, 'unit_code' => 'kg']);
     $r = $this->makeRecipe($this->rootTeam, 'Geflügelrahmsauce Mint', ['status' => 'approved']);
@@ -130,6 +130,11 @@ it('Anreicherung (minteFehlendeGps) mintet keine Basiskomponente ohne Zukauf-Sig
     $ohne = app(RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $r->fresh());
     expect($zeile->fresh()->gp_id)->toBeNull()->and($ohne['basisrezept_luecken'])->toBe(1);
 
+    // Dominique 29.10.: Zukauf nur, wenn ein passendes GP da ist — ein Lieferantenartikel allein reicht nicht, sonst Unterrezept
+    $nurLa = app(RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $r->fresh(), ['convenience' => 'voll_convenience']);
+    expect($nurLa['basisrezept_luecken'])->toBe(1);
+
+    ($this->gp)('Geflügelfond', 'gefluegelfond', null, '13');
     $mit = app(RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $r->fresh(), ['convenience' => 'voll_convenience']);
     expect($mit['basisrezept_luecken'] ?? 0)->toBe(0);
 });
