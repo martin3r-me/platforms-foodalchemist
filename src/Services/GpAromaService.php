@@ -18,18 +18,18 @@ use Platform\FoodAlchemist\Support\MasterTeam;
  *             einig → übernehmen (Quelle `geschwister`). Anker hängen an der Hauptzutat, nicht an Marke/Zustand/Zuschnitt.
  *          2. Sonst KI aus dem Anker-Vokabular (`BulkEnrichService::gpAnkerVorschlag`, derselbe Weg wie der Knopf).
  *
- *  PROFIL  Salzig/Süß/Fettig MISST {@see SensorikService::erdungBulk()} aus den LA-Nährwerten; geschätzt wird nur, was für DIESES GP
- *          nicht gemessen ist (immer sauer/bitter/umami/scharf, dazu die Etikett-Achsen ohne Messwert).
+ *  PROFIL  Wahrnehmung auf allen 7 Achsen (Dominique 29.10.2026): ein Profil sagt, wie das Produkt SCHMECKT, nicht wie viel drin ist.
+ *          Zucker, Salz und Fett aus den LA-Nährwerten stehen als Fakt im KI-Kontext (`naehrwerte`), die Kurve nur als Hinweis
+ *          (`konzentration_ohne_maskierung`). Nach der Antwort fängt {@see SensorikService::begrenze()} klare Ausreißer ab.
  *          1. Geschwister: gleiche Hauptzutat UND gleicher Zustand UND gleiche Verarbeitung, Profil aus KI/Hand (nicht die alten
- *             Import-Vektoren), alle einig (Spannweite je Achse ≤ GESCHWISTER_SPANNE) → Mittelwert (Quelle `geschwister`).
- *             Zustand/Verarbeitung müssen gleich sein, weil sie den Geschmack ändern (geräuchert, eingelegt, getrocknet, geröstet).
+ *             Import-Vektoren), alle einig (Spannweite je Achse ≤ GESCHWISTER_SPANNE) → Mittelwert (Quelle `geschwister`);
+ *             die Grenzen prüfen mit den eigenen Nährwerten.
  *          2. Sonst KI `gp.sensorik` mit Anker, „Geschmacksbild in Worten" aus dem Zutaten-Dossier (ungeprüft) und Nachbar-Profilen.
- *          Gemessene Achsen werden als Messwert mitgespeichert (damit die Erdung beim Lesen keinen Schein-Widerspruch meldet) und
- *          beim Lesen weiter überlagert. `source='manual'` wird nie überschrieben.
+ *          Nichts wird beim Lesen überlagert. `source='manual'` wird nie überschrieben.
  */
 class GpAromaService
 {
-    /** Achsen, die kein Etikett hergibt — immer geschätzt. */
+    /** Achsen, die kein Etikett hergibt (Nachbar-Hinweise, Vergleich). */
     public const NIE_GEMESSEN = ['sauer', 'bitter', 'umami', 'scharf'];
 
     /** Geschwister gelten als einig, wenn je Achse max − min höchstens so groß ist. */
@@ -199,32 +199,33 @@ class GpAromaService
     // ── KI-Schätzung ───────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Schätzt die NICHT gemessenen Achsen (+ Texturen, wenn das GP keine hat) per KI. Schreibt nichts.
+     * Schätzt die Wahrnehmung auf allen 7 Achsen (+ Texturen, wenn das GP keine hat) per KI und wendet danach die Grenzen an.
+     * Schreibt nichts.
      *
-     * @return array{werte: array<string,float>, geschaetzt: list<string>, gemessen: array<string,float>, texturen: list<array{slug: string, intensity: float}>, confidence: float, reasoning: ?string, call_log_id: ?int}|null
+     * @return array{werte: array<string,float>, geschaetzt: list<string>, naehrwerte: array<string,float>, konzentration: array<string,float>, eingriffe: list<string>, texturen: list<array{slug: string, intensity: float}>, confidence: float, reasoning: ?string, call_log_id: ?int}|null
      */
     public function schaetze(FoodAlchemistGp $gp): ?array
     {
-        $gemessen = [];
-        foreach ($this->sensorik->erdungBulk([$gp->id])[$gp->id] ?? [] as $dim => $m) {
-            $gemessen[$dim] = round((float) $m['wert'], 2);
-        }
-        $geschaetzt = array_values(array_diff(SensorikService::DIMS, array_keys($gemessen)));
+        $erdung = $this->sensorik->erdungBulk([$gp->id])[$gp->id] ?? [];
+        $naehrwerte = array_map(fn ($m) => round((float) $m['gehalt'], 2), $erdung);
+        $konzentration = array_map(fn ($m) => round((float) $m['wert'], 2), $erdung);
         $mitTextur = ! DB::table('foodalchemist_gp_textures')->where('gp_id', $gp->id)->exists();
 
-        $p = app(AiGatewayService::class)->propose('gp.sensorik', $this->kontext($gp, $gemessen, $geschaetzt, $mitTextur),
+        $p = app(AiGatewayService::class)->propose('gp.sensorik', $this->kontext($gp, $naehrwerte, $konzentration, $mitTextur),
             ['target_table' => 'foodalchemist_gp_taste_vectors', 'target_id' => $gp->id]);
         $roh = $p->werte['geschmack'] ?? null;
         if (! is_array($roh)) {
             return null;                                              // Fake-Provider / kaputte Antwort → nichts
         }
         $werte = [];
-        foreach ($geschaetzt as $d) {
+        foreach (SensorikService::DIMS as $d) {
             if (! is_numeric($roh[$d] ?? null)) {
                 return null;                                          // unvollständig = nicht verwertbar, lieber kein Profil
             }
             $werte[$d] = max(0.0, min(1.0, round((float) $roh[$d], 2)));
         }
+        $begrenzt = $this->sensorik->begrenze($werte, $naehrwerte);
+        $werte = $begrenzt['werte'];
         $vocab = DB::table('foodalchemist_vocab_textures')->pluck('id', 'slug');
         $texturen = [];
         foreach ($mitTextur && is_array($p->werte['texturen'] ?? null) ? $p->werte['texturen'] : [] as $t) {
@@ -233,13 +234,19 @@ class GpAromaService
                 $texturen[] = ['slug' => $slug, 'intensity' => max(0.0, min(1.0, round((float) ($t['intensitaet'] ?? $t['intensity'] ?? 1), 2)))];
             }
         }
+        $begruendung = trim((string) $p->reasoning . ' ' . implode(' ', $begrenzt['eingriffe']));
 
-        return ['werte' => $werte, 'geschaetzt' => $geschaetzt, 'gemessen' => $gemessen, 'texturen' => $texturen,
-            'confidence' => max(0.0, min(1.0, (float) $p->confidence)), 'reasoning' => $p->reasoning, 'call_log_id' => $p->callLogId];
+        return ['werte' => $werte, 'geschaetzt' => SensorikService::DIMS, 'naehrwerte' => $naehrwerte, 'konzentration' => $konzentration,
+            'eingriffe' => $begrenzt['eingriffe'], 'texturen' => $texturen,
+            'confidence' => max(0.0, min(1.0, (float) $p->confidence)), 'reasoning' => $begruendung !== '' ? $begruendung : null, 'call_log_id' => $p->callLogId];
     }
 
-    /** @return array<string, mixed> */
-    private function kontext(FoodAlchemistGp $gp, array $gemessen, array $geschaetzt, bool $mitTextur): array
+    /**
+     * @param  array<string, float>  $naehrwerte  g/100 g je Achse (suess = Zucker, salzig = Salz, fettig = Fett)
+     * @param  array<string, float>  $konzentration  Kurvenwert ohne Maskierung, nur als Hinweis
+     * @return array<string, mixed>
+     */
+    private function kontext(FoodAlchemistGp $gp, array $naehrwerte, array $konzentration, bool $mitTextur): array
     {
         $anker = app(PairingService::class)->gpAnkerAlle($gp->id);
         $kern = $anker->firstWhere('role', 'kern') ?? $anker->first();
@@ -248,7 +255,13 @@ class GpAromaService
             ->where('g.main_ingredient_slug', (string) $gp->main_ingredient_slug)->where('g.id', '!=', $gp->id)
             ->whereNull('g.deleted_at')->whereNull('g.merged_into_id')->whereIn('g.id', $this->sichtbareIds($gp))
             ->whereIn('t.source', self::VERLAESSLICHE_QUELLEN)
-            ->orderBy('g.name')->limit(3)->get(array_merge(['g.name'], array_map(fn ($d) => "t.{$d}", self::NIE_GEMESSEN)));
+            ->orderBy('g.name')->limit(3)->get(array_merge(['g.name'], array_map(fn ($d) => "t.{$d}", SensorikService::DIMS)));
+
+        // Nährwerte mit sprechenden Schlüsseln: der Fakt, an dem die Einstufung hängt.
+        $fakten = [];
+        foreach ($naehrwerte as $dim => $g) {
+            $fakten[match ($dim) { 'suess' => 'zucker_g_je_100g', 'salzig' => 'salz_g_je_100g', default => 'fett_g_je_100g' }] = $g;
+        }
 
         return [
             'name' => $gp->name,
@@ -258,8 +271,9 @@ class GpAromaService
             'warengruppe' => $gp->commodity_group?->name,
             'kern_anker' => $kern?->display_de,
             'geschmacksbild_aus_dossier' => $kern !== null ? $this->geschmacksbild((int) $kern->id) : null,
-            'gemessen' => $gemessen === [] ? null : $gemessen,
-            'zu_schaetzen' => $geschaetzt,
+            'naehrwerte' => $fakten === [] ? null : $fakten,
+            'konzentration_ohne_maskierung' => $konzentration === [] ? null : $konzentration,
+            'zu_schaetzen' => SensorikService::DIMS,
             'nachbarn' => $nachbarn->isEmpty() ? null : $nachbarn->map(fn ($n) => (array) $n)->all(),
             'texturen_schaetzen' => $mitTextur,
         ];
@@ -285,8 +299,9 @@ class GpAromaService
     // ── Schreiben ──────────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Speichert ein Profil. `$werte` = die geschätzten/übernommenen Achsen; gemessene Achsen kommen als Messwert dazu, der Rest 0.
-     * Ein manuelles Profil bleibt immer; ein vorhandenes anderes nur mit `$ueberschreiben` (Knopf nach Vorschau).
+     * Speichert ein Profil: die 7 Wahrnehmungswerte, nach den Nährwert-Grenzen (mit den eigenen Nährwerten des GP — auch beim
+     * Geschwister-Weg). Es wird nichts mehr aus den Nährwerten eingespielt. Ein manuelles Profil bleibt immer; ein vorhandenes
+     * anderes nur mit `$ueberschreiben` (Knopf nach Vorschau, Neu-Schätzen im Backfill).
      */
     public function speichereProfil(int $gpId, array $werte, string $quelle, ?float $conf, ?string $begr, array $texturen = [], bool $ueberschreiben = false): bool
     {
@@ -294,10 +309,19 @@ class GpAromaService
         if ($ist !== null && ($ist->source === 'manual' || (! $ueberschreiben && ! $this->profilFehlt($gpId)))) {
             return false;
         }
-        $gemessen = $this->sensorik->erdungBulk([$gpId])[$gpId] ?? [];
+        $clamp = fn ($x) => max(0.0, min(1.0, round((float) $x, 2)));
+        $roh = [];
+        foreach (SensorikService::DIMS as $d) {
+            $roh[$d] = $clamp($werte[$d] ?? 0);
+        }
+        $naehrwerte = array_map(fn ($m) => (float) $m['gehalt'], $this->sensorik->erdungBulk([$gpId])[$gpId] ?? []);
+        $begrenzt = $this->sensorik->begrenze($roh, $naehrwerte);
+        if ($begrenzt['eingriffe'] !== [] && ! str_contains((string) $begr, '[Grenze:')) {
+            $begr = trim((string) $begr . ' ' . implode(' ', $begrenzt['eingriffe']));
+        }
         $row = ['source' => $quelle, 'ai_confidence' => $conf, 'ai_reasoning' => $begr !== null ? mb_strimwidth($begr, 0, 2000) : null, 'updated_at' => now()];
         foreach (SensorikService::DIMS as $d) {
-            $row[$d] = isset($gemessen[$d]) ? round((float) $gemessen[$d]['wert'], 2) : max(0.0, min(1.0, round((float) ($werte[$d] ?? 0), 2)));
+            $row[$d] = $begrenzt['werte'][$d];
         }
         DB::table('foodalchemist_gp_taste_vectors')->updateOrInsert(['gp_id' => $gpId], $row + ['created_at' => $ist->created_at ?? now()]);
 

@@ -12,11 +12,11 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Erdung der messbaren Sensorik-Achsen (Salzig/Süß/Fettig) an den LA-Nährwerten.
+ * Wahrnehmung statt Messung (Dominique 29.10.2026, Plan „Geschmacksprofil = Wahrnehmung").
  *
- * Anlass: „Achiote-Paste: konserviert" stand mit salzig 0.60 im GP-Vektor (Gemini-Schätzung
- * allein aus dem Namen), während die verknüpften LAs 1640/1200 mg Natrium melden = ~3,6 g
- * Salz/100 g — Salz ist dort Zutat #2. Messbares wird nicht mehr geschätzt.
+ * Anlass: „Amerikaner mit Zuckerguss" (Salz 1,2 g/100 g) wurde über die Kurve auf salzig 0,54 gezogen, obwohl der Zucker das Salz
+ * überdeckt. Das gespeicherte Profil beschreibt jetzt, wie das Produkt SCHMECKT; die Nährwerte bleiben Grundlage (Fakt) und
+ * ersetzen beim Lesen nichts. Nur OHNE Profil steht die Konzentration vorläufig als Wert.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -49,65 +49,67 @@ beforeEach(function () {
     };
 });
 
-it('Salzig kommt aus dem Natrium der LAs, nicht aus der KI-Schätzung (Fall Achiote-Paste)', function () {
+it('das gespeicherte Profil gewinnt, die Nährwerte bleiben als Grundlage (Fall Amerikaner: Salz 1,2 g, Zucker überdeckt)', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Amerikaner mit Zuckerguss');
+    ($this->setzeVektor)($gp->id, ['suess' => 0.7, 'salzig' => 0.1, 'fettig' => 0.3], 'ai');
+    ($this->mkLa)($gp->id, ['sodium' => 480, 'sugar' => 21, 'carbs_absorbable' => 55, 'fat' => 8, 'energy_kcal' => 380]);    // 1,2 g Salz
+
+    $s = $this->svc->fuerGp($gp->id);
+
+    // Gegenprobe zur alten Überlagerung: die Kurve hätte 1,2 g auf 0,54 gezogen
+    expect($s['geschmack']['salzig'])->toBe(0.1)
+        ->and($s['erdung']['salzig']['basis'])->toContain('Salz 1,2 g/100 g')
+        ->and($s['erdung']['salzig']['gehalt'])->toBe(1.2)
+        ->and($s['erdung']['salzig']['vorlaeufig'])->toBeFalse()
+        ->and($s['erdung']['salzig']['konflikt'])->toContain('deutlich von der Konzentration')   // Überdeckung wird sichtbar, nicht überschrieben
+        ->and($s['erdung']['suess']['basis'])->toContain('Zucker 21,0 g/100 g');
+});
+
+it('Achiote-Paste: ein Profil mit salzig 0,6 bleibt, die Grundlage zeigt 3,6 g Salz; nicht gemessene Achsen tauchen nicht als Grundlage auf', function () {
     $gp = $this->makeGp($this->rootTeam, 'Achiote-Paste konserviert');
-    ($this->setzeVektor)($gp->id, ['salzig' => 0.6, 'umami' => 0.4, 'sauer' => 0.3]);
+    ($this->setzeVektor)($gp->id, ['salzig' => 0.6, 'umami' => 0.4, 'sauer' => 0.3], 'ai');
     ($this->mkLa)($gp->id, ['sodium' => 1640, 'energy_kcal' => 204, 'fat' => 2.3, 'sugar' => 3.2]);
     ($this->mkLa)($gp->id, ['sodium' => 1200, 'energy_kcal' => 550, 'fat' => 10, 'sugar' => 46]);
 
     $s = $this->svc->fuerGp($gp->id);
 
-    // Ø 1420 mg Na = 3,55 g Salz/100 g → deutlich über der FSA-Schwelle „hoch" (1,5 g = 0.60)
-    expect($s['geschmack']['salzig'])->toBeGreaterThan(0.6)
-        ->and($s['erdung'])->toHaveKey('salzig')
+    expect($s['geschmack']['salzig'])->toBe(0.6)
         ->and($s['erdung']['salzig']['basis'])->toContain('Salz 3,6 g/100 g')->toContain('Ø 2 LA')
-        ->and($s['erdung']['salzig']['angewendet'])->toBeTrue()
         ->and($s['erdung']['salzig']['konflikt'])->toBeNull()
-        ->and($s['dominant'])->toContain('salzig');
-
-    // nicht messbare Achsen bleiben bei der KI-Schätzung — und werden nicht als gemessen ausgewiesen
-    expect($s['geschmack']['umami'])->toBe(0.4)
-        ->and($s['geschmack']['sauer'])->toBe(0.3)
+        ->and($s['geschmack']['umami'])->toBe(0.4)->and($s['geschmack']['sauer'])->toBe(0.3)
         ->and($s['erdung'])->not->toHaveKey('umami');
 });
 
-it('erdet auch nach unten, solange die Messung nicht abstürzt', function () {
-    $gp = $this->makeGp($this->rootTeam, 'Kochschinken');
-    ($this->setzeVektor)($gp->id, ['salzig' => 0.45]);
-    ($this->mkLa)($gp->id, ['sodium' => 60, 'energy_kcal' => 110, 'fat' => 3]);    // 0,15 g Salz/100 g
+it('ohne Profil steht die Konzentration vorläufig als Wert, gekennzeichnet (kein Absturz auf 0 im Roh-Fallback)', function () {
+    $gp = $this->makeGp($this->rootTeam, 'Salzstangen');
+    ($this->mkLa)($gp->id, ['sodium' => 1400, 'energy_kcal' => 380, 'fat' => 8]);    // 3,5 g Salz
 
     $s = $this->svc->fuerGp($gp->id);
 
-    expect($s['geschmack']['salzig'])->toBeLessThan(0.2)
-        ->and($s['erdung']['salzig']['angewendet'])->toBeTrue();
+    expect($s['geschmack']['salzig'])->toBeGreaterThan(0.6)
+        ->and($s['erdung']['salzig']['vorlaeufig'])->toBeTrue()
+        ->and($s['gp_profil']['fehlt'])->toBeTrue();
+
+    // ein Import-Artefakt aus lauter Nullen gilt ebenfalls als „kein Profil"
+    ($this->setzeVektor)($gp->id, [], 'gemini');
+    expect($this->svc->fuerGp($gp->id)['erdung']['salzig']['vorlaeufig'])->toBeTrue();
 });
 
-it('ein abstürzender Label-Wert wird NICHT übernommen, sondern als Widerspruch gemeldet', function () {
-    $gp = $this->makeGp($this->rootTeam, 'Praline mit Yuzu');
-    ($this->setzeVektor)($gp->id, ['suess' => 0.8]);
-    ($this->mkLa)($gp->id, ['sugar' => 0.8, 'carbs_absorbable' => 55, 'fat' => 30, 'energy_kcal' => 520]);
-
-    $s = $this->svc->fuerGp($gp->id);
-
-    expect($s['geschmack']['suess'])->toBe(0.8)                       // Schätzung bleibt stehen
-        ->and($s['erdung']['suess']['angewendet'])->toBeFalse()
-        ->and($s['erdung']['suess']['konflikt'])->toContain('unplausibel')
-        ->and($s['erdung']['fettig']['angewendet'])->toBeTrue();      // Fett am selben LA ist plausibel
-});
-
-it('Fett und Zucker kommen ebenfalls vom Label, die Kurve trifft die bekannten Anker', function () {
+it('Fett und Zucker ohne Profil: die Kurve trifft die bekannten Anker (nur vorläufig)', function () {
     $oel = $this->makeGp($this->rootTeam, 'Rapsoel');
-    ($this->setzeVektor)($oel->id, ['fettig' => 0.3]);                              // absichtlich zu niedrig
     ($this->mkLa)($oel->id, ['fat' => 100, 'energy_kcal' => 900, 'sodium' => 0]);
-
     $zucker = $this->makeGp($this->rootTeam, 'Zucker');
     ($this->mkLa)($zucker->id, ['sugar' => 100, 'carbs_absorbable' => 100, 'energy_kcal' => 400]);
 
     expect($this->svc->fuerGp($oel->id)['geschmack']['fettig'])->toBe(1.0)
         ->and($this->svc->fuerGp($zucker->id)['geschmack']['suess'])->toBe(1.0);
+
+    // mit Profil gewinnt das Profil, auch wenn es niedriger ist (Gegenprobe zur alten Überlagerung)
+    ($this->setzeVektor)($oel->id, ['fettig' => 0.3], 'ai');
+    expect($this->svc->fuerGp($oel->id)['geschmack']['fettig'])->toBe(0.3);
 });
 
-it('Leer-Label (alles 0) und ausgelistete LAs ziehen keine Achse auf 0', function () {
+it('Leer-Label (alles 0) und ausgelistete LAs liefern keine Grundlage, das Profil bleibt', function () {
     $gp = $this->makeGp($this->rootTeam, 'Miso hell');
     ($this->setzeVektor)($gp->id, ['salzig' => 0.7, 'umami' => 0.8]);
     ($this->mkLa)($gp->id, ['sodium' => 0, 'energy_kcal' => 0, 'fat' => 0, 'sugar' => 0, 'protein' => 0]);
@@ -115,11 +117,11 @@ it('Leer-Label (alles 0) und ausgelistete LAs ziehen keine Achse auf 0', functio
 
     $s = $this->svc->fuerGp($gp->id);
 
-    expect($s['erdung'])->toBe([])                       // keine verwertbare Zeile ⇒ keine Erdung
-        ->and($s['geschmack']['salzig'])->toBe(0.7);     // KI-Schätzung bleibt stehen
+    expect($s['erdung'])->toBe([])
+        ->and($s['geschmack']['salzig'])->toBe(0.7);
 });
 
-it('eine exakte 0 im Label ist keine Messung (Fall Cola: 0-Zucker-Label darf Süße nicht löschen)', function () {
+it('eine exakte 0 im Label ist keine Messung (Fall Cola: 0-Zucker-Label)', function () {
     $gp = $this->makeGp($this->rootTeam, 'Cola konserviert');
     ($this->setzeVektor)($gp->id, ['suess' => 0.9]);
     ($this->mkLa)($gp->id, ['sugar' => 0, 'carbs_absorbable' => 10.6, 'energy_kcal' => 42]);
@@ -129,7 +131,6 @@ it('eine exakte 0 im Label ist keine Messung (Fall Cola: 0-Zucker-Label darf Sü
     expect($s['geschmack']['suess'])->toBe(0.9)
         ->and($s['erdung'])->not->toHaveKey('suess');
 
-    // eine zweite, deklarierte Zeile erdet dann — ohne dass die 0 den Ø verwässert
     ($this->mkLa)($gp->id, ['sugar' => 10.6, 'carbs_absorbable' => 10.6, 'energy_kcal' => 42]);
     expect($this->svc->fuerGp($gp->id)['erdung']['suess']['basis'])->toContain('Zucker 10,6 g/100 g');
 });
@@ -145,19 +146,7 @@ it('Zucker > Kohlenhydrate ist LMIV-widersprüchlich und wird verworfen', functi
         ->and($s['erdung'])->toHaveKey('fettig');
 });
 
-it('weicht die Messung stark von der Schätzung ab, wird der Widerspruch ausgewiesen', function () {
-    $gp = $this->makeGp($this->rootTeam, 'Knollensellerie Stifte');
-    ($this->setzeVektor)($gp->id, ['salzig' => 0.0]);
-    ($this->mkLa)($gp->id, ['sodium' => 32000, 'energy_kcal' => 20]);       // 80 g Salz/100 g = LA-Fehler
-
-    $s = $this->svc->fuerGp($gp->id);
-
-    expect($s['geschmack']['salzig'])->toBeGreaterThan(0.9)              // Messung gewinnt nach oben …
-        ->and($s['erdung']['salzig']['angewendet'])->toBeTrue()
-        ->and($s['erdung']['salzig']['konflikt'])->toContain('Zuordnung des Lieferantenartikels prüfen');   // … aber sichtbar
-});
-
-it('ohne Nährwerte bleibt alles wie bisher (reine KI-Schätzung)', function () {
+it('ohne Nährwerte bleibt alles wie bisher (nur das gespeicherte Profil)', function () {
     $gp = $this->makeGp($this->rootTeam, 'Kreuzkuemmel gemahlen');
     ($this->setzeVektor)($gp->id, ['bitter' => 0.4, 'scharf' => 0.3]);
 
@@ -168,18 +157,55 @@ it('ohne Nährwerte bleibt alles wie bisher (reine KI-Schätzung)', function () 
         ->and($s['geschmack']['salzig'])->toBe(0.0);
 });
 
-it('im Rezept-Rohaggregat wird erst geerdet, dann gemaxt (GP ohne Label verliert nicht)', function () {
-    $salzig = $this->makeGp($this->rootTeam, 'Sojasauce');
-    ($this->setzeVektor)($salzig->id, ['salzig' => 0.9, 'umami' => 0.9]);           // kuratierter Regel-Wert
-    $mager = $this->makeGp($this->rootTeam, 'Zucchini');
-    ($this->setzeVektor)($mager->id, ['salzig' => 0.0]);
-    ($this->mkLa)($mager->id, ['sodium' => 4, 'energy_kcal' => 19, 'fat' => 0.3]);  // messbar ≈ 0
+it('im Rezept-Rohfallback gilt das mengengewichtete Mittel, nicht MAX: eine Prise Salz dominiert nicht mehr', function () {
+    $fleisch = $this->makeGp($this->rootTeam, 'Rinderlende');
+    ($this->setzeVektor)($fleisch->id, ['umami' => 0.8, 'salzig' => 0.1], 'ai');
+    $salz = $this->makeGp($this->rootTeam, 'Salz');
+    ($this->setzeVektor)($salz->id, ['salzig' => 1.0], 'ai');
+    $r = $this->makeRecipe($this->rootTeam, 'Fleisch: Roastbeef', ['is_sales_recipe' => false]);
+    $this->makeIngredient($r, 'Rinderlende', $fleisch, '1600', 1);
+    $this->makeIngredient($r, 'Salz', $salz, '16', 2);                      // 1 %
 
-    // Sojasauce hat KEIN Label → ihr 0.9 muss den Messwert der Zucchini überleben
-    $vektoren = $this->svc->vektorenFuerGps([$salzig->id, $mager->id]);
+    $s = $this->svc->fuerRezept($r->id);
 
-    expect($vektoren[$salzig->id]['werte']['salzig'])->toBe(0.9)
-        ->and($vektoren[$salzig->id]['messung'])->toBe([])
-        ->and($vektoren[$mager->id]['werte']['salzig'])->toBeLessThan(0.1)
-        ->and(max(array_column(array_column($vektoren, 'werte'), 'salzig')))->toBe(0.9);
+    // (1600 × 0,1 + 16 × 1,0) / 1616 ≈ 0,11 — MAX hätte 1,0 geliefert
+    expect($s['source'])->toBe('roh')
+        ->and($s['geschmack']['salzig'])->toBeLessThan(0.2)
+        ->and($s['geschmack']['umami'])->toBeGreaterThan(0.7)
+        ->and($s['dominant'])->toBe(['umami'])
+        ->and($s['hinweis'])->toBeNull();
 });
+
+it('ohne Mengen bleibt der Rohfallback bei MAX und ist gekennzeichnet', function () {
+    $a = $this->makeGp($this->rootTeam, 'Rinderlende');
+    ($this->setzeVektor)($a->id, ['umami' => 0.8], 'ai');
+    $b = $this->makeGp($this->rootTeam, 'Salz');
+    ($this->setzeVektor)($b->id, ['salzig' => 1.0], 'ai');
+    $r = $this->makeRecipe($this->rootTeam, 'Fleisch: ohne Mengen', ['is_sales_recipe' => false]);
+    $this->makeIngredient($r, 'Rinderlende', $a, '0', 1);
+    $this->makeIngredient($r, 'Salz', $b, '0', 2);
+
+    $s = $this->svc->fuerRezept($r->id);
+
+    expect($s['geschmack']['salzig'])->toBe(1.0)->and($s['geschmack']['umami'])->toBe(0.8)
+        ->and($s['hinweis'])->toBe('grob, ohne Mengen');
+});
+
+it('Rezept-Nährwerte je 100 g aus Menge × Gehalt der Zutaten, mit Abdeckung; die Grenzen greifen nur bei genug bekannter Masse', function () {
+    $fleisch = $this->makeGp($this->rootTeam, 'Rinderlende');
+    ($this->mkLa)($fleisch->id, ['sodium' => 60, 'fat' => 5, 'energy_kcal' => 120]);               // 0,15 g Salz, 5 g Fett
+    $salz = $this->makeGp($this->rootTeam, 'Salz');
+    ($this->mkLa)($salz->id, ['sodium' => 39300, 'energy_kcal' => 0]);                            // 98,25 g Salz
+    $r = $this->makeRecipe($this->rootTeam, 'Fleisch: Roastbeef', ['is_sales_recipe' => false]);
+    $this->makeIngredient($r, 'Rinderlende', $fleisch, '1600', 1);
+    $this->makeIngredient($r, 'Salz', $salz, '16', 2);
+    $this->makeIngredient($r, 'Pfeffer', null, '5', 3);                                          // ungemappt: Masse ohne Gehalt
+
+    $n = $this->svc->rezeptNaehrwerte($r->id);
+
+    // Salz: (1600 × 0,15 + 16 × 98,25) / 1616 ≈ 1,09 g/100 g; bekannt für 1616 von 1621 g
+    expect($n['werte']['salzig'])->toBeGreaterThan(1.0)->toBeLessThan(1.2)
+        ->and($n['abdeckung']['salzig'])->toBeGreaterThan(0.99)
+        ->and($n['werte']['suess'])->toBeNull();
+});
+

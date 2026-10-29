@@ -85,29 +85,32 @@
                         @if($sQuelle === 'gp')
                             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack des Grundprodukts, wie es eingekauft wird, je Achse von 0 bis 1.</p>
                             @if($gpProfil['fehlt'])
-                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-gp-profil-fehlt-text>Sauer, bitter, umami und scharf sind noch nicht bewertet. Ohne Profil stehen sie auf 0.</p>
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-gp-profil-fehlt-text>Das Profil ist noch nicht bewertet. Süß, salzig und fettig zeigen vorläufig den Wert aus den Nährwerten, die übrigen Achsen stehen auf 0.</p>
                             @endif
                         @else
                             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack nach dem Garen je Achse von 0 bis 1. Zeigen auf eine Achse nennt zusätzlich den Wert der Aroma-Anker.</p>
                         @endif
-                        {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (Nährwerte der Lieferantenartikel), nicht geschätzt. --}}
+                        {{-- Grundlage (29.10.2026): die Achsenwerte zeigen die WAHRNEHMUNG; die Nährwerte stehen als Fakt daneben. --}}
                         @if(count($sensorik['erdung'] ?? []))
-                            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ok-soft)] px-3 py-2">
-                                <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ok)]">@svg('heroicon-m-chart-bar', 'w-4 h-4') Aus den Nährwerten der Lieferantenartikel gemessen</p>
+                            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ok-soft)] px-3 py-2" data-sensorik-grundlage>
+                                <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ok)]">@svg('heroicon-m-chart-bar', 'w-4 h-4') Grundlage: Nährwerte {{ $sQuelle === 'gp' ? 'der Lieferantenartikel' : 'der Zutaten' }}</p>
                                 <ul class="flex flex-col gap-1">
                                     @foreach($sensorik['erdung'] as $dim => $e)
-                                        <li class="text-[length:var(--fa-text-sm)] {{ $e['angewendet'] ? 'text-[var(--fa-ink)]' : 'text-[var(--fa-ink-3)]' }}">
+                                        <li class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink)]">
                                             <span class="font-medium">{{ ucfirst($dimLabel[$dim] ?? $dim) }} {{ number_format((float) ($sensorik['geschmack'][$dim] ?? 0), 2, ',', '.') }}</span>
                                             <span class="text-[var(--fa-ink-2)]">, {{ $e['basis'] }}</span>
-                                            @unless($e['angewendet'])<span>, geschätzt</span>@endunless
+                                            @if($e['vorlaeufig'] ?? false)<span>, vorläufig aus Nährwerten</span>@endif
                                             @if($e['konflikt'])
                                                 <span class="block"><x-fa::signal tone="warn">{{ $e['konflikt'] }}</x-fa::signal></span>
                                             @endif
                                         </li>
                                     @endforeach
                                 </ul>
-                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die übrigen Achsen schätzt die KI, sie stehen auf keinem Etikett.</p>
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Werte beschreiben, wie es schmeckt, nicht wie viel drin ist: Zucker überdeckt zum Beispiel Salz.</p>
                             </div>
+                        @endif
+                        @if($sensorik['hinweis'] ?? null)
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-sensorik-hinweis>Vorläufig, {{ $sensorik['hinweis'] }}: noch keine KI-Bewertung des gegarten Rezepts.</p>
                         @endif
                         @if(count($sensorik['dominant']) || count($sensorik['luecken']))
                             <div class="flex flex-wrap gap-1.5">

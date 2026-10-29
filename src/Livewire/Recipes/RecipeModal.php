@@ -1407,7 +1407,7 @@ class RecipeModal extends Component
                     ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'sensorik' => $this->recipeId !== null && ($this->geladeneTabs['sensorik'] ?? false)
-                ? app(SensorikService::class)->fuerRezept($this->recipeId) : null,
+                ? app(SensorikService::class)->fuerRezept($this->recipeId, true) : null,
             'pairing' => $r !== null && ($this->geladeneTabs['sensorik'] ?? false)
                 ? app(PairingService::class)->panelRecipe($r) : null,
         ]);

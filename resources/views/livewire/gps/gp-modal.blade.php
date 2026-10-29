@@ -611,7 +611,7 @@
             <div x-show="tab === 'sensorik'" x-cloak class="pt-4 flex flex-col gap-4">
                 <x-fa::section title="Geschmack" icon="heroicon-o-beaker">
                     <x-slot:actions>
-                        {{-- 27.10.2026: Profil des rohen GP — nur die nicht gemessenen Achsen (+ Texturen, wenn keine da sind) --}}
+                        {{-- 27.10.2026: Profil des rohen GP — Wahrnehmung auf allen 7 Achsen (+ Texturen, wenn keine da sind) --}}
                         <x-foodalchemist::ki-action action="sensorikKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="Mit KI schätzen"
                             title="Schätzt sauer, bitter, umami, scharf und die Achsen ohne Messwert. Vorschau, gespeichert wird erst mit Übernehmen."
                             data-gp-sensorik-ki busy="Wird geschätzt …" />

@@ -36,9 +36,13 @@ class GpAromaBackfillCommand extends Command
         {--chunk=25 : GPs je Paket im KI-Teil}
         {--pause=3 : Sekunden Pause zwischen den Paketen}
         {--vergleich=0 : N GPs mit vorhandenem Profil neu schätzen, NICHT speichern, alt/neu als CSV}
+        {--neu-schaetzen= : vorhandene Profile dieser Quellen neu schätzen und überschreiben (ai,geschwister,gemini,rule; dazu rezept = gegarte Rezept-Profile). Ein manuelles Profil wird nie angefasst}
         {--bericht= : Ordner für Protokoll und CSV (Standard: storage/app/fa-gp-aroma-backfill)}';
 
     protected $description = 'Kern-Anker + Geschmacksprofil für GPs mit Lücke nachziehen: Geschwister zuerst (kostenlos), dann KI (Trockenlauf, Kosten, Chunks, Protokoll)';
+
+    /** Quellen, deren Profil neu geschätzt werden darf (manual nie). `rezept` = gegarte Profile in recipe_taste_vectors (source ai). */
+    private const NEU_QUELLEN = ['ai', 'geschwister', 'gemini', 'rule', 'rezept'];
 
     /** Token-Annahme ohne Call-Historie (gemessen an recipe.sensorik/gp.anker auf demo, 19.09.). */
     private const ANNAHME = ['gp.sensorik' => ['in' => 1200, 'out' => 250], 'gp.anker' => ['in' => 1500, 'out' => 120]];
@@ -51,6 +55,12 @@ class GpAromaBackfillCommand extends Command
         $nur = (string) $this->option('nur');
         if (! in_array($nur, ['anker', 'profil', 'beide'], true)) {
             $this->error('--nur=anker|profil|beide');
+
+            return self::FAILURE;
+        }
+        $neuQuellen = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('neu-schaetzen')))));
+        if (array_diff($neuQuellen, self::NEU_QUELLEN) !== []) {
+            $this->error('--neu-schaetzen=' . implode(',', self::NEU_QUELLEN) . ' (manual wird nie neu geschätzt)');
 
             return self::FAILURE;
         }
@@ -107,6 +117,13 @@ class GpAromaBackfillCommand extends Command
         $limit = (int) $this->option('limit');
         $nAnker = $limit > 0 ? min($limit, $kiAnker) : $kiAnker;
         $nProfil = $limit > 0 ? min($limit, $kiProfil) : $kiProfil;
+        $neuGps = array_values(array_intersect($neuQuellen, ['ai', 'geschwister', 'gemini', 'rule'])) !== [] ? $this->neuGps($neuQuellen) : [];
+        $neuRezepte = in_array('rezept', $neuQuellen, true) ? $this->neuRezepte() : [];
+        if ($neuQuellen !== []) {
+            $this->line(sprintf('Neu schätzen (%s): %d GP-Profile (%s), %d Rezept-Profile. Manuelle Profile bleiben.', implode(',', $neuQuellen),
+                count($neuGps), $limit > 0 ? "--limit={$limit} gilt je Teil" : 'alle', count($neuRezepte)));
+            $nProfil += $limit > 0 ? min($limit, count($neuGps)) : count($neuGps);
+        }
         $teile = [$this->kosten('gp.anker', $nAnker), $this->kosten('gp.sensorik', $nProfil)];
         $eur = array_sum(array_column($teile, 'eur'));
         $this->line(sprintf('Kostenschätzung KI-Teil%s: %d Anker-Calls + %d Profil-Calls ≈ %s · Tokens ≈ %s in / %s out', $limit > 0 ? " (--limit={$limit})" : '',
@@ -180,13 +197,78 @@ class GpAromaBackfillCommand extends Command
             }
             $this->line("Paket ".($i + 1).": {$n} GPs bearbeitet");
         }
-        $this->info("KI-Teil fertig: {$n} GPs. Protokoll: {$protokoll}");
+        if ($neuQuellen !== []) {
+            $n += $this->neuSchaetzen($bulk, $team, $neuGps, $neuRezepte, $limit, $extern, $protokoll);
+        }
+        $this->info("KI-Teil fertig: {$n} GPs/Rezepte. Protokoll: {$protokoll}");
         if ($extern) {
             $offenA = DB::table('foodalchemist_ki_auftraege')->where('team_id', $team->id)->where('status', 'offen')->count();
             $this->comment("Externer Weg: {$offenA} offene KI-Aufträge (ki_auftraege.GET → ANTWORT), danach diesen Befehl erneut ausführen — beantwortete Aufträge werden dabei übernommen.");
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * GPs mit vorhandenem Profil aus den genannten Quellen (nie manual), das neu geschätzt werden soll.
+     *
+     * @param  list<string>  $quellen
+     * @return list<int>
+     */
+    private function neuGps(array $quellen): array
+    {
+        $gp = array_values(array_intersect($quellen, ['ai', 'geschwister', 'gemini', 'rule']));
+
+        return $this->basis()->join('foodalchemist_gp_taste_vectors AS t', 't.gp_id', '=', 'g.id')
+            ->whereIn('t.source', $gp)->where('t.source', '!=', 'manual')
+            ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /** @return list<int> Rezepte mit gegartem KI-Profil (source ai), nie manual */
+    private function neuRezepte(): array
+    {
+        return DB::table('foodalchemist_recipe_taste_vectors AS t')->join('foodalchemist_recipes AS r', 'r.id', '=', 't.recipe_id')
+            ->whereNull('r.deleted_at')->where('t.source', 'ai')->orderBy('t.recipe_id')->pluck('t.recipe_id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /**
+     * Neu-Schätzen (Dominique 29.10.2026: Profile tragen noch den alten Messwert). GPs über dieselbe Bulk-Strecke wie die Lücken (Vorschlag →
+     * Übernehmen, auf dem externen Weg über KI-Aufträge), Rezept-Profile über {@see SensorikService::bewerteRezept()} (nur Plattform-KI).
+     *
+     * @param  list<int>  $gpIds
+     * @param  list<int>  $rezeptIds
+     */
+    private function neuSchaetzen(BulkEnrichService $bulk, Team $team, array $gpIds, array $rezeptIds, int $limit, bool $extern, string $protokoll): int
+    {
+        $n = 0;
+        $gpIds = array_values(array_filter($this->streueNachWg($gpIds), fn ($id) => ($gp = FoodAlchemistGp::find($id)) !== null && app(GpAromaService::class)->anreicherbar($gp) && $gp->isOwnedBy($team)));
+        foreach ($limit > 0 ? array_slice($gpIds, 0, $limit) : $gpIds as $gpId) {
+            try {
+                $r = $extern
+                    ? app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->within(fn () => $bulk->nachziehenGp($team, [$gpId], ['sensorik'], 'backfill-neu', true))
+                    : $bulk->nachziehenGp($team, [$gpId], ['sensorik'], 'backfill-neu', true);
+            } catch (\Throwable $e) {
+                $r = ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+            }
+            File::append($protokoll, json_encode(['gp_id' => $gpId, 'schritte' => ['sensorik-neu'], 'zeit' => now()->toIso8601String()] + $r, JSON_UNESCAPED_UNICODE) . "\n");
+            $n++;
+        }
+        if ($rezeptIds !== [] && $extern) {
+            $this->warn('Rezept-Profile werden nur mit --anbieter=plattform neu geschätzt.');
+            $rezeptIds = [];
+        }
+        $sensorik = app(SensorikService::class);
+        foreach ($limit > 0 ? array_slice($rezeptIds, 0, $limit) : $rezeptIds as $rid) {
+            try {
+                $r = $sensorik->bewerteRezept($rid, true);
+            } catch (\Throwable $e) {
+                $r = ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+            }
+            File::append($protokoll, json_encode(['recipe_id' => $rid, 'schritte' => ['rezept-sensorik-neu'], 'zeit' => now()->toIso8601String()] + $r, JSON_UNESCAPED_UNICODE) . "\n");
+            $n++;
+        }
+
+        return $n;
     }
 
     /** @return list<int> lebende, gepflegte GPs ohne Anker */
@@ -293,10 +375,10 @@ class GpAromaBackfillCommand extends Command
         $h = fopen($csv, 'wb');
         fwrite($h, "\xEF\xBB\xBF");
         $kopf = ['gp_id', 'name', 'quelle_alt'];
-        foreach (GpAromaService::NIE_GEMESSEN as $d) {
+        foreach (SensorikService::DIMS as $d) {
             array_push($kopf, "{$d}_alt", "{$d}_neu");
         }
-        array_push($kopf, 'max_abweichung', 'gemessen', 'sicherheit', 'tokens_in', 'tokens_out', 'kosten_eur', 'begruendung');
+        array_push($kopf, 'max_abweichung', 'naehrwerte', 'sicherheit', 'tokens_in', 'tokens_out', 'kosten_eur', 'begruendung');
         fputcsv($h, $kopf, ';', '"', '');
         $summe = 0.0;
         foreach ($ids as $id) {
@@ -317,11 +399,11 @@ class GpAromaBackfillCommand extends Command
             $summe += (float) $eur;
             $zeile = [$id, $gp->name, $alt->source];
             $max = 0.0;
-            foreach (GpAromaService::NIE_GEMESSEN as $d) {
+            foreach (SensorikService::DIMS as $d) {
                 $max = max($max, abs((float) $alt->{$d} - (float) ($v['werte'][$d] ?? 0)));
                 array_push($zeile, number_format((float) $alt->{$d}, 2, ',', ''), number_format((float) ($v['werte'][$d] ?? 0), 2, ',', ''));
             }
-            array_push($zeile, number_format($max, 2, ',', ''), implode(' ', array_map(fn ($k, $w) => "{$k} {$w}", array_keys($v['gemessen']), $v['gemessen'])),
+            array_push($zeile, number_format($max, 2, ',', ''), implode(' ', array_map(fn ($k, $w) => "{$k} {$w}", array_keys($v['naehrwerte']), $v['naehrwerte'])),
                 number_format($v['confidence'], 2, ',', ''), $log?->tokens_in, $log?->tokens_out, $eur !== null ? number_format($eur, 5, ',', '') : '', $v['reasoning']);
             fputcsv($h, array_map(fn ($x) => $x === null ? '' : (string) $x, $zeile), ';', '"', '');
         }
