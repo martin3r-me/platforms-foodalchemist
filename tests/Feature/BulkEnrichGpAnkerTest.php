@@ -123,7 +123,8 @@ it('B-7: ein Slug außerhalb des Vokabulars (oder ein erfundener) wird zur LEERE
     ($this->fake)('rauch');
     $runId = $this->svc->starteGp($this->rootTeam, [$this->gp->id], ['anker']);
     $zeile = FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('field', 'anker')->first();
-    expect($zeile->status)->toBe(BulkProposalStatus::Leer)->and($zeile->value)->toBeNull()->and($zeile->error)->toBeNull();
+    // seit 29.10.2026 mit Grund statt still leer (GpAnreichernAnzeigeTest)
+    expect($zeile->status)->toBe(BulkProposalStatus::Leer)->and($zeile->value)->toBeNull()->and($zeile->error)->toContain('nicht in der Vorauswahl');
 
     ($this->fake)('holunder-erfunden');
     $runId = $this->svc->starteGp($this->rootTeam, [$this->gp->id], ['anker']);
