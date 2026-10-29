@@ -23,22 +23,7 @@ class SupplierService
      */
     public function listWithCounts(Team $team, bool $includeInactive = false, string $search = '', ?int $gruppeId = null): Collection
     {
-        // Spec 82 §12 A3: nur Artikel zählen, die dieses Team sehen darf (Stamm-Paket ohne Opt-in nicht).
-        $itemCounts = StammPaket::begrenzen(DB::table('foodalchemist_supplier_items'), 'foodalchemist_supplier_items', $team)
-            ->whereNull('deleted_at')
-            ->selectRaw('supplier_id, COUNT(*) AS n')
-            ->groupBy('supplier_id')
-            ->pluck('n', 'supplier_id');
-
-        $mappedCounts = DB::table('foodalchemist_supplier_item_structures AS s')
-            ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 's.supplier_item_id')
-            ->whereNull('s.deleted_at')
-            ->whereNotNull('s.gp_id')
-            ->tap(fn ($q) => StammPaket::begrenzen($q, 'i', $team, 'foodalchemist_supplier_items'))
-            ->selectRaw('i.supplier_id, COUNT(*) AS n')
-            ->groupBy('i.supplier_id')
-            ->pluck('n', 'supplier_id');
-
+        [$itemCounts, $mappedCounts] = $this->artikelZaehler($team);
         // Spec 15 §5a: bei aktivem Suchbegriff die lexikalische Namenssuche additiv um
         // semantische Lieferanten-Treffer ergänzen (Synonyme/Tippfehler/Branche) — behebt
         // „Lieferant nicht gefunden". Graceful: ohne Provider bleibt es rein lexikalisch.
@@ -60,6 +45,32 @@ class SupplierService
                 $supplier->setAttribute('item_count', (int) ($itemCounts[$supplier->id] ?? 0));
                 $supplier->setAttribute('mapped_count', (int) ($mappedCounts[$supplier->id] ?? 0));
             });
+    }
+
+    /**
+     * Artikel- und GP-zugeordnete Artikel je Lieferant (Spalten der Lieferantenliste; Spec 91: auch suppliers.SEARCH).
+     *
+     * @return array{0: \Illuminate\Support\Collection<int, int>, 1: \Illuminate\Support\Collection<int, int>}
+     */
+    public function artikelZaehler(Team $team): array
+    {
+        // Spec 82 §12 A3: nur Artikel zählen, die dieses Team sehen darf (Stamm-Paket ohne Opt-in nicht).
+        $itemCounts = StammPaket::begrenzen(DB::table('foodalchemist_supplier_items'), 'foodalchemist_supplier_items', $team)
+            ->whereNull('deleted_at')
+            ->selectRaw('supplier_id, COUNT(*) AS n')
+            ->groupBy('supplier_id')
+            ->pluck('n', 'supplier_id');
+
+        $mappedCounts = DB::table('foodalchemist_supplier_item_structures AS s')
+            ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 's.supplier_item_id')
+            ->whereNull('s.deleted_at')
+            ->whereNotNull('s.gp_id')
+            ->tap(fn ($q) => StammPaket::begrenzen($q, 'i', $team, 'foodalchemist_supplier_items'))
+            ->selectRaw('i.supplier_id, COUNT(*) AS n')
+            ->groupBy('i.supplier_id')
+            ->pluck('n', 'supplier_id');
+
+        return [$itemCounts, $mappedCounts];
     }
 
     /**

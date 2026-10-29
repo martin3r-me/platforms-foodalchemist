@@ -160,3 +160,18 @@ it('gps.LIST über den echten Executor: Filter (WG, Text-Boolean) und Paging lau
         ->and($offen->success)->toBeTrue()->and(array_column($offen->data['gps'], 'name'))->toBe(['Bratensauce'])
         ->and($offen->data['gps'][0]['marke_offen'])->toBeTrue();
 });
+
+it('artikel.LIST + suppliers.SEARCH über den echten Executor: supplier_id filtert, Paging mit Gesamtzahl, unbekannter Parameter landet in warnungen (Spec 91)', function () {
+    $a = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos']);
+    $b = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Kluth']);
+    foreach ([[$a, 'Zanderfilet'], [$a, 'Butter'], [$b, 'Zander ganz']] as [$sup, $name]) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => $name, 'qty' => 1, 'unit_code' => 'kg']);
+    }
+
+    $artikel = ($this->ausfuehren)('foodalchemist.artikel.LIST', ['supplier_id' => $b->id, 'lieferant_name' => 'Kluth']);
+    $lieferanten = ($this->ausfuehren)('foodalchemist.suppliers.SEARCH', ['per_page' => 1]);
+
+    expect($artikel->success)->toBeTrue()->and(array_column($artikel->data['artikel'], 'designation'))->toBe(['Zander ganz'])
+        ->and($artikel->data['warnungen'][0])->toContain("'lieferant_name'")
+        ->and($lieferanten->success)->toBeTrue()->and($lieferanten->data['total'])->toBe(2)->and($lieferanten->data['last_page'])->toBe(2);
+});
