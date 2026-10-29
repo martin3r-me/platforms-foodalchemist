@@ -202,3 +202,127 @@ Tabelle D, Nachtrag P2c-3 (erste Charge, alle über die Tool-Hülle, je Tool ein
 
 Tabelle D, Nachtrag P2c-3b (Kundentexte, über die Tool-Hülle, je Tool ein Test): `foodbook.KUNDENTEXT_GENERATE`, `foodbook_kapitel.KUNDENTEXT_GENERATE`, `angebot.KUNDENTEXT_GENERATE` umgeleitet (ein `propose()` `foodbook.kundentext`, liefern nur einen Vorschlag, schreiben nichts). Noch NICHT belegt, deshalb in `KiUmleitung::AUSGENOMMEN`: `foodbook_kapitel.WORDING_GENERATE` und `speisekarte_wording.GENERATE` — bei leerem Kapitel/leerer Karte entsteht kein KI-Aufruf, der Test braucht Fixtures mit belegten Slots/Positionen. Die Services haben kein dispatch/Cache/Storage.
 
+## F · Inventur ALLER Token-Verbraucher (Stand 29.10., Dominique: „alles, was Plattform-KI-Token kostet, muss per MCP über Claude laufen können“)
+
+Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D dieser Datei, Code-Suche nach Jobs, Artisan-Befehlen und Zeitplan, `foodalchemist_ai_call_log` der **lokalen Dev-DB** (`foodalchemist`, 2.612 Aufrufe, 12.06.–16.10.2026). **Grenze:** das ist KEINE Produktivnutzung und KEINE letzten 30 Tage — demo/io-Zahlen stehen mir nicht zur Verfügung (siehe F5: `ki_verbrauch.GET` zeigt für das Master-Team 0). Die Spalten „Aufrufe / Ø Token“ zeigen daher nur, welche Features überhaupt im Log vorkommen und wie schwer ein Aufruf ist; `kosten_usd` ist lokal nicht befüllt (0).
+
+### F1 · Je Prompt-Key (Rang nach lokalen Gesamt-Token)
+| Prompt-Key | lokal: Aufrufe | Ø Token/Aufruf | Token gesamt | Einstieg (Methode / Tool) | Status heute | Paket |
+|---|---|---|---|---|---|---|
+| `recipe.generator` | 307 | 28592 | 8.777.592 | RecipesGenerateTool. StubAusrezeptierenJob (Import-Hülle. 29.10.) | angeschlossen | 2d (übrige) |
+| `conformance.check` | 332 | 17944 | 5.957.396 | – | Plattform | Konformität: Job angeschlossen (2c-2), Tool-Einstieg offen (2d) |
+| `vk.generator` | 123 | 35763 | 4.398.888 | RecipesGenerateTool. StubAusrezeptierenJob (Import-Hülle. 29.10.) | angeschlossen | 2d (übrige) |
+| `recipe.steps` | 94 | 15843 | 1.489.199 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (steps) | teilweise | 2d (übrige) |
+| `recipe.ueberarbeiten` | 124 | 10019 | 1.242.373 | RecipesReviseTool | angeschlossen | 2d (übrige) |
+| `foodbook.kapitel_ideen` | 43 | 18734 | 805.576 | KapitelIdeen*Tool | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `concept.plan` | 31 | 20770 | 643.869 | concepts.GENERATE | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `recipe.review` | 82 | 5440 | 446.046 | RecipesReviewTool | angeschlossen | 2d (übrige) |
+| `recipe.eigenschaften` | 87 | 4139 | 360.056 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
+| `recipe.sensorik` | 70 | 3732 | 261.262 | RecipeSensorikPostTool | angeschlossen | 2d (übrige) |
+| `recipe.category` | 54 | 4537 | 245.015 | recipes.ENRICH (Schritt) | Plattform | 2d (übrige) |
+| `concept.brief_geruest` | 52 | 4016 | 208.828 | concepts.GENERATE | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `recipe.equipment` | 70 | 2872 | 201.062 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt) | teilweise | 2d (übrige) |
+| `recipe.production_depth` | 69 | 2438 | 168.204 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
+| `recipe.level` | 42 | 3485 | 146.379 | DetailPanel::kiEignung; RecipesGenerateTool (One-Shot-Kette) | teilweise | 2d (übrige) |
+| `recipe.sektor` | 42 | 3361 | 141.168 | DetailPanel::kiEignung; RecipesGenerateTool (One-Shot-Kette) | teilweise | 2d (übrige) |
+| `gp.zaehl_einheiten` | 133 | 867 | 115.350 | GpFormsEstimateTool | angeschlossen | Paket LA-Wege (vorgezogen) |
+| `recipe.komponenten_plan` | 56 | 1695 | 94.943 | im Generator | Plattform | 2d (übrige) |
+| `recipe.verpackungsmasse` | 126 | 725 | 91.390 | Artisan-Befehl | Plattform | 2d (übrige) |
+| `vk.plating` | 36 | 2145 | 77.223 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `concept.wording` | 26 | 2736 | 71.146 | ConceptWordingGenerateTool; FoodbookKapitelWordingTool; – (offer_chapter/offer_block) | teilweise | 2c-3c/d (Konzepte. Kaskade) |
+| `gp.suggest` | 44 | 1606 | 70.671 | GpModal::einordnungKiVorschlagen; GpModal::kiVorschlagNaming; GpModal::nameAusLeadLa; Job nach LA-Import; LaGpAbgleichTool | Plattform | Paket LA-Wege (vorgezogen) |
+| `recipe.dichteklasse` | 26 | 2655 | 69.038 | recipes.ENRICH; recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
+| `recipe.geschmack` | 24 | 2499 | 59.978 | recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `planung.leitplanken` | 22 | 2471 | 54.352 | planung_leitplanken.EXTRACT. planung_kaskade.START. planung_vorschlag.POST | angeschlossen | 2c-3c/d (Konzepte. Kaskade) |
+| `vk.wording` | 32 | 1542 | 49.332 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `vk.kohaerenz` | 32 | 1534 | 49.095 | recipe_coherence.POST | angeschlossen | 2d (übrige) |
+| `format.grundgeruest` | 3 | 14236 | 42.708 | 4 *_plan_from_brief-Tools | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `recipe.extract` | 7 | 5659 | 39.616 | RecipesExtractTool | Plattform | 2d-1 (Text-Pfad). Bild/PDF Plattform |
+| `vk.speisen_klasse` | 33 | 1181 | 38.968 | RecipeKlassePostTool | angeschlossen | 2d (übrige) |
+| `foodbook.kundentext` | 10 | 3141 | 31.411 | AngebotKundentextTool; FoodbookKapitelKundentextTool; FoodbookKundentextTool; SpeisekarteWordingTool; SpeiseplanService::kiWordingVorschlag | teilweise | 2c-3c/d (Konzepte. Kaskade) |
+| `vk.review` | 18 | 1445 | 26.001 | RecipesReviewTool | angeschlossen | 2d (übrige) |
+| `recipe.name_putzen` | 15 | 1707 | 25.610 | RecipeModal::namePutzen | Plattform | 2d (übrige) |
+| `vk.ueberarbeiten` | 3 | 6535 | 19.604 | VerkaufsrezepteReviseTool | angeschlossen | 2d (übrige) |
+| `gp.conformance_revise` | 11 | 1668 | 18.349 | – | Plattform | Konformität: Job angeschlossen (2c-2), Tool-Einstieg offen (2d) |
+| `foodbook.grundgeruest` | 6 | 2495 | 14.968 | 4 *_plan_from_brief-Tools | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `component.replacement_suggest` | 4 | 3714 | 14.854 | ReplacementSuggestionService::forGp | Plattform | 2d (übrige) |
+| `praesentation.design_css` | 2 | 3303 | 6.606 | PresentationDesignsGenerateCssTool | angeschlossen | angeschlossen (Hülle) |
+| `vk.servier_vehikel` | 10 | 639 | 6.393 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `recipe.regeneration` | 5 | 1192 | 5.962 | recipes.ENRICH | angeschlossen | 2d (übrige) |
+| `vk.regeneration` | 4 | 1293 | 5.170 | verkaufsrezepte.REVISE | Plattform | 2d (übrige) |
+| `recipe.titel_vorschlag` | 3 | 1715 | 5.146 | TitelVorschlagService::titelVorschlag | Plattform | 2d (übrige) |
+| `recipe.garverlust` | 5 | 835 | 4.175 | IngredientEditor::garverlustVorschlag; recipes.ENRICH | Plattform | 2d (übrige) |
+| `recipe.description` | 3 | 1167 | 3.501 | recipes.ENRICH (Schritt) | Plattform | 2d (übrige) |
+| `vk.teller_heber` | 2 | 1197 | 2.394 | recipe_coherence.POST | angeschlossen | 2d (übrige) |
+| `planning.dish_proposal_revise` | 1 | 2281 | 2.281 | planung_kaskade.* | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `gp.allergene` | 4 | 426 | 1.703 | gps.ENRICH | Plattform | 2d (übrige) |
+| `gp.condition` | 2 | 685 | 1.370 | gps.ENRICH; gps.ENRICH (condition) | Plattform | 2d (übrige) |
+| `gp.naehrwerte` | 4 | 334 | 1.337 | gps.ENRICH; gps.ENRICH (naehrwerte) | Plattform | 2d (übrige) |
+| `gp.tags` | 4 | 326 | 1.302 | gps.ENRICH; gps.ENRICH (tags) | Plattform | 2d (übrige) |
+| `vk.titel_vorschlag` | 1 | 1215 | 1.215 | TitelVorschlagService::titelVorschlag | Plattform | 2d (übrige) |
+| `gp.anker` | 1 | 531 | 531 | gps.ENRICH | Plattform | 2d (übrige) |
+| `vk.rollen` | 3 | 132 | 395 | RecipeRollenPostTool | angeschlossen | 2d (übrige) |
+| `la.nonfood` | 12 | 0 | 0 | Job | Plattform | Paket LA-Wege (vorgezogen) |
+| `recipe.posten` | 1 | 0 | 0 | RecipesGenerateTool (One-Shot-Kette) | Plattform | 2d (übrige) |
+| `demo.echo` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `artikel.web_recherche` | 0 | – | 0 | CoreWebSucheTransport::suche | Plattform | Paket LA-Wege (vorgezogen) |
+| `recipe.ruestschritt` | 0 | – | 0 | ZukaufBasisrezeptService::baue; recipes.ENRICH (steps) | Plattform | 2d (übrige) |
+| `gp.domain` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `gp.piece_default_g` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `gp.verluste` | 0 | – | 0 | – (gp_forms.ESTIMATE?) | Plattform | 2d (übrige) |
+| `anker.wissen_auslese` | 0 | – | 0 | Artisan AnkerWissenCommand | Plattform | Artisan. Phase 1 |
+| `gp.sensorik` | 0 | – | 0 | Backfill. gps.ENRICH; gps.ENRICH | teilweise | 2d (übrige) |
+| `gp.la_suggest` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `gp.la_abgleich` | 0 | – | 0 | LaGpAbgleichTool | Plattform | Paket LA-Wege (vorgezogen) |
+| `gp.term_la_rank` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `recipe.bauart` | 0 | – | 0 | im Generator | Plattform | 2d (übrige) |
+| `produktpass.extract` | 0 | – | 0 | ProduktpassLeser::liefere | Plattform | ausgenommen (Anhang/Storage) |
+| `vk.marketing` | 0 | – | 0 | AngebotKundentextTool; FoodbookKundentextTool | Plattform | 2d (übrige) |
+| `price.plausi` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `chat.message` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
+| `signal.supplier_inquiry` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.margin_levers` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.vk_release_advice` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.serving_form_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.recipe_category_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.recipe_naming_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+
+Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 307× Ø 28592, `conformance.check` 332× Ø 17944, `vk.generator` 123× Ø 35763.
+
+### F2 · Verbraucher ohne `propose()`
+| Verbraucher | Einstieg | Status | Empfehlung |
+|---|---|---|---|
+| Websuche (`include_web_search`, `artikel.web_recherche`, `CoreWebSucheTransport`) | Artikel-Recherche (UI/Tool) | Plattform | anschließen (2d-2): `ANTWORT.quellen` → `sources`; eine Antwort OHNE Quellen bei einem Websuche-Auftrag wird abgelehnt |
+| Voice-Agent (`AiGatewayService::callWithTools`) | `VoiceCommandService` (UI) | Plattform | ausgenommen (Gadget, Claude ist selbst der Loop) |
+| Bildgenerierung (`RecipeImageService` → Core `ImageGenerationService`) | `recipe_images.GENERATE`, `EnrichRecipeJob` (KI-Bilder) | Plattform | ausgenommen (Claude erzeugt keine Bilder); im Extern-Lauf aus |
+| Embeddings (Qdrant, `text-embedding-3-large`) | semantische Suche, Wissens-/Pool-Index | Plattform | ausgenommen (Entscheid Dominique); nicht im `ki_verbrauch` erfasst |
+| Bild-/PDF-Anhänge (`recipe.extract` mit Bild, `produktpass.extract`) | Rezept-Import, Produktpass | Plattform | ausgenommen (siehe 2d-1: Text-Pfad anschließen, Bild liest Claude selbst) |
+
+### F3 · Jobs, Befehle, Zeitplan
+| Job / Befehl | Auslöser | Prompt-Keys | Status | Paket |
+|---|---|---|---|---|
+| `BulkEnrichGpJob` | `gps.ENRICH`, UI, Backfill | gp.condition/tags/anker/sensorik/naehrwerte | angeschlossen | P1b |
+| `GpAromaBackfillCommand` (`foodalchemist:gp-aroma-backfill`) | manuell (Forge/SSH) | gp.anker, gp.sensorik | angeschlossen (`--anbieter=extern`); MCP-Werkzeug zum Starten ohne Forge = Zusatzpaket (Entscheidung Dominique offen) | P1 |
+| `EnrichRecipeJob` | `recipes.ENRICH`, UI, Kaskade | recipe.* (Anreicherung) | angeschlossen | 2b |
+| `SensorikNachholenJob` | Rezept-Anlage/-Änderung (afterCommit, 90 s verzögert) | recipe.sensorik | angeschlossen | 2c-1 |
+| `GenerateRecipeJob`, `EnrichGeneratedRecipeJob`, `ConformanceCheckJob` | Generator-UI, Planungs-Kaskade | recipe.generator, vk.generator, conformance.check, recipe.* | angeschlossen (Job-Weg; Einstiegs-Tools der Kaskade setzen `_extern` noch nicht) | 2c-2, Einstiege 2c-3d |
+| `ClassifyLaJob` | `LaFirstGpService` (LA-First/Import), UI | gp.suggest | Plattform | **LA-Wege (vorgezogen)** |
+| `NonFoodKiBatchJob` / `NonFoodErkennenCommand` | Artisan `foodalchemist:nonfood-erkennen` | la.nonfood | Plattform | **LA-Wege (vorgezogen)** |
+| `GpAromaNachholenJob` | GP-Anlage (`GpAromaNachholen`) | gp.sensorik, gp.anker | Plattform | LA-Wege/GP (vorgezogen) |
+| `la.GP_ABGLEICH` (`GpAbgleichService`, `LaFelderService`) | Tool, UI (LA-Detail) | gp.suggest, gp.la_abgleich | Plattform | **LA-Wege (vorgezogen)**; ≈ 24.000 Token je Artikel (2 Calls, io gemessen) |
+| `ImportArticlesJob` (Necta-/Artikel-Import) | `ArticleImportTriggerService`, Zeitplan `NectaAbgleichCommand` | – (kein direkter `propose()` gefunden; löst über `LaFirstGpService` ggf. `ClassifyLaJob` aus) | prüfen | LA-Wege |
+| `SignalFixJob` / `signale.FIX` | Review-Queue (UI), Tool | signal.*, price.plausi | Plattform | **Signale** |
+| `SignaleDetektorCommand` (täglich 03:20) | Zeitplan | – (deterministisch; die KI-Stufe `price.plausi` „folgt in #375“, heute keine Token) | keine KI | Signale (beobachten) |
+| `StubAusrezeptierenJob` | `RecipeExtractService` (Rezept-Import) | recipe.generator | Plattform | 2d-1 |
+| `BuildZukaufRecipeJob` | `RecipeDependencyWorkflowService` | recipe.ruestschritt, recipe.generator | Plattform | 2c-3d |
+| `GenerateConceptJob`, `FanoutConceptJob`, `GenerateDishProposalJob`, `GenerateRecipePlanJob`, `ReviseDishProposalJob`, `MaterializeConceptIdeaJob`, `MaterializeSpeisekartePositionJob`, `MaterializeSpeiseplanCellJob` | `PlanningCascadeService` (Kaskade) | concept.*, planung.*, planning.*, foodbook.* | Plattform | 2c-3c/d |
+| `BulkEnrichJob` | UI-Bulk-Läufe Rezepte | recipe.* | Plattform | 2d |
+| `RecipeFindingsRunJob`, `QualityRunJob` | `QualityRunService` (UI) | recipe.review/vk.review (zu prüfen) | prüfen | 2d |
+| `RezeptFolgeJob`, `BausteinFolgeJob` | Folge-Services (afterCommit) | – (kein KI-Dienst gefunden) | prüfen | – |
+| `ProduktpassLesenJob`, `ProduktpassRechercheJob` | Produktpass (UI) | produktpass.extract, Web | Plattform | ausgenommen |
+| `AnkerWissenCommand`, `RecipePackagingUnitsCommand`, `GeneratorEvalCommand`, `GpSensorikReferenzCommand` | manuell (Artisan) | anker.wissen_auslese, recipe.verpackungsmasse; Eval-/Referenz-Werkzeuge | Plattform | 2d (Befehle `--anbieter=extern`) |
+| Zeitplan sonst: `NectaAbgleichCommand`, `WechselkursHolenCommand`, `PlanNutzungZaehlenCommand`, `WissenSteuerdatenW0Command`, `WissenDeckelCheckCommand`, `WissenKanonSicherungCommand`, `AboHuelleNachfuehrenCommand`, `SpeiseplanAushangRollierenCommand` | Zeitplan (nachts/wöchentlich) | – | keine KI-Token (kein propose/Gateway im Befehl) | – |
+
+### F5 · Nebenbefund `ki_verbrauch.GET` zeigt für das Master-Team 0
+`KiAbrechnungService::fuerTeam` zählt nur Zeilen mit `verursacher = mandant` UND `abrechnung_team_id = Kunden-Hauptteam`. Aufrufe des Master-Teams (io Team 1, BHG.DIGITAL) bekommen in `KiVerursacher::aufloesen` den Verursacher `plattform` und `abrechnung_team_id = NULL` (`MasterTeam::istMaster($haupt)`). Die Mandanten-Sicht filtert sie deshalb heraus: **0 Aufrufe / 0 €** ist für das Master-Team die erwartete Ausgabe der Mandanten-Sicht, nicht eine leere Erfassung. Die Aufrufe stehen im Log und in `KiAbrechnungService::auswertung()` unter „Plattform“. Fix-Vorschlag (eigener kleiner Punkt): für das Master-Team in `fuerTeam` die `plattform`-Zeilen mit `team_id` im Teilbaum zählen (oder das Tool weist „Master-Team: Verbrauch unter Plattform“ aus). Nicht geändert.
+
