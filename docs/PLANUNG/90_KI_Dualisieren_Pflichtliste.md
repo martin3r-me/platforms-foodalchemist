@@ -54,9 +54,9 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 29 | `src/Services/AngebotService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
 | 30 | `src/Services/AngebotService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
 | 31 | `src/Services/BriefingLeitplankenService.php::ausBriefing` | planung.leitplanken | 1 | a | P2 | planung_leitplanken.EXTRACT, planung_kaskade.START, planung_vorschlag.POST | offen |  |
-| 32 | `src/Services/BulkEnrichService.php::proposeFeld` | dyn. $key (Rezept-Schritte) | 1 | b | P2 | recipes.ENRICH | offen | Keys über config-Prompt-Liste abgesichert |
-| 33 | `src/Services/BulkEnrichService.php::proposeDichteklasse` | recipe.dichteklasse | 1 | a | P2 | recipes.ENRICH | offen |  |
-| 34 | `src/Services/BulkEnrichService.php::proposeRegeneration` | recipe.regeneration | 1 | a | P2 | recipes.ENRICH | offen |  |
+| 32 | `src/Services/BulkEnrichService.php::proposeFeld` | dyn. $key (Rezept-Schritte) | 1 | b | P2 | recipes.ENRICH | angeschlossen | Keys über config-Prompt-Liste abgesichert Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
+| 33 | `src/Services/BulkEnrichService.php::proposeDichteklasse` | recipe.dichteklasse | 1 | a | P2 | recipes.ENRICH | angeschlossen | Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
+| 34 | `src/Services/BulkEnrichService.php::proposeRegeneration` | recipe.regeneration | 1 | a | P2 | recipes.ENRICH | angeschlossen | Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 35 | `src/Services/BulkEnrichService.php::proposeGarverlust` | recipe.garverlust | 1 | a | P2 | recipes.ENRICH | offen |  |
 | 36 | `src/Services/BulkEnrichService.php::proposeGpFeld` | dyn. $key (gp.condition, gp.tags, gp.anker, gp.sensorik, gp.allergene, gp.naehrwerte) | 1 | b | P1 | gps.ENRICH | offen | P1-Kern |
 | 37 | `src/Services/CoherenceService.php::judge` | vk.kohaerenz | 1 | a | P2 | recipe_coherence.POST | angeschlossen | MCP-Umleitung (Tabelle D). |
@@ -85,12 +85,12 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 60 | `src/Services/RecipeExtractService.php::extrahiere` | recipe.extract | 1 | b | P2 | RecipesExtractTool | offen | ANHANG (Bild/PDF): Entscheidung Punkt 5 |
 | 61 | `src/Services/RecipeGeneratorService.php::generiereImLaufKern` | dyn. (vk.generator / recipe.generator) | 1 | c | P2 | RecipesGenerateTool, StubAusrezeptierenJob (Import-Hülle, 29.10.) | offen | Kaskade, mehrere propose + Schreiben |
 | 62 | `src/Services/RecipeKomponentenPlanService.php::plane` | recipe.komponenten_plan | 1 | a | P2 | im Generator | offen |  |
-| 63 | `src/Services/RecipeOneShotService.php::fertigungsGlied` | recipe.production_depth | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
-| 64 | `src/Services/RecipeOneShotService.php::eigenschaftenGlied` | recipe.eigenschaften | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
-| 65 | `src/Services/RecipeOneShotService.php::equipmentGlied` | recipe.equipment | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
+| 63 | `src/Services/RecipeOneShotService.php::fertigungsGlied` | recipe.production_depth | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
+| 64 | `src/Services/RecipeOneShotService.php::eigenschaftenGlied` | recipe.eigenschaften | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
+| 65 | `src/Services/RecipeOneShotService.php::equipmentGlied` | recipe.equipment | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 66 | `src/Services/RecipeOneShotService.php::stationVorschlag` | recipe.posten | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
-| 67 | `src/Services/RecipeOneShotService.php::stepGlied` | recipe.steps | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
-| 68 | `src/Services/RecipeOneShotService.php::eignungsGlied` | recipe.sektor, recipe.level | 2 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | 2 propose in einer Methode |
+| 67 | `src/Services/RecipeOneShotService.php::stepGlied` | recipe.steps | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
+| 68 | `src/Services/RecipeOneShotService.php::eignungsGlied` | recipe.sektor, recipe.level | 2 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | 2 propose in einer Methode Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 69 | `src/Services/RecipeReviewService.php::pruefeImLauf` | dyn. $feature (recipe.review / vk.review) | 1 | b | P2 | RecipesReviewTool | offen |  |
 | 70 | `src/Services/RecipeReviseService.php::freitextVorschlag` | recipe.ueberarbeiten | 1 | a | P2 | RecipesReviseTool | offen |  |
 | 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | offen |  |
@@ -156,7 +156,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.recipe_rollen.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme |
 | `foodalchemist.recipe_sensorik.POST` | umgeleitet | ein `propose()`, danach DB-Schreiben |
 | `foodalchemist.gps.ENRICH` | Lauf-Flag (`KiUmleitung::LAUF_FLAG`) | Queue: `propose()` läuft im Worker. Der externe MCP-Aufruf setzt `extern` am Lauf (`starteGp`) und am Job; der Worker legt KI-Aufträge an (ohne Leer-Vorschlag), nach ANTWORT den Aufruf wiederholen. Ohne MCP-Herkunft Plattformweg |
-| `foodalchemist.recipes.ENRICH` | ausgenommen (Klasse c) | Queue-Dispatch wie `gps.ENRICH` |
+| `foodalchemist.recipes.ENRICH` | Job-Mechanik (P2a/P2b) | `EnrichRecipeJob` ist `KiExternWiederholbar`: Rumpf in Sammel-Transaktion, Rollback bis zur Antwort, `ki_auftraege.ANTWORT` startet den Lauf neu, ein Lauf je Rezept (`enrich-recipe:{team}:{rezept}`). Inventur der Nicht-DB-Nebenwirkungen: Wartezustand/Fortschritt nur DB; Cache nur im Modal-Pfad ohne Step (nicht MCP); KI-Bilder und Produktfoto bleiben Plattform (im Extern-Weg aus); die Wache (`KiExternLauf::$nebenwirkungen`) meldet Queue-Dispatch/Cache/Mail im Test und im Log |
 | `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
 | `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
@@ -174,3 +174,5 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | Nachbar-GPs im Sensorik-Kontext (`orderBy g.name limit 3`) | Gleichstand bei gleichem Namen unbestimmt; erst nach der Sensorik-Umstellung (#617) betrachten |
 
 Zähler (`KiAuftragService::zaehler`, im Backfill `--anbieter=extern` am Ende und im Protokoll): angelegt, beantwortet, verbraucht (je ab Lauf-Beginn), Bestand offen / beantwortet-liegt / abgelaufen, `verwaist` (abgelaufen + über 1 h beantwortet und unverbraucht) `doppelt` (verschiedene Prompts je Feature und Ziel; > 0 heißt: Fingerabdruck instabil oder Kontext hat sich geändert) und `wiederholt` (derselbe Prompt mehrfach: Re-Roll der Antwortprüfung `structural_retry`, bis 3 Versuche; erwartet, kein Fehler).
+
+Tabelle D, Nachtrag P2b: Nicht belegt bleiben in der Enrich-Kette `recipe.posten` (`stationVorschlag`) und `recipe.garverlust` (im Test nicht durchlaufen: keine Zutaten). Sie hängen am selben Job, sind mechanisch erfasst, aber nicht durch einen Test belegt. Zähler `wiederholt`: `recipe.steps` wurde im Test 3× mit gleichem Prompt beauftragt (Re-Roll der Antwortprüfung, die Test-Antwort war unbrauchbar) — erwartet.
