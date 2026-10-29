@@ -9,6 +9,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistMandant;
 use Platform\FoodAlchemist\Support\KiKlassen;
 use Platform\FoodAlchemist\Support\KiVerursacher;
+use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
  * KI-Verbrauch je Mandant und Zeitraum (16.10.2026), gelesen aus ai_call_log. Kein Monatsabschluss: der Zeitraum ist frei (created_at),
@@ -67,7 +68,7 @@ class KiAbrechnungService
      * die dieser Mandant zahlt (verursacher mandant, abrechnung_team_id = Kunden-Hauptteam); Euro aus Preis und Kurs beim Aufruf.
      * Embeddings stehen nicht im Log und fehlen hier (ausgewiesen).
      *
-     * @return array{ist_haupt: bool, mandant_id: int, summe: array<string, mixed>, klassen: list<array<string, mixed>>, standorte: list<array<string, mixed>>, deckel: ?array<string, mixed>}
+     * @return array{ist_haupt: bool, plattform: bool, mandant_id: int, summe: array<string, mixed>, klassen: list<array<string, mixed>>, standorte: list<array<string, mixed>>, deckel: ?array<string, mixed>}
      */
     public function fuerTeam(Team $team, CarbonInterface $von, CarbonInterface $bis): array
     {
@@ -75,8 +76,14 @@ class KiAbrechnungService
         $istHaupt = (int) $haupt->id === (int) $team->id;
         $teamIds = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $team->id);
 
+        // Das Master-Team zahlt nicht selbst (Läufe sind „plattform“, ohne Abrechnungs-Team): es sieht die Plattform-Zeilen seines Teilbaums
+        // statt einer leeren Summe (Kurator 29.10.). Der Mandanten-Verbrauch bleibt in der Auswertung je Mandant.
+        $plattform = MasterTeam::istMaster($haupt);
+
         $zeilen = DB::table('foodalchemist_ai_call_log')
-            ->where('verursacher', KiVerursacher::MANDANT)->where('abrechnung_team_id', $haupt->id)
+            ->when($plattform,
+                fn ($q) => $q->where('verursacher', KiVerursacher::PLATTFORM),
+                fn ($q) => $q->where('verursacher', KiVerursacher::MANDANT)->where('abrechnung_team_id', $haupt->id))
             ->whereIn('team_id', $teamIds)
             ->where('created_at', '>=', $von)->where('created_at', '<=', $bis)
             ->selectRaw('team_id, tier, COUNT(*) AS calls, '
@@ -102,12 +109,12 @@ class KiAbrechnungService
         }
 
         $deckel = null;
-        if ($istHaupt) {
+        if ($istHaupt && ! $plattform) {
             $svc = app(KiDeckelService::class);
             $deckel = $svc->deckel((int) $haupt->id) + ['verbrauch_monat' => round($svc->verbrauchMonat((int) $haupt->id), 2)];
         }
 
-        return ['ist_haupt' => $istHaupt, 'mandant_id' => (int) $haupt->id, 'summe' => $this->zeile($zeilen->all(), 'Summe'),
+        return ['ist_haupt' => $istHaupt, 'plattform' => $plattform, 'mandant_id' => (int) $haupt->id, 'summe' => $this->zeile($zeilen->all(), 'Summe'),
             'klassen' => $klassen, 'standorte' => $standorte, 'deckel' => $deckel];
     }
 

@@ -46,6 +46,18 @@ it('Hauptteam sieht den ganzen Mandanten und je Standort; Fehlläufe kosten mit,
         ->and($v['deckel'])->toMatchArray(['eur' => 20.0, 'quelle' => 'projekt_standard', 'verbrauch_monat' => 5.5]);
 });
 
+it('Master-Team sieht die Plattform-Aufrufe seines Teilbaums, nicht den Mandanten-Verbrauch und keinen Deckel', function () {
+    ($this->log)($this->master, $this->master, 7.0, 'L', null, 'plattform');
+    ($this->log)($this->master, $this->master, 1.0, 'S', 'timeout', 'plattform');
+    $v = $this->svc->fuerTeam($this->master, now()->startOfMonth(), now());
+
+    expect($v['plattform'])->toBeTrue()->and($v['summe']['eur'])->toBe(8.0)->and($v['summe']['calls'])->toBe(2)->and($v['summe']['fehler'])->toBe(1)
+        ->and($v['deckel'])->toBeNull();
+
+    $r = app(KiVerbrauchGetTool::class)->execute([], new ToolContext($this->makeUser($this->master, "Kurator", "admin"), $this->master));
+    expect($r->success)->toBeTrue()->and($r->data['summe']['eur'])->toBe(8.0)->and($r->data['plattform'])->toBeTrue()->and($r->data['hinweis'])->toContain('Plattform-Aufrufe');
+});
+
 it('Standort sieht nur sich, ohne Standort-Liste und ohne Deckel', function () {
     $v = $this->svc->fuerTeam($this->kita, now()->startOfMonth(), now());
 
