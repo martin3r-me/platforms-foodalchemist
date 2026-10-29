@@ -1,7 +1,10 @@
 {{-- Wiederverwendbares Sensorik-Panel: erwartet $sensorik (SensorikService::fuer*). Genutzt in Gericht-, Basisrezept- und GP-Editor.
+     $nurRadar (GP-Detail, Dominique 28.10.2026): Kopfzeile mit Quelle, Radar in voller Breite, DARUNTER die Tags (dominant/schwach/Textur) und die
+     Pairing-Empfehlungen — ohne Erklärtext, Messwert-Box und Textur-Warnhinweis.
      fa-pass: nur Tokens + x-fa-Bausteine. Ui::maps() bleibt, weil pairing-empfehlungen ($pill/$variantPill) aus diesem Scope liest. --}}
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
+    $nurRadar = (bool) ($nurRadar ?? false);
     $dimLabel = ['suess' => 'süß', 'salzig' => 'salzig', 'sauer' => 'sauer', 'bitter' => 'bitter', 'umami' => 'umami', 'fettig' => 'fettig', 'scharf' => 'scharf'];
 @endphp
 
@@ -42,6 +45,26 @@
             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] italic">{{ $sensorik['reasoning'] }}</p>
         @endif
 
+        @if($nurRadar)
+            <div class="rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3" data-sensorik-nur-radar>
+                @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
+                    'sensGeschmack' => $sensorik['geschmack'] ?? [],
+                    'ankerGeschmack' => $pairing['geschmack'] ?? [],
+                    'dominant' => $sensorik['dominant'] ?? [],
+                    'luecken' => $sensorik['luecken'] ?? [],
+                    'radarBreit' => true,
+                ])
+            </div>
+            @if(count($sensorik['dominant']) || count($sensorik['luecken']) || count($sensorik['textur']))
+                <div class="flex flex-wrap gap-1.5" data-sensorik-tags>
+                    @foreach($sensorik['dominant'] as $d)<x-fa::badge tone="ok">dominant: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
+                    @foreach($sensorik['luecken'] as $d)<x-fa::badge :tone="$sQuelle === 'gp' ? 'neutral' : 'warn'">{{ $sQuelle === 'gp' ? 'schwach' : 'Lücke' }}: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
+                    @foreach($sensorik['textur'] as $t)<x-fa::badge>{{ $t['label'] }}</x-fa::badge>@endforeach
+                </div>
+            @endif
+            {{-- Pairing: Entscheid Dominique offen (28.10.) — bis dahin unter den Tags statt daneben --}}
+            @include('foodalchemist::livewire.concepter.partials.pairing-empfehlungen', ['pairing' => $pairing ?? null])
+        @else
         <x-fa::section title="Geschmacksprofil" icon="heroicon-o-beaker" meta="sensorisch">
             {{-- #503: Fläche = gegarte Sensorik, Aroma-Anker-Wert je Achse im Tooltip.
                  Rechts: Geschmack + Pairing-Empfehlungen (aus $pairing, recipe-Typ). Laptop: Radar
@@ -111,6 +134,7 @@
                 </div>
             </div>
         </x-fa::section>
+        @endif
         {{-- Kein „Ausgleich/Kontrast"-Vorschlag hier: Grundgeschmack = reine Diagnose.
              Kontrast/Komplettierung liefert der Anker-Graph (Pairing-Block: klassisch + kontrast). --}}
     </div>

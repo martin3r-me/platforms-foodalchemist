@@ -6,6 +6,7 @@ use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\GpAromaNachholenJob;
 use Platform\FoodAlchemist\Livewire\Gps\DetailPanel;
+use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\AiProposal;
@@ -233,13 +234,43 @@ it('Detail-Ansicht: ohne Profil „Profil fehlt" und beide KI-Knöpfe; Schätzen
     expect(DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->value('source'))->toBe('ai');
 });
 
-it('mit Profil heißt ein Wert unter 0,3 „schwach", nicht „Lücke"', function () {
+it('mit Profil heißt ein Wert unter 0,3 „schwach", nicht „Lücke" — im GP-Detail und im GP-Dialog', function () {
     $this->actingAs($this->user);
     $gp = ($this->gp)('Zitrone: frisch', 'zitrone');
     ($this->profil)($gp->id, ['sauer' => 0.9]);
 
     Livewire::test(DetailPanel::class, ['gpId' => $gp->id])
         ->assertSee('schwach: süß')->assertDontSee('Lücke:')->assertSeeHtml('data-gp-profil-quelle="ai"');
+    Livewire::test(GpModal::class)->call('oeffnen', $gp->id)
+        ->assertSee('schwach: süß')->assertDontSee('Lücke:')->assertSeeHtml('data-gp-profil-quelle="ai"');
+});
+
+it('GP-Detail „Geschmack" (Dominique 28.10.): Radar oben, Tags darunter; Erklärtext, Messwert-Box und Crunch-Hinweis weg — der GP-Dialog bleibt', function () {
+    $this->actingAs($this->user);
+    $gp = ($this->gp)('Zitrone: frisch', 'zitrone');
+    ($this->profil)($gp->id, ['sauer' => 0.9, 'suess' => 0.1]);
+    ($this->gemessen)(['suess' => 0.1]);                                        // Messwert-Box hätte Inhalt
+    foreach (['cremig' => 'Cremig', 'fluessig' => 'Flüssig'] as $slug => $label) {   // zwei weiche Texturen → Crunch-Hinweis
+        $v = DB::table('foodalchemist_vocab_textures')->insertGetId(['slug' => $slug, 'display_de' => $label, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('foodalchemist_gp_textures')->insert(['gp_id' => $gp->id, 'texture_vocab_id' => $v, 'intensity' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    $detail = Livewire::test(DetailPanel::class, ['gpId' => $gp->id])->html();
+    $dialog = Livewire::test(GpModal::class)->call('oeffnen', $gp->id)->html();
+    $geschmack = Str::between($detail, 'data-gp-panel-geschmack', 'data-gp-panel-anker');
+
+    expect($geschmack)->toContain('data-sensorik-nur-radar')->toContain('data-geschmack-radar')->toContain('max-w-lg')->toContain('Grundprodukt, Rohprofil')
+        ->toContain('data-ki-action="sensorikKiSchaetzen"');
+    $tags = Str::between($geschmack, 'data-sensorik-tags', '</div>');
+    foreach (['dominant: sauer', 'schwach: süß', 'Cremig', 'Flüssig'] as $tag) {
+        expect($tags)->toContain($tag);
+    }
+    expect(strpos($geschmack, 'data-sensorik-tags'))->toBeGreaterThan(strpos($geschmack, 'data-geschmack-radar'));   // unter dem Radar
+    foreach (['Die Fläche zeigt', 'Aus den Nährwerten der Lieferantenartikel gemessen', 'Crunch-Element', '>Textur<'] as $teil) {
+        expect($geschmack)->not->toContain($teil);
+        expect($dialog)->toContain($teil);                                      // GP-Dialog unverändert
+    }
+    expect($dialog)->not->toContain('data-sensorik-nur-radar')->not->toContain('data-sensorik-tags')->toContain('max-w-[360px]');
 });
 
 it('Detail-Ansicht: „Anker vorschlagen" nimmt Geschwister ohne KI', function () {

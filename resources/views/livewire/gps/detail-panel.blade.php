@@ -524,7 +524,8 @@
                 @endif
             </x-slot:actions>
             @include('foodalchemist::livewire.gps.partials.aroma-vorschau')
-            @include('foodalchemist::livewire.concepter.partials.sensorik')
+            {{-- Dominique 27.10.: im GP-Detail nur das Radar (Erklärtext, Messwerte, dominant, Textur gehören in den GP-Dialog) --}}
+            @include('foodalchemist::livewire.concepter.partials.sensorik', ['nurRadar' => true])
         </x-fa::section>
         @endif
 
