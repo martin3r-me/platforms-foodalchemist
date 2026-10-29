@@ -30,6 +30,21 @@ beforeEach(function () {
     $this->gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ei'], $this->kontext)->data['id'];
     $this->basisId = $this->makeRecipe($this->rootTeam, 'Reduktion: Rotwein-Schalotte', ['status' => 'draft', 'description' => 'Sirup.', 'preparation' => '1. Reduzieren.'])->id;
     $this->conceptId = $this->makeConcept($this->rootTeam, 'Sommer-Buffet')->id;
+    // Foodbook/Kapitel, Angebot/Kapitel und Speisekarte über die Tools anlegen (die Antwort-Form variiert: id oder {objekt: {id}})
+    $idAus = function ($res) {
+        expect($res->success)->toBeTrue($res->error ?? '');
+        foreach ([$res->data['id'] ?? null, ...array_map(fn ($v) => is_array($v) ? ($v['id'] ?? null) : null, array_values((array) $res->data))] as $id) {
+            if (is_int($id)) {
+                return $id;
+            }
+        }
+        throw new \RuntimeException('keine id in ' . json_encode($res->data));
+    };
+    $this->foodbookId = $idAus($this->registry->get('foodalchemist.foodbooks.POST')->execute(['label' => 'Sommerbuch'], $this->kontext));
+    $this->kapitelId = $idAus($this->registry->get('foodalchemist.foodbook_kapitel.POST')->execute(['foodbook_id' => $this->foodbookId, 'title' => 'Vorspeisen'], $this->kontext));
+    $this->offerId = $idAus($this->registry->get('foodalchemist.angebote.POST')->execute(['name' => 'Sommerfest-Angebot'], $this->kontext));
+    $this->offerChapterId = $idAus($this->registry->get('foodalchemist.offer_chapter.POST')->execute(['offer_id' => $this->offerId, 'title' => 'Buffet'], $this->kontext));
+    $this->karteId = $idAus($this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Abendkarte'], $this->kontext));
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
 });
 
@@ -42,6 +57,9 @@ dataset('umgeleitete_tools', function () {
         'recipe_klasse.POST' => ['foodalchemist.recipe_klasse.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.speisen_klasse'],
         'recipe_rollen.POST' => ['foodalchemist.recipe_rollen.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.rollen'],
         'recipe_sensorik.POST' => ['foodalchemist.recipe_sensorik.POST', fn ($t) => ['recipe_id' => $t->vkId], 'recipe.sensorik'],
+        'foodbook.KUNDENTEXT_GENERATE' => ['foodalchemist.foodbook.KUNDENTEXT_GENERATE', fn ($t) => ['foodbook_id' => $t->foodbookId], 'foodbook.kundentext'],
+        'foodbook_kapitel.KUNDENTEXT_GENERATE' => ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE', fn ($t) => ['kapitel_id' => $t->kapitelId], 'foodbook.kundentext'],
+        'angebot.KUNDENTEXT_GENERATE' => ['foodalchemist.angebot.KUNDENTEXT_GENERATE', fn ($t) => ['offer_id' => $t->offerId], 'foodbook.kundentext'],
         'concept_wording.GENERATE' => ['foodalchemist.concept_wording.GENERATE', fn ($t) => ['concept_id' => $t->conceptId], 'concept.wording'],
         'planung_leitplanken.EXTRACT' => ['foodalchemist.planung_leitplanken.EXTRACT', fn ($t) => ['briefing' => 'Sommerfest, vegetarisch, eher frisch und regional'], 'planung.leitplanken'],
         'planung_vorschlag.POST' => ['foodalchemist.planung_vorschlag.POST', fn ($t) => ['scope' => 'rezept', 'brief' => 'Sommerfest, vegetarisch, eher frisch und regional'], 'planung.leitplanken'],
@@ -57,7 +75,8 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
         return [
             ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
-            ['foodalchemist.recipes.GENERATE'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
+            ['foodalchemist.recipes.GENERATE'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
+            ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'],
         ];
     })());

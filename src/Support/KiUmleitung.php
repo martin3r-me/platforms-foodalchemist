@@ -29,6 +29,9 @@ final class KiUmleitung
      */
     public const TOOLS = [
         'foodalchemist.concept_wording.GENERATE' => 'Ein propose() (concept.wording) je Slot/Kopf, danach DB-Schreiben der Texte (ConceptService::generateWording, keine Folge-Jobs).',
+        'foodalchemist.angebot.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über AngebotService, liefert nur den Vorschlag, schreibt nichts.',
+        'foodalchemist.foodbook.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
+        'foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
         'foodalchemist.gp_forms.ESTIMATE' => 'Ein propose() (gp.zaehl_einheiten), danach nur DB-Schreiben der Formen.',
         'foodalchemist.presentation_designs.GENERATE_CSS' => 'Ein propose() (praesentation.design_css), liefert nur den Vorschlag, schreibt nicht.',
         'foodalchemist.planung_leitplanken.EXTRACT' => 'Ein propose() (planung.leitplanken), schreibt höchstens die Regler der Planungssitzung (DB).',
@@ -49,6 +52,8 @@ final class KiUmleitung
      * @var array<string, string>
      */
     public const AUSGENOMMEN = [
+        'foodalchemist.foodbook_kapitel.WORDING_GENERATE' => 'Noch nicht belegt: der Service tut bei einem Kapitel ohne Konzept-Slots nichts (kein KI-Aufruf), der Test braucht ein Kapitel mit belegten Slots (Fixture). Services ohne Folge-Jobs — Aufnahme nach Fixture-Bau.',
+        'foodalchemist.speisekarte_wording.GENERATE' => 'Noch nicht belegt: bei einer Karte ohne Positionen entsteht kein KI-Aufruf; der Test braucht eine Karte mit Positionen (Fixture).',
         'foodalchemist.concepts.GENERATE' => 'Klasse c: Kaskade, mehrere propose() mit Schreibzugriffen dazwischen (Phase 2).',
     ];
 

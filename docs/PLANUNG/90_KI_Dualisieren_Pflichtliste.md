@@ -51,8 +51,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 26 | `src/Livewire/Verkauf/VkModal.php::kiBehaelter` | recipe.dichteklasse | 1 | a | P2 | verkaufsrezepte.ENRICH | offen |  |
 | 27 | `src/Livewire/Verkauf/VkModal.php::uebernehmeEigenschaften` | recipe.eigenschaften, recipe.geschmack | 2 | b | P2 | verkaufsrezepte.ENRICH | offen |  |
 | 28 | `src/Livewire/Verkauf/VkModal.php::kiRegeneration` | vk.regeneration | 1 | a | P2 | verkaufsrezepte.REVISE | offen |  |
-| 29 | `src/Services/AngebotService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
-| 30 | `src/Services/AngebotService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | offen |  |
+| 29 | `src/Services/AngebotService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | angeschlossen | MCP-Umleitung angebot.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
+| 30 | `src/Services/AngebotService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | AngebotKundentextTool | angeschlossen | MCP-Umleitung angebot.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
 | 31 | `src/Services/BriefingLeitplankenService.php::ausBriefing` | planung.leitplanken | 1 | a | P2 | planung_leitplanken.EXTRACT, planung_kaskade.START, planung_vorschlag.POST | angeschlossen | MCP-Umleitung planung_leitplanken.EXTRACT / planung_vorschlag.POST (Tabelle D, KiUmleitungTest). |
 | 32 | `src/Services/BulkEnrichService.php::proposeFeld` | dyn. $key (Rezept-Schritte) | 1 | b | P2 | recipes.ENRICH | angeschlossen | Keys über config-Prompt-Liste abgesichert Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 33 | `src/Services/BulkEnrichService.php::proposeDichteklasse` | recipe.dichteklasse | 1 | a | P2 | recipes.ENRICH | angeschlossen | Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
@@ -69,8 +69,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 44 | `src/Services/Conformance/RecipeConformanceAdapter.php::revise` | dyn. $promptKey | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 45 | `src/Services/ConformanceService.php::pruefeAdapter` | conformance.check | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 46 | `src/Services/FoodbookService.php::kapitelWordingRegenerieren` | concept.wording | 1 | a | P2 | FoodbookKapitelWordingTool | offen |  |
-| 47 | `src/Services/FoodbookService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKundentextTool | offen |  |
-| 48 | `src/Services/FoodbookService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKapitelKundentextTool | offen |  |
+| 47 | `src/Services/FoodbookService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKundentextTool | angeschlossen | MCP-Umleitung foodbook.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
+| 48 | `src/Services/FoodbookService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKapitelKundentextTool | angeschlossen | MCP-Umleitung foodbook_kapitel.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
 | 49 | `src/Services/GpAbgleich/GpAbgleichService.php::entscheiderKi` | gp.la_abgleich | 1 | b | P2 | LaGpAbgleichTool | offen |  |
 | 50 | `src/Services/GpAbgleich/LaFelderService.php::fuer` | gp.suggest | 1 | a | P2 | LaGpAbgleichTool | offen |  |
 | 51 | `src/Services/GpAromaService.php::schaetze` | gp.sensorik | 1 | a | P1 | Backfill, gps.ENRICH | angeschlossen | Backfill ANGESCHLOSSEN (#611); Tool-Weg offen. 29.10.: 7 Achsen + Grenzen nach der Antwort (Nachverarbeitung beim Aufrufer, `SensorikService::begrenze`); Anzahl bleibt 1, Einstufung a, Backfill `--neu-schaetzen` |
@@ -198,4 +198,7 @@ Tabelle D, Nachtrag P2c-3 (erste Charge, alle über die Tool-Hülle, je Tool ein
 | `foodalchemist.planung_leitplanken.EXTRACT` | umgeleitet | ein `propose()` (`planung.leitplanken`), schreibt höchstens Regler der Sitzung |
 | `foodalchemist.planung_vorschlag.POST` | umgeleitet | wie oben, schreibt nichts. Das Tool fängt nur `InvalidArgumentException`: der Plattformweg mit dem Fake-Provider wirft „strukturell unbrauchbar“ — bekannt, kein Teil der Umleitung |
 | `foodalchemist.concept_wording.GENERATE` | umgeleitet | `propose()` je Slot/Kopf, danach DB-Schreiben |
+
+
+Tabelle D, Nachtrag P2c-3b (Kundentexte, über die Tool-Hülle, je Tool ein Test): `foodbook.KUNDENTEXT_GENERATE`, `foodbook_kapitel.KUNDENTEXT_GENERATE`, `angebot.KUNDENTEXT_GENERATE` umgeleitet (ein `propose()` `foodbook.kundentext`, liefern nur einen Vorschlag, schreiben nichts). Noch NICHT belegt, deshalb in `KiUmleitung::AUSGENOMMEN`: `foodbook_kapitel.WORDING_GENERATE` und `speisekarte_wording.GENERATE` — bei leerem Kapitel/leerer Karte entsteht kein KI-Aufruf, der Test braucht Fixtures mit belegten Slots/Positionen. Die Services haben kein dispatch/Cache/Storage.
 
