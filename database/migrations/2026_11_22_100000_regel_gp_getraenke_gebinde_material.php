@@ -64,6 +64,8 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Nimmt nur die neue Regel zurück. Die Ergänzung an gp.7.1a.sammelgebinde (Muster „6 x 0,33 l“, Beispiele) bleibt stehen — Rücknahme per
+        // Regel-Pflegeseite (Versionen in foodalchemist_rule_versions), wie bei 2026_11_08 (Kurator-Review 29.10.).
         $neu = FoodAlchemistRule::query()->whereNull('team_id')->where('schluessel', self::NEU)->first();
         if ($neu !== null) {
             DB::table('foodalchemist_rule_versions')->where('rule_id', $neu->id)->delete();
