@@ -546,6 +546,9 @@ class SignalDetektorService
      * gesättigte > Gesamt-Fett). Entsteht, wenn die LA-Abdeckung je Nährstoff
      * unterschiedlich ist (Ø über verschiedene LA-Mengen) — auf einem Label wäre
      * das ein Fehler. KEIN stilles Clampen (Ehrlichkeits-Prinzip): Summen-Signal.
+     * Die Ebene darunter — derselbe Widerspruch schon im einzelnen Artikel — prüft
+     * {@see \Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertPruefService} (Regel H3); im Modus scharf zählt
+     * so ein Artikel nicht, die Rezept-Zeile hier entsteht dann nur noch aus ungleicher Abdeckung.
      */
     public function naehrwertPlausi(Team $team, float $toleranzG = 0.1): int
     {

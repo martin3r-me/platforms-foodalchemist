@@ -294,6 +294,7 @@ return [
     \Platform\FoodAlchemist\Tools\MatchRunTool::class,
     \Platform\FoodAlchemist\Tools\MenuEngineeringGetTool::class,
     \Platform\FoodAlchemist\Tools\NaehrwerteVorschauGetTool::class,   // Nährwert-Umstellung Nullen/Median: vorher/nachher (nur lesend)
+    \Platform\FoodAlchemist\Tools\NaehrwertPruefungGetTool::class,   // Nährwert-Prüfung je Artikel: Trockenlauf (nur lesend)
     \Platform\FoodAlchemist\Tools\NectaPruefaelleEntscheidenTool::class,
     \Platform\FoodAlchemist\Tools\NectaPruefaelleGetTool::class,
     \Platform\FoodAlchemist\Tools\NonfoodPruefenTool::class,   // Non-Food-Prüfliste
