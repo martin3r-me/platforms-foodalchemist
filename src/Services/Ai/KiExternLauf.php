@@ -12,6 +12,45 @@ use Platform\FoodAlchemist\Exceptions\KiExternSchrankeException;
  */
 class KiExternLauf
 {
+    /** @var list<string>|null laufende Wache auf Nicht-DB-Nebenwirkungen (nur während eines externen Rumpfs gesetzt) */
+    private static ?array $wache = null;
+
+    /** Objekt-ID des Event-Dispatchers, an dem die Wache hängt (neue App-Instanz = neu registrieren, z. B. in Tests/Octane) */
+    private static ?int $wacheFuer = null;
+
+    /** Harmloses Cache-Rauschen der Plattform (Worker-Heartbeat, Wechselkurs) — kein Effekt, den ein Rollback bereuen müsste */
+    private const UNKRITISCHE_CACHE_KEYS = ['fa:worker:heartbeat', 'foodalchemist.wechselkurs.'];
+
+    /** @var list<string> Nebenwirkungen des letzten externen Rumpfs (Queue-Dispatch, Cache-Schreiben, Mail) — für Tests und Log */
+    public static array $nebenwirkungen = [];
+
+    /** Einmalig: Ereignisse, die ein Rollback nicht zurücknimmt. Nur aktiv, solange {@see $wache} gesetzt ist. */
+    private static function registriereWache(): void
+    {
+        $dispatcher = app('events');
+        if (self::$wacheFuer === spl_object_id($dispatcher)) {
+            return;
+        }
+        self::$wacheFuer = spl_object_id($dispatcher);
+        $melde = function (string $was) {
+            if (self::$wache !== null) {
+                self::$wache[] = $was;
+            }
+        };
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Queue\Events\JobQueued::class, fn ($e) => $melde('Queue-Dispatch '.($e->job instanceof \Closure ? 'Closure' : (is_object($e->job) ? $e->job::class : (string) $e->job))));
+        // Sync-Queue feuert kein JobQueued, der Job läuft sofort inline → JobProcessing (bei echten Queues passiert das im Worker, nicht hier)
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Queue\Events\JobProcessing::class, fn ($e) => $melde('Queue-Dispatch (sync) '.$e->job->resolveName()));
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Cache\Events\KeyWritten::class, function ($e) use ($melde) {
+            foreach (self::UNKRITISCHE_CACHE_KEYS as $praefix) {
+                if (str_starts_with((string) $e->key, $praefix)) {
+                    return;
+                }
+            }
+            $melde('Cache::put '.$e->key);
+        });
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Mail\Events\MessageSending::class, fn () => $melde('Mail'));
+    }
+
     public const FERTIG = 'fertig';
 
     public const WARTET = 'wartet';
@@ -39,6 +78,8 @@ class KiExternLauf
         $modus = app(KiExternModus::class);
         $db = DB::connection();
         $niveau = $db->transactionLevel();
+        self::registriereWache();
+        self::$wache = [];
         $db->beginTransaction();
         $fehler = null;
         try {
@@ -47,6 +88,12 @@ class KiExternLauf
             ]);
         } catch (\Throwable $e) {
             $fehler = $e;
+        }
+        self::$nebenwirkungen = self::$wache ?? [];
+        self::$wache = null;
+        if (self::$nebenwirkungen !== []) {
+            // Ein Rollback nimmt das nicht zurück: der Rumpf gehört auf DB::afterCommit / ->afterCommit() (Pflichtliste Tabelle D)
+            \Illuminate\Support\Facades\Log::error("[KI-extern] Nicht-DB-Nebenwirkung im externen Lauf [{$key}] vor dem Commit", ['nebenwirkungen' => self::$nebenwirkungen]);
         }
         $merker = $modus->entnimm();
 

@@ -30,6 +30,7 @@ class KiExternFakeJob implements KiExternWiederholbar, ShouldQueue
         public string $ziel = 'ziel-1',
         public int $versuch = 0,
         public bool $instabil = false,
+        public bool $nebenwirkung = false,
     ) {
     }
 
@@ -38,6 +39,10 @@ class KiExternFakeJob implements KiExternWiederholbar, ShouldQueue
         return $lauf->fuehreAus($this, function () {
             self::$niveaus[] = DB::transactionLevel();
             DB::table('ki_fake_job')->insert(['x' => 'A']);
+            if ($this->nebenwirkung) {                     // genau das, was ein Rollback NICHT zurücknimmt
+                KiExternDummyJob::dispatch();
+                \Illuminate\Support\Facades\Cache::put('ki-fake-job-cache', 1, 60);
+            }
             DB::afterCommit(function () {
                 self::$nachCommit[] = $this->ziel;
             });
@@ -77,5 +82,15 @@ class KiExternFakeJob implements KiExternWiederholbar, ShouldQueue
     public static function fromExternNutzlast(array $nutzlast, int $versuch): static
     {
         return new static((int) $nutzlast['team_id'], true, (string) $nutzlast['ziel'], $versuch, (bool) ($nutzlast['instabil'] ?? false));
+    }
+}
+
+/** No-op-Job: nur um einen Queue-Dispatch auszulösen. */
+class KiExternDummyJob implements ShouldQueue
+{
+    use Dispatchable, Queueable;
+
+    public function handle(): void
+    {
     }
 }

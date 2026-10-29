@@ -86,11 +86,13 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
         $vorher = app(ReifeService::class)->kurz($team, $this->salesRecipeExpected() ? 'sales_recipe' : 'recipe', $id);
 
+        $extern = \Platform\FoodAlchemist\Support\KiUmleitung::externFuerLauf($context);   // #1002 P2b: per MCP → KI-Aufträge statt OpenAI
         try {
             $run = app(PlanningCascadeService::class)->enrichBestehendesRezept(
                 $team, $id, $this->salesRecipeExpected(), null,
                 (bool) ($arguments['complete_coverage'] ?? true),
                 (bool) ($arguments['ki_bilder'] ?? false),
+                extern: $extern,
             );
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'ENRICH_FEHLGESCHLAGEN');
@@ -104,7 +106,9 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name, 'ist_gericht' => (bool) $recipe->is_sales_recipe],
             // Der Ausgangszustand, damit nach dem Lauf vergleichbar ist, was der Pass bewirkt hat.
             'reife_vorher' => $vorher,
-            'hinweis' => 'Läuft asynchron. Fortschritt ausschließlich mit foodalchemist.planung_kaskade.GET '
+            'extern' => $extern,
+            'hinweis' => ($extern ? 'EXTERN: der Lauf legt KI-Aufträge an (ki_auftraege.GET → ANTWORT, das System startet den Lauf danach selbst neu, Ablauf workflow.ki_auftrag_beantworten_mcp); KI-Bilder entfallen. ' : '')
+                . 'Läuft asynchron. Fortschritt ausschließlich mit foodalchemist.planung_kaskade.GET '
                 . '(run_id = cascade_run_id) abfragen; foodalchemist.runs.GET liest eine andere ID-Tabelle. '
                 . 'Danach foodalchemist.recipes.REIFE für den neuen Stand. Freigabe bleibt menschlich.',
         ]);

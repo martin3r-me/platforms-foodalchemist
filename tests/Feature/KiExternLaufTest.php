@@ -143,6 +143,19 @@ it('fremde Klasse in der Nutzlast wird nie instanziiert', function () {
     expect($this->ki->stoesseWiederholungAn($this->rootTeam->id, [$uuid]))->toBe([]);
 });
 
+it('Wache: Queue-Dispatch und Cache-Schreiben im externen Rumpf werden gemeldet (Rollback nimmt sie nicht zurück)', function () {
+    \Illuminate\Support\Facades\Log::spy();
+
+    ($this->start)(['nebenwirkung' => true]);
+
+    expect(KiExternLauf::$nebenwirkungen)->toContain('Cache::put ki-fake-job-cache')
+        ->and(collect(KiExternLauf::$nebenwirkungen)->contains(fn ($n) => str_starts_with($n, 'Queue-Dispatch')))->toBeTrue('JobQueued-Ereignis kommt an');
+    \Illuminate\Support\Facades\Log::shouldHaveReceived('error')->once();
+
+    ($this->start)(['ziel' => 'ziel-sauber']);                     // ohne Nebenwirkung: die Liste ist wieder leer
+    expect(KiExternLauf::$nebenwirkungen)->toBe([]);
+});
+
 it('Aufträge ohne Nutzlast (Backfill, Tool-Hülle) lösen keine Wiederholung aus', function () {
     $tool = app(ToolRegistry::class)->get('foodalchemist.gps.ENRICH');   // nur um den Registry-Zugriff zu belegen
     expect($tool)->not->toBeNull();

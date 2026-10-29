@@ -134,6 +134,10 @@ class KiAuftragService
     public function legeAn(array $zeilen): void
     {
         foreach ($zeilen as $zeile) {
+            // Der Wissens-Lauf (knowledge_run) entstand in der zurückgerollten Transaktion und existiert nicht mehr — kein hängender Verweis
+            if (! empty($zeile['knowledge_run_id']) && ! DB::table('foodalchemist_knowledge_runs')->where('id', $zeile['knowledge_run_id'])->exists()) {
+                $zeile['knowledge_run_id'] = null;
+            }
             DB::table('foodalchemist_ki_auftraege')->insert($zeile);
         }
     }
@@ -181,8 +185,10 @@ class KiAuftragService
     /**
      * Bilanz des externen Wegs (#1002): wie viele Aufträge entstanden, wie viele Antworten wirklich verbraucht wurden, was liegen blieb.
      * `angelegt`/`beantwortet`/`verbraucht` zählen ab `$seit` (Lauf-Beginn); `offen`, `liegt_beantwortet`, `abgelaufen` sind Bestand.
-     * `doppelt` = Aufträge über dem ersten je (Feature, Ziel) ab `$seit` — wäre der Fingerabdruck instabil (andere Reihenfolge der Treffer,
-     * anderer Kontext), entstünden hier mehrere Aufträge für dasselbe Ziel. `verwaist` = abgelaufen + seit über 1 Stunde beantwortet, nie verbraucht.
+     * `doppelt` = verschiedene Prompts über dem ersten je (Feature, Ziel) ab `$seit` — wäre der Fingerabdruck instabil (andere Reihenfolge der
+     * Treffer, anderer Kontext), entstünden hier mehrere Aufträge für dasselbe Ziel. `wiederholt` = derselbe Prompt mehrfach beauftragt: der
+     * Re-Roll der Antwortprüfung (`structural_retry`, bis 3 Versuche) fragt bei unbrauchbarer Antwort neu — erwartet, kein Fehler.
+     * `verwaist` = abgelaufen + seit über 1 Stunde beantwortet, nie verbraucht.
      *
      * @return array<string, int>
      */
@@ -191,10 +197,13 @@ class KiAuftragService
         $basis = fn () => DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->when($feature, fn ($q) => $q->where('feature', $feature));
         $ab = fn ($q, string $spalte) => $seit !== null ? $q->where($spalte, '>=', $seit) : $q;
         $doppelt = 0;
-        $ab($basis()->whereNotNull('target_id'), 'created_at')->select('feature', 'target_table', 'target_id')->selectRaw('COUNT(*) AS n')
+        $wiederholt = 0;
+        $ab($basis()->whereNotNull('target_id'), 'created_at')->select('feature', 'target_table', 'target_id')
+            ->selectRaw('COUNT(*) AS n, COUNT(DISTINCT messages_hash) AS h')
             ->groupBy('feature', 'target_table', 'target_id')->havingRaw('COUNT(*) > 1')->get()
-            ->each(function ($z) use (&$doppelt) {
-                $doppelt += (int) $z->n - 1;
+            ->each(function ($z) use (&$doppelt, &$wiederholt) {
+                $doppelt += max(0, (int) $z->h - 1);                 // verschiedener Prompt für dasselbe Ziel: Fingerabdruck instabil (oder Kontext hat sich geändert)
+                $wiederholt += (int) $z->n - (int) $z->h;           // derselbe Prompt nochmal: Re-Roll der Prüfung (structural_retry), die Antwort war unbrauchbar
             });
         $abgelaufen = (int) $basis()->where('status', 'abgelaufen')->count();
         $alt = (int) $basis()->where('status', 'beantwortet')->where('beantwortet_at', '<', now()->subHour())->count();
@@ -208,6 +217,7 @@ class KiAuftragService
             'abgelaufen' => $abgelaufen,
             'verwaist' => $abgelaufen + $alt,
             'doppelt' => $doppelt,
+            'wiederholt' => $wiederholt,
         ];
     }
 
