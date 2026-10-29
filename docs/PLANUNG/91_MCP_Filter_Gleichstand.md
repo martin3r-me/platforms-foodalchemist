@@ -456,6 +456,13 @@ Keine Listenansicht in der UI. Der Fortschritt erscheint nur im jeweiligen Konte
 | 5 | `concepts.LIST`, `formats.LIST`, `foodbooks.LIST`, `speisekarten.LIST`, `pakete.LIST` | Facetten C14, `page` B7, Felder D19 |
 | 6 | Wächter | Mapping-Liste UI-Ansicht → Tool mit Filter-Gegenstück; ein UI-Filter ohne Gegenstück macht den Test rot. Analog Spec77b/ToolListe. Kommt in PR 1 als Gerüst und wächst je PR mit (Ausnahmen begründet). |
 
-Offene Entscheidungen:
-- `additionalProperties: false` für LIST/SEARCH: ja oder nein? Sauber, aber eine Verhaltensänderung für bestehende MCP-Aufrufer, die heute zusätzliche Felder mitschicken.
-- Concepter-Pakete (`kind=paket`): eigenes Tool oder Filter `kind` an `concepts.LIST`?
+Entscheidungen (Kurator 29.10.):
+- `additionalProperties` bleibt offen (die Plattform-KI schickt über callWithTools teils Zusatzfelder; der Core ist Fremdmodul). Stattdessen meldet ein gemeinsamer Helfer in `FoodAlchemistTool` (`parameterWarnungen` / `erfolgMitWarnungen`) unbekannte Parameter im Ergebnis als `warnungen` — ignoriert, aber nicht mehr still.
+- Concepter-Pakete: Filter `kind` an `concepts.LIST`/`SEARCH`, kein eigenes Tool.
+- A1–A4 vor neuen Filtern.
+
+## Stand
+
+| PR | Stand |
+|---|---|
+| 1 | gebaut (Branch `feat/mcp-filter-gleichstand`): artikel.LIST `supplier_id`/`q`/`art`/`only_active`/`felder`; artikel.SEARCH `supplier_id`/`art`/`only_active` (auch im semantischen Pass); suppliers.SEARCH Paging mit Gesamtzahl, `gruppe`, `einstufen`, `item_count`/`mapped_count`; Helfer `warnungen`; Wächter `Spec91FilterGleichstandWaechterTest` (Lieferanten-Browser, GP-Browser). Die `related_tools`-Verweise auf `artikel.LIST` stimmen damit. |
