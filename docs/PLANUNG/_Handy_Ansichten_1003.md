@@ -1,9 +1,24 @@
 # Handy-Ansicht: Liste aller Ansichten (Issue #1003)
 
-Stand 29.10.2026. Leitsatz: **Jede Detailseite ist am Handy vollständig lesbar.** Die Detailseite ist
-die Wahrheit; am Handy wird sie nicht nachgebaut, sondern lesbar gemacht. Bearbeiten bleibt am Computer.
+Stand 30.10.2026 (Entscheidungen Dominique 29./30.10.).
 
-Handy heißt: Bildschirm schmaler als 768 px (Tailwind `md`). Geprüft wird bei 375 px und 390–430 px.
+## Leitsätze
+
+- **App-Gefühl:** leicht bedienbar, Infos schnell findbar. Untere Leiste in der Daumenzone, schlanke
+  Kopfzeile, globale Suche als Einstieg, Listen als Karten, Detail als Vollbild mit Zurück.
+- **Handbuch-Stil, übersichtlich:** je Bildschirm ein Thema; Titel → Kernwerte (Allergene, Menge, Preis) →
+  Details auf Antippen. Keine breiten Tabellen, keine Chip-Wolken, keine Doppel-Infos. Prüffrage je
+  Screenshot: Findet man das Wichtigste in 2 Sekunden?
+- **Detailseiten lesbar + eigene Handbuch-Ansicht wo nötig:** Alle Detailseiten werden am Handy lesbar.
+  Wo sie für die Küche nicht reichen (Rezept: Schritte mit Bildern, Regeneration; Gericht: Darreichungsformen
+  mit VK, Bilder), gibt es eine eigene Handy-Ansicht im Handbuch-Stil. Die Desktop-Detailseite bleibt dafür
+  unverändert.
+- **Erst nur Lesen:** Ändern-Aktionen am Handy aus, Hinweis „Am Computer bearbeiten“. Zentral freischaltbar
+  für spätere kleine Änderungen am Handy (erster Kandidat: Signal abhaken). **Ausnahme Planung:** voll bedienbar.
+- **Am Laptop ändert sich nichts.** Handy-Oberfläche = Touch-Gerät ohne Hover und schmaler als 768 px, oder
+  bewusst gewählt; nie ein schmales Laptop-Fenster. Notausgang „Desktop-Ansicht“.
+
+Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1024 px.
 
 ## Arten
 
@@ -20,14 +35,19 @@ Handy heißt: Bildschirm schmaler als 768 px (Tailwind `md`). Geprüft wird bei 
 |---|---|
 | Linke Leiste (Filter, Baum) `x-foodalchemist::page-sidebar` | zu, als schmale Leiste am Rand; Antippen öffnet sie als Schublade über dem Inhalt |
 | Rechte Detail-Leiste `x-foodalchemist::detail-sidebar` | ganze Breite, öffnet beim Antippen eines Eintrags, Zurück schließt sie; ohne Auswahl keine Leiste |
-| Kopfzeile oben (io-Hülle, Host food-alchemist.de) | eigener PR im Host |
+| Kopfzeile oben (io-Hülle, Host food-alchemist.de) | schlank (Logo, Titel, Benutzer); eigener PR im Host |
+| Untere Leiste (Daumenzone) | Suche · Rezepte/Gerichte · Planung · Signale (mit Zähler offener Signale) · Mehr |
+| „Mehr“ | Dashboard ganz oben, dann Grundprodukte, Lieferanten, Produktion, Bestellungen, Concepter, Formate, Projekte, Speiseplan, Speisekarten, Foodbooks; Mandant wechseln (vorhandener Umschalter); Desktop-Ansicht |
+| Globale Suche | Rezept, Gericht, GP, Lieferant, Artikelnummer/EAN über die vorhandenen Such-Dienste; darunter „Zuletzt angesehen“ (pro Gerät) und Favoriten |
+| Mandantenwechsel | vorhandener Core-/Host-Umschalter, danach dieselbe Seite bzw. Startseite des Bereichs |
+| App auf dem Startbildschirm (PWA Stufe 1) | Manifest, Icons, Vollbild ohne Browserleiste, iOS-Hinweis „Zum Home-Bildschirm“ einmalig; kein Service Worker (Stufe 2 → 92_PWA_Offline_Push.md) |
 
 ## Seiten
 
 | Seite | Pfad | Livewire | Art | Detailseite | PR |
 |---|---|---|---|---|---|
-| Rezepte (Basisrezepte) | `/rezepte` | Recipes\Browser | Lesen | Recipes\DetailPanel | 2 |
-| Gerichte (Verkauf) | `/gerichte` | Verkauf\Browser | Lesen | Verkauf\DetailPanel | 2 |
+| Rezepte (Basisrezepte) | `/rezepte` | Recipes\Browser | Lesen + Handbuch-Ansicht (Schritte mit Bildern, Regeneration) | Recipes\DetailPanel | 2 |
+| Gerichte (Verkauf) | `/gerichte` | Verkauf\Browser | Lesen + Handbuch-Ansicht (Darreichungsformen mit VK, Bilder) | Verkauf\DetailPanel | 2 |
 | Grundprodukte | `/gps` | Gps\Browser | Lesen | Gps\DetailPanel | 3 |
 | Lieferanten + Artikel | `/lieferanten` | Suppliers\Index | Lesen | Suppliers\SupplierDetail | 3 |
 | Concepter | `/concepter` | Concepter\Browser | Lesen | Concepter\DetailPanel | 4 |
@@ -35,13 +55,13 @@ Handy heißt: Bildschirm schmaler als 768 px (Tailwind `md`). Geprüft wird bei 
 | Projekte | `/projekte`, `/projekte/{id}` | Projekte\Index, Projekte\Detail | Lesen | Projekte\Detail | 4 |
 | Produktion | `/produktion` | Produktion\Browser | Lesen | Produktion\DetailPanel | 5 |
 | Bestellungen | `/bestellungen` | Orders\Index | Lesen | Orders\DetailPanel | 5 |
-| Zu prüfen (Signale) | `/zu-pruefen` | ReviewQueue | Lesen | Signale\DetailPanel | 5 |
+| Signale (Zu prüfen) | `/zu-pruefen` | ReviewQueue | Lesen, prominent (untere Leiste, Zähler); „abhaken“ als erste Freischaltung vorgemerkt | Signale\DetailPanel | 5 |
 | Speiseplan | `/speiseplan` | Speiseplan\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
 | Speisekarten | `/speisekarten` | Speisekarte\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
 | Foodbooks | `/foodbooks` | Foodbooks\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
 | Planung | `/planung` | Planung\Index | Planung | Reiter Auftrag → Ergebnis → Kontext | 7 |
 | Rezept-Import (Foto) | in Planung | Planung\RezeptImport | Planung | – | 7 |
-| Start | `/` | Dashboard | Lesen (Einstieg in die Bereiche) | – | 1 |
+| Dashboard (Leitstelle) | `/` | Dashboard | Lesen, prominent (ganz oben in „Mehr“ bzw. Startseite) | – | 1b |
 | Concepts (alt) | `/concepts` | Concepts\Index | Desktop | – | – |
 | Pakete | `/pakete` | Pakete\Index | Desktop | – | – |
 | Angebote | `/angebote` | Angebote\Index | Desktop | – | – |
