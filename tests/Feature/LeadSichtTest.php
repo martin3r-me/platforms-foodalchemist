@@ -171,8 +171,16 @@ it('(b) team-eigenes GP des Mandanten: Allergene und Zusatzstoffe nur aus sichtb
         FoodAlchemistItemAllergen::create(['team_id' => null, 'supplier_item_id' => $b->id, 'allergen_gluten' => 'enthalten']);
         FoodAlchemistItemDeclaration::create(['team_id' => null, 'supplier_item_id' => $b->id, 'with_dye' => 3]);
     }
+    // Master-GP mit einem team-eigenen Artikel des Mandanten (Senf): der Master sieht ihn nicht, ALL-MAX zählt ihn trotzdem (kein Filter für die Master-Kette)
+    $eigenLief = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hauslieferant']);
+    $mandantLa = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $eigenLief->id, 'designation' => 'KB Haus', 'qty' => 1.0, 'unit_code' => 'kg']);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $mandantLa->id, 'gp_id' => $mstr->id]);
+    FoodAlchemistItemAllergen::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $mandantLa->id, 'allergen_mustard' => 'enthalten']);
+    FoodAlchemistItemNutritional::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $mandantLa->id, 'energy_kcal' => 100]);
     $agg = app(GpAggregateService::class);
 
+    expect($agg->allergene($mstr->fresh())['mustard']['value']->value)->toBe('enthalten')
+        ->and($agg->naehrwerte($mstr->fresh(), sicht: $this->master)['energy_kcal']['avg'])->toBe(100.0);
     expect($agg->allergene($eigen->fresh())['gluten']['value']->value)->toBe('nicht_enthalten')
         ->and($agg->zusatzstoffeUndFreiwillig($eigen->fresh())['with_dye'])->toBeNull()
         ->and($agg->allergene($mstr->fresh())['gluten']['value']->value)->toBe('enthalten')
