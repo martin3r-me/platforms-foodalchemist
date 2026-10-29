@@ -45,12 +45,18 @@ class KiAuftragService
         $offen = DB::table('foodalchemist_ki_auftraege')
             ->where('team_id', $teamId)->where('feature', $feature)->where('messages_hash', $hash)
             ->where('status', 'offen')->where('laeuft_ab_at', '>', now())->first();
+        $modus = app(KiExternModus::class);
         if ($offen !== null) {
+            $modus->meldeWartend($offen->uuid, $feature);
+
             throw new KiAuftragAusstehendException($offen->uuid, $feature);
+        }
+        if ($modus->sammelt() && ($schonDa = $modus->vorgemerktUuid($feature, $hash)) !== null) {
+            throw new KiAuftragAusstehendException($schonDa, $feature);
         }
 
         $uuid = (string) \Symfony\Component\Uid\UuidV7::generate();
-        DB::table('foodalchemist_ki_auftraege')->insert([
+        $zeile = [
             'uuid' => $uuid, 'team_id' => $teamId, 'user_id' => \Illuminate\Support\Facades\Auth::id(),
             'feature' => $feature, 'messages_hash' => $hash,
             'messages' => json_encode($messages, JSON_UNESCAPED_UNICODE),
@@ -59,9 +65,23 @@ class KiAuftragService
             'knowledge_run_id' => $audit['knowledge_run_id'] ?? null,
             'status' => 'offen', 'laeuft_ab_at' => now()->addHours(self::TTL_STUNDEN),
             'created_at' => now(), 'updated_at' => now(),
-        ]);
+        ];
+        if ($modus->sammelt()) {
+            // MCP-Tool-Hülle: erst nach dem Rollback der Tool-Transaktion schreiben (legeAn), sonst rollt der Auftrag mit zurück
+            $modus->merkeVor($zeile);
+        } else {
+            $this->legeAn([$zeile]);
+        }
 
         throw new KiAuftragAusstehendException($uuid, $feature);
+    }
+
+    /** @param list<array<string, mixed>> $zeilen vorgemerkte Aufträge — außerhalb jeder Tool-Transaktion aufrufen */
+    public function legeAn(array $zeilen): void
+    {
+        foreach ($zeilen as $zeile) {
+            DB::table('foodalchemist_ki_auftraege')->insert($zeile);
+        }
     }
 
     /** @return list<object> offene, nicht abgelaufene Aufträge des Teams (inkl. vollem Prompt) */
