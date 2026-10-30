@@ -153,6 +153,25 @@ final class SignalCockpit
             . 'oder einen neueren Produktpass hochladen. Das Signal schließt, wenn nichts mehr offen ist.',
         'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
             . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
+        // Spec 93 C · Trendradar: Ereignisse der Automatik und Zustand der Quellen. Kein Fixer — der Weg ist eine Prüfung im Trendradar.
+        'trendradar_neuer_hype' => 'Trendradar → Liste: den neuen Hype öffnen, Einordnung und Belege prüfen und bei Bedarf korrigieren. Eine Korrektur von Hand '
+            . 'gilt dauerhaft (die Automatik fasst das Feld nicht mehr an) und schließt das Signal.',
+        'trendradar_neuer_trend' => 'Trendradar → Liste: den neuen Trend öffnen, Einordnung, Ebene und Belege prüfen und bei Bedarf korrigieren. Eine Korrektur von '
+            . 'Hand gilt dauerhaft und schließt das Signal.',
+        'trendradar_hype_wird_trend' => 'Trendradar → Trend öffnen: Die Automatik hat einen Hype zum Trend hochgestuft (mehr Tiefe, mehr Monate, Fachquellen). '
+            . 'Die Begründung steht am Trend; Typ von Hand bestätigen oder zurücksetzen schließt das Signal.',
+        'trendradar_auf_radar' => 'Trendradar → Radar: Der Trend steht automatisch auf dem Radar (Radar-Regel erfüllt). Prüfen und den Status von Hand bestätigen '
+            . 'oder ändern — das schließt das Signal.',
+        'trendradar_thema_abgeklungen' => 'Trendradar → Reiter „Automatik“ bzw. den Trend zum Thema öffnen: keine Sichtung mehr seit der Abklingen-Grenze. '
+            . 'Vorschlag: den Trend archivieren. Gelöscht wird nichts automatisch; eine neue Sichtung schließt das Signal.',
+        'trendradar_quelle_fehler' => 'Trendradar → Reiter „Quellen“: die Quelle mit „Quelle neu prüfen“ neu einordnen oder auf MCP umstellen (Bot-Sperre, '
+            . 'Übersicht ohne Artikel). Der nächste erfolgreiche Abruf schließt das Signal.',
+        'trendradar_mcp_quelle_ueberfaellig' => 'Im MCP-Client: foodalchemist.trend_quellen.GET (abruf_weg=mcp, fällige zuerst) holt die Quelle, Funde mit '
+            . 'foodalchemist.trend_eingang.POST und quelle_id einreichen — das setzt den letzten Besuch und schließt das Signal.',
+        'trendradar_pinnwand_passt' => 'Trendradar → Reiter „Inspiration“: die Karte öffnen und mit „An Trend hängen“ dem vorgeschlagenen Trend zuordnen — oder '
+            . 'liegen lassen. Zuordnen bleibt Handarbeit; die Karte zählt schon jetzt als Sichtung.',
+        'trendradar_kandidaten_gestaut' => 'Trendradar → Reiter „Automatik“: Die Lauf-Grenze (neue Trends je Lauf) war erreicht; der Rest folgt im nächsten Lauf '
+            . '(„Lauf jetzt“ oder der tägliche Lauf). Die Grenze steht in den Trendradar-Einstellungen.',
         // #1002: der Weg ist der MCP-Client, kein Knopf (die KI-Antwort kommt von außen).
         'ki_auftraege_offen' => 'Im MCP-Client: foodalchemist.ki_auftraege.GET holt die offenen Aufträge, ki_auftraege.ANTWORT beantwortet sie (Ablauf: Dossier workflow.ki_auftrag_beantworten_mcp). '
             . 'Abgelaufene Aufträge werden nicht verworfen, der Nachlauf bzw. foodalchemist.gp_aroma_backfill.RUN erkennt die Lücke wieder und legt neue Aufträge an.',
