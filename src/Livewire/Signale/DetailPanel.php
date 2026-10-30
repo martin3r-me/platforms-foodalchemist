@@ -40,6 +40,14 @@ use Platform\FoodAlchemist\Support\SignalCockpit;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003 PR5: am Handy nur lesen
+
+    /** #1003: am Handy Signal öffnen, Objekte ansehen, sortieren; Übernehmen und Einstellungen bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'beiModalClosed', 'nachAenderung', 'objektWaehlen', 'setSort', 'signalOeffnen', 'bausteinUebernahmeAbbrechen', 'rezeptUebernahmeAbbrechen'];
+    }
+
     /** Punkt 4: wie viele Messpunkte die Sparkline zeigt (ältester links). */
     private const SERIE_PUNKTE = 24;
 

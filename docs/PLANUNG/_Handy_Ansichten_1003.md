@@ -55,9 +55,9 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | Concepter | `/concepter` | Concepter\Browser | Lesen: Karten-Liste (Name · Klasse · Einsatz · Status, €/Person) mit Umschalter Concepts \| Pakete, Filter in der Schublade; Detail = vorhandenes Concept-Detail über die ganze Breite; ?edit= öffnet am Handy keinen Editor | Concepter\DetailPanel | 4 ✓ |
 | Formate | `/formate` | Formate\Browser | Lesen: Karten-Liste (Name · Einsatz · Herkunft · Status, Editionen); Detail = vorhandenes Format-Detail über die ganze Breite | Formate\DetailPanel | 4 ✓ |
 | Projekte | `/projekte`, `/projekte/{id}` | Projekte\Index, Projekte\Detail | Lesen: Liste als Karten (Projekt · Kunde · Phase, Status), keine Anlege-Box; Akte nur lesen — Phasen-Reiter schalten um, Kopf/Standorte/Canvas/Gate/Foodbook/Lizenz und Kunden-DNA (KundeDnaPhase) gesperrt | Projekte\Detail | 4 ✓ |
-| Produktion | `/produktion` | Produktion\Browser | Lesen | Produktion\DetailPanel | 5 |
-| Bestellungen | `/bestellungen` | Orders\Index | Lesen | Orders\DetailPanel | 5 |
-| Signale (Zu prüfen) | `/zu-pruefen` | ReviewQueue | Lesen, prominent (untere Leiste, Zähler); „abhaken“ als erste Freischaltung vorgemerkt | Signale\DetailPanel | 5 |
+| Produktion | `/produktion` | Produktion\Browser | Lesen: Karten (Name · Liefertag · Status · Ziele, Portionen), Status/Zeitraum in der Schublade, kein Anlegen, kein Tagesplan-Knopf; Detail = vorhandenes Auftrags-Detail (Status, Notiz, Materialbedarf am Computer) | Produktion\DetailPanel | 5 ✓ |
+| Bestellungen | `/bestellungen` | Orders\Index | Lesen: nur die Bestellungen als Karten nach Liefertag (Lieferant · Positionen · Netto · Status), Suche, Zeitraum; Antippen öffnet das Detail ohne Editor. Liefertage, Lieferanten, Runden, Versand/Auslösen/Stornieren am Computer | Orders\DetailPanel (Concerns\HandyBestellungenLesen → livewire/handy/bestellungen) | 5 ✓ |
+| Signale (Zu prüfen) | `/zu-pruefen` | ReviewQueue | Lesen, prominent (untere Leiste, Zähler): Reiter, Filter, „Betroffene ansehen“ (Modal); keine Läufe, KI, Ignorieren, Übernehmen, Begriffe lehren. „Abhaken“ (signalErledigt, signalWiederOeffnen) über config foodalchemist.handy.aendern_frei freischaltbar | Signale\DetailPanel | 5 ✓ |
 | Speiseplan | `/speiseplan` | Speiseplan\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
 | Speisekarten | `/speisekarten` | Speisekarte\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
 | Foodbooks | `/foodbooks` | Foodbooks\Index | Lesen (Ansicht, nicht Editor) | – | 6 |

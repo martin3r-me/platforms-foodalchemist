@@ -10,6 +10,10 @@
      · Signal-Zeile seitenlokal (statt partials/_signal-row): Schwere-Badge, Titel, Bezug, eine
        Hauptaktion; keine farbigen Seitenbalken mehr. Funktion, wire:-Bindungen und data-Marker gleich. --}}
 @php
+    // #1003 PR5: am Handy nur lesen — Aktionen nicht rendern, außer sie stehen in config('foodalchemist.handy.aendern_frei')
+    // (z. B. signalErledigt/signalWiederOeffnen). Der Server prüft dasselbe (ReviewQueue: HandyLesebereich).
+    $handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy();
+    $zeigen = fn (string $schluessel) => ! $handy || \Platform\FoodAlchemist\Support\HandyLesemodus::frei($schluessel);
     $pflegeGesamt = $vkOhneKlasse->count() + $imReviewZahl + $ungemapptZahl;
     $vorschlaegeZahl = $bulkZahl + $matchZahl;
     $sevK = $severitySplit['kritisch'] ?? 0;
@@ -85,6 +89,7 @@
             <x-slot:actions>
                 {{-- Lauf-Knöpfe: getrennt, weil die Prüfung gratis ist und die KI-Befunde Provider-Geld
                      kosten. Das Limit steht sichtbar am Knopf (Kostenbremse, V-047). --}}
+                @if($zeigen('signale.laeufe'))
                 <div class="flex flex-wrap items-center justify-end gap-2" data-rq-laeufe>
                     <div class="inline-flex items-center gap-2 h-9 pl-1 pr-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
                         <x-foodalchemist::ki-action action="befundeLaufen" variant="ai" icon="heroicon-o-sparkles" label="KI-Befunde sammeln"
@@ -102,6 +107,7 @@
                         <span wire:loading wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-m-arrow-path', 'w-4 h-4 animate-spin') Wird eingereiht …</span>
                     </x-fa::button>
                 </div>
+                @endif
             </x-slot:actions>
         </x-fa::page-header>
 
@@ -287,7 +293,8 @@
                                 <div class="px-4" wire:key="sig-{{ $sig->id }}">
                                     <div class="flex flex-wrap sm:flex-nowrap items-start gap-3 py-3">
                                         <x-fa::badge :tone="$schwereTon[$sig->severity->value] ?? 'info'" class="shrink-0 w-[76px] justify-center mt-px">{{ $sig->severity->label() }}</x-fa::badge>
-                                        <div class="min-w-0 flex-1">
+                                        {{-- #1003: am Handy Mindestbreite, damit die Aktionen umbrechen statt den Titel Wort für Wort zu quetschen --}}
+                                        <div class="{{ $handy ? 'min-w-[12rem]' : 'min-w-0' }} flex-1">
                                             <p class="text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)] leading-snug">{{ $sig->title }}</p>
                                             <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                                                 <span class="inline-flex items-center gap-1">@svg($sig->type->icon(), 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]'){{ $sig->type->label() }}</span>
@@ -335,7 +342,7 @@
 
                                         <div class="shrink-0 flex items-center gap-1.5 ml-auto">
                                             @if($sig->status->istOffen())
-                                                @if($ki)
+                                                @if($ki && $zeigen('signale.ki'))
                                                     <x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="toggleKiPanel({{ $sig->id }})"
                                                                   aria-expanded="{{ $kiPanelId === $sig->id ? 'true' : 'false' }}" title="{{ $ki['flavorLabel'] }}">KI erledigen lassen</x-fa::button>
                                                 @endif
@@ -343,13 +350,13 @@
                                                 <x-fa::button size="sm" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
                                                               title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">Betroffene ansehen</x-fa::button>
                                                 {{-- Erledigt/Ignorieren sind Status-Setzer, keine lauten Aktionen. --}}
-                                                <x-fa::icon-button size="sm" icon="heroicon-o-check-circle" label="Als erledigt markieren" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}" />
-                                                <x-fa::icon-button size="sm" icon="heroicon-o-no-symbol" label="Bewusst ignorieren" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}" />
+                                                @if($zeigen('signalErledigt'))<x-fa::icon-button size="sm" icon="heroicon-o-check-circle" label="Als erledigt markieren" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}" />@endif
+                                                @if($zeigen('signalIgnorieren'))<x-fa::icon-button size="sm" icon="heroicon-o-no-symbol" label="Bewusst ignorieren" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}" />@endif
                                             @else
                                                 <x-fa::badge :tone="$sig->status->value === 'erledigt' ? 'ok' : 'neutral'">{{ $sig->status->label() }}</x-fa::badge>
                                                 <x-fa::button size="sm" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
                                                               title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">Betroffene ansehen</x-fa::button>
-                                                <x-fa::button variant="ghost" size="sm" wire:click="signalWiederOeffnen({{ $sig->id }})">Wieder öffnen</x-fa::button>
+                                                @if($zeigen('signalWiederOeffnen'))<x-fa::button variant="ghost" size="sm" wire:click="signalWiederOeffnen({{ $sig->id }})" data-rq-sig-wieder="{{ $sig->id }}">Wieder öffnen</x-fa::button>@endif
                                             @endif
                                         </div>
                                     </div>
@@ -457,8 +464,10 @@
                                 </p>
                             </div>
                             <div class="shrink-0 flex items-center gap-1.5 ml-auto">
+                                @if($zeigen('signale.vorschlag'))
                                 <x-fa::button variant="ghost" size="sm" wire:click="bulkVerwerfen({{ $b->id }})" data-rq-bulk-nein>Verwerfen</x-fa::button>
                                 <x-fa::button size="sm" icon="heroicon-m-check" wire:click="bulkUebernehmen({{ $b->id }})" data-rq-bulk-ok>Übernehmen</x-fa::button>
+                                @endif
                             </div>
                         </div>
                     @empty
@@ -480,8 +489,10 @@
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Wie die Zuordnung gefunden wurde">{{ $m->methode }}</span>
                             </div>
                             <div class="shrink-0 flex items-center gap-1.5 ml-auto">
+                                @if($zeigen('signale.vorschlag'))
                                 <x-fa::button variant="ghost" size="sm" wire:click="matchVerwerfen({{ $m->id }})" data-rq-match-nein>Verwerfen</x-fa::button>
                                 <x-fa::button size="sm" icon="heroicon-m-check" wire:click="matchUebernehmen({{ $m->id }})" data-rq-match-ok>Übernehmen</x-fa::button>
+                                @endif
                             </div>
                         </div>
                     @empty
@@ -515,6 +526,7 @@
                 @endforeach
             </div>
 
+            @if($zeigen('signale.terminologie'))
             {{-- Begriffe lehren (E7-c, #507): wirkt sofort im nächsten Zuordnen. --}}
             <x-fa::section title="Begriffe lehren" icon="heroicon-o-academic-cap"
                            description="Passt eine Zuordnung nur wegen eines anderen Worts nicht, oder verwechselt sie zwei Produkte? Hier lehren. Wirkt sofort beim nächsten Zuordnen." data-rq-terminologie>
@@ -537,6 +549,7 @@
                     </x-fa::field>
                 </div>
             </x-fa::section>
+            @endif
         @endif
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}

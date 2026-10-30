@@ -29,6 +29,16 @@ use Platform\FoodAlchemist\Services\TerminologyService;
 class ReviewQueue extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003 PR5: am Handy lesen; „abhaken“ über handy.aendern_frei
+
+    /**
+     * #1003: am Handy laufen Reiter, Filter und Blättern. Erledigt/Wieder öffnen nur, wenn sie in
+     * config('foodalchemist.handy.aendern_frei') stehen (HandyLesemodus::frei) — Ignorieren, KI, Übernehmen, Läufe nie.
+     */
+    public function handyLeseMethoden(): array
+    {
+        return ['setTab', 'setSignalStatus', 'setSignalTyp', 'betriebGewechselt', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     public ?string $meldung = null;
 

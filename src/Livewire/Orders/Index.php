@@ -23,6 +23,7 @@ use Platform\FoodAlchemist\Support\Zeitraum;
  */
 class Index extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyBestellungenLesen;   // #1003 PR5: am Handy nur die Bestellungen lesen
     /** Deep-Link ?o=ID (Herkunfts-Links aus Produktion) → beim Mount den Editor öffnen. */
     #[Url(as: 'o')]
     public ?int $openId = null;
@@ -358,6 +359,9 @@ class Index extends Component
 
     public function render(OrderService $orders)
     {
+        if ($this->handyBestellungenAktiv()) {
+            return $this->handyBestellungen();
+        }
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
         // Spec 91 PR 4: derselbe Filterweg wie foodalchemist.orders.GET.

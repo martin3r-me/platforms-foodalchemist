@@ -17,6 +17,13 @@ use Platform\FoodAlchemist\Services\ProductionOrderService;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;        // #1003: am Handy nur lesen
+
+    /** #1003: am Handy nur Auswahl; Status, Zeilennotiz und Materialbedarf freigeben bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehle'];
+    }
 
     /** Spec 65: gleiche Sperre wie der Produktion-Editor (Ziel production_order). */
     protected function sperrZiel(): ?array

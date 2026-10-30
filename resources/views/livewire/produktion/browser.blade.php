@@ -107,6 +107,18 @@
 
     <livewire:foodalchemist.produktion.editor key="produktion-browser--produktion.editor" />
 
+    {{-- #1003: am Handy Karten statt Tabelle (wie Rezepte); Status und Zeitraum bleiben in der linken Schublade --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Produktion', 'eintraege' => $auftraege, 'aktivId' => $orderId, 'wahl' => 'waehle', 'scope' => 'activity_produktion',
+            'suchHinweis' => 'Auftrag suchen', 'suchFeld' => 'suche',
+            'titelVon' => fn ($a) => $a->name ?: $a->reference ?: 'Ohne Namen',
+            'unterzeile' => fn ($a) => implode(' · ', array_filter([$a->production_date?->format('d.m.Y'), ucfirst($a->status->label()),
+                collect($a->targets ?? [])->pluck('label')->filter()->take(2)->implode(', ') ?: null])),
+            'wert' => fn ($a) => ($p = (int) $a->lines->reject(fn ($l) => (bool) $l->is_struck)->sum('portionen')) > 0 ? $p . ' Port.' : null,
+            'leer' => 'Anderen Zeitraum, Status oder andere Suche versuchen.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Produktion"
             :subtitle="number_format($gesamtCount, 0, ',', '.') . ($gesamtCount === 1 ? ' Auftrag' : ' Aufträge') . ($filterAktiv ? ' im Ausschnitt' : '')">
@@ -266,5 +278,6 @@
             @endif
         </div>
     </x-ui-page-container>
+    @endif
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>
