@@ -33,6 +33,7 @@ final class KiUmleitung
         'foodalchemist.foodbook.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
         'foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
         'foodalchemist.gp_forms.ESTIMATE' => 'Ein propose() (gp.zaehl_einheiten), danach nur DB-Schreiben der Formen.',
+        'foodalchemist.la.GP_ABGLEICH' => 'Bis zu zwei propose() nacheinander (gp.suggest für die Felder, danach gp.la_abgleich); der zweite Prompt hängt von der ersten Antwort ab, darum je Runde ein Auftrag. Schreibt nur DB (Abgleich-Log, bei apply Verknüpfung/neues GP), keine Queue-Jobs im Abgleich-Pfad.',
         'foodalchemist.presentation_designs.GENERATE_CSS' => 'Ein propose() (praesentation.design_css), liefert nur den Vorschlag, schreibt nicht.',
         'foodalchemist.planung_leitplanken.EXTRACT' => 'Ein propose() (planung.leitplanken), schreibt höchstens die Regler der Planungssitzung (DB).',
         'foodalchemist.planung_vorschlag.POST' => 'Ein propose() (planung.leitplanken) über BriefingLeitplankenService, schreibt nichts (Vorschlag).',

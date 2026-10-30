@@ -45,6 +45,10 @@ beforeEach(function () {
     $this->offerId = $idAus($this->registry->get('foodalchemist.angebote.POST')->execute(['name' => 'Sommerfest-Angebot'], $this->kontext));
     $this->offerChapterId = $idAus($this->registry->get('foodalchemist.offer_chapter.POST')->execute(['offer_id' => $this->offerId, 'title' => 'Buffet'], $this->kontext));
     $this->karteId = $idAus($this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Abendkarte'], $this->kontext));
+    // Lieferantenartikel ohne Klassifikation (→ gp.suggest) und ein GP als Kandidat (→ gp.la_abgleich)
+    $sup = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs']);
+    $this->laId = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => 'Eier Bodenhaltung M 30er',
+        'article_number' => 'A1', 'qty' => 1, 'unit_code' => 'kg'])->id;
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
 });
 
@@ -66,6 +70,7 @@ dataset('umgeleitete_tools', function () {
         'recipes.REVIEW' => ['foodalchemist.recipes.REVIEW', fn ($t) => ['recipe_id' => $t->basisId], '*'],
         'recipes.REVISE' => ['foodalchemist.recipes.REVISE', fn ($t) => ['recipe_id' => $t->basisId, 'anweisung' => 'Etwas weniger süß'], 'recipe.ueberarbeiten'],
         'verkaufsrezepte.REVISE' => ['foodalchemist.verkaufsrezepte.REVISE', fn ($t) => ['recipe_id' => $t->vkId, 'anweisung' => 'Etwas leichter'], 'vk.ueberarbeiten'],
+        'la.GP_ABGLEICH' => ['foodalchemist.la.GP_ABGLEICH', fn ($t) => ['artikel_id' => $t->laId], 'gp.suggest'],
         'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
 });
@@ -75,7 +80,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
         return [
             ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
-            ['foodalchemist.recipes.GENERATE'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
+            ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'],
         ];
