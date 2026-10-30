@@ -161,6 +161,8 @@ enum SignalTyp: string
     // Marken-Nachlauf (Plan GP-Stamm 3g, Dominique 26.10.2026): unbekannte Kürzel an Rezeptur-GPs ohne Marke bzw. Lieferanten mit Rolle „offen“, die an
     // Rezepturware hängen. Nur im Master-Team (die GPs sind global); der Weg ist die Seite Lieferanten → „Marke offen“.
     case MarkenNachlauf = 'marken_nachlauf';
+    // #1002 KI dualisieren: KI-Aufträge des externen Wegs (MCP-Client) liegen unbeantwortet oder sind abgelaufen. Ein Signal je Team und Feature, kein Dauerfeuer.
+    case KiAuftraegeOffen = 'ki_auftraege_offen';
 
     public function label(): string
     {
@@ -170,6 +172,7 @@ enum SignalTyp: string
             self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
             self::MarkenNachlauf => 'Marke offen bei Rezepturware',
+            self::KiAuftraegeOffen => 'KI-Aufträge warten auf Antwort',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
             self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
@@ -235,6 +238,7 @@ enum SignalTyp: string
             self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
             self::NectaLieferantNeu => 'heroicon-o-truck',
             self::MarkenNachlauf => 'heroicon-o-tag',
+            self::KiAuftraegeOffen => 'heroicon-o-clock',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
             self::WechselkursVeraltet => 'heroicon-o-currency-euro',

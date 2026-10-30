@@ -98,6 +98,23 @@ final class KiUmleitung
         return isset(self::TOOLS[$toolName]) && (bool) config('foodalchemist.ai.mcp_extern', true) && self::vomExternenMcp($context);
     }
 
+    /**
+     * Ein externer MCP-Aufruf hat Folge-Jobs angestoßen (z. B. GP-Aroma nach gps.POST), die extern laufen: ihre KI-Aufträge entstehen
+     * erst im Worker (teils verzögert). Das Ergebnis sagt es, damit sie nicht unbemerkt bis zum Ablauf (24 h) liegen bleiben.
+     */
+    public static function mitFolgeHinweis(ToolResult $ergebnis, int $folgeJobs): ToolResult
+    {
+        if ($folgeJobs <= 0 || ! $ergebnis->success || ! is_array($ergebnis->data)) {
+            return $ergebnis;
+        }
+
+        return new ToolResult(true, $ergebnis->data + ['folgeauftraege' => [
+            'jobs_angestossen' => $folgeJobs,
+            'hinweis' => 'Der Aufruf hat '.$folgeJobs.' Folge-Job(s) angestoßen, die KI-Aufträge anlegen (teils verzögert, bis zu einigen Minuten). '
+                .'foodalchemist.ki_auftraege.GET zeigt sie, ki_auftraege.ANTWORT beantwortet sie; unbeantwortet laufen sie nach 24 Stunden ab.',
+        ]], $ergebnis->error, $ergebnis->errorCode, $ergebnis->metadata);
+    }
+
     /** @param callable(): ToolResult $lauf */
     public static function ausfuehren(callable $lauf, string $toolName = 'tool'): ToolResult
     {
