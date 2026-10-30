@@ -71,6 +71,24 @@ abstract class FoodAlchemistTool
         ));
     }
 
+    /**
+     * Spec 91 PR 2: Der Core prüft nur den Typ, nicht das `enum` — ein falscher Wert (z. B. status „abgeschlossen“) filterte still auf 0 Treffer.
+     * Liefert VALIDATION_ERROR für den ersten gesetzten, nicht leeren Wert außerhalb seines Schema-`enum`, sonst null.
+     */
+    protected function enumFehler(array $arguments): ?ToolResult
+    {
+        $properties = method_exists($this, 'getSchema') ? ($this->getSchema()['properties'] ?? []) : [];
+        foreach ($properties as $name => $def) {
+            $wert = $arguments[$name] ?? null;
+            if (isset($def['enum']) && $wert !== null && $wert !== '' && ! in_array($wert, $def['enum'], true)) {
+                return ToolResult::error("{$name} '" . (is_scalar($wert) ? $wert : json_encode($wert)) . "' unbekannt – erlaubt: "
+                    . implode(', ', array_filter($def['enum'], fn ($e) => $e !== '')) . '.', 'VALIDATION_ERROR');
+            }
+        }
+
+        return null;
+    }
+
     /** Erfolg samt {@see parameterWarnungen} (Schlüssel `warnungen` nur, wenn es welche gibt). */
     protected function erfolgMitWarnungen(array $daten, array $arguments): ToolResult
     {

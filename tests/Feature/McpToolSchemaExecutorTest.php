@@ -175,3 +175,15 @@ it('artikel.LIST + suppliers.SEARCH über den echten Executor: supplier_id filte
         ->and($artikel->data['warnungen'][0])->toContain("'lieferant_name'")
         ->and($lieferanten->success)->toBeTrue()->and($lieferanten->data['total'])->toBe(2)->and($lieferanten->data['last_page'])->toBe(2);
 });
+
+it('signale.SEARCH + speiseplaene.LIST über den echten Executor: falscher Status ist VALIDATION_ERROR, gültiger filtert (Spec 91 PR 2)', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
+    $svc->create($this->rootTeam, ['name' => 'Kantine Nord', 'status' => 'aktiv']);
+    $svc->create($this->rootTeam, ['name' => 'Kantine Süd']);
+
+    $falsch = ($this->ausfuehren)('foodalchemist.signale.SEARCH', ['status' => 'abgeschlossen']);
+    $plaene = ($this->ausfuehren)('foodalchemist.speiseplaene.LIST', ['status' => 'aktiv']);
+
+    expect($falsch->success)->toBeFalse()->and($falsch->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($plaene->success)->toBeTrue()->and(array_column($plaene->data['speiseplaene'], 'name'))->toBe(['Kantine Nord']);
+});

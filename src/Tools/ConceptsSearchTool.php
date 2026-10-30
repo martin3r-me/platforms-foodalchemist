@@ -46,6 +46,9 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
+        }
         $q = (string) ($arguments['q'] ?? '');
         $limit = min(50, max(1, (int) ($arguments['limit'] ?? 15)));
         $treffer = app(ConceptService::class)->paginateBrowser([
@@ -63,6 +66,9 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         $semScores = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_CONCEPT, array_column($concepts, 'id'), $limit);
         if ($semScores !== []) {
             $rows = FoodAlchemistConcept::visibleToTeam($team)->konzepte()->whereIn('id', array_keys($semScores))
+                // Spec 91 A4: dieselben Filter wie der lexikalische Pass (ConceptService::paginateBrowser)
+                ->when((bool) ($arguments['vorlagen'] ?? false), fn ($w) => $w->vorlagen(), fn ($w) => $w->echte())
+                ->when(($arguments['status'] ?? '') !== '', fn ($w) => $w->where('status', $arguments['status']))
                 ->get(['id', 'name', 'status', 'class', 'occasion', 'level'])->keyBy('id');
             arsort($semScores);
             foreach ($semScores as $id => $score) {
@@ -78,7 +84,7 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             }
         }
 
-        return ToolResult::success(['total' => count($concepts), 'concepts' => $concepts]);
+        return $this->erfolgMitWarnungen(['total' => count($concepts), 'concepts' => $concepts], $arguments);
     }
 
     public function getMetadata(): array

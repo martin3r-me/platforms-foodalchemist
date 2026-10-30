@@ -30,7 +30,7 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchbegriff, leer = alle'],
-                'status' => ['type' => 'string', 'description' => 'z. B. anfrage, angebot, gewonnen — leer = alle'],
+                'status' => ['type' => 'string', 'enum' => [...array_column(\Platform\FoodAlchemist\Enums\AngebotStatus::cases(), 'value'), ''], 'description' => 'z. B. anfrage, angebot, gewonnen — leer = alle'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 15],
             ],
         ];
@@ -41,6 +41,9 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
         }
         $svc = app(AngebotService::class);
         $q = trim((string) ($arguments['q'] ?? ''));
@@ -57,7 +60,9 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_ANGEBOT, array_column($out, 'id'), $limit);
         if ($sem !== []) {
             arsort($sem);
-            $rows = FoodAlchemistAngebot::visibleToTeam($team)->whereIn('id', array_keys($sem))->get()->keyBy('id');
+            $rows = FoodAlchemistAngebot::visibleToTeam($team)->whereIn('id', array_keys($sem))
+                ->when(($arguments['status'] ?? '') !== '', fn ($w) => $w->where('status', $arguments['status']))   // Spec 91 A4: Filter gilt auch semantisch
+                ->get()->keyBy('id');
             foreach ($sem as $id => $score) {
                 $a = $rows->get($id);
                 if ($a === null || count($out) >= $limit) {
@@ -67,7 +72,7 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             }
         }
 
-        return ToolResult::success(['total' => count($out), 'status_werte' => $svc->statusWerte(), 'angebote' => $out]);
+        return $this->erfolgMitWarnungen(['total' => count($out), 'status_werte' => $svc->statusWerte(), 'angebote' => $out], $arguments);
     }
 
     public function getMetadata(): array
