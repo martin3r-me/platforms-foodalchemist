@@ -75,17 +75,29 @@ Quellen (je Team) ──► Abruf ──► Eingang (1 Zeile je Artikel, Dublett
 
 Neue Tabelle `foodalchemist_trend_quellen` (team_id, name, url, art ∈ `TrendVokabular::QUELLEN`, feed_typ
 `rss|atom|seite|manuell`, schwerpunkt_kategorien json, schwerpunkt_sparten json, aktiv, letzter_abruf_at,
-letzter_fehler, uuid, softDeletes). UI: Reiter „Quellen“ im Trendradar (Kuratieren). MCP:
+letzter_fehler, abruf_weg `plattform|mcp`, uuid, softDeletes). UI: Reiter „Quellen“ im Trendradar (Kuratieren). MCP:
 `foodalchemist.trend_quellen.GET|POST|PUT|DELETE`.
 
-**Abruf:** Command/Job `foodalchemist:trend-quellen-abrufen {--team}` (Scheduler, Rhythmus je Team einstellbar,
-Standard wöchentlich). Holt RSS/Atom-Einträge (Titel, Link, Datum, Teaser) bzw. bei `seite` die Seite und nur deren
+**Rhythmus je Quelle** (Dominique 30.10.): Spalte `rhythmus ∈ taeglich|woechentlich|monatlich|aus` je Quelle, in der
+Quellen-Liste einstellbar (Standard aus der Team-Einstellung, die selbst Standard `aus` hat, bis Dominique einschaltet).
+Gilt für beide Abruf-Wege: bei `plattform` steuert er den Abruf, bei `mcp` die Fälligkeit in `trend_quellen.GET` und das
+Signal „überfällig“.
+
+**Abruf:** Command/Job `foodalchemist:trend-quellen-abrufen {--team}` (Scheduler täglich, holt nur fällige
+`plattform`-Quellen nach ihrem Rhythmus). Holt RSS/Atom-Einträge (Titel, Link, Datum, Teaser) bzw. bei `seite` die Seite und nur deren
 Überschrift/Beschreibung. **Sicherheit:** nur http/https, keine privaten/lokalen Adressen (SSRF-Schutz: DNS auflösen,
 private/Loopback/Link-Local-Bereiche sperren, keine Weiterleitung dorthin), Timeout, Größengrenze, eigener
 User-Agent, Fehler je Quelle in `letzter_fehler` statt Abbruch. Kein KI-Aufruf im Abruf.
 
-Der **MCP-Prototyp** (Dominiques geplante Aufgabe) liest `trend_quellen.GET`, recherchiert selbst und reicht über
-`trend_eingang.POST` ein — derselbe Eingang, dieselbe Weiterverarbeitung.
+**Abruf-Weg je Quelle** (Dominique 30.10.): Spalte `abruf_weg ∈ plattform|mcp` (Standard `plattform`).
+- `plattform`: der Abruf-Command holt die Quelle (Feed/Seite, ohne KI).
+- `mcp`: die Plattform ruft die Quelle **nie** selbst ab. Ein MCP-Client (Dominiques geplante Aufgabe in Claude) holt
+  sich mit `trend_quellen.GET` (Filter `abruf_weg=mcp`, fällige zuerst) die Liste, sichtet und sucht dort selbst
+  (z. B. Instagram-Accounts, Seiten ohne Feed, freie Recherche) und reicht über `trend_eingang.POST` mit `quelle_id`
+  ein. Das setzt `letzter_abruf_at` der Quelle. Ist eine MCP-Quelle länger als ihr Rhythmus nicht besucht worden,
+  meldet ein Signal „MCP-Quelle überfällig“.
+Die **Einordnung** danach (Erschließen, Bündeln, Regeln, Ableitung) läuft für alle Einträge gleich über den
+Plattform-Weg (KI dual wie üblich: plattform-angestoßen = Plattform-KI).
 
 ### 2. Eingang
 
@@ -181,7 +193,7 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
 | `abklingen_monate` | 6 |
 | `buendel_aehnlichkeit` | im Bau an Testdaten messen und begründen (nicht raten) |
 | `max_neue_trends_je_lauf` | 5 (Schutz vor Flut; Rest bleibt Kandidat mit Signal) |
-| `abruf_rhythmus` | wöchentlich |
+| `abruf_rhythmus` (Team-Standard für neue Quellen) | aus (bis Dominique einschaltet) |
 | KI-Budget je Team und Monat | analog `trend_dataforseo` (Standard klein, einstellbar) |
 
 ## Bauabschnitte (je eigener PR)
