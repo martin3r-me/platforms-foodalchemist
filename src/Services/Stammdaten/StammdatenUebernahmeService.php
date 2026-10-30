@@ -90,13 +90,23 @@ class StammdatenUebernahmeService
      * Vorgemerkte Zeilen (optional nur `$zeilenIds`) in den Bestand übernehmen.
      *
      * @param  ?list<int>  $zeilenIds
-     * @return array{angewendet: int, uebersprungen: list<array{id: int, zeile: int, grund: string}>, kette: array<string, int>, lauf_status: string}
+     * @return array{angewendet: int, uebersprungen: list<array{id: int, zeile: int, grund: string}>, faellige_preise: int, kette: array<string, int>, lauf_status: string}
      */
     public function uebernehmen(Team $team, ?User $user, Lauf $lauf, ?array $zeilenIds = null): array
     {
         $this->pruefeRecht($team, $user, $lauf);
-        $bilanz = ['angewendet' => 0, 'uebersprungen' => []];
+        $bilanz = ['angewendet' => 0, 'uebersprungen' => [], 'faellige_preise' => 0];
         $bewegt = [];
+
+        if ($zeilenIds === null) {   // vorgemerkte Preise, deren „Gültig ab“ erreicht ist
+            Zeile::where('run_id', $lauf->id)->where('team_id', $team->id)->where('status', Zeile::STATUS_ZUKUENFTIG)
+                ->whereDate('valid_from', '<=', now()->toDateString())->orderBy('id')
+                ->each(function (Zeile $z) use ($team, &$bilanz, &$bewegt) {
+                    if ($this->schreibeFaelligenPreis($team, $z, $bewegt)) {
+                        $bilanz['faellige_preise']++;
+                    }
+                });
+        }
 
         Zeile::where('run_id', $lauf->id)->where('team_id', $team->id)->where('status', Zeile::STATUS_GEPRUEFT)
             ->where('entscheidung', Zeile::ENTSCHEIDUNG_UEBERNEHMEN)->when($zeilenIds !== null, fn ($q) => $q->whereIn('id', $zeilenIds))
@@ -110,11 +120,11 @@ class StammdatenUebernahmeService
             });
 
         $counts = (array) $lauf->counts;
-        foreach ([Zeile::STATUS_ANGEWENDET, Zeile::STATUS_VERWORFEN] as $s) {
+        foreach ([Zeile::STATUS_ANGEWENDET, Zeile::STATUS_VERWORFEN, Zeile::STATUS_ZUKUENFTIG] as $s) {
             $counts[$s] = Zeile::where('run_id', $lauf->id)->where('status', $s)->count();
         }
         $offen = Zeile::where('run_id', $lauf->id)->where('status', Zeile::STATUS_GEPRUEFT)->whereIn('aktion', [Zeile::AKTION_NEU, Zeile::AKTION_AENDERT])
-            ->where('entscheidung', Zeile::ENTSCHEIDUNG_OFFEN)->exists();
+            ->where('entscheidung', Zeile::ENTSCHEIDUNG_OFFEN)->exists() || ($counts[Zeile::STATUS_ZUKUENFTIG] ?? 0) > 0;
         $lauf->update(['counts' => $counts, 'status' => $offen ? 'staged' : 'applied']);
 
         $kette = $bewegt !== [] ? $this->artikel->postImportKette($team, $bewegt, true) : ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0];
@@ -123,6 +133,30 @@ class StammdatenUebernahmeService
     }
 
     // ---- intern -----------------------------------------------------------
+
+    /**
+     * Vorgemerkten Preis schreiben, sobald „Gültig ab“ erreicht ist: nur Artikelschlüssel + Preis (der Rest der Zeile ging schon durch), über denselben
+     * Schreibweg. Ein unveränderter Preis erzeugt keine neue Zeile; ein neuer bekommt „Gültig ab“ als Stand-Beginn (wie bei der Preisliste).
+     *
+     * @param  array<int, true>  $bewegt
+     */
+    private function schreibeFaelligenPreis(Team $team, Zeile $z, array &$bewegt): bool
+    {
+        $daten = (array) $z->daten;
+        $werte = array_intersect_key($daten, array_flip(['artikelnummer', 'eangebinde', 'eanbestelleinheit', 'preis', 'preisstatus']));
+        $befund = $this->artikel->verarbeiteZeile($team, (int) $z->supplier_id, ['nr' => (int) $z->row_nr, 'werte' => $werte], true, $bewegt);
+        if (in_array($befund['preis']['status'] ?? '', ['fehler'], true) || in_array($befund['status'] ?? '', ['fehler', 'uebersprungen'], true)) {
+            return false;
+        }
+        if (in_array($befund['preis']['status'] ?? '', ['neu', 'geaendert'], true) && $z->supplier_item_id !== null
+            && ($aktiv = app(\Platform\FoodAlchemist\Services\PriceService::class)->activeFor((int) $z->supplier_item_id, $team)) !== null) {
+            $aktiv->update(['status_valid_from' => $z->valid_from]);
+        }
+        $hinweise = array_values(array_filter((array) $z->hinweise, fn ($h) => ($h['code'] ?? '') !== 'preis_vorgemerkt'));
+        $z->update(['status' => Zeile::STATUS_ANGEWENDET, 'hinweise' => $hinweise]);
+
+        return true;
+    }
 
     private function pruefeRecht(Team $team, ?User $user, Lauf $lauf): void
     {
@@ -178,9 +212,11 @@ class StammdatenUebernahmeService
         if (collect($hinweise)->contains(fn ($h) => ($h['bereich'] ?? null) === 'naehrwert' && ($h['stufe'] ?? null) === 'konflikt')) {
             $werte = array_filter($werte, fn ($k) => ! str_starts_with((string) $k, 'nw:'), ARRAY_FILTER_USE_KEY);
         }
-        if ($z->valid_from !== null && $z->valid_from->copy()->startOfDay()->isFuture()) {
+        $zukunft = $z->valid_from !== null && $z->valid_from->copy()->startOfDay()->isFuture() && ($werte['preis'] ?? '') !== '';
+        if ($zukunft) {   // Preis vormerken: der Rest der Zeile geht jetzt durch, der Preis beim ersten Übernehmen ab dem Datum
             unset($werte['preis'], $werte['preisstatus'], $werte['aktion_ab'], $werte['aktion_bis']);
-            $hinweise[] = ['code' => 'preis_zurueckgestellt', 'stufe' => 'info', 'text' => 'Preis gilt erst ab ' . $z->valid_from->format('d.m.Y') . ' — nicht geschrieben, später erneut importieren.'];
+            $hinweise = array_values(array_filter($hinweise, fn ($h) => ($h['code'] ?? '') !== 'gueltig_ab_zukunft'));
+            $hinweise[] = ['code' => 'preis_vorgemerkt', 'stufe' => 'info', 'text' => 'Preis gilt erst ab ' . $z->valid_from->format('d.m.Y') . ' — vorgemerkt, wird beim nächsten Übernehmen ab diesem Tag geschrieben.'];
         }
 
         DB::beginTransaction();
@@ -208,7 +244,8 @@ class StammdatenUebernahmeService
             if ($item !== null) {
                 $bewegt[(int) $item->id] = true;
             }
-            $z->update(['status' => Zeile::STATUS_ANGEWENDET, 'supplier_item_id' => $item?->id, 'hinweise' => array_values(array_filter($hinweise, fn ($h) => ($h['code'] ?? '') !== 'uebernahme_gestoppt'))]);
+            $z->update(['status' => $zukunft ? Zeile::STATUS_ZUKUENFTIG : Zeile::STATUS_ANGEWENDET, 'supplier_item_id' => $item?->id,
+                'hinweise' => array_values(array_filter($hinweise, fn ($h) => ($h['code'] ?? '') !== 'uebernahme_gestoppt'))]);
             DB::commit();
 
             return null;

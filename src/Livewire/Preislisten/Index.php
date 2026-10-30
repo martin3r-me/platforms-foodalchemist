@@ -34,6 +34,9 @@ class Index extends Component
 
     public ?int $laufId = null;
 
+    /** Zuordnung merken (je Lieferant), wenn eine wartende Datei zugeordnet wird. */
+    public bool $merken = true;
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -129,8 +132,10 @@ class Index extends Component
             return;
         }
         if ($run->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
-            app(\Platform\FoodAlchemist\Services\Stammdaten\ImportZuordnungService::class)->verwerfen($run);
-            $this->fehler = 'Die Pflichtspalten (Preis und Artikelnummer oder EAN) sind noch nicht zugeordnet — bitte oben zuordnen.';
+            $this->laufWaehlen($run->id);   // Datei wartet: Zuordnung unten ergänzen
+            $this->meldung = 'Preis und Artikelnummer oder EAN sind noch nicht zugeordnet — bitte unten zuordnen.';
+            $this->datei = null;
+            $this->vorschau = null;
 
             return;
         }
@@ -146,7 +151,40 @@ class Index extends Component
     public function laufWaehlen(int $id): void
     {
         $team = $this->team();
-        $this->laufId = $team !== null && app(PreislistenImportService::class)->lauf($team, $id) !== null ? $id : null;
+        $lauf = $team !== null ? app(PreislistenImportService::class)->lauf($team, $id) : null;
+        $this->laufId = $lauf?->id;
+        if ($lauf?->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) {
+            $this->zuordnung = [];
+            foreach ((array) ($lauf->mapping['vorschlag'] ?? []) as $idx => $feld) {   // Spaltenindex ⇒ Feld (Vorschlag der Erkennung)
+                $this->zuordnung[(string) $feld] = (string) $idx;
+            }
+        }
+    }
+
+    /** Eigene Datei ohne erkannte Pflichtspalten (1c): gewählte Zuordnung anwenden, Datei abgleichen, Zuordnung je Lieferant merken. */
+    public function zuordnen(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $team = $this->team();
+        $svc = app(PreislistenImportService::class);
+        $lauf = $team !== null && $this->laufId !== null ? $svc->lauf($team, $this->laufId) : null;
+        if ($lauf === null || ! $this->darf()) {
+            $this->fehler = 'Preislisten importieren darf nur das Haupt-Team des Kunden (Rolle Kuratieren).';
+
+            return;
+        }
+        $mapping = array_filter($this->zuordnung, fn ($v) => $v !== '' && $v !== null);
+        try {
+            $neu = $svc->zuordnen($team, $lauf, $mapping, Auth::id(), $this->merken);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->laufId = $neu->id;
+        $this->zuordnung = [];
+        $c = $neu->counts ?? [];
+        $this->meldung = sprintf('Abgeglichen: %d Zeilen, %d Treffer, %d zu prüfen. Es wurde noch kein Preis geschrieben.', $c['zeilen'] ?? 0, $c['treffer'] ?? 0, ($c['zeilen'] ?? 0) - ($c['treffer'] ?? 0));
     }
 
     /** Treffer eines Laufs als Teampreise übernehmen (Schreib-Schicht). Nur wer importieren darf; Bestätigung kommt aus der Oberfläche (wire:confirm). */

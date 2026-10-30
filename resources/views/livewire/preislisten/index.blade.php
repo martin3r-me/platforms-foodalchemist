@@ -87,7 +87,7 @@
                         @foreach($laeufe as $l)
                             @php $c = $l->counts ?? []; @endphp
                             <tr wire:key="pl-lauf-{{ $l->id }}" class="cursor-pointer hover:bg-[var(--fa-hover)]" wire:click="laufWaehlen({{ $l->id }})" data-preisliste-lauf="{{ $l->id }}">
-                                <td class="font-medium">{{ $l->filename }}</td>
+                                <td class="font-medium">{{ $l->filename }}@if($l->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) <x-fa::badge tone="warn" data-preisliste-lauf-zuordnung>Zuordnung nötig</x-fa::badge>@endif</td>
                                 <td class="tabular-nums">{{ $l->created_at?->format('d.m.Y H:i') }}</td>
                                 <td class="text-right tabular-nums">{{ $c['zeilen'] ?? 0 }}</td>
                                 <td class="text-right tabular-nums">{{ ($c['treffer'] ?? 0) + ($c['zukuenftig'] ?? 0) }}</td>
@@ -101,7 +101,33 @@
             @endif
         </x-fa::section>
 
-        @if($lauf)
+        @if($lauf && $lauf->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG)
+            {{-- 1c: eigene Datei ohne erkannte Pflichtspalten — dieselbe Zuordnung wie beim Stammdaten-Import, hier für die Preisliste (UI-/MCP-Gleichstand). --}}
+            <x-fa::section title="Zuordnung nötig: {{ $lauf->filename }}" icon="heroicon-o-arrows-right-left" data-preisliste-zuordnung-noetig>
+                <p class="{{ $leise }} mb-3">{{ $lauf->mapping['grund'] ?? 'Die Spalten wurden nicht erkannt.' }} Ordne die Felder den Spalten deiner Datei zu; Pflicht sind der Preis und die Artikelnummer oder die EAN.</p>
+                <div class="grid gap-2 grid-cols-1 md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
+                    @foreach($felder as $feld => $label)
+                        <x-fa::field :label="$label" for="pl-zn-{{ $feld }}" wire:key="pl-zn-{{ $feld }}">
+                            <x-fa::select id="pl-zn-{{ $feld }}" size="sm" wire:model="zuordnung.{{ $feld }}" placeholder="– nicht in der Datei –" data-preisliste-zuordnung-feld="{{ $feld }}">
+                                @foreach(($lauf->mapping['kopf'] ?? []) as $i => $kopf)<option value="{{ $i }}">{{ $kopf !== '' ? $kopf : 'Spalte ' . ($i + 1) }}</option>@endforeach
+                            </x-fa::select>
+                        </x-fa::field>
+                    @endforeach
+                </div>
+                @if(! empty($lauf->mapping['vorschau']))
+                    <div class="overflow-x-auto mt-3 -mx-4">
+                        <table class="fa-table fa-table--compact">
+                            <thead><tr>@foreach(($lauf->mapping['kopf'] ?? []) as $kopf)<th>{{ $kopf }}</th>@endforeach</tr></thead>
+                            <tbody>@foreach($lauf->mapping['vorschau'] as $zeile)<tr>@foreach(($lauf->mapping['kopf'] ?? []) as $i => $_)<td>{{ $zeile[$i] ?? '' }}</td>@endforeach</tr>@endforeach</tbody>
+                        </table>
+                    </div>
+                @endif
+                @if($darf)
+                    <label class="mt-3 flex items-center gap-2 text-[length:var(--fa-text-md)]"><input type="checkbox" wire:model="merken" data-preisliste-merken /> Zuordnung für diesen Lieferanten merken und beim nächsten Upload anwenden</label>
+                    <div class="pt-3"><x-fa::button variant="primary" icon="heroicon-m-arrows-right-left" wire:click="zuordnen" wire:loading.attr="disabled" data-preisliste-zuordnen>Zuordnen und abgleichen</x-fa::button></div>
+                @endif
+            </x-fa::section>
+        @elseif($lauf)
             <x-fa::section title="Prüfliste: {{ $lauf->filename }}" icon="heroicon-o-clipboard-document-check" :meta="$pruefliste->count()" data-preisliste-pruefliste>
                 <x-slot:actions>
                     @php $offen = (($lauf->counts['treffer'] ?? 0) + ($lauf->counts['zukuenftig'] ?? 0)); @endphp
