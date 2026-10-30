@@ -11,7 +11,9 @@ interface NaehrwertPruefer
 {
     /**
      * @param  array<string, float>  $zeile  Kern-Nährwerte je 100 g/ml (energy_kcal, energy_kj, protein, fat, saturated_fat, carbs_absorbable, sugar, sodium[mg])
-     * @return list<array{regel: string, schwere: string, feld: ?string, wert: mixed, erwartet: mixed, vorschlag: mixed, text: string}>  leer = unauffällig
+     * @param  array{wg?: ?string, sub?: ?string, name?: ?string, bezeichnung?: ?string}  $kontext
+     * @return list<array{regel: string, schwere: string, // hart | hinweis | umrechnung
+     *                     feld: ?string, wert: mixed, erwartet: mixed, vorschlag: mixed, text: string}>  leer = unauffällig
      */
-    public function pruefe(array $zeile, ?string $warengruppe = null, ?string $sub = null): array;
+    public function pruefe(array $zeile, array $kontext = []): array;
 }

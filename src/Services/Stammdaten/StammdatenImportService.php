@@ -280,6 +280,22 @@ class StammdatenImportService
 
     // ---- intern -----------------------------------------------------------
 
+    /** Kontext für die Nährwert-Prüfung: Artikelbezeichnung, bei bekanntem Artikel Warengruppe/Unterkategorie seines GP. @return array{wg?: ?string, sub?: ?string, bezeichnung?: ?string} */
+    private function nwKontext(?FoodAlchemistSupplierItem $item, array $w): array
+    {
+        $k = ['bezeichnung' => (string) ($item?->designation ?? ($w['bezeichnung'] ?? ''))];
+        if ($item !== null) {
+            $gp = DB::table('foodalchemist_supplier_item_structures as s')->join('foodalchemist_gps as g', 'g.id', '=', 's.gp_id')
+                ->where('s.supplier_item_id', $item->id)->whereNull('s.deleted_at')->first(['g.commodity_group_code', 'g.name']);
+            if ($gp !== null) {
+                $k['wg'] = (string) $gp->commodity_group_code;
+                $k['name'] = (string) $gp->name;
+            }
+        }
+
+        return $k;
+    }
+
     /** Kopfzeile mit den zugeordneten Spalten auf die Vorlagen-Namen umschreiben (Index ⇒ Zielfeld). @param list<string> $kopf @param array<int, string> $spalten @return list<string> */
     private function umbenennen(array $kopf, array $spalten): array
     {
@@ -390,8 +406,8 @@ class StammdatenImportService
                 $diff['naehrwerte'][$k] = ['alt' => $alt, 'neu' => $v];
             }
         }
-        foreach ($this->pruefer->pruefe($nw) as $h) {
-            $hinweise[] = ['code' => $h['regel'], 'bereich' => 'naehrwert', 'stufe' => $h['schwere'] === 'hart' ? 'konflikt' : 'warnung', 'text' => 'Nährwert: ' . $h['text'],
+        foreach ($this->pruefer->pruefe($nw, $this->nwKontext($item, $w)) as $h) {
+            $hinweise[] = ['code' => $h['regel'], 'bereich' => 'naehrwert', 'stufe' => match ($h['schwere']) { 'hart' => 'konflikt', 'umrechnung' => 'info', default => 'warnung' }, 'text' => 'Nährwert: ' . $h['text'],
                 'feld' => $h['feld'], 'wert' => $h['wert'], 'erwartet' => $h['erwartet'], 'vorschlag' => $h['vorschlag']];
         }
 

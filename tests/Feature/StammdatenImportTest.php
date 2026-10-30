@@ -7,7 +7,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun as Lauf;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\PreislistenImportService;
-use Platform\FoodAlchemist\Services\Stammdaten\BasisNaehrwertPruefer;
+use Platform\FoodAlchemist\Services\Stammdaten\NaehrwertPruefServiceAdapter;
 use Platform\FoodAlchemist\Services\Stammdaten\NaehrwertPruefer;
 use Platform\FoodAlchemist\Services\Stammdaten\StammdatenImportService;
 use Platform\FoodAlchemist\Services\SupplierItemService;
@@ -151,15 +151,15 @@ it('Nährwert-Prüfer: unplausible Werte erzeugen Hinweise, blockieren aber nich
     $z = Zeile::where('run_id', $lauf->id)->first();
     $codes = collect($z->hinweise)->pluck('code')->all();
 
-    expect($codes)->toContain('zucker_ueber_kh')->toContain('kcal_kj')
-        ->and($z->aktion)->toBe('neu');
+    expect($codes)->toContain('H3')->toContain('H5')
+        ->and($z->aktion)->toBe('konflikt');   // harter Nährwert-Befund: die Zeile braucht den Blick, die Nährwerte werden bei der Übernahme nie geschrieben
 
     app()->bind(NaehrwertPruefer::class, fn () => new class implements NaehrwertPruefer {
-        public function pruefe(array $zeile, ?string $warengruppe = null, ?string $sub = null): array { return [['regel' => 'ersatz', 'schwere' => 'hinweis', 'feld' => null, 'wert' => null, 'erwartet' => null, 'vorschlag' => null, 'text' => 'anderer Prüfer']]; }
+        public function pruefe(array $zeile, array $kontext = []): array { return [['regel' => 'ersatz', 'schwere' => 'hinweis', 'feld' => null, 'wert' => null, 'erwartet' => null, 'vorschlag' => null, 'text' => 'anderer Prüfer']]; }
     });
     $lauf2 = app(StammdatenImportService::class)->stage($this->team, ($this->csv)("Lieferant;Artikelnummer;Bezeichnung;Nährwert Fett\nHanos;N2;Öl;99\n"));
     expect(collect(Zeile::where('run_id', $lauf2->id)->first()->hinweise)->pluck('code')->all())->toBe(['ersatz']);
-    expect(app(NaehrwertPruefer::class))->not->toBeInstanceOf(BasisNaehrwertPruefer::class);
+    expect(app(NaehrwertPruefer::class))->not->toBeInstanceOf(NaehrwertPruefServiceAdapter::class);
 });
 
 it('Preis: neu/geändert wird als Soll/Ist gezeigt, geschrieben wird nichts; ungültiger Preis ⇒ Fehler', function () {
@@ -201,4 +201,14 @@ it('Prüfliste: Filter nach Aktion, strikt team-eigen', function () {
 
     expect($this->svc->pruefliste($lauf, 'neu'))->toHaveCount(1)
         ->and($this->svc->pruefliste($lauf))->toHaveCount(2);
+});
+
+it('Nährwert-Einheiten-Probe: „× 1000“ kommt als Hinweis (Rohwerte bleiben), nicht als Hart-Befund und ohne Umschreiben der Datei-Werte', function () {
+    $lauf = $this->svc->stage($this->team, ($this->csv)("Lieferant;Artikelnummer;Bezeichnung;Nährwert Fett;Nährwert Eiweiß;Nährwert Kohlenhydrate;Nährwert kcal\nHanos;E1;Butter;0,082;0,007;0,006;740\n"));
+    $z = Zeile::where('run_id', $lauf->id)->first();
+    $h = collect($z->hinweise)->firstWhere('code', 'H6');
+
+    expect($h)->not->toBeNull()->and($h['stufe'])->toBe('info')->and($h['vorschlag']['faktor'])->toBe(1000)
+        ->and($z->diff['naehrwerte']['fat']['neu'])->toEqual(0.082)      // Rohwert, nicht 82
+        ->and($z->aktion)->toBe('neu');
 });
