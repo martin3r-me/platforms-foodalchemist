@@ -93,8 +93,9 @@ trait HandyTrendsLesen
                     ->map(fn ($i) => ['i' => $i, 'bild' => ($t = $svc->titelbild($i)) ? $svc->dateiUrl($t) : null,
                         'quellen' => $i->quellen->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)])])
                 : collect(),
+            // Spec 93: automatische Themen aus dem Eingang sind nie Ziel eines Fundstücks (nur herkunft = manuell)
             'eigeneInspirationen' => $reiter === 'pinnwand' ? \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $team->id)
-                ->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all() : [],
+                ->where('herkunft', 'manuell')->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all() : [],
             'bewertung' => $gewaehlt ? $svc->bewertung($gewaehlt) : null,
             'belege' => $gewaehlt ? $gewaehlt->belege()->get()->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)]) : collect(),
             'messungen' => $gewaehlt ? $gewaehlt->signale()->limit(3)->get() : collect(),

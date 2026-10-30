@@ -91,6 +91,13 @@ class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemis
             'trends' => $trends,
         ];
 
+        // Spec 93 C: eigenes Trend-KI-Budget (null = kein eigener Deckel). Nur der Plattformweg zählt; der MCP-Weg kostet keine Plattform-KI.
+        if (! $this->extern && app(\Platform\FoodAlchemist\Services\TrendEingangService::class)->budgetErreicht($this->teamId)) {
+            app(TrendEingangService::class)->erschliessungFehlgeschlagen($e, 'Trend-KI-Budget erreicht');
+
+            return;
+        }
+
         try {
             $vorschlag = $ki->propose('trend.eingang_erschliessen', $kontext);
         } catch (\Throwable $ex) {

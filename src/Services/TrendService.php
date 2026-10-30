@@ -28,6 +28,24 @@ class TrendService
 {
     public function __construct(private readonly FaRechte $rechte) {}
 
+    /** Spec 93 C: Felder, die ein Mensch gesetzt hat, merkt sich der Trend (manuell_felder) — die Automatik fasst sie nie an. */
+    public const MANUELLE_FELDER = ['typ', 'ebene', 'kategorie', 'sparten', 'status', 'konfidenz'];
+
+    /** Spec 93 C: läuft gerade die Trend-Automatik? Dann setzt kein Schreibpfad einen Manuell-Merker. */
+    private bool $automatik = false;
+
+    /** Spec 93 C: Schreiben im Auftrag der Automatik (TrendAutomatikService) — ohne Manuell-Merker. */
+    public function alsAutomatik(callable $schritt): mixed
+    {
+        $vorher = $this->automatik;
+        $this->automatik = true;
+        try {
+            return $schritt();
+        } finally {
+            $this->automatik = $vorher;
+        }
+    }
+
     // ── Lesen ──────────────────────────────────────────────────────────────
 
     /**
@@ -167,6 +185,8 @@ class TrendService
                 $this->inspirationAnTrend($this->eigeneInspiration($team, $iid), $trend->id);
             }
 
+            $this->merkeManuell($trend, array_keys(array_filter(array_merge($felder, ['sparten' => $trend->sparten]), fn ($v) => $v !== null && $v !== [])));
+
             return $this->neuBewerten($trend);
         });
 
@@ -217,6 +237,8 @@ class TrendService
             $update['einordnung_quelle'] = (string) ($daten['einordnung_quelle'] ?? 'manuell');
         }
         $trend->update($update);
+        $this->merkeManuell($trend, array_keys(array_intersect_key($update + (array_key_exists('konfidenz_manuell', $update) ? ['konfidenz' => 1] : []),
+            array_flip(self::MANUELLE_FELDER))));
         $trend = $this->neuBewerten($trend->refresh());
 
         if (array_key_exists('status', $daten) && $daten['status'] !== $trend->status) {
@@ -242,6 +264,7 @@ class TrendService
             $update += ['geprueft_by' => $userId, 'geprueft_at' => now()];
         }
         $trend->update($update);
+        $this->merkeManuell($trend, ['status']);
 
         return $trend->refresh();
     }
@@ -253,7 +276,9 @@ class TrendService
         DB::transaction(function () use ($team, $trend) {
             // Inspirationen samt Quellen bleiben auf der Pinnwand, nur die Zuordnung fällt weg
             FoodAlchemistTrendInspiration::where('trend_id', $trend->id)->update(['trend_id' => null]);
-            FoodAlchemistTrendBeleg::where('trend_id', $trend->id)->where('fundstueck', true)->update(['trend_id' => null]);
+            // Spec 93: Belege einer Inspiration (Pinnwand-Fundstücke UND Artikel automatischer Themen) bleiben, nur die Zuordnung fällt weg
+            FoodAlchemistTrendBeleg::where('trend_id', $trend->id)->where(fn ($q) => $q->where('fundstueck', true)->orWhereNotNull('inspiration_id'))
+                ->update(['trend_id' => null]);
             foreach ($trend->belege()->get() as $beleg) {
                 $this->dateiEntfernen($team, $beleg);
                 $beleg->delete();
@@ -342,6 +367,10 @@ class TrendService
         return DB::transaction(function () use ($team, $daten, $datei, $userId) {
             if (! empty($daten['inspiration_id'])) {
                 $insp = $this->eigeneInspiration($team, (int) $daten['inspiration_id']);
+                if ($insp->herkunft === 'automatisch') {
+                    // Spec 93 (Abgrenzung): die Pinnwand bleibt Handarbeit — ein Fundstück kommt nie in ein automatisches Thema
+                    throw new \RuntimeException('Diese Inspiration ist ein automatisches Thema aus dem Eingang; ein Fundstück legt man auf der Pinnwand ab.');
+                }
                 $neueWorte = $this->liste_($daten['schlagworte'] ?? null, true) ?? [];
                 if ($neueWorte !== []) {
                     $insp->update(['schlagworte' => $this->worteVereinen($insp->schlagworte ?? [], $neueWorte)]);
@@ -862,6 +891,20 @@ class TrendService
         }
 
         return array_slice($out, 0, 15);
+    }
+
+    /** @param  list<string>  $felder */
+    private function merkeManuell(FoodAlchemistTrend $trend, array $felder): void
+    {
+        $felder = array_values(array_intersect($felder, self::MANUELLE_FELDER));
+        if ($this->automatik || $felder === []) {
+            return;
+        }
+        $neu = array_values(array_unique(array_merge($trend->manuell_felder ?? [], $felder)));
+        sort($neu);
+        if ($neu !== ($trend->manuell_felder ?? [])) {
+            $trend->forceFill(['manuell_felder' => $neu])->save();
+        }
     }
 
     private function eigener(Team $team, int $id): FoodAlchemistTrend

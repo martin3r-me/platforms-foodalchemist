@@ -38,6 +38,10 @@ class FoodAlchemistTeamSetting extends Model
         'trend_dataforseo_budget_usd' => 'decimal:2',
         'trend_stichworte_ein' => 'array',   // Spec 93 A: Team-Standard des Stichwort-Filters (greift ohne eigene Liste der Quelle)
         'trend_stichworte_aus' => 'array',
+        'trend_automatik_schatten' => 'boolean',   // Spec 93 C
+        'trend_automatik_regeln' => 'array',
+        'trend_ki_budget_eur' => 'decimal:2',
+        'trend_automatik_letzter_lauf' => 'array',
         'cooking_loss_defaults' => 'array',
         'trimming_loss_defaults' => 'array',
         'vat_defaults' => 'array',

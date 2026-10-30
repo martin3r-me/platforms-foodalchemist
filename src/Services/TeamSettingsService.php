@@ -333,6 +333,38 @@ class TeamSettingsService
             'aus' => \Platform\FoodAlchemist\Support\StichwortFilter::liste($s->trend_stichworte_aus ?? [])];
     }
 
+    /** Spec 93 C: Stufe der Trend-Automatik (aus | bis_geprueft | radar). Standard aus. */
+    public function trendAutomatik(Team $team): string
+    {
+        $v = (string) ($this->for($team)->trend_automatik ?? 'aus');
+
+        return array_key_exists($v, \Platform\FoodAlchemist\Support\TrendAutomatikRegeln::STUFEN) ? $v : 'aus';
+    }
+
+    /** Spec 93 C: Schatten-Modus (rechnet, schreibt keine Trends). Standard an. */
+    public function trendAutomatikSchatten(Team $team): bool
+    {
+        $v = $this->for($team)->trend_automatik_schatten;
+
+        return $v === null ? true : (bool) $v;
+    }
+
+    /** @return array<string,mixed>|null Spec 93 C: Team-Schwellen der Trend-Automatik (null = Startwerte) */
+    public function trendAutomatikRegeln(Team $team): ?array
+    {
+        $v = $this->for($team)->trend_automatik_regeln;
+
+        return is_array($v) ? $v : null;
+    }
+
+    /** Spec 93 C: Trend-KI-Budget je Monat in € (null = kein eigener Deckel, nur der Team-Deckel). */
+    public function trendKiBudget(Team $team): ?float
+    {
+        $v = $this->for($team)->trend_ki_budget_eur;
+
+        return $v !== null ? max(0.0, (float) $v) : null;
+    }
+
     /**
      * Phase 5: Typ-Farben (GP / Basisrezept / Gericht) als Hex, gemerged mit den Defaults.
      * Nur valide #rrggbb-Werte überschreiben — Müll/Teil-Konfig fällt auf Default zurück.

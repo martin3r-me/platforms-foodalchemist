@@ -85,6 +85,7 @@
             {{-- Spec 93: systematische Erfassung, getrennt von der Pinnwand --}}
             <x-fa::button size="sm" :variant="$ansicht === 'eingang' ? 'primary' : 'ghost'" icon="heroicon-m-inbox-arrow-down" wire:click="ansichtSetzen('eingang')" role="tab" data-tab-eingang>Eingang</x-fa::button>
             <x-fa::button size="sm" :variant="$ansicht === 'quellen' ? 'primary' : 'ghost'" icon="heroicon-m-rss" wire:click="ansichtSetzen('quellen')" role="tab" data-tab-quellen>Quellen</x-fa::button>
+            <x-fa::button size="sm" :variant="$ansicht === 'automatik' ? 'primary' : 'ghost'" icon="heroicon-m-cpu-chip" wire:click="ansichtSetzen('automatik')" role="tab" data-tab-automatik>Automatik</x-fa::button>
         </div>
 
         @if($ansicht === 'radar')
@@ -161,6 +162,8 @@
             <livewire:foodalchemist.trendradar.eingang key="trendradar-eingang" />
         @elseif($ansicht === 'quellen')
             <livewire:foodalchemist.trendradar.quellen key="trendradar-quellen" />
+        @elseif($ansicht === 'automatik')
+            <livewire:foodalchemist.trendradar.automatik key="trendradar-automatik" />
         @elseif($ansicht === 'inspiration')
             {{-- INSPIRATION: Team-Pinnwand — eine Karte je Inspiration (Thema), darunter ihre Quellen --}}
             <div class="flex flex-wrap items-center gap-1.5" data-pinnwand-filter>

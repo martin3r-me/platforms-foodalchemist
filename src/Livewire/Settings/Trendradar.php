@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TrendSignalService;
 use Platform\FoodAlchemist\Support\StichwortFilter;
+use Platform\FoodAlchemist\Support\TrendAutomatikRegeln;
 use Platform\FoodAlchemist\Support\TrendVokabular;
 
 /**
@@ -38,6 +39,16 @@ class Trendradar extends Component
 
     public string $stichworteAus = '';
 
+    /** Spec 93 C: Trend-Automatik — Stufe, Schatten-Modus, Schwellen (leer = Startwert), Trend-KI-Budget (leer = kein eigener Deckel). */
+    public string $automatikStufe = 'aus';
+
+    public bool $automatikSchatten = true;
+
+    /** @var array<string, string> */
+    public array $regeln = [];
+
+    public string $kiBudget = '';
+
     public ?string $meldung = null;
 
     public function mount(): void
@@ -54,6 +65,10 @@ class Trendradar extends Component
         $w = $s->trendStichworte($team);
         $this->stichworteEin = implode(', ', $w['ein']);
         $this->stichworteAus = implode(', ', $w['aus']);
+        $this->automatikStufe = $s->trendAutomatik($team);
+        $this->automatikSchatten = $s->trendAutomatikSchatten($team);
+        $this->regeln = array_map(fn ($v) => (string) $v, $s->trendAutomatikRegeln($team) ?? []);
+        $this->kiBudget = ($b = $s->trendKiBudget($team)) !== null ? rtrim(rtrim(number_format($b, 2, '.', ''), '0'), '.') : '';
     }
 
     public function speichern(): void
@@ -70,6 +85,10 @@ class Trendradar extends Component
             'trend_quellen_rhythmus' => array_key_exists($this->quellenRhythmus, TrendVokabular::RHYTHMEN) ? $this->quellenRhythmus : 'aus',
             'trend_stichworte_ein' => StichwortFilter::liste($this->stichworteEin) ?: null,
             'trend_stichworte_aus' => StichwortFilter::liste($this->stichworteAus) ?: null,
+            'trend_automatik' => array_key_exists($this->automatikStufe, TrendAutomatikRegeln::STUFEN) ? $this->automatikStufe : 'aus',
+            'trend_automatik_schatten' => $this->automatikSchatten,
+            'trend_automatik_regeln' => TrendAutomatikRegeln::pruefen(array_filter($this->regeln, fn ($v) => trim((string) $v) !== ''), false) ?: null,
+            'trend_ki_budget_eur' => trim($this->kiBudget) === '' ? null : max(0, min(10000, (float) str_replace(',', '.', $this->kiBudget))),
         ]);
         $this->dfsBudget = rtrim(rtrim(number_format($budget, 2, '.', ''), '0'), '.');
         $this->meldung = $this->dfsAktiv
@@ -92,6 +111,9 @@ class Trendradar extends Component
             'anbindung' => $signale->anbindungVorhanden(),
             'messZeit' => config('foodalchemist.scheduler.trends_messen_zeit', '06:10'),
             'rhythmen' => TrendVokabular::RHYTHMEN,
+            'stufen' => TrendAutomatikRegeln::STUFEN,
+            'regelSchluessel' => TrendAutomatikRegeln::SCHLUESSEL,
+            'startwerte' => TrendAutomatikRegeln::startwerte(),
             'quellenHostAktiv' => (bool) config('foodalchemist.scheduler.trend_quellen_enabled', false) && (bool) config('foodalchemist.scheduler.enabled', true),
             'hostAktiv' => (bool) config('foodalchemist.scheduler.trends_messen_enabled', true)
                 && (bool) config('foodalchemist.scheduler.enabled', true),

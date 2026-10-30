@@ -438,6 +438,19 @@ return [
             // (`foodalchemist:trend-themen-aehnlichkeit --team=…`), dann gesetzt — nicht raten.
             'buendel_aehnlichkeit' => env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') !== null ? (float) env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') : null,
         ],
+        // Spec 93 C · Startwerte der Regel-Einordnung. Annahmen des Kurators, KEINE belegten Zahlen (Sarah Spork nennt keine
+        // Schwellen) — im Schatten-Modus an echten Läufen kalibrieren; je Team in den Trendradar-Einstellungen überschreibbar.
+        'automatik' => [
+            'kandidat_sichtungen' => 3, 'kandidat_quellen' => 2, 'kandidat_tage' => 60,
+            'hype_sichtungen_30t' => 5,
+            'trend_monate' => 3, 'trend_quellenarten' => 2,
+            'tiefe_schwelle' => 0.5,
+            'konsum_sparten' => 2, 'konsum_monate' => 6,
+            'abklingen_monate' => 6,
+            'max_neue_trends_je_lauf' => 5,
+            // Signal „Quelle liefert seit N Abrufen Fehler“ ab so vielen Fehlern in Folge (Kurator 30.10.: ein Ausfall allein kein Signal)
+            'quelle_fehler_signal_ab' => 3,
+        ],
     ],
 
     'gebuehren' => [
@@ -493,6 +506,9 @@ return [
         // Spec 93 A: täglicher Quellen-Abruf (holt nur fällige plattform-Quellen). Standard AUS — kein Lauf allein durch den Deploy.
         'trend_quellen_enabled' => env('FOODALCHEMIST_TREND_QUELLEN', false),
         'trend_quellen_zeit' => env('FOODALCHEMIST_TREND_QUELLEN_ZEIT', '05:50'),
+        // Spec 93 C: täglicher Automatik-Lauf NACH dem Abruf (05:50) und dem Erschließen (Queue). Standard AUS.
+        'trend_automatik_enabled' => env('FOODALCHEMIST_TREND_AUTOMATIK', false),
+        'trend_automatik_zeit' => env('FOODALCHEMIST_TREND_AUTOMATIK_ZEIT', '06:40'),
         // Spec 52/Paket 3: Team, dessen Kanon-Sicherung wöchentlich geprüft wird.
         // **0 schaltet den Lauf ab.** Der Kanon ist team-gebunden und es gibt keinen sinnvollen
         // Default über Installationen hinweg — eine frische Instanz ohne Team 6 soll deshalb
