@@ -17,6 +17,8 @@ use Platform\FoodAlchemist\Support\FaShell;
  */
 class Index extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen (Anlegen am Computer)
+
     public string $firmaSuche = '';
 
     public ?int $firmaId = null;
@@ -85,7 +87,9 @@ class Index extends Component
 
         return view('foodalchemist::livewire.projekte.index', [
             'projekte' => $projekte, 'firmenNamen' => $namen, 'firmen' => $firmen, 'phasen' => FoodAlchemistProjekt::PHASEN,
-            'darfSchreiben' => $team !== null && app(FaRechte::class)->darf($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
+            'darfSchreiben' => $team !== null && ! ($handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+                && app(FaRechte::class)->darf($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
+            'handy' => \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy(),
             'crmVerfuegbar' => CrmKunden::verfuegbar(),
         ])->layout(FaShell::layout());
     }

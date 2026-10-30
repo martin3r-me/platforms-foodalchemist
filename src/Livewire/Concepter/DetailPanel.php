@@ -18,6 +18,13 @@ use Platform\FoodAlchemist\Services\ConcepterBewertungService;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;        // #1003: am Handy nur lesen
+
+    /** #1003: am Handy laufen Auswahl und Aktualisieren; Vorlage, Duplizieren und Löschen bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'aktualisiere'];
+    }
 
     /** Spec 65: gleiche Sperre wie der Concepter-Editor — beide Reiter sind Concepts (Kaskade) → Typ concept. */
     protected function sperrZiel(): ?array

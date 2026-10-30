@@ -21,6 +21,13 @@ use Platform\FoodAlchemist\Support\FaShell;
 class Detail extends Component
 {
     use ManagesCanvas;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+
+    /** #1003: am Handy nur Phasen-Reiter wechseln (reine Ansicht); Kopf, Standorte, Canvas, Gate, Foodbook, Lizenz am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['phaseSetzen'];
+    }
 
     public int $projektId;
 
@@ -211,7 +218,8 @@ class Detail extends Component
             'gateFehlt' => $svc->gateFehlt($p), 'foodbooks' => $svc->foodbooks($team, (int) $p->id),
             'gateKontakte' => $this->phase === 'paketlogik' && ! $p->strukturFreigegeben() ? CrmKunden::kontakte($team, $this->gateKontaktSuche) : collect(),
             'kontakteVerknuepft' => count(array_filter($rollen, fn ($r) => ! empty($r['meta']['crm_contact_id']))), 'kontakteGesamt' => count($rollen),
-            'darfSchreiben' => app(FaRechte::class)->darf(Auth::user(), $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
+            'handy' => ($handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()),
+            'darfSchreiben' => ! $handy && app(FaRechte::class)->darf(Auth::user(), $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
         ])->layout(FaShell::layout());
     }
 }

@@ -1,5 +1,5 @@
 {{-- Spec 82 §9 · Projekt-Detail (Agentur-Akte im Master-Team): Kopf, Phasen-Reiter, Seitenleiste „Verknüpft“. --}}
-<div class="flex flex-col gap-4" data-fa-projekt="{{ $p->id }}">
+<div class="flex flex-col gap-4 {{ $handy ? 'px-4 py-4' : '' }}" data-fa-projekt="{{ $p->id }}">{{-- #1003: am Handy 16 px Rand --}}
     <nav class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" aria-label="Brotkrumen" data-projekt-brotkrumen>
         <a href="{{ route('foodalchemist.projekte.index') }}" wire:navigate class="hover:underline">Projekte</a>
         <span aria-hidden="true">/</span> <span>{{ $firma?->display_name ?? 'Kunde' }}</span>
@@ -70,7 +70,10 @@
             @endif
 
             @if($phase === 'dna')
+                {{-- #1003: am Handy nur lesen — das Kind-Board hat kein eigenes Rechte-Fieldset --}}
+                @if($handy)<fieldset disabled class="contents" data-fa-lesemodus="1">@endif
                 <livewire:foodalchemist.projekte.kunde-dna-phase :company-id="(int) $p->crm_company_id" :key="'kdna-'.$p->crm_company_id" />
+                @if($handy)</fieldset>@endif
             @endif
 
             <div data-projekt-board>

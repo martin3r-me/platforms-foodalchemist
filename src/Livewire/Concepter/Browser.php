@@ -23,6 +23,14 @@ use Platform\FoodAlchemist\Support\Curate;
 class Browser extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur suchen, filtern, öffnen
+
+    /** #1003: am Handy laufen Reiter, Auswahl, Filter und Blättern; Anlegen, Status und Editor bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehle', 'wechselTab', 'waehleKlasse', 'waehleKategorie', 'waehleRolle', 'waehleStatus', 'waehleFacette', 'filterZuruecksetzen',
+            'aktualisiere', 'entfernt', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     /** Aktiver Reiter: 'concepts' (Menüs/Buffets) | 'pakete' (bepreiste Bündel). */
     #[Url]
@@ -87,7 +95,9 @@ class Browser extends Component
             $this->dispatch('concepter-selected', type: $this->tab, id: $this->selectedId);
         }
         if ($this->editId !== null) {
-            $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $this->editId);
+            if (! \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {   // #1003: am Handy kein Editor
+                $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $this->editId);
+            }
             $this->editId = null;
         }
     }

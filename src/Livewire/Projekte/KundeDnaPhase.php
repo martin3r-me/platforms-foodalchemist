@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Support\CrmKunden;
 class KundeDnaPhase extends Component
 {
     use ManagesCanvas;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen (Kunden-DNA am Computer pflegen)
 
     public int $companyId;
 
