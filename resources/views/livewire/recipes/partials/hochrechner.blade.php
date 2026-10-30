@@ -1,6 +1,6 @@
 {{-- #1003 Hochrechnen am Basisrezept (Rezept-Detail am Computer und Handbuch am Handy): „auf ___ kg" oder „nach Zutat",
      Faktor sichtbar, Zurücksetzen. Rechnung = Support\Hochrechnung (dieselbe wie das Dokument). Ansicht speichert nichts;
-     „Als neuen Ansatz übernehmen" nur am Computer ($uebernehmbar). Parameter: $hoch, $handy, $uebernehmbar. --}}
+     Mengen korrigieren + „Ins Rezept übernehmen" nur am Computer ($uebernehmbar). Parameter: $hoch, $handy, $uebernehmbar. --}}
 @php
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $feld = $handy ? 'h-11 w-28 text-[length:var(--fa-text-base)]' : 'h-8 w-24';
@@ -41,12 +41,18 @@
     @endif
 
     @if($hoch['aktiv'] && $uebernehmbar)
-        @if($hoch['ohne_menge'] === [])
-            <div>
-                <x-fa::button size="sm" variant="secondary" wire:click="hochUebernehmen" wire:confirm="{{ $hoch['bestaetigung'] }}" data-fa-hoch-uebernehmen>Als neuen Ansatz übernehmen</x-fa::button>
-            </div>
+        @if($hoch['aenderungen'] === [])
+            <p class="{{ $leise }}">Stimmt eine Menge in diesem Maßstab nicht, direkt in der Liste ändern — „Ins Rezept übernehmen" rechnet sie auf den Ansatz zurück.</p>
         @else
-            <p class="{{ $leise }}" data-fa-hoch-ohne-menge>Übernehmen geht erst, wenn alle Zeilen eine Menge haben (fehlt bei {{ implode(', ', $hoch['ohne_menge']) }}).</p>
+            <div class="flex flex-wrap items-center gap-2">
+                @if($hoch['ohne_menge'] === [])
+                    <x-fa::button size="sm" variant="secondary" wire:click="hochUebernehmen" wire:confirm="{{ $hoch['bestaetigung'] }}" data-fa-hoch-uebernehmen>Ins Rezept übernehmen</x-fa::button>
+                @endif
+                <button type="button" wire:click="hochAenderungenZuruecknehmen" class="underline underline-offset-2 {{ $leise }}" data-fa-hoch-zuruecknehmen>Änderungen zurücknehmen</button>
+            </div>
+        @endif
+        @if($hoch['ohne_menge'] !== [])
+            <p class="{{ $leise }}" data-fa-hoch-ohne-menge>Übernehmen geht erst, wenn alle Zeilen eine Menge haben (fehlt bei {{ implode(', ', $hoch['ohne_menge']) }}) — hier eintragen oder im Zutaten-Editor.</p>
         @endif
     @endif
 </div>

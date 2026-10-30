@@ -262,7 +262,26 @@
                         @foreach($rezept->ingredients as $z)
                             <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2.5 py-1.5 border-b border-[var(--fa-line)] last:border-b-0 text-[length:var(--fa-text-md)] {{ $z->is_optional ? 'opacity-60' : '' }}">
                                 @php $mengeText = $menge($z->quantity) . ($z->quantity_max !== null ? '–' . $menge($z->quantity_max) : ''); @endphp
-                                @if($hoch !== null && (float) $z->quantity > 0)
+                                @if($hoch !== null && $hoch['aktiv'] && $hochUebernehmbar)
+                                    {{-- #1003: hochgerechnet + bearbeitbar → Menge als Feld (Verhältnis im großen Maßstab korrigieren, Dominique 30.10.) --}}
+                                    @php $geaendert = $hoch['aenderungen'][$z->id] ?? null; @endphp
+                                    <span class="shrink-0 flex flex-col items-end gap-0.5" data-fa-hoch-feld="{{ $z->id }}">
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <input type="text" inputmode="decimal" autocomplete="off" wire:model.live.debounce.400ms="hochNeu.z{{ $z->id }}"
+                                                   aria-label="Menge {{ $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text }}"
+                                                   class="fa-control h-8 w-24 text-right tabular-nums {{ $geaendert !== null ? 'border-[var(--fa-accent)] text-[var(--fa-accent)]' : '' }}" data-fa-hoch-eingabe>
+                                            <span class="min-w-8 text-[var(--fa-ink-3)]">{{ $hoch['felder'][$z->id]['einheit'] }}</span>
+                                        </span>
+                                        @if($hoch['felder'][$z->id]['max'] !== null)
+                                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">bis {{ $hoch['felder'][$z->id]['max'] }}</span>
+                                        @endif
+                                        @if($geaendert !== null)
+                                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)]" data-fa-hoch-geaendert>im Rezept {{ $geaendert }}</span>
+                                        @else
+                                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">statt {{ $mengeText }} {{ $z->unit?->slug }}</span>
+                                        @endif
+                                    </span>
+                                @elseif($hoch !== null && (float) $z->quantity > 0)
                                     {{-- #1003: Menge antippen = „nach Zutat" hochrechnen; bei Faktor die neue Menge, darunter die Rezeptmenge --}}
                                     <button type="button" wire:click="hochNachZutat({{ $z->id }})" title="Danach hochrechnen: davon habe ich …"
                                             class="w-20 shrink-0 text-right tabular-nums hover:underline {{ ($hoch['zutat']?->id ?? null) === $z->id ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink-2)]' }}" data-fa-hoch-menge="{{ $z->id }}">

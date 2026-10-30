@@ -45,10 +45,15 @@ final class Hochrechnung
         return ['faktor' => $ziel / $basis, 'hinweis' => null];
     }
 
-    /** Eingabe „2,5" / „2.5" → 2.5; leer, Unsinn oder negativ → 0. */
+    /** Eingabe „2,5" / „2.5" / „1.000,5" → Zahl; leer, Unsinn oder negativ → 0. */
     public static function zahl(mixed $eingabe): float
     {
-        return max(0.0, (float) str_replace(',', '.', trim((string) $eingabe)));
+        $t = trim((string) $eingabe);
+        if (str_contains($t, ',')) {
+            $t = str_replace(['.', ','], ['', '.'], $t);   // deutsch: Punkt = Tausender
+        }
+
+        return max(0.0, (float) $t);
     }
 
     /** Menge × Faktor. Ohne Faktor unverändert, NULL bleibt NULL — eine fehlende Zahl wird durch Skalieren nicht besser. */
@@ -103,7 +108,7 @@ final class Hochrechnung
     }
 
     /**
-     * Wert zum Speichern („Als neuen Ansatz übernehmen", Kurator 30.10.): g/ml auf ganze (unter 10 eine Stelle,
+     * Wert zum Speichern („Ins Rezept übernehmen", Kurator 30.10.): g/ml auf ganze (unter 10 eine Stelle,
      * damit 0,4 g nicht 0 wird), kg/l auf 3 Stellen. Andere Einheiten (Stück, Bund, EL …) nie still runden —
      * genauer Wert, und ist er nicht ganz, steht die Zeile in „bitte prüfen".
      *
@@ -116,6 +121,41 @@ final class Hochrechnung
             'kg', 'l' => ['wert' => round($wert, 3), 'pruefen' => false],
             default => ['wert' => round($wert, 4), 'pruefen' => abs($wert - round($wert)) > 0.0001],
         };
+    }
+
+    /**
+     * Menge für die Ansicht in der Einheit, die der Koch liest (Dominique 30.10.): kg/l unter 1 als g/ml, sonst wie
+     * gespeichert; gerundet wie beim Speichern (g/ml ganz, unter 10 eine Stelle; kg/l 3 Stellen; Rest 3 Stellen).
+     * „je" = wie viel gespeicherte Einheit eine Anzeige-Einheit ist (750 g bei Zeile in kg: je 0,001) — der Rückweg.
+     *
+     * @return array{wert: float, einheit: string, je: float}
+     */
+    public static function anzeige(float $menge, ?object $unit): array
+    {
+        $slug = (string) ($unit?->slug ?? '');
+        [$wert, $einheit, $je] = match (true) {
+            $slug === 'kg' && $menge < 1 => [$menge * 1000, 'g', 0.001],
+            $slug === 'l' && $menge < 1 => [$menge * 1000, 'ml', 0.001],
+            in_array($slug, ['g', 'ml', 'kg', 'l'], true) => [$menge, $slug, 1.0],
+            default => [$menge, (string) ($unit?->display_de ?? $slug), 1.0],
+        };
+
+        return ['wert' => in_array($einheit, ['g', 'ml'], true) ? round($wert, $wert < 10 ? 1 : 0)
+            : round($wert, 3), 'einheit' => $einheit, 'je' => $je];
+    }
+
+    /** Einheit kurz für Texte: g/kg/ml/l als Kürzel, sonst ausgeschrieben („Stück"). */
+    public static function einheit(?object $unit): string
+    {
+        $slug = (string) ($unit?->slug ?? '');
+
+        return in_array($slug, ['g', 'ml', 'kg', 'l'], true) ? $slug : (string) ($unit?->display_de ?? $slug);
+    }
+
+    /** „1000,5" — Zahl fürs Eingabefeld: ohne Tausenderpunkt (sonst läse zahl() „1.000" als 1). */
+    public static function eingabeText(float $wert): string
+    {
+        return rtrim(rtrim(number_format($wert, 3, ',', ''), '0'), ',');
     }
 
     /** „12,48" — Zahl ohne Einheit, bis 3 Stellen, ohne Null-Schwanz. */
