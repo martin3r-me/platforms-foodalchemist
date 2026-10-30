@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\TauschtRezept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Support\Hochrechnung;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -27,7 +28,8 @@ class DetailPanel extends Component
     /** #1003: am Handy laufen nur Anzeige und Navigation. */
     public function handyLeseMethoden(): array
     {
-        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion'];
+        // Hochrechnen ist reine Ansicht (speichert nichts) — hochUebernehmen schreibt und steht bewusst NICHT hier.
+        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion', 'hochNachZutat', 'hochZuruecksetzen'];
     }
 
     /** Spec 65: gleiche Sperre wie der Basisrezept-Editor (Ziel recipe). */
@@ -42,7 +44,7 @@ class DetailPanel extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen'];
+        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen', 'hochNachZutat', 'hochZuruecksetzen'];
     }
 
     public ?int $recipeId = null;
@@ -84,6 +86,7 @@ class DetailPanel extends Component
         $this->recipeId = $recipeId;
         $this->embedded = $embedded;
         $this->section = $section;
+        $this->hochVorbelegen();
     }
 
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */
@@ -102,6 +105,7 @@ class DetailPanel extends Component
             $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
         }
         $this->recipeId = $id;
+        $this->hochVorbelegen();
         $this->ersatzSuche = '';
         $this->tauschSuche = '';
         $this->fehlerTausch = null;
@@ -118,6 +122,168 @@ class DetailPanel extends Component
     public function nachSpeichern(): void
     {
         // no-op: die Präsenz des Listeners löst das Re-Rendering des Panels aus.
+    }
+
+    // ── #1003 Hochrechnen (Basisrezept): Ansicht über Support\Hochrechnung, dieselbe Rechnung wie das Dokument ──
+
+    /** Ziel in kg (Eingabe, vorbelegt mit dem Ansatz). */
+    public string $hochZielKg = '';
+
+    /** „Nach Zutat": gewählte Zeile und „davon habe ich" in deren Einheit. */
+    public ?int $hochZutatId = null;
+
+    public string $hochHabe = '';
+
+    /** Feld = Ansatz, kein Faktor (beim Rezeptwechsel, Zurücksetzen und nach dem Übernehmen). */
+    private function hochVorbelegen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $rezept = $team !== null && $this->recipeId !== null
+            ? FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId, ['id', 'yield_kg', 'yield_kg_manual'])
+            : null;
+        $ansatz = $rezept !== null ? Hochrechnung::ansatzKg($rezept) : null;
+        $this->hochZielKg = $ansatz !== null ? rtrim(rtrim(number_format($ansatz, 3, ',', ''), '0'), ',') : '';
+        $this->hochZutatId = null;
+        $this->hochHabe = '';
+    }
+
+    /** Eingabe in kg beendet „nach Zutat". */
+    public function updatedHochZielKg(): void
+    {
+        $this->hochZutatId = null;
+        $this->hochHabe = '';
+    }
+
+    public function hochNachZutat(int $zutatId): void
+    {
+        $this->hochVorbelegen();   // Feld zurück auf den Ansatz, bis „davon habe ich" einen Faktor ergibt
+        $this->hochZutatId = $zutatId;
+    }
+
+    /** „Davon habe ich" → das kg-Feld zeigt die Menge, die es ergibt (sonst stünde dort ein alter Wert). */
+    public function updatedHochHabe(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $rezept = $team !== null && $this->recipeId !== null ? app(RecipeService::class)->detail($team, $this->recipeId) : null;
+        $ziel = $rezept !== null ? $this->hochrechnung($rezept)['ziel_kg'] : null;
+        if ($ziel !== null) {
+            $this->hochZielKg = rtrim(rtrim(number_format($ziel, 3, ',', ''), '0'), ',');
+        }
+    }
+
+    public function hochZuruecksetzen(): void
+    {
+        $this->hochVorbelegen();
+    }
+
+    /**
+     * Faktor und neue Mengen für die Ansicht. aktiv nur bei einem Faktor ≠ 1 — sonst zeigt die Liste die Rezeptmengen.
+     *
+     * @return array{aktiv: bool, faktor: ?float, faktor_text: ?string, hinweis: ?string, ansatz_kg: ?float, ziel_kg: ?float, zutat: mixed, mengen: array<int, string>, pruefen: array<int, string>}
+     */
+    private function hochrechnung(FoodAlchemistRecipe $rezept): array
+    {
+        $ansatz = Hochrechnung::ansatzKg($rezept);
+        $zutat = $this->hochZutatId !== null ? $rezept->ingredients->firstWhere('id', $this->hochZutatId) : null;
+        $r = $zutat !== null
+            ? Hochrechnung::faktor(Hochrechnung::zahl($this->hochHabe), $zutat->quantity !== null && (float) $zutat->quantity > 0 ? (float) $zutat->quantity : null, Hochrechnung::OHNE_ZUTATMENGE)
+            : Hochrechnung::faktor(Hochrechnung::zahl($this->hochZielKg), $ansatz);
+        $f = $r['faktor'];
+        $aktiv = $f !== null && abs($f - 1) >= 0.0005;
+
+        $mengen = [];
+        $pruefen = [];
+        if ($aktiv) {
+            foreach ($rezept->ingredients as $z) {
+                $neu = Hochrechnung::mengeKurz($z->quantity, $z->unit, $f);
+                if ($neu !== null && $z->quantity_max !== null) {
+                    $neu .= ' – ' . Hochrechnung::mengeKurz($z->quantity_max, $z->unit, $f);
+                }
+                $mengen[$z->id] = $neu;
+                if ($z->quantity !== null && Hochrechnung::speicherWert((float) $z->quantity * $f, $z->unit)['pruefen']) {
+                    $pruefen[$z->id] = ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text) . ' '
+                        . Hochrechnung::zahlText((float) $z->quantity) . ' → ' . Hochrechnung::zahlText(round((float) $z->quantity * $f, 4))
+                        . ' ' . ($z->unit?->display_de ?? $z->unit?->slug);
+                }
+            }
+        }
+
+        // syncIngredients verlangt je Zeile eine Menge > 0 (wie der Zutaten-Editor) → solche Rezepte erst im Editor ergänzen
+        $ohneMenge = $rezept->ingredients->filter(fn ($z) => $z->quantity === null || (float) $z->quantity <= 0)
+            ->map(fn ($z) => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text)->values()->all();
+        $zielKg = $aktiv && $ansatz !== null ? round($ansatz * $f, 3) : null;
+
+        return [
+            'aktiv' => $aktiv,
+            'faktor' => $aktiv ? $f : null,
+            'ohne_menge' => $ohneMenge,
+            'bestaetigung' => $aktiv ? 'Alle Zutatmengen ' . Hochrechnung::faktorText($f)
+                . ($zielKg !== null ? ' und Ansatz ' . Hochrechnung::zahlText($ansatz) . ' → ' . Hochrechnung::zahlText($zielKg) . ' kg' : '') . ' speichern?'
+                . ($pruefen !== [] ? "\n\nBitte prüfen (nicht gerundet):\n– " . implode("\n– ", $pruefen) : '') : null,
+            'faktor_text' => $aktiv ? Hochrechnung::faktorText($f) : null,
+            'hinweis' => $r['hinweis'],
+            'ansatz_kg' => $ansatz,
+            'ziel_kg' => $zielKg,
+            'zutat' => $zutat,
+            'mengen' => $mengen,
+            'pruefen' => $pruefen,
+        ];
+    }
+
+    /**
+     * „Als neuen Ansatz übernehmen" (nur am Computer, Kurator 30.10.): Zutatmengen × Faktor und — falls gepflegt —
+     * die Ausbeute × Faktor speichern. Kein eigener Speicherweg: Zutaten über RecipeService::syncIngredients wie der
+     * Zutaten-Editor (D1-Besitzer-Prüfung, Recompute inkl. Eltern), Ausbeute über RecipeService::update wie der
+     * Rezept-Editor. Unterrezept-Zeilen ändern nur ihre Menge. Am Handy gesperrt (nicht in handyLeseMethoden),
+     * mit Bearbeitungssperre nur nach „Bearbeiten" (nicht in sperrFreiExtra).
+     */
+    public function hochUebernehmen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $rezept = $team !== null && $this->recipeId !== null ? app(RecipeService::class)->detail($team, $this->recipeId) : null;
+        if ($rezept === null || $rezept->is_sales_recipe) {
+            return;
+        }
+        $hoch = $this->hochrechnung($rezept);
+        $f = $hoch['faktor'];
+        if ($f === null || $f <= 0 || $hoch['ohne_menge'] !== []) {
+            $this->dispatch('fa-saved', message: $f === null ? 'Kein Faktor — erst eine Zielmenge eingeben.' : 'Zeilen ohne Menge — bitte erst im Zutaten-Editor ergänzen.', type: 'error');
+
+            return;
+        }
+
+        $zeilen = $rezept->ingredients->map(function ($z) use ($f) {
+            $wert = fn ($m) => $m === null ? null : Hochrechnung::speicherWert((float) $m * $f, $z->unit)['wert'];
+
+            return [
+                'id' => $z->id, 'gp_id' => $z->gp_id, 'referenced_recipe_id' => $z->referenced_recipe_id,
+                'raw_text' => $z->raw_text, 'display_name' => $z->display_name,
+                'quantity' => $wert($z->quantity), 'quantity_max' => $wert($z->quantity_max),
+                'unit_vocab_id' => $z->unit_vocab_id, 'cooking_loss_pct' => $z->cooking_loss_pct,
+                'cooking_loss_source' => $z->cooking_loss_source, 'trimming_loss_pct' => $z->trimming_loss_pct,
+                'is_optional' => $z->is_optional, 'note' => $z->note, 'role' => $z->role, 'role_source' => $z->role_source,
+                'is_value_relevant' => $z->is_value_relevant,
+                'auto_ground' => false,   // nur Mengen ändern — offene Zeilen nicht nebenbei neu zuordnen
+            ];
+        })->all();
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($team, $rezept, $zeilen, $f) {
+                app(RecipeService::class)->syncIngredients($team, $rezept->id, $zeilen);
+                if ($rezept->yield_kg_manual !== null) {
+                    app(RecipeService::class)->update($team, $rezept->id, ['yield_kg_manual' => round((float) $rezept->yield_kg_manual * $f, 3)]);
+                }
+            });
+        } catch (\RuntimeException $e) {
+            $this->dispatch('fa-saved', message: $e->getMessage(), type: 'error');
+
+            return;
+        }
+
+        $this->hochVorbelegen();   // Feld = neuer Ansatz, kein alter Faktor
+        $this->dispatch('recipe-gespeichert');
+        $this->dispatch('kosten-aktualisiert', recipe_id: $rezept->id, ids: app(RecipeRecomputeService::class)->betroffeneRezepte($rezept->id));
+        $this->dispatch('fa-saved', message: 'Neuer Ansatz gespeichert');
     }
 
     // ── Ersatz-Logik (make-or-buy): dieses Rezept ↔ Fertig-GP / Alternativ-Rezept ──
@@ -241,6 +407,10 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            // #1003 Hochrechnen; „Übernehmen" nur fürs Besitzer-Team außerhalb des Lesemodus (wie der Zutaten-Editor)
+            'hoch' => $rezept !== null && ! $rezept->is_sales_recipe ? $this->hochrechnung($rezept) : null,
+            'hochUebernehmbar' => $rezept !== null && $team !== null && (int) $rezept->team_id === (int) $team->id
+                && ! in_array($this->sperrZustand()['modus'] ?? 'aus', ['lesen', 'fremd'], true),
             'rezept' => $rezept,
             // Spec 82 Stufe 3b (E4): Kosten aus Sicht des aktuellen Teams (Besitzer: Rezept-Spalten; sonst Team-Cache)
             'kosten' => $rezept !== null && $team !== null ? app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($rezept, $team) : null,
@@ -304,6 +474,7 @@ class DetailPanel extends Component
             'rezept' => $rezept,
             'karte' => app(\Platform\FoodAlchemist\Services\HandyDetailService::class)->karte($team, $rezept),
             'formen' => collect(),
+            'hoch' => $rezept->is_sales_recipe ? null : $this->hochrechnung($rezept),   // #1003 Hochrechnen (Ansicht)
             'kennzahlen' => [
                 ['label' => 'Ausbeute', 'value' => $ausbeute !== null ? rtrim(rtrim(number_format((float) $ausbeute, 2, ',', '.'), '0'), ',') . ' kg' : 'fehlt', 'fehlt' => $ausbeute === null],
                 ['label' => 'Arbeitszeit', 'value' => $rezept->work_time_min ? $rezept->work_time_min . ' min' : 'fehlt', 'fehlt' => ! $rezept->work_time_min],

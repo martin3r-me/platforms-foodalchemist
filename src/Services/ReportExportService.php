@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\DarreichungService;
+use Platform\FoodAlchemist\Support\Hochrechnung;
 
 /**
  * Zentrale Datenaufbereitung für druckbare/PDF-fähige Reports.
@@ -192,7 +193,9 @@ class ReportExportService
             'darreichungen' => $darreichungen, 'darreichung' => null, 'hinweis' => null,
         ];
 
-        $yield = $recipe->yield_kg !== null ? (float) $recipe->yield_kg : 0.0;
+        // A-3 (Kurator 30.10.): Kalkulations-Ausbeute, gepflegte vor errechneter — vorher teilte das Dokument
+        // durch die errechnete yield_kg und rechnete z. B. Reis (nimmt Wasser auf) falsch hoch. Hochrechnung = EINE Rechnung mit der Ansicht.
+        $yield = Hochrechnung::ansatzKg($recipe) ?? 0.0;
         $zielKg = (float) ($optionen['ziel_kg'] ?? 0);
         $zielMenge = (int) ($optionen['ziel_menge'] ?? 0);
 
@@ -200,7 +203,7 @@ class ReportExportService
             return $aus;
         }
         if ($yield <= 0) {
-            return ['hinweis' => 'Keine Ausbeute hinterlegt — ohne Ansatz-Menge lässt sich der Bedarf nicht hochrechnen.'] + $aus;
+            return ['hinweis' => Hochrechnung::OHNE_AUSBEUTE] + $aus;
         }
 
         if ($zielMenge > 0 && $darreichungen !== []) {
@@ -222,7 +225,7 @@ class ReportExportService
 
         return array_merge($aus, [
             'aktiv' => true,
-            'faktor' => $zielKg / $yield,
+            'faktor' => Hochrechnung::faktor($zielKg, $yield)['faktor'],
             'ziel_kg' => round($zielKg, 3),
             'ansatz_kg' => round($yield, 3),
         ]);
@@ -1002,11 +1005,8 @@ class ReportExportService
     private function skaliere(mixed $wert, array $optionen): mixed
     {
         $faktor = $optionen['faktor'] ?? null;
-        if ($faktor === null || $wert === null) {
-            return $wert;
-        }
 
-        return round((float) $wert * (float) $faktor, 4);
+        return Hochrechnung::skaliere($wert, $faktor === null ? null : (float) $faktor);
     }
 
     /**
@@ -1153,12 +1153,7 @@ class ReportExportService
 
     private function mengeText($quantity, $unit): ?string
     {
-        if ($quantity === null || $quantity === '') {
-            return null;
-        }
-
-        return rtrim(rtrim(number_format((float) $quantity, 3, ',', '.'), '0'), ',')
-            . ($unit ? ' ' . ($unit->display_de ?? $unit->slug) : '');
+        return Hochrechnung::mengeText($quantity, $unit);
     }
 
     /** @return array<string, mixed> */

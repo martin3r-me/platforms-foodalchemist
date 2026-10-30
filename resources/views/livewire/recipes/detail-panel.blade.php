@@ -236,22 +236,46 @@
             </div>
         @endif
 
+        </fieldset>
+
         <div class="flex flex-col">
+            <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
             {{-- 4 · Deklaration: Allergene und Diät --}}
             <x-fa::section variant="plain" title="Allergene und Diät" icon="heroicon-o-shield-exclamation"
                 :meta="'Sicherheit ' . \Platform\FoodAlchemist\Support\Labels::konfidenz($rezept->allergens_confidence)" data-allergen-konfidenz>
                 @include('foodalchemist::livewire.recipes.partials.deklaration')
             </x-fa::section>
 
+            {{-- #1003: Zutaten außerhalb des gesperrten Fieldsets — das Hochrechnen-Feld ist Ansicht und bleibt im Lesemodus bedienbar
+                 (im Abschnitt sonst nur Links). „Übernehmen" prüft die Sperre selbst (hochUebernehmbar + Server). --}}
+            </fieldset>
+
             {{-- 5 · Inhalt: Zutaten (Menge · Grundprodukt oder Unterrezept · EK der Zeile) --}}
             <x-fa::section variant="plain" title="Zutaten" icon="heroicon-o-list-bullet" :meta="$rezept->ingredients->count()" data-zutaten>
+                @if($hoch !== null && $rezept->ingredients->isNotEmpty())
+                    @include('foodalchemist::livewire.recipes.partials.hochrechner', ['hoch' => $hoch, 'handy' => false, 'uebernehmbar' => $hochUebernehmbar])
+                @endif
                 @if($rezept->ingredients->isEmpty())
                     <x-fa::empty compact icon="heroicon-o-list-bullet" title="Noch keine Zutaten">Im Editor die Zutaten erfassen, dann rechnet der Food.Alchemist Kosten und Allergene.</x-fa::empty>
                 @else
                     <div class="flex flex-col">
                         @foreach($rezept->ingredients as $z)
                             <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2.5 py-1.5 border-b border-[var(--fa-line)] last:border-b-0 text-[length:var(--fa-text-md)] {{ $z->is_optional ? 'opacity-60' : '' }}">
-                                <span class="w-20 shrink-0 text-right tabular-nums text-[var(--fa-ink-2)]">{{ $menge($z->quantity) }}{{ $z->quantity_max !== null ? '–' . $menge($z->quantity_max) : '' }} <span class="text-[var(--fa-ink-3)]">{{ $z->unit?->slug }}</span></span>
+                                @php $mengeText = $menge($z->quantity) . ($z->quantity_max !== null ? '–' . $menge($z->quantity_max) : ''); @endphp
+                                @if($hoch !== null && (float) $z->quantity > 0)
+                                    {{-- #1003: Menge antippen = „nach Zutat" hochrechnen; bei Faktor die neue Menge, darunter die Rezeptmenge --}}
+                                    <button type="button" wire:click="hochNachZutat({{ $z->id }})" title="Danach hochrechnen: davon habe ich …"
+                                            class="w-20 shrink-0 text-right tabular-nums hover:underline {{ ($hoch['zutat']?->id ?? null) === $z->id ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink-2)]' }}" data-fa-hoch-menge="{{ $z->id }}">
+                                        @if(isset($hoch['mengen'][$z->id]))
+                                            <span class="block font-medium text-[var(--fa-accent)]" data-fa-hoch-neu>{{ $hoch['mengen'][$z->id] }}</span>
+                                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">statt {{ $mengeText }} {{ $z->unit?->slug }}</span>
+                                        @else
+                                            {{ $mengeText }} <span class="text-[var(--fa-ink-3)]">{{ $z->unit?->slug }}</span>
+                                        @endif
+                                    </button>
+                                @else
+                                    <span class="w-20 shrink-0 text-right tabular-nums text-[var(--fa-ink-2)]">{{ $mengeText }} <span class="text-[var(--fa-ink-3)]">{{ $z->unit?->slug }}</span></span>
+                                @endif
                                 <span class="min-w-0 flex-1">
                                     @if($z->gp !== null)
                                         <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-[var(--fa-accent)] hover:underline" title="Grundprodukt öffnen">{{ $z->gp->name }}</a>
@@ -274,6 +298,8 @@
                     </div>
                 @endif
             </x-fa::section>
+
+            <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
             {{-- Spec 27: Endprodukt-Bild — „so soll es fertig aussehen" --}}
             @if($endprodukt !== null)
@@ -483,7 +509,7 @@
                     @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $rezept->name, 'kompakt' => true])
                 </x-fa::section>
             @endif
+            </fieldset>
         </div>
-        </fieldset>
     @endif
 </div>

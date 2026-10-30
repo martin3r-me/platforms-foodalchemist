@@ -49,6 +49,7 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 |---|---|---|---|---|---|
 | Rezepte (Basisrezepte) | `/rezepte` | Recipes\Browser | Lesen: Karten-Liste; Detail im Handbuch-Stil (Ausbeute · Arbeitszeit · EK je kg, Allergene, Reiter Zutaten · Zubereitung · Anrichten · Regeneration) | Recipes\DetailPanel → livewire/handy/rezept-handbuch | 2 ✓ |
 | Gerichte (Verkauf) | `/gerichte` | Verkauf\Browser | Lesen: Karten-Liste; Detail im Handbuch-Stil (Portion · VK brutto · Wareneinsatz, Allergene, Reiter wie oben + Formen mit VK) | Verkauf\DetailPanel → livewire/handy/rezept-handbuch | 2 ✓ |
+| Hochrechnen (Basisrezept) | im Rezepte-Detail, Computer und Handy | Recipes\DetailPanel | Ansicht: „Hochrechnen auf ___ kg“ (vorbelegt mit dem Ansatz = gepflegte vor errechneter Ausbeute) oder Menge einer Zutat antippen „davon habe ich …“; Faktor sichtbar, Zurücksetzen; speichert nichts, am Handy erlaubt. Rechnung = Support\Hochrechnung, dieselbe wie im Dokument „Bedarf hochrechnen“. Nur am Computer: „Als neuen Ansatz übernehmen“ (Speicherweg Zutaten-Editor + Rezept-Editor, Bestätigung mit Prüfliste für Stück-Mengen). Gerichte: vorerst nicht | Recipes\DetailPanel → partials/hochrechner | Hoch ✓ |
 | Grundprodukte | `/gps` | Gps\Browser | Lesen | Gps\DetailPanel | 3 |
 | Lieferanten + Artikel | `/lieferanten` | Suppliers\Index | Lesen | Suppliers\SupplierDetail | 3 |
 | Concepter | `/concepter` | Concepter\Browser | Lesen | Concepter\DetailPanel | 4 |
