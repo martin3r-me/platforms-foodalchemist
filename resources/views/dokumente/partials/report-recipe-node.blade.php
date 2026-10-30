@@ -35,24 +35,8 @@
         return $html === '' ? '' : '<div class="grid meta">' . $html . '</div>';
     };
 
-    /* Kompakte Mengen im Druck (Dominique 2026-10-05): „0,015 Kilogramm" → „15 g", „0,25 Liter" → „250 ml".
-       Greift NUR bei eindeutig deutsch formatierten Zahlen (1.234,5) mit genau dieser Einheit —
-       alles andere (Stück, Bund, „1.5 Kilogramm", Freitext) bleibt unverändert. Reine Anzeige. */
-    $kurzMenge = function ($m) {
-        $m = (string) $m;
-        if (! preg_match('/^\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(Kilogramm|Gramm|Liter|Milliliter)\s*$/u', $m, $t)) {
-            return $m;
-        }
-        $wert = (float) str_replace(['.', ','], ['', '.'], $t[1]);
-        $fmt = fn ($v) => rtrim(rtrim(number_format($v, 3, ',', '.'), '0'), ',');
-
-        return match ($t[2]) {
-            'Kilogramm' => $wert < 1 ? $fmt($wert * 1000) . ' g' : $fmt($wert) . ' kg',
-            'Liter' => $wert < 1 ? $fmt($wert * 1000) . ' ml' : $fmt($wert) . ' l',
-            'Gramm' => $fmt($wert) . ' g',
-            'Milliliter' => $fmt($wert) . ' ml',
-        };
-    };
+    /* Kompakte Mengen im Druck („0,015 Kilogramm" → „15 g"): eine Regel mit der Ansicht, Support\Hochrechnung::kurz. */
+    $kurzMenge = fn ($m) => \Platform\FoodAlchemist\Support\Hochrechnung::kurz($m);
     $preiseAn = ($opt['preise'] ?? false) && ($opt['ek'] ?? true);
     $ekSumme = collect($node['ingredients'] ?? [])->sum(fn ($z) => (float) ($z['ek_anteil_eur'] ?? 0));
     $ekLuecken = collect($node['ingredients'] ?? [])->filter(fn ($z) => ($z['ek_anteil_eur'] ?? null) === null)->count();

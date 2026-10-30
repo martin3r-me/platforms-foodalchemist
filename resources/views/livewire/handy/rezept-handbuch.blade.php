@@ -68,6 +68,9 @@
         @if($rezept->ingredients->isEmpty())
             <p class="{{ $leise }}">Keine Zutaten hinterlegt.</p>
         @else
+            @if(($hoch ?? null) !== null)
+                @include('foodalchemist::livewire.recipes.partials.hochrechner', ['hoch' => $hoch, 'handy' => true, 'uebernehmbar' => false])
+            @endif
             <ul class="flex flex-col">
                 @foreach($rezept->ingredients as $z)
                     <li wire:key="hz-{{ $z->id }}" class="flex items-baseline gap-3 py-2.5 border-b border-[var(--fa-line)] last:border-b-0 text-[length:var(--fa-text-md)] {{ $z->is_optional ? 'opacity-60' : '' }}">
@@ -84,7 +87,20 @@
                             @endif
                             @if($z->is_optional)<span class="{{ $leise }}"> (optional)</span>@endif
                         </span>
-                        <span class="shrink-0 text-right tabular-nums text-[var(--fa-ink-2)]">{{ $menge($z->quantity) }}{{ $z->quantity_max !== null ? '–' . $menge($z->quantity_max) : '' }} {{ $z->unit?->slug }}</span>
+                        @php $mengeText = $menge($z->quantity) . ($z->quantity_max !== null ? '–' . $menge($z->quantity_max) : '') . ' ' . $z->unit?->slug; @endphp
+                        @if(($hoch ?? null) !== null && (float) $z->quantity > 0)
+                            {{-- Menge antippen = „nach Zutat" hochrechnen; bei Faktor die neue Menge, darunter die Rezeptmenge --}}
+                            <button type="button" wire:click="hochNachZutat({{ $z->id }})" class="shrink-0 min-h-11 -my-2 pl-2 text-right tabular-nums {{ ($hoch['zutat']?->id ?? null) === $z->id ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink-2)]' }}" data-fa-hoch-menge="{{ $z->id }}">
+                                @if(isset($hoch['mengen'][$z->id]))
+                                    <span class="block font-semibold text-[var(--fa-accent)]" data-fa-hoch-neu>{{ $hoch['mengen'][$z->id] }}</span>
+                                    <span class="block {{ $leise }}">statt {{ $mengeText }}</span>
+                                @else
+                                    <span class="underline decoration-dotted underline-offset-4">{{ $mengeText }}</span>
+                                @endif
+                            </button>
+                        @else
+                            <span class="shrink-0 text-right tabular-nums text-[var(--fa-ink-2)]">{{ $mengeText }}</span>
+                        @endif
                     </li>
                 @endforeach
             </ul>

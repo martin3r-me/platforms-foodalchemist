@@ -23,11 +23,13 @@ class DetailPanel extends Component
     use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
     use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatHochrechner;   // #1003: Hochrechnen am Basisrezept
 
     /** #1003: am Handy laufen nur Anzeige und Navigation. */
     public function handyLeseMethoden(): array
     {
-        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion'];
+        // Hochrechnen ist reine Ansicht (speichert nichts) — hochUebernehmen schreibt und steht bewusst NICHT hier.
+        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion', 'hochNachZutat', 'hochZuruecksetzen'];
     }
 
     /** Spec 65: gleiche Sperre wie der Basisrezept-Editor (Ziel recipe). */
@@ -42,7 +44,7 @@ class DetailPanel extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen'];
+        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen', 'hochNachZutat', 'hochZuruecksetzen', 'hochAenderungenZuruecknehmen'];
     }
 
     public ?int $recipeId = null;
@@ -84,6 +86,7 @@ class DetailPanel extends Component
         $this->recipeId = $recipeId;
         $this->embedded = $embedded;
         $this->section = $section;
+        $this->hochVorbelegen();
     }
 
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */
@@ -102,6 +105,7 @@ class DetailPanel extends Component
             $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
         }
         $this->recipeId = $id;
+        $this->hochVorbelegen();
         $this->ersatzSuche = '';
         $this->tauschSuche = '';
         $this->fehlerTausch = null;
@@ -241,6 +245,10 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            // #1003 Hochrechnen; „Übernehmen" nur fürs Besitzer-Team außerhalb des Lesemodus (wie der Zutaten-Editor)
+            'hoch' => $rezept !== null && ! $rezept->is_sales_recipe ? $this->hochrechnung($rezept) : null,
+            'hochUebernehmbar' => $rezept !== null && $team !== null && (int) $rezept->team_id === (int) $team->id
+                && ! in_array($this->sperrZustand()['modus'] ?? 'aus', ['lesen', 'fremd'], true),
             'rezept' => $rezept,
             // Spec 82 Stufe 3b (E4): Kosten aus Sicht des aktuellen Teams (Besitzer: Rezept-Spalten; sonst Team-Cache)
             'kosten' => $rezept !== null && $team !== null ? app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($rezept, $team) : null,
@@ -304,6 +312,7 @@ class DetailPanel extends Component
             'rezept' => $rezept,
             'karte' => app(\Platform\FoodAlchemist\Services\HandyDetailService::class)->karte($team, $rezept),
             'formen' => collect(),
+            'hoch' => $rezept->is_sales_recipe ? null : $this->hochrechnung($rezept),   // #1003 Hochrechnen (Ansicht)
             'kennzahlen' => [
                 ['label' => 'Ausbeute', 'value' => $ausbeute !== null ? rtrim(rtrim(number_format((float) $ausbeute, 2, ',', '.'), '0'), ',') . ' kg' : 'fehlt', 'fehlt' => $ausbeute === null],
                 ['label' => 'Arbeitszeit', 'value' => $rezept->work_time_min ? $rezept->work_time_min . ' min' : 'fehlt', 'fehlt' => ! $rezept->work_time_min],
