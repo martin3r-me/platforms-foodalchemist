@@ -3,7 +3,7 @@
 namespace Platform\FoodAlchemist\Tools\Concerns;
 
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
+use Platform\FoodAlchemist\Support\SichererAbruf;
 use Platform\FoodAlchemist\Support\TrendVokabular;
 
 /**
@@ -40,7 +40,8 @@ trait DateiAusArgumenten
             if (! preg_match('~^https?://~i', $url)) {
                 throw new \RuntimeException('datei.url muss mit http:// oder https:// beginnen.');
             }
-            $antwort = Http::timeout(30)->get($url);
+            // SSRF-Schutz: kein Abruf ins interne Netz, Weiterleitungen je Stufe geprüft, Größengrenze schon beim Laden
+            $antwort = app(SichererAbruf::class)->laden($url, TrendVokabular::DATEI_MAX_KB * 1024, 30);
             if (! $antwort->successful()) {
                 throw new \RuntimeException('Datei konnte nicht geladen werden (HTTP '.$antwort->status().').');
             }
