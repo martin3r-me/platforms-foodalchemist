@@ -23,6 +23,13 @@ use Platform\FoodAlchemist\Support\Curate;
 class Browser extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur suchen, filtern, öffnen
+
+    /** #1003: am Handy laufen Auswahl, Filter und Blättern; Anlegen, Status und Sammel-Aktionen bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehleRezept', 'waehleHauptgruppe', 'waehleKlasse', 'waehleGeschmack', 'aktualisiere', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     #[Url(as: 'rezept')]
     public ?int $recipeId = null;

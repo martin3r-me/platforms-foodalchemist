@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Support;
 
 use Illuminate\Support\HtmlString;
+use Livewire\Features\SupportEvents\SupportEvents;
 use Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;
 
 /**
@@ -12,7 +13,9 @@ use Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;
  * (foodalchemist-pass.css) blendet sie in [data-fa-handy-lesen] am Handy aus, außer sie steht in
  * config('foodalchemist.handy.aendern_frei') — dann trägt sie data-fa-aendern-frei und bleibt sichtbar.
  *
- * Server: Livewire-Anfragen vom Handy tragen die Kopfzeile X-FA-Handy: 1 (gesetzt in detail-sidebar).
+ * Server: Livewire-Anfragen vom Handy tragen die Kopfzeile X-FA-Handy: 1 (gesetzt in detail-sidebar); jede Anfrage
+ * zusätzlich das Cookie fa_handy (gesetzt von JS_MODUS, dieselbe Entscheidung). So kann auch der erste Seitenaufbau
+ * (Direktlink ?rezept=…) die Handbuch-Ansicht statt des Desktop-Details rendern.
  * Komponenten mit Concerns\HandyLesebereich nehmen dann nur ihre Lese-Methoden und freigeschaltete Methoden an
  * (Schlüssel = Methodenname oder 'ki.<methode>', dieselbe Liste wie oben). Schutz vor versehentlichem Ändern,
  * keine Rechteprüfung: die Kopfzeile kommt vom Gerät.
@@ -22,6 +25,9 @@ use Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;
 final class HandyLesemodus
 {
     public const KOPFZEILE = 'X-FA-Handy';
+
+    /** Cookie mit derselben Entscheidung wie <html data-fa-handy> ('1' | '0'), unverschlüsselt (FoodAlchemistServiceProvider). */
+    public const COOKIE = 'fa_handy';
 
     public const MELDUNG = 'Am Handy kannst du hier nur lesen. Bitte am Computer bearbeiten.';
 
@@ -38,6 +44,7 @@ final class HandyLesemodus
         ." a = localStorage.getItem('fa-ansicht'); } catch (e) {}"
         ." const h = a === 'handy' || (a !== 'desktop' && window.matchMedia('(hover: none) and (pointer: coarse) and (max-width: 47.99rem)').matches);"
         ." document.documentElement.toggleAttribute('data-fa-handy', h);"
+        ." document.cookie = 'fa_handy=' + (h ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax';"
         ." return h; })";
 
     public static function frei(string $schluessel): bool
@@ -55,16 +62,26 @@ final class HandyLesemodus
 
     public static function anfrageVomHandy(): bool
     {
-        return request()->header(self::KOPFZEILE) === '1';
+        return request()->header(self::KOPFZEILE) === '1' || request()->cookie(self::COOKIE) === '1';
     }
 
-    /** Livewire-Aufruf am Handy abweisen? Interne Aufrufe ($refresh, $set …) laufen immer. */
-    public static function abgewiesen(object $component, string $methode): bool
+    /**
+     * Livewire-Aufruf am Handy abweisen? Interne Aufrufe ($refresh, $set …) laufen immer. Ein Ereignis
+     * (`__dispatch`, z. B. recipe-selected aus der Liste) zählt als Aufruf seiner Listener-Methode.
+     */
+    public static function abgewiesen(object $component, string $methode, array $params = []): bool
     {
         if (! in_array(HandyLesebereich::class, class_uses_recursive($component), true)
             || str_starts_with($methode, '$')
             || ! self::anfrageVomHandy()) {
             return false;
+        }
+        if ($methode === '__dispatch') {
+            $ereignis = (string) ($params[0] ?? '');
+            if (! in_array($ereignis, SupportEvents::getListenerEventNames($component), true)) {
+                return false;   // unbekanntes Ereignis: Livewire meldet den Fehler selbst
+            }
+            $methode = (string) SupportEvents::getListenerMethodName($component, $ereignis);
         }
 
         return ! in_array($methode, $component->handyLeseMethoden(), true)

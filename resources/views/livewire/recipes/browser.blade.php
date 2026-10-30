@@ -104,6 +104,16 @@
     <livewire:foodalchemist.recipes.template-instantiate-modal key="recipes-browser--recipes.template-instantiate-modal" />
     <livewire:foodalchemist.recipes.pairing-netz-modal key="recipes-browser--recipes.pairing-netz-modal" />
 
+    {{-- #1003: am Handy Karten statt Tabelle (Server weiß es über HandyLesemodus, das Gerät setzt das Cookie) --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Basisrezepte', 'eintraege' => $rezepte, 'aktivId' => $recipeId, 'wahl' => 'waehleRezept', 'scope' => 'activity_recipes',
+            'suchHinweis' => 'Rezept suchen',
+            'unterzeile' => fn ($r) => implode(' · ', array_filter([$r->category?->label, $r->status->label()])),
+            'wert' => fn ($r) => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
+            'leer' => 'Andere Suche oder Filter zurücksetzen.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Basisrezepte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">
             <x-slot:actions>
@@ -268,4 +278,5 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $rezepte->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    @endif
 </x-ui-page>
