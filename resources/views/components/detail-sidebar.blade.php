@@ -66,8 +66,23 @@
             new MutationObserver(() => {
                 this.auswahl = this.$el.dataset.faAuswahl ?? '-';
                 this.handyOffen = this.gewaehlt;
+                this.merke();
             }).observe(this.$el, { attributes: true, attributeFilter: ['data-fa-auswahl'] });
             if (@js((bool) $aufziehen) && ! this.handy && ! this.open) this.setOpen(true);
+            this.merke();
+        },
+        // Handy: geöffnete Detailseite als „Zuletzt angesehen“ merken (Handy-Suche, pro Gerät, localStorage fa-zuletzt)
+        merke() {
+            if (! this.handy || ! this.gewaehlt) return;
+            setTimeout(() => {
+                const titel = this.$el.querySelector('[data-fa-detail-kopf] h2')?.textContent?.trim();
+                if (! titel) return;
+                const url = location.pathname + location.search;
+                let liste = [];
+                try { liste = JSON.parse(localStorage.getItem('fa-zuletzt') || '[]'); } catch (e) {}
+                liste = [{ titel, url }].concat(liste.filter((e) => e.url !== url)).slice(0, 10);
+                try { localStorage.setItem('fa-zuletzt', JSON.stringify(liste)); } catch (e) {}
+            }, 800);
         },
         get gewaehlt() { return this.auswahl !== '-' && this.auswahl !== ''; },
         get handyLeiste() { return this.auswahl !== ''; },

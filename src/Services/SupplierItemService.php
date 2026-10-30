@@ -49,6 +49,24 @@ class SupplierItemService
     /** P-7: Suche über ALLE Lieferanten (eigene „Route" via ?q=, V-17). */
     public function searchGlobal(Team $team, string $q, array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
+        return $this->globalQuery($team, $q, $filters)
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
+    /**
+     * #1003 Handy-Suche: dieselbe Suche wie searchGlobal, nur die ersten Treffer ohne Gesamtzahl — die Zählung
+     * kostet bei ~10.000 Artikeln so viel wie die Suche selbst (gemessen ~0,5 s je Abfrage).
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, FoodAlchemistSupplierItem>
+     */
+    public function searchGlobalErste(Team $team, string $q, array $filters = [], int $limit = 5): \Illuminate\Database\Eloquent\Collection
+    {
+        return $this->globalQuery($team, $q, $filters)->limit($limit)->get();
+    }
+
+    private function globalQuery(Team $team, string $q, array $filters): Builder
+    {
         $query = $this->baseQuery($team, $filters)->with('supplier:id,name');
         // Multi-Wort: jedes Token muss treffen (Bezeichnung ODER Artikelnummer-Präfix)
         foreach (\Platform\FoodAlchemist\Support\Suche::tokens($q) as $token) {
@@ -57,10 +75,27 @@ class SupplierItemService
                 ->orWhere('article_number', 'like', $token . '%'));
         }
 
-        return $query
+        return $query->orderBy('designation');
+    }
+
+    /**
+     * #1003 Handy-Suche: Artikel per EAN (Verpackung oder Bestelleinheit), exakt — gleiche Sicht und Form wie
+     * searchGlobal (baseQuery). Nur 8–14 Ziffern, sonst leer.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, FoodAlchemistSupplierItem>
+     */
+    public function byEan(Team $team, string $ean, array $filters = [], int $limit = 10): \Illuminate\Database\Eloquent\Collection
+    {
+        $ean = (string) preg_replace('/\s+/', '', $ean);
+        if (! preg_match('/^\d{8,14}$/', $ean)) {
+            return FoodAlchemistSupplierItem::query()->whereRaw('1 = 0')->get();
+        }
+
+        return $this->baseQuery($team, $filters)->with('supplier:id,name')
+            ->where(fn (Builder $x) => $x->where('ean_packaging', $ean)->orWhere('ean_ordering', $ean))
             ->orderBy('designation')
-            ->paginate($perPage)
-            ->withQueryString();
+            ->limit($limit)
+            ->get();
     }
 
     /**

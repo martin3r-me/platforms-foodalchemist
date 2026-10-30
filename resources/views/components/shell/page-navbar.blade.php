@@ -17,7 +17,8 @@
             <h1 class="text-[15px] font-semibold text-gray-900 truncate">{{ $title }}</h1>
             {{ $slot }}
         </div>
-        <div class="flex items-center gap-4 shrink-0">
+        {{-- #1003 Handy-Oberfläche: Kopfzeile schlank, Brille und Standort nur am Computer --}}
+        <div class="flex items-center gap-4 shrink-0" data-fa-nur-desktop>
             @livewire('foodalchemist.team-brille-bar')
             @livewire('foodalchemist.active-outlet-bar')
         </div>

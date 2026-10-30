@@ -1176,6 +1176,12 @@ Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)
     ->name('foodalchemist.demnaechst');
 
 /**
+ * #1003 Globale Suche (Handy-Einstieg, untere Leiste). Bereichsfrei; jeder Abschnitt prüft seinen Bereich selbst.
+ */
+Route::get('/suche', \Platform\FoodAlchemist\Livewire\Handy\Suche::class)
+    ->name('foodalchemist.suche');
+
+/**
  * M9-03 / V-10: Review-Queue — zentrale «Zu prüfen»-Seite.
  */
 Route::get('/zu-pruefen', \Platform\FoodAlchemist\Livewire\ReviewQueue::class)

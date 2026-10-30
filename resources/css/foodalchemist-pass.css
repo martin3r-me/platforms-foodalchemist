@@ -588,3 +588,12 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
 [data-fa-handy] [data-fa-handy-lesen] [data-fa-aendern]:not([data-fa-aendern-frei]) { display: none; }
 [data-fa-handy] [data-fa-handy-lesen] [data-fa-handy-hinweis] { display: flex; }
 [data-fa-handy] [data-fa-handy-lesen] :is(button, a[href], [role="button"], summary) { min-height: 44px; }
+
+/* Handy-Hülle (#1003): untere Leiste (x-foodalchemist::handy.nav) nur auf der Handy-Oberfläche; die Hülle
+   ([data-fa-huelle], Modul-Layout und Host) macht ihr Platz. [data-fa-nur-desktop] markiert Teile der Hülle,
+   die am Handy fehlen (Modul-Umschalter, Chat-Leiste …). Am Computer greift keine dieser Regeln. */
+[data-fa-handy-nav] { display: none; }
+[data-fa-handy] [data-fa-handy-nav] { display: block; }
+[data-fa-handy] [data-fa-nur-desktop] { display: none; }
+[data-fa-handy] [data-fa-huelle] { height: calc(100dvh - 4rem - env(safe-area-inset-bottom)); }
+[data-fa-handy] [data-fa-huelle] > main { height: 100%; }

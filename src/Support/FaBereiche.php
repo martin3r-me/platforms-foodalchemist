@@ -60,6 +60,7 @@ final class FaBereiche
         'abos' => 'abos',           // Spec 82 §13 B6: Abo-Seite (Master verwaltet, Mandant liest „Meine Abos“)
         // bereichsfrei: Sprachbefehl, Designsystem (Bau-Werkzeug), „demnächst"-Platzhalter
         'voice' => null, 'ui-katalog' => null, 'demnaechst' => null,
+        'suche' => null, 'handy_app' => null,   // #1003 Handy: Suche filtert je Abschnitt selbst nach Bereich; App-Manifest ist öffentlich
         // öffentlich geteilte Präsentationen (ohne Anmeldung) und Plattform-Assets — nie an einer Freischaltung
         'presentation' => null, 'platform-asset' => null,
         // Spec 82 §13 C3: Export-Download an keinem Bereich, auch im gesperrten Team erreichbar
