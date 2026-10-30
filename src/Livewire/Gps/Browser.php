@@ -22,6 +22,13 @@ use Platform\FoodAlchemist\Support\Curate;
 class Browser extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur suchen, filtern, öffnen
+
+    /** #1003: am Handy laufen Auswahl, Filter und Blättern; Anlegen, Status und Bearbeiten bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehleGp', 'waehleWg', 'waehleSub', 'aktualisiere', 'gpGeloescht', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     #[Url(as: 'gp')]
     public ?int $gpId = null;
@@ -163,7 +170,9 @@ class Browser extends Component
             $this->dispatch('gp-selected', id: $this->gpId);
             // Deeplink „in den Artikel": Editor gleich aufziehen, dann edit=1 aus der URL putzen.
             if ($this->editOeffnen) {
-                $this->dispatch('gp-modal.oeffnen', id: $this->gpId);
+                if (! \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {   // #1003: am Handy kein Editor
+                    $this->dispatch('gp-modal.oeffnen', id: $this->gpId);
+                }
                 $this->editOeffnen = false;
             }
         }
