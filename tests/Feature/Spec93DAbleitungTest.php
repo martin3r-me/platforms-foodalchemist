@@ -113,6 +113,9 @@ it('Manuell bearbeitete Ableitung gilt dauerhaft: Tool und Job überschreiben si
     Queue::assertNotPushed(TrendAbleitungJob::class);
     ($this->lauf)($t);
     expect($this->stub->calls)->toBe(0)->and($t->refresh()->ableitung['kurzfazit'])->toBe('TEST-93 von Hand')->and($t->ableitung_quelle)->toBe('manuell');
+    // zweiter Riegel: auch eine (z. B. verspätete) KI-Antwort wird über einer manuellen Ableitung nicht übernommen
+    $this->ab->uebernehmen($t->refresh(), $this->stub->werte);
+    expect($t->refresh()->ableitung['kurzfazit'])->toBe('TEST-93 von Hand')->and($t->ableitung_quelle)->toBe('manuell');
 
     $this->reg->get('foodalchemist.trends.PUT')->execute(['id' => $t->id, 'ableitung' => []], $this->ctx);
     expect($t->refresh()->ableitung)->toBeNull()->and($this->reg->get('foodalchemist.trends.ABLEITUNG')->execute(['id' => $t->id], $this->ctx)->data['angestossen'])->toBeTrue();
@@ -194,7 +197,8 @@ it('Zwischenspeicher je Lauf: eine neue Pinnwand-Karte zählt im nächsten Lauf'
     $svc->lauf($this->rootTeam);
     expect($svc->passendePinnwand($this->rootTeam, 'koji'))->toHaveCount(0);
     $this->trends->fundstueckAblegen($this->rootTeam, ['titel' => 'Koji', 'url' => 'https://insta.test/koji']);
-    expect($svc->lauf($this->rootTeam)['liste'][0]['kennzahlen']['davon_pinnwand'])->toBe(1);
+    expect($svc->passendePinnwand($this->rootTeam, 'koji'))->toHaveCount(1)   // außerhalb eines Laufs immer frisch
+        ->and($svc->lauf($this->rootTeam)['liste'][0]['kennzahlen']['davon_pinnwand'])->toBe(1);
 });
 
 it('UI: Block im Trend-Detail zeigt die Ableitung, „Erzeugen“ ist Plattform-KI, Bearbeiten macht sie dauerhaft manuell', function () {
