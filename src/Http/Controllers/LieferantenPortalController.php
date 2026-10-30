@@ -3,10 +3,12 @@
 namespace Platform\FoodAlchemist\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 use Platform\Core\Http\Controllers\Controller;
 use Platform\FoodAlchemist\Models\FoodAlchemistLieferantenLink;
 use Platform\FoodAlchemist\Services\LieferantenLinkService;
+use Platform\FoodAlchemist\Services\LieferantenUploadService;
 
 /**
  * Lieferanten-Portal (Stufe 2): Seite OHNE Login, per Token aufgelöst. Stufe 2a zeigt nur den gültigen Zugang (Lieferant, Gültigkeit, freigegebene Bereiche);
@@ -25,8 +27,39 @@ class LieferantenPortalController extends Controller
 
         return $this->antwort(response()->view('foodalchemist::lieferanten-portal.show', [
             'link' => $link, 'lieferant' => $link->supplier, 'bereiche' => collect($link->bereiche)->map(fn ($b) => FoodAlchemistLieferantenLink::BEREICHE[$b] ?? $b)->all(),
+            'token' => $token, 'meldung' => session('portal_meldung'), 'fehler' => session('portal_fehler'),
             'cssVersion' => substr((string) @md5_file($this->cssPfad()), 0, 8),
         ]));
+    }
+
+    /**
+     * Datei einreichen (Preisliste oder Stammdaten). Landet als Lauf in der Prüfliste des Teams, nie direkt im Bestand. Der Lieferant sieht nur eine
+     * kurze Rückmeldung; Fehlermeldungen kommen aus {@see LieferantenUploadService} und enthalten keine Pfade oder technischen Details.
+     */
+    public function upload(string $token, Request $request, LieferantenLinkService $svc, LieferantenUploadService $upload): Response|RedirectResponse
+    {
+        $link = $svc->aufloesen($token);
+        if ($link === null) {
+            return $this->antwort(response()->view('foodalchemist::lieferanten-portal.ungueltig', [], 410));
+        }
+        $weiter = redirect()->route('foodalchemist.presentation.lieferanten_portal', ['token' => $token]);
+        $datei = $request->file('datei');
+        if (! $datei instanceof \Illuminate\Http\UploadedFile) {
+            return $weiter->with('portal_fehler', 'Bitte eine Datei auswählen.');
+        }
+        try {
+            $r = $upload->annehmen($link, (string) $request->input('bereich'), $datei, $request);
+        } catch (\RuntimeException $e) {
+            return $weiter->with('portal_fehler', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $weiter->with('portal_fehler', 'Die Datei konnte nicht verarbeitet werden. Bitte prüfe sie oder melde dich bei uns.');
+        }
+
+        return $weiter->with('portal_meldung', $r['zuordnung_noetig']
+            ? 'Danke, die Datei ist angekommen. Wir ordnen die Spalten zu und prüfen sie, bevor etwas übernommen wird.'
+            : "Danke, die Datei ist angekommen ({$r['zeilen']} Zeilen). Wir prüfen sie, bevor etwas übernommen wird.");
     }
 
     /** Stylesheet des Portals (Farben als CSS-Variablen, kein Inline-Style in der View). Öffentlich. */
