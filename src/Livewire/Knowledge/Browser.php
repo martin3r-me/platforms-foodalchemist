@@ -22,6 +22,7 @@ class Browser extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyWissenLesen;   // #1003 Teil 8: am Handy Dossiers nur lesen
 
     /**
      * Liste ohne Suche seitenweise (Befund io 16.10.: alle ~14.250 sichtbaren Dokumente als Zeile →
@@ -544,6 +545,9 @@ class Browser extends Component
 
     public function render()
     {
+        if ($this->handyWissenAktiv()) {
+            return $this->handyWissen();
+        }
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
             ->orderBy('sort_order')->orderBy('label')->get();
         // Filter: Kunden-Teams sehen nur Kategorien mit für sie sichtbaren Dokumenten (io 16.10.). Beim Anlegen
