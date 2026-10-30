@@ -66,7 +66,7 @@ class LieferantenDokumentService
                 throw new \RuntimeException('Bitte die Artikelnummer angeben (höchstens 64 Zeichen).');
             }
             [$endung, $mime] = $this->pruefeDatei($datei);
-            $item = FoodAlchemistSupplierItem::visibleToTeam($team)->where('supplier_id', $link->supplier_id)->where('article_number', $artikelnummer)->first();
+            $item = $this->artikelZu($team, $link, $artikelnummer);
             $rel = self::ORDNER . '/' . Str::uuid() . '.' . $endung;
             Storage::disk('local')->put($rel, (string) file_get_contents((string) $datei->getRealPath()));
         } catch (\RuntimeException $e) {
@@ -88,6 +88,12 @@ class LieferantenDokumentService
         $this->benachrichtigung->melde($link, $lauf);
 
         return ['lauf' => $lauf, 'zugeordnet' => $item !== null];
+    }
+
+    /** Nur lesen: der Artikel des Link-Lieferanten zur Artikelnummer (nie ein Artikel eines anderen Lieferanten). */
+    private function artikelZu(Team $team, Link $link, string $artikelnummer): ?FoodAlchemistSupplierItem
+    {
+        return FoodAlchemistSupplierItem::visibleToTeam($team)->where('supplier_id', $link->supplier_id)->where('article_number', $artikelnummer)->first();
     }
 
     /** @return array{0: string, 1: string} [Endung, Mime] */
