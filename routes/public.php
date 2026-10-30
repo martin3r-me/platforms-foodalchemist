@@ -50,6 +50,11 @@ Route::get('/l/{token}', [\Platform\FoodAlchemist\Http\Controllers\LieferantenPo
     ->middleware(['throttle:30,1', NoCacheHeaders::class])
     ->name('foodalchemist.presentation.lieferanten_portal');
 
+Route::post('/l/{token}/upload', [\Platform\FoodAlchemist\Http\Controllers\LieferantenPortalController::class, 'upload'])
+    ->where('token', '[A-Za-z0-9]{32,64}')
+    ->middleware(['throttle:fa-lieferanten-upload', NoCacheHeaders::class])
+    ->name('foodalchemist.presentation.lieferanten_portal_upload');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
     ->where('token', '[A-Za-z0-9-]+')

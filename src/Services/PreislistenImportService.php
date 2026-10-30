@@ -207,6 +207,10 @@ class PreislistenImportService
             throw new \RuntimeException('Die Zuordnung reicht noch nicht: ' . ($neu->mapping['grund'] ?? 'Pflichtspalten fehlen') . ' — weitere Spalten zuordnen.');
         }
         $zuo->verwerfen($lauf);
+        if ($lauf->herkunft === FoodAlchemistPriceImportRun::HERKUNFT_LIEFERANTEN_LINK) {
+            $neu->update(['herkunft' => $lauf->herkunft, 'link_id' => $lauf->link_id]);
+            $neu = app(LieferantenUploadService::class)->sichere($neu->refresh());
+        }
 
         return $neu;
     }

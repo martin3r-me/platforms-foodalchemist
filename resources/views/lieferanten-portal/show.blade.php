@@ -15,10 +15,24 @@
         <h2>Dein Zugang ist gültig</h2>
         <p class="hinweis">Gültig bis {{ $link->expires_at->timezone('Europe/Berlin')->format('d.m.Y') }}. Der Link gehört nur dir; gib ihn bitte nicht weiter.</p>
     </section>
+    @if(!empty($meldung))<section class="karte" data-portal-meldung role="status"><p>{{ $meldung }}</p></section>@endif
+    @if(!empty($fehler))<section class="karte" data-portal-fehler role="alert"><p>{{ $fehler }}</p></section>@endif
     <section class="karte" data-portal-bereiche>
         <h2>Das kannst du hier tun</h2>
+        @foreach(['preisliste' => ['Preisliste hochladen', 'Artikelnummer oder EAN und Preis netto je Zeile.'], 'stammdaten' => ['Stammdaten-Datei hochladen', 'Artikeldaten, Allergene, Nährwerte laut Vorlage.']] as $key => [$titel, $text])
+            @if(in_array($key, $link->bereiche ?? [], true))
+                <form class="upload" method="POST" action="{{ route('foodalchemist.presentation.lieferanten_portal_upload', ['token' => $token]) }}" enctype="multipart/form-data" data-portal-upload="{{ $key }}">
+                    @csrf
+                    <input type="hidden" name="bereich" value="{{ $key }}">
+                    <h3>{{ $titel }}</h3>
+                    <p class="hinweis">{{ $text }} Erlaubt: .csv, .xlsx, .ods (höchstens 10 MB, keine Makros).</p>
+                    <input type="file" name="datei" accept=".csv,.tsv,.txt,.xlsx,.ods" required>
+                    <button type="submit">Einreichen</button>
+                </form>
+            @endif
+        @endforeach
         <ul class="liste">@foreach($bereiche as $b)<li>{{ $b }}</li>@endforeach</ul>
-        <p class="hinweis">Die Funktionen werden in Kürze freigeschaltet. Alles, was du einreichst, wird vom Team geprüft, bevor es übernommen wird.</p>
+        <p class="hinweis">Alles, was du einreichst, wird vom Team geprüft, bevor es übernommen wird.</p>
     </section>
 </main>
 </body>

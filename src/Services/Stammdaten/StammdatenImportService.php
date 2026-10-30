@@ -261,7 +261,7 @@ class StammdatenImportService
         }
         $zuo->verwerfen($lauf);
 
-        return $neu;
+        return app(\Platform\FoodAlchemist\Services\LieferantenUploadService::class)->sichere($neu);
     }
 
     /**

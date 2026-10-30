@@ -735,6 +735,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         $this->registerLivewireComponents();
 
+        // Lieferanten-Link (2b): Rate-Limit je Token + IP, austauschbarer Upload-Scanner, Benachrichtigungstyp „neuer Upload“.
+        \Illuminate\Support\Facades\RateLimiter::for('fa-lieferanten-upload', fn (\Illuminate\Http\Request $r) => \Illuminate\Cache\RateLimiting\Limit::perMinutes(
+            max(1, (int) config('foodalchemist.lieferanten_link.upload_fenster_minuten', 10)), max(1, (int) config('foodalchemist.lieferanten_link.upload_versuche', 10)),
+        )->by(sha1((string) $r->route('token')) . '|' . $r->ip()));
+        $this->app->bind(\Platform\FoodAlchemist\Support\UploadScanner::class, fn () => ($k = config('foodalchemist.lieferanten_link.scanner')) && is_a($k, \Platform\FoodAlchemist\Support\UploadScanner::class, true)
+            ? $this->app->make($k) : new \Platform\FoodAlchemist\Support\KeinUploadScan);
+        \Platform\FoodAlchemist\Services\LieferantenUploadBenachrichtigung::registriere();
+
         // M8-02: generische Modul-Policy für die Kern-Models (view = Team-Kette,
         // update/delete = Curate-Gate M1-08 — dieselben Regel-Stellen wie die Services)
         foreach ([

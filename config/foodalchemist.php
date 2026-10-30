@@ -908,6 +908,12 @@ return [
     'lieferanten_link' => [
         'standard_tage' => 30,
         'max_tage' => 90,
+        // Portal-Upload (2b): Versuche je Token+IP und Zeitfenster; Virenscanner (Klasse, die Support\UploadScanner umsetzt, null = kein Scan);
+        // Benachrichtigung: ein Hinweis je Lieferant und Zeitfenster (Minuten).
+        'upload_versuche' => 10,
+        'upload_fenster_minuten' => 10,
+        'scanner' => null,
+        'benachrichtigung_fenster_minuten' => 10,
     ],
 
     'handy' => [

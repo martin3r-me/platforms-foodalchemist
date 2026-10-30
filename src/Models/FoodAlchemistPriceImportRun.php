@@ -20,6 +20,9 @@ class FoodAlchemistPriceImportRun extends Model
 
     public const ART_STAMMDATEN = 'stammdaten';
 
+    /** Herkunft eines Laufs, den ein Lieferant über seinen Link (Portal) eingereicht hat; Standard ist „user“ (Team). */
+    public const HERKUNFT_LIEFERANTEN_LINK = 'lieferanten_link';
+
     /** Eigene Lieferanten-Datei: die Spalten wurden nicht erkannt, die Datei wartet auf die Zuordnung (1a2). */
     public const STATUS_ZUORDNUNG_NOETIG = 'zuordnung_noetig';
 
