@@ -342,7 +342,7 @@
 
                                         <div class="shrink-0 flex items-center gap-1.5 ml-auto">
                                             @if($sig->status->istOffen())
-                                                @if($ki && $zeigen('signale.ki'))
+                                                @if($ki && $zeigen('toggleKiPanel'))
                                                     <x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="toggleKiPanel({{ $sig->id }})"
                                                                   aria-expanded="{{ $kiPanelId === $sig->id ? 'true' : 'false' }}" title="{{ $ki['flavorLabel'] }}">KI erledigen lassen</x-fa::button>
                                                 @endif
@@ -386,9 +386,13 @@
 
                                             <div class="flex items-center justify-end gap-2">
                                                 <x-fa::button variant="ghost" size="sm" wire:click="toggleKiPanel({{ $sig->id }})">Schließen</x-fa::button>
+                                                @if($zeigen('kiFixAusfuehren'))
+                                                {{-- #1003: am Handy ändert „Automatisch beheben“ erst nach Bestätigung (Entwurf ändert nichts) --}}
                                                 <x-foodalchemist::ki-action action="kiFixAusfuehren({{ $sig->id }})" target="kiFixAusfuehren" variant="primary"
                                                         :icon="$istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles'" :label="$istFix ? 'Automatisch beheben' : 'Entwurf erzeugen'"
-                                                        busy="Läuft …" />
+                                                        :confirm="$handy && $istFix ? 'Automatisch beheben? ' . $ki['flavorLabel'] . ($anzahl !== null ? ' · betrifft ' . number_format($anzahl, 0, ',', '.') . ' Objekte' : '') . '. ' . $ki['plan'] . ' Die betroffenen Objekte werden im Hintergrund geändert.' : null"
+                                                        busy="Läuft …" data-rq-ki-fix="{{ $sig->id }}" />
+                                                @endif
                                             </div>
                                         </div>
                                     @endif

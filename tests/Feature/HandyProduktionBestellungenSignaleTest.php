@@ -1,9 +1,11 @@
 <?php
 
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
+use Platform\FoodAlchemist\Jobs\SignalFixJob;
 use Platform\FoodAlchemist\Livewire\Orders\DetailPanel as BestellDetail;
 use Platform\FoodAlchemist\Livewire\Orders\Index as Bestellungen;
 use Platform\FoodAlchemist\Livewire\Produktion\Browser as ProduktionBrowser;
@@ -23,7 +25,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * #1003 Handy-Ansicht PR5 · Produktion, Bestellungen, Signale: am Handy Karten und Lesen, am Computer unverändert.
- * Signale: „abhaken“ (erledigt / wieder öffnen) nur, wenn config('foodalchemist.handy.aendern_frei') es nennt.
+ * Signale: „abhaken“ (erledigt / wieder öffnen) und KI-Fix nur, wenn config('foodalchemist.handy.aendern_frei') sie nennt
+ * (Standard seit Dominique 30.10.: an; zentral abschaltbar).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -142,4 +145,43 @@ it('Team-Sicht am Handy: ein fremdes Team sieht weder Aufträge, Bestellungen no
 it('Signale am Computer unverändert: Läufe, Erledigt, Ignorieren, Begriffe lehren sichtbar', function () {
     Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(ReviewQueue::class)
         ->assertSeeHtml('data-rq-laeufe')->assertSeeHtml('data-rq-sig-erledigt="' . $this->signal->id . '"')->assertSeeHtml('data-rq-sig-ignorieren');
+});
+
+it('Standard-Freischaltung am Handy: genau Abhaken und KI-Fix (Dominique 30.10.)', function () {
+    expect(config('foodalchemist.handy.aendern_frei'))->toBe(['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren']);
+});
+
+it('KI-Fix am Handy (Standard an): Panel über die ganze Breite, „Automatisch beheben“ mit Bestätigung, derselbe Job wie am Desktop; Ignorieren und Läufe weiter gesperrt', function () {
+    Queue::fake();
+    $this->makeRecipe($this->rootTeam, 'Fond: braun HANDY');
+    $det = app(SignalService::class)->erzeuge($this->rootTeam, SignalTyp::EkKetteUnvollstaendig, SignalSeverity::Warnung, 'Basisrezepte ohne EK HANDY', [
+        'dedup_key' => 'dq-br-ek-null-handy', 'source' => 'data-quality', 'payload' => ['metrik' => 'br_ek_null', 'anzahl' => 1],
+    ]);
+
+    handyPr5(ReviewQueue::class)
+        ->assertSee('KI erledigen lassen')
+        ->call('toggleKiPanel', $det->id)->assertSet('kiPanelId', $det->id)
+        ->assertSeeHtml('data-rq-ki-fix="' . $det->id . '"')->assertSee('Automatisch beheben? Auto-Fix · betrifft 1 Objekte.')
+        ->assertDontSeeHtml('data-rq-sig-ignorieren')->assertDontSeeHtml('data-rq-laeufe')
+        ->call('kiFixAusfuehren', $det->id)->assertSet('fehler', null)
+        ->call('signalIgnorieren', $det->id);
+    Queue::assertPushed(SignalFixJob::class, fn ($job) => true);
+    expect($det->fresh()->status->value)->toBe('offen');
+
+    // Am Computer: derselbe Knopf ohne Bestätigungstext (unverändert)
+    Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(ReviewQueue::class)->call('toggleKiPanel', $det->id)
+        ->assertSeeHtml('data-rq-ki-fix="' . $det->id . '"')->assertDontSee('Automatisch beheben? Auto-Fix');
+});
+
+it('KI-Fix am Handy aus (aendern_frei leer): kein Knopf, Server lehnt toggleKiPanel und kiFixAusfuehren ab', function () {
+    Queue::fake();
+    config(['foodalchemist.handy.aendern_frei' => []]);
+    $det = app(SignalService::class)->erzeuge($this->rootTeam, SignalTyp::EkKetteUnvollstaendig, SignalSeverity::Warnung, 'Basisrezepte ohne EK HANDY', [
+        'dedup_key' => 'dq-br-ek-null-handy-aus', 'source' => 'data-quality', 'payload' => ['metrik' => 'br_ek_null', 'anzahl' => 1],
+    ]);
+    handyPr5(ReviewQueue::class)
+        ->assertDontSee('KI erledigen lassen')
+        ->call('toggleKiPanel', $det->id)->assertSet('kiPanelId', null)
+        ->call('kiFixAusfuehren', $det->id);
+    Queue::assertNotPushed(SignalFixJob::class);
 });

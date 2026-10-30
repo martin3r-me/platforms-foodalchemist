@@ -933,7 +933,9 @@ return [
     ],
 
     'handy' => [
-        'aendern_frei' => [],
+        // #1003 (Dominique 30.10.): Signale am Handy abhaken und von der KI erledigen lassen. KI-Fix am Handy ist ein UI-Klick
+        // über die Plattform-KI; wer Plattform-Tokens sparen will, nutzt Claude per MCP (signale.FIX). Zentral abschaltbar.
+        'aendern_frei' => ['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren'],
     ],
 
     // Spec 65 · Bearbeitungssperre: Editoren erst nach „Bearbeiten“ beschreibbar, Datensatz für andere gesperrt.
