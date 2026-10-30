@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\InventurService;
+use Platform\FoodAlchemist\Services\LagerBewegungService;
 
 /** Spec 66 §6 · Lager lesen: Bestand je GP und Lagerort (bewertet), optional Bewegungen und Bestandswert zum Stichtag. */
 class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -20,7 +21,7 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Liest das Lager des Teams (periodisch: Bestand entsteht aus Wareneingang + Inventur). '
             . 'Liefert den Bestand je Grundprodukt und Lagerort mit Menge (kg/l/Stk) und Wert zum aktuellen EK. '
-            . 'Optional: bewegungen=true (letzte Zu-/Abgänge, Filter quelle=wareneingang|inventur|…) und '
+            . 'Optional: bewegungen=true (letzte 200 Zu-/Abgänge, Filter quelle=wareneingang|inventur|… und grund=verderb|bruch|… wie im Lager) und '
             . 'stichtag=YYYY-MM-DD (Bestandswert aus der jüngsten gebuchten Inventur je Lagerort). Filter: stellplatz (bin_id | "ohne"), '
             . 'zustand (' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '), warengruppe (Code 01–15), lieferant (supplier_id), ohne_preis, '
             . 'ladenhueter (seit 90 Tagen keine Bewegung).';
@@ -42,6 +43,7 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'ladenhueter' => ['type' => 'boolean'],
                 'bewegungen' => ['type' => 'boolean', 'description' => 'Letzte Lagerbewegungen mitliefern.'],
                 'quelle' => ['type' => 'string', 'description' => 'Filter für Bewegungen nach Quelle.'],
+                'grund' => ['type' => 'string', 'enum' => [...self::gruende(), ''], 'description' => 'Filter für Bewegungen nach Grund (Hand-Buchung).'],
                 'stichtag' => ['type' => 'string', 'description' => 'Bestandswert zu diesem Datum (YYYY-MM-DD).'],
                 'limit' => ['type' => 'integer', 'description' => 'Max. Bestandszeilen (Default 200).'],
             ],
@@ -53,6 +55,9 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
         }
         $svc = app(InventurService::class);
         $rows = array_values(array_filter($svc->filterBestand(
@@ -67,7 +72,7 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'ohne_preis' => count(array_filter($rows, fn ($r) => $r['wert'] === null)),
         ];
         if (! empty($arguments['bewegungen'])) {
-            $out['bewegungen'] = $svc->bewegungen($team, $arguments['quelle'] ?? null, 100)->map(fn ($m) => [
+            $out['bewegungen'] = $svc->bewegungen($team, $arguments['quelle'] ?? null, 200, ($arguments['grund'] ?? '') ?: null)->map(fn ($m) => [
                 'id' => $m->id, 'gp_id' => $m->gp_id, 'recipe_id' => $m->recipe_id, 'name' => $m->gp?->name ?? $m->recipe?->name ?? $m->supplierItem?->designation, 'richtung' => $m->direction,
                 'menge' => $svc->anzeigeMenge((float) $m->qty_base, (string) $m->base_unit),
                 'einheit' => $svc->anzeigeEinheit((string) $m->base_unit),
@@ -80,7 +85,13 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             $out['bestandswert'] = $svc->bestandswert($team, (string) $arguments['stichtag']);
         }
 
-        return ToolResult::success($out);
+        return $this->erfolgMitWarnungen($out, $arguments);
+    }
+
+    /** @return list<string> alle Gründe der Hand-Buchung (Zu- und Abgang) */
+    private static function gruende(): array
+    {
+        return array_values(array_unique(array_merge(...array_map('array_keys', array_values(LagerBewegungService::GRUENDE)))));
     }
 
     public function getMetadata(): array

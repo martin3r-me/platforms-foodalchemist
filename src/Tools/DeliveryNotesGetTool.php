@@ -22,7 +22,8 @@ class DeliveryNotesGetTool extends WareneingangTool implements ToolContract, Too
             .'ansicht=erwartet = gesendete/bestätigte Bestellungen mit offener Ware nach Liefertag. '
             .'ansicht=vorschlag + supplier_id (optional order_ids) = offene Positionen des Lieferanten über alle offenen Bestellungen, '
             .'Menge = noch offen (Grundlage für delivery_notes.POST). Sonst Liste mit Filtern supplier_id, status '
-            .'(entwurf|gebucht|storniert), von, bis, suche, nur_abweichung.';
+            .'(entwurf|gebucht|storniert), von, bis, suche, nur_abweichung; je Seite 500 (neueste zuerst, page ab 1, weniger als 500 = letzte Seite; '
+            .'nur_abweichung filtert innerhalb der Seite).';
     }
 
     public function getSchema(): array
@@ -35,6 +36,7 @@ class DeliveryNotesGetTool extends WareneingangTool implements ToolContract, Too
             'status' => ['type' => 'string', 'enum' => ['entwurf', 'gebucht', 'storniert']],
             'von' => ['type' => 'string'], 'bis' => ['type' => 'string'], 'suche' => ['type' => 'string'],
             'nur_abweichung' => ['type' => 'boolean'],
+            'page' => ['type' => 'integer', 'description' => 'Seite der Liste (je 500), ab 1.'],
         ]];
     }
 

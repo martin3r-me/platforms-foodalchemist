@@ -10,6 +10,8 @@ use Livewire\WithPagination;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
+use Platform\FoodAlchemist\Services\ProduktionListeService;
+use Platform\FoodAlchemist\Support\Zeitraum;
 
 /**
  * Spec 18/30 — Produktion: Browser-Liste der Produktionsaufträge.
@@ -102,7 +104,7 @@ class Browser extends Component
     public function waehleZeitraum(string $key): void
     {
         $this->zeitraum = $this->zeitraum === $key ? '' : $key;
-        [$this->von, $this->bis] = $this->zeitraumGrenzen($this->zeitraum);
+        [$this->von, $this->bis] = Zeitraum::grenzen($this->zeitraum);
         $this->resetPage();
     }
 
@@ -152,20 +154,6 @@ class Browser extends Component
         // Re-render holt den neuen Status (Cross-Component-Refresh, kein State nötig).
     }
 
-    /** @return array{0: ?string, 1: ?string} */
-    private function zeitraumGrenzen(string $key): array
-    {
-        $heute = now()->startOfDay();
-
-        return match ($key) {
-            'heute' => [$heute->toDateString(), $heute->toDateString()],
-            'woche' => [$heute->copy()->startOfWeek()->toDateString(), $heute->copy()->endOfWeek()->toDateString()],
-            'naechste' => [$heute->copy()->addWeek()->startOfWeek()->toDateString(), $heute->copy()->addWeek()->endOfWeek()->toDateString()],
-            'vergangen' => [null, $heute->copy()->subDay()->toDateString()],
-            default => [null, null],
-        };
-    }
-
     /** @return list<string> sichtbare Spalten-Keys in Katalog-Reihenfolge */
     public function spalten(): array
     {
@@ -185,11 +173,9 @@ class Browser extends Component
         $filters = ['status' => $this->statusFilter, 'von' => $this->von, 'bis' => $this->bis, 'suche' => $this->suche];
         $auftraege = $svc->paginateBrowser($team, $filters, $this->perPage);
 
-        // Kein N+1: Zeilen der GELISTETEN Aufträge in einer Query, Einkaufs-Indikator gebündelt.
-        $auftraege->getCollection()->load([
-            'lines:id,production_order_id,ansaetze,manual_ansaetze,is_manual_ansaetze,is_struck,portionen,arbeitszeit_min,station_id',
-            'lines.station:id,name',
-        ]);
+        // Kein N+1: Zeilen der GELISTETEN Aufträge in einer Query, Einkaufs-Indikator gebündelt (Spec 91 PR 4: wie production_orders.GET).
+        $liste = app(ProduktionListeService::class);
+        $liste->zeilenLaden($auftraege->getCollection());
 
         // KPI-Zeile: „wie ist die Lage" — bewusst UNABHÄNGIG von den Filtern, sonst
         // beantwortet sie nur noch „was habe ich gerade gefiltert".
@@ -198,11 +184,7 @@ class Browser extends Component
 
         return view('foodalchemist::livewire.produktion.browser', [
             'auftraege' => $auftraege,
-            'indikatoren' => $auftraege->getCollection()->mapWithKeys(fn ($order) => [
-                (int) $order->id => $order->procurement_released_at === null
-                    ? 'entwurf'
-                    : ($svc->materialbedarfVeraltet($order) ? 'geaendert' : 'freigegeben'),
-            ])->all(),
+            'indikatoren' => $liste->indikatoren($auftraege->getCollection()),
             'statusFaelle' => ProductionOrderStatus::cases(),
             'statusCounts' => $svc->statusCounts($team, $filters),
             'gesamtCount' => $svc->browserGesamt($team, $filters),
