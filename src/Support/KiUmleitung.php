@@ -44,6 +44,9 @@ final class KiUmleitung
         'foodalchemist.recipe_sensorik.POST' => 'Ein propose() (recipe.sensorik), danach DB-Schreiben des Profils.',
         'foodalchemist.recipes.REVIEW' => 'Read-only: ein propose() (recipe.review / vk.review) über RecipeReviewService, schreibt nichts.',
         'foodalchemist.recipes.REVISE' => 'Ein propose() (recipe.ueberarbeiten), optional DB-Übernahme (accept) über RecipeService — dessen Folge-Job SensorikNachholen erbt den Extern-Modus (P2c-1).',
+        'foodalchemist.concepts.GENERATE' => 'Brief-Pfad: propose() concept.brief_geruest, danach Gerüst-Befüllung (concept.plan je Bedarf) und Wording-Pass (concept.wording, fail-soft) — jede Runde in der Tool-Transaktion, Rollback bis alles beantwortet ist; nur DB-Schreiben, keine Queue-Jobs. Gerüst-Pfad ohne KI bis auf den Wording-Pass.',
+        'foodalchemist.foodbook_kapitel.WORDING_GENERATE' => 'Je Konzept-Block ein propose() (concept.wording, Positionen des Kapitels), danach DB-Schreiben der Overrides am Block; ohne Kapitel-Schreibstil oder ohne Slots kein KI-Aufruf.',
+        'foodalchemist.speisekarte_wording.GENERATE' => 'Je Gericht-/Menü-Position ein propose() (foodbook.kundentext), fail-soft je Position, danach DB-Schreiben von wording; ohne Schreibstil der Karte kein KI-Aufruf.',
         'foodalchemist.signale.FIX' => 'Nur der Assist-Plan ruft ein propose() (je Signal-Typ signal.* / price.plausi) und liefert einen Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne, Weg-Absagen und dry_run rufen keine KI und laufen unverändert (SignalFixJob ist rein deterministisch).',
         'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
@@ -54,9 +57,11 @@ final class KiUmleitung
      * @var array<string, string>
      */
     public const AUSGENOMMEN = [
-        'foodalchemist.foodbook_kapitel.WORDING_GENERATE' => 'Noch nicht belegt: der Service tut bei einem Kapitel ohne Konzept-Slots nichts (kein KI-Aufruf), der Test braucht ein Kapitel mit belegten Slots (Fixture). Services ohne Folge-Jobs — Aufnahme nach Fixture-Bau.',
-        'foodalchemist.speisekarte_wording.GENERATE' => 'Noch nicht belegt: bei einer Karte ohne Positionen entsteht kein KI-Aufruf; der Test braucht eine Karte mit Positionen (Fixture).',
-        'foodalchemist.concepts.GENERATE' => 'Klasse c: Kaskade, mehrere propose() mit Schreibzugriffen dazwischen (Phase 2).',
+        'foodalchemist.foodbook.PLAN_FROM_BRIEF' => 'Planungs-Kaskade (Paket 2d): nach dem Gerüst-propose() startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle als KiExternWiederholbar laufen und deren `_extern`-Flag der Einstieg erst setzen muss. Würde nur das Gerüst umgeleitet, liefe die Kaskade danach still auf der Plattform-KI.',
+        'foodalchemist.angebot.PLAN_FROM_BRIEF' => 'Planungs-Kaskade (Paket 2d): nach dem Gerüst-propose() startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle als KiExternWiederholbar laufen und deren `_extern`-Flag der Einstieg erst setzen muss. Würde nur das Gerüst umgeleitet, liefe die Kaskade danach still auf der Plattform-KI.',
+        'foodalchemist.format.PLAN_FROM_BRIEF' => 'Planungs-Kaskade (Paket 2d): nach dem Gerüst-propose() startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle als KiExternWiederholbar laufen und deren `_extern`-Flag der Einstieg erst setzen muss. Würde nur das Gerüst umgeleitet, liefe die Kaskade danach still auf der Plattform-KI.',
+        'foodalchemist.speisekarte.PLAN_FROM_BRIEF' => 'Planungs-Kaskade (Paket 2d): nach dem Gerüst-propose() startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle als KiExternWiederholbar laufen und deren `_extern`-Flag der Einstieg erst setzen muss. Würde nur das Gerüst umgeleitet, liefe die Kaskade danach still auf der Plattform-KI.',
+        'foodalchemist.speiseplan.PLAN_FROM_BRIEF' => 'Planungs-Kaskade (Paket 2d): nach dem Gerüst-propose() startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle als KiExternWiederholbar laufen und deren `_extern`-Flag der Einstieg erst setzen muss. Würde nur das Gerüst umgeleitet, liefe die Kaskade danach still auf der Plattform-KI.',
     ];
 
     /**
