@@ -228,6 +228,8 @@
                         @endif
                     </x-fa::section>
 
+                    <livewire:foodalchemist.suppliers.lieferanten-link :supplier-id="$supplierId" :key="'lfl-'.$supplierId" />
+
                     {{-- ── Einkauf E1: Rückvergütungs-Staffeln (Volumen-Rabatt, team-scoped Overlay) ── --}}
                     <x-fa::section title="Rückvergütungs-Staffel" icon="heroicon-o-chart-bar-square"
                         description="Rückwirkender Jahresbonus. Ergibt den effektiven Nettopreis zum Vergleichen, nicht den Bestellpreis."

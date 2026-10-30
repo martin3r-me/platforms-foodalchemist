@@ -381,6 +381,9 @@ return [
     \Platform\FoodAlchemist\Tools\PortfolioPromotionGetTool::class,
     \Platform\FoodAlchemist\Tools\PreiseHistorieAusblendenTool::class,   // Preis-Stand als Erfassungsfehler aus-/einblenden (Admin)
     \Platform\FoodAlchemist\Tools\PreiseVerlaufGetTool::class,   // Preisverlauf als Stufenlinie + Trend
+    \Platform\FoodAlchemist\Tools\LieferantenLinkDeleteTool::class,   // Lieferanten-Link widerrufen (Stufe 2a)
+    \Platform\FoodAlchemist\Tools\LieferantenLinkGetTool::class,
+    \Platform\FoodAlchemist\Tools\LieferantenLinkPostTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteApplyTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteUploadTool::class,

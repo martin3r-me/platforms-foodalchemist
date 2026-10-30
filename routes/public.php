@@ -40,6 +40,16 @@ Route::get('/p/handbuch/{token}', [\Platform\FoodAlchemist\Http\Controllers\Hand
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.handbuch');
 
+// Lieferanten-Portal (Stufe 2): persönlicher Link je Lieferant, ohne Login. Eigenes Muster /l/…; Routenname mit „presentation“ ⇒ bereichsfrei (kein Login-Bereich).
+// throttle: wer Tokens rät, wird gebremst. Ungültig/abgelaufen/widerrufen/gesperrt antworten gleich (410).
+Route::get('/l/portal.css', [\Platform\FoodAlchemist\Http\Controllers\LieferantenPortalController::class, 'stil'])
+    ->name('foodalchemist.presentation.lieferanten_portal_css');
+
+Route::get('/l/{token}', [\Platform\FoodAlchemist\Http\Controllers\LieferantenPortalController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{32,64}')
+    ->middleware(['throttle:30,1', NoCacheHeaders::class])
+    ->name('foodalchemist.presentation.lieferanten_portal');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
     ->where('token', '[A-Za-z0-9-]+')

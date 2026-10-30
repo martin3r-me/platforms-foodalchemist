@@ -1,0 +1,14 @@
+/* Lieferanten-Portal (Stufe 2): öffentliche Seite, mobile-first. Farben als CSS-Variablen, hell und dunkel; kein Inline-Style in den Views. */
+:root { --grund:#f3f5f8; --karte:#fdfdfe; --linie:#dde2ea; --text:#131a26; --text2:#4a5466; --akzent:#0a3dd6; --akzent-hell:#e6edfe; --ok:#0b6b3a; --r:10px; }
+@media (prefers-color-scheme: dark) { :root { --grund:#141d36; --karte:#1b2744; --linie:#2d3b5f; --text:#eef2fb; --text2:#b9c3da; --akzent:#8fb0ff; --akzent-hell:#243a6e; --ok:#7bd9a4; } }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--grund); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.portal { max-width: 40rem; margin: 0 auto; padding: 1.25rem 16px 3rem; }
+.portal h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+.portal .unter { color: var(--text2); margin: 0 0 1.25rem; }
+.karte { background: var(--karte); border: 1px solid var(--linie); border-radius: var(--r); padding: 1rem; margin-bottom: 1rem; }
+.karte h2 { font-size: 1rem; margin: 0 0 .5rem; }
+.liste { margin: 0; padding-left: 1.2rem; }
+.hinweis { color: var(--text2); font-size: .9rem; }
+.marke { display: inline-block; padding: .15rem .6rem; border-radius: 999px; background: var(--akzent-hell); color: var(--akzent); font-size: .85rem; }
