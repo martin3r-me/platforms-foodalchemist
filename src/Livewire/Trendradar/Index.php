@@ -25,6 +25,7 @@ use Platform\FoodAlchemist\Support\TrendVokabular as V;
 class Index extends Component
 {
     use WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyTrendsLesen;   // #1003 Teil 8: am Handy Trends nur lesen
 
     #[Url(as: 'ansicht')]
     public string $ansicht = 'radar';
@@ -372,6 +373,9 @@ class Index extends Component
 
     public function render(TrendService $svc, FaRechte $rechte, TrendSignalService $signale, TeamSettingsService $settings)
     {
+        if ($this->handyTrendsAktiv()) {
+            return $this->handyTrends($svc);
+        }
         $team = $this->team();
         $alle = $svc->liste($team);
         $filter = ['suche' => $this->suche, 'kategorie' => $this->kategorien, 'sparte' => $this->sparten, 'typ' => $this->typen, 'ebene' => $this->ebenen,

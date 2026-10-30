@@ -70,10 +70,10 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | Kalkulation, Controlling | `/kalkulation`, `/controlling` | Controlling\Cockpit | Desktop | – | – |
 | Favoriten | `/favoriten` | Favorites\Index | Desktop | – | – |
 | Food-DNA | `/food-dna` | FoodDna\Index | Desktop | – | – |
-| Wissen | `/wissen` | Knowledge\Browser | Desktop | – | – |
+| Wissen | `/wissen` | Knowledge\Browser | Lesen, PR 8: Dossiers als Karten (Suche, Kategorie), nur aktive in der Team-Sicht (Kunden nur eigenes Wissen, Entscheid 13.10.); Dossier über die ganze Breite, Markdown wie am Computer, Tabellen im eigenen Scroll-Rahmen, [[Verweise]] als Text; Suche ohne KI | Concerns\HandyWissenLesen → livewire/handy/wissen | 8 ✓ |
 | Abos | `/abos` | Abos\Index | Desktop | – | – |
 | Standortprofil | `/standortprofil` | Standortprofil\Index | Desktop | – | – |
-| Trendradar | `/trendradar` | Trendradar\Index | Desktop | – | – |
+| Trendradar | `/trendradar` | Trendradar\Index | Lesen, PR 8: Reiter Trends (Karten nach Ebene oder Kategorie) \| Pinnwand (Fundstücke mit Bild); Trend lesbar über die ganze Breite. Ausnahme vom Lesemodus wie die Planung: „Fundstück ablegen“ (Foto aus Kamera/Galerie, Link, Notiz) über den vorhandenen Weg; Vorbelegung per URL ?ablegen=1&link=&text=&titel= (für „Teilen an Food Alchemist“). Radar bleibt am Computer (bei 375 px nicht eindeutig antippbar) | Concerns\HandyTrendsLesen → livewire/handy/trends, handy/trend-pinnwand | 8 ✓ |
 | Tagesplan, Wandmonitor | `/produktion/tagesplan`, `/produktion/wandmonitor` | Produktion\Tagesplan | Desktop (Wandmonitor hat eigene Kiosk-Ansicht) | – | – |
 | Wareneingang | `/wareneingang` | Wareneingang\Index | Desktop | – | – |
 | Preislisten | `/preislisten` | Preislisten\Index | Desktop | – | – |
