@@ -259,6 +259,7 @@ class GpService
                 try {
                     \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
                         (int) $gp->team_id, (int) $confUid, 'gp', (int) $gp->id,
+                        extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch(),
                     );
                 } catch (\Throwable $e) {
                     // Dispatch-Fehler schlucken — die Freigabe steht.

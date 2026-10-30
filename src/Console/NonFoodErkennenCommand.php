@@ -24,6 +24,7 @@ class NonFoodErkennenCommand extends Command
         {--ki : die unklaren Artikel an die KI geben (nur mit --apply)}
         {--ki-nochmal : auch Artikel noch einmal an die KI geben, die sie schon versucht hat (Standard: nur die noch nie versuchten)}
         {--ki-limit= : höchstens so viele Artikel an die KI (Messlauf an 2–3 Stapeln, bevor der ganze Bestand läuft)}
+        {--anbieter=plattform : plattform (OpenAI über den Core) | extern (legt KI-Aufträge je Stapel an, ein MCP-Client beantwortet sie über ki_auftraege.*; ANTWORT startet den Stapel neu)}
         {--stapel= : Artikel je KI-Aufruf (Standard: NonFoodKiBatchJob::STAPEL)}';
 
     protected $description = 'Non-Food am Lieferantenartikel erkennen: Regel, dann KI für unklare, Rest in die Prüfliste';
@@ -75,7 +76,7 @@ class NonFoodErkennenCommand extends Command
             $groesse = max(1, (int) ($this->option('stapel') ?: NonFoodKiBatchJob::STAPEL));
             $stapel = array_chunk($ids, $groesse);
             foreach ($stapel as $teil) {
-                NonFoodKiBatchJob::dispatch($teil)->onQueue(Warteschlange::anreichern());
+                NonFoodKiBatchJob::dispatch($teil, $this->option('anbieter') === 'extern')->onQueue(Warteschlange::anreichern());
             }
             $this->line(count($stapel).' KI-Stapel à höchstens '.$groesse.' auf der Schlange „'.(Warteschlange::anreichern() ?? 'default').'“ eingereiht ('.count($ids).' Artikel'
                 .($uebersprungen > 0 ? ', '.$uebersprungen.' schon früher von der KI versucht und übersprungen' : '').').');

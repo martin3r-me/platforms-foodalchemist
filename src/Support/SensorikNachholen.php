@@ -28,7 +28,7 @@ final class SensorikNachholen
         if ($user === null || ! self::braucht($recipeId) || ! app(TeamSettingsService::class)->kiAktiv($team)) {
             return;
         }
-        SensorikNachholenJob::dispatch((int) $team->id, (int) $user->id, $recipeId, extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->aktiv())   // #1002: das Kind erbt den Extern-Modus des auslösenden Laufs
+        SensorikNachholenJob::dispatch((int) $team->id, (int) $user->id, $recipeId, extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch())   // #1002: das Kind erbt den Extern-Modus des auslösenden Laufs
             ->onQueue(Warteschlange::anreichern())
             ->delay(now()->addSeconds(self::VERZOEGERUNG_SEKUNDEN))
             ->afterCommit();

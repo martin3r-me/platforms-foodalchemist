@@ -31,7 +31,7 @@ use Platform\FoodAlchemist\Services\GpNamingService;
  * Reuse: Feld-Ableitung über den bestehenden Prompt `gp.suggest`
  * (= WaWi-105-Spiegel: hauptzutat/condition/processing/form/pflichtangabe).
  */
-class ClassifyLaJob implements ShouldQueue
+class ClassifyLaJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
 
@@ -43,10 +43,49 @@ class ClassifyLaJob implements ShouldQueue
     public function __construct(
         public int $supplierItemId,
         public int $teamId,
+        public bool $extern = false,   // #1002 LA-Wege: ausgelöst von einem externen MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
     ) {
     }
 
+    // ── #1002 · KiExternWiederholbar ──
+    public function externAktiv(): bool
+    {
+        return $this->extern;
+    }
+
+    public function externSchluessel(): string
+    {
+        return "classify-la:{$this->teamId}:{$this->supplierItemId}";
+    }
+
+    public function externTeamId(): int
+    {
+        return $this->teamId;
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['supplier_item_id' => $this->supplierItemId, 'team_id' => $this->teamId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['supplier_item_id'], (int) $n['team_id'], true, $versuch);
+    }
+
     public function handle(AiGatewayService $ki, GpNamingService $naming): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($ki, $naming));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(AiGatewayService $ki, GpNamingService $naming): void
     {
         $team = Team::find($this->teamId);
         if ($team === null) {

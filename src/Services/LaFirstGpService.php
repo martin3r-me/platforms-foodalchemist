@@ -154,7 +154,7 @@ class LaFirstGpService
             // Spec 16·S4: getroffenen LA on-demand nachklassifizieren — ASYNC, nie inline.
             // Der Job blockiert den Mint nie und ist idempotent (klassifiziert → skip).
             if ($struktur === null || $struktur->classified_at === null) {
-                ClassifyLaJob::dispatch((int) $la->id, $team->id);
+                ClassifyLaJob::dispatch((int) $la->id, $team->id, extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch());
             }
 
             // Schicht 3 · Slice 4b: frisch geminteten (tentativen) GP async gegen das GP-Regelwerk
@@ -162,7 +162,7 @@ class LaFirstGpService
             // Critic braucht Auth für den KI-Call). Best-effort: kippt den Mint nie.
             if ($neuAngelegt && $gp !== null && ($confUid = \Illuminate\Support\Facades\Auth::id()) !== null) {
                 try {
-                    ConformanceCheckJob::dispatch($team->id, (int) $confUid, 'gp', (int) $gp->id);
+                    ConformanceCheckJob::dispatch($team->id, (int) $confUid, 'gp', (int) $gp->id, extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch());
                 } catch (\Throwable $e) {
                     // Dispatch-Fehler schlucken — der Mint steht.
                 }
