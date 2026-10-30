@@ -237,12 +237,33 @@ class PreislistenImportService
             throw new \RuntimeException('Ein Stammdaten-Lauf wird nicht als Preisliste angewendet — die Übernahme je Zeile folgt in der Prüfliste.');
         }
 
+        return $this->schreibeLauf($team, $run, [Zeile::STATUS_TREFFER, Zeile::STATUS_ZUKUENFTIG]);
+    }
+
+    /**
+     * Täglicher Systemlauf (Kommando `foodalchemist:faellige-preise`): schreibt nur vorgemerkte Preise, deren „Gültig ab“ erreicht ist. Kein Nutzer, keine
+     * neue Entscheidung — die Treffer wurden beim Anwenden schon bestätigt; Zeilen mit künftigem Datum bleiben vorgemerkt ({@see wendeZeileAn}).
+     *
+     * @return array{angewendet:int, unveraendert:int, zukuenftig:int, fehler:int, kette:array<string,int>, lauf_status:string}
+     */
+    public function faelligeZukunftspreise(Team $team, FoodAlchemistPriceImportRun $run): array
+    {
+        if ((int) $run->team_id !== (int) $team->id || $run->art !== FoodAlchemistPriceImportRun::ART_PREISLISTE) {
+            throw new \RuntimeException('Dieser Lauf gehört nicht zu diesem Team oder ist keine Preisliste.');
+        }
+
+        return $this->schreibeLauf($team, $run, [Zeile::STATUS_ZUKUENFTIG]);
+    }
+
+    /** @param list<string> $stati  Zeilen-Stati, die angefasst werden */
+    private function schreibeLauf(Team $team, FoodAlchemistPriceImportRun $run, array $stati): array
+    {
         $heute = Carbon::today();
         $bilanz = ['angewendet' => 0, 'unveraendert' => 0, 'zukuenftig' => 0, 'fehler' => 0];
         $bewegt = [];
 
         Zeile::where('run_id', $run->id)->where('team_id', $team->id)
-            ->whereIn('status', [Zeile::STATUS_TREFFER, Zeile::STATUS_ZUKUENFTIG])->orderBy('id')
+            ->whereIn('status', $stati)->orderBy('id')
             ->chunkById(500, function ($zeilen) use ($team, $heute, &$bilanz, &$bewegt) {
                 foreach ($zeilen as $z) {
                     $ergebnis = $this->wendeZeileAn($team, $z, $heute);

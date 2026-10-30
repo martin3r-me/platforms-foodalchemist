@@ -84,6 +84,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\PlanPreiseStartwerteCommand::class,   // Spec 82 §13 D (Platzhalter-Startpreise)
                 \Platform\FoodAlchemist\Console\EquipmentStandardSetzenCommand::class,   // Spec 82 §6 (Daten per Befehl, nicht per Migration)
                 \Platform\FoodAlchemist\Console\PreislisteImportCommand::class,   // Spec 82 §3 (Abgleich, schreibt keine Preise)
+                \Platform\FoodAlchemist\Console\FaelligePreiseCommand::class,   // täglich: vorgemerkte Preise (Gültig ab erreicht) aus Preislisten-/Stammdaten-Läufen
                 \Platform\FoodAlchemist\Console\GpHomogenitaetBerichtCommand::class,   // Spec 82 §2 (nur lesend)
                 \Platform\FoodAlchemist\Console\NaehrwertePruefenCommand::class,   // Nährwert-Prüfung: Trockenlauf + Meldeliste (nur lesend)
                 \Platform\FoodAlchemist\Console\WareneingangAltbestandCommand::class,   // Spec 75c
@@ -231,6 +232,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+
+            // Fällige vorgemerkte Preise (Preisliste + Stammdaten): früh morgens, idempotent, Protokoll im Log und am Lauf.
+            $schedule->command(\Platform\FoodAlchemist\Console\FaelligePreiseCommand::class)
+                ->dailyAt(config('foodalchemist.scheduler.faellige_preise_zeit', '05:30'))
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: fällige vorgemerkte Preise schreiben (Preislisten + Stammdaten)');
 
             // Necta-Abgleich (PR 2): nachts Preis-Delta + neue Artikel, wöchentlich Vollvergleich. NUR bewusst eingeschaltet
             // (foodalchemist.necta.abgleich_aktiv, Standard aus): erst Probelauf und Dominiques Ja, dann einschalten.
