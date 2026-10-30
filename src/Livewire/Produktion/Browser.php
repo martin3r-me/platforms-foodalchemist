@@ -24,6 +24,14 @@ use Platform\FoodAlchemist\Support\Zeitraum;
 class Browser extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur suchen, filtern, öffnen
+
+    /** #1003: am Handy laufen Auswahl, Filter, Zeitraum und Blättern; Anlegen und Editor bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehle', 'waehleStatus', 'waehleZeitraum', 'waehleAnsicht', 'aktualisiere', 'verwerfeAuswahl', 'aktualisiereListe',
+            'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     #[Url(as: 'auftrag')]
     public ?int $orderId = null;

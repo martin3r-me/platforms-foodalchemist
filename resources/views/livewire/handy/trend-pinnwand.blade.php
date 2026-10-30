@@ -50,10 +50,10 @@
     <div class="flex flex-wrap gap-1.5">
         @foreach(['offen' => 'Offen', 'zugeordnet' => 'Zugeordnet', 'alle' => 'Alle'] as $wert => $label)
             <button type="button" wire:click="$set('pinnAnsicht', @js($wert))" wire:key="hpa-{{ $wert }}"
-                    class="fa-chip min-h-11 {{ $pinnAnsicht === $wert ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : '' }}"><span>{{ $label }}</span></button>
+                    class="inline-flex items-center gap-1 min-h-11 px-3.5 rounded-full border text-[length:var(--fa-text-md)] font-medium {{ $pinnAnsicht === $wert ? 'bg-[var(--fa-accent-soft)] border-[var(--fa-accent)] text-[var(--fa-accent)]' : 'bg-[var(--fa-surface)] border-[var(--fa-line-strong)] text-[var(--fa-ink-2)]' }}">{{ $label }}</button>
         @endforeach
         @if($pinnSchlagwort !== '')
-            <button type="button" class="fa-chip min-h-11" wire:click="$set('pinnSchlagwort', '')"><span class="inline-flex items-center gap-1" aria-label="Filter #{{ $pinnSchlagwort }} entfernen">#{{ $pinnSchlagwort }} @svg('heroicon-m-x-mark', 'w-4 h-4')</span></button>
+            <button type="button" class="inline-flex items-center gap-1 min-h-11 px-3.5 rounded-full border text-[length:var(--fa-text-md)] font-medium bg-[var(--fa-accent-soft)] border-[var(--fa-accent)] text-[var(--fa-accent)]" wire:click="$set('pinnSchlagwort', '')" aria-label="Filter #{{ $pinnSchlagwort }} entfernen">#{{ $pinnSchlagwort }} @svg('heroicon-m-x-mark', 'w-4 h-4')</button>
         @endif
     </div>
 

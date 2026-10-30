@@ -9,6 +9,14 @@ use Platform\FoodAlchemist\Services\OrderService;
 
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003 PR5: am Handy nur lesen
+
+    /** #1003: am Handy nur Auswahl; „Bestellung bearbeiten“ bleibt am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehle'];
+    }
+
     public ?int $orderId = null;
 
     public function mount(?int $orderId = null): void

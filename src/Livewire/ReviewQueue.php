@@ -29,6 +29,16 @@ use Platform\FoodAlchemist\Services\TerminologyService;
 class ReviewQueue extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003 PR5: am Handy lesen; „abhaken“ über handy.aendern_frei
+
+    /**
+     * #1003: am Handy laufen Reiter, Filter und Blättern. Erledigt/Wieder öffnen nur, wenn sie in
+     * config('foodalchemist.handy.aendern_frei') stehen (HandyLesemodus::frei) — Ignorieren, KI, Übernehmen, Läufe nie.
+     */
+    public function handyLeseMethoden(): array
+    {
+        return ['setTab', 'setSignalStatus', 'setSignalTyp', 'betriebGewechselt', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
 
     public ?string $meldung = null;
 
@@ -512,7 +522,9 @@ class ReviewQueue extends Component
                 ->get(['p.id', 'p.score', 'p.methode', 'i.designation AS la_name', 'g.name AS gp_name']),
             'bulkZahl' => (clone $bulkOffen)->count(),
             'bulks' => (clone $bulkOffen)->orderByDesc('b.id')->limit(50)
-                ->get(['b.id', 'b.field', 'b.value', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.is_sales_recipe']),
+                ->get(['b.id', 'b.field', 'b.value', 'b.confidence', 'r.name AS rezept_name', 'r.id AS rezept_id', 'r.is_sales_recipe',
+                    // #1003: am Handy je Vorschlag Begründung und bisheriger Wert (Textfelder) lesbar
+                    'b.reasoning', 'r.description AS alt_description', 'r.sales_wording_standard AS alt_wording', 'r.plating_text AS alt_plating', 'r.taste_direction AS alt_geschmack']),
             'vkOhneKlasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')
                 ->orderBy('name')->limit(50)->get(['id', 'name']),
             'imReview' => (clone $rezept())->where('status', 'review')->orderBy('name')->limit(50)

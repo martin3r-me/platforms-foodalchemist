@@ -25,6 +25,7 @@
     $kiUrteil = $sig !== null && $sig->type->istKiUrteil();
     $linkKlasse = 'min-w-0 flex-1 flex items-center gap-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline';
     $artLabel = ['recipe' => null, 'gp' => 'Grundprodukt', 'concept' => 'Konzept', 'foodbook' => 'Foodbook'];
+    $handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy();   // #1003 PR5: am Handy nur lesen (Übernehmen, Einstellen am Computer)
 @endphp
 
 <x-foodalchemist::modal name="signal-detail" title="Signal" size="max-w-2xl">
@@ -88,13 +89,13 @@
                 @foreach($fp['rezepte'] ?? [] as $r)
                     <div class="flex items-center gap-2 py-1" wire:key="sigfr-{{ $r['recipe_id'] }}" data-signal-fassung-rezept="{{ $r['recipe_id'] }}">
                         <span class="min-w-0 flex-1 truncate">{{ $r['name'] }} <span class="text-[var(--fa-ink-3)]">· Rezept auf Fassung #{{ $r['von_nr'] }} · {{ $r['grund'] === 'allergen' ? 'Allergen-Änderung' : 'in eingefrorenem Angebot' }}</span></span>
-                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="rezeptUebernahmePruefen({{ $r['recipe_id'] }}, {{ $fp['familie_id'] }})" data-signal-rezept-uebernehmen>Übernehmen am Rezept …</x-fa::button>
+                        @unless($handy)<x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="rezeptUebernahmePruefen({{ $r['recipe_id'] }}, {{ $fp['familie_id'] }})" data-signal-rezept-uebernehmen>Übernehmen am Rezept …</x-fa::button>@endunless
                     </div>
                 @endforeach
                 @foreach($fp['bausteine'] ?? [] as $b)
                     <div class="flex items-center gap-2 py-1" wire:key="sigfb-{{ $b['quelle'] }}-{{ $b['row_id'] }}" data-signal-fassung-baustein="{{ $b['quelle'] }}-{{ $b['row_id'] }}">
                         <span class="min-w-0 flex-1 truncate">{{ $b['wo'] }} „{{ $b['name'] }}“ <span class="text-[var(--fa-ink-3)]">· steht auf Fassung #{{ $b['von_nr'] }} · {{ $b['grund'] === 'allergen' ? 'Allergen-Änderung' : 'in eingefrorenem Angebot' }}</span></span>
-                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="bausteinUebernahmePruefen('{{ $fp['art'] ?? 'concept' }}', '{{ $b['quelle'] }}', {{ $b['row_id'] }})" data-signal-baustein-uebernehmen>Übernehmen …</x-fa::button>
+                        @unless($handy)<x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="bausteinUebernahmePruefen('{{ $fp['art'] ?? 'concept' }}', '{{ $b['quelle'] }}', {{ $b['row_id'] }})" data-signal-baustein-uebernehmen>Übernehmen …</x-fa::button>@endunless
                     </div>
                 @endforeach
                 @if($bausteinUebernahme)
@@ -284,8 +285,10 @@
         <x-fa::section variant="plain" title="Meldungen dieser Art dämpfen" icon="heroicon-o-adjustments-horizontal"
                        description="Gilt für alle Signale der Art, nicht nur für dieses.">
             <x-slot:actions>
+                @unless($handy)
                 <x-fa::button variant="ghost" size="sm" :icon="$policyForm ? 'heroicon-m-x-mark' : 'heroicon-m-adjustments-horizontal'" wire:click="policyFormUmschalten"
                               aria-expanded="{{ $policyForm ? 'true' : 'false' }}" data-signal-policy-toggle>{{ $policyForm ? 'Schließen' : 'Einstellen' }}</x-fa::button>
+                @endunless
             </x-slot:actions>
 
             @if($policy !== null)

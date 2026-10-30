@@ -10,6 +10,10 @@
      · Signal-Zeile seitenlokal (statt partials/_signal-row): Schwere-Badge, Titel, Bezug, eine
        Hauptaktion; keine farbigen Seitenbalken mehr. Funktion, wire:-Bindungen und data-Marker gleich. --}}
 @php
+    // #1003 PR5: am Handy nur lesen — Aktionen nicht rendern, außer sie stehen in config('foodalchemist.handy.aendern_frei')
+    // (z. B. signalErledigt/signalWiederOeffnen). Der Server prüft dasselbe (ReviewQueue: HandyLesebereich).
+    $handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy();
+    $zeigen = fn (string $schluessel) => ! $handy || \Platform\FoodAlchemist\Support\HandyLesemodus::frei($schluessel);
     $pflegeGesamt = $vkOhneKlasse->count() + $imReviewZahl + $ungemapptZahl;
     $vorschlaegeZahl = $bulkZahl + $matchZahl;
     $sevK = $severitySplit['kritisch'] ?? 0;
@@ -85,6 +89,7 @@
             <x-slot:actions>
                 {{-- Lauf-Knöpfe: getrennt, weil die Prüfung gratis ist und die KI-Befunde Provider-Geld
                      kosten. Das Limit steht sichtbar am Knopf (Kostenbremse, V-047). --}}
+                @if($zeigen('signale.laeufe'))
                 <div class="flex flex-wrap items-center justify-end gap-2" data-rq-laeufe>
                     <div class="inline-flex items-center gap-2 h-9 pl-1 pr-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
                         <x-foodalchemist::ki-action action="befundeLaufen" variant="ai" icon="heroicon-o-sparkles" label="KI-Befunde sammeln"
@@ -102,6 +107,7 @@
                         <span wire:loading wire:target="detektorLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-m-arrow-path', 'w-4 h-4 animate-spin') Wird eingereiht …</span>
                     </x-fa::button>
                 </div>
+                @endif
             </x-slot:actions>
         </x-fa::page-header>
 
@@ -287,7 +293,8 @@
                                 <div class="px-4" wire:key="sig-{{ $sig->id }}">
                                     <div class="flex flex-wrap sm:flex-nowrap items-start gap-3 py-3">
                                         <x-fa::badge :tone="$schwereTon[$sig->severity->value] ?? 'info'" class="shrink-0 w-[76px] justify-center mt-px">{{ $sig->severity->label() }}</x-fa::badge>
-                                        <div class="min-w-0 flex-1">
+                                        {{-- #1003: am Handy Mindestbreite, damit die Aktionen umbrechen statt den Titel Wort für Wort zu quetschen --}}
+                                        <div class="{{ $handy ? 'min-w-[12rem]' : 'min-w-0' }} flex-1">
                                             <p class="text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)] leading-snug">{{ $sig->title }}</p>
                                             <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                                                 <span class="inline-flex items-center gap-1">@svg($sig->type->icon(), 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]'){{ $sig->type->label() }}</span>
@@ -335,7 +342,7 @@
 
                                         <div class="shrink-0 flex items-center gap-1.5 ml-auto">
                                             @if($sig->status->istOffen())
-                                                @if($ki)
+                                                @if($ki && $zeigen('toggleKiPanel'))
                                                     <x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="toggleKiPanel({{ $sig->id }})"
                                                                   aria-expanded="{{ $kiPanelId === $sig->id ? 'true' : 'false' }}" title="{{ $ki['flavorLabel'] }}">KI erledigen lassen</x-fa::button>
                                                 @endif
@@ -343,13 +350,13 @@
                                                 <x-fa::button size="sm" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
                                                               title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">Betroffene ansehen</x-fa::button>
                                                 {{-- Erledigt/Ignorieren sind Status-Setzer, keine lauten Aktionen. --}}
-                                                <x-fa::icon-button size="sm" icon="heroicon-o-check-circle" label="Als erledigt markieren" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}" />
-                                                <x-fa::icon-button size="sm" icon="heroicon-o-no-symbol" label="Bewusst ignorieren" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}" />
+                                                @if($zeigen('signalErledigt'))<x-fa::icon-button size="sm" icon="heroicon-o-check-circle" label="Als erledigt markieren" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}" />@endif
+                                                @if($zeigen('signalIgnorieren'))<x-fa::icon-button size="sm" icon="heroicon-o-no-symbol" label="Bewusst ignorieren" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}" />@endif
                                             @else
                                                 <x-fa::badge :tone="$sig->status->value === 'erledigt' ? 'ok' : 'neutral'">{{ $sig->status->label() }}</x-fa::badge>
                                                 <x-fa::button size="sm" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
                                                               title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">Betroffene ansehen</x-fa::button>
-                                                <x-fa::button variant="ghost" size="sm" wire:click="signalWiederOeffnen({{ $sig->id }})">Wieder öffnen</x-fa::button>
+                                                @if($zeigen('signalWiederOeffnen'))<x-fa::button variant="ghost" size="sm" wire:click="signalWiederOeffnen({{ $sig->id }})" data-rq-sig-wieder="{{ $sig->id }}">Wieder öffnen</x-fa::button>@endif
                                             @endif
                                         </div>
                                     </div>
@@ -379,9 +386,13 @@
 
                                             <div class="flex items-center justify-end gap-2">
                                                 <x-fa::button variant="ghost" size="sm" wire:click="toggleKiPanel({{ $sig->id }})">Schließen</x-fa::button>
+                                                @if($zeigen('kiFixAusfuehren'))
+                                                {{-- #1003: am Handy ändert „Automatisch beheben“ erst nach Bestätigung (Entwurf ändert nichts) --}}
                                                 <x-foodalchemist::ki-action action="kiFixAusfuehren({{ $sig->id }})" target="kiFixAusfuehren" variant="primary"
                                                         :icon="$istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles'" :label="$istFix ? 'Automatisch beheben' : 'Entwurf erzeugen'"
-                                                        busy="Läuft …" />
+                                                        :confirm="$handy && $istFix ? 'Automatisch beheben? ' . $ki['flavorLabel'] . ($anzahl !== null ? ' · betrifft ' . number_format($anzahl, 0, ',', '.') . ' Objekte' : '') . '. ' . $ki['plan'] . ' Die betroffenen Objekte werden im Hintergrund geändert.' : null"
+                                                        busy="Läuft …" data-rq-ki-fix="{{ $sig->id }}" />
+                                                @endif
                                             </div>
                                         </div>
                                     @endif
@@ -446,6 +457,42 @@
                            description="Übernehmen schreibt den vorgeschlagenen Wert ins Rezept." data-rq-bulks>
                 <div class="flex flex-col divide-y divide-[var(--fa-line)] -mx-4">
                     @forelse($bulks as $b)
+                        @if($handy)
+                            {{-- #1003: am Handy je Vorschlag eine Karte — Objekt, Feld, bisher → neu, Begründung; Übernehmen mit Bestätigung --}}
+                            @php
+                                $feldLabel = ['description' => 'Beschreibung', 'wording' => 'Verkaufstext', 'plating' => 'Anrichten', 'category' => 'Kategorie',
+                                    'geschmack' => 'Geschmacksrichtung', 'servier_vehikel' => 'Servier-Vehikel', 'speisen_klasse' => 'Speisen-Klasse',
+                                    'dichteklasse' => 'Dichteklasse', 'rollen' => 'Zutaten-Rollen', 'regeneration' => 'Regeneration', 'garverlust' => 'Garverlust'][$b->field] ?? $b->field;
+                                $roh = json_decode((string) $b->value, true);
+                                // strukturierte Werte lesbar: bekannte Schlüssel mit Einheit, IDs weg, Listen als Anzahl
+                                $teil = fn ($k, $v) => match (true) {
+                                    $k === 'temp_c' && is_numeric($v) => $v . ' °C', $k === 'core_temp_c' && is_numeric($v) => 'Kern ' . $v . ' °C',
+                                    $k === 'duration_min' && is_numeric($v) => $v . ' min', $k === 'kalt' => $v === true ? 'kalt' : null,
+                                    in_array($k, ['rollen', 'verluste'], true) && is_array($v) => count($v) . ' Zutaten',
+                                    str_ends_with((string) $k, '_id') || is_array($v) || $v === null || $v === '' => null,
+                                    default => (string) $v,
+                                };
+                                $neu = is_array($roh) ? \Illuminate\Support\Str::limit(collect($roh)->map(fn ($v, $k) => $teil($k, $v))->filter()->implode(' · '), 240) : trim((string) ($roh ?? $b->value), '"');
+                                $alt = ['description' => $b->alt_description, 'wording' => $b->alt_wording, 'plating' => $b->alt_plating, 'geschmack' => $b->alt_geschmack][$b->field] ?? null;
+                            @endphp
+                            <div class="flex flex-col gap-2 px-4 py-3" wire:key="rqb-{{ $b->id }}" data-rq-bulk-karte="{{ $b->id }}">
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="min-w-0 font-medium text-[var(--fa-ink)] wrap-anywhere">{{ $b->rezept_name }}</p>
+                                    @if($b->confidence !== null)<span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ round($b->confidence * 100) }} %</span>@endif
+                                </div>
+                                <x-fa::badge tone="info" class="self-start">{{ $feldLabel }}</x-fa::badge>
+                                @if(filled($alt))<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] wrap-anywhere"><span class="font-medium">Bisher:</span> {{ \Illuminate\Support\Str::limit((string) $alt, 240) }}</p>@endif
+                                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] wrap-anywhere"><span class="font-medium">Neu:</span> {{ $neu }}</p>
+                                @if(filled($b->reasoning))<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] wrap-anywhere"><span class="font-medium">Begründung:</span> {{ \Illuminate\Support\Str::limit((string) $b->reasoning, 300) }}</p>@endif
+                                @if($zeigen('bulkUebernehmen') || $zeigen('bulkVerwerfen'))
+                                    <div class="flex gap-2">
+                                        @if($zeigen('bulkVerwerfen'))<x-fa::button variant="ghost" class="flex-1 min-h-11 justify-center" wire:click="bulkVerwerfen({{ $b->id }})" data-rq-bulk-nein>Verwerfen</x-fa::button>@endif
+                                        @if($zeigen('bulkUebernehmen'))<x-fa::button icon="heroicon-m-check" class="flex-1 min-h-11 justify-center" wire:click="bulkUebernehmen({{ $b->id }})"
+                                            wire:confirm="{{ 'Wert „' . \Illuminate\Support\Str::limit($neu, 80) . '“ für ' . $feldLabel . ' an ' . $b->rezept_name . ' übernehmen?' }}" data-rq-bulk-ok>Übernehmen</x-fa::button>@endif
+                                    </div>
+                                @endif
+                            </div>
+                        @else
                         <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-2.5" wire:key="rqb-{{ $b->id }}">
                             <div class="min-w-0 flex-1">
                                 <button type="button" wire:click="$dispatch('{{ $b->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $b->rezept_id }} })"
@@ -457,10 +504,13 @@
                                 </p>
                             </div>
                             <div class="shrink-0 flex items-center gap-1.5 ml-auto">
+                                @if($zeigen('signale.vorschlag'))
                                 <x-fa::button variant="ghost" size="sm" wire:click="bulkVerwerfen({{ $b->id }})" data-rq-bulk-nein>Verwerfen</x-fa::button>
                                 <x-fa::button size="sm" icon="heroicon-m-check" wire:click="bulkUebernehmen({{ $b->id }})" data-rq-bulk-ok>Übernehmen</x-fa::button>
+                                @endif
                             </div>
                         </div>
+                        @endif
                     @empty
                         <x-fa::empty compact icon="heroicon-o-sparkles" title="Keine offenen KI-Werte">Vorschläge entstehen, wenn Rezepte im Rezept-Browser per KI angereichert werden.</x-fa::empty>
                     @endforelse
@@ -480,8 +530,10 @@
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Wie die Zuordnung gefunden wurde">{{ $m->methode }}</span>
                             </div>
                             <div class="shrink-0 flex items-center gap-1.5 ml-auto">
+                                @if($zeigen('signale.vorschlag'))
                                 <x-fa::button variant="ghost" size="sm" wire:click="matchVerwerfen({{ $m->id }})" data-rq-match-nein>Verwerfen</x-fa::button>
                                 <x-fa::button size="sm" icon="heroicon-m-check" wire:click="matchUebernehmen({{ $m->id }})" data-rq-match-ok>Übernehmen</x-fa::button>
+                                @endif
                             </div>
                         </div>
                     @empty
@@ -515,6 +567,7 @@
                 @endforeach
             </div>
 
+            @if($zeigen('signale.terminologie'))
             {{-- Begriffe lehren (E7-c, #507): wirkt sofort im nächsten Zuordnen. --}}
             <x-fa::section title="Begriffe lehren" icon="heroicon-o-academic-cap"
                            description="Passt eine Zuordnung nur wegen eines anderen Worts nicht, oder verwechselt sie zwei Produkte? Hier lehren. Wirkt sofort beim nächsten Zuordnen." data-rq-terminologie>
@@ -537,6 +590,7 @@
                     </x-fa::field>
                 </div>
             </x-fa::section>
+            @endif
         @endif
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
