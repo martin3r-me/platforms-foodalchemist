@@ -86,6 +86,12 @@ it('(b) das Signal schließt sich, wenn nichts mehr unbeantwortet liegt', functi
     expect(($this->signale)()->first()->status->value)->toBe('erledigt');
 });
 
+it('(b) der reguläre Detektor-Lauf (laufen) erzeugt das Signal — nicht nur der direkte Aufruf', function () {
+    ($this->auftrag)('gp.anker', 'offen', now()->subHours(5));
+    app(SignalDetektorService::class)->laufen($this->rootTeam);
+    expect(($this->signale)())->toHaveCount(1);
+});
+
 it('(c) abgelaufene Aufträge werden nicht verworfen — der Nachlauf erkennt die Lücke und legt einen neuen Auftrag an', function () {
     Queue::fake();
     $gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ananas'], $this->mcp)->data['id'];
