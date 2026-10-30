@@ -103,7 +103,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 78 | `src/Services/SpeisenKlassenService.php::verteileRollen` | vk.rollen | 1 | a | P2 | RecipeRollenPostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 79 | `src/Services/SpeiseplanService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 80 | `src/Services/TitelVorschlagService.php::titelVorschlag` | dyn. $promptKey (recipe.titel_vorschlag / vk.titel_vorschlag) | 1 | a | P2 | kein Tool (nur UI) | offen |  |
-| 81 | `src/Services/Websuche/CoreWebSucheTransport.php::suche` | artikel.web_recherche (include_web_search) | 1 | b | P2 | kein Tool (nur UI) | offen | WEBSUCHE: eigener Weg, Entscheidung Punkt 5 |
+| 81 | `src/Services/Websuche/CoreWebSucheTransport.php::suche` | artikel.web_recherche (include_web_search) | 1 | b | P2 | produktpass.RECHERCHE (neu), Produktpass-Panel (UI) | angeschlossen | 2d-2: MCP-Weg über das neue Tool produktpass.RECHERCHE (Tool-Umleitung, Tabelle D, KiExternWebsucheTest): der MCP-Client sucht selbst im Web, ANTWORT verlangt `quellen` (url, title) — Antwort ohne http(s)-Quelle wird abgelehnt, die Quellen kommen als `sources` im Vorschlag an (ArtikelWebRecherche unverändert: jede Angabe braucht eine dieser URLs). Der UI-Weg (Panel, ProduktpassRechercheJob) bleibt Plattform. |
 | 82 | `src/Services/ZukaufBasisrezeptService.php::baue` | recipe.ruestschritt | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 
 ## B · Zusatzwege
@@ -113,7 +113,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 83 | `src/Services/VoiceCommandService.php` → `AiGatewayService::callWithTools` | Voice-Agent (Tier-D-Tool-Loop) | c | P2 | — | Ausnahme (Vorschlag) | AGENTISCHER LOOP: Claude ist selbst der Loop, ruft MCP-Tools direkt. Ausnahme-Vorschlag. Dominique 29.10.: der Voice-Agent ist nur ein Gadget, Ausnahme unkritisch |
 | 84 | `src/Services/RecipeImageService.php::generateAndStore` | Bildgenerierung (Core ImageGenerationService) | c | P2 | RecipeImageGenerateTool | Ausnahme (Vorschlag) | Ausnahme-Vorschlag: Claude erzeugt keine Bilder, bleibt Plattform |
 | 85 | `src/Services/Ai/SemanticRetrievalService.php`, `PoolEmbeddingService.php`, `KnowledgeEmbeddingService.php` | Embeddings (text-embedding-3-large) | — | — | — | Ausnahme (Vorschlag) | AUSNAHME (Entscheidung Dominique): bleibt OpenAI |
-| 86 | `src/Services/Websuche/CoreWebSucheTransport.php` (`include_web_search`, Eintrag auch in Tabelle A) | Websuche über den Plattform-Provider | b | P2 | — | offen | Entscheidung Punkt 5: Claude sucht selbst (extern) oder bleibt Plattform |
+| 86 | `src/Services/Websuche/CoreWebSucheTransport.php` (`include_web_search`, Eintrag auch in Tabelle A; die externe Seite: `KiAuftragService` prüft die Quellen beim Beantworten, `KiAuftraegeGetTool` kennzeichnet den Auftrag) | Websuche über den Plattform-Provider | b | P2 | — | angeschlossen | Entscheidung Punkt 5 umgesetzt (2d-2): extern sucht der MCP-Client selbst, Quellenpflicht beim Beantworten; UI bleibt Plattform |
 
 ## Summen
 
@@ -168,6 +168,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | MCP-Herkunft → Folge-Jobs | Merker `KiExternModus::imMcp` (Hülle, jedes FA-Tool) | Ein externer MCP-Aufruf markiert den Lauf; Jobs, die er anstößt (`ClassifyLaJob`, `GpAromaNachholenJob`, `SensorikNachholenJob`, `ConformanceCheckJob` bei GP), laufen mit `extern=true` (`fuerDispatch`). Kein Auftrag, keine Transaktion im Tool selbst |
 | `foodalchemist.recipes.EXTRACT` | umgeleitet (Textweg) | ein `propose()` (`recipe.extract`), danach DB-Schreiben des Entwurfs inkl. Sub-Basisrezepte; `StubAusrezeptierenJob` für neue Hüllen erbt `extern` aus dem MCP-Aufruf und startet nach dem Commit; `dry_run` schreibt nichts |
 | `signale.FIX` (Assist) | `KiUmleitung::TOOLS` | Ein `propose()` je Signal-Typ (`signal.supplier_inquiry`, `signal.margin_levers`, `price.plausi`, `signal.vk_release_advice`, `signal.serving_form_suggest`, `signal.recipe_category_suggest`, `signal.recipe_naming_suggest`), Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne und `dry_run` rufen keine KI. `SignalFixJob` bleibt deterministisch ohne KI (geprüft per Code-Lesen: nur `SignalFixService::execute`, kein Gateway-Aufruf) |
+| `foodalchemist.produktpass.RECHERCHE` | umgeleitet (Websuche) | ein `propose()` (`artikel.web_recherche`, `include_web_search`) über `ArtikelWebRecherche`, danach DB-Schreiben des Produktpass-Vorschlags (Status `gelesen`); keine Queue-Jobs. Extern sucht der MCP-Client selbst, `ANTWORT.quellen` ist Pflicht (abgelehnt ohne http(s)-Quelle), Rückgabe als `sources` |
 | Folge-Aufträge sichtbar | `KiUmleitung::mitFolgeHinweis`, `SignalDetektorService::kiAuftraegeOffen` (`SignalTyp::KiAuftraegeOffen`) | Tool-Ergebnis meldet `folgeauftraege.jobs_angestossen` (Hinweis auf `ki_auftraege.GET`, 24-h-Ablauf). Cockpit-Signal je Team und Feature (nicht je Auftrag): offen > 2 h = Info, abgelaufen in 7 Tagen = Warnung; schließt sich selbst. Abgelaufene Aufträge werden nicht verworfen und lösen keinen Plattform-Fallback aus: die Lücke bleibt in den Daten, der nächste Nachhol-Lauf findet sie wieder (Test) |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
 
@@ -281,7 +282,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `la.nonfood` | 12 | 0 | 0 | Job | angeschlossen (`--anbieter=extern`) | LA-Wege |
 | `recipe.posten` | 1 | 0 | 0 | RecipesGenerateTool (One-Shot-Kette) | Plattform | 2d (übrige) |
 | `demo.echo` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
-| `artikel.web_recherche` | 0 | – | 0 | CoreWebSucheTransport::suche | Plattform | Paket LA-Wege (vorgezogen) |
+| `artikel.web_recherche` | 0 | – | 0 | CoreWebSucheTransport::suche | angeschlossen | 2d-2 (MCP-Weg; UI-Panel bleibt Plattform) |
 | `recipe.ruestschritt` | 0 | – | 0 | ZukaufBasisrezeptService::baue; recipes.ENRICH (steps) | Plattform | 2d (übrige) |
 | `gp.domain` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
 | `gp.piece_default_g` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
@@ -308,7 +309,7 @@ Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 30
 ### F2 · Verbraucher ohne `propose()`
 | Verbraucher | Einstieg | Status | Empfehlung |
 |---|---|---|---|
-| Websuche (`include_web_search`, `artikel.web_recherche`, `CoreWebSucheTransport`) | Artikel-Recherche (UI/Tool) | Plattform | anschließen (2d-2): `ANTWORT.quellen` → `sources`; eine Antwort OHNE Quellen bei einem Websuche-Auftrag wird abgelehnt |
+| Websuche (`include_web_search`, `artikel.web_recherche`, `CoreWebSucheTransport`) | Artikel-Recherche: UI-Panel (Job) und MCP-Tool `produktpass.RECHERCHE` | MCP: angeschlossen, UI: Plattform | `ANTWORT.quellen` → `sources`; eine Antwort OHNE Quellen bei einem Websuche-Auftrag wird abgelehnt (`ki_auftraege.GET` zeigt `web_suche=true`); der Gateway prüft im externen Modus den Plattform-Provider nicht |
 | Voice-Agent (`AiGatewayService::callWithTools`) | `VoiceCommandService` (UI) | Plattform | ausgenommen (Gadget, Claude ist selbst der Loop) |
 | Bildgenerierung (`RecipeImageService` → Core `ImageGenerationService`) | `recipe_images.GENERATE`, `EnrichRecipeJob` (KI-Bilder) | Plattform | ausgenommen (Claude erzeugt keine Bilder); im Extern-Lauf aus |
 | Embeddings (Qdrant, `text-embedding-3-large`) | semantische Suche, Wissens-/Pool-Index | Plattform | ausgenommen (Entscheid Dominique); nicht im `ki_verbrauch` erfasst |

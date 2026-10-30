@@ -40,6 +40,8 @@ class KiAuftraegeAntwortTool extends FoodAlchemistTool implements ToolContract, 
                         'properties' => [
                             'auftrag_id' => ['type' => 'string'],
                             'werte' => ['description' => 'Antwort-JSON laut Umschlag (Objekt) — oder dessen JSON-Text'],
+                            'quellen' => ['type' => 'array', 'description' => 'NUR bei Websuche-Aufträgen (ki_auftraege.GET: web_suche=true): die tatsächlich gefundenen Seiten, je {url, title}. Ohne mindestens eine http(s)-Quelle wird die Antwort abgelehnt.',
+                                'items' => ['type' => 'object', 'properties' => ['url' => ['type' => 'string'], 'title' => ['type' => 'string']], 'required' => ['url']]],
                         ],
                         'required' => ['auftrag_id', 'werte'],
                     ],
@@ -69,7 +71,7 @@ class KiAuftraegeAntwortTool extends FoodAlchemistTool implements ToolContract, 
         foreach ((array) ($arguments['antworten'] ?? []) as $a) {
             $id = (string) ($a['auftrag_id'] ?? '');
             try {
-                $service->beantworte((int) $team->id, $id, $a['werte'] ?? '', $anbieter, $modell);
+                $service->beantworte((int) $team->id, $id, $a['werte'] ?? '', $anbieter, $modell, isset($a['quellen']) ? (array) $a['quellen'] : null);
                 $ergebnis[] = ['auftrag_id' => $id, 'status' => 'ok'];
                 $angenommen[] = $id;
                 $ok++;

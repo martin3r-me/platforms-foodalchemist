@@ -53,6 +53,8 @@ class KiAuftraegeGetTool extends FoodAlchemistTool implements ToolContract, Tool
                 'ziel' => $z->target_table ? ['tabelle' => $z->target_table, 'id' => $z->target_id] : null,
                 'laeuft_ab_at' => $z->laeuft_ab_at,
                 'messages' => json_decode((string) $z->messages, true),
+                // 2d-2: Websuche-Auftrag — selbst im Web suchen und die gefundenen Seiten als quellen mitsenden (sonst abgelehnt)
+                'web_suche' => (json_decode((string) ($z->optionen ?? ''), true)['include_web_search'] ?? false) === true,
             ], $zeilen),
             'note' => 'Je Auftrag: Antwort als JSON-Umschlag laut messages an foodalchemist.ki_auftraege.ANTWORT (auftrag_id, werte, anbieter, modell).',
         ]);

@@ -426,6 +426,7 @@ return [
     \Platform\FoodAlchemist\Tools\ProduktpassGetTool::class,
     \Platform\FoodAlchemist\Tools\ProduktpassKennzeichnungBestaetigenTool::class,
     \Platform\FoodAlchemist\Tools\ProduktpassPostTool::class,
+    \Platform\FoodAlchemist\Tools\ProduktpassRechercheTool::class,
     \Platform\FoodAlchemist\Tools\ProjekteGetTool::class,
     \Platform\FoodAlchemist\Tools\ProjektePostTool::class,
     \Platform\FoodAlchemist\Tools\ProjektePutTool::class,
