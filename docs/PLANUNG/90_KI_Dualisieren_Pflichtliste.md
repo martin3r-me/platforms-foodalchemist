@@ -24,8 +24,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | Nr | Datei::Methode | Prompt-Key(s) | Anz. | Einst. | Phase | MCP-Einstieg | Status | Hinweis |
 |---|---|---|---|---|---|---|---|---|
 | 1 | `src/Console/RecipePackagingUnitsCommand.php::beurteile` | recipe.verpackungsmasse | 1 | a | P2 | Artisan-Befehl | offen | Massenbefehl: --anbieter=extern wie Backfill |
-| 2 | `src/Jobs/ClassifyLaJob.php::handle` | gp.suggest | 1 | a | P2 | Job nach LA-Import | offen | Job-Wiederholung: Auftrag + Job erneut dispatchen |
-| 3 | `src/Jobs/NonFoodKiBatchJob.php::handle` | la.nonfood | 1 | a | P2 | Job | offen | Batch, Paketbetrieb |
+| 2 | `src/Jobs/ClassifyLaJob.php::arbeite` | gp.suggest | 1 | a | P2 | Job nach LA-Import | angeschlossen | `KiExternWiederholbar` (`classify-la:{team}:{la}`); Extern-Flag erbt der Job aus dem MCP-Aufruf (`KiExternModus::fuerDispatch`). KiExternLaJobTest |
+| 3 | `src/Jobs/NonFoodKiBatchJob.php::arbeite` | la.nonfood | 1 | a | P2 | Job | angeschlossen | `KiExternWiederholbar` je Stapel (`nonfood-ki:{hash}`); Start `foodalchemist:nonfood-erkennen --ki --anbieter=extern`. KiExternLaJobTest |
 | 4 | `src/Jobs/ReviseDishProposalJob.php::handle` | planning.dish_proposal_revise | 1 | b | P2 | planung_kaskade.* | offen | Job schreibt nach Antwort; Idempotenz prüfen |
 | 5 | `src/Livewire/Angebote/Editor.php::kiKundentext` | vk.marketing | 1 | a | P2 | AngebotKundentextTool | offen |  |
 | 6 | `src/Livewire/Foodbooks/Index.php::kiKundentext` | vk.marketing | 1 | a | P2 | FoodbookKundentextTool | offen |  |
@@ -71,8 +71,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 46 | `src/Services/FoodbookService.php::kapitelWordingRegenerieren` | concept.wording | 1 | a | P2 | FoodbookKapitelWordingTool | offen |  |
 | 47 | `src/Services/FoodbookService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKundentextTool | angeschlossen | MCP-Umleitung foodbook.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
 | 48 | `src/Services/FoodbookService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKapitelKundentextTool | angeschlossen | MCP-Umleitung foodbook_kapitel.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
-| 49 | `src/Services/GpAbgleich/GpAbgleichService.php::entscheiderKi` | gp.la_abgleich | 1 | b | P2 | LaGpAbgleichTool | offen |  |
-| 50 | `src/Services/GpAbgleich/LaFelderService.php::fuer` | gp.suggest | 1 | a | P2 | LaGpAbgleichTool | offen |  |
+| 49 | `src/Services/GpAbgleich/GpAbgleichService.php::entscheiderKi` | gp.la_abgleich | 1 | b | P2 | LaGpAbgleichTool | angeschlossen | MCP-Umleitung la.GP_ABGLEICH (Tabelle D, zweite Runde). KiExternLaTest |
+| 50 | `src/Services/GpAbgleich/LaFelderService.php::fuer` | gp.suggest | 1 | a | P2 | LaGpAbgleichTool | angeschlossen | MCP-Umleitung la.GP_ABGLEICH (erste Runde). KiExternLaTest |
 | 51 | `src/Services/GpAromaService.php::schaetze` | gp.sensorik | 1 | a | P1 | Backfill, gps.ENRICH | angeschlossen | Backfill ANGESCHLOSSEN (#611); Tool-Weg offen. 29.10.: 7 Achsen + Grenzen nach der Antwort (Nachverarbeitung beim Aufrufer, `SensorikService::begrenze`); Anzahl bleibt 1, Einstufung a, Backfill `--neu-schaetzen` |
 | 52 | `src/Services/GpFormService.php::estimateKi` | gp.zaehl_einheiten | 1 | a | P2 | GpFormsEstimateTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 53 | `src/Services/IdeenService.php::kiDivergenzConcept` | foodbook.kapitel_ideen | 1 | b | P2 | KapitelIdeen*Tool | offen |  |
@@ -160,6 +160,8 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.gp_aroma_backfill.RUN` | Service-Weg (#630) | startet `GpAromaBackfillService` (derselbe wie der Befehl); per MCP immer extern (`KiUmleitung::externFuerLauf`), KI-Aufträge je Lücke, Aufruf nach ANTWORT wiederholen; Trockenlauf Standard, Scope: eigenes Team (Master zusätzlich globale Stamm-GPs) |
 | `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
 | `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
+| `foodalchemist.la.GP_ABGLEICH` | umgeleitet (2 Runden) | `gp.suggest` (Felder), danach `gp.la_abgleich`; der zweite Prompt hängt von der ersten Antwort ab. Schreibt nur DB (Abgleich-Log, bei `apply` Verknüpfung/neues GP). `ki=false` = Sparsamkeit: nie ein Auftrag |
+| MCP-Herkunft → Folge-Jobs | Merker `KiExternModus::imMcp` (Hülle, jedes FA-Tool) | Ein externer MCP-Aufruf markiert den Lauf; Jobs, die er anstößt (`ClassifyLaJob`, `GpAromaNachholenJob`, `SensorikNachholenJob`, `ConformanceCheckJob` bei GP), laufen mit `extern=true` (`fuerDispatch`). Kein Auftrag, keine Transaktion im Tool selbst |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
 
 
@@ -231,7 +233,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `recipe.verpackungsmasse` | 126 | 725 | 91.390 | Artisan-Befehl | Plattform | 2d (übrige) |
 | `vk.plating` | 36 | 2145 | 77.223 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
 | `concept.wording` | 26 | 2736 | 71.146 | ConceptWordingGenerateTool; FoodbookKapitelWordingTool; – (offer_chapter/offer_block) | teilweise | 2c-3c/d (Konzepte. Kaskade) |
-| `gp.suggest` | 44 | 1606 | 70.671 | GpModal::einordnungKiVorschlagen; GpModal::kiVorschlagNaming; GpModal::nameAusLeadLa; Job nach LA-Import; LaGpAbgleichTool | Plattform | Paket LA-Wege (vorgezogen) |
+| `gp.suggest` | 44 | 1606 | 70.671 | GpModal::einordnungKiVorschlagen; GpModal::kiVorschlagNaming; GpModal::nameAusLeadLa; Job nach LA-Import; LaGpAbgleichTool | teilweise (LaGpAbgleichTool, Job nach LA-Import); UI-Knöpfe Plattform | LA-Wege (UI bleibt) |
 | `recipe.dichteklasse` | 26 | 2655 | 69.038 | recipes.ENRICH; recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.geschmack` | 24 | 2499 | 59.978 | recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
 | `planung.leitplanken` | 22 | 2471 | 54.352 | planung_leitplanken.EXTRACT. planung_kaskade.START. planung_vorschlag.POST | angeschlossen | 2c-3c/d (Konzepte. Kaskade) |
@@ -263,7 +265,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `vk.titel_vorschlag` | 1 | 1215 | 1.215 | TitelVorschlagService::titelVorschlag | Plattform | 2d (übrige) |
 | `gp.anker` | 1 | 531 | 531 | gps.ENRICH | Plattform | 2d (übrige) |
 | `vk.rollen` | 3 | 132 | 395 | RecipeRollenPostTool | angeschlossen | 2d (übrige) |
-| `la.nonfood` | 12 | 0 | 0 | Job | Plattform | Paket LA-Wege (vorgezogen) |
+| `la.nonfood` | 12 | 0 | 0 | Job | angeschlossen (`--anbieter=extern`) | LA-Wege |
 | `recipe.posten` | 1 | 0 | 0 | RecipesGenerateTool (One-Shot-Kette) | Plattform | 2d (übrige) |
 | `demo.echo` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
 | `artikel.web_recherche` | 0 | – | 0 | CoreWebSucheTransport::suche | Plattform | Paket LA-Wege (vorgezogen) |
@@ -274,7 +276,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `anker.wissen_auslese` | 0 | – | 0 | Artisan AnkerWissenCommand | Plattform | Artisan. Phase 1 |
 | `gp.sensorik` | 0 | – | 0 | Backfill. gps.ENRICH; gps.ENRICH | teilweise | 2d (übrige) |
 | `gp.la_suggest` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
-| `gp.la_abgleich` | 0 | – | 0 | LaGpAbgleichTool | Plattform | Paket LA-Wege (vorgezogen) |
+| `gp.la_abgleich` | 0 | – | 0 | LaGpAbgleichTool | angeschlossen | LA-Wege |
 | `gp.term_la_rank` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
 | `recipe.bauart` | 0 | – | 0 | im Generator | Plattform | 2d (übrige) |
 | `produktpass.extract` | 0 | – | 0 | ProduktpassLeser::liefere | Plattform | ausgenommen (Anhang/Storage) |
@@ -307,10 +309,10 @@ Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 30
 | `EnrichRecipeJob` | `recipes.ENRICH`, UI, Kaskade | recipe.* (Anreicherung) | angeschlossen | 2b |
 | `SensorikNachholenJob` | Rezept-Anlage/-Änderung (afterCommit, 90 s verzögert) | recipe.sensorik | angeschlossen | 2c-1 |
 | `GenerateRecipeJob`, `EnrichGeneratedRecipeJob`, `ConformanceCheckJob` | Generator-UI, Planungs-Kaskade | recipe.generator, vk.generator, conformance.check, recipe.* | angeschlossen (Job-Weg; Einstiegs-Tools der Kaskade setzen `_extern` noch nicht) | 2c-2, Einstiege 2c-3d |
-| `ClassifyLaJob` | `LaFirstGpService` (LA-First/Import), UI | gp.suggest | Plattform | **LA-Wege (vorgezogen)** |
-| `NonFoodKiBatchJob` / `NonFoodErkennenCommand` | Artisan `foodalchemist:nonfood-erkennen` | la.nonfood | Plattform | **LA-Wege (vorgezogen)** |
-| `GpAromaNachholenJob` | GP-Anlage (`GpAromaNachholen`) | gp.sensorik, gp.anker | Plattform | LA-Wege/GP (vorgezogen) |
-| `la.GP_ABGLEICH` (`GpAbgleichService`, `LaFelderService`) | Tool, UI (LA-Detail) | gp.suggest, gp.la_abgleich | Plattform | **LA-Wege (vorgezogen)**; ≈ 24.000 Token je Artikel (2 Calls, io gemessen) |
+| `ClassifyLaJob` | `LaFirstGpService` (LA-First/Import), UI | gp.suggest | angeschlossen (MCP-Herkunft erbt `extern`) | LA-Wege |
+| `NonFoodKiBatchJob` / `NonFoodErkennenCommand` | Artisan `foodalchemist:nonfood-erkennen` | la.nonfood | angeschlossen (`--anbieter=extern`) | LA-Wege |
+| `GpAromaNachholenJob` | GP-Anlage (`GpAromaNachholen`) | gp.sensorik, gp.anker | angeschlossen (MCP-Herkunft erbt `extern`, `gp-aroma-nachholen:{team}:{gp}`) | LA-Wege |
+| `la.GP_ABGLEICH` (`GpAbgleichService`, `LaFelderService`) | Tool, UI (LA-Detail) | gp.suggest, gp.la_abgleich | angeschlossen (Umleitung, 2 Runden) | LA-Wege; ≈ 24.000 Token je Artikel (2 Calls, io gemessen) |
 | `ImportArticlesJob` (Necta-/Artikel-Import) | `ArticleImportTriggerService`, Zeitplan `NectaAbgleichCommand` | – (kein direkter `propose()` gefunden; löst über `LaFirstGpService` ggf. `ClassifyLaJob` aus) | prüfen | LA-Wege |
 | `SignalFixJob` / `signale.FIX` | Review-Queue (UI), Tool | signal.*, price.plausi | Plattform | **Signale** |
 | `SignaleDetektorCommand` (täglich 03:20) | Zeitplan | – (deterministisch; die KI-Stufe `price.plausi` „folgt in #375“, heute keine Token) | keine KI | Signale (beobachten) |
