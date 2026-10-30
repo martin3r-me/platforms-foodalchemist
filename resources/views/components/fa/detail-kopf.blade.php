@@ -30,7 +30,7 @@
         <p class="items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-fa-handy-hinweis>
             @svg('heroicon-m-computer-desktop', 'w-4 h-4 shrink-0') Am Computer bearbeiten
             {{-- Notausgang: Desktop-Ansicht auf diesem Gerät (Support\HandyLesemodus::JS_MODUS liest fa-ansicht) --}}
-            <button type="button" class="ml-auto underline underline-offset-2" x-on:click="try { localStorage.setItem('fa-ansicht', 'desktop'); } catch (e) {} location.reload()" data-fa-desktop-ansicht>Desktop-Ansicht</button>
+            <button type="button" class="ml-auto underline underline-offset-2" x-on:click="window.faAnsicht('desktop')" data-fa-desktop-ansicht>Desktop-Ansicht</button>
         </p>
     @endif
 </header>

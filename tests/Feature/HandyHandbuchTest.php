@@ -94,5 +94,19 @@ it('Server-Sperre am Handy: Auswahl und Ereignisse laufen, Ändern nicht', funct
 });
 
 it('Handy-Entscheidung setzt das Cookie, das der Server liest (dieselbe Entscheidung wie <html data-fa-handy>)', function () {
-    expect(HandyLesemodus::JS_MODUS)->toContain("document.cookie = 'fa_handy='");
+    expect(HandyLesemodus::JS_MODUS)->toContain("document.cookie = 'fa_handy='")
+        ->toContain('location.reload()')            // Cookie passte nicht zum Aufbau → einmal neu laden
+        ->toContain("sessionStorage.getItem('fa-handy-neu')")   // je Ziel nur einmal, keine Schleife
+        ->toContain('window.faAnsicht = function');
+});
+
+it('„Desktop-Ansicht“ setzt das Cookie vor dem Neuladen (faAnsicht), sonst käme noch einmal die Handy-Ansicht', function () {
+    $kopf = \Illuminate\Support\Facades\Blade::render('<x-fa::detail-kopf title="T"><x-slot:aktion><span>A</span></x-slot:aktion></x-fa::detail-kopf>');
+    $nav = \Illuminate\Support\Facades\Blade::render('<x-foodalchemist::handy.nav />');
+    $handbuch = file_get_contents(__DIR__ . '/../../resources/views/livewire/handy/rezept-handbuch.blade.php');
+
+    foreach ([$kopf, $nav, $handbuch] as $html) {
+        expect($html)->toContain("window.faAnsicht('desktop')")
+            ->not->toContain("localStorage.setItem('fa-ansicht', 'desktop'); } catch (e) {} location.reload()");
+    }
 });

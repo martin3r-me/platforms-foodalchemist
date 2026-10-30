@@ -20,7 +20,7 @@
             this.iosHinweis = ios && ! window.navigator.standalone && ! gesehen;
         },
         hinweisWeg() { this.iosHinweis = false; try { localStorage.setItem('fa-ios-hinweis', '1'); } catch (e) {} },
-        desktop() { try { localStorage.setItem('fa-ansicht', 'desktop'); } catch (e) {} location.reload(); },
+        desktop() { window.faAnsicht('desktop'); },
      }"
      @keydown.escape.window="mehr = false">
 
