@@ -77,7 +77,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 52 | `src/Services/GpFormService.php::estimateKi` | gp.zaehl_einheiten | 1 | a | P2 | GpFormsEstimateTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 53 | `src/Services/IdeenService.php::kiDivergenzConcept` | foodbook.kapitel_ideen | 1 | b | P2 | kein Tool (Aufrufer PlanningCascadeService::fanoutConceptInvention) | offen | Korrektur 30.10.: die KapitelIdeen*-Tools rufen keine KI (nur liste/anlegen/ändern); die KI-Stelle läuft in der Planungs-Kaskade — Paket 2d. |
 | 54 | `src/Services/IdeenService.php::kiDivergenzSession` | foodbook.kapitel_ideen | 1 | b | P2 | kein Tool (Aufrufer GenerateDishProposalJob) | offen | Korrektur 30.10.: Aufrufer ist `GenerateDishProposalJob` (Kaskade) — Paket 2d. |
-| 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | Zuordnung prüfen (offer_chapter/offer_block) | offen | Schleife über Kapitel |
+| 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | kein Tool (nur UI: Angebote-Editor) | offen | Geprüft 30.10.: kein MCP-Tool ruft diese Methode (per grep), nur `Angebote/Editor.php`. Bleibt Plattform-KI (UI). |
 | 56 | `src/Services/Pairing/AnkerWissenAuslese.php::lese` | anker.wissen_auslese | 1 | a | P1 | Artisan AnkerWissenCommand | offen | Anker-Pfad |
 | 57 | `src/Services/PresentationDesignService.php::generateCss` | praesentation.design_css | 1 | a | P2 | PresentationDesignsGenerateCssTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | offen | ANHANG (PDF/Bild): Entscheidung Punkt 5 |
@@ -102,9 +102,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 77 | `src/Services/SpeisenKlassenService.php::classify` | vk.speisen_klasse | 1 | a | P2 | RecipeKlassePostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 78 | `src/Services/SpeisenKlassenService.php::verteileRollen` | vk.rollen | 1 | a | P2 | RecipeRollenPostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 79 | `src/Services/SpeiseplanService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | kein Tool (nur UI) | offen |  |
-| 80 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | kein Tool (nur UI: Angebote-Editor) | offen | Geprüft 30.10.: kein MCP-Tool ruft diese Methode (per grep), nur `Angebote/Editor.php`. Bleibt Plattform-KI (UI). |
+| 80 | `src/Services/TitelVorschlagService.php::titelVorschlag` | dyn. $promptKey (recipe.titel_vorschlag / vk.titel_vorschlag) | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 81 | `src/Services/Websuche/CoreWebSucheTransport.php::suche` | artikel.web_recherche (include_web_search) | 1 | b | P2 | kein Tool (nur UI) | offen | WEBSUCHE: eigener Weg, Entscheidung Punkt 5 |
-| 82 | `src/Services/TitelVorschlagService.php::titelVorschlag` | recipe.titel_vorschlag, vk.titel_vorschlag (dyn. $promptKey) | 1 | a | P2 | kein Tool (nur UI: Planung `titelVorschlagen`) | offen | Nachgetragen 30.10.: der Service kam nach dem Stand der Liste auf main (ae549960), der Wächter schlug auf main schon an. Aufrufer per grep nur `Livewire/Planung/Index.php`; kein MCP-Tool, bleibt Plattform-KI (UI). |
 | 82 | `src/Services/ZukaufBasisrezeptService.php::baue` | recipe.ruestschritt | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 
 ## B · Zusatzwege
