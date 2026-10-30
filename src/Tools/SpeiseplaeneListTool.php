@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
+use Illuminate\Pagination\Paginator;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -18,7 +19,7 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Listet sichtbare Speisepläne (paginiert). Optional status-Filter oder Freitext-search.';
+        return 'Listet sichtbare Speisepläne seitenweise (page, per_page, last_page) mit Anzahl Einträge. Optional status-Filter oder Freitext-search.';
     }
 
     public function getSchema(): array
@@ -29,6 +30,7 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
                 'search' => ['type' => 'string', 'description' => 'Freitext (Name).'],
                 'status' => ['type' => 'string', 'enum' => array_column(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases(), 'value'), 'description' => 'Optionaler Status-Filter (leer = alle).'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
+                'page' => ['type' => 'integer', 'description' => 'Seite (ab 1, last_page im Ergebnis).'],
             ],
         ];
     }
@@ -49,16 +51,21 @@ class SpeiseplaeneListTool extends FoodAlchemistTool implements ToolContract, To
         if (($status = trim((string) ($arguments['status'] ?? ''))) !== '') {
             $filters['status'] = $status;
         }
+        $seite = max(1, (int) ($arguments['page'] ?? 1));
+        Paginator::currentPageResolver(fn () => $seite);
         $perPage = (int) ($arguments['per_page'] ?? 100);
         $page = app(SpeiseplanService::class)->paginateBrowser($filters, $team, $perPage > 0 ? $perPage : 100);
 
         return $this->erfolgMitWarnungen([
             'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
             'speiseplaene' => collect($page->items())->map(fn ($p) => [
                 'id' => (int) $p->id, 'name' => $p->name,
                 'status' => $p->status instanceof \BackedEnum ? $p->status->value : $p->status,
                 'cycle_weeks' => $p->cycle_weeks,
                 'crm_company_id' => $p->crm_company_id !== null ? (int) $p->crm_company_id : null,
+                'eintraege' => (int) $p->entries_count,
             ])->all(),
         ], $arguments);
     }
