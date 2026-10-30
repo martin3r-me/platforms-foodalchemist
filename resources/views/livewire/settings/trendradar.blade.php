@@ -81,5 +81,38 @@
         @endunless
     </x-fa::section>
 
+    {{-- Spec 93 C: Trend-Automatik --}}
+    <x-fa::section title="Trend-Automatik" icon="heroicon-o-cpu-chip"
+                   description="Ordnet automatische Themen nach festen Regeln ein und legt Trends an. Im Schatten-Modus rechnet sie nur (Trendradar → Reiter „Automatik“). Von Hand gesetzte Felder fasst sie nie an, Mega- und Metatrends setzt sie nie selbst.">
+        <div class="flex flex-col gap-4" data-trendradar-automatik>
+            <x-fa::field label="Stufe" for="ta-stufe">
+                <x-fa::select id="ta-stufe" wire:model="automatikStufe" :options="$stufen" class="max-w-[28rem]" />
+            </x-fa::field>
+            <label class="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" wire:model="automatikSchatten" class="{{ $haken }}" />
+                <span>
+                    <span class="block text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Schatten-Modus</span>
+                    <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Rechnet alles, schreibt aber keine Trends — zum Kalibrieren der Schwellen.</span>
+                </span>
+            </label>
+            <x-fa::notice tone="info">Die vorgegebenen Schwellen sind Startwerte, nicht belegt (Annahmen, Sarah Spork nennt keine Zahlen). Leer = Startwert.</x-fa::notice>
+            <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
+                @foreach($regelSchluessel as $schluessel => [$label])
+                    <x-fa::field :label="$label" for="ta-{{ $schluessel }}" hint="Startwert {{ $startwerte[$schluessel] }}, nicht belegt">
+                        <x-fa::input id="ta-{{ $schluessel }}" wire:model="regeln.{{ $schluessel }}" placeholder="{{ $startwerte[$schluessel] }}" numeric />
+                    </x-fa::field>
+                @endforeach
+            </div>
+            <x-fa::field label="Trend-KI-Budget je Monat in €" for="ta-budget" optional hint="Leer = kein eigener Deckel (es gilt der KI-Deckel des Teams). Nur Plattform-KI zählt.">
+                <x-fa::input id="ta-budget" type="number" min="0" step="0.5" wire:model="kiBudget" numeric class="max-w-[8rem]" />
+            </x-fa::field>
+        </div>
+        @unless($sperrLesen)
+            <div class="flex justify-end pt-3 border-t border-[var(--fa-line)]">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-trendradar-automatik-speichern>Einstellungen speichern</x-fa::button>
+            </div>
+        @endunless
+    </x-fa::section>
+
     </fieldset>
 </div>

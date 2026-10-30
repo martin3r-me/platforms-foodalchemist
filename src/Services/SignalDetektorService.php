@@ -73,6 +73,7 @@ class SignalDetektorService
             + app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertSignalService::class)->laufen($team)   // Nährwert-Prüfung je Artikel (nur Modus scharf, gedrosselt)
             + $this->markenNachlauf($team)   // Plan GP-Stamm 3g (nur Master-Team)
             + $this->kiAuftraegeOffen($team)   // #1002: unbeantwortete/abgelaufene KI-Aufträge des externen Wegs
+            + app(\Platform\FoodAlchemist\Services\Trends\TrendAutomatikSignale::class)->laufen($team)   // Spec 93 C: Trendradar (Automatik, Quellen, Pinnwand-Vorschlag)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
 
         // Ebene 2 — Betriebs-Lanes: die geldabhängigen Detektoren (Marge/Wareneinsatz/Ausgabe-Drift)

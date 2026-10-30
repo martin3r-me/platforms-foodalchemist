@@ -165,6 +165,16 @@ enum SignalTyp: string
     case KiAuftraegeOffen = 'ki_auftraege_offen';
     // Link-Stufe 2d: Zertifikate eines Lieferanten (IFS, BRC, Bio …) laufen ab oder sind abgelaufen. Ein Signal je Team und Lieferant, schließt sich selbst.
     case ZertifikatLaeuftAb = 'zertifikat_laeuft_ab';
+    // Spec 93 C · Trend-Automatik: Ereignisse (je Team und Ereignis ein Signal, schließen sich selbst), Quellen-Zustand, Pinnwand-Vorschlag.
+    case TrendradarNeuerHype = 'trendradar_neuer_hype';
+    case TrendradarNeuerTrend = 'trendradar_neuer_trend';
+    case TrendradarHypeWirdTrend = 'trendradar_hype_wird_trend';
+    case TrendradarAufRadar = 'trendradar_auf_radar';
+    case TrendradarThemaAbgeklungen = 'trendradar_thema_abgeklungen';
+    case TrendradarQuelleFehler = 'trendradar_quelle_fehler';
+    case TrendradarMcpQuelleUeberfaellig = 'trendradar_mcp_quelle_ueberfaellig';
+    case TrendradarPinnwandPasst = 'trendradar_pinnwand_passt';
+    case TrendradarKandidatenGestaut = 'trendradar_kandidaten_gestaut';
 
     public function label(): string
     {
@@ -176,6 +186,15 @@ enum SignalTyp: string
             self::MarkenNachlauf => 'Marke offen bei Rezepturware',
             self::KiAuftraegeOffen => 'KI-Aufträge warten auf Antwort',
             self::ZertifikatLaeuftAb => 'Zertifikat läuft ab',
+            self::TrendradarNeuerHype => 'Neuer Hype erkannt',
+            self::TrendradarNeuerTrend => 'Neuer Trend erkannt',
+            self::TrendradarHypeWirdTrend => 'Hype wird Trend',
+            self::TrendradarAufRadar => 'Automatisch aufs Radar gesetzt',
+            self::TrendradarThemaAbgeklungen => 'Trend-Thema abgeklungen',
+            self::TrendradarQuelleFehler => 'Trend-Quelle liefert Fehler',
+            self::TrendradarMcpQuelleUeberfaellig => 'MCP-Quelle überfällig',
+            self::TrendradarPinnwandPasst => 'Pinnwand-Karte passt zu einem Trend',
+            self::TrendradarKandidatenGestaut => 'Trend-Kandidaten warten (Lauf-Grenze)',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
             self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
@@ -243,6 +262,15 @@ enum SignalTyp: string
             self::MarkenNachlauf => 'heroicon-o-tag',
             self::KiAuftraegeOffen => 'heroicon-o-clock',
             self::ZertifikatLaeuftAb => 'heroicon-o-shield-check',
+            self::TrendradarNeuerHype => 'heroicon-o-bolt',
+            self::TrendradarNeuerTrend => 'heroicon-o-arrow-trending-up',
+            self::TrendradarHypeWirdTrend => 'heroicon-o-arrow-up-circle',
+            self::TrendradarAufRadar => 'heroicon-o-signal',
+            self::TrendradarThemaAbgeklungen => 'heroicon-o-arrow-trending-down',
+            self::TrendradarQuelleFehler => 'heroicon-o-exclamation-triangle',
+            self::TrendradarMcpQuelleUeberfaellig => 'heroicon-o-clock',
+            self::TrendradarPinnwandPasst => 'heroicon-o-light-bulb',
+            self::TrendradarKandidatenGestaut => 'heroicon-o-queue-list',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
             self::WechselkursVeraltet => 'heroicon-o-currency-euro',
@@ -297,6 +325,12 @@ enum SignalTyp: string
             self::KonformitaetGp => 'heroicon-o-clipboard-document-check',
             self::KonformitaetLa => 'heroicon-o-clipboard-document-list',
         };
+    }
+
+    /** Spec 93 C: Signale der Trend-Automatik (Bereich „Konzepte“ in der Inbox). */
+    public function istTrendradar(): bool
+    {
+        return str_starts_with($this->value, 'trendradar_');
     }
 
     /**

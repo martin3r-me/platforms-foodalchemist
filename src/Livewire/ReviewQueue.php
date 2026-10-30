@@ -90,7 +90,7 @@ class ReviewQueue extends Component
             SignalTyp::QualitaetDrift => 'entwicklung',
             default => match (true) {
                 $typ->istRezeptQualitaet() => 'rezepte',
-                $typ->istKonzeptQualitaet(), $typ->istFoodbookQualitaet() => 'konzepte',
+                $typ->istKonzeptQualitaet(), $typ->istFoodbookQualitaet(), $typ->istTrendradar() => 'konzepte',
                 default => 'system',
             },
         };

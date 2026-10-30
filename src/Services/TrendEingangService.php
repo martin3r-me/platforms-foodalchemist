@@ -274,6 +274,33 @@ class TrendEingangService
         return $e->refresh();
     }
 
+    /**
+     * Spec 93 C: Trend-KI-Budget des Monats erreicht? Gezählt werden die Plattform-Kosten des Prompts `trend.eingang_erschliessen`
+     * im Team (Call-Log, € zum eingefrorenen Kurs). null-Budget = kein eigener Deckel (es gilt nur der allgemeine Team-Deckel).
+     */
+    public function budgetErreicht(int $teamId): bool
+    {
+        $team = Team::find($teamId);
+        $budget = $team ? $this->settings->trendKiBudget($team) : null;
+        if ($budget === null) {
+            return false;
+        }
+
+        return $this->trendKiVerbrauch($teamId) >= $budget - 1e-9;
+    }
+
+    /** Plattform-KI-Kosten des Erschließens im laufenden Monat, in € (ohne Kosten = MCP-Antworten zählen nicht). */
+    public function trendKiVerbrauch(int $teamId): float
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'usd_eur')) {
+            return 0.0;
+        }
+
+        return round((float) DB::table('foodalchemist_ai_call_log')->where('team_id', $teamId)->where('feature', 'trend.eingang_erschliessen')
+            ->where('created_at', '>=', now()->startOfMonth())->whereNotNull('kosten_usd')->whereNotNull('usd_eur')
+            ->sum(DB::raw('kosten_usd * usd_eur')), 4);
+    }
+
     public function erschliessungFehlgeschlagen(FoodAlchemistTrendEingang $e, string $grund): FoodAlchemistTrendEingang
     {
         $e->update(['status' => 'fehler', 'begruendung' => mb_substr($grund, 0, 1000)]);

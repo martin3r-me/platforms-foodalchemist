@@ -186,6 +186,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class, // Spec 93 A
                 \Platform\FoodAlchemist\Console\TrendThemenAehnlichkeitCommand::class, // Spec 93 B (Messung, schreibt nichts)
+                \Platform\FoodAlchemist\Console\TrendAutomatikCommand::class, // Spec 93 C
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
@@ -356,6 +357,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->onOneServer()
                     ->runInBackground()
                     ->description('FoodAlchemist: Trendradar → fällige Quellen in den Eingang holen');
+            }
+
+            // Spec 93 C: Trend-Automatik täglich NACH dem Abruf (05:50) und dem Erschließen (Queue). Standard AUS.
+            if (config('foodalchemist.scheduler.trend_automatik_enabled', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendAutomatikCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.trend_automatik_zeit', '06:40'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → Themen einordnen, Trends anlegen (Automatik)');
             }
         });
     }

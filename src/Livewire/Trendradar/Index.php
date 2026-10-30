@@ -122,7 +122,7 @@ class Index extends Component
 
     public function ansichtSetzen(string $ansicht): void
     {
-        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'quellen'], true) ? $ansicht : 'radar';
+        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'quellen', 'automatik'], true) ? $ansicht : 'radar';
     }
 
     public function resetFilter(): void

@@ -28,6 +28,8 @@ class FoodAlchemistTrend extends Model
         'befragung_bestaetigt' => 'boolean',
         'befragung_anteil' => 'float',
         'suchbegriffe' => 'array',
+        'manuell_felder' => 'array',          // Spec 93 C: von Hand gesetzte Felder — die Automatik fasst sie nie an
+        'automatik_ereignisse' => 'array',    // Spec 93 C: letzte Ereignisse der Automatik (Quelle der Signale)
         'hashtags' => 'array',
         'sparten' => 'array',
         'geprueft_at' => 'datetime',

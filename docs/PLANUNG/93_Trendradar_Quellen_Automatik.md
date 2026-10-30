@@ -226,7 +226,29 @@ Folge je Entscheidung:
 
 **Schatten-Modus:** Einstellung `trend_automatik_schatten` (Standard **an** für die ersten Läufe): die Automatik
 rechnet alles und zeigt in einer Ansicht „Was die Automatik tun würde“ (Thema, Kennzahlen, Entscheidung, Begründung),
-schreibt aber keine Trends. Dominique kalibriert die Schwellen daran und schaltet dann scharf.
+schreibt aber keine Trends. Dominique kalibriert die Schwellen daran und schaltet dann scharf. Die Liste ist
+reproduzierbar (gleicher Datenstand = gleiche Liste).
+
+**Stand C (gebaut 30.10., Kurator-Entscheide):**
+- **Reihenfolge des Tages:** Quellen-Abruf 05:50 → Erschließen (Queue, je neuem Artikel) → Automatik
+  `foodalchemist:trend-automatik` 06:40. Alle drei Scheduler-Schalter ab Werk **aus**; Stufe ab Werk `aus`, Schatten ab Werk an.
+  Dazu `trend_automatik.LAUF` und der Knopf „Lauf jetzt“ im Reiter „Automatik“.
+- **Kennzahlen:** Sichtungen = Artikel des Themas + Pinnwand-Fundstücke der Teamfamilie, deren Titel oder Schlagwort den
+  gleichen Schlüssel hat (Regel 2; die Karte bleibt unverändert). Quellen = Host der URL, sonst Fundort. Quellenarten,
+  Monate, Anteil sozial über 12 Monate; Anteil „Bedürfnis“ nur über Artikel mit Tiefe (Pinnwand hat keine).
+  „Spitze ohne Sockel“ nur, wenn das Thema schon an einem gemessenen Trend hängt.
+- **Kandidat ohne Typ** (weder Hype- noch Trend-Regel): kein Trend, in der Liste „Kandidat, Typ offen“.
+- **Schutz:** Bestandstrends (`herkunft = manuell`, z. B. Sarahs 27) bekommen nur Belege und `neuBewerten()`, ihre
+  Felder ändert die Automatik nie. Eigene Trends (`herkunft = automatisch`): nur Felder ohne Merker
+  (`manuell_felder`, gesetzt von jedem menschlichen Schreibweg), Status nur anheben, nie mega/meta.
+- **Trend löschen** lässt die Artikel des Themas bestehen (nur die Zuordnung fällt weg).
+- **Trend-KI-Budget** (`trend_ki_budget_eur`, null = kein eigener Deckel): erreicht → Erschließen setzt
+  „fehler: Trend-KI-Budget erreicht“ und ruft den Provider nicht; der MCP-Weg zählt nicht.
+- **Signale** (über `SignalDetektorService::laufen()`, Bereich „Konzepte“, je Team und Ereignis, selbst schließend):
+  neuer Hype / neuer Trend / Hype wird Trend / aufs Radar (schließen, sobald ein Mensch den Trend anfasst), Thema
+  abgeklungen, Quelle ab **3** Fehlern in Folge (`quelle_fehler_signal_ab`, *Startwert, nicht belegt*), MCP-Quelle
+  fällig, Pinnwand-Karte passt zu einem Trend der Automatik (Vorschlag, nie selbst umhängen), Kandidaten warten (aus
+  dem letzten scharfen Lauf, `trend_automatik_letzter_lauf`).
 
 ### 6. Signale und Ableitung
 
@@ -255,6 +277,7 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
 | `abklingen_monate` | 6 |
 | `buendel_aehnlichkeit` | im Bau an Testdaten messen und begründen (nicht raten) |
 | `max_neue_trends_je_lauf` | 5 (Schutz vor Flut; Rest bleibt Kandidat mit Signal) |
+| `quelle_fehler_signal_ab` (Signal „Quelle liefert Fehler“) | 3 |
 | `abruf_rhythmus` (Team-Standard für neue Quellen) | aus (bis Dominique einschaltet) |
 | `max_neue_je_abruf` (je Quelle und Abruf, alle Feed-Typen) | 20 |
 | `uebersicht_mindest_treffer` (Auto-Wahl) | 3 |
@@ -273,7 +296,9 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
   `trend_eingang.ERSCHLIESSEN`; Mess-Befehl `trend-themen-aehnlichkeit`; Pflichtliste Spec 90 Zeile 87; Test
   `Spec93BErschliessenBuendelnTest`.
 - **C · Einordnung + Automatik:** `TrendAutomatikService`, Einstellungen + MCP, Schatten-Ansicht, Status-Stufen,
-  Schutz manueller Felder, Signale.
+  Schutz manueller Felder, Signale. *Gebaut 30.10. (Branch `feat/spec93-c-einordnung-automatik`):* Migrationen
+  `2026_12_01_100500` (Trend herkunft, manuell_felder, automatik_ereignisse), `…100600` (Team: Stufe, Schatten, Regeln,
+  Budget, letzter Lauf); Tools `trend_automatik.GET|PUT|LAUF`; Reiter „Automatik“; Test `Spec93CEinordnungAutomatikTest`.
 - **D · Ableitung:** Prompt + Job (dual), Anzeige am Trend, Übergabe an die Planung.
 
 ## Tests (Pflicht)
