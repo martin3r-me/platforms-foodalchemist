@@ -6,7 +6,7 @@
 @if($grid && !empty($grid['lines']))
     <section class="pt-section pt-reveal">
         <div class="pt-wide">
-            <div style="overflow-x:auto">
+            <div class="pt-grid-rahmen" style="overflow-x:auto">
                 <table class="pt-grid">
                     <thead>
                         <tr>
@@ -36,6 +36,28 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+            {{-- #1003: am Handy (≤ 640 px) dieselben Zellen als Tagesliste (Tag → Linie → Gericht) statt der breiten Tabelle;
+                 Computer und Druck zeigen weiter die Tabelle. --}}
+            <div class="pt-grid-tage">
+                @foreach(($grid['tage'] ?? []) as $tag)
+                    @php
+                        $linien = collect($grid['lines'])->map(fn ($l) => ['line' => $l, 'cells' => $l['cells'][$tag['key'] ?? ''] ?? []])->filter(fn ($x) => $x['cells'] !== []);
+                    @endphp
+                    @if($linien->isNotEmpty())
+                        <div class="pt-grid-tag">
+                            <h3 class="pt-grid-tag-titel">{{ $tag['label'] ?? '' }}</h3>
+                            @foreach($linien as $x)
+                                <div class="pt-grid-tag-linie">
+                                    <span class="pt-grid-tag-name">@if(!empty($x['line']['color']))<span class="pt-grid-punkt" style="background:{{ $x['line']['color'] }};"></span>@endif{{ $x['line']['name'] ?? '' }}</span>
+                                    @foreach($x['cells'] as $cell)
+                                        <div class="pt-grid-tag-gericht">@if($showFotos && !empty($cell['image']['url']))<img class="pt-grid-tag-foto pt-zoomable" src="{{ $cell['image']['url'] }}" alt="" loading="lazy">@endif{{ $cell['label'] ?? '' }}@if(!empty($cell['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $cell['codes'])) }}</span>@endif@if(!empty($cell['price']))<span class="pt-price pt-grid-tag-preis">{{ $cell['price'] }}</span>@endif</div>
+                                    @endforeach
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                @endforeach
             </div>
         </div>
     </section>

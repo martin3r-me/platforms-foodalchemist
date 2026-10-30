@@ -26,7 +26,7 @@ use Platform\FoodAlchemist\Services\PresentationService;
  */
 class Index extends Component
 {
-    use WithPagination, WithFileUploads, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+    use WithPagination, WithFileUploads, ManagesCanvas, ManagesPlanningFrame, ManagesPhase, \Platform\FoodAlchemist\Livewire\Concerns\HandyAusgabenLesen;   // #1003
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
 
@@ -1396,6 +1396,7 @@ class Index extends Component
 
     public function render(FoodbookService $svc)
     {
+        if (\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) { return $this->handyAusgabe('foodbook'); }   // #1003: am Handy Karten → Vorschau
         $team = $this->team();
         $fb = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
         $kapitel = $fb !== null && $this->selectedKapitelId !== null

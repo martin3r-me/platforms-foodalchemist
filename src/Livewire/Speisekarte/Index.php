@@ -22,7 +22,7 @@ use Platform\FoodAlchemist\Services\SpeisekarteService;
  */
 class Index extends Component
 {
-    use WithFileUploads, WithPagination;
+    use WithFileUploads, WithPagination, \Platform\FoodAlchemist\Livewire\Concerns\HandyAusgabenLesen;   // #1003
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
 
@@ -881,6 +881,7 @@ class Index extends Component
 
     public function render(SpeisekarteService $svc)
     {
+        if (\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) { return $this->handyAusgabe('speisekarte'); }   // #1003: am Handy Karten → Vorschau
         $team = $this->team();
         $karte = $this->karteId ? $svc->detail($team, $this->karteId) : null;
 

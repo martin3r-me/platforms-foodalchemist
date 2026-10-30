@@ -253,6 +253,20 @@
         .pt-grid { width: 100%; border-collapse: collapse; margin-top: var(--pt-gap); font-size: .95rem; }
         .pt-grid th { text-align: left; padding: 10px; color: var(--pt-primary); border-bottom: 2px solid color-mix(in srgb, var(--pt-accent) 40%, transparent); white-space: nowrap; font-family: var(--pt-heading-font); }
         .pt-grid td { padding: 10px; vertical-align: top; border-bottom: 1px solid var(--pt-line); }
+        /* #1003: Tagesliste statt Wochentabelle am Handy (Computer und Druck: Tabelle). */
+        .pt-grid-tage { display: none; }
+        @media screen and (max-width: 640px) {
+            .pt-grid-rahmen { display: none; }
+            .pt-grid-tage { display: block; margin-top: var(--pt-gap); }
+            .pt-grid-tag { padding: 14px 0; border-bottom: 1px solid var(--pt-line); }
+            .pt-grid-tag-titel { margin: 0 0 8px; color: var(--pt-primary); font-family: var(--pt-heading-font); font-size: 1.05rem; }
+            .pt-grid-tag-linie { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 6px 0; }
+            .pt-grid-tag-name { font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; opacity: .75; }
+            .pt-grid-punkt { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; }
+            .pt-grid-tag-gericht { overflow-wrap: anywhere; }
+            .pt-grid-tag-preis { margin-left: .4em; white-space: nowrap; opacity: .85; font-variant-numeric: tabular-nums; }
+            .pt-grid-tag-foto { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; margin: 4px 0 6px; }
+        }
 
         /* Navigation — Sidebar (Chassis) */
         .pt-sidebar, .pt-burger, .pt-toc { display: none; }

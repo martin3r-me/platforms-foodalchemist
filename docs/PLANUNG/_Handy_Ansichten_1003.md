@@ -58,9 +58,9 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | Produktion | `/produktion` | Produktion\Browser | Lesen: Karten (Name · Liefertag · Status · Ziele, Portionen), Status/Zeitraum in der Schublade, kein Anlegen, kein Tagesplan-Knopf; Detail = vorhandenes Auftrags-Detail (Status, Notiz, Materialbedarf am Computer) | Produktion\DetailPanel | 5 ✓ |
 | Bestellungen | `/bestellungen` | Orders\Index | Lesen: nur die Bestellungen als Karten nach Liefertag (Lieferant · Positionen · Netto · Status), Suche, Zeitraum; Antippen öffnet das Detail ohne Editor. Liefertage, Lieferanten, Runden, Versand/Auslösen/Stornieren am Computer | Orders\DetailPanel (Concerns\HandyBestellungenLesen → livewire/handy/bestellungen) | 5 ✓ |
 | Signale (Zu prüfen) | `/zu-pruefen` | ReviewQueue | Lesen, prominent (untere Leiste, Zähler): Reiter, Filter, „Betroffene ansehen“ (Modal); keine Läufe, kein Ignorieren, kein Übernehmen im Modal, kein Begriffe lehren. Bedienbar (Dominique 30.10., Standard in config foodalchemist.handy.aendern_frei, zentral abschaltbar): signalErledigt, signalWiederOeffnen, toggleKiPanel, kiFixAusfuehren, bulkUebernehmen, bulkVerwerfen — „Automatisch beheben“ und „Übernehmen“ eines KI-Werts (Reiter „Zum Bestätigen“: Karte mit Rezept, Feld, bisher → neu, Begründung) am Handy mit Bestätigung; Zuordnungs-Vorschläge (match*) bleiben am Computer. Der KI-Fix am Handy ist ein UI-Klick und läuft über die Plattform-KI („Plattform auf der Plattform“); wer Plattform-Tokens sparen will, nutzt Claude per MCP (signale.FIX) | Signale\DetailPanel | 5 ✓ |
-| Speiseplan | `/speiseplan` | Speiseplan\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
-| Speisekarten | `/speisekarten` | Speisekarte\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
-| Foodbooks | `/foodbooks` | Foodbooks\Index | Lesen (Ansicht, nicht Editor) | – | 6 |
+| Speiseplan | `/speiseplan` | Speiseplan\Index | Lesen, PR 6: Karten (Name · ab Datum · Wochen · Einträge, Status) mit Suche; Antippen öffnet die Live-Vorschau `/speiseplan/{id}/praesentation` (Kundensicht, Aushang am Handy als Tagesliste). Keine interne Sicht: der Speiseplan hat keinen Report. Editor, Anlegen, Duplizieren gesperrt | Concerns\HandyAusgabenLesen → livewire/handy/ausgaben | 6 ✓ |
+| Speisekarten | `/speisekarten` | Speisekarte\Index | Lesen, PR 6: Karten (Name · Kartentyp · Rubriken, Status) mit Suche; Antippen öffnet die Live-Vorschau (Kundensicht); „Intern“ öffnet den vorhandenen Report im Profil Kalkulation (EK, VK, Wareneinsatz je Gericht; Dominique 30.10.). Editor, Rubriken, Branding, KI, Veröffentlichen gesperrt | Concerns\HandyAusgabenLesen → livewire/handy/ausgaben | 6 ✓ |
+| Foodbooks | `/foodbooks` | Foodbooks\Index | Lesen, PR 6: Karten (Name · Kunde · Jahr · Kapitel, Status) mit Suche; Antippen öffnet die Live-Vorschau (Kundensicht); „Intern“ öffnet den Report im Profil Kalkulation. Editor, Kapitel, Branding, KI, Veröffentlichen gesperrt | Concerns\HandyAusgabenLesen → livewire/handy/ausgaben | 6 ✓ |
 | Planung | `/planung` | Planung\Index | Planung | Reiter Auftrag → Ergebnis → Kontext | 7 |
 | Rezept-Import (Foto) | in Planung | Planung\RezeptImport | Planung | – | 7 |
 | Dashboard (Leitstelle) | `/` | Dashboard | Lesen, prominent (ganz oben in „Mehr“ bzw. Startseite) | – | 1b |
@@ -92,9 +92,11 @@ Speisekarten- und Foodbook-Editor) und alle Bearbeiten-Dialoge sind **Desktop**.
 
 | Link | Ansicht | Art | PR |
 |---|---|---|---|
-| `/p/{type}/{token}` (Foodbook, Speisekarte, Speiseplan, Angebot) + App-Manifest, Share-Card | presentation/show | Öffentlicher Link | 6 |
-| `/p/handbuch/{token}` | handbuch/show (seit #558 mit Handy-Ansicht) | Öffentlicher Link | 6 |
-| `/_platform/fa-recipe-pdf/{token}` | Rezept-PDF | Öffentlicher Link (öffnen/teilen) | 6 |
+| `/p/{type}/{token}` (Foodbook, Speisekarte, Speiseplan, Angebot) + App-Manifest, Share-Card | presentation/show — bei 375 px geprüft; Speiseplan-Wochenraster am Handy (≤ 640 px) als Tagesliste, Computer und Druck unverändert | Öffentlicher Link | 6 ✓ |
+| `/p/handbuch/{token}` | handbuch/show (seit #558 mit Handy-Ansicht) — geprüft, keine Änderung | Öffentlicher Link | 6 ✓ |
+| `/_platform/fa-recipe-pdf/{token}` | Rezept-PDF — PR 6: `inline` statt `attachment` (am Handy öffnet der PDF-Betrachter mit Teilen), Dateiname RFC 6266 mit Umlauten | Öffentlicher Link (öffnen/teilen) | 6 ✓ |
+| `/l/{token}` | Lieferanten-Portal (eigenes Layout, #649–#654) — nur geprüft: viewport, max. 40rem, 16 px Rand; keine Änderung | Öffentlicher Link | 6 ✓ |
+| `/foodbooks/{id}/report`, `/speisekarten/{id}/report` | dokumente.report — PR 6: am Handy lesbar über `viewport` + `@media screen and (max-width: 640px)` nur in der HTML-Ausgabe (Tabellen wischbar); DomPDF und Druck unverändert | Interne Sicht („Intern“) | 6 ✓ |
 
 ## Bestandsaufnahme 375 px (29.10.2026, io-Hülle lokal)
 
