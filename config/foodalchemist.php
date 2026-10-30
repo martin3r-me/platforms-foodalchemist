@@ -425,6 +425,14 @@ return [
     'trends' => [
         'dataforseo_kosten_je_abfrage' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_KOSTEN', 0.009),
         'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
+        // Spec 93 A · Quellen-Abruf. Die Zahlen sind Startwerte, nicht belegt (im Schatten-/Probelauf kalibrieren).
+        'quellen' => [
+            'max_neue_je_abruf' => (int) env('FOODALCHEMIST_TREND_QUELLEN_MAX_NEUE', 20),       // je Quelle und Abruf, Dubletten zählen nicht
+            'uebersicht_mindest_treffer' => (int) env('FOODALCHEMIST_TREND_QUELLEN_MIN_TREFFER', 3), // Auto-Wahl: ab so vielen Artikeln gilt eine Übersicht als lesbar
+            'max_bytes' => (int) env('FOODALCHEMIST_TREND_QUELLEN_MAX_BYTES', 2 * 1024 * 1024),
+            'timeout' => (int) env('FOODALCHEMIST_TREND_QUELLEN_TIMEOUT', 20),
+            'teaser_max' => 600,
+        ],
     ],
 
     'gebuehren' => [
@@ -477,6 +485,9 @@ return [
         // trend_dataforseo_enabled und stoppt am Monatsbudget des Teams.
         'trends_messen_enabled' => env('FOODALCHEMIST_TRENDS_MESSEN', true),
         'trends_messen_zeit' => env('FOODALCHEMIST_TRENDS_MESSEN_ZEIT', '06:10'),
+        // Spec 93 A: täglicher Quellen-Abruf (holt nur fällige plattform-Quellen). Standard AUS — kein Lauf allein durch den Deploy.
+        'trend_quellen_enabled' => env('FOODALCHEMIST_TREND_QUELLEN', false),
+        'trend_quellen_zeit' => env('FOODALCHEMIST_TREND_QUELLEN_ZEIT', '05:50'),
         // Spec 52/Paket 3: Team, dessen Kanon-Sicherung wöchentlich geprüft wird.
         // **0 schaltet den Lauf ab.** Der Kanon ist team-gebunden und es gibt keinen sinnvollen
         // Default über Installationen hinweg — eine frische Instanz ohne Team 6 soll deshalb

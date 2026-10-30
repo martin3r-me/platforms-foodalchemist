@@ -55,5 +55,31 @@
         @endunless
     </x-fa::section>
 
+    {{-- Spec 93 A: Standards für die Quellen des Trendradars --}}
+    <x-fa::section title="Quellen und Eingang" icon="heroicon-o-rss"
+                   description="Standard für neue Quellen und für den Stichwort-Filter vor dem Eingang. Jede Quelle kann eigene Werte haben (Trendradar → Reiter „Quellen“).">
+        <div class="flex flex-col gap-4 max-w-[60ch]" data-trendradar-quellen>
+            @unless($quellenHostAktiv)
+                <x-fa::notice tone="info">Der tägliche Abruf ist auf dem Server noch ausgeschaltet. Quellen, Eingang und MCP funktionieren trotzdem.</x-fa::notice>
+            @endunless
+            <x-fa::field label="Rhythmus neuer Quellen" for="tq-rhythmus" hint="„Aus“ = neue Quellen werden nicht automatisch abgerufen.">
+                <x-fa::select id="tq-rhythmus" wire:model="quellenRhythmus" :options="$rhythmen" class="max-w-[14rem]" />
+            </x-fa::field>
+            <x-fa::field label="Stichworte ein" for="tq-ein" optional
+                         hint="Mindestens eins muss in Titel oder Teaser vorkommen; leer = alles durch. Komma-getrennt, Wortanfang genügt, Umlaute egal, Phrasen in Anführungszeichen exakt. Beispiel, keine Vorgabe: {{ implode(', ', \Platform\FoodAlchemist\Support\TrendVokabular::STICHWORT_BEISPIEL_EIN) }}.">
+                <x-fa::input id="tq-ein" wire:model="stichworteEin" />
+            </x-fa::field>
+            <x-fa::field label="Stichworte aus" for="tq-aus" optional
+                         hint="Kommt eins davon vor, landet der Artikel nicht im Eingang. Beispiel, keine Vorgabe: {{ implode(', ', \Platform\FoodAlchemist\Support\TrendVokabular::STICHWORT_BEISPIEL_AUS) }}.">
+                <x-fa::input id="tq-aus" wire:model="stichworteAus" />
+            </x-fa::field>
+        </div>
+        @unless($sperrLesen)
+            <div class="flex justify-end pt-3 border-t border-[var(--fa-line)]">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-trendradar-quellen-speichern>Einstellungen speichern</x-fa::button>
+            </div>
+        @endunless
+    </x-fa::section>
+
     </fieldset>
 </div>

@@ -116,7 +116,7 @@ final class FaBereiche
         ['lab_notes', 'rezepte'], ['reife', 'rezepte'], ['surplus', 'rezepte'], ['quality_run', 'rezepte'], ['anreicherung_vorschlag', 'rezepte'],
         ['datenwerk', 'rezepte'], ['substitution', 'rezepte'], ['machbarkeit', 'rezepte'],
         // Wissen & Trendradar
-        ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'], ['trendradar', 'wissen'], ['trends', 'wissen'], ['trend_belege', 'wissen'], ['fundstuecke', 'wissen'], ['pairing', 'wissen'], ['reference', 'wissen'],
+        ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'], ['trendradar', 'wissen'], ['trends', 'wissen'], ['trend_belege', 'wissen'], ['fundstuecke', 'wissen'], ['trend_quellen', 'wissen'], ['trend_eingang', 'wissen'], ['pairing', 'wissen'], ['reference', 'wissen'],
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
         // Stammdaten
         ['gp', 'stammdaten'], ['gps', 'stammdaten'], ['preise_verlauf', 'stammdaten'], ['preise_historie', 'stammdaten'], ['nonfood', 'stammdaten'], ['artikel', 'stammdaten'], ['produktpass', 'stammdaten'], ['necta_pruefaelle', 'stammdaten'], ['marke_offen', 'stammdaten'], ['supplier', 'stammdaten'], ['suppliers', 'stammdaten'],

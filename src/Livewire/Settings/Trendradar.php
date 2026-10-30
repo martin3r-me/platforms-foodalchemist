@@ -7,6 +7,8 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TrendSignalService;
+use Platform\FoodAlchemist\Support\StichwortFilter;
+use Platform\FoodAlchemist\Support\TrendVokabular;
 
 /**
  * Einstellungen → Trendradar: Google-Trends-Messung über DataForSEO (Spec 79: an/aus, Monatsbudget,
@@ -29,6 +31,13 @@ class Trendradar extends Component
 
     public string $dfsVerbindung = '';
 
+    /** Spec 93 A: Team-Standard für neue Quellen und für den Stichwort-Filter (je Liste, wenn die Quelle keine eigene hat). */
+    public string $quellenRhythmus = 'aus';
+
+    public string $stichworteEin = '';
+
+    public string $stichworteAus = '';
+
     public ?string $meldung = null;
 
     public function mount(): void
@@ -41,6 +50,10 @@ class Trendradar extends Component
         $this->dfsAktiv = $s->trendDataForSeoAktiv($team);
         $this->dfsBudget = rtrim(rtrim(number_format($s->trendDataForSeoBudget($team), 2, '.', ''), '0'), '.');
         $this->dfsVerbindung = (string) ($s->trendDataForSeoConnectionId($team) ?? '');
+        $this->quellenRhythmus = $s->trendQuellenRhythmus($team);
+        $w = $s->trendStichworte($team);
+        $this->stichworteEin = implode(', ', $w['ein']);
+        $this->stichworteAus = implode(', ', $w['aus']);
     }
 
     public function speichern(): void
@@ -54,6 +67,9 @@ class Trendradar extends Component
             'trend_dataforseo_enabled' => $this->dfsAktiv,
             'trend_dataforseo_budget_usd' => $budget,
             'trend_dataforseo_connection_id' => (int) $this->dfsVerbindung > 0 ? (int) $this->dfsVerbindung : null,
+            'trend_quellen_rhythmus' => array_key_exists($this->quellenRhythmus, TrendVokabular::RHYTHMEN) ? $this->quellenRhythmus : 'aus',
+            'trend_stichworte_ein' => StichwortFilter::liste($this->stichworteEin) ?: null,
+            'trend_stichworte_aus' => StichwortFilter::liste($this->stichworteAus) ?: null,
         ]);
         $this->dfsBudget = rtrim(rtrim(number_format($budget, 2, '.', ''), '0'), '.');
         $this->meldung = $this->dfsAktiv
@@ -75,6 +91,8 @@ class Trendradar extends Component
             'kostenJeAbfrage' => $signale->kostenJeAbfrage(),
             'anbindung' => $signale->anbindungVorhanden(),
             'messZeit' => config('foodalchemist.scheduler.trends_messen_zeit', '06:10'),
+            'rhythmen' => TrendVokabular::RHYTHMEN,
+            'quellenHostAktiv' => (bool) config('foodalchemist.scheduler.trend_quellen_enabled', false) && (bool) config('foodalchemist.scheduler.enabled', true),
             'hostAktiv' => (bool) config('foodalchemist.scheduler.trends_messen_enabled', true)
                 && (bool) config('foodalchemist.scheduler.enabled', true),
         ]);
