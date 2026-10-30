@@ -47,6 +47,8 @@ class TrendsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'gartner_phase' => ['type' => 'string', 'enum' => array_merge(array_keys(V::GARTNER_PHASEN), [''])],
                 'einordnung_quelle' => ['type' => 'string', 'enum' => ['manuell', 'ki']],
                 'einordnung_begruendung' => ['type' => 'string'],
+                'ableitung' => ['type' => 'object', 'description' => 'Spec 93 D „Was heißt das für uns“ von Hand: {kurzfazit, bedeutung: {sparte: text}, impulse: [{art: gericht|konzept, titel, beschreibung}]}. '
+                    .'Gilt dauerhaft, die KI überschreibt sie nicht mehr. Leeres Objekt {} entfernt die Ableitung.'],
             ],
             'required' => ['id'],
         ];
@@ -60,9 +62,13 @@ class TrendsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         }
         $svc = app(TrendService::class);
         $id = (int) $arguments['id'];
-        unset($arguments['id']);
+        $ableitung = $arguments['ableitung'] ?? null;
+        unset($arguments['id'], $arguments['ableitung']);
         try {
-            $trend = $svc->aendern($team, $id, $arguments, $context->user?->id);
+            if (is_array($ableitung)) {
+                app(\Platform\FoodAlchemist\Services\Trends\TrendAbleitungService::class)->manuellSetzen($team, $id, $ableitung === [] ? null : $ableitung, $context->user?->id);
+            }
+            $trend = $arguments === [] ? $svc->detail($team, $id) : $svc->aendern($team, $id, $arguments, $context->user?->id);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return ToolResult::error('Trend nicht gefunden oder gehört einem anderen Team.', 'NOT_FOUND');
         } catch (\RuntimeException $e) {

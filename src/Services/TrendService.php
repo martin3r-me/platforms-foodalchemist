@@ -123,6 +123,9 @@ class TrendService
         $out['historische_einordnung'] = $t->historische_einordnung;
         $out['gartner_phase'] = $t->gartner_phase;
         $out['einordnung_begruendung'] = $t->einordnung_begruendung;
+        $out['ableitung'] = $t->ableitung;   // Spec 93 D
+        $out['ableitung_quelle'] = $t->ableitung_quelle;
+        $out['ableitung_fehler'] = $t->ableitung_fehler;
         $out['belege'] = $t->belege()->get()->map(fn (FoodAlchemistTrendBeleg $x) => [
             'id' => $x->id, 'quelle' => $x->quelle, 'quelle_label' => V::label(V::QUELLEN, $x->quelle),
             'titel' => $x->titel, 'url' => $x->url, 'notiz' => $x->notiz, 'fundort' => $x->fundort,

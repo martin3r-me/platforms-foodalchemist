@@ -414,6 +414,7 @@
                                 <p class="text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink)]">{{ $gewaehlt->definition }}</p>
                             </x-fa::section>
                         @endif
+                        <livewire:foodalchemist.trendradar.ableitung :trend-id="$gewaehlt->id" :key="'ableitung-'.$gewaehlt->id" />{{-- Spec 93 D --}}
 
                         <x-fa::section variant="plain" title="Position in der Trendhierarchie" icon="heroicon-o-signal">
                             <div class="flex items-center gap-3">

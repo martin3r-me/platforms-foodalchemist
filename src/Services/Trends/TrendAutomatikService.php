@@ -35,6 +35,9 @@ class TrendAutomatikService
     /** Belege, die einen Trend in Fachkreisen verankern (Trend-Regel: mindestens einer davon). */
     public const HARTE_ARTEN = ['presse', 'branchenquelle', 'literatur'];
 
+    /** @var array<int, \Illuminate\Support\Collection<int, FoodAlchemistTrendInspiration>>|null Spec 93 D (Befund 1 aus C): manuelle Inspirationen je Team, nur während eines Laufs (null = kein Lauf, immer frisch lesen) */
+    private ?array $pinnwand = null;
+
     public function __construct(
         private readonly TrendService $trends,
         private readonly TeamSettingsService $settings,
@@ -175,6 +178,17 @@ class TrendAutomatikService
             $userId !== null ? $this->rechte->pruefeId($userId, $team, FaRolle::Kuratieren, 'Trend-Automatik ausführen')
                 : $this->rechte->pruefeAngemeldet($team, FaRolle::Kuratieren, 'Trend-Automatik ausführen');
         }
+        $this->pinnwand = [];   // Zwischenspeicher nur für diesen Lauf: was seit dem letzten Lauf auf die Pinnwand kam, zählt
+        try {
+            return $this->laufRumpf($team, $e, $schreiben, $userId);
+        } finally {
+            $this->pinnwand = null;
+        }
+    }
+
+    /** @return array{stufe:string, schatten:bool, geschrieben:bool, neue_trends:int, gestaut:int, liste:list<array<string,mixed>>} */
+    private function laufRumpf(Team $team, array $e, bool $schreiben, ?int $userId): array
+    {
         $r = $e['regeln'];
         $liste = [];
         $neu = 0;
@@ -312,14 +326,24 @@ class TrendAutomatikService
         if ($stufe === 'radar' && $hindernis === null) {
             $this->trends->statusSetzen($team, (int) $trend->id, 'auf_radar', $userId);
             $this->ereignis($trend->refresh(), 'auf_radar');
+            $this->ableitungAnstossen($team, $trend);
 
             return;
         }
         if ($trend->status === 'gesichtet') {
             $this->trends->statusSetzen($team, (int) $trend->id, 'geprueft', $userId);
+            $this->ableitungAnstossen($team, $trend->refresh());
         }
         if ($stufe === 'radar' && $hindernis !== null) {
             $trend->refresh()->forceFill(['einordnung_begruendung' => trim((string) $trend->einordnung_begruendung).' Nicht aufs Radar: '.$hindernis])->save();
+        }
+    }
+
+    /** Spec 93 D: ein Trend der Automatik hat „geprüft“/„auf dem Radar“ erreicht und noch keine Ableitung → anstoßen (nach dem Commit). */
+    private function ableitungAnstossen(Team $team, FoodAlchemistTrend $trend): void
+    {
+        if ($trend->herkunft === 'automatisch' && $trend->ableitung === null && $trend->ableitung_quelle === null) {
+            app(TrendAbleitungService::class)->anstossen($team, (int) $trend->id);
         }
     }
 
@@ -339,8 +363,13 @@ class TrendAutomatikService
             return collect();
         }
 
-        return FoodAlchemistTrendInspiration::whereIn('team_id', $this->trends->fundstueckFamilie($team))->where('herkunft', 'manuell')
-            ->with('quellen')->orderBy('id')->get()
+        $lesen = fn () => FoodAlchemistTrendInspiration::whereIn('team_id', $this->trends->fundstueckFamilie($team))
+            ->where('herkunft', 'manuell')->with('quellen')->orderBy('id')->get();
+        if ($this->pinnwand !== null) {
+            $this->pinnwand[(int) $team->id] ??= $lesen();
+        }
+
+        return ($this->pinnwand[(int) $team->id] ?? $lesen())
             ->filter(function ($i) use ($schluessel) {
                 if (TrendThemenService::schluessel((string) $i->titel) === $schluessel) {
                     return true;

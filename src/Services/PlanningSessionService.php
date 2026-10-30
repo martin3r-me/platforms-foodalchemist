@@ -132,6 +132,11 @@ class PlanningSessionService
             $einordnung = array_filter([$t->ebene ? $V::EBENEN[$t->ebene] : null, $t->kategorie ? $V::KATEGORIEN[$t->kategorie] : null]);
             $zeilen[] = $art.($einordnung ? ' ('.implode(', ', $einordnung).')' : '').': '.$t->name
                 .(($d = $kurz($t->definition, 260)) !== '' ? ' — '.$d : '');
+            // Spec 93 D: „Was heißt das für uns“ geht mit, aber nur eine gültige Ableitung (ki|manuell, ohne Fehler)
+            if (($ab = app(\Platform\FoodAlchemist\Services\Trends\TrendAbleitungService::class)->gueltig($t)) !== null) {
+                $impulse = array_map(fn ($i) => ($i['art'] === 'konzept' ? 'Konzept' : 'Gericht').': '.$i['titel'], $ab['impulse'] ?? []);
+                $zeilen[] = '  Was heißt das für uns: '.trim(($kurz($ab['kurzfazit'] ?? null, 300)).($impulse !== [] ? ' Impulse: '.implode('; ', $impulse).'.' : ''));
+            }
             $belege = $t->belege->take(6)->map(fn ($b) => '  - '.($b->titel ?: ($V::QUELLEN[$b->quelle] ?? $b->quelle)).($b->url ? ' ('.$b->url.')' : ''))->implode("\n");
             $analyse[] = $art.': '.$t->name.' · Konfidenz '.$V::KONFIDENZ[$t->wirksameKonfidenz()].($belege !== '' ? "\n".$belege : '');
         }

@@ -1403,6 +1403,19 @@ return [
                 . 'Nicht relevant (z. B. Personalie, Insolvenz, Stellenanzeige, Technik ohne Food-Bezug): relevant=false mit begruendung, '
                 . 'die übrigen Felder dürfen leer sein. Erfinde nichts, was nicht in Titel oder Teaser steht.',
         ],
+        // Spec 93 D: „Was heißt das für uns“ an einem Trend — Bedeutung je Sparte und 3–5 Gericht-/Konzept-Impulse für die Planung.
+        'trend.ableitung' => [
+            'klasse' => 'mittel',
+            'max_tokens' => 1500,
+            'temperature' => 0.4,
+            'task' => 'Leite für einen Caterer ab, was ein Trend oder Hype praktisch bedeutet. Eingabe: trend (name, typ, ebene, kategorie, '
+                . 'sparten, definition, begruendung), belege (Titel der Quellen), sparten_vokabular (Schlüssel → Name). '
+                . 'werte = {kurzfazit: höchstens 300 Zeichen, bedeutung: Objekt Sparten-Schlüssel → ein bis zwei Sätze (nur Sparten aus '
+                . '`sparten_vokabular`; hat der Trend Sparten, nur diese, sonst die zwei bis vier relevantesten), impulse: 3 bis 5 Einträge '
+                . '[{art: gericht|konzept, titel: kurz, beschreibung: höchstens 200 Zeichen}]}. '
+                . 'Konkret und umsetzbar für Catering und Gemeinschaftsverpflegung, keine Marketing-Floskeln, nichts erfinden, was dem '
+                . 'Trend widerspricht. Bei einem Hype: kurzlebig denken (Aktion, Special), bei einem Trend: dauerhaft (Sortiment, Konzept).',
+        ],
         'component.replacement_suggest' => [
             'klasse' => 'stark',
             'max_tokens' => 1800,

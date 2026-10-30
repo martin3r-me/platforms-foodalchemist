@@ -639,6 +639,7 @@ return [
     \Platform\FoodAlchemist\Tools\TrendQuellenGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenPostTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenPutTool::class,
+    \Platform\FoodAlchemist\Tools\TrendsAbleitungTool::class,
     \Platform\FoodAlchemist\Tools\TrendsDeleteTool::class,
     \Platform\FoodAlchemist\Tools\TrendsGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendsMessenTool::class,
