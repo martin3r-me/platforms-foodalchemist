@@ -95,6 +95,7 @@ dataset('umgeleitete_tools', function () {
         'format.PLAN_FROM_BRIEF' => ['foodalchemist.format.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
         'speisekarte.PLAN_FROM_BRIEF' => ['foodalchemist.speisekarte.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
         'recipes.EXTRACT' => ['foodalchemist.recipes.EXTRACT', fn ($t) => ['raw_text' => "Rotweinjus\n300 g Schalotten\n200 ml Rotwein\nSchalotten anschwitzen, mit Rotwein ablöschen, reduzieren.", 'dry_run' => true], 'recipe.extract'],
+        'produktpass.RECHERCHE' => ['foodalchemist.produktpass.RECHERCHE', fn ($t) => ['supplier_item_id' => $t->laId], 'artikel.web_recherche'],
         'signale.FIX' => ['foodalchemist.signale.FIX', fn ($t) => ['signal_id' => $t->signalId], 'signal.margin_levers'],
         'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
@@ -107,7 +108,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
-            ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'], ['foodalchemist.recipes.EXTRACT'],
+            ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'], ['foodalchemist.recipes.EXTRACT'], ['foodalchemist.produktpass.RECHERCHE'],
             ['foodalchemist.concepts.GENERATE'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
             ['foodalchemist.foodbook.PLAN_FROM_BRIEF'], ['foodalchemist.angebot.PLAN_FROM_BRIEF'], ['foodalchemist.format.PLAN_FROM_BRIEF'], ['foodalchemist.speisekarte.PLAN_FROM_BRIEF'],
         ];

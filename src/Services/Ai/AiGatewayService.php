@@ -352,7 +352,7 @@ class AiGatewayService
         unset($options['bilder']);
         // Spec 85 I5-8: Websuche nur über einen Provider, der im Web sucht — sonst kein Aufruf (keine Kosten, keine erfundenen Werte)
         $websuche = ($options['include_web_search'] ?? false) === true;
-        if ($websuche) {
+        if ($websuche && ! app(KiExternModus::class)->aktiv()) {   // extern sucht der MCP-Client selbst (2d-2): der Plattform-Provider ist nicht beteiligt
             $this->pruefeWebsucheWeg();
         }
         if ($bilder !== []) {

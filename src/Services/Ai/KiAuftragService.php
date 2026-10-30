@@ -38,7 +38,12 @@ class KiAuftragService
             if ($n === 1) {
                 $modell = trim(($fertig->anbieter ? $fertig->anbieter . '/' : '') . (string) $fertig->modell, '/');
 
-                return ['content' => (string) $fertig->antwort, 'model' => $modell !== '' ? $modell : 'extern', 'usage' => [], 'extern' => true];
+                $roh = ['content' => (string) $fertig->antwort, 'model' => $modell !== '' ? $modell : 'extern', 'usage' => [], 'extern' => true];
+                if (($optionen['include_web_search'] ?? false) === true) {
+                    $roh['sources'] = (array) (json_decode((string) $fertig->antwort, true)['sources'] ?? []);   // ANTWORT hat sie beim Speichern geprüft
+                }
+
+                return $roh;
             }
         }
 
@@ -78,6 +83,22 @@ class KiAuftragService
         }
 
         throw new KiAuftragAusstehendException($uuid, $feature);
+    }
+
+    /**
+     * @return list<array{url: string, title: string}> nur http(s)-URLs, je URL einmal
+     */
+    public static function bereinigeQuellen(mixed $roh): array
+    {
+        $aus = [];
+        foreach ((array) $roh as $q) {
+            $url = is_array($q) ? trim((string) ($q['url'] ?? '')) : trim((string) $q);
+            if (preg_match('#^https?://\S+$#i', $url) === 1 && ! isset($aus[$url])) {
+                $aus[$url] = ['url' => $url, 'title' => is_array($q) ? trim((string) ($q['title'] ?? '')) : ''];
+            }
+        }
+
+        return array_values($aus);
     }
 
     /** Wartet für dieses Ziel schon ein Lauf (offener oder beantworteter, noch nicht verbrauchter Auftrag)? Dann startet kein zweiter. */
@@ -214,7 +235,7 @@ class KiAuftragService
      *
      * @param array<string, mixed>|string $werte
      */
-    public function beantworte(int $teamId, string $auftragUuid, array|string $werte, ?string $anbieter, ?string $modell): void
+    public function beantworte(int $teamId, string $auftragUuid, array|string $werte, ?string $anbieter, ?string $modell, ?array $quellen = null): void
     {
         $zeile = DB::table('foodalchemist_ki_auftraege')->where('uuid', $auftragUuid)->where('team_id', $teamId)->first();
         if ($zeile === null) {
@@ -231,6 +252,17 @@ class KiAuftragService
         $json = json_decode(app(AiGatewayService::class)->stripJsonFence($roh), true);
         if (! is_array($json)) {
             throw new RuntimeException('Antwort ist kein JSON-Objekt/Array — Schema-Verstoß, nichts gespeichert.');
+        }
+        // 2d-2: ein Websuche-Auftrag (optionen.include_web_search) verlangt belegte Quellen — eine Antwort ohne http(s)-Quelle wird abgelehnt,
+        // nichts wird gespeichert (der Auftrag bleibt offen, es entsteht keine unbelegte Aussage)
+        $optionen = json_decode((string) $zeile->optionen, true);
+        if (is_array($optionen) && ($optionen['include_web_search'] ?? false) === true) {
+            $quellenListe = self::bereinigeQuellen($quellen ?? ($json['sources'] ?? $json['quellen'] ?? []));
+            if ($quellenListe === []) {
+                throw new RuntimeException('Websuche-Auftrag: Antwort ohne Quellen abgelehnt — quellen (url, title) der tatsächlich gefundenen Seiten mitsenden; ohne Beleg wird nichts übernommen.');
+            }
+            unset($json['quellen']);
+            $json['sources'] = $quellenListe;
         }
         DB::table('foodalchemist_ki_auftraege')->where('id', $zeile->id)->where('status', 'offen')->update([
             'status' => 'beantwortet', 'antwort' => json_encode($json, JSON_UNESCAPED_UNICODE),
