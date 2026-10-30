@@ -21,9 +21,9 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
  * Die eigentliche Arbeit (Generierung + Verdrahtung + Lineage + Step-Rückmeldung) liegt in
  * {@see PlanningCascadeService::materialisiereConceptGericht} — der Job ist nur der Auth-/Queue-Rahmen.
  */
-class MaterializeConceptIdeaJob implements ShouldQueue
+class MaterializeConceptIdeaJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     /** Rezept-Generierung inkl. Grounding — unter dem demo-Worker-Timeout (600 s). */
     public int $timeout = 300;
@@ -37,9 +37,35 @@ class MaterializeConceptIdeaJob implements ShouldQueue
         public int $ideaId,
         public int $cascadeStepId,
         public ?int $planningSessionId = null,
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "materialize-idea:{$this->teamId}:{$this->ideaId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'idea_id' => $this->ideaId, 'cascade_step_id' => $this->cascadeStepId, 'planning_session_id' => $this->planningSessionId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['idea_id'], (int) $n['cascade_step_id'], isset($n['planning_session_id']) ? (int) $n['planning_session_id'] : null, true, $versuch);
+    }
 
     public function handle(): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite());
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(): void
     {
         $cascade = app(PlanningCascadeService::class);
         $runId = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->cascadeStepId)->value('cascade_run_id');

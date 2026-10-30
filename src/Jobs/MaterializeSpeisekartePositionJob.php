@@ -20,9 +20,9 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
  *
  * Die eigentliche Arbeit liegt in {@see PlanningCascadeService::materialisiereSpeisekartePosition}.
  */
-class MaterializeSpeisekartePositionJob implements ShouldQueue
+class MaterializeSpeisekartePositionJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     public int $timeout = 300;
 
@@ -35,9 +35,35 @@ class MaterializeSpeisekartePositionJob implements ShouldQueue
         public string $brief,
         public int $cascadeStepId,
         public ?int $planningSessionId = null,
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "materialize-position:{$this->teamId}:{$this->cascadeStepId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'rubrik_id' => $this->rubrikId, 'brief' => $this->brief, 'cascade_step_id' => $this->cascadeStepId, 'planning_session_id' => $this->planningSessionId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['rubrik_id'], (string) $n['brief'], (int) $n['cascade_step_id'], isset($n['planning_session_id']) ? (int) $n['planning_session_id'] : null, true, $versuch);
+    }
 
     public function handle(): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite());
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(): void
     {
         $team = Team::find($this->teamId);
         if ($team === null) {

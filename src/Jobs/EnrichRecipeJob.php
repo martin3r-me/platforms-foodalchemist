@@ -70,7 +70,13 @@ class EnrichRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\A
         public array $leitplanken = [],   // 27.10.: Rezept-Leitplanken (bio_pref/frische/convenience) für die Bestandssuche vor jedem GP-Mint
         public bool $extern = false,   // #1002 P2b: per MCP gestartet → KI-Aufträge statt Provider-Calls (Sammel-Transaktion, Wiederholung durch ANTWORT)
         public int $versuch = 0,
-    ) {}
+    ) {
+        // #1002 Kaskade: aus einem externen MCP-Aufruf/Lauf angestoßen → selbst extern, Dispatch erst nach dem Commit
+        $this->extern = $this->extern || app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        if ($this->extern && $this->versuch === 0) {
+            $this->afterCommit = true;
+        }
+    }
 
     // ── #1002 P2b · KiExternWiederholbar ────────────────────────────────────────────────────────────
     // Nur die Voll-Anreicherung läuft extern; „nur Bilder“/„nur Produktfoto“ bleiben beim Plattform-Provider (Bildgenerierung).

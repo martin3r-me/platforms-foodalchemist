@@ -20,9 +20,9 @@ use Platform\FoodAlchemist\Services\RecipeKomponentenPlanService;
  * {@see PlanningCascadeService::starteRezeptNachPlan}. Ein Plan mit höchstens einer Komponente braucht kein
  * Gate (ein Baustein) und wird sofort gebaut.
  */
-class GenerateRecipePlanJob implements ShouldQueue
+class GenerateRecipePlanJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     public int $timeout = 300;
 
@@ -35,9 +35,35 @@ class GenerateRecipePlanJob implements ShouldQueue
         public int $stepId,
         public string $brief,
         public array $params,
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "recipe-plan:{$this->teamId}:{$this->stepId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'step_id' => $this->stepId, 'brief' => $this->brief, 'params' => $this->params];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['step_id'], (string) $n['brief'], (array) $n['params'], true, $versuch);
+    }
 
     public function handle(RecipeKomponentenPlanService $plan, PlanningCascadeService $cascade): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($plan, $cascade));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(RecipeKomponentenPlanService $plan, PlanningCascadeService $cascade): void
     {
         $team = Team::find($this->teamId);
         $step = FoodAlchemistCascadeRunStep::find($this->stepId);
@@ -76,6 +102,8 @@ class GenerateRecipePlanJob implements ShouldQueue
                 'context_snapshot' => [...$snapshot, 'plan' => true, 'komponenten' => $komponenten],
             ]);
             $cascade->recomputeRunStatus((int) $step->cascade_run_id);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
+            // wartet auf die externe Antwort — Step bleibt `running`, kein Fehler; ANTWORT startet den Job neu
         } catch (\Throwable $e) {
             $cascade->markStepFailed($this->stepId, 'Komponenten-Plan fehlgeschlagen: ' . $e->getMessage());
         }

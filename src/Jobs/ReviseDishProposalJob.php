@@ -17,9 +17,9 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 
 /** Überarbeitet nur den textlichen Gericht-Bauplan; erzeugt bewusst noch kein Rezept. */
-class ReviseDishProposalJob implements ShouldQueue
+class ReviseDishProposalJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     public int $timeout = 120;
     public int $tries = 1;
@@ -30,9 +30,35 @@ class ReviseDishProposalJob implements ShouldQueue
         public int $stepId,
         public int $ideaId,
         public string $feedback,
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "dish-revise:{$this->teamId}:{$this->stepId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'step_id' => $this->stepId, 'idea_id' => $this->ideaId, 'feedback' => $this->feedback];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['step_id'], (int) $n['idea_id'], (string) $n['feedback'], true, $versuch);
+    }
 
     public function handle(AiGatewayService $ai, PlanningCascadeService $cascade): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($ai, $cascade));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(AiGatewayService $ai, PlanningCascadeService $cascade): void
     {
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
@@ -92,6 +118,8 @@ class ReviseDishProposalJob implements ShouldQueue
                 ]);
                 $cascade->recomputeRunStatus((int) $step->cascade_run_id);
             }
+        } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
+            // wartet auf die externe Antwort — Step bleibt `running`, kein Fehler; ANTWORT startet den Job neu
         } catch (\Throwable $e) {
             $cascade->setzePhase($this->stepId, null);
             $step->update(['status' => 'geplant', 'error' => Str::limit('Überarbeitung fehlgeschlagen: '.$e->getMessage(), 500, '')]);

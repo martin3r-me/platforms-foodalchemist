@@ -133,6 +133,10 @@ class KiExternLauf
                 .'(ki_auftraege-Zähler „doppelt“ prüfen) oder der Lauf hat mehr KI-Glieder als erwartet.');
         }
         app(KiAuftragService::class)->legeAn($merker['vorgemerkt']);
+        // Aufträge, die ein anderer Lauf angelegt hat (gleicher Prompt): als Mitwartender eintragen, damit ANTWORT auch diesen Lauf neu startet
+        app(KiAuftragService::class)->registriereWartende($teamId, array_values(array_diff(array_keys($merker['wartet']), array_column($merker['vorgemerkt'], 'uuid'))), [
+            'klasse' => $job::class, 'nutzlast' => $job->externNutzlast(), 'versuch' => $job->externVersuch(), 'lauf_key' => $key,
+        ]);
 
         return self::WARTET;
     }
