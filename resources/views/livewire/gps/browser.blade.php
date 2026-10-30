@@ -80,6 +80,18 @@
     {{-- Klick auf einen Lieferantenartikel im Panel öffnet dessen Artikel-Dialog --}}
     <livewire:foodalchemist.suppliers.item-modal key="gps-browser--suppliers.item-modal" />
 
+    {{-- #1003: am Handy Karten statt Tabelle (wie Rezepte); Warengruppen bleiben in der linken Schublade --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Grundprodukte', 'eintraege' => $gps, 'aktivId' => $gpId, 'wahl' => 'waehleGp', 'scope' => 'activity_gps',
+            'suchHinweis' => 'Grundprodukt suchen',
+            'unterzeile' => fn ($gp) => implode(' · ', array_filter([$gp->commodity_group?->name ?? $gp->commodity_group_code, $gp->status->label()])),
+            'wert' => fn ($gp) => $gp->lead_vergleichspreis
+                ? number_format((float) $gp->lead_vergleichspreis['value'], 2, ',', '.') . ' ' . $gp->lead_vergleichspreis['unit']
+                : ($gp->lead_preis !== null ? number_format((float) $gp->lead_preis, 2, ',', '.') . ' €' : null),
+            'leer' => 'Andere Suche oder Warengruppe zurücksetzen.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Grundprodukte" :subtitle="$untertitel">
             <x-slot:actions>
@@ -227,4 +239,5 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $gps->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    @endif
 </x-ui-page>

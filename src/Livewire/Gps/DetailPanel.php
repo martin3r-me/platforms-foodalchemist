@@ -23,6 +23,13 @@ class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
     use \Platform\FoodAlchemist\Livewire\Concerns\HatGpAromaKi;            // Aroma: Anker + Profil per KI (ein Weg mit dem GP-Dialog)
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;        // #1003: am Handy nur lesen
+
+    /** #1003: am Handy laufen Auswahl und Aufklappen; Verknüpfen, Lead, KI und Löschen bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'ankerNetzUmschalten'];
+    }
 
     /** Spec 65: gleiche Sperre wie der GP-Editor (Ziel gp) — auch eingebettet als Kartei im GP-Dialog. */
     protected function sperrZiel(): ?array

@@ -22,6 +22,34 @@ class Index extends Component
 {
     use WithPagination;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur suchen und lesen
+
+    /** #1003: am Handy laufen Auswahl, Zurück, Artikel-Karte und Blättern; alles Pflegen bleibt am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['waehleLieferant', 'handyZurueck', 'handyArtikel', 'gpGespeichert', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
+    }
+
+    /** #1003: am Handy geöffnete Artikel-Karte (Stufe 3). */
+    public ?int $handyArtikelId = null;
+
+    public function handyArtikel(int $id): void
+    {
+        $this->handyArtikelId = $id;
+    }
+
+    /** #1003: eine Stufe zurück — Artikel-Karte → Artikel des Lieferanten → Lieferanten-Liste. */
+    public function handyZurueck(): void
+    {
+        if ($this->handyArtikelId !== null) {
+            $this->handyArtikelId = null;
+
+            return;
+        }
+        $this->supplierId = null;
+        $this->artikelSuche = '';
+        $this->resetPage();
+    }
 
     #[Url(as: 'lieferant')]
     public ?int $supplierId = null;
@@ -311,6 +339,9 @@ class Index extends Component
     public function render(SupplierService $suppliers, SupplierItemService $items, PriceService $preise)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        if (\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
+            return $this->handyAnsicht($team, $suppliers, $items, $preise);
+        }
 
         $liste = $suppliers->listWithCounts($team, $this->includeInactive, $this->supplierSuche, $this->gruppe === '' ? null : (int) $this->gruppe);
         if ($this->einstufen) {
@@ -373,6 +404,37 @@ class Index extends Component
                     \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team), 'name', $this->bulkGpSuche)
                     ->orderBy('name')->limit(6)->get()
                 : collect(),
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
+    }
+
+    /**
+     * #1003 Handy: drei Stufen statt Seite mit Leiste und Tabelle — Lieferanten (inaktive ausgeblendet wie am
+     * Computer) mit Artikelsuche über alle → Kontakt-Karte + Artikel des Lieferanten → Artikel-Karte. Gleiche
+     * team-sichtbare Lese-Wege wie der Desktop (listWithCounts, paginateForSupplier, searchGlobal); nur lieferbare Artikel.
+     */
+    private function handyAnsicht($team, SupplierService $suppliers, SupplierItemService $items, PriceService $preise)
+    {
+        $handy = app(\Platform\FoodAlchemist\Services\HandyDetailService::class);
+        $artikelKarte = $this->handyArtikelId !== null ? $handy->artikel($team, $this->handyArtikelId) : null;
+        $lieferant = $artikelKarte === null && $this->supplierId !== null ? $handy->lieferantKarte($team, $this->supplierId) : null;
+        $suche = trim($this->q);
+
+        $artikel = match (true) {
+            $artikelKarte !== null => null,
+            $lieferant !== null => $items->paginateForSupplier($team, $lieferant['id'], ['onlyActive' => true, 'q' => $this->artikelSuche], 25),
+            $suche !== '' => $items->searchGlobal($team, $suche, ['onlyActive' => true], 25),
+            default => null,
+        };
+        $artikel?->getCollection()->each(fn ($item) => $item->setAttribute('vergleichspreis',
+            $preise->vergleichspreis($item, $item->aktiver_preis !== null ? (float) $item->aktiver_preis : null)));
+
+        return view('foodalchemist::livewire.handy.lieferanten', [
+            'artikelKarte' => $artikelKarte,
+            'artikelFehlt' => $this->handyArtikelId !== null && $artikelKarte === null,
+            'lieferant' => $lieferant,
+            'artikel' => $artikel,
+            'lieferanten' => $lieferant === null && $artikelKarte === null && $suche === ''
+                ? $suppliers->listWithCounts($team, false, $this->supplierSuche) : collect(),
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }
