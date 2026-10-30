@@ -8,11 +8,15 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\TrendEingangService;
+use Platform\FoodAlchemist\Services\TrendThemenService;
 
 /**
  * Spec 93 A · Reiter „Eingang“ im Trendradar: systematisch erfasste Artikel als Prüfliste (Titel, Quelle, Datum,
  * Teaser, Thema, Status). Aktionen Verwerfen, Wiederherstellen, Thema ändern, „Auf die Pinnwand“ — die einzige
  * Brücke zur Pinnwand. Die Fachlogik liegt im TrendEingangService.
+ *
+ * Spec 93 B: Block „Themen“ (automatische Inspirationen mit Artikelzahl), Einordnung je Artikel (Kategorie, Tiefe, Sparten)
+ * und „Erschließen“ für offene Einträge — ein Klick hier ist Plattform-KI.
  */
 class Eingang extends Component
 {
@@ -53,6 +57,21 @@ class Eingang extends Component
         }
     }
 
+    public function erschliessen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $this->meldung = $this->fehler = null;
+        try {
+            $n = count(app(TrendEingangService::class)->erschliessenAnstossen($team, null, Auth::id()));
+            $this->meldung = $n > 0 ? $n.' Artikel werden erschlossen.' : 'Nichts offen zum Erschließen.';
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function render()
     {
         $user = Auth::user();
@@ -68,6 +87,7 @@ class Eingang extends Component
         return view('foodalchemist::livewire.trendradar.eingang', [
             'eintraege' => $eintraege,
             'zaehler' => $team ? $svc->zaehler($team) : [],
+            'themen' => $team ? app(TrendThemenService::class)->themen($team, 30) : collect(),
             'darfKuratieren' => $team ? app(FaRechte::class)->darf($user, $team, FaRolle::Kuratieren) : false,
             'teamId' => (int) ($team?->id ?? 0),
         ]);

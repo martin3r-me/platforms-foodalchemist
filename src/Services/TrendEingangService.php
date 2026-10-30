@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FaRolle;
+use Platform\FoodAlchemist\Jobs\TrendEingangErschliessenJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendEingang;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
 use Platform\FoodAlchemist\Services\Trends\QuellenAbruf;
@@ -22,6 +23,9 @@ use Platform\FoodAlchemist\Support\TrendVokabular as V;
  * über die normalisierte URL in der ganzen Teamfamilie (eigene Zeile: nur zuletzt_gesehen_at; Zeile eines anderen Teams:
  * nur melden, nie dort schreiben) → neue Zeile mit Status „neu“. Gespeichert werden Titel, Link, Datum und ein gekürzter
  * Teaser, nie der Volltext. Auf die Pinnwand kommt ein Artikel nur per ausdrücklicher Entscheidung.
+ *
+ * Spec 93 B: Jeder neue Eintrag wird danach erschlossen (TrendEingangErschliessenJob): Plattform-Abruf und Klick → Plattform-KI,
+ * MCP-Aufruf → KI-Auftrag. Erschlossene Artikel kommen in ein automatisches Thema (TrendThemenService), nie auf die Pinnwand.
  */
 class TrendEingangService
 {
@@ -33,6 +37,7 @@ class TrendEingangService
         private readonly TrendQuellenService $quellen,
         private readonly QuellenAbruf $abruf,
         private readonly TeamSettingsService $settings,
+        private readonly TrendThemenService $themen,
     ) {}
 
     // ── Lesen ──────────────────────────────────────────────────────────────
@@ -73,6 +78,9 @@ class TrendEingangService
             'veroeffentlicht_am' => $e->veroeffentlicht_am?->toIso8601String(), 'teaser' => $e->teaser,
             'zusammenfassung' => $e->zusammenfassung, 'thema' => $e->thema, 'kategorie' => $e->kategorie, 'sparten' => $e->sparten ?? [],
             'tiefe' => $e->tiefe, 'relevant' => $e->relevant, 'begruendung' => $e->begruendung,
+            'thema_quelle' => $e->thema_quelle, 'thema_id' => $e->thema_inspiration_id !== null ? (int) $e->thema_inspiration_id : null,
+            'passt_zu_trend_id' => $e->passt_zu_trend_id !== null ? (int) $e->passt_zu_trend_id : null,
+            'erschlossen_am' => $e->erschlossen_at?->toIso8601String(),
             'status' => $e->status, 'status_label' => V::label(V::EINGANG_STATUS, $e->status),
             'eingereicht_von' => $e->eingereicht_von, 'inspiration_id' => $e->inspiration_id !== null ? (int) $e->inspiration_id : null,
             'zuletzt_gesehen_at' => $e->zuletzt_gesehen_at?->toIso8601String(), 'angelegt_am' => $e->created_at?->toIso8601String(),
@@ -155,6 +163,7 @@ class TrendEingangService
         if ($quelle !== null && $von !== 'abruf') {
             $this->mcpBesuch($quelle, 0);
         }
+        $this->erschliessenDispatchen($eintrag);
 
         return ['ergebnis' => 'neu', 'eintrag' => $eintrag->refresh(), 'grund' => $filter['grund']];
     }
@@ -196,6 +205,98 @@ class TrendEingangService
         return $z;
     }
 
+    // ── Erschließen (Spec 93 B) ────────────────────────────────────────────
+
+    /**
+     * Erschließen anstoßen: die genannten Einträge oder alle offenen („neu“/„fehler“) des eigenen Teams, älteste zuerst,
+     * höchstens `trends.quellen.erschliessen_max_je_aufruf` (50) je Aufruf. Per MCP laufen die Jobs extern.
+     *
+     * @param  list<int>|null  $ids
+     * @return list<int> angestoßene Eintrag-IDs
+     */
+    public function erschliessenAnstossen(Team $team, ?array $ids = null, ?int $userId = null): array
+    {
+        $this->pruefe($userId, $team, 'Trend-Eingang erschließen');
+        $max = (int) config('foodalchemist.trends.quellen.erschliessen_max_je_aufruf', 50);
+        $q = FoodAlchemistTrendEingang::where('team_id', $team->id)->whereIn('status', ['neu', 'fehler']);
+        if ($ids !== null) {
+            $q->whereKey(array_map('intval', $ids));
+        }
+        $zeilen = $q->orderBy('id')->limit($max)->get();
+        foreach ($zeilen as $e) {
+            $this->erschliessenDispatchen($e);
+        }
+
+        return $zeilen->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /**
+     * KI-Merkmale übernehmen (vom Job). Ungültige Antwort → Status „fehler“ mit Begründung; nicht relevant → „verworfen“;
+     * sonst „erschlossen“ und gebündelt. Ein von Hand gesetztes Thema bleibt.
+     *
+     * @param  array<string,mixed>  $w
+     * @param  list<int>  $trendIds  erlaubte Werte für passt_zu_trend_id (die mitgegebene Liste)
+     */
+    public function erschliessungUebernehmen(FoodAlchemistTrendEingang $e, array $w, array $trendIds): FoodAlchemistTrendEingang
+    {
+        if (! is_bool($w['relevant'] ?? null)) {
+            return $this->erschliessungFehlgeschlagen($e, 'KI-Antwort ohne gültiges Feld relevant');
+        }
+        $begruendung = $this->kurz($w['begruendung'] ?? null, 1000);
+        if ($w['relevant'] === false) {
+            $e->update(['relevant' => false, 'status' => 'verworfen', 'begruendung' => $begruendung ?? 'Nicht relevant (KI)', 'erschlossen_at' => now()]);
+
+            return $e->refresh();
+        }
+        $thema = $e->thema_quelle === 'manuell' ? $e->thema : $this->kurz($w['thema'] ?? null, 190);
+        if ($thema === null || TrendThemenService::schluessel($thema) === '') {
+            return $this->erschliessungFehlgeschlagen($e, 'KI-Antwort ohne Thema');
+        }
+        $tiefe = (string) ($w['tiefe'] ?? 'unklar');
+        $trend = isset($w['passt_zu_trend_id']) && in_array((int) $w['passt_zu_trend_id'], $trendIds, true) ? (int) $w['passt_zu_trend_id'] : null;
+        $e->update([
+            'relevant' => true,
+            'zusammenfassung' => $this->kurz($w['zusammenfassung'] ?? null, 400),
+            'thema' => $thema,
+            'thema_quelle' => $e->thema_quelle === 'manuell' ? 'manuell' : 'ki',
+            'kategorie' => array_key_exists((string) ($w['kategorie'] ?? ''), V::KATEGORIEN) ? (string) $w['kategorie'] : null,
+            'sparten' => array_values(array_intersect(array_map('strval', (array) ($w['sparten'] ?? [])), array_keys(V::SPARTEN))) ?: null,
+            'tiefe' => array_key_exists($tiefe, V::TIEFEN) ? $tiefe : 'unklar',
+            'begruendung' => $this->kurz($w['tiefe_begruendung'] ?? null, 1000) ?? $begruendung,
+            'passt_zu_trend_id' => $trend,
+            'status' => 'erschlossen',
+            'erschlossen_at' => now(),
+        ]);
+        if ($this->themen->buendeln($e->refresh()) !== null) {
+            $e->update(['status' => 'gebuendelt']);
+        }
+
+        return $e->refresh();
+    }
+
+    public function erschliessungFehlgeschlagen(FoodAlchemistTrendEingang $e, string $grund): FoodAlchemistTrendEingang
+    {
+        $e->update(['status' => 'fehler', 'begruendung' => mb_substr($grund, 0, 1000)]);
+
+        return $e->refresh();
+    }
+
+    /** Job anstoßen (nach dem Commit). Extern, wenn ein MCP-Aufruf dahintersteht — das Flag wird JETZT gelesen, nicht im Callback. */
+    private function erschliessenDispatchen(FoodAlchemistTrendEingang $e): void
+    {
+        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        $id = (int) $e->id;
+        $team = (int) $e->team_id;
+        DB::afterCommit(fn () => TrendEingangErschliessenJob::dispatch($id, $team, $extern));
+    }
+
+    private function kurz(mixed $wert, int $max): ?string
+    {
+        $t = trim(preg_replace('/\s+/u', ' ', (string) ($wert ?? '')) ?? '');
+
+        return $t === '' ? null : mb_substr($t, 0, $max);
+    }
+
     // ── Entscheiden ────────────────────────────────────────────────────────
 
     /**
@@ -210,15 +311,29 @@ class TrendEingangService
         switch ($aktion) {
             case 'verwerfen':
                 $eintrag->update(['status' => 'verworfen', 'begruendung' => $wert !== '' ? mb_substr($wert, 0, 2000) : $eintrag->begruendung]);
+                $this->themen->loesen($eintrag);
                 break;
             case 'wiederherstellen':
-                $eintrag->update(['status' => $eintrag->zusammenfassung !== null ? 'erschlossen' : 'neu']);
+                if ($eintrag->thema !== null && $eintrag->erschlossen_at !== null) {
+                    $eintrag->update(['status' => 'erschlossen', 'relevant' => true]);
+                    if ($this->themen->buendeln($eintrag->refresh()) !== null) {
+                        $eintrag->update(['status' => 'gebuendelt']);
+                    }
+                } else {
+                    $eintrag->update(['status' => 'neu']);
+                }
                 break;
             case 'thema':
-                if ($wert === '') {
+                if ($wert === '' || TrendThemenService::schluessel($wert) === '') {
                     throw new \RuntimeException('Bitte ein Thema angeben.');
                 }
-                $eintrag->update(['thema' => mb_substr($wert, 0, 190)]);
+                // von Hand gesetzt: die KI fasst es nie wieder an; ein schon gebündelter Artikel wandert ins neue Thema
+                $eintrag->update(['thema' => mb_substr($wert, 0, 190), 'thema_quelle' => 'manuell']);
+                if (in_array($eintrag->status, ['erschlossen', 'gebuendelt'], true)) {
+                    if ($this->themen->buendeln($eintrag->refresh()) !== null) {
+                        $eintrag->update(['status' => 'gebuendelt']);
+                    }
+                }
                 break;
             case 'pinnwand':
                 if ($eintrag->inspiration_id !== null) {

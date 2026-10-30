@@ -185,6 +185,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class, // Spec 93 A
+                \Platform\FoodAlchemist\Console\TrendThemenAehnlichkeitCommand::class, // Spec 93 B (Messung, schreibt nichts)
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
