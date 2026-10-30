@@ -904,6 +904,12 @@ return [
 
     // #1003 Handy-Lesemodus: am Handy sind in Lese-Bereichen alle Ändern-Aktionen aus. Hier einzelne Aktionen
     // (Schlüssel wie 'kopf.aktion', 'kopf.menue', 'ki.<methode>') gezielt wieder freischalten (Support\HandyLesemodus).
+    // Lieferanten-Link (Stufe 2): Gültigkeit in Tagen.
+    'lieferanten_link' => [
+        'standard_tage' => 30,
+        'max_tage' => 90,
+    ],
+
     'handy' => [
         'aendern_frei' => [],
     ],

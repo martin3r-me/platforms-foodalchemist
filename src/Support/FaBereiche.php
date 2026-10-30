@@ -95,7 +95,7 @@ final class FaBereiche
         ['signal', 'uebersicht'], ['signale', 'uebersicht'],
         // Einkauf
         ['orders', 'einkauf'], ['order_', 'einkauf'], ['delivery_notes', 'einkauf'], ['supplier_invoices', 'einkauf'],
-        ['triple_match', 'einkauf'], ['preisliste', 'einkauf'], ['bestellvorschlag', 'einkauf'], ['einkaufsliste', 'einkauf'],
+        ['triple_match', 'einkauf'], ['preisliste', 'einkauf'], ['lieferanten_link', 'einkauf'], ['bestellvorschlag', 'einkauf'], ['einkaufsliste', 'einkauf'],
         // Lager
         ['inventory', 'lager'], ['storage_bins', 'lager'], ['eigenproduktion', 'lager'], ['lagerartikel', 'lager'],
         // Produktion

@@ -275,9 +275,10 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)
             ? ['LogsActivity', 'HasUuidV7', 'SoftDeletes']
             : ['LogsActivity', 'BelongsToTeamHierarchy', 'HasUuidV7', 'SoftDeletes'];
-        if (in_array(class_basename($klasse), ['FoodAlchemistPrice', 'FoodAlchemistPriceImportLine', 'FoodAlchemistTeamProfileEquipment', 'FoodAlchemistTeamProfileArea'], true)) {
+        if (in_array(class_basename($klasse), ['FoodAlchemistPrice', 'FoodAlchemistPriceImportLine', 'FoodAlchemistTeamProfileEquipment', 'FoodAlchemistTeamProfileArea', 'FoodAlchemistLieferantenLinkEreignis'], true)) {
             // Bewusst ohne LogsActivity: Massendaten (221k), Audit über Import-Reports (M2-Entscheid im Model);
             // die Import-Zeilen hängen am Lauf (er trägt LogsActivity)
+            // Lieferanten-Link-Ereignisse sind selbst das Protokoll des Links (append-only)
             $pflichten = array_diff($pflichten, ['LogsActivity']);
         }
         foreach ($pflichten as $pflicht) {
