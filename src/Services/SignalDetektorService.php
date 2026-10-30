@@ -620,10 +620,6 @@ class SignalDetektorService
     }
 
     /**
-     * Marken-Nachlauf (Plan GP-Stamm 3g): Summen-Signale im Master-Team — unbekannte Kürzel an Rezeptur-GPs ohne Marke und Lieferanten mit Rolle
-     * „offen“, die an Rezepturware hängen. Die Liste selbst baut {@see \Platform\FoodAlchemist\Services\Marken\MarkeOffenService}.
-     */
-    /**
      * #1002 — KI-Aufträge des externen Wegs, die nicht beantwortet wurden: offen und älter als {@see KI_AUFTRAG_WARTE_STUNDEN} oder in den letzten
      * {@see KI_AUFTRAG_TAGE} Tagen abgelaufen. EIN Signal je Team und Feature (nicht je Auftrag); schließt sich, sobald nichts mehr liegt.
      * Abgelaufene Aufträge werden bewusst nicht verworfen oder per Plattform-KI ersetzt: die Lücke bleibt in den Daten sichtbar und der Nachlauf
@@ -658,6 +654,10 @@ class SignalDetektorService
 
     private const KI_AUFTRAG_TAGE = 7;
 
+    /**
+     * Marken-Nachlauf (Plan GP-Stamm 3g): Summen-Signale im Master-Team — unbekannte Kürzel an Rezeptur-GPs ohne Marke und Lieferanten mit Rolle
+     * „offen“, die an Rezepturware hängen. Die Liste selbst baut {@see \Platform\FoodAlchemist\Services\Marken\MarkeOffenService}.
+     */
     public function markenNachlauf(Team $team): int
     {
         if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
