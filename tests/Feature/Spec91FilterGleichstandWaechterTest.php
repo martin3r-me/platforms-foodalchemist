@@ -34,13 +34,44 @@ function spec91_gleichstand(): array
                 'commodity_group' => ['foodalchemist.gps.LIST', 'commodity_group_code'],
                 'subKategorie' => ['foodalchemist.gps.LIST', 'sub_category'],
                 'status' => ['foodalchemist.gps.LIST', 'status'],
-                'search' => ['foodalchemist.gps.SEARCH', 'q'],
+                'search' => ['foodalchemist.gps.LIST', 'q'],
                 'perPage' => ['foodalchemist.gps.LIST', 'per_page'],
             ],
             'ausnahmen' => [
                 'gpId' => 'Auswahl eines GP (Detail via gps.GET), kein Listenfilter',
                 'editOeffnen' => 'Dialog-Zustand',
                 'ansicht' => 'Spaltenauswahl — MCP: felder=kurz|voll',
+            ],
+        ],
+        \Platform\FoodAlchemist\Livewire\Recipes\Browser::class => [
+            'filter' => [
+                'search' => ['foodalchemist.recipes.LIST', 'q'],
+                'hauptgruppe' => ['foodalchemist.recipes.LIST', 'hauptgruppe'],
+                'kategorie' => ['foodalchemist.recipes.LIST', 'kategorie'],
+                'ohneKategorie' => ['foodalchemist.recipes.LIST', 'ohne_kategorie'],
+                'status' => ['foodalchemist.recipes.LIST', 'status'],
+                'geschmack' => ['foodalchemist.recipes.LIST', 'geschmack'],
+                'fertigung' => ['foodalchemist.recipes.LIST', 'fertigung'],
+                'nurTemplates' => ['foodalchemist.recipes.LIST', 'nur_templates'],
+                'perPage' => ['foodalchemist.recipes.LIST', 'per_page'],
+            ],
+            'ausnahmen' => [
+                'recipeId' => 'Auswahl eines Rezepts (Detail via recipes.GET), kein Listenfilter',
+                'ansicht' => 'Spaltenauswahl — MCP liefert alle Spalten',
+            ],
+        ],
+        \Platform\FoodAlchemist\Livewire\Verkauf\Browser::class => [
+            'filter' => [
+                'search' => ['foodalchemist.verkaufsrezepte.LIST', 'q'],
+                'hauptgruppe' => ['foodalchemist.verkaufsrezepte.LIST', 'hauptgruppe'],
+                'klasse' => ['foodalchemist.verkaufsrezepte.LIST', 'klasse'],
+                'status' => ['foodalchemist.verkaufsrezepte.LIST', 'status'],
+                'geschmack' => ['foodalchemist.verkaufsrezepte.LIST', 'geschmack'],
+                'perPage' => ['foodalchemist.verkaufsrezepte.LIST', 'per_page'],
+            ],
+            'ausnahmen' => [
+                'recipeId' => 'Auswahl eines Gerichts (Detail via verkaufsrezepte.GET), kein Listenfilter',
+                'ansicht' => 'Spaltenauswahl — MCP liefert alle Spalten',
             ],
         ],
         \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class => [

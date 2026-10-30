@@ -443,6 +443,10 @@ Keine Listenansicht in der UI. Der Fortschritt erscheint nur im jeweiligen Konte
    - Speisepläne: Einträge
 20. Bestellungen: Standort, Datum, Produktion. Produktion: Ziele, Ansätze, Portionen, Arbeitszeit, Posten, Bedarf. Inventur: Positionen, Standort. Signale: description, payload.
 
+**E. Nachschlage-Werte ohne Tool** (ids nur aus Ergebnissen ablesbar)
+
+21. Rezept-Hauptgruppen und -Kategorien: `recipes.LIST` filtert seit PR 3 nach `hauptgruppe`/`kategorie`, aber kein MCP-Tool listet die erlaubten Werte (Gerichte haben `dish_classes.GET`). Nachbau nach dem Deploy (Kurator 30.10.).
+
 ---
 
 ## Vorschlag Portionen (je PR 3–5 Tools)
@@ -466,3 +470,5 @@ Entscheidungen (Kurator 29.10.):
 | PR | Stand |
 |---|---|
 | 1 | gebaut (Branch `feat/mcp-filter-gleichstand`): artikel.LIST `supplier_id`/`q`/`art`/`only_active`/`felder`; artikel.SEARCH `supplier_id`/`art`/`only_active` (auch im semantischen Pass); suppliers.SEARCH Paging mit Gesamtzahl, `gruppe`, `einstufen`, `item_count`/`mapped_count`; Helfer `warnungen`; Wächter `Spec91FilterGleichstandWaechterTest` (Lieferanten-Browser, GP-Browser). Die `related_tools`-Verweise auf `artikel.LIST` stimmen damit. |
+| 2 | in main (#646): speiseplaene.LIST `status` wirkt; signale.SEARCH/LIST `status`-enum offen/erledigt/ignoriert; semantische Pässe von recipes/concepts/angebote.SEARCH filtern `status`/`vorlagen`; Helfer `enumFehler` (Core prüft kein enum); Wächter + Speiseplan, Angebote (Grenze: dort keine `#[Url]`-Filter, nur Zuordnungs-Prüfung). |
+| 3 | gebaut (Branch `feat/mcp-rezept-gericht-filter`): gps.LIST `q`, ohne `status` keine merged-GPs, `felder=voll` mit Lead-Preis/Vergleichspreis/`la_count`/`rezepte_count`/Allergen-Badges (gemeinsam mit dem Browser über `GpService::listenKennzahlen`); recipes.LIST `q`/`hauptgruppe`/`kategorie`/`ohne_kategorie`/`geschmack`/`fertigung`/`nur_templates` + Spalten; verkaufsrezepte.LIST `q`/`hauptgruppe`/`klasse`/`status`/`geschmack` + Status, Geschmack, Komponenten, Deklaration; Wächter + Rezept-, Gerichte-Browser. Offen: kein MCP-Tool für Rezept-Hauptgruppen/-Kategorien → Punkt 21. |

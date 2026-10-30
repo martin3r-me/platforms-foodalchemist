@@ -2,8 +2,13 @@
 
 use Platform\Core\Contracts\ToolContext;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 use Platform\FoodAlchemist\Tools\GpsListTool;
@@ -97,4 +102,31 @@ it('unbekannter Filter wird gemeldet statt still verworfen (Spec 91)', function 
 
     expect($r->success)->toBeTrue()->and($r->data['warnungen'][0])->toContain("unbekannter Parameter 'warengruppe' ignoriert")->toContain('commodity_group_code')
         ->and(app(GpsListTool::class)->execute(['commodity_group_code' => '13'], $this->ctx)->data)->not->toHaveKey('warnungen');
+});
+
+it('Spec 91 C15 · q sucht wie der GP-Browser; ohne status fehlen merged-GPs, status=merged zeigt sie', function () {
+    $tombstone = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => 'Kalbsjus alt', 'gp_key' => 'gl-merged||', 'status' => 'merged', 'commodity_group_code' => '13']);
+
+    expect(($this->ids)(['q' => 'kalbsjus']))->toBe(($this->sortiert)($this->jus))
+        ->and(($this->ids)(['q' => 'jus taste']))->toBe(($this->sortiert)($this->jus))
+        ->and(($this->ids)([]))->not->toContain($tombstone->id)
+        ->and(($this->ids)(['status' => 'merged']))->toBe(($this->sortiert)($tombstone))
+        ->and(app(GpsListTool::class)->execute(['status' => 'aktiv'], $this->ctx)->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('Spec 91 D17 · felder=voll liefert Lead-Preis, Vergleichspreis, Anzahl Lieferantenartikel und Rezepte, Allergene wie der Browser', function () {
+    $t = $this->rootTeam->id;
+    FoodAlchemistPrice::create(['team_id' => $t, 'supplier_item_id' => $this->jus->lead_la_supplier_item_id, 'price' => 8.5, 'status' => '0']);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $t, 'supplier_item_id' => $this->jus->lead_la_supplier_item_id, 'gp_id' => $this->jus->id]);
+    FoodAlchemistItemAllergen::create(['team_id' => $t, 'supplier_item_id' => $this->jus->lead_la_supplier_item_id, 'allergen_celery' => 'enthalten']);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rinderschmorbraten');
+    $gramm = FoodAlchemistVocabEinheit::create(['team_id' => $t, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    FoodAlchemistRecipeIngredient::create(['team_id' => $t, 'recipe_id' => $rezept->id, 'gp_id' => $this->jus->id, 'raw_text' => 'Kalbsjus', 'quantity' => '100', 'unit_vocab_id' => $gramm->id, 'position' => 1]);
+
+    $voll = collect(app(GpsListTool::class)->execute(['felder' => 'voll', 'sub_category' => '13.3 Saucen & Fonds'], $this->ctx)->data['gps'])->keyBy('id');
+
+    expect($voll[$this->jus->id])->toMatchArray(['lead_preis' => 8.5, 'lead_letzter_preis' => null, 'la_count' => 1, 'rezepte_count' => 1,
+        'allergen_badges' => ['celery'], 'allergen_status' => 'vorhanden'])
+        ->and($voll[$this->jus->id]['lead_vergleichspreis'])->toBe(['value' => 8.5, 'unit' => '€/kg'])
+        ->and($voll[$this->offen->id])->toMatchArray(['lead_preis' => null, 'la_count' => 0, 'rezepte_count' => 0, 'allergen_status' => 'keine_daten']);
 });

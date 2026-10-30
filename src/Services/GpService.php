@@ -46,6 +46,8 @@ class GpService
 
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
+        } elseif (! empty($filters['ohne_merged'])) {   // Spec 91 C15: gps.LIST blendet Merge-Tombstones aus wie der Browser; status=merged zeigt sie
+            $query->where('status', '!=', GpStatus::Merged->value);
         }
         // MCP gps.LIST (Bestandsarbeit per MCP, 29.10.): weitere Filter, nur wenn gesetzt
         if (($filters['sub_category'] ?? '') !== '') {
@@ -355,11 +357,45 @@ class GpService
         // zahl nicht, kostete im Paginator-COUNT aber ~120 ms auf 7,7k GPs)
         $seite = $q->paginate($perPage, total: $this->browserQuery($team, $filters)->count())->withQueryString();
 
+        $this->zeilenAnreichern($seite->getCollection());
+
+        return $seite;
+    }
+
+    /**
+     * Spec 91 PR 3 (D17): die Listen-Kennzahlen des GP-Browsers für beliebige GPs — Lead-Preis (Rückfall: letzter Preis, gekennzeichnet),
+     * Vergleichspreis, Anzahl Lieferantenartikel und Rezepte, Allergen-Badges. gps.LIST felder=voll zeigt damit dieselben Zahlen wie der Browser.
+     */
+    public function listenKennzahlen(\Illuminate\Support\Collection $zeilen, ?Team $team): void
+    {
+        $leadIds = $zeilen->pluck('lead_la_supplier_item_id')->filter()->unique()->values();
+        $leads = $leadIds->isEmpty() ? collect() : \Platform\FoodAlchemist\Support\StammPaket::begrenzen(
+            \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items AS lead')->whereIn('lead.id', $leadIds), 'lead', $team, 'foodalchemist_supplier_items')
+            ->select('lead.id', 'lead.unit_code AS lead_unit_code', 'lead.lieferstatus_seit AS lead_eingestellt_seit')
+            ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('lead').' AS lead_qty')
+            ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis')
+            ->tap(fn ($q) => app(PriceService::class)->mitLetztemPreis($q, 'lead.id', $team))
+            ->get()->keyBy('id');
+        $laCounts = $zeilen->isEmpty() ? collect() : \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+            ->whereIn('gp_id', $zeilen->pluck('id'))->whereNull('deleted_at')
+            ->selectRaw('gp_id, COUNT(*) AS n')->groupBy('gp_id')->pluck('n', 'gp_id');
+        foreach ($zeilen as $gp) {
+            $lead = $leads->get($gp->lead_la_supplier_item_id);
+            foreach (['lead_unit_code', 'lead_eingestellt_seit', 'lead_qty', 'lead_preis', 'letzter_preis', 'letzter_preis_ab'] as $feld) {
+                $gp->setAttribute($feld, $lead?->{$feld});
+            }
+            $gp->setAttribute('la_count', (int) ($laCounts[$gp->id] ?? 0));
+        }
+        $this->zeilenAnreichern($zeilen);
+    }
+
+    /** Browser-Zeilen anreichern: Preis-Rückfall, Vergleichspreis, Rezept-Verwendungen, effektive Allergen-Badges (erwartet die Lead-Spalten). */
+    private function zeilenAnreichern(\Illuminate\Support\Collection $zeilen): void
+    {
         $preise = app(PriceService::class);
         $rezepteAktiv = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipes');
 
         // Effektive Allergen-Badges (GL-01, seit M3-04): Override > Mutter (Derivat) > LA-MAX — Bulk in 1 Query
-        $zeilen = $seite->getCollection();
         $mutterIds = $zeilen->filter(fn ($gp) => $gp->is_derivat && $gp->derivat_von_gp_id !== null)->pluck('derivat_von_gp_id');
         $raenge = app(GpAggregateService::class)->laMaxRaengeBulk($zeilen->pluck('id')->merge($mutterIds)->unique()->values()->all());
         $muetter = $mutterIds->isNotEmpty() ? FoodAlchemistGp::whereIn('id', $mutterIds)->get()->keyBy('id') : collect();
@@ -418,7 +454,6 @@ class GpService
             $gp->setAttribute('allergen_ki_conf', $gp->allergens_confidence ?? $gp->allergens_confidence);
         });
 
-        return $seite;
     }
 
     /** Gemeinsame Browser-Filter (Suche/WG/Sub-Kategorie/Status), team-gescoped. */
