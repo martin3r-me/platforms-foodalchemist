@@ -264,7 +264,37 @@ class StammdatenImportService
         return $neu;
     }
 
+    /**
+     * Eine gespeicherte Zeile gegen den AKTUELLEN Bestand neu prüfen (Übernahme-Guard, 1b): ist der Bestand seit der Prüfung anders, weicht das Ergebnis ab.
+     *
+     * @return array<string, mixed>  wie pruefeZeile (aktion, diff, hinweise, …)
+     */
+    public function pruefeGespeichert(Team $team, Zeile $z): array
+    {
+        $daten = (array) $z->daten;
+        $werte = array_filter($daten, fn ($k) => ! str_starts_with((string) $k, 'x:'), ARRAY_FILTER_USE_KEY);
+        $eigene = array_filter($daten, fn ($k) => str_starts_with((string) $k, 'x:'), ARRAY_FILTER_USE_KEY);
+
+        return $this->pruefeZeile($team, (int) $z->supplier_id, $werte, $eigene);
+    }
+
     // ---- intern -----------------------------------------------------------
+
+    /** Kontext für die Nährwert-Prüfung: Artikelbezeichnung, bei bekanntem Artikel Warengruppe/Unterkategorie seines GP. @return array{wg?: ?string, sub?: ?string, bezeichnung?: ?string} */
+    private function nwKontext(?FoodAlchemistSupplierItem $item, array $w): array
+    {
+        $k = ['bezeichnung' => (string) ($item?->designation ?? ($w['bezeichnung'] ?? ''))];
+        if ($item !== null) {
+            $gp = DB::table('foodalchemist_supplier_item_structures as s')->join('foodalchemist_gps as g', 'g.id', '=', 's.gp_id')
+                ->where('s.supplier_item_id', $item->id)->whereNull('s.deleted_at')->first(['g.commodity_group_code', 'g.name']);
+            if ($gp !== null) {
+                $k['wg'] = (string) $gp->commodity_group_code;
+                $k['name'] = (string) $gp->name;
+            }
+        }
+
+        return $k;
+    }
 
     /** Kopfzeile mit den zugeordneten Spalten auf die Vorlagen-Namen umschreiben (Index ⇒ Zielfeld). @param list<string> $kopf @param array<int, string> $spalten @return list<string> */
     private function umbenennen(array $kopf, array $spalten): array
@@ -376,8 +406,8 @@ class StammdatenImportService
                 $diff['naehrwerte'][$k] = ['alt' => $alt, 'neu' => $v];
             }
         }
-        foreach ($this->pruefer->pruefe($nw) as $h) {
-            $hinweise[] = ['code' => $h['regel'], 'stufe' => $h['schwere'] === 'hart' ? 'konflikt' : 'warnung', 'text' => 'Nährwert: ' . $h['text'],
+        foreach ($this->pruefer->pruefe($nw, $this->nwKontext($item, $w)) as $h) {
+            $hinweise[] = ['code' => $h['regel'], 'bereich' => 'naehrwert', 'stufe' => match ($h['schwere']) { 'hart' => 'konflikt', 'umrechnung' => 'info', default => 'warnung' }, 'text' => 'Nährwert: ' . $h['text'],
                 'feld' => $h['feld'], 'wert' => $h['wert'], 'erwartet' => $h['erwartet'], 'vorschlag' => $h['vorschlag']];
         }
 
@@ -391,7 +421,7 @@ class StammdatenImportService
                 }
                 $diff[$block][$k] = ['alt' => $alt, 'neu' => $v];
                 if ($kuerzel === 'al' && $alt === 'enthalten' && $v !== 'enthalten') {
-                    $hinweise[] = ['code' => 'allergen_rueckstufung', 'stufe' => 'konflikt', 'text' => "Allergen {$k}: bisher „enthalten“, die Datei sagt „{$v}“ — Rückstufung nur mit Beleg."];
+                    $hinweise[] = ['code' => 'allergen_rueckstufung', 'bereich' => 'allergene', 'stufe' => 'konflikt', 'text' => "Allergen {$k}: bisher „enthalten“, die Datei sagt „{$v}“ — Rückstufung nur mit Beleg."];
                 }
             }
         }

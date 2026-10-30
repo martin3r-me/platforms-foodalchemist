@@ -429,7 +429,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         $this->app->scoped(\Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::class);
 
         // Spec 79: Google Trends für den Trendradar — produktiv über DataForSEO (Integrations-Modul)
-        $this->app->bind(\Platform\FoodAlchemist\Services\Stammdaten\NaehrwertPruefer::class, \Platform\FoodAlchemist\Services\Stammdaten\BasisNaehrwertPruefer::class);   // Stammdaten-Import: austauschbar (GP-Session)
+        $this->app->bind(\Platform\FoodAlchemist\Services\Stammdaten\NaehrwertPruefer::class, \Platform\FoodAlchemist\Services\Stammdaten\NaehrwertPruefServiceAdapter::class);   // Stammdaten-Import: die eine Nährwert-Prüfung (#638)
         $this->app->bind(\Platform\FoodAlchemist\Services\Trends\GoogleTrendsQuelle::class, \Platform\FoodAlchemist\Services\Trends\DataForSeoGoogleTrends::class);
         // Web-Recherche zu Lieferantenartikeln (Spec 85 I5-8): Websuche über den Core-Contract (include_web_search, Core #935)
         $this->app->bind(\Platform\FoodAlchemist\Services\Websuche\WebSucheTransport::class, \Platform\FoodAlchemist\Services\Websuche\CoreWebSucheTransport::class);
