@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response;
 use Platform\Core\Http\Controllers\Controller;
 use Platform\FoodAlchemist\Models\FoodAlchemistLieferantenLink;
+use Platform\FoodAlchemist\Services\LieferantenDokumentService;
 use Platform\FoodAlchemist\Services\LieferantenLinkService;
 use Platform\FoodAlchemist\Services\LieferantenUploadService;
 
@@ -60,6 +61,33 @@ class LieferantenPortalController extends Controller
         return $weiter->with('portal_meldung', $r['zuordnung_noetig']
             ? 'Danke, die Datei ist angekommen. Wir ordnen die Spalten zu und prüfen sie, bevor etwas übernommen wird.'
             : "Danke, die Datei ist angekommen ({$r['zeilen']} Zeilen). Wir prüfen sie, bevor etwas übernommen wird.");
+    }
+
+    /** Datenblatt/Produktpass zu einem Artikel einreichen (2c). Wartet als Prüflisten-Zeile, bis das Team es übernimmt. */
+    public function dokument(string $token, Request $request, LieferantenLinkService $svc, LieferantenDokumentService $dokumente): Response|RedirectResponse
+    {
+        $link = $svc->aufloesen($token);
+        if ($link === null) {
+            return $this->antwort(response()->view('foodalchemist::lieferanten-portal.ungueltig', [], 410));
+        }
+        $weiter = redirect()->route('foodalchemist.presentation.lieferanten_portal', ['token' => $token]);
+        $datei = $request->file('datei');
+        if (! $datei instanceof \Illuminate\Http\UploadedFile) {
+            return $weiter->with('portal_fehler', 'Bitte eine Datei auswählen.');
+        }
+        try {
+            $r = $dokumente->annehmen($link, (string) $request->input('artikelnummer'), $datei, $request);
+        } catch (\RuntimeException $e) {
+            return $weiter->with('portal_fehler', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $weiter->with('portal_fehler', 'Die Datei konnte nicht verarbeitet werden. Bitte prüfe sie oder melde dich bei uns.');
+        }
+
+        return $weiter->with('portal_meldung', $r['zugeordnet']
+            ? 'Danke, das Dokument ist angekommen. Wir prüfen es, bevor es dem Artikel zugeordnet wird.'
+            : 'Danke, das Dokument ist angekommen. Zu dieser Artikelnummer haben wir keinen Artikel gefunden; wir melden uns, falls etwas unklar ist.');
     }
 
     /** Stylesheet des Portals (Farben als CSS-Variablen, kein Inline-Style in der View). Öffentlich. */

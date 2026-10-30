@@ -31,6 +31,16 @@
                 </form>
             @endif
         @endforeach
+        @if(in_array('dokumente', $link->bereiche ?? [], true))
+            <form class="upload" method="POST" action="{{ route('foodalchemist.presentation.lieferanten_portal_dokument', ['token' => $token]) }}" enctype="multipart/form-data" data-portal-upload="dokumente">
+                @csrf
+                <h3>Datenblatt oder Produktpass zu einem Artikel</h3>
+                <p class="hinweis">Ein Dokument je Artikel. Erlaubt: .pdf, .jpg, .png (höchstens 15 MB).</p>
+                <label>Artikelnummer <input type="text" name="artikelnummer" maxlength="64" required></label>
+                <input type="file" name="datei" accept=".pdf,.jpg,.jpeg,.png" required>
+                <button type="submit">Einreichen</button>
+            </form>
+        @endif
         <ul class="liste">@foreach($bereiche as $b)<li>{{ $b }}</li>@endforeach</ul>
         <p class="hinweis">Alles, was du einreichst, wird vom Team geprüft, bevor es übernommen wird.</p>
     </section>

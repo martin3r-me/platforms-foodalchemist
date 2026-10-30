@@ -12,3 +12,5 @@ body { background: var(--grund); color: var(--text); font: 16px/1.5 system-ui, -
 .liste { margin: 0; padding-left: 1.2rem; }
 .hinweis { color: var(--text2); font-size: .9rem; }
 .marke { display: inline-block; padding: .15rem .6rem; border-radius: 999px; background: var(--akzent-hell); color: var(--akzent); font-size: .85rem; }
+.upload label { display: block; margin: .25rem 0; color: var(--text2); }
+.upload input[type=text] { display: block; width: 100%; max-width: 20rem; margin-top: .25rem; padding: .4rem .5rem; border: 1px solid var(--linie); border-radius: .375rem; background: var(--karte); color: var(--text); font: inherit; }

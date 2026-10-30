@@ -51,7 +51,7 @@
                     @php $c = $l->counts ?? []; @endphp
                     <button type="button" wire:key="sd-lauf-{{ $l->id }}" wire:click="laufWaehlen({{ $l->id }})" data-stammdaten-lauf="{{ $l->id }}"
                             class="flex flex-wrap items-center justify-between gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2 text-left hover:bg-[var(--fa-hover)]">
-                        <span class="min-w-0 truncate font-medium text-[var(--fa-ink)]">{{ $l->filename }}</span>
+                        <span class="min-w-0 truncate font-medium text-[var(--fa-ink)]">{{ $l->filename }}@if($l->herkunft === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::HERKUNFT_LIEFERANTEN_LINK) <x-fa::badge tone="info" data-lauf-vom-lieferanten>vom Lieferanten</x-fa::badge>@endif</span>
                         <span class="{{ $leise }} tabular-nums">{{ $l->created_at?->format('d.m.Y H:i') }} · {{ $c['zeilen'] ?? 0 }} Zeilen · {{ $c['neu'] ?? 0 }} neu · {{ $c['aendert'] ?? 0 }} ändern · {{ $c['konflikt'] ?? 0 }} Konflikte · {{ $c['fehler'] ?? 0 }} Fehler</span>
                     </button>
                 @endforeach
