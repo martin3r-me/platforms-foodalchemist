@@ -44,6 +44,59 @@ final class MatchLeitplanken
         ];
     }
 
+    /** Vorgabe-Werte am Rezept (Spalten vorgabe_convenience / vorgabe_niveau, 29.10.) — dieselben Werte wie in der Planung. */
+    public const EIGENLEISTUNG = ['from_scratch', 'teil_convenience', 'voll_convenience'];
+
+    public const NIVEAU = ['haute_cuisine', 'gehoben', 'klassisch'];
+
+    private const VORGABE_SPALTEN = ['vorgabe_convenience' => self::EIGENLEISTUNG, 'vorgabe_niveau' => self::NIVEAU];
+
+    /** Beim Anlegen: Vorgabe-Spalten aus den Leitplanken der Planung (ungültige Werte → keine Vorgabe). */
+    public static function vorgabeAus(array $parameter): array
+    {
+        $conv = $parameter['convenience'] ?? null;
+        $niveau = $parameter['level'] ?? $parameter['niveau'] ?? null;
+
+        return ['vorgabe_convenience' => in_array($conv, self::EIGENLEISTUNG, true) ? $conv : null,
+            'vorgabe_niveau' => in_array($niveau, self::NIVEAU, true) ? $niveau : null];
+    }
+
+    /**
+     * Editor/MCP: nur mitgesandte Vorgabe-Spalten, '' = keine Vorgabe; ein unbekannter Wert ist ein Fehler (nie still verworfen).
+     *
+     * @return array<string, ?string>
+     */
+    public static function vorgabeFelder(array $in): array
+    {
+        $out = [];
+        foreach (self::VORGABE_SPALTEN as $spalte => $erlaubt) {
+            if (! array_key_exists($spalte, $in)) {
+                continue;
+            }
+            $wert = $in[$spalte] === null ? '' : trim((string) $in[$spalte]);
+            if ($wert !== '' && ! in_array($wert, $erlaubt, true)) {
+                throw new \RuntimeException("Unbekannte Vorgabe {$spalte}: „{$wert}“ (erlaubt: " . implode(', ', $erlaubt) . ').');
+            }
+            $out[$spalte] = $wert === '' ? null : $wert;
+        }
+
+        return $out;
+    }
+
+    /** Leitplanken des Rezepts für die Weiche — die Weiche liest am Rezept NUR diese (nie die Planung). */
+    public static function ausRezept(object $recipe): array
+    {
+        return array_filter(['convenience' => $recipe->vorgabe_convenience ?? null, 'level' => $recipe->vorgabe_niveau ?? null]);
+    }
+
+    /** Matcher-Argumente (convenience, zubereitung) aus der Rezept-Vorgabe — für Läufe an einem bestehenden Rezept. */
+    public static function matcherArgsFuerRezept(object $recipe): array
+    {
+        $lp = self::aus(self::ausRezept($recipe));
+
+        return ['convenience' => $lp['convenience'], 'zubereitung' => $lp['zubereitung']];
+    }
+
     /** eigen | zukauf | ohne — Eigenleistung (convenience) vor Niveau (level, Alt-Key niveau). */
     public static function zubereitung(array $parameter): string
     {

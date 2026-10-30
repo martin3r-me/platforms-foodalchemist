@@ -392,6 +392,14 @@ class RecipeDependencyWorkflowService
     private function kindVorgaben(FoodAlchemistCascadeRunStep $eltern, int $ingredientId, string $text): array
     {
         $out = [];
+        // 29.10. (Kurator b): das Kind erbt die Leitplanken-Vorgabe des ELTERN-REZEPTS (dort änderbar), nicht die ggf. ältere Planung. Trägt das
+        // Eltern-Rezept keine Vorgabe (Bestand vor dem 29.10.), bleiben die Lauf-Leitplanken — sonst fiele ein alter Lauf still auf „keine Vorgabe“.
+        $elternRezept = $eltern->ref_type === 'recipe' && $eltern->ref_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->find($eltern->ref_id, ['id', 'vorgabe_convenience', 'vorgabe_niveau']) : null;
+        if ($elternRezept !== null && ($elternRezept->vorgabe_convenience !== null || $elternRezept->vorgabe_niveau !== null)) {
+            $out['convenience'] = (string) $elternRezept->vorgabe_convenience;
+            $out['level'] = (string) $elternRezept->vorgabe_niveau;
+        }
         $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()->with('unit:id,slug')->find($ingredientId);
         $slug = (string) ($zeile?->unit?->slug ?? '');
         // Dominique 10.10.: die Charge eines Basisrezepts ist für das Gericht egal — ein Fond kann im 100-kg-Kessel

@@ -90,7 +90,10 @@ class StubAusrezeptierenJob implements ShouldQueue
             $generator->generiere(
                 $team,
                 self::brief((string) $stub->name, $eltern?->name),
-                array_merge(array_intersect_key($this->parameter, array_flip(['convenience', 'frische', 'bio', 'diaet_hart', 'allergen_nogo', 'niveau', 'sektor'])), [
+                // 29.10.: die Leitplanken-Vorgabe der Hülle (geerbt, ggf. im Editor geändert) gewinnt vor den Import-Leitplanken — die Weiche liest
+                // am bestehenden Rezept nur das Rezept; `level` ist der Planungs-Schlüssel des Niveaus (vorher fiel er hier weg)
+                array_merge(array_intersect_key($this->parameter, array_flip(['convenience', 'frische', 'bio', 'diaet_hart', 'allergen_nogo', 'level', 'niveau', 'sektor'])),
+                    \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::ausRezept($stub), [
                     'stub_fuellen_id' => (int) $stub->id,
                     'titel_vorgabe' => (string) $stub->name,   // der Name der Hülle gilt, nicht der KI-Vorschlag
                 ]),

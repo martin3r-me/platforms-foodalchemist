@@ -325,6 +325,7 @@ class SalesRecipeService
         'sales_net', 'price_mode', 'price_override_reason',
         'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
+        'vorgabe_convenience', 'vorgabe_niveau',                         // 29.10.: Leitplanken-Vorgabe (selbst oder gekauft), geprüft in updateVk
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
         // `temperature` + `function` bewusst NICHT (Entscheid 2026-09-04): Temperaturen
         // stehen strukturiert an der Regeneration, „Funktion" ist die Hauptgruppe.
@@ -404,6 +405,7 @@ class SalesRecipeService
 
         return DB::transaction(function () use ($team, $recipe, $in, $kiLineage) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
+            $update = \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::vorgabeFelder($update) + $update;   // unbekannter Wert wirft
 
             // MVP-050 (P0): Referenzen autorisieren, BEVOR sie geschrieben werden. Der
             // Owner-Guard oben schützt das Rezept — nicht die daran gehängten Fremdschlüssel.
@@ -592,7 +594,7 @@ class SalesRecipeService
             $vk = $recipes->create($team, [
                 'name' => $name,
                 'is_sales_recipe' => true,
-            ]);
+            ] + $basis->only(['vorgabe_convenience', 'vorgabe_niveau']));   // 29.10.: das Gericht erbt die Leitplanken-Vorgabe des Basisrezepts
             $gramm = $basis->yield_kg !== null ? round((float) $basis->yield_kg * 1000, 1) : 1000.0;
             $einheitG = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id');
 

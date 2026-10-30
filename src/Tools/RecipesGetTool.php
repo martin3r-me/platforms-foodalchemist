@@ -52,6 +52,7 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         $daten = [
             'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
             'description' => $r->description, 'yield_kg' => $r->yield_kg,
+            'vorgabe_convenience' => $r->vorgabe_convenience, 'vorgabe_niveau' => $r->vorgabe_niveau,   // Leitplanken-Vorgabe (29.10.), null = keine
             'ek_total_eur' => $kosten['ek_summe'], 'ek_per_kg_eur' => $kosten['ek_per_kg'],
             // vollständig=false: ek_total_eur ist eine TEILSUMME (Zutaten ohne Preis) und nie als Preis zu verwenden
             'ek_vollstaendig' => $kosten['vollstaendig'], 'ek_quelle' => $kosten['quelle'],

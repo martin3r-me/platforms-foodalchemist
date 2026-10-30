@@ -227,7 +227,7 @@ class RecipeService
             }
         }
 
-        $recipe = FoodAlchemistRecipe::create([
+        $recipe = FoodAlchemistRecipe::create(Matching\MatchLeitplanken::vorgabeFelder($in) + [
             'team_id' => $team->id,
             'recipe_key' => $key,
             'name' => $name,
@@ -305,7 +305,7 @@ class RecipeService
                 : $recipe->category_id,
             'taste_direction' => array_key_exists('taste_direction', $in)
                 ? self::tasteDirection($in['taste_direction']) : $recipe->taste_direction,
-            'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth,
+            'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth, ...Matching\MatchLeitplanken::vorgabeFelder($in),
             'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,
             // Stufe 3 — Auto-Produktionsplaner: Default-Posten, Vorproduzierbarkeit, Rüstzeit, Topf-Deckel.
             'setup_time_min' => array_key_exists('setup_time_min', $in) ? $in['setup_time_min'] : $recipe->setup_time_min,
@@ -390,7 +390,7 @@ class RecipeService
                 'name' => $neuerName,
                 'category_id' => $original->category_id,
                 'origin_source' => $original->origin_source,
-                'taste_direction' => $original->taste_direction,
+                'taste_direction' => $original->taste_direction, 'vorgabe_convenience' => $original->vorgabe_convenience, 'vorgabe_niveau' => $original->vorgabe_niveau,
                 'production_depth' => $original->production_depth,
                 'is_sales_recipe' => $original->is_sales_recipe,
                 'description' => $original->description,
@@ -510,7 +510,7 @@ class RecipeService
      *
      * @return array{recipe: FoodAlchemistRecipe, neu: bool}
      */
-    public function createSubRecipeStub(Team $team, string $name, ?int $parentId = null): array
+    public function createSubRecipeStub(Team $team, string $name, ?int $parentId = null, array $vorgabe = []): array   // $vorgabe: vorgabe_* vom Aufrufer, sonst vom Eltern-Rezept (29.10.)
     {
         $name = trim($name);
         if ($name === '') {
@@ -522,7 +522,7 @@ class RecipeService
             return ['recipe' => $treffer, 'neu' => false];         // idempotent (Dedupe by name)
         }
 
-        $stub = $this->create($team, ['name' => $name]);
+        $stub = $this->create($team, ['name' => $name] + $vorgabe + ($parentId !== null ? (FoodAlchemistRecipe::visibleToTeam($team)->find($parentId)?->only(['vorgabe_convenience', 'vorgabe_niveau']) ?? []) : []));
         $stub->update(['status' => 'stub', 'last_modified_by' => 'generator_stub']);
 
         if ($parentId !== null) {
@@ -1175,7 +1175,7 @@ class RecipeService
                         // Generator (strongSub): so eine Zeile wird nur ein Unterrezept oder bleibt eine Lücke.
                         $nurSub = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)->istBasisrezeptZeile($groundName);
                         $treffer = app(IngredientMatchService::class)->matchIngredient(
-                            $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
+                            $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null), ...Matching\MatchLeitplanken::matcherArgsFuerRezept($recipe),
                         );
                         // Live-Test demo 09.10. (Lauf 86): ohne Band-Gate verdrahtete die Heilung „bitte prüfen"-Treffer
                         // („Ginger Beer" → Beeren-Kaviar 0,5; „Pilzmischung: frisch, ganz" → Auberginen 0,667). Wie der

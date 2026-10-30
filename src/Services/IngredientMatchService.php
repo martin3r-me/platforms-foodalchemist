@@ -310,6 +310,19 @@ class IngredientMatchService
     }
 
     /**
+     * Zukauf-GP einer Zeile, wenn die Leitplanken „zukauf“ ergeben und das GP im Bestand ist — mit Basisvarianten-Regel (Bio/Marke → Review)
+     * wie im Matcher-Lauf; sonst null. Für die Anreicherung (bindet nur GPs, nie ein Unterrezept).
+     */
+    public function zukaufTrefferFuer(Team $team, string $text, string $convenience, ?string $zubereitung, string $pref = 'fresh_first', string $bio = 'conventional'): ?array
+    {
+        if ($this->zubereitungsWeg($team, $text, $convenience, $zubereitung) !== 'zukauf' || $this->zukaufTreffer === null) {
+            return null;
+        }
+
+        return app(Matching\BasisVariante::class)->pruefe($team, $text, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, null);
+    }
+
+    /**
      * Passendes Zukauf-GP im Bestand (ab MIN_MATCH_SCORE), reine Erkennung ohne Basisvarianten-Regel — keine Rekursion. Rezeptnamen-Syntax
      * „Fond: Geflügel“ heißt als Ware meist „Geflügelfond“: Kompositum mit Fugenlaut mitprüfen (wie „Öl (Raps)“ → „Rapsöl“, ZutatFreitext).
      */

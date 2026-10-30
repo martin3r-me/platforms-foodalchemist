@@ -60,7 +60,7 @@ class RecipeReviseService
                 continue;
             }
 
-            $t = $matcher->matchIngredient($team, $text);
+            $t = $matcher->matchIngredient($team, $text, ...\Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::matcherArgsFuerRezept($r));
             if ($t['target'] === 'gp') {
                 $out[$i] = ['status' => 'grounded', 'kind' => 'gp', 'ziel' => $t['gp_name'], 'primaer' => null, 'shortlist' => 0];
             } elseif ($t['target'] === 'sub_recipe') {

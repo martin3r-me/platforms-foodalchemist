@@ -204,7 +204,7 @@ class RecipeExtractService
             if (($t['basiskomponente'] ?? null) !== 'stub') {
                 continue;   // Basisrezept im Bestand (auch zur Prüfung) — der Generator bindet bzw. legt es zur Prüfung vor
             }
-            $stub = app(RecipeService::class)->createSubRecipeStub($team, $text);
+            $stub = app(RecipeService::class)->createSubRecipeStub($team, $text, vorgabe: \Platform\FoodAlchemist\Services\Matching\MatchLeitplanken::vorgabeAus($parameter));   // erbt die Vorgabe des Imports (29.10.)
             $zutaten[$i] += ['sub_rezept_id' => (int) $stub['recipe']->id, 'sub_rezept' => true, 'sub_rezept_eigen' => true];
             $stubs[] = ['id' => (int) $stub['recipe']->id, 'name' => (string) $stub['recipe']->name, 'neu' => $stub['neu']] + (isset($t['hinweis']) ? ['hinweis' => $t['hinweis']] : []);
         }

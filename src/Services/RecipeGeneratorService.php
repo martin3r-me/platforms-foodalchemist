@@ -238,7 +238,7 @@ class RecipeGeneratorService
                 // Länge gedeckelt), damit kein Brief-Text als Name in die varchar-Spalte rutscht.
                 'name' => $this->kanonischerTyp($this->normalisiereName((string) ($parameter['titel_vorgabe'] ?? '') ?: (string) $kiRezept['name']), $vkModus),
                 'is_sales_recipe' => $vkModus,
-                'created_via' => $createdVia,
+                'created_via' => $createdVia, ...Matching\MatchLeitplanken::vorgabeAus($parameter),   // 29.10.: Leitplanken einmal ins Rezept
                 'description' => $kiRezept['description'] ?? null,
                 // Enum-Guard: taste_direction ist die grobe Menüplanungs-Richtung (suess|herzhaft|neutral,
                 // varchar(16)) — nicht das Aroma-Profil. Ein Generator-Freitext ("cremig-süßlich, …") lebt
