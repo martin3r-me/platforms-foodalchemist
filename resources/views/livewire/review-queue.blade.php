@@ -457,6 +457,42 @@
                            description="Übernehmen schreibt den vorgeschlagenen Wert ins Rezept." data-rq-bulks>
                 <div class="flex flex-col divide-y divide-[var(--fa-line)] -mx-4">
                     @forelse($bulks as $b)
+                        @if($handy)
+                            {{-- #1003: am Handy je Vorschlag eine Karte — Objekt, Feld, bisher → neu, Begründung; Übernehmen mit Bestätigung --}}
+                            @php
+                                $feldLabel = ['description' => 'Beschreibung', 'wording' => 'Verkaufstext', 'plating' => 'Anrichten', 'category' => 'Kategorie',
+                                    'geschmack' => 'Geschmacksrichtung', 'servier_vehikel' => 'Servier-Vehikel', 'speisen_klasse' => 'Speisen-Klasse',
+                                    'dichteklasse' => 'Dichteklasse', 'rollen' => 'Zutaten-Rollen', 'regeneration' => 'Regeneration', 'garverlust' => 'Garverlust'][$b->field] ?? $b->field;
+                                $roh = json_decode((string) $b->value, true);
+                                // strukturierte Werte lesbar: bekannte Schlüssel mit Einheit, IDs weg, Listen als Anzahl
+                                $teil = fn ($k, $v) => match (true) {
+                                    $k === 'temp_c' && is_numeric($v) => $v . ' °C', $k === 'core_temp_c' && is_numeric($v) => 'Kern ' . $v . ' °C',
+                                    $k === 'duration_min' && is_numeric($v) => $v . ' min', $k === 'kalt' => $v === true ? 'kalt' : null,
+                                    in_array($k, ['rollen', 'verluste'], true) && is_array($v) => count($v) . ' Zutaten',
+                                    str_ends_with((string) $k, '_id') || is_array($v) || $v === null || $v === '' => null,
+                                    default => (string) $v,
+                                };
+                                $neu = is_array($roh) ? \Illuminate\Support\Str::limit(collect($roh)->map(fn ($v, $k) => $teil($k, $v))->filter()->implode(' · '), 240) : trim((string) ($roh ?? $b->value), '"');
+                                $alt = ['description' => $b->alt_description, 'wording' => $b->alt_wording, 'plating' => $b->alt_plating, 'geschmack' => $b->alt_geschmack][$b->field] ?? null;
+                            @endphp
+                            <div class="flex flex-col gap-2 px-4 py-3" wire:key="rqb-{{ $b->id }}" data-rq-bulk-karte="{{ $b->id }}">
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="min-w-0 font-medium text-[var(--fa-ink)] wrap-anywhere">{{ $b->rezept_name }}</p>
+                                    @if($b->confidence !== null)<span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ round($b->confidence * 100) }} %</span>@endif
+                                </div>
+                                <x-fa::badge tone="info" class="self-start">{{ $feldLabel }}</x-fa::badge>
+                                @if(filled($alt))<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] wrap-anywhere"><span class="font-medium">Bisher:</span> {{ \Illuminate\Support\Str::limit((string) $alt, 240) }}</p>@endif
+                                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] wrap-anywhere"><span class="font-medium">Neu:</span> {{ $neu }}</p>
+                                @if(filled($b->reasoning))<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] wrap-anywhere"><span class="font-medium">Begründung:</span> {{ \Illuminate\Support\Str::limit((string) $b->reasoning, 300) }}</p>@endif
+                                @if($zeigen('bulkUebernehmen') || $zeigen('bulkVerwerfen'))
+                                    <div class="flex gap-2">
+                                        @if($zeigen('bulkVerwerfen'))<x-fa::button variant="ghost" class="flex-1 min-h-11 justify-center" wire:click="bulkVerwerfen({{ $b->id }})" data-rq-bulk-nein>Verwerfen</x-fa::button>@endif
+                                        @if($zeigen('bulkUebernehmen'))<x-fa::button icon="heroicon-m-check" class="flex-1 min-h-11 justify-center" wire:click="bulkUebernehmen({{ $b->id }})"
+                                            wire:confirm="{{ 'Wert „' . \Illuminate\Support\Str::limit($neu, 80) . '“ für ' . $feldLabel . ' an ' . $b->rezept_name . ' übernehmen?' }}" data-rq-bulk-ok>Übernehmen</x-fa::button>@endif
+                                    </div>
+                                @endif
+                            </div>
+                        @else
                         <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-2.5" wire:key="rqb-{{ $b->id }}">
                             <div class="min-w-0 flex-1">
                                 <button type="button" wire:click="$dispatch('{{ $b->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $b->rezept_id }} })"
@@ -474,6 +510,7 @@
                                 @endif
                             </div>
                         </div>
+                        @endif
                     @empty
                         <x-fa::empty compact icon="heroicon-o-sparkles" title="Keine offenen KI-Werte">Vorschläge entstehen, wenn Rezepte im Rezept-Browser per KI angereichert werden.</x-fa::empty>
                     @endforelse
