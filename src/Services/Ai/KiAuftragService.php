@@ -97,8 +97,9 @@ class KiAuftragService
     public function stoesseWiederholungAn(int $teamId, array $uuids): array
     {
         $gestartet = [];
-        $rows = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->whereIn('uuid', $uuids)
-            ->where('status', 'beantwortet')->whereNotNull('wiederholung')->get()->groupBy('lauf_key');
+        $beantwortet = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->whereIn('uuid', $uuids)
+            ->where('status', 'beantwortet')->whereNotNull('wiederholung')->get();
+        $rows = $beantwortet->filter(fn ($r) => (string) $r->lauf_key !== '')->groupBy('lauf_key');
         foreach ($rows as $key => $_) {
             $key = (string) $key;
             if ($key === ''
@@ -127,7 +128,59 @@ class KiAuftragService
             $gestartet[] = ['lauf_key' => $key, 'job' => class_basename($klasse), 'versuch' => $maxV + 1];
         }
 
+        // Mitwartende: Läufe mit demselben Prompt, die auf einen fremden Auftrag gewartet haben — jeder genau einmal neu starten
+        $schonGestartet = array_column($gestartet, 'lauf_key');
+        foreach ($beantwortet as $r) {
+            $p = json_decode((string) $r->wiederholung, true);
+            $weitere = is_array($p) ? (array) ($p['weitere'] ?? []) : [];
+            $geaendert = false;
+            foreach ($weitere as $i => $w) {
+                $wKey = (string) ($w['lauf_key'] ?? '');
+                $klasse = $w['klasse'] ?? null;
+                if ($wKey === '' || isset($w['gestartet_at']) || in_array($wKey, $schonGestartet, true)
+                    || ! is_string($klasse) || ! class_exists($klasse) || ! is_subclass_of($klasse, KiExternWiederholbar::class)) {
+                    continue;
+                }
+                $weitere[$i]['gestartet_at'] = now()->toIso8601String();
+                $geaendert = true;
+                $schonGestartet[] = $wKey;
+                dispatch($klasse::fromExternNutzlast((array) ($w['nutzlast'] ?? []), (int) ($w['versuch'] ?? 0) + 1));
+                $gestartet[] = ['lauf_key' => $wKey, 'job' => class_basename($klasse), 'versuch' => (int) ($w['versuch'] ?? 0) + 1];
+            }
+            if ($geaendert) {
+                $p['weitere'] = $weitere;
+                DB::table('foodalchemist_ki_auftraege')->where('id', $r->id)->update(['wiederholung' => json_encode($p, JSON_UNESCAPED_UNICODE)]);
+            }
+        }
+
         return $gestartet;
+    }
+
+    /**
+     * Ein Lauf wartet auf einen Auftrag, der schon da ist (gleicher Prompt, den ein anderer Lauf angelegt hat): ihn bei diesem Auftrag als
+     * Mitwartenden festhalten, damit ANTWORT auch ihn neu startet (sonst bliebe sein Step für immer `running`). Je Lauf ein Eintrag; ein
+     * neuer Versuch ersetzt den alten. Nach dem Rollback des Laufs aufrufen (die Zeile selbst gehört zu keiner Transaktion des Laufs).
+     *
+     * @param  list<string>  $uuids Aufträge, auf die der Lauf wartet (ohne die, die er selbst neu anlegt)
+     * @param  array<string, mixed>  $lauf Wiederholungs-Nutzlast des wartenden Laufs (klasse, nutzlast, versuch, lauf_key)
+     */
+    public function registriereWartende(int $teamId, array $uuids, array $lauf): void
+    {
+        $key = (string) ($lauf['lauf_key'] ?? '');
+        if ($key === '' || $uuids === []) {
+            return;
+        }
+        foreach (DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->whereIn('uuid', $uuids)->where('status', 'offen')->get() as $z) {
+            if ((string) $z->lauf_key === $key) {
+                continue;                                            // der Besitzer des Auftrags wird ohnehin neu gestartet
+            }
+            $p = json_decode((string) $z->wiederholung, true);
+            $p = is_array($p) ? $p : [];
+            $weitere = array_values(array_filter((array) ($p['weitere'] ?? []), fn ($w) => ($w['lauf_key'] ?? null) !== $key));
+            $weitere[] = ['klasse' => $lauf['klasse'] ?? null, 'nutzlast' => $lauf['nutzlast'] ?? [], 'versuch' => (int) ($lauf['versuch'] ?? 0), 'lauf_key' => $key];
+            $p['weitere'] = $weitere;
+            DB::table('foodalchemist_ki_auftraege')->where('id', $z->id)->update(['wiederholung' => json_encode($p, JSON_UNESCAPED_UNICODE)]);
+        }
     }
 
     /** @param list<array<string, mixed>> $zeilen vorgemerkte Aufträge — außerhalb jeder Tool-Transaktion aufrufen */

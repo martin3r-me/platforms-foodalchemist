@@ -47,7 +47,7 @@ beforeEach(function () {
     $this->antwort = function (array $messages): array {
         $roh = json_encode($messages, JSON_UNESCAPED_UNICODE);
         if (str_contains($roh, 'kapitel_beschreibung')) {
-            return ['ideen' => [['titel' => 'Geschmorte Schulter vom Rind ' . substr(md5($roh), 0, 6), 'beschreibung' => 'Mit Wurzelgemüse und Jus.',
+            return ['ideen' => [['titel' => 'Geschmorte Schulter vom Rind' . (($this->identisch ?? false) ? '' : ' ' . substr(md5($roh), 0, 6)), 'beschreibung' => 'Mit Wurzelgemüse und Jus.',
                 'komponenten' => [['name' => 'Rinderschulter', 'funktion' => 'Hauptkomponente', 'herstellung' => 'schmoren']]]]];
         }
 
@@ -118,18 +118,20 @@ it('GenerateDishProposalJob ohne MCP-Herkunft: Plattformweg, kein Auftrag (Provi
         ->and(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->first()->status)->toBe('failed');
 });
 
-it('Wächter: foodbook.PLAN_FROM_BRIEF läuft komplett extern — der Plattform-Provider wird nie gerufen, kein Lauf bleibt hängen', function (string $modus) {
-    $r = $this->registry->get('foodalchemist.foodbook.PLAN_FROM_BRIEF')->execute(['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.', 'creative_mode' => $modus], $this->mcp);
+/** Fährt die Vollkaskade foodbook.PLAN_FROM_BRIEF per MCP durch: Aufträge beantworten, Ebenen freigeben, bis nichts mehr offen ist. */
+function faehreVollkaskadeDurch($t, string $modus): void
+{
+    $r = $t->registry->get('foodalchemist.foodbook.PLAN_FROM_BRIEF')->execute(['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.', 'creative_mode' => $modus], $t->mcp);
     expect($r->success)->toBeTrue($r->error ?? '')->and($r->data['status'] ?? null)->toBe('ki_auftrag_offen');
 
     for ($i = 0; $i < 12; $i++) {
-        ($this->beantworteAlle)();
-        $r = $this->registry->get('foodalchemist.foodbook.PLAN_FROM_BRIEF')->execute(['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.', 'creative_mode' => $modus], $this->mcp);
+        ($t->beantworteAlle)();
+        $r = $t->registry->get('foodalchemist.foodbook.PLAN_FROM_BRIEF')->execute(['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.', 'creative_mode' => $modus], $t->mcp);
         if (($r->data['status'] ?? null) !== 'ki_auftrag_offen') {
             break;
         }
     }
-    ($this->beantworteAlle)();
+    ($t->beantworteAlle)();
 
     // gestufte Kaskade: der Mensch (hier der MCP-Client) gibt jede Ebene frei, die Freigabe startet die Jobs der nächsten Stufe
     for ($stufe = 0; $stufe < 10; $stufe++) {
@@ -138,20 +140,32 @@ it('Wächter: foodbook.PLAN_FROM_BRIEF läuft komplett extern — der Plattform-
             break;
         }
         foreach ($offen as $id) {
-            $f = $this->registry->get('foodalchemist.planung_kaskade.FREIGABE')->execute(['step_id' => $id], $this->mcp);
+            $f = $t->registry->get('foodalchemist.planung_kaskade.FREIGABE')->execute(['step_id' => $id], $t->mcp);
             expect($f->success)->toBeTrue($f->error ?? '');
         }
-        ($this->beantworteAlle)();
+        ($t->beantworteAlle)();
     }
 
-    expect($r->success)->toBeTrue($r->error ?? '')->and($this->wirft->calls)->toBe(0);
+    expect($r->success)->toBeTrue($r->error ?? '')->and($t->wirft->calls)->toBe(0);
     $run = FoodAlchemistCascadeRun::orderByDesc('id')->first();
     expect($run)->not->toBeNull();
     $steps = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->pluck('status', 'id')->all();
     expect($steps)->not->toBeEmpty()->and(array_values(array_unique($steps)))->not->toContain('running')->not->toContain('failed');
     expect(DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->count())->toBe(0)
         ->and(DB::table('foodalchemist_ki_auftraege')->where('status', 'verbraucht')->pluck('feature')->unique()->all())->not->toBeEmpty();
+}
+
+it('Wächter: foodbook.PLAN_FROM_BRIEF läuft komplett extern — der Plattform-Provider wird nie gerufen, kein Lauf bleibt hängen', function (string $modus) {
+    faehreVollkaskadeDurch($this, $modus);
 })->with(['datenbank', 'voll_kreativ']);
+
+it('drei identische Skizzen (gleicher Prompt, ein Auftrag): ANTWORT startet alle wartenden Läufe neu, kein Step bleibt running', function () {
+    $this->identisch = true;
+    faehreVollkaskadeDurch($this, 'voll_kreativ');
+    // alle drei Gericht-Steps sind durch (die Skizzen sind gleich, die Läufe teilen sich zunächst einen Auftrag)
+    expect(FoodAlchemistCascadeRunStep::where('kind', 'gericht')->pluck('status')->unique()->values()->all())->toBe(['freigegeben'])
+        ->and(FoodAlchemistCascadeRunStep::where('kind', 'gericht')->count())->toBe(3);
+});
 
 it('Wächter: jeder Job der Planungs-Kaskade mit KI-Aufruf ist KiExternWiederholbar', function () {
     foreach (['GenerateRecipeJob', 'EnrichRecipeJob', 'EnrichGeneratedRecipeJob', 'ConformanceCheckJob', 'GenerateRecipePlanJob', 'GenerateDishProposalJob', 'ReviseDishProposalJob',
