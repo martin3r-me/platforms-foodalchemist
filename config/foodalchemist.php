@@ -948,10 +948,17 @@ return [
         'benachrichtigung_fenster_minuten' => 10,
     ],
 
+    'media' => [
+        // #1003 (Dominique 30.10.): Fotos vor dem Speichern auf diese lange Kante verkleinern (4K; der Wandmonitor zeigt sie groß).
+        // Kleinere bleiben unverändert, EXIF-Ausrichtung wird angewendet (FoodAlchemistMediaService::verkleinert).
+        'max_kante' => (int) env('FA_MEDIA_MAX_KANTE', 3840),
+    ],
+
     'handy' => [
         // #1003 (Dominique 30.10.): Signale am Handy abhaken, von der KI erledigen lassen und KI-Werte („Zum Bestätigen“) übernehmen/verwerfen. KI-Fix am Handy ist ein UI-Klick
         // über die Plattform-KI; wer Plattform-Tokens sparen will, nutzt Claude per MCP (signale.FIX). Zentral abschaltbar.
-        'aendern_frei' => ['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren', 'bulkUebernehmen', 'bulkVerwerfen'],
+        // #1003 Fotos (Dominique 30.10.): handyFotoSpeichern = Foto im Rezept-/Gericht-Detail als Hauptbild, zu einem Arbeits- oder Anrichte-Schritt.
+        'aendern_frei' => ['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren', 'bulkUebernehmen', 'bulkVerwerfen', 'handyFotoSpeichern'],
     ],
 
     // Spec 65 · Bearbeitungssperre: Editoren erst nach „Bearbeiten“ beschreibbar, Datensatz für andere gesperrt.

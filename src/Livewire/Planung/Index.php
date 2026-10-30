@@ -2966,7 +2966,7 @@ class Index extends Component
             return;
         }
         $this->validate([
-            "fotoUploads.$stepId" => 'image|max:8192',   // max. 8 MB, nur Bilder
+            "fotoUploads.$stepId" => 'image|max:' . \Platform\FoodAlchemist\Services\RezeptFotoService::MAX_KB,   // max. 15 MB (#1003), nur Bilder
         ]);
         try {
             $cascade->uebernimmManuellesFotoFuerStep($team, $stepId, $datei, $istErgebnis);

@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\ImageManager;
 use Platform\Core\Models\ContextFile;
 use Platform\Core\Models\Team;
 use Platform\Core\Services\ContextFileService;
@@ -15,12 +16,20 @@ class FoodAlchemistMediaService
     ) {
     }
 
+    /** Standard der langen Kante (4K: der Wandmonitor zeigt Fotos groß); einstellbar über foodalchemist.media.max_kante. */
+    public const MAX_KANTE = 3840;
+
+    public static function maxKante(): int
+    {
+        return max(1, (int) config('foodalchemist.media.max_kante', self::MAX_KANTE));
+    }
+
     /**
      * @return array{context_file_id:int,path:string}
      */
     public function storeImage(UploadedFile $file, Team $team, string $contextType, int $contextId, string $folder): array
     {
-        $result = $this->contextFiles->uploadForContext($file, $contextType, $contextId, [
+        $result = $this->contextFiles->uploadForContext($this->verkleinert($file), $contextType, $contextId, [
             'team_id' => $team->id,
             'folder' => $folder,
             'keep_original' => false,
@@ -31,6 +40,43 @@ class FoodAlchemistMediaService
             'context_file_id' => (int) $result['id'],
             'path' => (string) $result['path'],
         ];
+    }
+
+    /**
+     * Vorschritt vor dem Core (der speichert Rasterbilder als WebP in Originalgröße): Bilder mit langer Kante über
+     * maxKante() werden auf maxKante() verkleinert, Seitenverhältnis bleibt, die EXIF-Ausrichtung wird angewendet (Handyfotos
+     * liegen sonst quer). Kleinere Bilder, Nicht-Bilder, SVG/GIF und Formate, die GD nicht lesen kann (z. B. HEIC), gehen
+     * unverändert durch. Dieselbe Bibliothek wie der Core (Intervention Image, GD).
+     */
+    public function verkleinert(UploadedFile $file): UploadedFile
+    {
+        $mime = strtolower((string) $file->getMimeType());
+        $pfad = (string) $file->getRealPath();
+        if (! in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true) || $pfad === '') {
+            return $file;
+        }
+        $masse = @getimagesize($pfad);
+        if ($masse === false || max((int) $masse[0], (int) $masse[1]) <= self::maxKante()) {
+            return $file;
+        }
+        try {
+            $bild = ImageManager::gd()->read($pfad);   // autoOrientation: EXIF-Drehung wird beim Lesen angewendet
+            $bild->scaleDown(self::maxKante(), self::maxKante());
+            $kodiert = match ($mime) {
+                'image/png' => $bild->toPng(),
+                'image/webp' => $bild->toWebp(90),
+                default => $bild->toJpeg(90),
+            };
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('Bild nicht verkleinert, unverändert gespeichert: '.$e->getMessage(), ['mime' => $mime]);
+
+            return $file;
+        }
+        $tmp = (string) tempnam(sys_get_temp_dir(), 'fa-klein-');
+        file_put_contents($tmp, (string) $kodiert);
+        register_shutdown_function(static fn () => @unlink($tmp));
+
+        return new UploadedFile($tmp, $file->getClientOriginalName(), $mime, null, true);
     }
 
     /**

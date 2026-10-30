@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
+use Platform\FoodAlchemist\Services\RezeptFotoService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\RecipeStepService;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
@@ -310,28 +311,10 @@ class StepEditor extends Component
             return;
         }
 
-        $this->validate(['fotoUpload' => 'image|max:8192'], [], ['fotoUpload' => 'Foto']);
+        $this->validate(['fotoUpload' => 'image|max:' . RezeptFotoService::MAX_KB], [], ['fotoUpload' => 'Foto']);
 
-        $media = app(FoodAlchemistMediaService::class)->storeImage(
-            $this->fotoUpload,
-            $this->team(),
-            'foodalchemist.recipe',
-            $r->id,
-            "foodalchemist/rezepte/{$r->id}",
-        );
-
-        $foto = FoodAlchemistRecipeStepPhoto::create([
-            'team_id' => $r->team_id,
-            'recipe_id' => $r->id,
-            'pfad' => $media['path'],
-            'context_file_id' => $media['context_file_id'],
-            'caption' => trim($this->fotoCaption) ?: null,
-        ]);
-
-        // aktiverSchritt = 0 ist der schritt-freie Pool („allgemeine" Rezept-Fotos).
-        if ($this->aktiverSchritt !== null && $this->aktiverSchritt > 0) {
-            $this->fotoUmschalten($this->aktiverSchritt, $foto->id);
-        }
+        // Ein Weg mit dem Handy-Detail (#1003): speichern, ins Pool, beim aktiven Schritt anhängen (0 = schritt-freier Pool).
+        app(RezeptFotoService::class)->schrittFoto($this->team(), $r, $this->fotoUpload, $this->fotoCaption, $this->aktiverSchritt, $this->ebene);
 
         $this->reset('fotoUpload', 'fotoCaption');
     }

@@ -22,14 +22,14 @@ class DetailPanel extends Component
 {
     use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
-    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich, \Platform\FoodAlchemist\Livewire\Concerns\HandyRezeptFotos;   // #1003: am Handy nur lesen, Fotos aufnehmen
     use \Platform\FoodAlchemist\Livewire\Concerns\HatHochrechner;   // #1003: Hochrechnen am Basisrezept
 
     /** #1003: am Handy laufen nur Anzeige und Navigation. */
     public function handyLeseMethoden(): array
     {
         // Hochrechnen ist reine Ansicht (speichert nichts) — hochUebernehmen schreibt und steht bewusst NICHT hier.
-        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion', 'hochNachZutat', 'hochZuruecksetzen'];
+        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion', 'hochNachZutat', 'hochZuruecksetzen', ...self::handyFotoMethoden()];
     }
 
     /** Spec 65: gleiche Sperre wie der Basisrezept-Editor (Ziel recipe). */
@@ -44,7 +44,7 @@ class DetailPanel extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen', 'hochNachZutat', 'hochZuruecksetzen', 'hochAenderungenZuruecknehmen'];
+        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen', 'hochNachZutat', 'hochZuruecksetzen', 'hochAenderungenZuruecknehmen', ...self::handyFotoMethoden()];
     }
 
     public ?int $recipeId = null;
