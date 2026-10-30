@@ -161,11 +161,7 @@ class StammdatenImportService
         // Kopf einmal prüfen (Pflichtspalten, Doppelbelegung). Fehlt etwas, ist das kein Fehler: der Lauf wartet auf die Zuordnung.
         try {
             $this->lesen($datei['kopf'], [], $eigene);
-        } catch (\RuntimeException $e) {
-            if (! preg_match('/Pflicht-Spalte|Weder „Artikel-Nr|Preis-Status/u', $e->getMessage())) {
-                throw $e;
-            }
-
+        } catch (\Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException $e) {
             return $zuo->zuordnungNoetig($team, Lauf::ART_STAMMDATEN, $pfad, $endung, $dateiname, $standard?->id ?? $merkId, $userId, $herkunft, $linkId,
                 ['kopf' => $originalKopf, 'zeilen' => $datei['zeilen']], $e->getMessage(), $spalten);
         }

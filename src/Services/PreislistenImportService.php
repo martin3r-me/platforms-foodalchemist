@@ -122,11 +122,7 @@ class PreislistenImportService
         }
         try {
             $zuordnung = $this->ordneSpalten($datei['kopf'], $mapping);
-        } catch (\RuntimeException $e) {
-            if (! preg_match('/Keine Preis-Spalte|Weder Artikelnummer/u', $e->getMessage())) {
-                throw $e;
-            }
-
+        } catch (\Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException $e) {
             return $zuo->zuordnungNoetig($team, FoodAlchemistPriceImportRun::ART_PREISLISTE, $pfad, $endung, $dateiname, $supplierId, $userId, 'user', null, $datei,
                 $e->getMessage(), array_flip($this->ordneSpaltenLose($datei['kopf'])));
         }
@@ -669,10 +665,10 @@ class PreislistenImportService
             }
         }
         if (! isset($zuordnung['price'])) {
-            throw new \RuntimeException('Keine Preis-Spalte erkannt (Kopfzeile: ' . implode(' | ', $kopf) . ') — Spalte im Mapping angeben.');
+            throw new \Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException('Keine Preis-Spalte erkannt (Kopfzeile: ' . implode(' | ', $kopf) . ') — Spalte im Mapping angeben.');
         }
         if (! isset($zuordnung['article_number']) && ! isset($zuordnung['ean'])) {
-            throw new \RuntimeException('Weder Artikelnummer- noch EAN-Spalte erkannt (Kopfzeile: ' . implode(' | ', $kopf) . ') — Spalte im Mapping angeben.');
+            throw new \Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException('Weder Artikelnummer- noch EAN-Spalte erkannt (Kopfzeile: ' . implode(' | ', $kopf) . ') — Spalte im Mapping angeben.');
         }
 
         return $zuordnung;

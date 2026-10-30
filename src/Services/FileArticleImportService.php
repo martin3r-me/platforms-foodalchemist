@@ -449,13 +449,13 @@ class FileArticleImportService
         }
 
         if (! in_array('bezeichnung', $erkannt, true)) {
-            throw new \RuntimeException('Pflicht-Spalte „Bezeichnung" fehlt — nichts importiert.');
+            throw new \Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException('Pflicht-Spalte „Bezeichnung" fehlt — nichts importiert.');
         }
         if (! in_array('artikelnummer', $erkannt, true) && ! in_array('eangebinde', $erkannt, true) && ! in_array('eanbestelleinheit', $erkannt, true)) {
-            throw new \RuntimeException('Weder „Artikel-Nr" noch eine EAN-Spalte vorhanden — ohne Schlüssel ist kein Upsert möglich (E2).');
+            throw new \Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException('Weder „Artikel-Nr" noch eine EAN-Spalte vorhanden — ohne Schlüssel ist kein Upsert möglich (E2).');
         }
         if (in_array('preisstatus', $erkannt, true) && ! in_array('preis', $erkannt, true)) {
-            throw new \RuntimeException('Spalte „Preis-Status" ohne „Preis" — ein Status ohne Betrag ergibt keine Preis-Zeile.');
+            throw new \Platform\FoodAlchemist\Exceptions\SpaltenZuordnungFehltException('Spalte „Preis-Status" ohne „Preis" — ein Status ohne Betrag ergibt keine Preis-Zeile.');
         }
         if ($spaeter !== []) {
             $hinweise[] = 'Erkannt, aber von DIESER Stufe NICHT geschrieben: ' . implode(' · ', $spaeter);
