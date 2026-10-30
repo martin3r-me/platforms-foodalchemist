@@ -20,6 +20,13 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+
+    /** #1003: am Handy laufen nur Anzeige und Navigation (KI-Läufe und Pflege bleiben am Computer). */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion'];
+    }
 
     /** Spec 65: gleiche Sperre wie der Gericht-Editor (Ziel recipe). */
     protected function sperrZiel(): ?array
@@ -315,6 +322,11 @@ class DetailPanel extends Component
         // Ebene 2 (D3): VK folgt dem aktiven Betrieb.
         $outlet = $team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
 
+        // #1003: am Handy die Handbuch-Ansicht (Portion, VK, Schritte, Anrichten, Regeneration, Formen)
+        if ($rezept !== null && \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
+            return $this->handyHandbuch($team, $rezept, $verkauf->cockpit($rezept, $team, $outlet), $outlet !== null);
+        }
+
         return view('foodalchemist::livewire.verkauf.detail-panel', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
@@ -346,6 +358,29 @@ class DetailPanel extends Component
                         ->whereNull('deleted_at')->distinct()->pluck('concept_id'))
                     ->orderBy('name')->get(['id', 'name', 'kind'])
                 : collect(),
+        ]);
+    }
+
+    /** #1003 Handy: Kernwerte Portion · VK brutto (aktiver Standort, wie am Computer) · Wareneinsatz. */
+    private function handyHandbuch($team, FoodAlchemistRecipe $rezept, ?array $cockpit, bool $standort)
+    {
+        $svc = app(\Platform\FoodAlchemist\Services\HandyDetailService::class);
+        $karte = $svc->karte($team, $rezept);
+        $gramm = $karte['portion']['gramm'] ?? null;
+        $vk = $cockpit['sales_gross'] ?? null;
+        $we = $cockpit['marge']['wareneinsatz_pct'] ?? null;
+
+        return view('foodalchemist::livewire.handy.rezept-handbuch', [
+            'art' => 'gericht',
+            'standort' => $standort,
+            'rezept' => $rezept,
+            'karte' => $karte,
+            'formen' => $svc->formen($rezept),
+            'kennzahlen' => [
+                ['label' => 'Portion', 'value' => $gramm !== null ? number_format((float) $gramm, 0, ',', '.') . ' g' : 'fehlt', 'fehlt' => $gramm === null],
+                ['label' => 'VK brutto', 'value' => $vk !== null ? number_format((float) $vk, 2, ',', '.') . ' €' : 'fehlt', 'fehlt' => $vk === null],
+                ['label' => 'Wareneinsatz', 'value' => $we !== null ? number_format((float) $we, 1, ',', '.') . ' %' : 'fehlt', 'fehlt' => $we === null],
+            ],
         ]);
     }
 

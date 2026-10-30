@@ -139,9 +139,11 @@
     @if($lesemodus) data-fa-handy-lesen @endif
     {{ $attributes }}
 >
-  {{-- Dunkler Rahmen: Detail-Panels im Werkbank-Modus (wie Navigation, Chat-Leiste, Editoren). --}}
+  {{-- Dunkler Rahmen: Detail-Panels im Werkbank-Modus (wie Navigation, Chat-Leiste, Editoren).
+       #1003: am Handy hell wie ein Handbuch (kein Token-Satz für „hell“ → erbt die hellen Tokens der Seite). --}}
   <div
     data-fa-theme="dark"
+    x-bind:data-fa-theme="handy ? 'hell' : 'dark'"
     x-show="! handy || handyLeiste"
     :style="open ? ('width: ' + breite + 'px') : 'width: 44px'"
     :class="(handy && open) ? 'fixed inset-0 z-50' : (schublade ? 'absolute inset-y-0 {{ $side === 'right' ? 'right-0' : 'left-0' }} z-40 shadow-2xl' : 'relative h-full')"
@@ -195,14 +197,20 @@
     >
         @if($title)
             <div class="px-6 h-14 flex-shrink-0 flex items-center border-b border-[var(--ui-border)]/60 bg-[var(--ui-surface)]/90 backdrop-blur">
+                {{-- #1003: am Handy steht „Zurück“ links, wo der Daumen es von Apps kennt --}}
+                <button type="button" x-show="handy" x-cloak @click="setOpen(false)"
+                        class="-ml-3 inline-flex items-center gap-1 min-h-11 pr-3 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-accent)]" data-fa-detail-zurueck>
+                    @svg('heroicon-m-chevron-left', 'w-5 h-5') Zurück
+                </button>
                 @if($icon)
-                    <span class="inline-flex items-center justify-center w-5 h-5 mr-2 text-[var(--ui-secondary)]">
+                    <span x-show="! handy" class="inline-flex items-center justify-center w-5 h-5 mr-2 text-[var(--ui-secondary)]">
                         @svg($icon, 'w-4 h-4')
                     </span>
                 @endif
-                <h2 class="text-sm font-semibold text-[var(--ui-secondary)] m-0 tracking-wide uppercase truncate">{{ $title }}</h2>
+                <h2 x-show="! handy" class="text-sm font-semibold text-[var(--ui-secondary)] m-0 tracking-wide uppercase truncate">{{ $title }}</h2>
                 <button
                     type="button"
+                    x-show="! handy"
                     @click="setOpen(false)"
                     class="ml-auto inline-flex items-center justify-center rounded-md text-[var(--ui-secondary)] hover:text-[var(--ui-primary)] hover:bg-[var(--ui-muted-10)] transition-colors flex-shrink-0"
                     :class="handy ? 'w-11 h-11' : 'w-7 h-7'"

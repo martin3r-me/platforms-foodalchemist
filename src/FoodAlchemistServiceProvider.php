@@ -417,9 +417,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $returnEarly(null);
         });
 
+        // #1003 Handy-Cookie setzt das Gerät per JavaScript (HandyLesemodus::JS_MODUS) → nicht verschlüsselt lesen.
+        \Illuminate\Cookie\Middleware\EncryptCookies::except(\Platform\FoodAlchemist\Support\HandyLesemodus::COOKIE);
+
         // #1003 Handy-Lesemodus serverseitig: Lese-Bereiche nehmen vom Handy nur Lese- und freigeschaltete Methoden an.
         \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
-            if (! \Platform\FoodAlchemist\Support\HandyLesemodus::abgewiesen($component, (string) $method)) {
+            if (! \Platform\FoodAlchemist\Support\HandyLesemodus::abgewiesen($component, (string) $method, (array) $params)) {
                 return;
             }
             $component->dispatch('fa-saved', message: \Platform\FoodAlchemist\Support\HandyLesemodus::MELDUNG, type: 'error');

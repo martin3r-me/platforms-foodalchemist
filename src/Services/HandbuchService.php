@@ -235,7 +235,7 @@ class HandbuchService
      *
      * @return array<string,mixed>
      */
-    public function gerichtKarte(Team $team, FoodAlchemistRecipe $recipe, string $label): array
+    public function gerichtKarte(Team $team, FoodAlchemistRecipe $recipe, string $label, bool $mitZutaten = true): array
     {
         $dar = $recipe->standardPresentation;
         $regen = $this->regeneration->fuerRezept($recipe);
@@ -281,7 +281,8 @@ class HandbuchService
                     : null,
             ],
             'behaelter' => $this->behaelter($recipe),
-            'zutaten' => $this->zutaten->fuerGericht($team, $recipe),
+            // #1003 Handy-Detail: zeigt die Zutaten selbst (aus dem Rezept) und spart den Report-Lauf
+            'zutaten' => $mitZutaten ? $this->zutaten->fuerGericht($team, $recipe) : null,
             'zubereitung' => $this->schritte($recipe->steps),
             'anrichten' => $this->schritte($recipe->platingSteps),
             'regeneration' => $regenZeilen,
@@ -339,20 +340,28 @@ class HandbuchService
     /** Identifier → frisch signierte URL (Snapshot speichert nur Identifier). */
     public function hydrateImages(array $snapshot): array
     {
+        foreach ($snapshot['gerichte'] ?? [] as $key => $g) {
+            $snapshot['gerichte'][$key] = $this->hydrateKarte($g);
+        }
+
+        return $snapshot;
+    }
+
+    /** Bilder EINER Gericht-Karte (Foto, Schritt-Fotos) → frisch signierte URLs. */
+    public function hydrateKarte(array $g): array
+    {
         $url = fn (?array $img) => (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null)))
             ? $this->media->url($img['context_file_id'] ?? null, $img['path'] ?? null) : null;
-        foreach ($snapshot['gerichte'] ?? [] as $key => $g) {
-            $snapshot['gerichte'][$key]['foto_url'] = $url($g['foto'] ?? null);
-            foreach (['zubereitung', 'anrichten'] as $abschnitt) {
-                foreach ($g[$abschnitt] ?? [] as $i => $s) {
-                    foreach ($s['fotos'] ?? [] as $j => $f) {
-                        $snapshot['gerichte'][$key][$abschnitt][$i]['fotos'][$j]['url'] = $url($f);
-                    }
+        $g['foto_url'] = $url($g['foto'] ?? null);
+        foreach (['zubereitung', 'anrichten'] as $abschnitt) {
+            foreach ($g[$abschnitt] ?? [] as $i => $s) {
+                foreach ($s['fotos'] ?? [] as $j => $f) {
+                    $g[$abschnitt][$i]['fotos'][$j]['url'] = $url($f);
                 }
             }
         }
 
-        return $snapshot;
+        return $g;
     }
 
     // ── intern ─────────────────────────────────────────────────────────────

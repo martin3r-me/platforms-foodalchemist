@@ -22,6 +22,13 @@ class DetailPanel extends Component
 {
     use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+
+    /** #1003: am Handy laufen nur Anzeige und Navigation. */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'nachSpeichern', 'pairingLaden', 'toggleSektion'];
+    }
 
     /** Spec 65: gleiche Sperre wie der Basisrezept-Editor (Ziel recipe). */
     protected function sperrZiel(): ?array
@@ -225,6 +232,11 @@ class DetailPanel extends Component
             ? $recipes->detail($team, $this->recipeId)
             : null;
 
+        // #1003: am Handy die Handbuch-Ansicht (nur das Standalone-Detail, nie die Editor-Karteien)
+        if ($rezept !== null && $team !== null && ! $this->embedded && $this->section === null && \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
+            return $this->handyHandbuch($team, $rezept);
+        }
+
         $equivSvc = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class);
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
@@ -276,6 +288,28 @@ class DetailPanel extends Component
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie kohaesion/pairings = nur Standalone-Panel).
             // Spec 60 · P7: Kombinationslogik + Netz — nur Standalone-Panel, NACHGELADEN (pairingLaden).
             ...$this->pairingFuerView($team, $rezept, $rezept !== null && ! $this->embedded && $this->section === null),
+        ]);
+    }
+
+    /** #1003 Handy: Kernwerte Ausbeute · Arbeitszeit · EK je kg (Kosten aus Sicht des Teams wie am Computer). */
+    private function handyHandbuch($team, FoodAlchemistRecipe $rezept)
+    {
+        $k = app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($rezept, $team);
+        $ekKg = $k !== null ? $k['ek_per_kg'] : $rezept->ek_per_kg_eur;
+        $vollstaendig = $k !== null ? ($k['n_total'] > 0 && $k['n_priced'] >= $k['n_total']) : ($rezept->ek_n_ingredients_total > 0 && $rezept->ek_n_ingredients_priced >= $rezept->ek_n_ingredients_total);
+        $ausbeute = $rezept->yield_kg_manual ?? $rezept->yield_kg;
+
+        return view('foodalchemist::livewire.handy.rezept-handbuch', [
+            'art' => 'rezept',
+            'rezept' => $rezept,
+            'karte' => app(\Platform\FoodAlchemist\Services\HandyDetailService::class)->karte($team, $rezept),
+            'formen' => collect(),
+            'kennzahlen' => [
+                ['label' => 'Ausbeute', 'value' => $ausbeute !== null ? rtrim(rtrim(number_format((float) $ausbeute, 2, ',', '.'), '0'), ',') . ' kg' : 'fehlt', 'fehlt' => $ausbeute === null],
+                ['label' => 'Arbeitszeit', 'value' => $rezept->work_time_min ? $rezept->work_time_min . ' min' : 'fehlt', 'fehlt' => ! $rezept->work_time_min],
+                // Auflage 4: eine Teilsumme ist nie ein Preis — „ab …"
+                ['label' => 'EK je kg', 'value' => $ekKg !== null ? ($vollstaendig ? '' : 'ab ') . number_format((float) $ekKg, 2, ',', '.') . ' €' : 'fehlt', 'fehlt' => $ekKg === null],
+            ],
         ]);
     }
 

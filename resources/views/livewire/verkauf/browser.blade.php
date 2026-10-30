@@ -100,6 +100,17 @@
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.suppliers.item-modal key="verkauf-browser--suppliers.item-modal" />
 
+    {{-- #1003: am Handy Karten statt Tabelle (Server weiß es über HandyLesemodus, das Gerät setzt das Cookie) --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Gerichte', 'eintraege' => $rezepte, 'aktivId' => $recipeId, 'wahl' => 'waehleRezept', 'scope' => 'activity_verkauf',
+            'suchHinweis' => 'Gericht suchen',
+            'unterzeile' => fn ($r) => implode(' · ', array_filter([$r->dishClass?->label, $r->status->label()])),
+            // Mit Betriebsbrille der betriebsscharfe VK, sonst die Standard-Darreichung (wie die Tabelle)
+            'wert' => fn ($r) => ($v = ($vkDisplay[$r->id] ?? null) ?? $r->vk_netto) !== null ? number_format((float) $v, 2, ',', '.') . ' € netto' : null,
+            'leer' => 'Andere Suche oder Filter zurücksetzen.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Gerichte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">
             <x-slot:actions>
@@ -217,5 +228,6 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $rezepte->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    @endif
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

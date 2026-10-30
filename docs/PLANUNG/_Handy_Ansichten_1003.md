@@ -40,14 +40,15 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | „Mehr“ | Dashboard ganz oben, dann Grundprodukte, Lieferanten, Produktion, Bestellungen, Concepter, Formate, Projekte, Speiseplan, Speisekarten, Foodbooks; Mandant wechseln (vorhandener Umschalter); Desktop-Ansicht |
 | Globale Suche | Rezept, Gericht, GP, Lieferant, Artikelnummer/EAN über die vorhandenen Such-Dienste; darunter „Zuletzt angesehen“ (pro Gerät) und Favoriten |
 | Mandantenwechsel | vorhandener Core-/Host-Umschalter, danach dieselbe Seite bzw. Startseite des Bereichs |
+| Server weiß „Handy“ | Cookie `fa_handy` (gleiche Entscheidung wie `<html data-fa-handy>`, gesetzt von HandyLesemodus::JS_MODUS) plus Kopfzeile X-FA-Handy bei Livewire-Anfragen. Darauf schalten Listen (Karten statt Tabelle) und Detail (Handbuch statt Desktop-Detail) und die Server-Sperre (HandyLesebereich). Erster Besuch ohne Cookie: Desktop-Aufbau, ab dem nächsten Laden Handy. |
 | App auf dem Startbildschirm (PWA Stufe 1) | Manifest, Icons, Vollbild ohne Browserleiste, iOS-Hinweis „Zum Home-Bildschirm“ einmalig; kein Service Worker (Stufe 2 → 92_PWA_Offline_Push.md) |
 
 ## Seiten
 
 | Seite | Pfad | Livewire | Art | Detailseite | PR |
 |---|---|---|---|---|---|
-| Rezepte (Basisrezepte) | `/rezepte` | Recipes\Browser | Lesen + Handbuch-Ansicht (Schritte mit Bildern, Regeneration) | Recipes\DetailPanel | 2 |
-| Gerichte (Verkauf) | `/gerichte` | Verkauf\Browser | Lesen + Handbuch-Ansicht (Darreichungsformen mit VK, Bilder) | Verkauf\DetailPanel | 2 |
+| Rezepte (Basisrezepte) | `/rezepte` | Recipes\Browser | Lesen: Karten-Liste; Detail im Handbuch-Stil (Ausbeute · Arbeitszeit · EK je kg, Allergene, Reiter Zutaten · Zubereitung · Anrichten · Regeneration) | Recipes\DetailPanel → livewire/handy/rezept-handbuch | 2 ✓ |
+| Gerichte (Verkauf) | `/gerichte` | Verkauf\Browser | Lesen: Karten-Liste; Detail im Handbuch-Stil (Portion · VK brutto · Wareneinsatz, Allergene, Reiter wie oben + Formen mit VK) | Verkauf\DetailPanel → livewire/handy/rezept-handbuch | 2 ✓ |
 | Grundprodukte | `/gps` | Gps\Browser | Lesen | Gps\DetailPanel | 3 |
 | Lieferanten + Artikel | `/lieferanten` | Suppliers\Index | Lesen | Suppliers\SupplierDetail | 3 |
 | Concepter | `/concepter` | Concepter\Browser | Lesen | Concepter\DetailPanel | 4 |
@@ -102,3 +103,9 @@ Speisekarten- und Foodbook-Editor) und alle Bearbeiten-Dialoge sind **Desktop**.
 - Kopfzeile oben läuft ca. 230 px über den Rand (Host).
 - In den Detailseiten sind alle Knöpfe kleiner als 44 px; Knöpfe zum Ändern und KI-Knöpfe sind sichtbar.
 - Inhalt der Detailseiten Rezept, Gericht, GP läuft nicht über den Rand.
+
+## Offene Punkte im Host (food-alchemist.de, nicht im Modul)
+
+- Einträge im Benutzermenü (im „Mehr“-Blatt) sind ca. 36 px hoch statt 44 px.
+- Nach dem Mandantenwechsel landet man im ersten Modul statt auf derselben Seite in Food Alchemist.
+- Standort ist am Handy nicht wechselbar (Standortwahl nur am Computer).
