@@ -155,7 +155,11 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
 
         // #1002: kein umgeleitetes Tool, aber ein externer MCP-Aufruf — Jobs, die er auslöst (GP-Aroma, Klassifikation, Sensorik, Konformität), laufen extern
         if (\Platform\FoodAlchemist\Support\KiUmleitung::vomExternenMcp($context)) {
-            return app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->imMcp(fn () => $this->innen()->execute($arguments, $context));
+            $modus = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class);
+            $modus->entnimmFolgeJobs();
+            $ergebnis = $modus->imMcp(fn () => $this->innen()->execute($arguments, $context));
+
+            return \Platform\FoodAlchemist\Support\KiUmleitung::mitFolgeHinweis($ergebnis, $modus->entnimmFolgeJobs());
         }
 
         return $this->innen()->execute($arguments, $context);

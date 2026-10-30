@@ -153,6 +153,9 @@ final class SignalCockpit
             . 'oder einen neueren Produktpass hochladen. Das Signal schließt, wenn nichts mehr offen ist.',
         'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
             . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
+        // #1002: der Weg ist der MCP-Client, kein Knopf (die KI-Antwort kommt von außen).
+        'ki_auftraege_offen' => 'Im MCP-Client: foodalchemist.ki_auftraege.GET holt die offenen Aufträge, ki_auftraege.ANTWORT beantwortet sie (Ablauf: Dossier workflow.ki_auftrag_beantworten_mcp). '
+            . 'Abgelaufene Aufträge werden nicht verworfen, der Nachlauf bzw. foodalchemist.gp_aroma_backfill.RUN erkennt die Lücke wieder und legt neue Aufträge an.',
         // Plan GP-Stamm 3g: Kuratierungs-Entscheidung des Masters, kein Auto-Fix (eine Marke darf nie geraten werden).
         'marken_nachlauf' => 'Lieferanten → „Marke offen“: je unbekanntem Kürzel die Marke zuordnen (Vorschau zeigt, welche GPs neu benannt werden; '
             . 'GPs mit Artikeln mehrerer Marken oder ohne Marke bleiben offen). Lieferanten mit Rolle „offen“ beim Lieferanten als Hersteller oder Händler einstufen.',

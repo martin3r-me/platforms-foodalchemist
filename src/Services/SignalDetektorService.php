@@ -71,6 +71,7 @@ class SignalDetektorService
             + $this->naehrwertPlausi($team)
             + app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertSignalService::class)->laufen($team)   // Nährwert-Prüfung je Artikel (nur Modus scharf, gedrosselt)
             + $this->markenNachlauf($team)   // Plan GP-Stamm 3g (nur Master-Team)
+            + $this->kiAuftraegeOffen($team)   // #1002: unbeantwortete/abgelaufene KI-Aufträge des externen Wegs
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
 
         // Ebene 2 — Betriebs-Lanes: die geldabhängigen Detektoren (Marge/Wareneinsatz/Ausgabe-Drift)
@@ -622,6 +623,41 @@ class SignalDetektorService
      * Marken-Nachlauf (Plan GP-Stamm 3g): Summen-Signale im Master-Team — unbekannte Kürzel an Rezeptur-GPs ohne Marke und Lieferanten mit Rolle
      * „offen“, die an Rezepturware hängen. Die Liste selbst baut {@see \Platform\FoodAlchemist\Services\Marken\MarkeOffenService}.
      */
+    /**
+     * #1002 — KI-Aufträge des externen Wegs, die nicht beantwortet wurden: offen und älter als {@see KI_AUFTRAG_WARTE_STUNDEN} oder in den letzten
+     * {@see KI_AUFTRAG_TAGE} Tagen abgelaufen. EIN Signal je Team und Feature (nicht je Auftrag); schließt sich, sobald nichts mehr liegt.
+     * Abgelaufene Aufträge werden bewusst nicht verworfen oder per Plattform-KI ersetzt: die Lücke bleibt in den Daten sichtbar und der Nachlauf
+     * (GpAromaNachholen, gp_aroma_backfill.RUN, die jeweiligen Tools) erkennt sie wieder.
+     */
+    public function kiAuftraegeOffen(Team $team): int
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiAuftragService::class)->offene((int) $team->id, 1);   // setzt abgelaufene auf „abgelaufen“
+        $zeilen = DB::table('foodalchemist_ki_auftraege')->where('team_id', $team->id)
+            ->where(fn ($q) => $q->where(fn ($o) => $o->where('status', 'offen')->where('created_at', '<', now()->subHours(self::KI_AUFTRAG_WARTE_STUNDEN)))
+                ->orWhere(fn ($a) => $a->where('status', 'abgelaufen')->where('updated_at', '>=', now()->subDays(self::KI_AUFTRAG_TAGE))))
+            ->selectRaw("feature, SUM(CASE WHEN status = 'offen' THEN 1 ELSE 0 END) AS offen, SUM(CASE WHEN status = 'abgelaufen' THEN 1 ELSE 0 END) AS abgelaufen")
+            ->groupBy('feature')->orderBy('feature')->get();
+
+        $keys = [];
+        foreach ($zeilen as $z) {
+            $key = 'ki-auftraege-'.$z->feature;
+            $keys[] = $key;
+            $this->signals->erzeuge($team, SignalTyp::KiAuftraegeOffen, (int) $z->abgelaufen > 0 ? SignalSeverity::Warnung : SignalSeverity::Info,
+                'KI-Aufträge '.$z->feature.': '.(int) $z->offen.' warten auf Antwort'.((int) $z->abgelaufen > 0 ? ', '.(int) $z->abgelaufen.' abgelaufen' : ''),
+                ['dedup_key' => $key,
+                    'description' => 'Der MCP-Client hat diese KI-Aufträge nicht beantwortet. Offene mit foodalchemist.ki_auftraege.GET holen und mit ki_auftraege.ANTWORT beantworten; '
+                        .'abgelaufene sind verfallen — den Nachlauf bzw. das auslösende Tool erneut starten.',
+                    'payload' => ['feature' => $z->feature, 'offen' => (int) $z->offen, 'abgelaufen' => (int) $z->abgelaufen]]);
+        }
+        $this->signals->schliesseVerschwundene($team, SignalTyp::KiAuftraegeOffen, 'detektor', $keys, 'Keine unbeantworteten KI-Aufträge mehr — automatisch geschlossen');
+
+        return count($keys);
+    }
+
+    private const KI_AUFTRAG_WARTE_STUNDEN = 2;
+
+    private const KI_AUFTRAG_TAGE = 7;
+
     public function markenNachlauf(Team $team): int
     {
         if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {

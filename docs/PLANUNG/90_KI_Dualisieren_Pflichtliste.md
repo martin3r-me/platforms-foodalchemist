@@ -162,6 +162,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
 | `foodalchemist.la.GP_ABGLEICH` | umgeleitet (2 Runden) | `gp.suggest` (Felder), danach `gp.la_abgleich`; der zweite Prompt hängt von der ersten Antwort ab. Schreibt nur DB (Abgleich-Log, bei `apply` Verknüpfung/neues GP). `ki=false` = Sparsamkeit: nie ein Auftrag |
 | MCP-Herkunft → Folge-Jobs | Merker `KiExternModus::imMcp` (Hülle, jedes FA-Tool) | Ein externer MCP-Aufruf markiert den Lauf; Jobs, die er anstößt (`ClassifyLaJob`, `GpAromaNachholenJob`, `SensorikNachholenJob`, `ConformanceCheckJob` bei GP), laufen mit `extern=true` (`fuerDispatch`). Kein Auftrag, keine Transaktion im Tool selbst |
+| Folge-Aufträge sichtbar | `KiUmleitung::mitFolgeHinweis`, `SignalDetektorService::kiAuftraegeOffen` (`SignalTyp::KiAuftraegeOffen`) | Tool-Ergebnis meldet `folgeauftraege.jobs_angestossen` (Hinweis auf `ki_auftraege.GET`, 24-h-Ablauf). Cockpit-Signal je Team und Feature (nicht je Auftrag): offen > 2 h = Info, abgelaufen in 7 Tagen = Warnung; schließt sich selbst. Abgelaufene Aufträge werden nicht verworfen und lösen keinen Plattform-Fallback aus: die Lücke bleibt in den Daten, der nächste Nachhol-Lauf findet sie wieder (Test) |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
 
 

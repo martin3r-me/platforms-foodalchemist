@@ -76,7 +76,7 @@ class ReviewQueue extends Component
             SignalTyp::AnkerFehlt, SignalTyp::MarkenNachlauf => 'datenqualitaet',
             SignalTyp::ServierformUnbestimmt => 'rezepte',
             SignalTyp::TrendKonzeptVorschlag => 'konzepte',
-            SignalTyp::WiderspruchWissenGraph, SignalTyp::SteuerdatenDrift => 'system',
+            SignalTyp::WiderspruchWissenGraph, SignalTyp::SteuerdatenDrift, SignalTyp::KiAuftraegeOffen => 'system',
             SignalTyp::QualitaetDrift => 'entwicklung',
             default => match (true) {
                 $typ->istRezeptQualitaet() => 'rezepte',
