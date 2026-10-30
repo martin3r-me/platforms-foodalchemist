@@ -471,6 +471,8 @@ return [
         // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
         // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
         'detektor_zeit' => env('FOODALCHEMIST_DETEKTOR_ZEIT', '03:20'),
+        // Vorgemerkte Preise (Gültig ab erreicht) aus Preislisten-/Stammdaten-Läufen: früh, vor dem Arbeitstag (Kommando foodalchemist:faellige-preise).
+        'faellige_preise_zeit' => env('FOODALCHEMIST_FAELLIGE_PREISE_ZEIT', '05:30'),
         // Spec 79: wöchentliche Google-Trends-Messung (DataForSEO). Läuft nur für Teams mit
         // trend_dataforseo_enabled und stoppt am Monatsbudget des Teams.
         'trends_messen_enabled' => env('FOODALCHEMIST_TRENDS_MESSEN', true),

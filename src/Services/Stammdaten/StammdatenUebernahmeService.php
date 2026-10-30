@@ -95,6 +95,28 @@ class StammdatenUebernahmeService
     public function uebernehmen(Team $team, ?User $user, Lauf $lauf, ?array $zeilenIds = null): array
     {
         $this->pruefeRecht($team, $user, $lauf);
+
+        return $this->verarbeite($team, $lauf, $zeilenIds, false);
+    }
+
+    /**
+     * Täglicher Systemlauf (Kommando `foodalchemist:faellige-preise`): schreibt nur vorgemerkte Preise, deren „Gültig ab“ erreicht ist — keine neue
+     * Entscheidung, kein Nutzer (die Zeilen wurden beim Übernehmen bestätigt).
+     *
+     * @return array{angewendet: int, uebersprungen: list<array{id: int, zeile: int, grund: string}>, faellige_preise: int, kette: array<string, int>, lauf_status: string}
+     */
+    public function faelligePreise(Team $team, Lauf $lauf): array
+    {
+        if ((int) $lauf->team_id !== (int) $team->id || $lauf->art !== Lauf::ART_STAMMDATEN) {
+            throw new \RuntimeException('Dieser Lauf gehört nicht zu diesem Team oder ist kein Stammdaten-Lauf.');
+        }
+
+        return $this->verarbeite($team, $lauf, null, true);
+    }
+
+    /** @param ?list<int> $zeilenIds */
+    private function verarbeite(Team $team, Lauf $lauf, ?array $zeilenIds, bool $nurFaellige): array
+    {
         $bilanz = ['angewendet' => 0, 'uebersprungen' => [], 'faellige_preise' => 0];
         $bewegt = [];
 
@@ -108,16 +130,18 @@ class StammdatenUebernahmeService
                 });
         }
 
-        Zeile::where('run_id', $lauf->id)->where('team_id', $team->id)->where('status', Zeile::STATUS_GEPRUEFT)
-            ->where('entscheidung', Zeile::ENTSCHEIDUNG_UEBERNEHMEN)->when($zeilenIds !== null, fn ($q) => $q->whereIn('id', $zeilenIds))
-            ->orderBy('id')->each(function (Zeile $z) use ($team, &$bilanz, &$bewegt) {
-                $grund = $this->wende($team, $z, $bewegt);
-                if ($grund === null) {
-                    $bilanz['angewendet']++;
-                } else {
-                    $bilanz['uebersprungen'][] = ['id' => (int) $z->id, 'zeile' => (int) $z->row_nr, 'grund' => $grund];
-                }
-            });
+        if (! $nurFaellige) {
+            Zeile::where('run_id', $lauf->id)->where('team_id', $team->id)->where('status', Zeile::STATUS_GEPRUEFT)
+                ->where('entscheidung', Zeile::ENTSCHEIDUNG_UEBERNEHMEN)->when($zeilenIds !== null, fn ($q) => $q->whereIn('id', $zeilenIds))
+                ->orderBy('id')->each(function (Zeile $z) use ($team, &$bilanz, &$bewegt) {
+                    $grund = $this->wende($team, $z, $bewegt);
+                    if ($grund === null) {
+                        $bilanz['angewendet']++;
+                    } else {
+                        $bilanz['uebersprungen'][] = ['id' => (int) $z->id, 'zeile' => (int) $z->row_nr, 'grund' => $grund];
+                    }
+                });
+        }
 
         $counts = (array) $lauf->counts;
         foreach ([Zeile::STATUS_ANGEWENDET, Zeile::STATUS_VERWORFEN, Zeile::STATUS_ZUKUENFTIG] as $s) {
