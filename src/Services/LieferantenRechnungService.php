@@ -94,7 +94,7 @@ class LieferantenRechnungService
             $q->where('invoice_number', 'like', '%'.trim((string) $filter['suche']).'%');
         }
 
-        return $q->limit(500)->get()->map(fn ($i) => $this->kopf($team, $i))->all();
+        return $q->forPage(max(1, (int) ($filter['page'] ?? 1)), 500)->get()->map(fn ($i) => $this->kopf($team, $i))->all();
     }
 
     /** @return array<string,mixed> */

@@ -905,13 +905,13 @@ class ProductionOrderService
      *
      * @param  array{status?: string, von?: ?string, bis?: ?string, suche?: string}  $filters
      */
-    public function paginateBrowser(Team $team, array $filters, int $perPage = 50): LengthAwarePaginator
+    public function paginateBrowser(Team $team, array $filters, int $perPage = 50, ?int $page = null): LengthAwarePaginator
     {
         return $this->browserQuery($team, $filters)
             // Offene zuerst, dann nach Produktionsdatum — dieselbe Leserichtung wie listForTeam().
             ->orderByRaw("CASE WHEN status = 'planned' THEN 0 ELSE 1 END")
             ->orderBy('production_date')->orderBy('name')
-            ->paginate(max(10, min(250, $perPage)));
+            ->paginate(max(10, min(250, $perPage)), ['*'], 'page', $page);
     }
 
     /** Trefferzahl je Status MIT den übrigen aktiven Filtern (ohne die Status-Achse selbst). */

@@ -9,7 +9,9 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Services\BestellListeService;
 use Platform\FoodAlchemist\Services\OrderService;
+use Platform\FoodAlchemist\Support\Zeitraum;
 
 /**
  * Bestellungen-Browser: bestell-zentrierte Liste nach Liefertag/Bestelldatum + Filter +
@@ -115,26 +117,7 @@ class Index extends Component
     public function waehleZeitraum(string $key): void
     {
         $this->zeitraum = $this->zeitraum === $key ? '' : $key;
-        [$this->von, $this->bis] = $this->zeitraumGrenzen($this->zeitraum);
-    }
-
-    /** @return array{0:?string, 1:?string} */
-    private function zeitraumGrenzen(string $key): array
-    {
-        $heute = Carbon::today();
-
-        return match ($key) {
-            'heute' => [$heute->toDateString(), $heute->toDateString()],
-            'woche' => [
-                $heute->copy()->startOfWeek(Carbon::MONDAY)->toDateString(),
-                $heute->copy()->endOfWeek(Carbon::SUNDAY)->toDateString(),
-            ],
-            'naechste' => [
-                $heute->copy()->addWeek()->startOfWeek(Carbon::MONDAY)->toDateString(),
-                $heute->copy()->addWeek()->endOfWeek(Carbon::SUNDAY)->toDateString(),
-            ],
-            default => [null, null],
-        };
+        [$this->von, $this->bis] = Zeitraum::grenzen($this->zeitraum);
     }
 
     /** Manuelles Datum → Preset auf „frei" zurücksetzen. */
@@ -377,31 +360,23 @@ class Index extends Component
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
-        $roh = $orders->listForTeam(
-            $team,
-            $this->statusFilter !== '' ? $this->statusFilter : null,
-            [
-                'datumsbasis' => $this->datumsbasis,
-                'von' => $this->von ?: null,
-                'bis' => $this->bis ?: null,
-            ],
-        );
+        // Spec 91 PR 4: derselbe Filterweg wie foodalchemist.orders.GET.
+        ['roh' => $roh, 'herkunft' => $herkunftByOrder, 'liste' => $gefiltert] = app(BestellListeService::class)->filtern($team, [
+            'status' => $this->statusFilter,
+            'datumsbasis' => $this->datumsbasis,
+            'von' => $this->von,
+            'bis' => $this->bis,
+            'supplier_id' => $this->supplierFilter,
+            'production_order_id' => $this->productionFilter,
+            'nur_mit_positionen' => $this->nurMitPositionen,
+            'nur_mit_klaerung' => $this->nurMitKlaerung,
+            'suche' => $this->suche,
+        ]);
 
         $lieferanten = $roh
             ->filter(fn ($o) => $o->supplier !== null)
             ->map(fn ($o) => ['id' => (int) $o->supplier->id, 'name' => (string) $o->supplier->name])
             ->unique('id')->sortBy('name')->values();
-
-        $herkunftByOrder = $roh->mapWithKeys(function ($o) use ($orders) {
-            $refs = $o->lines
-                ->flatMap(fn ($l) => array_keys((array) ($l->source_contributions ?? [])))
-                ->values()->all();
-
-            return [(int) $o->id => $orders->herkunftAggregat($refs)];
-        });
-
-        // #6 N+1: EIN whereIn ueber alle Bestellungen statt je Order ein ProductionOrder-Query.
-        $herkunftByOrder = collect($orders->herkunftMitProduktionsnamenBulk($team, $herkunftByOrder->all()));
 
         $produktionen = $herkunftByOrder
             ->flatten(1)
@@ -412,46 +387,7 @@ class Index extends Component
             ->values();
 
         $suche = trim(mb_strtolower($this->suche));
-        $liste = $roh
-            ->when($this->supplierFilter !== null, fn ($c) => $c->filter(fn ($o) => (int) $o->supplier_id === $this->supplierFilter))
-            ->when($this->productionFilter !== null, fn ($c) => $c->filter(fn ($o) => collect($herkunftByOrder[(int) $o->id] ?? [])
-                ->contains(fn ($h) => (int) ($h['production_order_id'] ?? 0) === $this->productionFilter)))
-            ->when($this->nurMitPositionen, fn ($c) => $c->filter(fn ($o) => $o->lines->count() > 0))
-            ->when($this->nurMitKlaerung, fn ($c) => $c->filter(fn ($o) => $orders->orderWarnings($o) !== []))
-            ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
-                $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
-                $positionen = $o->lines
-                    ->map(fn ($l) => implode(' ', [
-                        $l->designation ?? '',
-                        $l->article_number ?? '',
-                        $l->packaging_unit ?? '',
-                        $l->supplierItem?->designation ?? '',
-                        $l->supplierItem?->article_number ?? '',
-                        $l->gp?->name ?? '',
-                        $l->note ?? '',
-                        $l->received_note ?? '',
-                        $l->invoice_note ?? '',
-                        $l->claim_note ?? '',
-                    ]))
-                    ->implode(' ');
-                $hay = mb_strtolower(implode(' ', [
-                    'ord-'.(int) $o->id,
-                    '#'.(int) $o->id,
-                    $o->supplier?->name ?? '',
-                    $o->reference ?? '',
-                    $o->supplier_order_number ?? '',
-                    $o->invoice_number ?? '',
-                    $o->supplier_confirmation_note ?? '',
-                    $o->invoice_note ?? '',
-                    $o->payment_note ?? '',
-                    $o->approval_note ?? '',
-                    $o->note ?? '',
-                    $herkunft,
-                    $positionen,
-                ]));
-
-                return str_contains($hay, $suche);
-            }))
+        $liste = $gefiltert
             ->map(function ($o) use ($herkunftByOrder, $orders) {
                 $lineCount = $o->lines->count();
                 $totalNet = (float) $o->total_net;

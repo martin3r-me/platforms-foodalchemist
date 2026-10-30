@@ -74,6 +74,46 @@ function spec91_gleichstand(): array
                 'ansicht' => 'Spaltenauswahl — MCP liefert alle Spalten',
             ],
         ],
+        \Platform\FoodAlchemist\Livewire\Orders\Index::class => [
+            'filter' => [
+                'statusFilter' => ['foodalchemist.orders.GET', 'status'],
+                'supplierFilter' => ['foodalchemist.orders.GET', 'supplier_id'],
+                'productionFilter' => ['foodalchemist.orders.GET', 'production_order_id'],
+                'suche' => ['foodalchemist.orders.GET', 'q'],
+                'datumsbasis' => ['foodalchemist.orders.GET', 'datumsbasis'],
+                'von' => ['foodalchemist.orders.GET', 'von'],
+                'bis' => ['foodalchemist.orders.GET', 'bis'],
+                'zeitraum' => ['foodalchemist.orders.GET', 'zeitraum'],
+                'nurMitPositionen' => ['foodalchemist.orders.GET', 'nur_mit_positionen'],
+                'nurMitKlaerung' => ['foodalchemist.orders.GET', 'nur_mit_klaerung'],
+            ],
+            'ausnahmen' => [
+                'openId' => 'Deep-Link auf eine Bestellung (Detail via orders.GET order_id), kein Listenfilter',
+                'sicht' => 'Reiter Bestellungen/Bedarfe — Bedarfe über die Produktions-Tools',
+            ],
+        ],
+        \Platform\FoodAlchemist\Livewire\Produktion\Browser::class => [
+            'filter' => [
+                'statusFilter' => ['foodalchemist.production_orders.GET', 'status'],
+                'von' => ['foodalchemist.production_orders.GET', 'von'],
+                'bis' => ['foodalchemist.production_orders.GET', 'bis'],
+                'suche' => ['foodalchemist.production_orders.GET', 'q'],
+                'zeitraum' => ['foodalchemist.production_orders.GET', 'zeitraum'],
+                'perPage' => ['foodalchemist.production_orders.GET', 'per_page'],
+            ],
+            'ausnahmen' => [
+                'orderId' => 'Auswahl eines Auftrags (Detail via production_orders.GET order_id), kein Listenfilter',
+                'ansicht' => 'Spaltenauswahl — MCP liefert alle Spalten',
+            ],
+        ],
+        // Grenze wie Speiseplan/Angebote: Leistenfilter, Grund und Quelle sind dort keine #[Url]-Eigenschaften, nur der Lagerort.
+        \Platform\FoodAlchemist\Livewire\Lager\Index::class => [
+            'filter' => ['lagerortId' => ['foodalchemist.inventory.GET', 'location_id']],
+            'ausnahmen' => [
+                'reiter' => 'Reiter-Auswahl (Bestand, Bewegungen, Inventur …) — je Reiter ein Tool bzw. bewegungen=true',
+                'inventurId' => 'Auswahl einer Inventur (Detail via inventory_counts.GET count_id), kein Listenfilter',
+            ],
+        ],
         \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class => [
             'filter' => ['search' => ['foodalchemist.speiseplaene.LIST', 'search']],
             'ausnahmen' => ['selectedId' => 'Auswahl eines Plans (Detail via speiseplaene.GET), kein Listenfilter'],

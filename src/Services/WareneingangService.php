@@ -143,7 +143,7 @@ class WareneingangService
             $q->where(fn ($w) => $w->where('delivery_note_number', 'like', $s)
                 ->orWhereHas('lines', fn ($l) => $l->where('designation', 'like', $s)));
         }
-        $rows = $q->limit(500)->get()->map(fn (FoodAlchemistDeliveryNote $n) => $this->kopf($n))->all();
+        $rows = $q->forPage(max(1, (int) ($filter['page'] ?? 1)), 500)->get()->map(fn (FoodAlchemistDeliveryNote $n) => $this->kopf($n))->all();
         if (! empty($filter['nur_abweichung'])) {
             $rows = array_values(array_filter($rows, fn ($r) => $r['abweichungen'] > 0));
         }

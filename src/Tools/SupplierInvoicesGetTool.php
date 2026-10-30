@@ -20,7 +20,8 @@ class SupplierInvoicesGetTool extends WareneingangTool implements ToolContract, 
     {
         return 'Rechnungen lesen. id = eine Rechnung mit Triple-Match-Befund je Position (bestellt, geliefert, berechnet, Preis Bestellung/Rechnung, '
             .'Befund ok|menge|preis|nicht_geliefert, Δ €), Summe vs. Beleg, freigebbar. ansicht=vorschlag + supplier_id = noch nicht abgerechnete '
-            .'Lieferschein-Positionen (Grundlage für POST). Sonst Liste mit Filtern supplier_id, status (erfasst|freigegeben|bezahlt|storniert), suche.';
+            .'Lieferschein-Positionen (Grundlage für POST). Sonst Liste mit Filtern supplier_id, status (erfasst|freigegeben|bezahlt|storniert), suche; '
+            .'je Seite 500 (neueste zuerst, page ab 1, weniger als 500 = letzte Seite).';
     }
 
     public function getSchema(): array
@@ -29,6 +30,7 @@ class SupplierInvoicesGetTool extends WareneingangTool implements ToolContract, 
             'id' => ['type' => 'integer'], 'ansicht' => ['type' => 'string', 'enum' => ['liste', 'vorschlag']],
             'supplier_id' => ['type' => 'integer'], 'delivery_note_ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
             'status' => ['type' => 'string'], 'suche' => ['type' => 'string'],
+            'page' => ['type' => 'integer', 'description' => 'Seite der Liste (je 500), ab 1.'],
         ]];
     }
 

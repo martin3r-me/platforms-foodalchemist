@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\InventurService;
+use Platform\FoodAlchemist\Services\StandortService;
 
 /** Spec 66 §6 · Inventuren lesen: Liste oder eine Inventur mit Zählliste. */
 class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -18,10 +19,11 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Ohne count_id: Liste der Inventuren des Teams (Stichtag, Lagerort, Status offen|gebucht, Wert). '
+        return 'Ohne count_id: Liste der Inventuren des Teams (Stichtag, Lagerort, Standort, Positionen, Status offen|gebucht, Wert). '
             . 'Mit count_id: die Inventur mit allen Zeilen (line_id, Grundprodukt, Einheit kg/l/Stk, Soll, gezählt, Preis je Einheit) '
             . 'und Summen, sortiert nach Laufweg (Stellplatz). Je Zeile auch Stellplatz und Gebinde (1 Karton = n Einheiten, '
-            . '1 Einheit = x kg/l/Stk), wenn bekannt. Filter: stellplatz (bin_id | "ohne"), status (offen | gezaehlt | differenz). '
+            . '1 Einheit = x kg/l/Stk), wenn bekannt. Zeilen-Filter wie die Zählliste im Lager: suche, stellplatz (bin_id | "ohne"), zustand, '
+            . 'warengruppe, ohne_preis, status (offen | gezaehlt | differenz). '
             . 'Mengen zum Zählen über foodalchemist.inventory_counts.PUT, Buchen über .BOOK.';
     }
 
@@ -31,7 +33,11 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
             'type' => 'object',
             'properties' => [
                 'count_id' => ['type' => 'integer', 'description' => 'Inventur-Id (für die Detailansicht).'],
+                'suche' => ['type' => 'string', 'description' => 'Zeilen nach Name (Teilstring).'],
                 'stellplatz' => ['type' => 'string', 'description' => 'Nur Zeilen dieses Stellplatzes (bin_id) oder "ohne".'],
+                'zustand' => ['type' => 'string', 'description' => 'Zustand des Grundprodukts (frisch, TK, …).'],
+                'warengruppe' => ['type' => 'string', 'description' => 'Warengruppen-Code 01–15.'],
+                'ohne_preis' => ['type' => 'boolean', 'description' => 'Nur Zeilen ohne Preis.'],
                 'status' => ['type' => 'string', 'enum' => ['offen', 'gezaehlt', 'differenz'], 'description' => 'differenz = über 10 % vom Soll.'],
             ],
         ];
@@ -43,9 +49,17 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
+        }
         $svc = app(InventurService::class);
         if (empty($arguments['count_id'])) {
-            return ToolResult::success(['inventuren' => $svc->liste($team)->map(fn ($c) => self::kopf($c))->values()->all()]);
+            $standorte = app(StandortService::class);
+            $namen = $standorte->teamNamen([(int) $team->id, ...$standorte->unterTeamIds($team)]);
+
+            return $this->erfolgMitWarnungen(['inventuren' => $svc->liste($team)->map(fn ($c) => self::kopf($c) + [
+                'positionen' => (int) $c->lines_count, 'team_id' => (int) $c->team_id, 'standort' => $namen[(int) $c->team_id] ?? null,
+            ])->values()->all()], $arguments);
         }
         try {
             $c = $svc->detail($team, (int) $arguments['count_id']);
@@ -53,9 +67,9 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error('Inventur nicht gefunden.', 'NOT_FOUND');
         }
 
-        return ToolResult::success(self::kopf($c) + [
+        return $this->erfolgMitWarnungen(self::kopf($c) + [
             'summen' => $svc->summen($c),
-            'zeilen' => $svc->filterZeilen($c->lines, array_intersect_key($arguments, array_flip(['stellplatz', 'status'])))
+            'zeilen' => $svc->filterZeilen($c->lines, array_intersect_key($arguments, array_flip(['suche', 'stellplatz', 'zustand', 'warengruppe', 'ohne_preis', 'status'])))
                 ->sortBy(fn ($l) => [$l->bin?->sort_order ?? PHP_INT_MAX, $l->position])->values()->map(fn ($l) => [
                 'line_id' => $l->id,
                 'gp_id' => $l->gp_id,
@@ -75,7 +89,7 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
                     ? ['kartons' => $l->counted_packs !== null ? (float) $l->counted_packs : null, 'einheiten' => $l->counted_units !== null ? (float) $l->counted_units : null, 'lose' => $l->counted_loose !== null ? (float) $l->counted_loose : null]
                     : null,
             ])->values()->all(),
-        ]);
+        ], $arguments);
     }
 
     /** @return array<string, mixed> */
