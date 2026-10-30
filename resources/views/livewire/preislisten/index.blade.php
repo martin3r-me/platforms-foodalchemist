@@ -77,6 +77,8 @@
             </x-fa::section>
         @endunless
 
+        <livewire:foodalchemist.preislisten.lieferanten-dokumente />
+
         <x-fa::section title="Läufe" icon="heroicon-o-queue-list" :meta="$laeufe->count()" data-preisliste-laeufe>
             @if($laeufe->isEmpty())
                 <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch keine Läufe">Nach dem ersten Upload steht hier jeder Abgleich mit seinen Zahlen.</x-fa::empty>
@@ -87,7 +89,7 @@
                         @foreach($laeufe as $l)
                             @php $c = $l->counts ?? []; @endphp
                             <tr wire:key="pl-lauf-{{ $l->id }}" class="cursor-pointer hover:bg-[var(--fa-hover)]" wire:click="laufWaehlen({{ $l->id }})" data-preisliste-lauf="{{ $l->id }}">
-                                <td class="font-medium">{{ $l->filename }}@if($l->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) <x-fa::badge tone="warn" data-preisliste-lauf-zuordnung>Zuordnung nötig</x-fa::badge>@endif</td>
+                                <td class="font-medium">{{ $l->filename }}@if($l->status === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::STATUS_ZUORDNUNG_NOETIG) <x-fa::badge tone="warn" data-preisliste-lauf-zuordnung>Zuordnung nötig</x-fa::badge>@endif @if($l->herkunft === \Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun::HERKUNFT_LIEFERANTEN_LINK)<x-fa::badge tone="info" data-lauf-vom-lieferanten>vom Lieferanten</x-fa::badge>@endif</td>
                                 <td class="tabular-nums">{{ $l->created_at?->format('d.m.Y H:i') }}</td>
                                 <td class="text-right tabular-nums">{{ $c['zeilen'] ?? 0 }}</td>
                                 <td class="text-right tabular-nums">{{ ($c['treffer'] ?? 0) + ($c['zukuenftig'] ?? 0) }}</td>

@@ -279,6 +279,8 @@ return [
     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
     \Platform\FoodAlchemist\Tools\LeadSichtGetTool::class,   // Lead-Sicht 29.10.: Nachlauf-Vorschau read-only
     \Platform\FoodAlchemist\Tools\LeitstelleGetTool::class,
+    \Platform\FoodAlchemist\Tools\LieferantenDokumentEntscheidenTool::class,   // Dokumente vom Lieferanten übernehmen/verwerfen (Stufe 2c)
+    \Platform\FoodAlchemist\Tools\LieferantenDokumentGetTool::class,
     \Platform\FoodAlchemist\Tools\LieferantenLinkDeleteTool::class,   // Lieferanten-Link widerrufen (Stufe 2a)
     \Platform\FoodAlchemist\Tools\LieferantenLinkGetTool::class,
     \Platform\FoodAlchemist\Tools\LieferantenLinkPostTool::class,
