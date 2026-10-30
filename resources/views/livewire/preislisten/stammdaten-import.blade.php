@@ -98,7 +98,7 @@
                     @foreach($pruefliste as $z)
                         <details wire:key="sd-z-{{ $z->id }}" class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-stammdaten-zeile="{{ $z->aktion }}">
                             <summary class="flex cursor-pointer flex-wrap items-center gap-2">
-                                <x-fa::badge :tone="$ton[$z->status === $Z::STATUS_VERWORFEN ? 'verworfen' : $z->aktion] ?? 'neutral'">{{ $z->status === $Z::STATUS_ANGEWENDET ? 'Übernommen' : ($z->status === $Z::STATUS_VERWORFEN ? 'Verworfen' : ($text[$z->aktion] ?? $z->aktion)) }}</x-fa::badge>
+                                <x-fa::badge :tone="$ton[$z->status === $Z::STATUS_VERWORFEN ? 'verworfen' : $z->aktion] ?? 'neutral'">{{ $z->status === $Z::STATUS_ZUKUENFTIG ? 'Übernommen, Preis vorgemerkt' : ($z->status === $Z::STATUS_ANGEWENDET ? 'Übernommen' : ($z->status === $Z::STATUS_VERWORFEN ? 'Verworfen' : ($text[$z->aktion] ?? $z->aktion))) }}</x-fa::badge>
                                 @if($z->entscheidung === 'uebernehmen' && $z->status === $Z::STATUS_GEPRUEFT)<x-fa::badge tone="ok" data-stammdaten-vorgemerkt>vorgemerkt</x-fa::badge>@endif
                                 <span class="tabular-nums {{ $leise }}">Zeile {{ $z->row_nr }}</span>
                                 <span class="min-w-0 flex-1 truncate font-medium text-[var(--fa-ink)]">{{ $z->designation ?? '–' }}</span>

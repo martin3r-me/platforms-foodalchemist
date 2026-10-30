@@ -123,14 +123,34 @@ it('Veralterung: hat sich der Bestand seit der Prüfung geändert, wird die Zeil
     expect($b['angewendet'])->toBe(0)->and($b['uebersprungen'][0]['grund'])->toContain('seit der Prüfung')->and($this->mehl->fresh()->brand)->toBe('Zwischendurch geändert');
 });
 
-it('Preis mit „Gültig ab“ in der Zukunft wird nicht geschrieben, mit Hinweis; der Rest geht durch', function () {
+it('Zukunftspreis wird vorgemerkt (Status zukünftig): der Rest geht durch, der Preis erst beim Übernehmen ab dem Datum', function () {
     $lauf = ($this->stage)($this->kopf . "N3;Salz;S;1,10;;;;;01.01.2099\n");
     ($this->waehle)($lauf, 2);
-    $this->uebernahme->uebernehmen($this->team, $this->admin, $lauf);
+    $b = $this->uebernahme->uebernehmen($this->team, $this->admin, $lauf);
     $item = FoodAlchemistSupplierItem::where('article_number', 'N3')->first();
 
-    expect($item)->not->toBeNull()->and(app(PriceService::class)->activeFor($item->id, $this->team))->toBeNull()
-        ->and(collect(($this->zeile)($lauf, 2)->hinweise)->pluck('code'))->toContain('preis_zurueckgestellt');
+    expect($b['angewendet'])->toBe(1)->and($item->brand)->toBe('S')
+        ->and(app(PriceService::class)->activeFor($item->id, $this->team))->toBeNull()
+        ->and(($this->zeile)($lauf, 2)->status)->toBe(Zeile::STATUS_ZUKUENFTIG)
+        ->and(collect(($this->zeile)($lauf, 2)->hinweise)->pluck('code'))->toContain('preis_vorgemerkt')
+        ->and($lauf->fresh()->status)->toBe('staged');                     // der Lauf bleibt offen, solange ein Preis vorgemerkt ist
+
+    // Noch nicht fällig: ein weiteres Übernehmen schreibt den Preis nicht
+    expect($this->uebernahme->uebernehmen($this->team, $this->admin, $lauf)['faellige_preise'])->toBe(0)
+        ->and(app(PriceService::class)->activeFor($item->id, $this->team))->toBeNull();
+
+    // Datum erreicht: der vorgemerkte Preis wird geschrieben, „Gültig ab“ wird der Stand-Beginn, der Lauf ist abgeschlossen
+    Zeile::where('id', ($this->zeile)($lauf, 2)->id)->update(['valid_from' => now()->subDay()->toDateString()]);
+    $b2 = $this->uebernahme->uebernehmen($this->team, $this->admin, $lauf);
+    $preis = app(PriceService::class)->activeFor($item->id, $this->team);
+
+    expect($b2['faellige_preise'])->toBe(1)->and((float) $preis->price)->toBe(1.1)
+        ->and($preis->status_valid_from->toDateString())->toBe(now()->subDay()->toDateString())
+        ->and(($this->zeile)($lauf, 2)->status)->toBe(Zeile::STATUS_ANGEWENDET)->and($lauf->fresh()->status)->toBe('applied');
+
+    // idempotent
+    expect($this->uebernahme->uebernehmen($this->team, $this->admin, $lauf)['faellige_preise'])->toBe(0)
+        ->and(FoodAlchemistPrice::where('supplier_item_id', $item->id)->count())->toBe(1);
 });
 
 it('Idempotenz: ein zweites Übernehmen schreibt nichts doppelt', function () {
