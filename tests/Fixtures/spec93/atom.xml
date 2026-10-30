@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Beispiel-Atom (erfunden)</title>
+  <entry>
+    <title>Gastronomie testet Mehrweg-Bowls</title>
+    <link rel="alternate" href="https://atom.beispiel.test/mehrweg-bowls"/>
+    <published>2026-10-21T09:00:00Z</published>
+    <summary>Erfundene Zusammenfassung.</summary>
+  </entry>
+</feed>

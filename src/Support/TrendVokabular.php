@@ -84,6 +84,31 @@ final class TrendVokabular
 
     public const DATEI_MAX_KB = 15360;
 
+    // ── Spec 93 · Quellen und Eingang ──────────────────────────────────────
+
+    /** Wie eine Quelle gelesen wird. „uebersicht“ = Rubrik-/Übersichtsseite, Artikel-Links werden deterministisch herausgezogen. */
+    public const FEED_TYPEN = ['rss' => 'RSS-Feed', 'atom' => 'Atom-Feed', 'uebersicht' => 'Übersichtsseite', 'manuell' => 'Manuell / MCP'];
+
+    /** plattform = der Abruf-Command holt die Quelle (ohne KI); mcp = die Plattform ruft nie selbst ab, ein MCP-Client sichtet. */
+    public const ABRUF_WEGE = ['plattform' => 'Plattform holt ab', 'mcp' => 'Per MCP gesichtet'];
+
+    /** Rhythmus je Quelle (Tage bis fällig); „aus“ = nie fällig. */
+    public const RHYTHMEN = ['taeglich' => 'Täglich', 'woechentlich' => 'Wöchentlich', 'monatlich' => 'Monatlich', 'aus' => 'Aus'];
+
+    public const RHYTHMUS_TAGE = ['taeglich' => 1, 'woechentlich' => 7, 'monatlich' => 30];
+
+    public const EINGANG_STATUS = ['neu' => 'Neu', 'erschlossen' => 'Erschlossen', 'gebuendelt' => 'Gebündelt', 'verworfen' => 'Verworfen', 'fehler' => 'Fehler'];
+
+    public const EINGEREICHT_VON = ['abruf' => 'Abruf', 'mcp' => 'MCP', 'hand' => 'Von Hand'];
+
+    /** Tiefe eines Artikels (Abschnitt B): gesellschaftliches Bedürfnis oder Oberfläche. */
+    public const TIEFEN = ['beduerfnis' => 'Bedürfnis (Tiefe)', 'oberflaeche' => 'Oberfläche', 'unklar' => 'Unklar'];
+
+    /** Beispiel-Stichworte für die UI — Beispiel, keine Vorgabe; die Listen bleiben leer, bis das Team sie füllt. */
+    public const STICHWORT_BEISPIEL_EIN = ['Trend', 'Food', 'Catering', 'Gastronomie', 'Getränk', 'Konzept'];
+
+    public const STICHWORT_BEISPIEL_AUS = ['Personalie', 'Insolvenz', 'Stellenanzeige'];
+
     public static function label(array $liste, ?string $wert): ?string
     {
         return $wert === null ? null : ($liste[$wert] ?? $wert);

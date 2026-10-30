@@ -82,6 +82,9 @@
             <x-fa::button size="sm" :variant="$ansicht === 'inspiration' ? 'primary' : 'ghost'" icon="heroicon-m-light-bulb" wire:click="ansichtSetzen('inspiration')" role="tab" data-tab-inspiration>
                 Inspiration @if($offeneFundstuecke > 0)<span class="ml-1 tabular-nums">· {{ $offeneFundstuecke }} offen</span>@endif
             </x-fa::button>
+            {{-- Spec 93: systematische Erfassung, getrennt von der Pinnwand --}}
+            <x-fa::button size="sm" :variant="$ansicht === 'eingang' ? 'primary' : 'ghost'" icon="heroicon-m-inbox-arrow-down" wire:click="ansichtSetzen('eingang')" role="tab" data-tab-eingang>Eingang</x-fa::button>
+            <x-fa::button size="sm" :variant="$ansicht === 'quellen' ? 'primary' : 'ghost'" icon="heroicon-m-rss" wire:click="ansichtSetzen('quellen')" role="tab" data-tab-quellen>Quellen</x-fa::button>
         </div>
 
         @if($ansicht === 'radar')
@@ -154,6 +157,10 @@
                     <span>Blass = niedrige Konfidenz</span>
                 </div>
             </div>
+        @elseif($ansicht === 'eingang')
+            <livewire:foodalchemist.trendradar.eingang key="trendradar-eingang" />
+        @elseif($ansicht === 'quellen')
+            <livewire:foodalchemist.trendradar.quellen key="trendradar-quellen" />
         @elseif($ansicht === 'inspiration')
             {{-- INSPIRATION: Team-Pinnwand — eine Karte je Inspiration (Thema), darunter ihre Quellen --}}
             <div class="flex flex-wrap items-center gap-1.5" data-pinnwand-filter>

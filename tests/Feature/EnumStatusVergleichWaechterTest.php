@@ -16,6 +16,7 @@ const ENUM_STATUS_GEPRUEFT = [
     'resources/views/livewire/planung/index.blade.php',
     // Trends, Produktpass, Necta, Mails, Befunde, Inventur, Projekte, Preislisten-Lauf, KI-Aufträge: eigene Modelle ohne Enum-Cast
     'src/Livewire/Trendradar/Index.php', 'src/Services/TrendService.php', 'resources/views/livewire/trendradar/index.blade.php',
+    'resources/views/livewire/trendradar/eingang.blade.php',   // Spec 93: FoodAlchemistTrendEingang.status ist eine String-Spalte
     'src/Livewire/Suppliers/ProduktpassPanel.php', 'src/Jobs/ProduktpassLesenJob.php', 'src/Services/Produktpass/ProduktpassService.php',
     'src/Services/Produktpass/ProduktpassAbweichungService.php', 'src/Livewire/Suppliers/NectaPruefaelle.php',
     'src/Services/OrderMailService.php', 'resources/views/livewire/orders/editor.blade.php', 'src/Services/RecipeFindingService.php',

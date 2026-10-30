@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>Beispielfachblatt (erfunden)</title>
+  <link>https://fachblatt.beispiel.test/</link>
+  <item>
+    <title>Neue Trends im Catering: Bowls mit Gemüse aus der Region</title>
+    <link>https://fachblatt.beispiel.test/artikel/bowls-region/?utm_source=rss&amp;utm_medium=feed</link>
+    <pubDate>Mon, 26 Oct 2026 08:00:00 +0100</pubDate>
+    <description><![CDATA[<p>Erfundener Teaser über <b>Bowls</b> im Catering.</p>]]></description>
+  </item>
+  <item>
+    <title>Personalie: Neuer Küchenchef im Beispielhotel</title>
+    <link>https://fachblatt.beispiel.test/artikel/personalie-kuechenchef/</link>
+    <description>Erfundene Personalmeldung.</description>
+  </item>
+  <item>
+    <title>Getränke-Konzept: Kombucha vom Fass</title>
+    <link>https://fachblatt.beispiel.test/artikel/kombucha-fass/</link>
+    <description>Erfundener Teaser über Kombucha.</description>
+  </item>
+</channel>
+</rss>

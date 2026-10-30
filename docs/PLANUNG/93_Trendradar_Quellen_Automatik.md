@@ -74,8 +74,10 @@ Quellen (je Team) ──► Abruf ──► Eingang (1 Zeile je Artikel, Dublett
 ### 1. Quellen
 
 Neue Tabelle `foodalchemist_trend_quellen` (team_id, name, url, art ∈ `TrendVokabular::QUELLEN`, feed_typ
-`rss|atom|seite|manuell`, schwerpunkt_kategorien json, schwerpunkt_sparten json, aktiv, letzter_abruf_at,
-letzter_fehler, abruf_weg `plattform|mcp`, uuid, softDeletes). UI: Reiter „Quellen“ im Trendradar (Kuratieren). MCP:
+`rss|atom|uebersicht|manuell`, feed_url, schwerpunkt_kategorien json, schwerpunkt_sparten json, stichworte_ein json,
+stichworte_aus json, aktiv, letzter_abruf_at, letzter_fehler, fehler_in_folge, gefiltert_letzter_abruf,
+gefiltert_gesamt, pruef_hinweis, abruf_weg `plattform|mcp`, rhythmus, uuid, softDeletes). „uebersicht“ ersetzt das
+frühere „seite“ (Kurator 30.10.): einzelne Seiten oder Artikel reicht man über `trend_eingang.POST` ein. UI: Reiter „Quellen“ im Trendradar (Kuratieren). MCP:
 `foodalchemist.trend_quellen.GET|POST|PUT|DELETE`.
 
 **Rhythmus je Quelle** (Dominique 30.10.): Spalte `rhythmus ∈ taeglich|woechentlich|monatlich|aus` je Quelle, in der
@@ -84,10 +86,52 @@ Gilt für beide Abruf-Wege: bei `plattform` steuert er den Abruf, bei `mcp` die 
 Signal „überfällig“.
 
 **Abruf:** Command/Job `foodalchemist:trend-quellen-abrufen {--team}` (Scheduler täglich, holt nur fällige
-`plattform`-Quellen nach ihrem Rhythmus). Holt RSS/Atom-Einträge (Titel, Link, Datum, Teaser) bzw. bei `seite` die Seite und nur deren
-Überschrift/Beschreibung. **Sicherheit:** nur http/https, keine privaten/lokalen Adressen (SSRF-Schutz: DNS auflösen,
+`plattform`-Quellen nach ihrem Rhythmus; Scheduler-Schalter `foodalchemist.scheduler.trend_quellen_enabled`, Standard
+**aus** — kein Lauf allein durch den Deploy). Holt RSS/Atom-Einträge (Titel, Link, Datum, Teaser) bzw. bei
+`uebersicht` die Artikel-Links der Übersichtsseite. Höchstens **20 neue Einträge je Quelle und Abruf** (Config
+`trends.quellen.max_neue_je_abruf`, *Startwert, nicht belegt*; Dubletten und Gefiltertes zählen nicht mit).
+**Sicherheit:** über `Support\SichererAbruf` (#671): nur http/https, keine privaten/lokalen Adressen (SSRF-Schutz: DNS auflösen,
 private/Loopback/Link-Local-Bereiche sperren, keine Weiterleitung dorthin), Timeout, Größengrenze, eigener
-User-Agent, Fehler je Quelle in `letzter_fehler` statt Abbruch. Kein KI-Aufruf im Abruf.
+User-Agent, Fehler je Quelle in `letzter_fehler` (+ `fehler_in_folge`) statt Abbruch. Kein KI-Aufruf im Abruf.
+**Bot-Sperre** (401/403/429) wird nie umgangen (kein User-Agent-Spoofing): Fehler an der Quelle „Abruf gesperrt
+(HTTP …) – auf MCP umstellen“.
+
+**Übersichtsseite (`uebersicht`, Kurator 30.10.)** — deterministisch, ohne KI (`Services\Trends\FeedLeser`):
+Kandidaten sind `<a>` in oder um eine Überschrift (h1–h4) sowie der erste Titel-Link in einem `article`-/Teaser-
+Container. Aussortiert: `nav`, `header`, `footer`, `aside`, fremde Domains (www. egal), die Übersicht selbst,
+Kategorie-/Schlagwort-/Tag-/Autor-/Blätter-Links (Pfadteile wie `schlagwort`, `tag`, `kategorie`, `page/2`),
+Linktexte unter 12 Zeichen („Mehr“). Je Treffer Titel, Link, Datum (`<time>`) und erster Absatz als Teaser.
+*Abweichung von „Pfad tiefer als die Übersicht“:* Artikel liegen oft nicht unter dem Rubrik-Pfad
+(`/schlagwort/food-trends/` → `/artikel-slug/`). Darum gilt „gleiche Domain, nicht die Übersicht, kein
+Rubrik-/Blätter-Pfad“ statt „Pfad beginnt mit dem Übersichtspfad“. **Ehrlichkeit:** 0 Treffer = Fehler „keine Artikel
+erkannt – auf MCP umstellen“, `fehler_in_folge` zählt hoch — kein stiller Leerlauf.
+
+**Automatische Wahl beim Anlegen** (Dominique 30.10., UI und `trend_quellen.POST`, wenn weder `feed_typ` noch
+`abruf_weg` mitgegeben ist; alles über SichererAbruf, ohne KI):
+1. Die URL ist ein Feed, oder die Seite nennt ihn per `<link rel="alternate" type="application/rss+xml|atom+xml">`,
+   oder einer der üblichen Pfade (`<url>/feed/`, `/feed/`, `/rss`, `/rss.xml`) liefert ihn → `rss`/`atom`, `plattform`.
+2. Kein Feed → Probelauf der Übersicht; ab **3 Artikeln** (Config `trends.quellen.uebersicht_mindest_treffer`,
+   *Startwert, nicht belegt*) → `uebersicht`, `plattform`.
+3. Sonst (0–2 Treffer, Bot-Sperre, Fehler) → `mcp`, `manuell`, Hinweis „kein Feed, Seite nicht lesbar – wird per MCP
+   gesichtet“.
+Das Ergebnis steht in der Antwort (`pruefung`: erkannt, gewählt, Grund) und an der Quelle (`pruef_hinweis`).
+„Quelle neu prüfen“ (UI, `trend_quellen.PUT pruefen=true`) wählt neu, z. B. wenn eine Übersicht kaputtgeht.
+Für Seiten ohne Feed ist MCP (Claude) der KI-Weg; im Abruf läuft keine Plattform-KI.
+
+**Stichwort-Filter vor dem Eingang** (Dominique 30.10., gegen „Riesenrauschen“), deterministisch:
+- Je Quelle `stichworte_ein` / `stichworte_aus`; je Liste greift der Team-Standard (Trendradar-Einstellungen), wenn die
+  Quelle keine eigene hat.
+- Durch kommt ein Artikel, wenn Titel + Teaser mindestens **ein** Ein-Stichwort enthalten (leere Liste = alles) und
+  **kein** Aus-Stichwort. Ohne Groß-/Kleinschreibung, Umlaute normalisiert (ä = ae, ß = ss), Wortanfang genügt
+  („vegan“ trifft „veganer“), Phrasen in Anführungszeichen exakt als ganze Wortfolge.
+- Kein Treffer → **keine** Eingang-Zeile, nur Zähler an der Quelle (`gefiltert_letzter_abruf`, `gefiltert_gesamt`).
+  Gilt für den Plattform-Abruf und `trend_eingang.POST`; die MCP-Antwort meldet je Artikel „gefiltert: Stichwort“. Bei
+  MCP zählt `gefiltert_letzter_abruf` je Kalendertag.
+- Die Listen bleiben leer, bis Dominique sie füllt. Beispiel (keine Vorgabe): ein = Trend, Food, Catering,
+  Gastronomie, Getränk, Konzept; aus = Personalie, Insolvenz, Stellenanzeige.
+- UI: Stichworte je Quelle editierbar, Probelauf „Was käme durch?“ (holt Feed bzw. Übersicht, zeigt durchgelassen vs.
+  gefiltert, speichert nichts; MCP `trend_quellen.PUT probelauf=true`). Die KI-Relevanzprüfung in B bleibt als
+  zweiter Filter danach.
 
 **Abruf-Weg je Quelle** (Dominique 30.10.): Spalte `abruf_weg ∈ plattform|mcp` (Standard `plattform`).
 - `plattform`: der Abruf-Command holt die Quelle (Feed/Seite, ohne KI).
@@ -106,11 +150,14 @@ teaser (gekürzt), zusammenfassung (eigene, KI), thema (normalisierte Schreibwei
 tiefe ∈ `beduerfnis|oberflaeche|unklar`, relevant bool, begruendung, inspiration_id nullable, status
 `neu|erschlossen|gebuendelt|verworfen|fehler`, eingereicht_von ∈ `abruf|mcp|hand`, uuid, timestamps).
 **Dublettenschutz:** unique (team-Familie, url_hash) — normalisierte URL (Schema, Host klein, ohne Tracking-Parameter
-`utm_*`, `fbclid`, `igsh` u. ä., ohne abschließenden Slash). Gleiche URL = keine neue Zeile, nur `zuletzt_gesehen`.
+`utm_*`, `fbclid`, `igsh` u. ä., ohne abschließenden Slash). Gleiche URL = keine neue Zeile, nur `zuletzt_gesehen_at`.
+Umsetzung (Kurator 30.10.): DB-Riegel `unique(team_id, url_hash)`, die Familienprüfung (`TrendService::fundstueckFamilie`)
+macht der Service. Treffer im eigenen Team → `zuletzt_gesehen_at`; Treffer in einem anderen Team der Familie → nur
+Meldung „Dublette (Team X)“, keine Zeile, kein Schreiben in das fremde Team.
 
 UI: Reiter „Eingang“ als Liste (Prüfliste-Muster): Titel, Quelle, Datum, Zusammenfassung, Thema, Einordnung,
-Status; Filter neu/erschlossen/verworfen; Aktionen Verwerfen / Thema ändern / als Inspiration auf die Pinnwand. MCP:
-`foodalchemist.trend_eingang.GET|POST` und `.ENTSCHEIDEN`.
+Status; Filter offen/verworfen/alle; Aktionen Verwerfen / Wiederherstellen / Thema ändern / als Inspiration auf die
+Pinnwand. MCP: `foodalchemist.trend_eingang.GET|POST` (einzeln oder bis 50 je Aufruf) und `.ENTSCHEIDEN`.
 
 ### 3. Erschließen (KI, je Artikel)
 
@@ -194,12 +241,17 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
 | `buendel_aehnlichkeit` | im Bau an Testdaten messen und begründen (nicht raten) |
 | `max_neue_trends_je_lauf` | 5 (Schutz vor Flut; Rest bleibt Kandidat mit Signal) |
 | `abruf_rhythmus` (Team-Standard für neue Quellen) | aus (bis Dominique einschaltet) |
+| `max_neue_je_abruf` (je Quelle und Abruf, alle Feed-Typen) | 20 |
+| `uebersicht_mindest_treffer` (Auto-Wahl) | 3 |
+| Stichworte ein/aus (Team-Standard) | leer (Beispiel in der UI, keine Vorgabe) |
 | KI-Budget je Team und Monat | analog `trend_dataforseo` (Standard klein, einstellbar) |
 
 ## Bauabschnitte (je eigener PR)
 
 - **A · Quellen + Eingang:** Migrationen (additiv), Quellen-UI/MCP, Abruf-Command mit SSRF-Schutz, Eingang-UI/MCP,
-  Dublettenschutz. Keine KI.
+  Dublettenschutz. Keine KI. *Gebaut 30.10. (Branch `feat/spec93-a-quellen-eingang`):* dazu Abruf-Weg und Rhythmus je
+  Quelle, automatische Wahl, Übersichtsseiten, Stichwort-Filter; Migrationen `2026_12_01_100000` (Quellen),
+  `…100100` (Eingang), `…100200` (Team-Standards Rhythmus + Stichworte); Test `Spec93AQuellenEingangTest`.
 - **B · Erschließen + Bündeln:** Prompt, Job (dual), Inspiration `herkunft`, Bündel-Logik, Pinnwand-Filter.
 - **C · Einordnung + Automatik:** `TrendAutomatikService`, Einstellungen + MCP, Schatten-Ansicht, Status-Stufen,
   Schutz manueller Felder, Signale.

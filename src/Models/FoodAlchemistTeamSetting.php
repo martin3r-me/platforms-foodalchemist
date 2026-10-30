@@ -36,6 +36,8 @@ class FoodAlchemistTeamSetting extends Model
         'iodized_hint_active' => 'boolean',   // NULL bleibt NULL = erben
         'trend_dataforseo_enabled' => 'boolean',
         'trend_dataforseo_budget_usd' => 'decimal:2',
+        'trend_stichworte_ein' => 'array',   // Spec 93 A: Team-Standard des Stichwort-Filters (greift ohne eigene Liste der Quelle)
+        'trend_stichworte_aus' => 'array',
         'cooking_loss_defaults' => 'array',
         'trimming_loss_defaults' => 'array',
         'vat_defaults' => 'array',

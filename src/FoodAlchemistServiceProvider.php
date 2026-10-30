@@ -184,6 +184,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
+                \Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class, // Spec 93 A
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
@@ -344,6 +345,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->onOneServer()
                     ->runInBackground()
                     ->description('FoodAlchemist: Trendradar → Google Trends je Trend messen (DataForSEO)');
+            }
+
+            // Spec 93 A: täglicher Quellen-Abruf (nur fällige plattform-Quellen). Standard AUS, bis Dominique einschaltet.
+            if (config('foodalchemist.scheduler.trend_quellen_enabled', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.trend_quellen_zeit', '05:50'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → fällige Quellen in den Eingang holen');
             }
         });
     }

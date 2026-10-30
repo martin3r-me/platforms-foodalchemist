@@ -312,6 +312,27 @@ class TeamSettingsService
         return $v > 0 ? $v : null;
     }
 
+    /** Spec 93 A: Rhythmus, den neue Trend-Quellen bekommen. Standard „aus“, bis das Team einschaltet. */
+    public function trendQuellenRhythmus(Team $team): string
+    {
+        $v = (string) ($this->for($team)->trend_quellen_rhythmus ?? 'aus');
+
+        return array_key_exists($v, \Platform\FoodAlchemist\Support\TrendVokabular::RHYTHMEN) ? $v : 'aus';
+    }
+
+    /**
+     * Spec 93 A: Team-Standard des Stichwort-Filters (greift je Liste, wenn die Quelle keine eigene hat). Leer, bis das Team füllt.
+     *
+     * @return array{ein: list<string>, aus: list<string>}
+     */
+    public function trendStichworte(Team $team): array
+    {
+        $s = $this->for($team);
+
+        return ['ein' => \Platform\FoodAlchemist\Support\StichwortFilter::liste($s->trend_stichworte_ein ?? []),
+            'aus' => \Platform\FoodAlchemist\Support\StichwortFilter::liste($s->trend_stichworte_aus ?? [])];
+    }
+
     /**
      * Phase 5: Typ-Farben (GP / Basisrezept / Gericht) als Hex, gemerged mit den Defaults.
      * Nur valide #rrggbb-Werte überschreiben — Müll/Teil-Konfig fällt auf Default zurück.
