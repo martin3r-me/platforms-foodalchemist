@@ -1,5 +1,5 @@
 {{-- Spec 82 §9 · Projekte (Agentur-Akten im Master-Team): Liste und Projekt anlegen. --}}
-<div class="flex flex-col gap-4" data-fa-projekte>
+<div class="flex flex-col gap-4 {{ $handy ? 'px-4 py-4' : '' }}" data-fa-projekte>{{-- #1003: am Handy 16 px Rand (die Seite hat keinen Seiten-Container) --}}
     <x-fa::page-header title="Projekte" subtitle="Agentur-Akten zu Kunden: Zielbild, Standorte, DNA, Paketlogik, Foodbook, Übergabe. Der Kunde wird erst bei der Lizenz zum Mandanten." />
 
     @if($darfSchreiben)
@@ -34,6 +34,23 @@
         @if($projekte->isEmpty())
             <x-fa::empty compact icon="heroicon-o-briefcase" title="Noch kein Projekt">Ein Projekt legst du zu einer Firma aus dem CRM an.</x-fa::empty>
         @else
+            @if($handy)
+                {{-- #1003: am Handy Karten statt Tabelle; Antippen öffnet die Akte (nur lesen) --}}
+                <ul class="-mx-4 -mb-4 flex flex-col divide-y divide-[var(--fa-line)]" data-fa-handy-liste>
+                    @foreach($projekte as $p)
+                        <li wire:key="hproj-{{ $p->id }}">
+                            <a href="{{ route('foodalchemist.projekte.show', $p->id) }}" wire:navigate class="flex items-center gap-3 px-4 py-3 min-h-[60px]" data-fa-handy-karte="{{ $p->id }}">
+                                <span class="min-w-0 flex-1">
+                                    <span class="block font-medium leading-snug text-[var(--fa-ink)] wrap-anywhere">{{ $p->name }}</span>
+                                    <span class="block truncate text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ implode(' · ', array_filter([$firmenNamen[$p->crm_company_id] ?? null, $phasen[$p->phase] ?? $p->phase])) }}</span>
+                                </span>
+                                <x-fa::badge tone="{{ $p->status === 'aktiv' ? 'ok' : ($p->status === 'pausiert' ? 'warn' : 'neutral') }}">{{ ucfirst($p->status) }}</x-fa::badge>
+                                @svg('heroicon-m-chevron-right', 'w-5 h-5 shrink-0 text-[var(--fa-ink-3)]')
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            @else
             <div class="overflow-x-auto -mx-4">
                 <table class="fa-table fa-table--compact" data-projekte-tabelle>
                     <thead><tr><th>Projekt</th><th>Kunde (CRM)</th><th>Phase</th><th>Status</th></tr></thead>
@@ -49,6 +66,7 @@
                     </tbody>
                 </table>
             </div>
+            @endif
         @endif
     </x-fa::section>
 </div>

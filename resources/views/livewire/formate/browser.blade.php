@@ -98,6 +98,16 @@
         </x-slot>
     @endif
 
+    {{-- #1003: am Handy Karten statt Tabelle (wie Rezepte); Filter bleiben in der linken Schublade --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Formate', 'eintraege' => $items, 'aktivId' => $selectedId, 'wahl' => 'waehle', 'scope' => 'activity_formate',
+            'suchHinweis' => 'Format suchen',
+            'unterzeile' => fn ($it) => implode(' · ', array_filter([$it->eventType?->name, $it->servingForm?->label, $it->origin ? ($originLabel[$it->origin] ?? $it->origin) : null, $statusLabel[$it->status] ?? $it->status])),
+            'wert' => fn ($it) => $it->editions_count > 0 ? $it->editions_count . ($it->editions_count === 1 ? ' Edition' : ' Editionen') : null,
+            'leer' => 'Noch keine Formate oder andere Suche.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Formate" :subtitle="number_format($items->total(), 0, ',', '.') . ($items->total() === 1 ? ' Format' : ' Formate')">
             <x-slot:actions>
@@ -174,6 +184,7 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $items->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    @endif
 
     {{-- Voll-Editor-Modal — auf Seitenebene, öffnet via formate-editor.oeffnen --}}
     <livewire:foodalchemist.formate.editor key="formate-browser--formate.editor" />

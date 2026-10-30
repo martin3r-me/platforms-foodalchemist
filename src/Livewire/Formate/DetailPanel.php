@@ -15,6 +15,13 @@ use Platform\FoodAlchemist\Services\FormatService;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;        // #1003: am Handy nur lesen
+
+    /** #1003: am Handy laufen Auswahl und Aktualisieren; Bearbeiten und Löschen bleiben am Computer. */
+    public function handyLeseMethoden(): array
+    {
+        return ['zeige', 'aktualisiere'];
+    }
 
     /** Spec 65: gleiche Sperre wie der Format-Editor (Ziel format). */
     protected function sperrZiel(): ?array

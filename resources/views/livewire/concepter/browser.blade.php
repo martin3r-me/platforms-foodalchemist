@@ -132,6 +132,21 @@
         </x-slot>
     @endif
 
+    {{-- #1003: am Handy Karten statt Tabelle (wie Rezepte), Concepts | Pakete als Umschalter; Filter bleiben in der linken Schublade --}}
+    @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy())
+        @include('foodalchemist::livewire.handy.karten-liste', [
+            'titel' => 'Concepter', 'eintraege' => $items, 'aktivId' => $selectedId, 'wahl' => 'waehle', 'scope' => 'activity_concepter',
+            'suchHinweis' => $istPakete ? 'Paket suchen' : 'Concept suchen',
+            'reiter' => ['concepts' => 'Concepts', 'pakete' => 'Pakete'], 'reiterAktiv' => $tab, 'reiterWahl' => 'wechselTab',
+            'unterzeile' => fn ($it) => implode(' · ', array_filter([$it->class ?: null, $it->eventType?->name, $it->servingForm?->label, $statusLabel[$it->status] ?? $it->status])),
+            'wert' => function ($it) use ($vkDisplay) {
+                $preis = isset($vkDisplay[$it->id]) && $vkDisplay[$it->id] !== null ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null);
+
+                return $preis !== null && $preis > 0 ? number_format($preis, 2, ',', '.') . ' €/P.' : null;
+            },
+            'leer' => $istPakete ? 'Noch keine Pakete oder andere Suche.' : 'Noch keine Concepts oder andere Suche.',
+        ])
+    @else
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Concepter" :subtitle="number_format($items->total(), 0, ',', '.') . $einheit">
             <x-slot:actions>
@@ -248,6 +263,7 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $items->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    @endif
 
     {{-- Voll-Editor-Modal (M10R-3) — auf Seitenebene, öffnet via concepter-editor.oeffnen --}}
     <livewire:foodalchemist.concepter.editor key="concepter-browser--concepter.editor" />
