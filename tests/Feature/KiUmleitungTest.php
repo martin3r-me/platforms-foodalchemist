@@ -49,6 +49,8 @@ beforeEach(function () {
     $sup = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs']);
     $this->laId = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => 'Eier Bodenhaltung M 30er',
         'article_number' => 'A1', 'qty' => 1, 'unit_code' => 'kg'])->id;
+    $this->signalId = app(\Platform\FoodAlchemist\Services\SignalService::class)->erzeuge($this->rootTeam, \Platform\FoodAlchemist\Enums\SignalTyp::MargeUnterZiel,
+        \Platform\FoodAlchemist\Enums\SignalSeverity::Warnung, 'Marge unter Ziel')->id;
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
 });
 
@@ -71,6 +73,7 @@ dataset('umgeleitete_tools', function () {
         'recipes.REVISE' => ['foodalchemist.recipes.REVISE', fn ($t) => ['recipe_id' => $t->basisId, 'anweisung' => 'Etwas weniger süß'], 'recipe.ueberarbeiten'],
         'verkaufsrezepte.REVISE' => ['foodalchemist.verkaufsrezepte.REVISE', fn ($t) => ['recipe_id' => $t->vkId, 'anweisung' => 'Etwas leichter'], 'vk.ueberarbeiten'],
         'la.GP_ABGLEICH' => ['foodalchemist.la.GP_ABGLEICH', fn ($t) => ['artikel_id' => $t->laId], 'gp.suggest'],
+        'signale.FIX' => ['foodalchemist.signale.FIX', fn ($t) => ['signal_id' => $t->signalId], 'signal.margin_levers'],
         'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
 });
@@ -82,7 +85,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
-            ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'],
+            ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'],
         ];
     })());
     expect($ds)->toEqualCanonicalizing(array_keys(KiUmleitung::TOOLS));
