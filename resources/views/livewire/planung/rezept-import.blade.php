@@ -27,7 +27,7 @@
                 <x-fa::field label="Oder PDF / Foto hochladen" hint="PDF (Text oder Scan), JPG, PNG, WebP — bis 20 MB. Ein Text im Feld oben ergänzt das Bild." error="importPdf">
                     <div class="flex flex-wrap items-center gap-3">
                         <input type="file" wire:model="importPdf" accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
-                               class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] file:mr-3 file:h-8 file:px-3 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:font-medium" />
+                               class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] file:mr-3 {{ \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy() ? 'file:h-11 file:px-4' : 'file:h-8 file:px-3' }} file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:font-medium" />
                         <span wire:loading wire:target="importPdf" class="{{ $hinweisText }}">wird geladen …</span>
                     </div>
                 </x-fa::field>

@@ -75,6 +75,12 @@
     $verwerfenFrage = 'Diese Planung verwerfen? Laufende Erstellungen dieser Planung werden ebenfalls gestoppt. Sie wird archiviert, nicht endgültig gelöscht.';
     // Editor-Reiter: Erstellen · Ausgaben · Fortschritt. Optik wie x-foodalchemist::editor-tabs; der Baustein selbst
     // passt hier nicht (der Reiter-Zustand `tab` lebt am Modal, tab-init + modal.open-Detail, die Panels liegen im Body).
+    // #1003 PR7: am Handy drei Schritte (Auftrag → Ergebnis → Kontext) statt der Reiterleiste; Auftrag nur diese Arten.
+    $handy = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy();
+    $handyArten = ['gericht' => 'Gericht', 'basisrezept' => 'Basisrezept', 'concept' => 'Concept', 'import' => 'Import (Foto)'];
+    $schrittKnopf = 'flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 rounded-[5px] text-[length:var(--fa-text-md)] font-medium';
+    $schrittAn = 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm';
+    $schrittAus = 'text-[var(--fa-ink-2)]';
     $reiterGruppen = [
         ['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept', 'format' => 'Format', 'composer' => 'Composer', 'trendradar' => 'Trendradar', 'import' => 'Import'],
         ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'angebot' => 'Angebot'],
@@ -163,9 +169,11 @@
                                             {{ \Illuminate\Support\Str::ucfirst($stat) }}
                                         </x-fa::badge>
                                     </button>
+                                    @unless($handy)
                                     <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Planung verwerfen"
                                         wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="{{ $verwerfenFrage }}"
                                         class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" data-planung-listen-verwerfen="{{ $s->id }}" />
+                                    @endunless
                                 </div>
                             @endforeach
                         </div>
@@ -200,6 +208,7 @@
                             <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
                             <p class="{{ $menueGruppe }}">Übernehmen und kombinieren</p>
                             <button type="button" role="menuitem" wire:click="schnellImport" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Rezept importieren</button>
+                            @unless($handy){{-- #1003 PR7: Composer, Trendradar und Ausgabe-Formen am Computer --}}
                             <button type="button" role="menuitem" wire:click="schnellComposer" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Aus Zutaten kombinieren (Composer)</button>
                             <button type="button" role="menuitem" wire:click="schnellTrendradar" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-trendradar>@svg('heroicon-o-signal', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Aus dem Trendradar (Trend, Hype, Inspiration)</button>
                             <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
@@ -209,11 +218,13 @@
                             <button type="button" role="menuitem" x-on:click="spOpen = true; fbOpen = false; skOpen = false; offOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Speiseplan</button>
                             <button type="button" role="menuitem" x-on:click="offOpen = true; fbOpen = false; skOpen = false; spOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-angebot>@svg('heroicon-o-document-text', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Angebot</button>
                             <button type="button" role="menuitem" x-on:click="fmtOpen = true; fbOpen = false; skOpen = false; spOpen = false; offOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-format>@svg('heroicon-o-swatch', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Format</button>
+                            @endunless
                         </div>
                     </div>
                 </x-slot:actions>
             </x-fa::page-header>
 
+            @unless($handy){{-- #1003 PR7: Ausgabe-Formen aus dem Brief bleiben am Computer --}}
             {{-- Spec 42 F1: ein ganzes Foodbook aus einem Brief planen. Rahmen (Gerüst/Struktur) + Inhalte
                  entstehen HIER in der Leitstelle; das Foodbook ist reine Ausgabe. --}}
             <x-fa::section x-show="fbOpen" x-cloak icon="heroicon-o-book-open" title="Foodbook aus einem Brief planen"
@@ -336,6 +347,7 @@
                     </div>
                 </div>
             </x-fa::section>
+            @endunless
         </div>
 
         {{-- Board (Leitstelle-Übersicht). Immer sichtbar, auch bei gewählter Session (Karte-Klick füllt NUR
@@ -388,67 +400,7 @@
         <x-foodalchemist::detail-sidebar title="Detail" width="w-80" :maxWidth="560" scope="activity_planung" side="right" :auswahl="(string) $active?->id" :lesemodus="false">
             {{-- Anatomie Detail-Panels (DESIGN.md): Kopf (Ergebnis-Name, Stand, „Im Editor öffnen", Verwerfen im Menü)
                  · offene Punkte · Fortschritt je Stufe. --}}
-            <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">
-                @if($active)
-                    @php
-                        $aktStufen = $kaskaden[$active->id]['stufen'] ?? [];
-                        $aktKaskade = $kaskaden[(int) $active->id]['status'] ?? 'entwurf';
-                        $aktPruefen = collect($aktStufen)->filter(fn ($st) => ($st['zustand'] ?? null) === 'prüfen');
-                    @endphp
-                    <x-fa::detail-kopf :title="$anzeigeTitel($active)"
-                        :subtitle="! empty($active->source_trend_refs) ? 'Herkunft: Trendradar (' . (count($active->source_trend_refs['trend_ids'] ?? []) + count($active->source_trend_refs['inspiration_ids'] ?? []) + count($active->source_trend_refs['fundstueck_ids'] ?? [])) . ' Impulse)' : 'Herkunft: Freier Brief'">
-                        @if(filled($active->title) && trim((string) $active->title) !== $anzeigeTitel($active))
-                            <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] break-words">Planung: {{ $active->title }}</p>
-                        @endif
-                        <x-slot:badges>
-                            <x-fa::badge :tone="$kaskadeStatusTon[$aktKaskade] ?? 'neutral'">{{ \Illuminate\Support\Str::ucfirst($aktKaskade) }}</x-fa::badge>
-                            <x-fa::badge tone="accent">{{ $statusLabel[$active->status] ?? $active->status }}</x-fa::badge>
-                            <x-fa::badge title="Kreativ-Modus">{{ $modeLabel[$active->creative_mode] ?? $active->creative_mode }}</x-fa::badge>
-                        </x-slot:badges>
-                        <x-slot:aktion>
-                            <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square" wire:click="oeffne({{ $active->id }})">Im Editor öffnen</x-fa::button>
-                        </x-slot:aktion>
-                        <x-slot:menue>
-                            <x-fa::menu-item danger icon="heroicon-m-trash"
-                                wire:click="planungVerwerfen({{ $active->id }})" wire:confirm="{{ $verwerfenFrage }}" data-planung-details-verwerfen>Planung verwerfen</x-fa::menu-item>
-                        </x-slot:menue>
-                    </x-fa::detail-kopf>
-
-                    @if($aktKaskade === 'fehlgeschlagen' || $aktPruefen->isNotEmpty())
-                        <div class="flex flex-col gap-1">
-                            @if($aktKaskade === 'fehlgeschlagen')
-                                <x-fa::signal tone="crit">Die letzte Erstellung ist fehlgeschlagen.</x-fa::signal>
-                            @endif
-                            @foreach($aktPruefen as $st)
-                                <x-fa::signal tone="warn">{{ $st['label'] }}: Ergebnisse prüfen.</x-fa::signal>
-                            @endforeach
-                        </div>
-                    @endif
-
-                    {{-- Stand je Stufe, ohne den Editor zu öffnen (finale Etappe). --}}
-                    <div class="flex flex-col">
-                        <x-fa::section variant="plain" title="Fortschritt je Stufe" icon="heroicon-o-queue-list" data-planung-kaskadenstand>
-                            @if($aktStufen === [])
-                                <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch nichts erstellt">Im Editor einen Brief formulieren und die Erstellung starten.</x-fa::empty>
-                            @else
-                                <ul class="flex flex-col">
-                                    @foreach($aktStufen as $st)
-                                        <li class="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--fa-line)] last:border-0 text-[length:var(--fa-text-md)]">
-                                            <span class="text-[var(--fa-ink)]">{{ $st['label'] }}</span>
-                                            <span class="flex items-center gap-2">
-                                                <span class="text-[var(--fa-ink-3)] tabular-nums">{{ $st['fertig'] }}/{{ $st['total'] }}</span>
-                                                <x-fa::badge :tone="$zustandTon[$st['zustand']] ?? 'neutral'">{{ \Illuminate\Support\Str::ucfirst($st['zustand']) }}</x-fa::badge>
-                                            </span>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            @endif
-                        </x-fa::section>
-                    </div>
-                @else
-                    <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Keine Planung gewählt">Eine Karte anklicken, um Herkunft, Stand und Fortschritt zu sehen.</x-fa::empty>
-                @endif
-            </div>
+            @include('foodalchemist::livewire.planung.partials.detail-inhalt')
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
@@ -482,6 +434,22 @@
         </x-slot:actions>
 
         <x-slot:tabs>
+            @if($handy)
+                {{-- #1003 PR7: am Handy drei Schritte statt zwölf Reitern — Auftrag (Gericht, Basisrezept, Concept, Import) →
+                     Ergebnis (Fortschritt) → Kontext (Herkunft, Stand je Stufe). --}}
+                <div class="flex w-full p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" role="tablist" aria-label="Schritte der Planung" data-planung-handy-schritte>
+                    <button type="button" role="tab" x-on:click="if (! ['gericht', 'basisrezept', 'concept', 'import'].includes(tab)) tab = 'gericht'"
+                            x-bind:aria-selected="['gericht', 'basisrezept', 'concept', 'import'].includes(tab)"
+                            x-bind:class="['gericht', 'basisrezept', 'concept', 'import'].includes(tab) ? '{{ $schrittAn }}' : '{{ $schrittAus }}'"
+                            class="{{ $schrittKnopf }}" data-planung-schritt="auftrag">Auftrag</button>
+                    <button type="button" role="tab" x-on:click="tab='worker'" x-bind:aria-selected="tab==='worker'"
+                            x-bind:class="tab==='worker' ? '{{ $schrittAn }}' : '{{ $schrittAus }}'"
+                            class="{{ $schrittKnopf }}" data-planung-schritt="ergebnis"><span>Ergebnis</span>@if($laeuft)<span class="w-2 h-2 rounded-full bg-[var(--fa-info)] animate-pulse" aria-label="läuft"></span>@endif</button>
+                    <button type="button" role="tab" x-on:click="tab='kontext'" x-bind:aria-selected="tab==='kontext'"
+                            x-bind:class="tab==='kontext' ? '{{ $schrittAn }}' : '{{ $schrittAus }}'"
+                            class="{{ $schrittKnopf }}" data-planung-schritt="kontext">Kontext</button>
+                </div>
+            @else
             {{-- Analyse + Skizzen (Spec-40-E0-Ideations-Einstieg) zurückgezogen (Dominique 2026-08-23):
                  abgelöst durch Composer (geerdet) + Brief-Kaskaden. DishIdea/IdeenService bleibt intern.
                  Gruppen: Erstellen · Ausgabe-Formen (Spec-42-Vollzug) · Fortschritt bewusst am Ende
@@ -498,6 +466,7 @@
                     @endforeach
                 @endforeach
             </div>
+            @endif
         </x-slot:tabs>
 
         @if($active)
@@ -510,6 +479,7 @@
                     </x-slot:actions>
                 </x-fa::notice>
             @endif
+            @unless($handy)
             {{-- AUSGABE-FORMEN (Spec-42-Vollzug): aus einem Brief plant die Leitstelle die ganze Ausgabeform
                  (owner-getaggte Voll-Kaskade), die Inhalte landen automatisch dort. Gleiche Bauart überall:
                  Auswahl links (schmaler), Brief rechts, ab xl nebeneinander. Jede Karte steckt in einem eigenen
@@ -784,7 +754,18 @@
                     </div>
                 </div>
             </div>
+            @endunless
 
+            {{-- #1003 PR7: am Handy die Auftrags-Arten als Daumen-Chips (statt der Reiterleiste). --}}
+            @if($handy)
+                <div x-show="['gericht', 'basisrezept', 'concept', 'import'].includes(tab)" class="flex flex-wrap gap-1.5 mb-3" role="group" aria-label="Art des Auftrags" data-planung-handy-arten>
+                    @foreach($handyArten as $artKey => $artLabel)
+                        <button type="button" x-on:click="tab='{{ $artKey }}'" x-bind:aria-pressed="tab==='{{ $artKey }}'"
+                                x-bind:class="tab==='{{ $artKey }}' ? 'bg-[var(--fa-accent-soft)] border-[var(--fa-accent)] text-[var(--fa-accent)]' : 'bg-[var(--fa-surface)] border-[var(--fa-line-strong)] text-[var(--fa-ink-2)]'"
+                                class="inline-flex items-center min-h-11 px-3.5 rounded-full border text-[length:var(--fa-text-md)] font-medium" data-planung-handy-art="{{ $artKey }}">{{ $artLabel }}</button>
+                    @endforeach
+                </div>
+            @endif
             {{-- IMPORT: bestehende Rezeptur (Text, Web-Kopie, PDF, Foto, Scan) TREU übernehmen und mit Grundprodukten
                  verknüpft anlegen. Getrennt vom Generator (der veredelt): hier 1:1 übernehmen. Foto und Scan gehen seit
                  2026-10-12 als Bild an die KI (OpenAI-Weg, Core-Fix #925). Schritt 2 hat eine klebende Anlegen-Leiste. --}}
@@ -872,6 +853,7 @@
                 @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => 'concept'])
 
                 {{-- Erstell-Leiste: klebt unten (Befund „Knopf unter dem Fold"), als EINE niedrige Zeile. --}}
+                @if($handy)@include('foodalchemist::livewire.planung.partials.worker-praesenz')@endif
                 <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 py-3 shadow-lg shadow-black/20" data-planung-erstellen-leiste>
                     <div class="flex-1 min-w-[16rem] flex flex-col gap-1">
                         <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">
@@ -888,9 +870,9 @@
                             </div>
                         @else
                             {{-- DF-2: direkter Weg (sekundär), ohne vorab ausgearbeiteten Plan. --}}
-                            <p class="{{ $hinweisText }}">Direkter Weg ohne Plan: die KI stellt Pakete oder Buffet sofort nach den Leitplanken zusammen, die Gerichte folgen nach der Freigabe. Den Stand siehst du im Reiter „Fortschritt".</p>
+                            <p class="{{ $hinweisText }} {{ $handy ? 'hidden' : '' }}">Direkter Weg ohne Plan: die KI stellt Pakete oder Buffet sofort nach den Leitplanken zusammen, die Gerichte folgen nach der Freigabe. Den Stand siehst du im Reiter „Fortschritt".</p>
                         @endif
-                        @include('foodalchemist::livewire.planung.partials.worker-praesenz')
+                        @unless($handy)@include('foodalchemist::livewire.planung.partials.worker-praesenz')@endunless
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         @if($planConceptId)
@@ -947,6 +929,7 @@
                 @endif
             </div>
 
+            @unless($handy)
             {{-- COMPOSER: Foodpairing-Fläche. Zutaten zusammenstellen, das Netz zeigt live, was passt.
                  Gezielte Kreation: aus den gewählten Zutaten ein Basisrezept oder Gericht vorbereiten
                  (Zutaten = verbindliche Leit-Aromen). Klick auf einen Kandidaten nimmt ihn auf.
@@ -1209,6 +1192,18 @@
                 </div>{{-- /rechte Spalte --}}
                 </div>{{-- /grid --}}
             </div>
+            @endunless
+            {{-- #1003 PR7: am Handy gibt es nur Gericht, Basisrezept, Concept und Import; die Ausgabe-Formen aus dem Brief,
+                 Composer und Trendradar-Kombinierer bleiben am Computer (Dominique 30.10.). Öffnet eine solche Planung am Handy,
+                 steht hier der Hinweis; Ergebnis und Kontext gehen trotzdem. --}}
+            @if($handy)
+                <div x-show="! ['gericht', 'basisrezept', 'concept', 'import', 'worker', 'kontext'].includes(tab)" x-cloak data-planung-handy-computer>
+                    <x-fa::empty icon="heroicon-o-computer-desktop" title="Am Computer bearbeiten">Diese Art der Planung (Foodbook, Speisekarte, Speiseplan, Angebot oder Format aus einem Brief, Composer, Trendradar) wird am Computer bearbeitet. Ergebnis und Kontext gehen auch hier.</x-fa::empty>
+                </div>
+                <div wire:key="planung-tab-kontext" x-show="tab==='kontext'" x-cloak class="flex flex-col gap-4" data-planung-handy-kontext>
+                    @include('foodalchemist::livewire.planung.partials.detail-inhalt', ['imEditor' => true])
+                </div>
+            @endif
         @endif
     </x-foodalchemist::modal>
     {{-- Leitstelle-In-Context: die erzeugten Entwürfe (Basisrezept/Gericht) im Cockpit ansehen,

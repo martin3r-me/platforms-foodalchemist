@@ -198,12 +198,17 @@
 
     {{-- Erstell-Leiste: klebt unten im Scroll-Bereich (Befund „Knopf unter dem Fold"), aber als EINE
          niedrige Zeile. Titel-Echo, damit sichtbar bleibt, woran gearbeitet wird. --}}
+    {{-- #1003 PR7: am Handy bleibt in der klebenden Leiste nur Titel und Start; der Worker-Hinweis steht davor im Fluss. --}}
+    @if($handy ?? false)
+        @include('foodalchemist::livewire.planung.partials.worker-praesenz')
+    @endif
     <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 py-3 shadow-lg shadow-black/20" data-planung-erstellen-leiste>
         <div class="flex-1 min-w-[16rem] flex flex-col gap-1">
             <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">
                 @svg($goIcon, 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') {{ $goTitel }}
                 @if($titelEcho !== '')<x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit($titelEcho, 32) }}</x-fa::badge>@endif
             </p>
+            @unless($handy ?? false)
             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
                 @if($scope === 'gericht')
                     Zuerst entsteht nur ein Bauplan mit Komponenten. Erst wenn du ihn annimmst, wird daraus ein Rezept und die Erstellung läuft weiter.
@@ -212,13 +217,16 @@
                 @endif
             </p>
             @include('foodalchemist::livewire.planung.partials.worker-praesenz')
+            @endunless
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            @unless($handy ?? false)
             <x-fa::button variant="ghost" icon="heroicon-o-magnifying-glass" wire:click="wissenVorschau('{{ $scope }}')" :disabled="$laeuft"
                 wire:loading.attr="disabled" wire:target="wissenVorschau" title="Zeigt, welches Wissen die KI für diese Eingabe heranziehen würde. Erstellt nichts." data-planung-wissen-vorab>
                 <span wire:loading.remove wire:target="wissenVorschau">Wissen vorab prüfen</span>
                 <span wire:loading wire:target="wissenVorschau">Wissen wird geladen …</span>
             </x-fa::button>
+            @endunless
             <x-foodalchemist::ki-action action="goKaskade('{{ $scope }}')" variant="primary" :icon="$goIcon"
                 :label="$scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erstellen'"
                 busy="Wird gestartet …" flash="Gestartet" :disabled="$laeuft" before="tab='worker'" />

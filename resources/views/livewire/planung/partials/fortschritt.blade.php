@@ -116,20 +116,25 @@
 
         <div class="flex flex-wrap items-center gap-2">
             @if($offen > 0)
+                @unless($handy ?? false){{-- #1003 PR7: Anreichern/Freigeben am Computer --}}
                 <x-foodalchemist::ki-action action="alleNeuenAnreichern()" target="alleNeuenAnreichern" icon="heroicon-o-sparkles" variant="ai"
                     label="Alle neu gebauten anreichern und freigeben ({{ $offen }})" busy="Wird angereichert …" flash="Anreicherung gestartet" data-planung-alle-anreichern />
+                @endunless
             @endif
             @if($laufFailedGenerierbar > 0)
                 <x-foodalchemist::ki-action action="laufWiederAufnehmen()" target="laufWiederAufnehmen" icon="heroicon-o-arrow-path" variant="ghostXs"
                     label="Gescheiterte Schritte fortsetzen ({{ $laufFailedGenerierbar }})" busy="Wird fortgesetzt …" flash="Fortsetzung eingereiht" data-planung-resume-btn />
             @endif
+            @unless($handy ?? false){{-- #1003 PR7: Stufe freigeben am Computer --}}
             @foreach($stufen as $stufe)
                 @if($stufe['zustand'] === 'prüfen')
                     <x-foodalchemist::ki-action action="gibStufeFrei('{{ $stufe['kind'] }}')" icon="heroicon-o-check-badge" variant="ghostXs" wire:key="stufe-frei-{{ $stufe['kind'] }}"
                         label="Ganze Stufe freigeben: {{ $stufeName[$stufe['kind']] ?? $stufe['label'] }}" busy="Wird freigegeben …" flash="Stufe freigegeben" data-planung-stufe-frei="{{ $stufe['kind'] }}" />
                 @endif
             @endforeach
+            @endunless
             @if($offen > 0)
+                @unless($handy ?? false){{-- #1003 PR7: Alle verwerfen am Computer --}}
                 <div class="relative ml-auto" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                     <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
                     <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 fa-surface shadow-lg py-1">
@@ -140,6 +145,7 @@
                         </button>
                     </div>
                 </div>
+                @endunless
             @endif
         </div>
 
@@ -164,11 +170,12 @@
                     @php $kopf = $c['kopf']; @endphp
                     <div class="overflow-hidden rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" wire:key="fc-{{ $kopf->id }}">
                         <button type="button" wire:click="waehleSchritt({{ $kopf->id }})"
-                            class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 text-left {{ $auswahl?->id === $kopf->id ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}"
+                            class="grid w-full {{ ($handy ?? false) ? 'grid-cols-[auto_minmax(0,1fr)] gap-y-1.5' : 'grid-cols-[auto_minmax(0,1fr)_auto]' }} items-center gap-2.5 px-3 py-2.5 text-left {{ $auswahl?->id === $kopf->id ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}"
                             data-fortschritt-kopf="{{ $kopf->id }}">
                             <span class="rounded border border-[var(--fa-line)] bg-[var(--fa-ground)] px-1.5 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $kuerzel($kopf) }}</span>
-                            <span class="truncate font-medium text-[var(--fa-ink)]" title="{{ $kopf->label }}">{{ $kopf->label }}</span>
-                            <span class="flex items-center gap-2 {{ $klein }} tabular-nums text-[var(--fa-ink-3)]">
+                            <span class="{{ ($handy ?? false) ? 'wrap-anywhere' : 'truncate' }} font-medium text-[var(--fa-ink)]" title="{{ $kopf->label }}">{{ $kopf->label }}</span>
+                            {{-- #1003 PR7: am Handy EK und Status in eine zweite Zeile, damit der Name lesbar bleibt. --}}
+                            <span class="flex items-center gap-2 {{ ($handy ?? false) ? 'col-span-2 justify-end' : '' }} {{ $klein }} tabular-nums text-[var(--fa-ink-3)]">
                                 @if($ek($kopf) !== null)EK {{ $euro($ek($kopf)) }}@endif
                                 @php [$ton, $txt] = $chip($kopf); @endphp
                                 <x-fa::badge :tone="$ton">{{ $txt }}</x-fa::badge>
@@ -177,26 +184,37 @@
                         @foreach($c['zeilen'] as $z)
                             @php [$ton, $txt] = $chip($z); @endphp
                             <button type="button" wire:click="waehleSchritt({{ $z->id }})" wire:key="fz-{{ $z->id }}"
-                                class="grid w-full grid-cols-[14px_minmax(0,1fr)_auto_4.5rem_10px] items-center gap-2.5 border-t border-[var(--fa-line)] py-2 pl-6 pr-3 text-left {{ $klein }} {{ $auswahl?->id === $z->id ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}"
+                                class="grid w-full {{ ($handy ?? false) ? 'grid-cols-[14px_minmax(0,1fr)_10px] gap-y-1 pl-4' : 'grid-cols-[14px_minmax(0,1fr)_auto_4.5rem_10px] pl-6' }} items-center gap-2.5 border-t border-[var(--fa-line)] py-2 pr-3 text-left {{ $klein }} {{ $auswahl?->id === $z->id ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}"
                                 data-fortschritt-zeile="{{ $z->id }}">
                                 <span class="font-mono text-[var(--fa-line-strong)]" aria-hidden="true">└</span>
+                                @if($handy ?? false)
+                                    {{-- #1003 PR7: Name über die ganze Breite, Status und EK darunter. --}}
+                                    <span class="text-[var(--fa-ink)] wrap-anywhere" title="{{ $z->label }}">{{ $z->label }}</span>
+                                    <span class="h-2 w-2 rounded-full {{ $punkt($z) }}" aria-hidden="true"></span>
+                                    <span></span>
+                                    <span class="col-span-2 flex items-center gap-2"><x-fa::badge :tone="$ton">{{ $txt }}</x-fa::badge><span class="ml-auto tabular-nums text-[var(--fa-ink-2)]">{{ $euro($ek($z)) }}</span></span>
+                                @else
                                 <span class="truncate text-[var(--fa-ink)]" title="{{ $z->label }}">{{ $z->label }}</span>
                                 <x-fa::badge :tone="$ton">{{ $txt }}</x-fa::badge>
                                 <span class="text-right tabular-nums text-[var(--fa-ink-2)]">{{ $euro($ek($z)) }}</span>
                                 <span class="h-2 w-2 rounded-full {{ $punkt($z) }}" aria-hidden="true"></span>
+                                @endif
                             </button>
                         @endforeach
                         <div class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fa-line)] bg-[var(--fa-ground)] px-3 py-2 {{ $klein }} text-[var(--fa-ink-3)]">
                             <span>{{ count($c['zeilen']) }} {{ count($c['zeilen']) === 1 ? 'Basisrezept' : 'Basisrezepte' }} · {{ $c['offen'] }} offen{{ $c['fehler'] > 0 ? ' · ' . $c['fehler'] . ' Fehler' : '' }}</span>
                             @if($c['offen'] > 0)
+                                @unless($handy ?? false){{-- #1003 PR7 --}}
                                 <x-foodalchemist::ki-action action="clusterFreigeben({{ $kopf->id }})" target="clusterFreigeben" icon="heroicon-o-check" variant="ghostXs"
                                     label="{{ $kopf->kind === 'gericht' ? 'Gericht + Basisrezepte' : 'Rezept + Unterrezepte' }} anreichern und freigeben" busy="Wird angereichert …" flash="Anreicherung gestartet" />
+                                @endunless
                             @endif
                         </div>
                     </div>
                 @empty
                     <x-fa::empty icon="heroicon-o-funnel" title="Nichts in dieser Auswahl">Anderen Filter oder „Alle Ergebnisse“ wählen.</x-fa::empty>
                 @endforelse
+                @unless($handy ?? false){{-- #1003 PR7: Basisrezept ergänzen am Computer --}}
                 @if(collect($stufen)->contains('kind', 'rezept'))
                     {{-- Fehlendes Basisrezept von Hand ergänzen: der Motor legt den geplanten Schritt an. --}}
                     <div x-data="{ busy: null }" class="flex flex-wrap items-center gap-2 rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line)] px-3 py-2" data-planung-sub-ergaenzen>
@@ -207,6 +225,7 @@
                     </div>
                 @endif
             </div>
+                @endunless
 
             {{-- Rechts: gewählter Eintrag (D4) --}}
             <aside class="flex min-w-0 flex-col gap-3 self-start lg:sticky lg:top-3 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-y-auto" data-fortschritt-detail>

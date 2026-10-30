@@ -19,7 +19,7 @@
                             @if($istAktiv) aria-pressed="true" @endif>
                         @unless($v['is_global'])@svg('heroicon-m-star', 'w-3.5 h-3.5 text-[var(--fa-warn)]')@endunless{{ $v['label'] }}
                     </button>
-                    @unless($v['is_global'])
+                    @unless($v['is_global'] || ($handy ?? false)){{-- #1003 PR7: Vorlage löschen am Computer --}}
                         <button type="button" wire:click="loeschenVorlage('{{ $scope }}', {{ $v['id'] }})"
                                 wire:confirm="Vorlage „{{ $v['label'] }}“ löschen?"
                                 class="inline-flex items-center justify-center w-6 h-full pr-1 text-[var(--fa-ink-3)] hover:text-[var(--fa-crit)]"

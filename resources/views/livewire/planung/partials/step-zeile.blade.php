@@ -100,24 +100,30 @@
                              Schritte, Sensorik, Zeiten, Equipment, Posten und Pairings leer. --}}
                         @if(($enr['tief'] ?? true) === false)
                             <x-fa::signal tone="info" title="Kernfelder gefüllt ({{ $enr['at'] ?? '' }}), ohne Schritte, Sensorik, Zeiten, Equipment und Pairings (Leitplanke „Voll anreichern“ war aus).">Leicht angereichert</x-fa::signal>
+                            @unless($handy ?? false){{-- #1003 PR7 --}}
                             <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }}, true)" variant="ai" icon="heroicon-o-sparkles" label="Voll anreichern"
                                 busy="Wird angereichert …" flash="Anreicherung eingereiht"
                                 title="Jetzt in voller Tiefe anreichern: Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten, geerdete Pairings." />
+                            @endunless
                         @else
                             <x-fa::signal tone="ok" title="Voll angereichert {{ $enr['at'] ?? '' }}">Angereichert</x-fa::signal>
                         @endif
                     @elseif(in_array($enrStatus, ['queued', 'running'], true))
                         <span class="inline-flex items-center gap-1 {{ $textKlein }} font-medium text-[var(--fa-info)]">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') Wird angereichert …</span>
                     @elseif($enrStatus === 'failed')
+                        @unless($handy ?? false){{-- #1003 PR7 --}}
                         <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" :error="$enr['error'] ?? null" icon="heroicon-o-arrow-path"
                             retry="Anreicherung fehlgeschlagen, erneut anreichern" busy="Wird erneut angereichert …"
                             flash="Anreicherung eingereiht" class="{{ $textKlein }}" />
+                        @endunless
                     @elseif($reuseUnreif)
                         {{-- Kein Auto-Lauf: das übernommene Rezept ist FREMD oder schon freigegeben — daran hängen
                              möglicherweise Gerichte, Foodbooks und Speisepläne. Die Entscheidung gehört dem Menschen. --}}
+                        @unless($handy ?? false){{-- #1003 PR7 --}}
                         <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" variant="ai" icon="heroicon-o-sparkles" label="Bestand anreichern"
                             busy="Wird angereichert …" flash="Anreicherung eingereiht"
                             title="Bestands-Rezept{{ ($reuse['eigen'] ?? false) ? '' : ' eines anderen Teams' }}{{ ($reuse['status'] ?? '') === 'approved' ? ', bereits freigegeben' : '' }}. Anreicherung bewusst anstoßen, vorhandene Inhalte können dabei neu erzeugt werden." />
+                        @endunless
                     @endif
                     {{-- Etappe 7 — Bild-Status: nur wenn KI-Fotos angefordert waren UND die Anreicherung durch ist
                          (die Fotos laufen im selben Job danach). deferred.bilder trägt done|failed + n; fehlt es
@@ -132,11 +138,13 @@
                             <span class="inline-flex items-center gap-1 {{ $textKlein }} font-medium text-[var(--fa-info)]" data-bild-status="{{ $st->id }}">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') erzeugt Fotos …</span>
                         @elseif($bldStatus === 'failed')
                             {{-- Etappe 7 Teil 2b: NUR die KI-Fotos neu anstoßen (ohne Voll-Anreicherung). --}}
+                            @unless($handy ?? false){{-- #1003 PR7 --}}
                             <x-foodalchemist::ki-action action="bilderNeu({{ $st->id }})"
                                 :error="$bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen'"
                                 retry="Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }}, neu erzeugen"
                                 icon="heroicon-o-photo" busy="Fotos werden neu erzeugt …" flash="Neu erzeugen eingereiht"
                                 data-bild-status="{{ $st->id }}" class="{{ $textKlein }}" />
+                            @endunless
                         @elseif($fotoN > 0)
                             <x-fa::signal tone="ok" icon="heroicon-m-photo" data-bild-status="{{ $st->id }}" title="{{ $fotoN }} KI-Foto(s) erzeugt">{{ $fotoN }} {{ $fotoN === 1 ? 'Foto' : 'Fotos' }}</x-fa::signal>
                         @else
@@ -164,6 +172,7 @@
                     @endif
                 @endif
 
+                @unless($handy ?? false){{-- #1003 PR7: KI-Assistent am Computer --}}
                 @if($kiAnzahl >= 2)
                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                         <x-fa::button size="sm" variant="ai" icon="heroicon-m-sparkles" icon-right="heroicon-m-chevron-down"
@@ -192,7 +201,9 @@
                     <x-foodalchemist::ki-action action="konformitaetPruefen({{ (int) $st->ref_id }})" variant="ai" icon="heroicon-o-clipboard-document-check" label="Gegen Regelwerk prüfen"
                         busy="Wird geprüft …" flash="Prüfung eingereiht" title="Konformität gegen die Regelwerke prüfen" />
                 @endif
+                @endunless
 
+                @unless($handy ?? false){{-- #1003 PR7: Weitere Aktionen am Computer --}}
                 @if($hatWeitere)
                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                         <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
@@ -224,8 +235,10 @@
                         </div>
                     </div>
                 @endif
+                @endunless
 
                 {{-- Hauptaktion der Karte --}}
+                @unless($handy ?? false){{-- #1003 PR7: Freigeben/Erzeugen am Computer --}}
                 @if($st->status === 'done')
                     <x-foodalchemist::ki-action action="gibFrei({{ $st->id }})" variant="primary" icon="heroicon-o-check"
                         label="Freigeben" busy="Wird freigegeben …" flash="Freigegeben" data-step-freigeben />
@@ -246,6 +259,7 @@
                             />
                     @endif
                 @endif
+                @endunless
             </div>
         @endif
     </div>
@@ -272,6 +286,8 @@
         <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] p-2.5" data-rezept-plan="{{ $st->id }}">
             <p class="{{ $textKlein }} font-medium text-[var(--fa-ink-2)]">Geplante Komponenten</p>
             {{-- Spec 80 D7: Plan-Karte — Menge ändern, Bestand ablehnen, entfernen, ergänzen (vor dem Bau). --}}
+            {{-- #1003 PR7: am Handy nur lesen — Menge ändern, ablehnen, entfernen, ergänzen am Computer. --}}
+            <fieldset class="contents" @disabled($handy ?? false)>
             <ul class="flex flex-col gap-2">
                 @foreach((array) ($snap['komponenten'] ?? []) as $ki => $komponente)
                     <li class="flex flex-col gap-1 {{ $textKlein }} text-[var(--fa-ink-2)]" wire:key="plan-{{ $st->id }}-{{ $ki }}-{{ md5(json_encode($komponente)) }}" data-plan-komponente="{{ $ki }}">
@@ -307,6 +323,7 @@
                     class="w-24 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1 text-right {{ $textKlein }} text-[var(--fa-ink)]" />
                 <x-fa::button size="sm" variant="secondary" icon="heroicon-o-plus" wire:click="planAendern({{ $st->id }}, 'hinzufuegen')">Ergänzen</x-fa::button>
             </div>
+            </fieldset>
             <p class="{{ $textKlein }} text-[var(--fa-ink-3)]">Noch nichts angelegt. „Plan annehmen“ übernimmt den Bestand und baut die neuen Komponenten als Unterrezepte.</p>
         </div>
     @endif
@@ -400,7 +417,7 @@
          (max. 1), sonst Foto im Pool. Teil 3b: vorhandenes Team-Foto wiederverwenden (Kopie, kein KI-Aufruf). --}}
     @if($st->ref_id && $st->status === 'freigegeben' && in_array($st->kind, ['rezept', 'gericht'], true))
         <div class="flex flex-wrap items-center gap-2" data-foto-upload="{{ $st->id }}">
-            <label class="fa-btn inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] {{ $textKlein }} font-medium text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[var(--fa-accent)]">
+            <label class="fa-btn inline-flex items-center gap-1.5 {{ ($handy ?? false) ? 'min-h-11 px-3.5' : 'h-7 px-2.5' }} rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] {{ $textKlein }} font-medium text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-[var(--fa-accent)]">
                 @svg('heroicon-o-arrow-up-tray', 'w-3.5 h-3.5 shrink-0')
                 {{ !empty($fotoUploads[$st->id]) ? 'Anderes Foto wählen' : 'Eigenes Foto hochladen' }}
                 <input type="file" accept="image/*" wire:model="fotoUploads.{{ $st->id }}" class="sr-only" />
@@ -454,8 +471,10 @@
              hängt aber nicht am Dokument. Teil-Problem, mit Nachhol-Aktion. --}}
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <x-fa::signal tone="warn">Nicht ins Ausgabe-Kapitel bzw. die Rubrik eingehängt: {{ \Illuminate\Support\Str::limit($attachErr, 120) }}. Das Konzept ist erzeugt.</x-fa::signal>
+            @unless($handy ?? false){{-- #1003 PR7 --}}
             <x-fa::button size="sm" icon="heroicon-o-link" wire:click="haengeKonzeptNach({{ $st->id }})"
                 wire:loading.attr="disabled" wire:target="haengeKonzeptNach">Nachträglich einhängen</x-fa::button>
+            @endunless
         </div>
     @endif
     @if($st->status === 'geplant')
@@ -464,7 +483,8 @@
 
     {{-- A: Zutaten direkt prüfen — sehen WAS angelegt wurde, tauschen/entfernen/ergänzen VOR der Freigabe.
          On-Demand gemountet (toggleZutaten), nutzt den IngredientEditor (:eingebettet), nur Rezept/Gericht. --}}
-    @if($st->ref_id && in_array($st->kind, ['rezept', 'gericht'], true) && in_array($st->status, ['done', 'freigegeben'], true))
+    {{-- #1003 PR7: Zutaten ändern (eingebetteter Editor) und Favoriten bleiben am Computer. --}}
+    @if(! ($handy ?? false) && $st->ref_id && in_array($st->kind, ['rezept', 'gericht'], true) && in_array($st->status, ['done', 'freigegeben'], true))
         @php $zOffen = in_array($st->id, $zutatenOffen ?? [], true); @endphp
         <div class="flex flex-col gap-2 min-w-0">
             <div>
