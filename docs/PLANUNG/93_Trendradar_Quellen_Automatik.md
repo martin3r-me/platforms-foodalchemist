@@ -13,6 +13,26 @@ aufs Radar, wenn die Radar-Regel erfüllt ist. Der Mensch korrigiert, statt alle
 Die Pinnwand bleibt, was sie ist: Inspiration (Bilder, Instagram, Gesehenes). Systematisch erfasste Fachpresse läuft
 über einen eigenen **Eingang** und landet nicht als Kachel in der Pinnwand.
 
+## Abgrenzung Pinnwand ↔ Eingang
+
+| | Pinnwand (bleibt wie Spec 79) | Eingang (neu) |
+|---|---|---|
+| Wofür | Inspiration: Gesehenes, Bilder, Instagram, Foto im Restaurant | systematische Erfassung: Fachpresse, Branchenquellen, Feeds |
+| Wer legt ab | ein Mensch (Laptop oder Handy, „Fundstück ablegen“) | das System (Abruf aus den Quellen) oder der MCP-Auftrag |
+| Ansicht | Bildkacheln | Liste wie eine Prüfliste |
+| Automatik | befüllt die Pinnwand **nie** und ändert keine Pinnwand-Karte | arbeitet alles automatisch ab |
+
+Drei Regeln, mehr nicht:
+1. **Nichts Automatisches landet in der Pinnwand.** Ein Artikel aus dem Eingang kommt nur per Klick „Auf die Pinnwand“
+   dorthin (z. B. ein bildstarker Artikel, den man als Inspiration behalten will).
+2. **Was ein Mensch in die Pinnwand legt, zählt mit.** Ein Pinnwand-Fundstück ist eine Sichtung: Es geht in die
+   Kennzahlen des passenden Themas ein (Häufung, Monate, Quellenarten), die Karte selbst bleibt unverändert.
+3. **Zuordnen von Pinnwand-Karten zu Trends bleibt Handarbeit.** Passt eine Pinnwand-Karte zu einem automatisch
+   erkannten Trend, meldet das System das als Vorschlag (Signal), es hängt sie nicht selbst um.
+
+Technisch nutzen automatische Themen dieselbe Tabelle wie die Inspirationen (Spalte `herkunft`); die Pinnwand zeigt
+nur `herkunft = manuell`, die automatischen Themen erscheinen im Reiter „Eingang“.
+
 ## Grundsätze
 
 1. **Automatik ist sichtbar und umkehrbar.** Alles, was das System einordnet oder anlegt, trägt
@@ -97,7 +117,7 @@ Ein Thema ist eine **Inspiration** (Tabelle gibt es seit Spec 79 Nachtrag 09.10.
    ab Schwelle `buendel_aehnlichkeit` → dieselbe Inspiration;
 3. sonst neue Inspiration (herkunft automatisch).
 Der Artikel wird zusätzlich als Beleg (`fundstueck = false`, quelle = art der Quelle) an die Inspiration gehängt.
-Die Pinnwand zeigt standardmäßig nur `herkunft = manuell`; Filter „automatisch“ zeigt die Themen.
+Die Pinnwand zeigt nur `herkunft = manuell`; die automatischen Themen erscheinen im Reiter „Eingang“ (siehe Abgrenzung).
 
 ### 5. Einordnung nach Regeln
 
