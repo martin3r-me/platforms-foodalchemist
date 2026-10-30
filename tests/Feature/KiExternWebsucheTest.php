@@ -93,3 +93,27 @@ it('KI-fremde Aufträge brauchen keine Quellen (Regel nur für Websuche-Aufträg
 
     expect(DB::table('foodalchemist_ki_auftraege')->where('uuid', 'u-1')->value('status'))->toBe('beantwortet');
 });
+
+it('Ein Provider, der nicht im Web sucht: extern trotzdem ein Auftrag (der MCP-Client sucht selbst), auf der Plattform die Meldung „Websuche nicht verfügbar"', function () {
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->instance(\Platform\Core\Contracts\LLMProviderContract::class, new class implements \Platform\Core\Contracts\LLMProviderContract
+    {
+        public function getName(): string { return 'ohne-websuche'; }
+
+        public function chat(array $messages, array $options = []): array { throw new \RuntimeException('Plattform-Provider darf nicht gerufen werden'); }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array { return []; }
+
+        public function getDefaultModel(): string { return 'x'; }
+
+        public function isAvailable(): bool { return true; }
+    });
+
+    $extern = ($this->recherche)();
+    expect($extern->success)->toBeTrue($extern->error ?? '')->and($extern->data['status'])->toBe('ki_auftrag_offen');
+
+    $intern = $this->registry->get('foodalchemist.produktpass.RECHERCHE')->execute(['supplier_item_id' => $this->la->id], new ToolContext($this->user, $this->rootTeam));
+    expect($intern->success)->toBeFalse()->and($intern->error)->toContain('Websuche nicht verfügbar');
+});
