@@ -78,6 +78,7 @@
         @endunless
 
         <livewire:foodalchemist.preislisten.lieferanten-dokumente />
+        <livewire:foodalchemist.preislisten.lieferanten-stammdatenblatt />
 
         <x-fa::section title="Läufe" icon="heroicon-o-queue-list" :meta="$laeufe->count()" data-preisliste-laeufe>
             @if($laeufe->isEmpty())

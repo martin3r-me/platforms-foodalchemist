@@ -23,6 +23,7 @@ class FoodAlchemistSupplierDocument extends Model
         'term_start' => 'date',
         'term_end' => 'date',
         'notice_period_days' => 'integer',
+        'context_file_id' => 'integer',
     ];
 
     public function supplier(): BelongsTo

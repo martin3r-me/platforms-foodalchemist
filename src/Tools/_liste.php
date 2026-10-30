@@ -284,6 +284,8 @@ return [
     \Platform\FoodAlchemist\Tools\LieferantenLinkDeleteTool::class,   // Lieferanten-Link widerrufen (Stufe 2a)
     \Platform\FoodAlchemist\Tools\LieferantenLinkGetTool::class,
     \Platform\FoodAlchemist\Tools\LieferantenLinkPostTool::class,
+    \Platform\FoodAlchemist\Tools\LieferantenStammdatenblattEntscheidenTool::class,   // Stammdatenblatt-Vorschläge übernehmen/verwerfen (Stufe 2d)
+    \Platform\FoodAlchemist\Tools\LieferantenStammdatenblattGetTool::class,
     \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“
     \Platform\FoodAlchemist\Tools\MandantenBeendenPostTool::class,   // Spec 82 §13 C3: ausführen, abbrechen, entsperren

@@ -33,6 +33,8 @@ class FoodAlchemistSupplier extends Model
         'min_order_value' => 'decimal:2',
         'free_shipping_threshold' => 'decimal:2',
         'order_lead_days' => 'integer',
+        'order_channels' => 'array',   // Stammdatenblatt (2d)
+        'small_order_surcharge' => 'decimal:2',
         'allergene_nur_positiv' => 'boolean',   // Spec 85: leer = angenommen nicht enthalten
         'allergene_nur_positiv_seit' => 'date',
         'rolle' => \Platform\FoodAlchemist\Enums\SupplierRolle::class,   // §5 Ausnahme 3

@@ -67,6 +67,7 @@ class SignalDetektorService
             + $this->wareneinsatzIstAbweichung($team)
             + $this->vkAnpassungEmpfohlen($team)
             + $this->vertragsfristFaellig($team)
+            + $this->zertifikateAblaufend($team)   // Link-Stufe 2d: Zertifikat-Ablauf je Lieferant
             + app(\Platform\FoodAlchemist\Services\Pairing\PairingSignale::class)->alle($team)   // Spec 60 · P8
             + $this->naehrwertPlausi($team)
             + app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertSignalService::class)->laufen($team)   // Nährwert-Prüfung je Artikel (nur Modus scharf, gedrosselt)
@@ -1109,4 +1110,38 @@ class SignalDetektorService
 
         return $n;
     }
+
+    /**
+     * Link-Stufe 2d — Zertifikate eines Lieferanten (Dokument-Art „zertifikat“ mit Ablaufdatum), die abgelaufen sind oder innerhalb von {@see ZERTIFIKAT_VORLAUF_TAGE}
+     * Tagen ablaufen. EIN Signal je Team und Lieferant (nicht je Zertifikat): Kritisch, sobald eines abgelaufen ist, sonst Warnung. Schließt sich selbst, sobald
+     * kein Zertifikat des Lieferanten mehr im Fenster liegt (neues Ablaufdatum eingetragen, Dokument gelöscht, Lieferant inaktiv).
+     */
+    public function zertifikateAblaufend(Team $team): int
+    {
+        $grenze = now()->addDays(self::ZERTIFIKAT_VORLAUF_TAGE)->toDateString();
+        $zeilen = DB::table('foodalchemist_supplier_documents as d')
+            ->join('foodalchemist_suppliers as s', 's.id', '=', 'd.supplier_id')
+            ->where('d.team_id', $team->id)->where('d.kind', 'zertifikat')->whereNull('d.deleted_at')->whereNull('s.deleted_at')
+            ->where('s.is_inactive', false)->whereNotNull('d.term_end')->where('d.term_end', '<=', $grenze)
+            ->orderBy('d.term_end')->get(['d.id', 'd.supplier_id', 'd.cert_type', 'd.term_end', 's.name as supplier_name']);
+
+        $keys = [];
+        foreach ($zeilen->groupBy('supplier_id') as $supplierId => $docs) {
+            $heute = now()->toDateString();
+            $abgelaufen = $docs->filter(fn ($d) => substr((string) $d->term_end, 0, 10) < $heute);
+            $key = 'zertifikat-lieferant-' . $supplierId;
+            $keys[] = $key;
+            $this->signals->erzeuge($team, SignalTyp::ZertifikatLaeuftAb, $abgelaufen->isNotEmpty() ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+                $docs->first()->supplier_name . ': ' . ($abgelaufen->isNotEmpty() ? $abgelaufen->count() . ' Zertifikat(e) abgelaufen' : $docs->count() . ' Zertifikat(e) laufen bald ab'),
+                ['dedup_key' => $key, 'ref_type' => 'supplier', 'ref_id' => (int) $supplierId,
+                    'description' => 'Ein Zertifikat des Lieferanten ist abgelaufen oder läuft in den nächsten ' . self::ZERTIFIKAT_VORLAUF_TAGE . ' Tagen ab. Erneuerung beim Lieferanten anfordern '
+                        . 'und das neue Ablaufdatum im Lieferanten-Dokument eintragen.',
+                    'payload' => ['zertifikate' => $docs->map(fn ($d) => ['document_id' => (int) $d->id, 'art' => $d->cert_type, 'ablauf' => substr((string) $d->term_end, 0, 10)])->values()->all()]]);
+        }
+        $this->signals->schliesseVerschwundene($team, SignalTyp::ZertifikatLaeuftAb, 'detektor', $keys, 'Kein Zertifikat des Lieferanten läuft mehr ab — automatisch geschlossen');
+
+        return count($keys);
+    }
+
+    private const ZERTIFIKAT_VORLAUF_TAGE = 60;
 }

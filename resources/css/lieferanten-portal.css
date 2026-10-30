@@ -14,3 +14,8 @@ body { background: var(--grund); color: var(--text); font: 16px/1.5 system-ui, -
 .marke { display: inline-block; padding: .15rem .6rem; border-radius: 999px; background: var(--akzent-hell); color: var(--akzent); font-size: .85rem; }
 .upload label { display: block; margin: .25rem 0; color: var(--text2); }
 .upload input[type=text] { display: block; width: 100%; max-width: 20rem; margin-top: .25rem; padding: .4rem .5rem; border: 1px solid var(--linie); border-radius: .375rem; background: var(--karte); color: var(--text); font: inherit; }
+.blatt fieldset { border: 1px solid var(--linie); border-radius: .375rem; margin: .75rem 0; padding: .5rem .75rem; }
+.blatt legend { padding: 0 .25rem; font-weight: 600; }
+.blatt .gruppe { margin: .5rem 0; }
+.blatt label.inline { display: inline-block; margin-right: .75rem; }
+.blatt input[type=text] { max-width: 100%; }
