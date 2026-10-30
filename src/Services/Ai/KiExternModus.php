@@ -16,6 +16,9 @@ final class KiExternModus
 
     private bool $sammeln = false;
 
+    /** Aufruf kommt vom externen MCP-Server (Hülle setzt es für jedes FA-Tool): Jobs, die dabei ausgelöst werden, laufen extern ({@see fuerDispatch()}). */
+    private bool $mcpHerkunft = false;
+
     /** @var array<string, mixed>|null Wiederholungs-Nutzlast des laufenden Job-Laufs (P2a), geht in jeden neu angelegten Auftrag */
     private ?array $wiederholung = null;
 
@@ -28,6 +31,24 @@ final class KiExternModus
     public function aktiv(): bool
     {
         return $this->aktiv;
+    }
+
+    /** Läuft $action im Auftrag eines externen MCP-Aufrufs? Nur ein Merker für Folge-Jobs, kein Extern-Modus (kein Auftrag, keine Transaktion). */
+    public function imMcp(callable $action): mixed
+    {
+        $vorher = $this->mcpHerkunft;
+        $this->mcpHerkunft = true;
+        try {
+            return $action();
+        } finally {
+            $this->mcpHerkunft = $vorher;
+        }
+    }
+
+    /** Sollen Jobs, die jetzt ausgelöst werden, extern laufen (KI-Auftrag statt Plattform-Provider)? Extern-Lauf ODER MCP-Aufruf, bei eingeschaltetem Schalter. */
+    public function fuerDispatch(): bool
+    {
+        return $this->aktiv || ($this->mcpHerkunft && (bool) config('foodalchemist.ai.mcp_extern', true));
     }
 
     public function within(callable $action): mixed

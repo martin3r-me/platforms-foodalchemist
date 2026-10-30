@@ -41,7 +41,7 @@ final class GpAromaNachholen
         if (app('queue')->connection() instanceof \Illuminate\Queue\SyncQueue) {
             return;
         }
-        GpAromaNachholenJob::dispatch((int) $team->id, (int) $user->id, (int) $gp->id)
+        GpAromaNachholenJob::dispatch((int) $team->id, (int) $user->id, (int) $gp->id, extern: app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch())
             ->onQueue(Warteschlange::anreichern())
             ->delay(now()->addSeconds(self::VERZOEGERUNG_SEKUNDEN))
             ->afterCommit();

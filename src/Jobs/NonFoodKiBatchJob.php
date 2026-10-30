@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Support\NonFoodRegeln;
  * gespeichert und nimmt den Artikel aus der Prüfliste; alles Unsichere bleibt `pruefung_offen`. Ein roter oder abgeschalteter
  * LLM-Call ist ein No-op (die Prüfliste bleibt), nie ein Absturz. Von Hand gesetzte Urteile fasst der Job nicht an.
  */
-class NonFoodKiBatchJob implements ShouldQueue
+class NonFoodKiBatchJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -28,11 +28,54 @@ class NonFoodKiBatchJob implements ShouldQueue
     public const STAPEL = 50;
 
     /** @param  list<int>  $itemIds */
-    public function __construct(public array $itemIds)
+    public function __construct(
+        public array $itemIds,
+        public bool $extern = false,   // #1002 LA-Wege: `foodalchemist:nonfood-erkennen --anbieter=extern` → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+    }
+
+    // ── #1002 · KiExternWiederholbar ──
+    public function externAktiv(): bool
     {
+        return $this->extern;
+    }
+
+    public function externSchluessel(): string
+    {
+        return 'nonfood-ki:'.md5(implode(',', $this->itemIds));
+    }
+
+    /** Stapel eines Stamm-Laufs gehören keinem Mandanten: Team des ersten Artikels, sonst das Master-Team. */
+    public function externTeamId(): int
+    {
+        $team = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::query()->whereIn('id', $this->itemIds)->whereNotNull('team_id')->value('team_id');
+
+        return (int) ($team ?? \Platform\FoodAlchemist\Support\MasterTeam::id());
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['item_ids' => $this->itemIds];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static(array_map('intval', (array) $n['item_ids']), true, $versuch);
     }
 
     public function handle(AiGatewayService $ki): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($ki));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(AiGatewayService $ki): void
     {
         $zeilen = FoodAlchemistSupplierItemNonfood::query()
             ->whereIn('supplier_item_id', $this->itemIds)
