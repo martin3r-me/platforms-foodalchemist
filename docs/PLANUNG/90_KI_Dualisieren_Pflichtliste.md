@@ -96,7 +96,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | angeschlossen | MCP-Umleitung verkaufsrezepte.REVISE (Tabelle D, KiUmleitungTest). |
 | 72 | `src/Services/ReplacementSuggestionService.php::forGp` | component.replacement_suggest | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 73 | `src/Services/SensorikService.php::schaetzeRezept` | recipe.sensorik | 1 | a | P2 | RecipeSensorikPostTool | angeschlossen | MCP-Umleitung (Tabelle D). 29.10.: KI-Aufruf aus `bewerteRezept` hierher gezogen (bewerteRezept = schaetzeRezept + Speichern; der Abnahme-Befehl `gp-sensorik-referenz` liest nur). Nährwerte als Fakt im Kontext, Grenzen nach der Antwort (Nachverarbeitung); Einstufung a; Backfill `--neu-schaetzen=rezept` |
-| 74 | `src/Services/SignalFixService.php::assist` | dyn. $plan (signal.*) | 1 | a | P2 | SignaleFixTool | offen |  |
+| 74 | `src/Services/SignalFixService.php::assist` | dyn. $plan (signal.*) | 1 | a | P2 | SignaleFixTool | angeschlossen | MCP-Umleitung signale.FIX (Tabelle D, KiUmleitungTest, KiExternSignaleTest je Assist-Signaltyp). Nur der Assist-Plan ruft die KI; deterministische Pläne, Weg-Absagen und dry_run bleiben unverändert. |
 | 75 | `src/Services/SpeisekarteService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
 | 76 | `src/Services/SpeisekarteService.php::kiKartenText` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
 | 77 | `src/Services/SpeisenKlassenService.php::classify` | vk.speisen_klasse | 1 | a | P2 | RecipeKlassePostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
@@ -128,13 +128,13 @@ Der Wächter verlangt, dass jeder Key aus `config/foodalchemist.php` (`ai.prompt
 
 | Prompt-Key | Vermuteter Aufrufer | Status |
 |---|---|---|
-| `signal.supplier_inquiry` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `signal.margin_levers` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `signal.vk_release_advice` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `signal.serving_form_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `signal.recipe_category_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `signal.recipe_naming_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
-| `price.plausi` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), wird mit dieser angeschlossen |
+| `signal.supplier_inquiry` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `signal.margin_levers` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `signal.vk_release_advice` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `signal.serving_form_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `signal.recipe_category_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `signal.recipe_naming_suggest` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
+| `price.plausi` | `SignalFixService::assist` (Tabelle A) — der Key kommt aus `SignalCockpit::planFor()` (Signal-Typ → Prompt), Aufruf mit dynamischem `$plan['prompt']` | gedeckt durch Tabelle A (Assist-Zeile), angeschlossen (Paket Signale) |
 | `gp.piece_default_g` | Config-Key, in `Regeln/RegelPromptBlock` als Regel-Ziel geführt; kein `propose()`-Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
 | `gp.domain` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
 | `gp.la_suggest` | nur Config und `PromptRegistryTest`; kein Aufrufer in `src/` | tot (nicht löschen in diesem Paket) |
@@ -162,6 +162,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
 | `foodalchemist.la.GP_ABGLEICH` | umgeleitet (2 Runden) | `gp.suggest` (Felder), danach `gp.la_abgleich`; der zweite Prompt hängt von der ersten Antwort ab. Schreibt nur DB (Abgleich-Log, bei `apply` Verknüpfung/neues GP). `ki=false` = Sparsamkeit: nie ein Auftrag |
 | MCP-Herkunft → Folge-Jobs | Merker `KiExternModus::imMcp` (Hülle, jedes FA-Tool) | Ein externer MCP-Aufruf markiert den Lauf; Jobs, die er anstößt (`ClassifyLaJob`, `GpAromaNachholenJob`, `SensorikNachholenJob`, `ConformanceCheckJob` bei GP), laufen mit `extern=true` (`fuerDispatch`). Kein Auftrag, keine Transaktion im Tool selbst |
+| `signale.FIX` (Assist) | `KiUmleitung::TOOLS` | Ein `propose()` je Signal-Typ (`signal.supplier_inquiry`, `signal.margin_levers`, `price.plausi`, `signal.vk_release_advice`, `signal.serving_form_suggest`, `signal.recipe_category_suggest`, `signal.recipe_naming_suggest`), Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne und `dry_run` rufen keine KI. `SignalFixJob` bleibt deterministisch ohne KI (geprüft per Code-Lesen: nur `SignalFixService::execute`, kein Gateway-Aufruf) |
 | Folge-Aufträge sichtbar | `KiUmleitung::mitFolgeHinweis`, `SignalDetektorService::kiAuftraegeOffen` (`SignalTyp::KiAuftraegeOffen`) | Tool-Ergebnis meldet `folgeauftraege.jobs_angestossen` (Hinweis auf `ki_auftraege.GET`, 24-h-Ablauf). Cockpit-Signal je Team und Feature (nicht je Auftrag): offen > 2 h = Info, abgelaufen in 7 Tagen = Warnung; schließt sich selbst. Abgelaufene Aufträge werden nicht verworfen und lösen keinen Plattform-Fallback aus: die Lücke bleibt in den Daten, der nächste Nachhol-Lauf findet sie wieder (Test) |
 | alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
 
@@ -282,14 +283,14 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `recipe.bauart` | 0 | – | 0 | im Generator | Plattform | 2d (übrige) |
 | `produktpass.extract` | 0 | – | 0 | ProduktpassLeser::liefere | Plattform | ausgenommen (Anhang/Storage) |
 | `vk.marketing` | 0 | – | 0 | AngebotKundentextTool; FoodbookKundentextTool | Plattform | 2d (übrige) |
-| `price.plausi` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `price.plausi` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
 | `chat.message` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
-| `signal.supplier_inquiry` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
-| `signal.margin_levers` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
-| `signal.vk_release_advice` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
-| `signal.serving_form_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
-| `signal.recipe_category_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
-| `signal.recipe_naming_suggest` | 0 | – | 0 | SignalFixService::assist (Signale.FIX) | Plattform | Paket Signale (nach LA) |
+| `signal.supplier_inquiry` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
+| `signal.margin_levers` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
+| `signal.vk_release_advice` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
+| `signal.serving_form_suggest` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
+| `signal.recipe_category_suggest` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
+| `signal.recipe_naming_suggest` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
 
 Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 307× Ø 28592, `conformance.check` 332× Ø 17944, `vk.generator` 123× Ø 35763.
 
@@ -315,7 +316,7 @@ Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 30
 | `GpAromaNachholenJob` | GP-Anlage (`GpAromaNachholen`) | gp.sensorik, gp.anker | angeschlossen (MCP-Herkunft erbt `extern`, `gp-aroma-nachholen:{team}:{gp}`) | LA-Wege |
 | `la.GP_ABGLEICH` (`GpAbgleichService`, `LaFelderService`) | Tool, UI (LA-Detail) | gp.suggest, gp.la_abgleich | angeschlossen (Umleitung, 2 Runden) | LA-Wege; ≈ 24.000 Token je Artikel (2 Calls, io gemessen) |
 | `ImportArticlesJob` (Necta-/Artikel-Import) | `ArticleImportTriggerService`, Zeitplan `NectaAbgleichCommand` | – (kein direkter `propose()` gefunden; löst über `LaFirstGpService` ggf. `ClassifyLaJob` aus) | prüfen | LA-Wege |
-| `SignalFixJob` / `signale.FIX` | Review-Queue (UI), Tool | signal.*, price.plausi | Plattform | **Signale** |
+| `SignalFixJob` / `signale.FIX` | Review-Queue (UI), Tool | signal.*, price.plausi (nur Assist, per Tool) | Tool: Plattform und MCP; `SignalFixJob` ruft keine KI (rein deterministisch) | Signale (angeschlossen) |
 | `SignaleDetektorCommand` (täglich 03:20) | Zeitplan | – (deterministisch; die KI-Stufe `price.plausi` „folgt in #375“, heute keine Token) | keine KI | Signale (beobachten) |
 | `StubAusrezeptierenJob` | `RecipeExtractService` (Rezept-Import) | recipe.generator | Plattform | 2d-1 |
 | `BuildZukaufRecipeJob` | `RecipeDependencyWorkflowService` | recipe.ruestschritt, recipe.generator | Plattform | 2c-3d |

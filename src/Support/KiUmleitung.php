@@ -44,6 +44,7 @@ final class KiUmleitung
         'foodalchemist.recipe_sensorik.POST' => 'Ein propose() (recipe.sensorik), danach DB-Schreiben des Profils.',
         'foodalchemist.recipes.REVIEW' => 'Read-only: ein propose() (recipe.review / vk.review) über RecipeReviewService, schreibt nichts.',
         'foodalchemist.recipes.REVISE' => 'Ein propose() (recipe.ueberarbeiten), optional DB-Übernahme (accept) über RecipeService — dessen Folge-Job SensorikNachholen erbt den Extern-Modus (P2c-1).',
+        'foodalchemist.signale.FIX' => 'Nur der Assist-Plan ruft ein propose() (je Signal-Typ signal.* / price.plausi) und liefert einen Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne, Weg-Absagen und dry_run rufen keine KI und laufen unverändert (SignalFixJob ist rein deterministisch).',
         'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
 
