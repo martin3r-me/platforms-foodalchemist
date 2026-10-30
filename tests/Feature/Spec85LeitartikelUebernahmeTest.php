@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Livewire\Settings\Einkauf;
+use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
@@ -80,7 +81,8 @@ it('vom Master wird nie übernommen: Mandant direkt unter dem Master bekommt des
     config(['foodalchemist.master_team_id' => $master->id]);
     TeamAncestryRegistry::flushAll();
     LeadOverlay::vergessen();
-    ($this->pin)($master, 'B');
+    // Pin direkt als Zeile: der Sicht-Riegel (Lead-Sicht 29.10.) lässt den Master den team-eigenen Artikel des Mandanten nicht über pinnen() setzen.
+    FoodAlchemistGpLaPreference::create(['team_id' => $master->id, 'gp_id' => $this->gp->id, 'supplier_item_id' => $this->la['B']->id, 'gepinnt' => true]);
 
     expect(LeadOverlay::kette($mandant))->toBe([(int) $mandant->id])
         ->and(LeadOverlay::fuer($mandant, [(int) $this->gp->id]))->toBe([]);
