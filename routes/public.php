@@ -66,6 +66,13 @@ Route::get('_platform/fa-assets/{file}', function (string $file) {
     ]);
 })->where('file', '[a-zA-Z0-9._-]+\.(js|css)')->name('foodalchemist.platform-asset');
 
+// #1003 PWA Stufe 1: Food Alchemist als App (Manifest + Icons). Ohne Login, Browser laden das Manifest ohne Cookies.
+Route::get('_platform/fa-app/manifest.webmanifest', [\Platform\FoodAlchemist\Http\Controllers\HandyAppController::class, 'manifest'])
+    ->name('foodalchemist.handy_app.manifest');
+Route::get('_platform/fa-app/{name}.png', [\Platform\FoodAlchemist\Http\Controllers\HandyAppController::class, 'icon'])
+    ->where('name', '[a-z0-9-]+')
+    ->name('foodalchemist.handy_app.icon');
+
 // Bearer-Download nur mit zeitlich begrenzter Signatur. Die Bytes wurden bereits
 // über den Teamkontext des MCP-Aufrufs autorisiert; kein Zugriff auf lebende IDs.
 Route::get('/_platform/fa-recipe-pdf/{token}', \Platform\FoodAlchemist\Http\Controllers\RecipePdfDownloadController::class)

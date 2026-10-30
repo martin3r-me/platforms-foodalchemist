@@ -11,6 +11,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <x-foodalchemist::handy.kopf />
   <title>{{ isset($title) ? $title.' · ' : '' }}Food Alchemist</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -65,7 +66,7 @@
   @endauth
 
 
-  <div class="flex h-screen w-full">
+  <div class="flex h-screen w-full" data-fa-huelle>
     @include('foodalchemist::layouts.partials.standalone-nav')
 
     <main class="flex-1 min-w-0 h-screen flex flex-col overflow-hidden bg-[var(--fa-ground)]">
@@ -76,7 +77,7 @@
       {{-- Dunkler Rahmen (Dominique 2026-10-05): Navigation, Chat-Leiste und Detail-Panels dunkel, Arbeitsfläche hell.
            display:contents — kein eigener Kasten, der Terminal-Root bleibt Flex-Kind von <main>; die Tokens erbt er trotzdem. --}}
       @auth
-        <div class="contents" data-fa-theme="dark">
+        <div class="contents" data-fa-theme="dark" data-fa-nur-desktop>
           @livewire('core.terminal')
         </div>
       @endauth
@@ -85,6 +86,11 @@
       </div>
     </main>
   </div>
+
+  {{-- #1003 Untere Leiste der Handy-Oberfläche (am Computer unsichtbar) --}}
+  @auth
+    <x-foodalchemist::handy.nav />
+  @endauth
 
   <livewire:notifications.notices.index />
   @livewireScripts
