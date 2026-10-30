@@ -77,7 +77,9 @@ class LieferantenStammdatenblattService
             $stamm[$f] = $lieferant->{$f};
         }
         $kontakte = [];
-        foreach ($this->kontakteVon($team, $lieferant) as $c) {
+        $alle = $this->kontakteVon($team, $lieferant);
+        foreach ($alle->pluck('rolle_key')->unique() as $rolle) {
+            $c = $this->kontaktFuerRolle($alle, $team, (string) $rolle);
             $kontakte[$c->rolle_key] = ['name' => $c->name, 'phone' => $c->phone, 'mobile' => $c->mobile, 'email' => $c->email];
         }
 
@@ -231,7 +233,8 @@ class LieferantenStammdatenblattService
         }
         $daten = ['name' => $this->wert('Name', 'text', 255, $w['name']), 'phone' => $this->wert('Telefon', 'text', 64, $w['phone'] ?? null), 'mobile' => $this->wert('Mobil', 'text', 64, $w['mobile'] ?? null),
             'email' => $this->wert('E-Mail', 'email', 255, $w['email'] ?? null), 'role' => self::ROLLEN[$rolle]];
-        $vorhanden = $this->kontakteVon($team, $lieferant)->firstWhere('rolle_key', $rolle);
+        // Nur den EIGENEN Kontakt der Rolle ändern; gibt es nur den eines Eltern-Teams, bekommt das Team einen eigenen (der fremde bleibt).
+        $vorhanden = $this->kontakteVon($team, $lieferant)->first(fn ($c) => $c->rolle_key === $rolle && (int) $c->team_id === (int) $team->id);
         $vorhanden !== null
             ? $vorhanden->update(array_filter($daten, fn ($v) => $v !== null))
             : FoodAlchemistSupplierContact::create($daten + ['team_id' => $team->id, 'supplier_id' => $lieferant->id, 'rolle_key' => $rolle]);
@@ -317,7 +320,8 @@ class LieferantenStammdatenblattService
             if ($werte['name'] === null) {
                 throw new \RuntimeException('Ansprechpartner ' . self::ROLLEN[$rolle] . ': bitte einen Namen angeben.');
             }
-            $alt = $kontakte->firstWhere('rolle_key', $rolle);
+            $alt = $this->kontaktFuerRolle($kontakte, $team, $rolle);
+            $eigen = $alt !== null && (int) $alt->team_id === (int) $team->id;   // Übernehmen ändert nur den eigenen, sonst legt es einen an
             $diff = [];
             foreach (self::KONTAKT_FELDER as $f => $_) {
                 if ($werte[$f] !== null && ! $this->gleich($alt?->{$f}, $werte[$f])) {
@@ -325,7 +329,7 @@ class LieferantenStammdatenblattService
                 }
             }
             if ($diff !== []) {
-                $saetze[] = ['typ' => 'kontakt', 'label' => 'Ansprechpartner ' . self::ROLLEN[$rolle], 'aktion' => $alt === null ? Zeile::AKTION_NEU : Zeile::AKTION_AENDERT, 'diff' => $diff, 'werte' => $werte];
+                $saetze[] = ['typ' => 'kontakt', 'label' => 'Ansprechpartner ' . self::ROLLEN[$rolle], 'aktion' => $eigen ? Zeile::AKTION_AENDERT : Zeile::AKTION_NEU, 'diff' => $diff, 'werte' => $werte];
             }
         }
         $gebiete = $this->gebieteVon($team, $lieferant);
@@ -458,6 +462,14 @@ class LieferantenStammdatenblattService
     private function kontakteVon(Team $team, FoodAlchemistSupplier $l): \Illuminate\Support\Collection
     {
         return FoodAlchemistSupplierContact::visibleToTeam($team)->where('supplier_id', $l->id)->whereNotNull('rolle_key')->get();
+    }
+
+    /** Kontakt einer Rolle für Anzeige und Vergleich: der eigene vor dem eines Eltern-Teams. */
+    private function kontaktFuerRolle(\Illuminate\Support\Collection $kontakte, Team $team, string $rolle): ?FoodAlchemistSupplierContact
+    {
+        $zurRolle = $kontakte->where('rolle_key', $rolle);
+
+        return $zurRolle->first(fn ($c) => (int) $c->team_id === (int) $team->id) ?? $zurRolle->first();
     }
 
     /** @return \Illuminate\Support\Collection<int, FoodAlchemistSupplierDeliveryArea> */

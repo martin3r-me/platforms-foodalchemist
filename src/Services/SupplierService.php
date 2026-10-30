@@ -271,7 +271,10 @@ class SupplierService
      */
     public function stammblatt(Team $team, int $id): array
     {
-        $supplier = FoodAlchemistSupplier::visibleToTeam($team)->with('contacts')->findOrFail($id);
+        // Ansprechpartner sind team-eigen (team_id des anlegenden Teams), auch am gemeinsamen Katalog-Lieferanten: nur die eigene Kette.
+        // Ausdrücklich hier statt über TeamSicht::STUFEN — Kind-Tabelle, und der Sichtfilter hängt am Stufen-Schalter.
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)
+            ->with(['contacts' => fn ($q) => $q->visibleToTeam($team)])->findOrFail($id);
         $agreements = app(SupplierAgreementService::class);
 
         // WG-Abdeckung: für welche Warengruppen ist dieser Lieferant Stamm (in der Team-Kette)?
