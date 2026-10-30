@@ -378,7 +378,8 @@ class TrendService
      */
     public function inspirationen(Team $team, string $ansicht = 'offen', string $suche = '', ?string $schlagwort = null): Collection
     {
-        $q = FoodAlchemistTrendInspiration::whereIn('team_id', $this->fundstueckFamilie($team))
+        // Spec 93: die Pinnwand zeigt nur, was ein Mensch abgelegt hat — automatische Themen aus dem Eingang nie
+        $q = FoodAlchemistTrendInspiration::whereIn('team_id', $this->fundstueckFamilie($team))->where('herkunft', 'manuell')
             ->with(['quellen', 'trend:id,name,status,typ']);
         if ($ansicht === 'offen') {
             $q->whereNull('trend_id');

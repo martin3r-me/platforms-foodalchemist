@@ -432,6 +432,11 @@ return [
             'max_bytes' => (int) env('FOODALCHEMIST_TREND_QUELLEN_MAX_BYTES', 2 * 1024 * 1024),
             'timeout' => (int) env('FOODALCHEMIST_TREND_QUELLEN_TIMEOUT', 20),
             'teaser_max' => 600,
+            // Spec 93 B: Erschließen-Lauf per Tool „alle neu“ nimmt höchstens so viele je Aufruf (Kurator 30.10.)
+            'erschliessen_max_je_aufruf' => 50,
+            // Spec 93 B: Ähnlichkeit für das Bündeln über die Vektorsuche (Schritt 2). null = aus. Wert wird auf demo gemessen
+            // (`foodalchemist:trend-themen-aehnlichkeit --team=…`), dann gesetzt — nicht raten.
+            'buendel_aehnlichkeit' => env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') !== null ? (float) env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') : null,
         ],
     ],
 
@@ -1363,6 +1368,22 @@ return [
                 . 'werte = {urteile: [{id, nonfood: true|false, unterkategorie: eine aus `unterkategorien` oder null, konfidenz: 0-1}]}. '
                 . 'Antworte KNAPP: nur diese vier Felder je Artikel. Das Feld grund (ein kurzer Satz) schreibst du NUR bei konfidenz unter 0.8, sonst weglassen. '
                 . 'Genau ein Urteil je übergebenem Artikel, id unverändert aus `artikel`.',
+        ],
+        // Spec 93 B: Trendradar-Eingang — ein Artikel (Titel, Teaser, Quelle) wird erschlossen. Die Entscheidung Hype/Trend/Radar
+        // trifft später eine deterministische Regel (Abschnitt C); die KI liefert nur Merkmale.
+        'trend.eingang_erschliessen' => [
+            'klasse' => 'leicht',
+            'max_tokens' => 900,
+            'temperature' => 0,
+            'task' => 'Erschließe einen Artikel für den Trendradar eines Caterers (Food & Beverage, Catering, Gastronomie). '
+                . 'Eingabe: titel, teaser, quelle (name, art, schwerpunkte), themen (vorhandene Themennamen des Teams), trends (id, name). '
+                . 'werte = {relevant: true|false, zusammenfassung: höchstens 400 Zeichen in EIGENEN Worten (kein Zitat), '
+                . 'thema: kurz, Singular, deutsch, 1–4 Wörter — ist es dasselbe wie ein Eintrag aus `themen`, übernimm genau dessen Schreibweise, '
+                . 'kategorie: food|getraenke|deko|format, sparten: Liste aus event_bankett|betriebsgastronomie|care|bildung|restaurant_hotel|delivery (leer = alle), '
+                . 'tiefe: beduerfnis (gesellschaftliches Bedürfnis, Dauer) | oberflaeche (medial, kurzlebig) | unklar, tiefe_begruendung: ein Satz, '
+                . 'passt_zu_trend_id: id NUR aus `trends`, sonst null, begruendung: ein Satz}. '
+                . 'Nicht relevant (z. B. Personalie, Insolvenz, Stellenanzeige, Technik ohne Food-Bezug): relevant=false mit begruendung, '
+                . 'die übrigen Felder dürfen leer sein. Erfinde nichts, was nicht in Titel oder Teaser steht.',
         ],
         'component.replacement_suggest' => [
             'klasse' => 'stark',

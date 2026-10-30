@@ -101,6 +101,9 @@ final class TrendVokabular
 
     public const EINGEREICHT_VON = ['abruf' => 'Abruf', 'mcp' => 'MCP', 'hand' => 'Von Hand'];
 
+    /** Herkunft einer Inspiration: manuell = Pinnwand (ein Mensch hat abgelegt), automatisch = Thema aus dem Eingang (nie auf der Pinnwand). */
+    public const HERKUNFT = ['manuell' => 'Pinnwand', 'automatisch' => 'Automatisch (Eingang)'];
+
     /** Tiefe eines Artikels (Abschnitt B): gesellschaftliches Bedürfnis oder Oberfläche. */
     public const TIEFEN = ['beduerfnis' => 'Bedürfnis (Tiefe)', 'oberflaeche' => 'Oberfläche', 'unklar' => 'Unklar'];
 

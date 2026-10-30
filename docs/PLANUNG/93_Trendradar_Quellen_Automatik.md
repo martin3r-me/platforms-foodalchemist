@@ -161,8 +161,13 @@ Pinnwand. MCP: `foodalchemist.trend_eingang.GET|POST` (einzeln oder bis 50 je Au
 
 ### 3. Erschließen (KI, je Artikel)
 
-Job `TrendEingangErschliessenJob` (KiExternWiederholbar), Prompt `trend.eingang_erschliessen`, Eingabe Titel + Teaser +
-Quelle + vorhandene Themen- und Trendnamen des Teams. Ausgabe (JSON, validiert): relevant (für Food & Beverage /
+Job `TrendEingangErschliessenJob` (KiExternWiederholbar), Prompt `trend.eingang_erschliessen` (Klasse leicht, ein Aufruf je
+Artikel), Eingabe Titel + Teaser + Quelle + vorhandene Themen- und Trendnamen des Teams (sortiert, stabiler
+Fingerabdruck). **Auslöser (Kurator 30.10.):** jeder neue Eingang-Eintrag automatisch — Plattform-Abruf → Plattform-KI,
+MCP-Einreichung → KI-Auftrag; dazu `trend_eingang.ERSCHLIESSEN` (ids oder alle offenen, höchstens 50 je Aufruf) und
+der Knopf „Erschließen“ im Reiter (Plattform-KI). Die Grenze N = 20 je Quelle und Abruf gilt damit auch fürs
+Erschließen. Kosten bis C über den allgemeinen KI-Deckel des Teams; das eigene Trend-KI-Budget kommt mit C.
+Ungültige Antwort → Status `fehler` mit Begründung (nicht still). Ausgabe (JSON, validiert): relevant (für Food & Beverage /
 Catering / Gastronomie), zusammenfassung (≤ 400 Zeichen, eigene Worte), thema (kurz, Singular, deutsch, an
 vorhandene Themen angleichen, wenn es dasselbe ist), kategorie, sparten, tiefe + Begründung, passt_zu_trend_id
 (nur aus der mitgegebenen Liste, sonst null). Nicht relevant → `verworfen` mit Begründung.
@@ -170,11 +175,21 @@ vorhandene Themen angleichen, wenn es dasselbe ist), kategorie, sparten, tiefe +
 ### 4. Bündeln zu Themen
 
 Ein Thema ist eine **Inspiration** (Tabelle gibt es seit Spec 79 Nachtrag 09.10.) mit neuer Spalte
-`herkunft ∈ manuell|automatisch` (Standard manuell, Bestand bleibt manuell). Zuordnung eines erschlossenen Artikels:
-1. gleiche normalisierte `thema`-Schreibweise im Team → dieselbe Inspiration;
-2. sonst Ähnlichkeit über die vorhandene Vektorsuche (Qdrant, Partition je Team) gegen Themen der letzten 12 Monate,
-   ab Schwelle `buendel_aehnlichkeit` → dieselbe Inspiration;
+`herkunft ∈ manuell|automatisch` (Standard manuell, Bestand bleibt manuell) und `thema_schluessel` (normalisierte
+Schreibweise: klein, Umlaute ausgeschrieben, Satzzeichen weg). Zuordnung eines erschlossenen Artikels:
+1. gleiche normalisierte `thema`-Schreibweise im Team → dieselbe Inspiration (der Prompt bekommt die vorhandenen
+   Themennamen und übernimmt deren Schreibweise, wenn es dasselbe ist);
+2. sonst Ähnlichkeit über die vorhandene Vektorsuche gegen Themen der letzten 12 Monate, ab Schwelle
+   `buendel_aehnlichkeit` → dieselbe Inspiration. **Stand B: aus** (`trends.quellen.buendel_aehnlichkeit = null`).
+   **Wert wird auf demo gemessen, dann gesetzt** — mit `foodalchemist:trend-themen-aehnlichkeit --team=<ID>`
+   (zeigt die ähnlichsten Themenpaare eines Teams mit Score, nur dieses Team, schreibt nichts, auch nicht in den
+   Vektor-Index);
 3. sonst neue Inspiration (herkunft automatisch).
+Der Eingang merkt sich das Thema in `thema_inspiration_id`; `inspiration_id` bleibt die Pinnwand-Inspiration aus
+„Auf die Pinnwand“ (beides kann gleichzeitig gelten). „Thema ändern“ setzt `thema_quelle = manuell` (die KI fasst es nie
+wieder an) und hängt einen gebündelten Artikel ins neue Thema um; leere automatische Themen verschwinden. „Verwerfen“
+nimmt den Artikel aus seinem Thema. Manuelle Inspirationen werden nie gebündelt, ihr Schlüssel ist aber berechenbar
+(`TrendThemenService::schluessel`), damit C Pinnwand-Fundstücke als Sichtung zählen kann (Regel 2).
 Der Artikel wird zusätzlich als Beleg (`fundstueck = false`, quelle = art der Quelle) an die Inspiration gehängt.
 Die Pinnwand zeigt nur `herkunft = manuell`; die automatischen Themen erscheinen im Reiter „Eingang“ (siehe Abgrenzung).
 
@@ -252,7 +267,11 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
   Dublettenschutz. Keine KI. *Gebaut 30.10. (Branch `feat/spec93-a-quellen-eingang`):* dazu Abruf-Weg und Rhythmus je
   Quelle, automatische Wahl, Übersichtsseiten, Stichwort-Filter; Migrationen `2026_12_01_100000` (Quellen),
   `…100100` (Eingang), `…100200` (Team-Standards Rhythmus + Stichworte); Test `Spec93AQuellenEingangTest`.
-- **B · Erschließen + Bündeln:** Prompt, Job (dual), Inspiration `herkunft`, Bündel-Logik, Pinnwand-Filter.
+- **B · Erschließen + Bündeln:** Prompt, Job (dual), Inspiration `herkunft`, Bündel-Logik, Pinnwand-Filter. *Gebaut 30.10.
+  (Branch `feat/spec93-b-erschliessen-buendeln`):* Migrationen `2026_12_01_100300` (Inspiration herkunft,
+  thema_schluessel), `…100400` (Eingang thema_inspiration_id, passt_zu_trend_id, thema_quelle, erschlossen_at); Tool
+  `trend_eingang.ERSCHLIESSEN`; Mess-Befehl `trend-themen-aehnlichkeit`; Pflichtliste Spec 90 Zeile 87; Test
+  `Spec93BErschliessenBuendelnTest`.
 - **C · Einordnung + Automatik:** `TrendAutomatikService`, Einstellungen + MCP, Schatten-Ansicht, Status-Stufen,
   Schutz manueller Felder, Signale.
 - **D · Ableitung:** Prompt + Job (dual), Anzeige am Trend, Übergabe an die Planung.

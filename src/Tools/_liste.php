@@ -629,6 +629,7 @@ return [
     \Platform\FoodAlchemist\Tools\TrendBelegeDeleteTool::class,
     \Platform\FoodAlchemist\Tools\TrendBelegePostTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangEntscheidenTool::class,
+    \Platform\FoodAlchemist\Tools\TrendEingangErschliessenTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangPostTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenDeleteTool::class,

@@ -12,7 +12,25 @@
             </button>
         @endforeach
         <x-fa::input size="sm" wire:model.live.debounce.400ms="suche" placeholder="Im Eingang suchen…" class="ml-auto w-56" aria-label="Im Eingang suchen" />
+        @if($darfKuratieren && (($zaehler['neu'] ?? 0) + ($zaehler['fehler'] ?? 0)) > 0)
+            <x-fa::button size="sm" variant="ai" icon="heroicon-m-sparkles" wire:click="erschliessen" data-eingang-erschliessen>
+                {{ ($zaehler['neu'] ?? 0) + ($zaehler['fehler'] ?? 0) }} erschließen
+            </x-fa::button>
+        @endif
     </div>
+
+    {{-- Spec 93 B: automatische Themen (gebündelte Artikel) — erscheinen nie auf der Pinnwand --}}
+    @if($themen->isNotEmpty())
+        <x-fa::section title="Themen" description="Automatisch gebündelte Artikel. Die Pinnwand bleibt davon unberührt." data-eingang-themen>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach($themen as $t)
+                    <button type="button" class="fa-chip" wire:click="$set('suche', @js($t->titel))" wire:key="th-{{ $t->id }}" data-thema="{{ $t->id }}">
+                        <span>{{ $t->titel }} · {{ $t->quellen_count }}</span>
+                    </button>
+                @endforeach
+            </div>
+        </x-fa::section>
+    @endif
 
     @if($eintraege->isEmpty())
         <div class="fa-surface">
@@ -31,13 +49,19 @@
                             <div class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] flex flex-wrap gap-x-2">
                                 <span>{{ $e->quelle?->name ?? V::label(V::EINGEREICHT_VON, $e->eingereicht_von) }}</span>
                                 @if($e->veroeffentlicht_am)<span>{{ $e->veroeffentlicht_am->format('d.m.Y') }}</span>@endif
-                                @if($e->thema)<span>Thema: {{ $e->thema }}</span>@endif
+                                @if($e->thema)<span>Thema: {{ $e->thema }}@if($e->thema_quelle === 'manuell') (von Hand)@endif</span>@endif
+                                @if($e->kategorie)<span>{{ V::label(V::KATEGORIEN, $e->kategorie) }}</span>@endif
+                                @if($e->tiefe)<span>{{ V::label(V::TIEFEN, $e->tiefe) }}</span>@endif
+                                @if(! empty($e->sparten))<span>{{ implode(', ', array_map(fn ($sp) => V::label(V::SPARTEN, $sp), $e->sparten)) }}</span>@endif
                             </div>
                         </div>
                         <x-fa::badge :tone="$e->status === 'verworfen' ? 'neutral' : 'accent'">{{ V::label(V::EINGANG_STATUS, $e->status) }}</x-fa::badge>
                     </div>
                     @if($e->zusammenfassung || $e->teaser)
                         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] line-clamp-3">{{ $e->zusammenfassung ?? $e->teaser }}</p>
+                    @endif
+                    @if($e->begruendung && in_array($e->status, ['verworfen', 'fehler'], true))
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-eingang-begruendung>Grund: {{ $e->begruendung }}</p>
                     @endif
                     @if($darfKuratieren && $eigen)
                         <div class="flex flex-wrap items-center gap-1.5">

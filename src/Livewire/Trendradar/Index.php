@@ -415,13 +415,13 @@ class Index extends Component
                     'quellen' => $i->quellen->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)])]) : collect(),
             // Ablegen-Dialog: offene Inspirationen des eigenen Teams als Ziel für eine weitere Quelle
             'eigeneInspirationen' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $team->id)
-                ->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all(),
+                ->where('herkunft', 'manuell')->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all(),
             'haeufungen' => $svc->haeufungen($team),
             'teamNamen' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->pluck('name', 'id')->all(),
             // Moderation: Teams der Familie, in denen der Benutzer FA-Admin ist (darf dort Fundstücke löschen)
             'adminTeams' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->get()
                 ->filter(fn ($t) => $rechte->darf($user, $t, FaRolle::Admin))->pluck('id')->map(fn ($id) => (int) $id)->all(),
-            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::whereIn('team_id', $svc->fundstueckFamilie($team))->whereNull('trend_id')->count(),
+            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::whereIn('team_id', $svc->fundstueckFamilie($team))->where('herkunft', 'manuell')->whereNull('trend_id')->count(),
             'trendOptionen' => $alle->where('team_id', $team->id)->whereNotIn('status', ['verworfen', 'archiviert'])->pluck('name', 'id')->all(),
             'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());

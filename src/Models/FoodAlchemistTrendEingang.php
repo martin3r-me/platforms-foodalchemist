@@ -23,13 +23,19 @@ class FoodAlchemistTrendEingang extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'uuid' => 'string', 'veroeffentlicht_am' => 'datetime', 'zuletzt_gesehen_at' => 'datetime',
+        'uuid' => 'string', 'veroeffentlicht_am' => 'datetime', 'zuletzt_gesehen_at' => 'datetime', 'erschlossen_at' => 'datetime',
         'sparten' => 'array', 'relevant' => 'boolean',
     ];
 
     public function quelle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistTrendQuelle::class, 'quelle_id');
+    }
+
+    /** Spec 93 B: automatisches Thema (Inspiration mit herkunft = automatisch) */
+    public function themaInspiration(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistTrendInspiration::class, 'thema_inspiration_id');
     }
 
     public function inspiration(): BelongsTo

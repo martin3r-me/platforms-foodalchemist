@@ -41,6 +41,8 @@ beforeEach(function () {
     $this->leser = $this->makeUser($this->rootTeam, 'Leser TEST-93', 'viewer');
     $this->actingAs($this->inhaber);
     Http::preventStrayRequests();
+    // A prüft den Eingang vor dem Erschließen (Abschnitt B, eigener Test) — der Job wird hier nur vorgemerkt
+    \Illuminate\Support\Facades\Queue::fake([\Platform\FoodAlchemist\Jobs\TrendEingangErschliessenJob::class]);
     // Kein echtes DNS: Testhosts zeigen auf eine öffentliche Adresse, „intern.test“ ins interne Netz
     app()->instance(SichererAbruf::class, new SichererAbruf(fn (string $host) => str_starts_with($host, 'intern.') ? ['10.0.0.7'] : ['93.184.216.34']));
     $this->quellen = app(TrendQuellenService::class);

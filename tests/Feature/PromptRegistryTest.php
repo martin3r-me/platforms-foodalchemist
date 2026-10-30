@@ -35,7 +35,7 @@ const REGISTRY_KLASSEN = [
     ],
     'leicht' => [
         'artikel.web_recherche',   // Kostenziel ≤ 0,05 € je Klick (Dominique 19.10., vorher stark)
-        'la.nonfood', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 
+        'la.nonfood', 'trend.eingang_erschliessen', 'gp.condition', 'recipe.category', 'recipe.name_putzen', 'recipe.titel_vorschlag', 'vk.speisen_klasse', 
         'gp.anker', 'recipe.sektor', 'recipe.level', 'recipe.production_depth', 'recipe.bauart', 'recipe.equipment',
         'vk.titel_vorschlag', 'recipe.dichteklasse', 'vk.servier_vehikel', 'gp.tags', 'signal.serving_form_suggest',
         'signal.recipe_category_suggest', 'signal.recipe_naming_suggest',
