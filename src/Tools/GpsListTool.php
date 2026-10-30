@@ -23,10 +23,11 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
 
     public function getDescription(): string
     {
-        return 'Listet die Grundprodukte (GPs) des Teams vollständig und seitenweise auf (ohne Suchbegriff, '
-            . 'ohne 50er-Cap). page/per_page-Paging (last_page zum Weiterblättern). Liefert je GP '
-            . 'id, name, status, main_ingredient_slug; mit felder="voll" zusätzlich Warengruppe, sub_category, condition, zusatz, marke_offen, '
-            . 'rezepturware und den Lead-Lieferantenartikel samt Lieferant. Filter (alle optional, kombinierbar): commodity_group_code (WG, z. B. "13"), '
+        return 'Listet die Grundprodukte (GPs) des Teams vollständig und seitenweise auf (ohne 50er-Cap), wie der GP-Browser. '
+            . 'page/per_page-Paging (last_page zum Weiterblättern). Ohne status-Filter fehlen zusammengeführte GPs (merged) wie im Browser; status=merged zeigt sie. '
+            . 'Liefert je GP id, name, status, main_ingredient_slug; mit felder="voll" zusätzlich Warengruppe, sub_category, condition, zusatz, marke_offen, '
+            . 'rezepturware, den Lead-Lieferantenartikel samt Lieferant, Lead-Preis (Rückfall: letzter Preis mit Kennzeichen) und Vergleichspreis, '
+            . 'Anzahl Lieferantenartikel und Rezepte, Allergen-Badges und -Status. Filter (alle optional, kombinierbar): q (Suche in Name und Hauptzutat, jedes Wort muss treffen), commodity_group_code (WG, z. B. "13"), '
             . 'sub_category, status, marke_offen, rezepturware (ja|nein|offen), ohne_lead (true = kein Lead-Lieferantenartikel), '
             . 'ohne_la (true = keine aktive Lieferantenartikel-Struktur), nur_la_pflicht (true = nur GPs, die einen Artikel brauchen: requires_la, kein Derivat), '
             . 'lead_lieferant_inaktiv (true = Lead-Artikel beim inaktiven oder gesperrten Lieferanten, false = Lead bestellbar). '
@@ -40,16 +41,17 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
             'properties' => [
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
                 'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
+                'q' => ['type' => 'string', 'description' => 'Suchtext in Name und Hauptzutat (jedes Wort muss treffen), wie die Suche im GP-Browser.'],
                 'commodity_group_code' => ['type' => 'string', 'description' => 'Warengruppe (Code, z. B. "13").'],
                 'sub_category' => ['type' => 'string', 'description' => 'Unterkategorie, exakt (z. B. "16.6 Geschirr & Ausstattung").'],
-                'status' => ['type' => 'string', 'enum' => ['approved', 'tentative', 'review', 'rejected', 'merged'], 'description' => 'GP-Status.'],
+                'status' => ['type' => 'string', 'enum' => ['approved', 'tentative', 'review', 'rejected', 'merged'], 'description' => 'GP-Status. Ohne Angabe alle außer merged.'],
                 'marke_offen' => ['type' => 'boolean', 'description' => 'true = nur GPs auf der Nachlauf-Liste „Marke offen“, false = ohne.'],
                 'rezepturware' => ['type' => 'string', 'enum' => ['ja', 'nein', 'offen'], 'description' => 'Rezepturware (§5 Ausnahme 3): ja, nein oder offen (nicht entschieden).'],
                 'ohne_lead' => ['type' => 'boolean', 'description' => 'true = nur GPs ohne Lead-Lieferantenartikel, false = nur mit.'],
                 'ohne_la' => ['type' => 'boolean', 'description' => 'true = nur GPs ohne aktive Lieferantenartikel-Struktur (kein verknüpfter Artikel), false = nur mit.'],
                 'lead_lieferant_inaktiv' => ['type' => 'boolean', 'description' => 'true = nur GPs, deren Lead-Lieferantenartikel bei einem inaktiven oder gesperrten Lieferanten liegt (Repick-Kandidaten); false = nur GPs mit bestellbarem Lead.'],
                 'nur_la_pflicht' => ['type' => 'boolean', 'description' => 'true = nur GPs, die einen Lieferantenartikel brauchen (requires_la, kein Derivat) — zusammen mit ohne_la die echte Lückenliste.'],
-                'felder' => ['type' => 'string', 'enum' => ['kurz', 'voll'], 'default' => 'kurz', 'description' => '„voll“ liefert zusätzlich WG, sub_category, condition, zusatz, marke_offen, rezepturware und den Lead samt Lieferant.'],
+                'felder' => ['type' => 'string', 'enum' => ['kurz', 'voll'], 'default' => 'kurz', 'description' => '„voll“ liefert zusätzlich WG, sub_category, condition, zusatz, marke_offen, rezepturware, den Lead samt Lieferant, lead_preis/lead_letzter_preis/lead_vergleichspreis, la_count, rezepte_count, allergen_badges und allergen_status.'],
             ],
             'required' => [],
         ];
@@ -64,16 +66,17 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
         $page = max(1, (int) ($arguments['page'] ?? 1));
         $perPage = min(200, max(1, (int) ($arguments['per_page'] ?? 100)));
         Paginator::currentPageResolver(fn () => $page);
-        $filter = ['search' => '', 'commodity_group' => $arguments['commodity_group_code'] ?? null, 'status' => $arguments['status'] ?? null,
+        if ($fehler = $this->enumFehler($arguments)) {
+            return $fehler;
+        }
+        $filter = ['search' => trim((string) ($arguments['q'] ?? '')), 'ohne_merged' => true, 'commodity_group' => $arguments['commodity_group_code'] ?? null, 'status' => $arguments['status'] ?? null,
             'sub_category' => $arguments['sub_category'] ?? null]
             + array_filter(array_intersect_key($arguments, array_flip(['marke_offen', 'rezepturware', 'ohne_lead', 'ohne_la', 'nur_la_pflicht', 'lead_lieferant_inaktiv'])), fn ($v) => $v !== null && $v !== '');
-        if (isset($filter['rezepturware']) && ! in_array($filter['rezepturware'], ['ja', 'nein', 'offen'], true)) {
-            return ToolResult::error('rezepturware muss ja, nein oder offen sein.', 'VALIDATION_ERROR');
-        }
         $voll = ($arguments['felder'] ?? 'kurz') === 'voll';
         $treffer = app(GpService::class)->paginate($filter, $team, $perPage);
         if ($voll) {
             $treffer->getCollection()->load('leadLa.supplier:id,name');
+            app(GpService::class)->listenKennzahlen($treffer->getCollection(), $team);
         }
 
         return $this->erfolgMitWarnungen([
@@ -89,6 +92,9 @@ class GpsListTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'zusatz' => $gp->zusatz, 'marke_offen' => (bool) $gp->marke_offen, 'rezepturware' => $gp->rezepturware,
                 'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
                 'lead_la' => $gp->leadLa !== null ? ['designation' => $gp->leadLa->designation, 'lieferant' => $gp->leadLa->supplier?->name] : null,
+                'lead_preis' => $gp->lead_preis !== null ? round((float) $gp->lead_preis, 4) : null, 'lead_letzter_preis' => $gp->lead_letzter,
+                'lead_vergleichspreis' => $gp->lead_vergleichspreis, 'la_count' => $gp->la_count, 'rezepte_count' => $gp->rezepte_count,
+                'allergen_badges' => $gp->allergen_badges, 'allergen_status' => $gp->allergen_status,
             ] : []))->all(),
         ], $arguments);
     }
