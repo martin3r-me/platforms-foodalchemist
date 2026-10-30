@@ -148,8 +148,11 @@ class KiAuftragService
                 $gestartet[] = ['lauf_key' => $wKey, 'job' => class_basename($klasse), 'versuch' => (int) ($w['versuch'] ?? 0) + 1];
             }
             if ($geaendert) {
-                $p['weitere'] = $weitere;
-                DB::table('foodalchemist_ki_auftraege')->where('id', $r->id)->update(['wiederholung' => json_encode($p, JSON_UNESCAPED_UNICODE)]);
+                // frisch lesen: der Besitzer-Neustart oben hat `gestartet_at` an dieser Zeile gesetzt, das darf nicht überschrieben werden
+                $frisch = json_decode((string) DB::table('foodalchemist_ki_auftraege')->where('id', $r->id)->value('wiederholung'), true);
+                $frisch = is_array($frisch) ? $frisch : [];
+                $frisch['weitere'] = $weitere;
+                DB::table('foodalchemist_ki_auftraege')->where('id', $r->id)->update(['wiederholung' => json_encode($frisch, JSON_UNESCAPED_UNICODE)]);
             }
         }
 
