@@ -151,7 +151,7 @@ it('Signale am Computer unverändert: Läufe, Erledigt, Ignorieren, Begriffe leh
 });
 
 it('Standard-Freischaltung am Handy: genau Abhaken, KI-Fix und KI-Werte bestätigen (Dominique 30.10.)', function () {
-    expect(config('foodalchemist.handy.aendern_frei'))->toBe(['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren', 'bulkUebernehmen', 'bulkVerwerfen']);
+    expect(config('foodalchemist.handy.aendern_frei'))->toBe(['signalErledigt', 'signalWiederOeffnen', 'toggleKiPanel', 'kiFixAusfuehren', 'bulkUebernehmen', 'bulkVerwerfen', 'handyFotoSpeichern']);   // + Fotos am Handy (#1003 Fotos)
 });
 
 it('KI-Fix am Handy (Standard an): Panel über die ganze Breite, „Automatisch beheben“ mit Bestätigung, derselbe Job wie am Desktop; Ignorieren und Läufe weiter gesperrt', function () {

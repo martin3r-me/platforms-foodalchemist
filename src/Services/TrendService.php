@@ -758,7 +758,7 @@ class TrendService
         if ($datei->getSize() > V::DATEI_MAX_KB * 1024) {
             throw new \RuntimeException('Die Datei ist größer als 15 MB.');
         }
-        $res = app(ContextFileService::class)->uploadForContext($datei, 'foodalchemist.trend_beleg', (int) $beleg->id, [
+        $res = app(ContextFileService::class)->uploadForContext(app(FoodAlchemistMediaService::class)->verkleinert($datei), 'foodalchemist.trend_beleg', (int) $beleg->id, [
             'team_id' => $team->id, 'user_id' => $userId, 'folder' => 'foodalchemist/trends/'.($beleg->trend_id !== null ? (int) $beleg->trend_id : 'fundstuecke'),
             'keep_original' => true, 'generate_variants' => false,
         ]);

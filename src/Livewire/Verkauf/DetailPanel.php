@@ -20,12 +20,12 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class DetailPanel extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
-    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;   // #1003: am Handy nur lesen
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich, \Platform\FoodAlchemist\Livewire\Concerns\HandyRezeptFotos;   // #1003: am Handy nur lesen, Fotos aufnehmen
 
     /** #1003: am Handy laufen nur Anzeige und Navigation (KI-Läufe und Pflege bleiben am Computer). */
     public function handyLeseMethoden(): array
     {
-        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion'];
+        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion', ...self::handyFotoMethoden()];
     }
 
     /** Spec 65: gleiche Sperre wie der Gericht-Editor (Ziel recipe). */
@@ -41,7 +41,7 @@ class DetailPanel extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion', 'reject_klasse', 'reject_rollen', 'eignungVerwerfen'];
+        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion', 'reject_klasse', 'reject_rollen', 'eignungVerwerfen', ...self::handyFotoMethoden()];
     }
 
     public ?int $recipeId = null;

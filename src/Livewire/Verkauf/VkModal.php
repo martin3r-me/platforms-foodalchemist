@@ -74,7 +74,7 @@ class VkModal extends Component
         if ($this->recipeId === null || $this->dishImageUpload === null) {
             return;
         }
-        $this->validate(['dishImageUpload' => 'image|max:8192'], [], ['dishImageUpload' => 'Gericht-Foto']);
+        $this->validate(['dishImageUpload' => 'image|max:' . \Platform\FoodAlchemist\Services\RezeptFotoService::MAX_KB], [], ['dishImageUpload' => 'Gericht-Foto']);
         try {
             app(\Platform\FoodAlchemist\Services\RecipeService::class)->storeDishImage(Auth::user()?->currentTeamRelation, $this->recipeId, $this->dishImageUpload);
         } catch (\Throwable $e) {

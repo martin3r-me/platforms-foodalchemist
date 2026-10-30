@@ -1,7 +1,8 @@
 {{-- #1003 Handy-Detail im Handbuch-Stil, für Rezept ($art 'rezept') und Gericht ($art 'gericht').
      Rendert NUR am Handy (Recipes\DetailPanel, Verkauf\DetailPanel: HandyLesemodus::anfrageVomHandy); das
      Desktop-Detail bleibt unverändert. Aufbau: Foto → Titel → drei Kernwerte → Allergene → Reiter
-     (Zutaten · Zubereitung · Anrichten · Regeneration · Formen). Nur lesen. --}}
+     (Zutaten · Zubereitung · Anrichten · Regeneration · Formen). Nur lesen — Ausnahme Fotos (Concerns\HandyRezeptFotos):
+     am eigenen Rezept „Foto aufnehmen“ als Hauptbild, zu einem Arbeits- oder Anrichte-Schritt (Kamera oder Galerie). --}}
 @php
     $menge = fn ($wert) => rtrim(rtrim(number_format((float) $wert, 2, ',', '.'), '0'), ',');
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
@@ -12,6 +13,21 @@
         'regeneration' => $karte['regeneration'] !== [] || $karte['behaelter'] !== [] ? 'Regeneration' : null,
         'formen' => $art === 'gericht' && $formen->isNotEmpty() ? 'Formen' : null,
     ]);
+    // #1003 Fotos: nur am eigenen Rezept und solange freigeschaltet; Schritt-IDs in derselben Reihenfolge wie die Karte.
+    $fotoTeam = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation;
+    $fotoFrei = \Platform\FoodAlchemist\Support\HandyLesemodus::frei('handyFotoSpeichern') && $fotoTeam !== null && $rezept->isOwnedBy($fotoTeam);
+    $schrittIds = $fotoFrei ? ['zubereitung' => $rezept->steps->pluck('id')->values()->all(), 'anrichten' => $rezept->platingSteps->pluck('id')->values()->all()] : [];
+    $zielText = function (string $ziel) use ($schrittIds) {
+        [$typ, $id] = array_pad(explode(':', $ziel, 2), 2, null);
+        if ($typ === 'hauptbild') {
+            return 'als Hauptbild';
+        }
+        $abschnitt = $typ === 'anrichten' ? 'anrichten' : 'zubereitung';
+        $nr = array_search((int) $id, $schrittIds[$abschnitt] ?? [], true);
+
+        return 'zu Schritt ' . ($nr === false ? '?' : $nr + 1) . ($abschnitt === 'anrichten' ? ' (Anrichten)' : ' (Zubereitung)');
+    };
+    $fotoKnopf = 'inline-flex items-center gap-1.5 min-h-11 px-3.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)] cursor-pointer';
     $teile = array_filter([
         $karte['portion']['form'] ?? null,
         ($karte['portion']['gramm'] ?? null) ? $menge($karte['portion']['gramm']) . ' g' : null,
@@ -33,11 +49,36 @@
                 <span class="{{ $leise }}">{{ implode(' · ', $teile) }}</span>
             @endif
         </div>
+        @if($fotoFrei)
+            <label class="{{ $fotoKnopf }} self-start" x-on:click="$wire.handyFotoZielWaehlen('hauptbild')" data-fa-handy-foto="hauptbild">
+                @svg('heroicon-m-camera', 'w-5 h-5 shrink-0') {{ $karte['foto_url'] ? 'Hauptbild ersetzen' : 'Foto aufnehmen' }}
+                <input type="file" accept="image/*" wire:model="handyFoto" class="sr-only">
+            </label>
+        @endif
         <p class="flex items-center gap-1.5 {{ $leise }}" data-fa-handy-hinweis>
             @svg('heroicon-m-computer-desktop', 'w-4 h-4 shrink-0') Am Computer bearbeiten
             <button type="button" class="ml-auto underline underline-offset-2" x-on:click="window.faAnsicht('desktop')" data-fa-desktop-ansicht>Desktop-Ansicht</button>
         </p>
     </header>
+
+    @if($fotoFrei && ($handyFoto || $handyFotoMeldung || $errors->has('handyFoto')))
+        <section class="mx-4 flex flex-col gap-3 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-4" data-fa-handy-foto-bestaetigen>
+            @error('handyFoto')<x-fa::notice tone="crit">{{ $message }}</x-fa::notice>@enderror
+            @if($handyFotoMeldung)<x-fa::notice :tone="$handyFotoMeldung === 'Foto gespeichert.' ? 'ok' : 'warn'" data-fa-handy-foto-meldung>{{ $handyFotoMeldung }}</x-fa::notice>@endif
+            <span wire:loading wire:target="handyFoto" class="{{ $leise }}">lädt hoch …</span>
+            @if($handyFoto && ! $errors->has('handyFoto'))
+                <p class="font-medium text-[var(--fa-ink)]">Foto {{ $zielText($handyFotoZiel) }}</p>
+                @if(method_exists($handyFoto, 'isPreviewable') && $handyFoto->isPreviewable())<img src="{{ $handyFoto->temporaryUrl() }}" alt="" class="w-full max-h-64 object-contain rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">@endif
+                @if($handyFotoZiel !== 'hauptbild')
+                    <input type="text" wire:model="handyFotoCaption" placeholder="Bildunterschrift (optional)" aria-label="Bildunterschrift" class="fa-control h-11">
+                @endif
+                <div class="flex gap-2">
+                    <x-fa::button variant="primary" icon="heroicon-m-check" class="flex-1 min-h-11 justify-center" wire:click="handyFotoSpeichern" wire:loading.attr="disabled" data-fa-handy-foto-speichern>Speichern</x-fa::button>
+                    <x-fa::button class="min-h-11" wire:click="$set('handyFoto', null)">Verwerfen</x-fa::button>
+                </div>
+            @endif
+        </section>
+    @endif
 
     {{-- Kernwerte: drei Zahlen, fehlende werden gezeigt, nicht geschätzt --}}
     <dl class="mx-4 grid grid-cols-3 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)] divide-x divide-[var(--fa-line)]" data-fa-kernwerte>
@@ -128,6 +169,13 @@
                                     <img src="{{ $f['url'] }}" alt="{{ $f['caption'] ?? '' }}" class="w-full rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)]" loading="lazy">
                                 @endif
                             @endforeach
+                            @if($fotoFrei && isset($schrittIds[$abschnitt][$s['nr'] - 1]))
+                                @php $schrittZiel = ($abschnitt === 'anrichten' ? 'anrichten:' : 'schritt:') . $schrittIds[$abschnitt][$s['nr'] - 1]; @endphp
+                                <label class="{{ $fotoKnopf }} self-start" x-on:click="$wire.handyFotoZielWaehlen('{{ $schrittZiel }}')" data-fa-handy-foto="{{ $schrittZiel }}">
+                                    @svg('heroicon-m-camera', 'w-5 h-5 shrink-0') Foto zu Schritt {{ $s['nr'] }}
+                                    <input type="file" accept="image/*" wire:model="handyFoto" class="sr-only">
+                                </label>
+                            @endif
                         </div>
                     </li>
                 @empty
