@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Services\LeadLaService;
 
 /**
  * Inaktiver oder gesperrter Lieferant (Kurator 29.10.2026) — aus RecipeRecomputeService ausgelagert (Dateigrößen-Wächter, Spec 85 §9).
- * Gemeinsame Stelle „Lead übergehen“ fürs Rezept-EK: so ein Artikel ist nie Lead und nie Preisquelle, solange ein bestellbarer Lieferant den GP
+ * Gemeinsame Stelle „Lead übergehen“ fürs Rezept-EK (auch: fürs Team nicht sichtbar, {@see leadUebergehen}): so ein Artikel ist nie Lead und nie Preisquelle, solange ein bestellbarer Lieferant den GP
  * beliefert; gibt es sonst nichts, bleibt er Ausweich. Das Kennzeichen `lieferant_inaktiv` setzen die Artikel-Abfragen ({@see \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::nichtBestellbarSql}).
  */
 class LieferantenAusweich
@@ -18,6 +18,18 @@ class LieferantenAusweich
     public function uebergehen(?FoodAlchemistSupplierItem $la): bool
     {
         return $la !== null && (bool) ($la->lieferant_inaktiv ?? false);
+    }
+
+    /**
+     * Wird der gesetzte Lead übergangen? Lieferant inaktiv/gesperrt — oder, beim Rechnen für ein Team, für das Team nicht sichtbar (Stamm-Lieferant
+     * nicht freigeschaltet, Artikel eines fremden Teams): dann fehlt er in den team-sichtbaren Artikeln `$las` (Lead-Sicht, Kurator 29.10.2026).
+     * Ohne Team sind `$las` alle verknüpften Artikel; ein fehlender Lead bleibt dort wie bisher stehen.
+     */
+    public function leadUebergehen(Collection $las, int $leadId, ?Team $team): bool
+    {
+        $lead = $las->firstWhere('id', $leadId);
+
+        return $lead === null ? $team !== null : $this->uebergehen($lead);
     }
 
     /** Ø-Pfad: Artikel nicht bestellbarer Lieferanten zählen nicht mit — außer es bliebe nichts. */

@@ -305,6 +305,7 @@ foodalchemist.knowledge_routings.PUT
 foodalchemist.lab_notes.POST
 foodalchemist.lab_notes.SEARCH
 foodalchemist.lead_la.REPICK
+foodalchemist.lead_sicht.GET
 foodalchemist.leitstelle.GET
 foodalchemist.menu_engineering.GET
 foodalchemist.orders.ADD_LINE

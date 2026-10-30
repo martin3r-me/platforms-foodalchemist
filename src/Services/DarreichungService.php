@@ -448,7 +448,7 @@ class DarreichungService
         foreach ($darreichung->zubehoer()->with('gp:id,name,team_id,commodity_group_code,lead_la_supplier_item_id,piece_default_g')->get() as $z) {
             // Doppelzählung vermeiden: dasselbe GP als Gefäß zählt dort (Gefäß gewinnt). Miete (Lieferant der Gruppe VERLEIH): nur Hinweis, nie je Portion.
             $doppelt = $darreichung->vessel_gp_id !== null && (int) $darreichung->vessel_gp_id === (int) $z->gp_id;
-            $miete = ! $doppelt && $z->gp !== null && $this->istVerleihGp($z->gp);
+            $miete = ! $doppelt && $z->gp !== null && $this->istVerleihGp($z->gp, $team);
             if ($doppelt || $miete) {
                 $zeilen[] = ['gp_id' => (int) $z->gp_id, 'name' => (string) $z->gp?->name, 'menge' => (float) $z->quantity, 'preis_stk' => null, 'kosten' => null, 'note' => $z->note, 'doppelt' => $doppelt, 'miete' => $miete];
 
@@ -492,17 +492,21 @@ class DarreichungService
         return $gefaessTyp !== null && (int) $gefaessTyp !== (int) $d->serving_vehicle_vocab_id;
     }
 
-    /** Kommt der Lead-Artikel des GP von einem Lieferanten der Gruppe VERLEIH (Miete je Tag/Veranstaltung)? Dann zählt er nicht je Portion. */
-    public function istVerleihGp(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp): bool
+    /**
+     * Kommt der Lead-Artikel des GP von einem Lieferanten der Gruppe VERLEIH (Miete je Tag/Veranstaltung)? Dann zählt er nicht je Portion.
+     * Mit Team: der effektive Lead dieses Teams wie im EK (Pin, inaktiver Lieferant, fürs Team nicht sichtbar — Lead-Sicht 29.10.2026).
+     */
+    public function istVerleihGp(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp, ?Team $team = null): bool
     {
-        if ($gp->lead_la_supplier_item_id === null || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_supplier_groups')) {
+        $leadId = $team !== null ? $this->recompute->effektiverLeadFuer($gp, $team) : $gp->lead_la_supplier_item_id;
+        if ($leadId === null || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_supplier_groups')) {
             return false;
         }
 
         return DB::table('foodalchemist_supplier_items as i')
             ->join('foodalchemist_suppliers as s', 's.id', '=', 'i.supplier_id')
             ->join('foodalchemist_supplier_groups as g', 'g.id', '=', 's.group_id')
-            ->where('i.id', $gp->lead_la_supplier_item_id)->where('g.code', \Platform\FoodAlchemist\Support\LieferantenGruppen::VERLEIH)->exists();
+            ->where('i.id', $leadId)->where('g.code', \Platform\FoodAlchemist\Support\LieferantenGruppen::VERLEIH)->exists();
     }
 
     /**
@@ -517,10 +521,10 @@ class DarreichungService
         if ($gp === null) {
             return ['gp' => null, 'kosten' => null, 'miete' => false, 'preis_fehlt' => false];
         }
-        if ($this->istVerleihGp($gp)) {
+        $team ??= Team::find($d->team_id);
+        if ($this->istVerleihGp($gp, $team)) {
             return ['gp' => $gp, 'kosten' => null, 'miete' => true, 'preis_fehlt' => false];
         }
-        $team ??= Team::find($d->team_id);
         $preis = $this->recompute->preisProStueckPublic($gp, $team);
 
         return ['gp' => $gp, 'kosten' => $preis !== null ? round($preis, 4) : null, 'miete' => false, 'preis_fehlt' => $preis === null];

@@ -277,6 +277,7 @@ return [
     \Platform\FoodAlchemist\Tools\LagerartikelPutTool::class,
     \Platform\FoodAlchemist\Tools\LaGpAbgleichTool::class,
     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
+    \Platform\FoodAlchemist\Tools\LeadSichtGetTool::class,   // Lead-Sicht 29.10.: Nachlauf-Vorschau read-only
     \Platform\FoodAlchemist\Tools\LeitstelleGetTool::class,
     \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“

@@ -457,12 +457,20 @@ class LeadLaService
             return 'global';
         }
         app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Leitartikel festlegen');
-        if (! FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($laId)->exists()) {
-            throw new \RuntimeException('Diesen Artikel kann euer Team nicht beziehen (Lieferant nicht freigeschaltet).');
-        }
         $this->pinnen($team, $gp, $laId);
 
         return 'pin';
+    }
+
+    /**
+     * Sicht-Riegel für Verknüpfen und Pin (Lead-Sicht, Kurator 29.10.2026): nur Artikel, die das Team sieht — ein Stamm-Artikel eines nicht
+     * freigeschalteten Lieferanten oder der Artikel eines fremden Teams würde sonst über das eigene GP in EK, Allergene und Nährwerte rutschen.
+     */
+    private function pruefeBeziehbar(Team $team, int $laId): void
+    {
+        if (! FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($laId)->exists()) {
+            throw new \RuntimeException('Diesen Artikel kann euer Team nicht beziehen (Lieferant nicht freigeschaltet).');
+        }
     }
 
     /** Team-Pin (V-27): fixiert den effektiven Lead, überlebt Bulk-Neuwahl. NULL = Pin lösen. */
@@ -470,6 +478,9 @@ class LeadLaService
     {
         if ($laId !== null && ! $this->gehoertZuGp($gp, $laId)) {
             throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
+        }
+        if ($laId !== null) {
+            $this->pruefeBeziehbar($team, $laId);
         }
 
         DB::transaction(function () use ($team, $gp, $laId) {
@@ -512,6 +523,7 @@ class LeadLaService
     /** LA an GP verknüpfen (Gegenstück, M3-07-Aktion): Struktur-Update + Lead-Neuwahl-Trigger (T3). */
     public function verknuepfen(Team $team, FoodAlchemistGp $gp, int $laId): void
     {
+        $this->pruefeBeziehbar($team, $laId);   // Lead-Sicht 29.10.: nie einen Artikel verknüpfen, den das Team nicht sieht (Stamm-Lieferant nicht freigeschaltet)
         DB::transaction(function () use ($gp, $laId, $team) {
             // Unique-Index auf supplier_item_id filtert NICHT nach deleted_at ⇒ evtl. Soft-Delete-
             // Leiche mitziehen, sonst kracht ein Neu-Insert. Gros der LAs (aus WaWi-Sync) hat noch

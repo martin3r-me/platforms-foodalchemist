@@ -548,7 +548,7 @@ class DetailPanel extends Component
             'allergene' => ($gp !== null && $brauchtAllergene) ? $aggregate->allergene($gp) : null,
             'allergenKonfidenz' => ($gp !== null && $brauchtAllergene) ? $aggregate->allergenKonfidenz($gp) : null,
             'zusatzstoffe' => ($gp !== null && $brauchtZusatz) ? $aggregate->zusatzstoffe($gp) : null,
-            'naehrwerte' => ($gp !== null && $brauchtNaehr) ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
+            'naehrwerte' => ($gp !== null && $brauchtNaehr) ? $aggregate->naehrwerte($gp, mitKiFallback: true, sicht: $team) : null,
             'kette' => $kette,
             'effektiverLeadId' => $effektiverLeadId,
             'leadSteuerung' => $leadSteuerung,
