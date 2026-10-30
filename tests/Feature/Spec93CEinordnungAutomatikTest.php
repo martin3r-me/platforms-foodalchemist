@@ -286,6 +286,22 @@ it('Signale: Quelle ab 3 Fehlern in Folge (2 nicht), MCP-Quelle fällig, Thema a
 
 // ── Budget, Team-Sicht, Tools, Oberfläche ───────────────────────────────
 
+it('Pinnwand „Gehört zu“ (Desktop und Handy) bietet nur manuelle Inspirationen an; ein Fundstück kommt nie in ein automatisches Thema', function () {
+    $thema = ($this->thema)('TEST-93 Automatisches Thema', [['tage' => 1]]);
+    $karte = $this->trends->fundstueckAblegen($this->rootTeam, ['titel' => 'TEST-93 Handkarte', 'url' => 'https://insta.test/hand']);
+
+    Livewire::withCookie(\Platform\FoodAlchemist\Support\HandyLesemodus::COOKIE, '0')->test(\Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
+        ->call('ansichtSetzen', 'inspiration')
+        ->assertViewHas('eigeneInspirationen', fn ($l) => array_key_exists((int) $karte->inspiration_id, $l) && ! array_key_exists((int) $thema->id, $l));
+    Livewire::withCookie(\Platform\FoodAlchemist\Support\HandyLesemodus::COOKIE, '1')->test(\Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
+        ->set('handyReiter', 'pinnwand')->call('$set', 'handyAblegenOffen', true)
+        ->assertViewHas('eigeneInspirationen', fn ($l) => array_key_exists((int) $karte->inspiration_id, $l) && ! array_key_exists((int) $thema->id, $l))
+        ->assertDontSee('TEST-93 Automatisches Thema');
+    expect(fn () => $this->trends->fundstueckAblegen($this->rootTeam, ['titel' => 'TEST-93 falsch', 'inspiration_id' => $thema->id]))
+        ->toThrow(\RuntimeException::class, 'automatisches Thema');
+    expect(FoodAlchemistTrendBeleg::where('inspiration_id', $thema->id)->count())->toBe(1);
+});
+
 it('Trend-KI-Budget: erreicht → Status fehler, Provider nicht gerufen; null = kein eigener Deckel; MCP-Weg zählt nicht', function () {
     $stub = new class extends FakeAiProvider
     {

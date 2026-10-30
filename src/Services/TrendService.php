@@ -367,6 +367,10 @@ class TrendService
         return DB::transaction(function () use ($team, $daten, $datei, $userId) {
             if (! empty($daten['inspiration_id'])) {
                 $insp = $this->eigeneInspiration($team, (int) $daten['inspiration_id']);
+                if ($insp->herkunft === 'automatisch') {
+                    // Spec 93 (Abgrenzung): die Pinnwand bleibt Handarbeit — ein Fundstück kommt nie in ein automatisches Thema
+                    throw new \RuntimeException('Diese Inspiration ist ein automatisches Thema aus dem Eingang; ein Fundstück legt man auf der Pinnwand ab.');
+                }
                 $neueWorte = $this->liste_($daten['schlagworte'] ?? null, true) ?? [];
                 if ($neueWorte !== []) {
                     $insp->update(['schlagworte' => $this->worteVereinen($insp->schlagworte ?? [], $neueWorte)]);
