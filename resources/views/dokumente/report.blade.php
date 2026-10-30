@@ -25,6 +25,7 @@
 <html lang="de">
 <head>
     <meta charset="utf-8">
+    @unless($pdf)<meta name="viewport" content="width=device-width, initial-scale=1">@endunless
     <title>{{ $titel ?? 'Report' }} – {{ $name ?? '' }}</title>
     <style>
         /* DomPDF-Leitplanken wie Speisekarte: keine CSS-Variablen, kein Flex/Grid, feste Bänder,
@@ -117,6 +118,23 @@
             .band-bottom { margin-top: 14px; }
             .recipe-node, .photo-strip, .grid { page-break-inside: auto; }
         }
+        @unless($pdf)
+        /* #1003: am Handy lesbar (nur Bildschirm ≤ 640 px; DomPDF bekommt diese Regel nicht, der Druck greift nicht). */
+        @media screen and (max-width: 640px) {
+            body { font-size: 12px; }
+            .doc { padding: 16px 16px 24px; }
+            .band-top, .band-bottom { padding: 0 16px; }
+            .actions { margin: -16px -16px 16px; padding: 10px 12px; }
+            .actions a { padding: 8px 12px; font-size: 12px; }
+            h1 { font-size: 22px; }
+            .grid > div, .grid > div.wide { width: 50%; font-size: 12px; }
+            .grid > div.full { width: 100%; }
+            table, table.zutaten { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            th, td { min-width: 4.5rem; font-size: 11px; overflow-wrap: normal; }
+            th:first-child, td:first-child { min-width: 0; }
+            th { font-size: 10px; }
+        }
+        @endunless
     </style>
 </head>
 <body>

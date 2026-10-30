@@ -16,7 +16,7 @@ return [
     'src/Livewire/Angebote/Editor.php' => [1790, 'C4 Komposition (Spec 85 §8)'],
     'resources/views/livewire/produktion/tagesplan.blade.php' => [1646, 'C6 mit Produktion/Tagesplan (Spec 85 §9)'],
     'src/Livewire/Concepter/Editor.php' => [1637, 'C6 Slots / Paket-Positionen (Spec 85 §9)'],
-    'src/Livewire/Foodbooks/Index.php' => [1624, 'C4 Komposition (Spec 85 §8)'],
+    'src/Livewire/Foodbooks/Index.php' => [1625, 'C4 Komposition (Spec 85 §8); +1 Handy-Weiche #1003 PR6'],
     'resources/views/livewire/concepter/editor.blade.php' => [1605, 'C6 mit Concepter/Editor (Spec 85 §9)'],
     'src/Services/RecipeRecomputeService.php' => [1524, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],
     'src/Services/ConceptService.php' => [1535, 'Nicht-Kernlogik auslagern (Spec 85 §9)'],

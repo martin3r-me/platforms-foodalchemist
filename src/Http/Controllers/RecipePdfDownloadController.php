@@ -18,9 +18,14 @@ class RecipePdfDownloadController
             : ($export['bytes'] ?? false);
         abort_unless(is_string($bytes) && str_starts_with($bytes, '%PDF-'), 404);
 
+        // #1003: inline statt attachment — am Handy öffnet der Link im PDF-Betrachter (teilen, sichern), statt still
+        // in „Downloads“ zu landen. Dateiname bleibt (beim Sichern), Umlaute RFC-6266-kodiert mit ASCII-Ersatz.
+        $name = str_replace(['/', '\\'], '_', (string) $export['filename']);
+        $ersatz = trim((string) preg_replace('/[^\x20-\x7E]|["\\\\%\/]/', '_', \Illuminate\Support\Str::ascii($name))) ?: 'Rezept.pdf';
+
         return response($bytes, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $export['filename'] . '"',
+            'Content-Disposition' => \Symfony\Component\HttpFoundation\HeaderUtils::makeDisposition('inline', $name, $ersatz),
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'no-referrer',

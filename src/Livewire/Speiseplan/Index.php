@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Services\SpeiseplanService;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyAusgabenLesen;   // #1003: am Handy Karten → Vorschau, nur Suche und Blättern
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -74,6 +75,9 @@ class Index extends Component
 
     public function render(SpeiseplanService $svc)
     {
+        if (\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
+            return $this->handyAusgabe('speiseplan');
+        }
         $team = $this->team();
         $plan = $this->selectedId ? $svc->detail($team, $this->selectedId) : null;
         $vorschau = $plan ? $svc->dokumentDaten($team, $plan, $this->vorschauMahlzeit) : null;
