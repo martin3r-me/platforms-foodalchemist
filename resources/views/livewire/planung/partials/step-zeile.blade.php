@@ -100,30 +100,24 @@
                              Schritte, Sensorik, Zeiten, Equipment, Posten und Pairings leer. --}}
                         @if(($enr['tief'] ?? true) === false)
                             <x-fa::signal tone="info" title="Kernfelder gefüllt ({{ $enr['at'] ?? '' }}), ohne Schritte, Sensorik, Zeiten, Equipment und Pairings (Leitplanke „Voll anreichern“ war aus).">Leicht angereichert</x-fa::signal>
-                            @unless($handy ?? false){{-- #1003 PR7 --}}
                             <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }}, true)" variant="ai" icon="heroicon-o-sparkles" label="Voll anreichern"
                                 busy="Wird angereichert …" flash="Anreicherung eingereiht"
                                 title="Jetzt in voller Tiefe anreichern: Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten, geerdete Pairings." />
-                            @endunless
                         @else
                             <x-fa::signal tone="ok" title="Voll angereichert {{ $enr['at'] ?? '' }}">Angereichert</x-fa::signal>
                         @endif
                     @elseif(in_array($enrStatus, ['queued', 'running'], true))
                         <span class="inline-flex items-center gap-1 {{ $textKlein }} font-medium text-[var(--fa-info)]">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') Wird angereichert …</span>
                     @elseif($enrStatus === 'failed')
-                        @unless($handy ?? false){{-- #1003 PR7 --}}
                         <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" :error="$enr['error'] ?? null" icon="heroicon-o-arrow-path"
                             retry="Anreicherung fehlgeschlagen, erneut anreichern" busy="Wird erneut angereichert …"
                             flash="Anreicherung eingereiht" class="{{ $textKlein }}" />
-                        @endunless
                     @elseif($reuseUnreif)
                         {{-- Kein Auto-Lauf: das übernommene Rezept ist FREMD oder schon freigegeben — daran hängen
                              möglicherweise Gerichte, Foodbooks und Speisepläne. Die Entscheidung gehört dem Menschen. --}}
-                        @unless($handy ?? false){{-- #1003 PR7 --}}
                         <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" variant="ai" icon="heroicon-o-sparkles" label="Bestand anreichern"
                             busy="Wird angereichert …" flash="Anreicherung eingereiht"
                             title="Bestands-Rezept{{ ($reuse['eigen'] ?? false) ? '' : ' eines anderen Teams' }}{{ ($reuse['status'] ?? '') === 'approved' ? ', bereits freigegeben' : '' }}. Anreicherung bewusst anstoßen, vorhandene Inhalte können dabei neu erzeugt werden." />
-                        @endunless
                     @endif
                     {{-- Etappe 7 — Bild-Status: nur wenn KI-Fotos angefordert waren UND die Anreicherung durch ist
                          (die Fotos laufen im selben Job danach). deferred.bilder trägt done|failed + n; fehlt es
@@ -238,11 +232,11 @@
                 @endunless
 
                 {{-- Hauptaktion der Karte --}}
-                @unless($handy ?? false){{-- #1003 PR7: Freigeben/Erzeugen am Computer --}}
+                {{-- #1003 PR7: Freigeben am Handy erlaubt (Dominique 30.10., wie am Computer, ohne Rückfrage); Erzeugen/Überarbeiten am Computer. --}}
                 @if($st->status === 'done')
-                    <x-foodalchemist::ki-action action="gibFrei({{ $st->id }})" variant="primary" icon="heroicon-o-check"
+                    <x-foodalchemist::ki-action action="gibFrei({{ $st->id }})" variant="primary" icon="heroicon-o-check" :class="($handy ?? false) ? 'min-h-11 max-w-full whitespace-normal text-left' : ''"
                         label="Freigeben" busy="Wird freigegeben …" flash="Freigegeben" data-step-freigeben />
-                @elseif($st->status === 'geplant')
+                @elseif($st->status === 'geplant' && ! ($handy ?? false))
                     @if($istIdee)
                         <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil-square" wire:click="toggleKommentar({{ $st->id }})"
                             title="Vorschlag mit Rückmeldung überarbeiten">{{ $kommentarIstOffen ? 'Rückmeldung schließen' : 'Überarbeiten' }}</x-fa::button>
@@ -259,7 +253,6 @@
                             />
                     @endif
                 @endif
-                @endunless
             </div>
         @endif
     </div>

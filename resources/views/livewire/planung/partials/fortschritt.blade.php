@@ -116,23 +116,23 @@
 
         <div class="flex flex-wrap items-center gap-2">
             @if($offen > 0)
-                @unless($handy ?? false){{-- #1003 PR7: Anreichern/Freigeben am Computer --}}
+                {{-- #1003 PR7: am Handy erlaubt (Dominique 30.10.), Sammel-Freigabe mit Rückfrage. --}}
                 <x-foodalchemist::ki-action action="alleNeuenAnreichern()" target="alleNeuenAnreichern" icon="heroicon-o-sparkles" variant="ai"
+                    :confirm="($handy ?? false) ? $offen . ' ' . ($offen === 1 ? 'Vorschlag' : 'Vorschläge') . ' freigeben und anreichern?' : null" :class="($handy ?? false) ? 'min-h-11 max-w-full whitespace-normal text-left' : ''"
                     label="Alle neu gebauten anreichern und freigeben ({{ $offen }})" busy="Wird angereichert …" flash="Anreicherung gestartet" data-planung-alle-anreichern />
-                @endunless
             @endif
             @if($laufFailedGenerierbar > 0)
                 <x-foodalchemist::ki-action action="laufWiederAufnehmen()" target="laufWiederAufnehmen" icon="heroicon-o-arrow-path" variant="ghostXs"
                     label="Gescheiterte Schritte fortsetzen ({{ $laufFailedGenerierbar }})" busy="Wird fortgesetzt …" flash="Fortsetzung eingereiht" data-planung-resume-btn />
             @endif
-            @unless($handy ?? false){{-- #1003 PR7: Stufe freigeben am Computer --}}
             @foreach($stufen as $stufe)
                 @if($stufe['zustand'] === 'prüfen')
+                    @php $stufeOffen = max(0, (int) ($stufe['total'] ?? 0) - (int) ($stufe['fertig'] ?? 0)); @endphp
                     <x-foodalchemist::ki-action action="gibStufeFrei('{{ $stufe['kind'] }}')" icon="heroicon-o-check-badge" variant="ghostXs" wire:key="stufe-frei-{{ $stufe['kind'] }}"
+                        :confirm="($handy ?? false) ? $stufeOffen . ' ' . ($stufeOffen === 1 ? 'Vorschlag' : 'Vorschläge') . ' freigeben und anreichern?' : null" :class="($handy ?? false) ? 'min-h-11 max-w-full whitespace-normal text-left' : ''"
                         label="Ganze Stufe freigeben: {{ $stufeName[$stufe['kind']] ?? $stufe['label'] }}" busy="Wird freigegeben …" flash="Stufe freigegeben" data-planung-stufe-frei="{{ $stufe['kind'] }}" />
                 @endif
             @endforeach
-            @endunless
             @if($offen > 0)
                 @unless($handy ?? false){{-- #1003 PR7: Alle verwerfen am Computer --}}
                 <div class="relative ml-auto" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
@@ -204,10 +204,9 @@
                         <div class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fa-line)] bg-[var(--fa-ground)] px-3 py-2 {{ $klein }} text-[var(--fa-ink-3)]">
                             <span>{{ count($c['zeilen']) }} {{ count($c['zeilen']) === 1 ? 'Basisrezept' : 'Basisrezepte' }} · {{ $c['offen'] }} offen{{ $c['fehler'] > 0 ? ' · ' . $c['fehler'] . ' Fehler' : '' }}</span>
                             @if($c['offen'] > 0)
-                                @unless($handy ?? false){{-- #1003 PR7 --}}
                                 <x-foodalchemist::ki-action action="clusterFreigeben({{ $kopf->id }})" target="clusterFreigeben" icon="heroicon-o-check" variant="ghostXs"
+                                    :confirm="($handy ?? false) ? $c['offen'] . ' ' . ($c['offen'] === 1 ? 'Vorschlag' : 'Vorschläge') . ' freigeben und anreichern?' : null" :class="($handy ?? false) ? 'min-h-11 max-w-full whitespace-normal text-left' : ''"
                                     label="{{ $kopf->kind === 'gericht' ? 'Gericht + Basisrezepte' : 'Rezept + Unterrezepte' }} anreichern und freigeben" busy="Wird angereichert …" flash="Anreicherung gestartet" />
-                                @endunless
                             @endif
                         </div>
                     </div>

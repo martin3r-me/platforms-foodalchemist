@@ -1,10 +1,14 @@
 <?php
 
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Livewire\Planung\RezeptImport;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Support\HandyLesemodus;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -19,6 +23,15 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
+    // Lauf mit einem fertigen Gericht-Entwurf (status done), wie ihn die Kaskade hinterlässt.
+    $this->lauf = function (string $titel, bool $gestuft = false): array {
+        $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => $titel, 'brief' => 'x']);
+        $recipe = $this->makeRecipe($this->rootTeam, $titel . ' Gericht', ['status' => 'draft']);
+        $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => $gestuft]);
+        $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+        return [$session, $recipe, $step];
+    };
 });
 
 function handyPr7()
@@ -51,14 +64,15 @@ it('am Computer unverändert: Reiterleiste mit allen Reitern, Ausgabe-Formen, Ve
         ->assertDontSeeHtml('data-planung-handy-schritte')->assertDontSeeHtml('data-planung-handy-arten')->assertDontSeeHtml('data-planung-handy-kontext');
 });
 
-it('Server-Sperre am Handy: Auftrag, Start, Abbruch, Wiederaufnahme und Schritt-Fotos ja; Freigabe, Verwerfen, Pflege, Ausgabe-Formen nein', function () {
+it('Server-Sperre am Handy: Auftrag, Start, Abbruch, Wiederaufnahme, Freigabe/Anreichern und Schritt-Fotos ja; Verwerfen, Pflege, Ausgabe-Formen nein', function () {
     request()->cookies->set(HandyLesemodus::COOKIE, '1');
     foreach (['schnellErstellen', 'oeffne', 'speichern', 'goKaskade', 'kiKopf', 'leitplankenAusBriefing', 'briefDiktatUebernehmen',
-        'laufAbbrechen', 'laufWiederAufnehmen', 'pruefeLauf', 'waehleKnoten', 'fotoHochladen', 'fotoUebernehmen', '_startUpload'] as $m) {
+        'laufAbbrechen', 'laufWiederAufnehmen', 'pruefeLauf', 'waehleKnoten', 'fotoHochladen', 'fotoUebernehmen', '_startUpload',
+        'gibFrei', 'gibStufeFrei', 'clusterFreigeben', 'neuAnreichern', 'alleNeuenAnreichern'] as $m) {
         expect(HandyLesemodus::abgewiesen(new PlanungIndex, $m))->toBeFalse($m);
     }
-    foreach (['gibFrei', 'gibStufeFrei', 'verwirf', 'verwirfGeplant', 'alleVerwerfen', 'planAendern', 'clusterFreigeben', 'haengeKonzeptNach',
-        'favoritPinnen', 'favoritVorschlaegeLaden', 'sourcingLueckenMelden', 'neuGenerieren', 'neuAnreichern', 'alleNeuenAnreichern', 'bilderNeu',
+    foreach (['verwirf', 'verwirfGeplant', 'alleVerwerfen', 'planAendern', 'haengeKonzeptNach',
+        'favoritPinnen', 'favoritVorschlaegeLaden', 'sourcingLueckenMelden', 'neuGenerieren', 'bilderNeu',
         'vorschlagUeberarbeiten', 'erzeugeGeplant', 'toggleZutaten', 'toggleKommentar', 'ergaenzeSubRezept', 'planungVerwerfen', 'planungDuplizieren', 'alsVorlageSpeichern',
         'loeschenVorlage', 'foodbookAusBrief', 'speisekarteAusBrief', 'speiseplanAusBrief', 'angebotAusBrief', 'formatAusBrief',
         'schnellComposer', 'schnellTrendradar', 'trendradarUebernehmen', 'composerAdd', 'composerUebernehmen', 'konformitaetPruefen'] as $m) {
@@ -88,4 +102,38 @@ it('Team-Sicht am Handy: eine fremde Planung lässt sich nicht öffnen', functio
 
     $this->actingAs($this->makeUser(Team::create(['name' => 'Fremde Küche', 'user_id' => 1, 'personal_team' => false]), 'Fremd'));
     handyPr7()->call('oeffne', $session->id)->assertDontSeeHtml('data-planung-handy-kontext');
+});
+
+
+it('Freigabe vom Handy (Dominique 30.10.): schreibt dasselbe wie am Computer, Knöpfe sichtbar, Sammel-Freigabe mit Rückfrage', function () {
+    Queue::fake();
+    // Gestufter Lauf: die Freigabe IST die Anreicherung (EnrichRecipeJob), grün erst danach.
+    [$sHandy, $rHandy, $stepHandy] = ($this->lauf)('Handy', true);
+    [$sPc, $rPc, $stepPc] = ($this->lauf)('Computer', true);
+
+    handyPr7()->call('oeffne', $sHandy->id)
+        ->assertSeeHtml('data-step-freigeben')->assertSeeHtml('data-planung-stufe-frei="gericht"')
+        ->assertSeeHtml('Vorschlag freigeben und anreichern?')
+        ->call('gibFrei', $stepHandy->id)->assertSet('meldung', 'Freigegeben.');
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\EnrichRecipeJob::class, 1);
+
+    Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(PlanungIndex::class)->call('oeffne', $sPc->id)
+        ->assertDontSeeHtml('Vorschlag freigeben und anreichern?')   // am Computer ohne Rückfrage (unverändert)
+        ->call('gibFrei', $stepPc->id)->assertSet('meldung', 'Freigegeben.');
+
+    expect($stepHandy->refresh()->status)->toBe($stepPc->refresh()->status)->toBe('freigegeben')
+        ->and($rHandy->refresh()->status->value)->toBe($rPc->refresh()->status->value)->toBe('review')   // freigegeben nach Anreicherung
+        ->and($stepHandy->deferred)->toBe($stepPc->deferred);
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\EnrichRecipeJob::class, 2);   // Handy und Computer je einmal
+});
+
+it('Anreichern vom Handy stößt die Anreicherung an; Verwerfen vom Handy bleibt wirkungslos', function () {
+    Queue::fake();
+    [$session, $recipe, $step] = ($this->lauf)('Anreichern');
+    handyPr7()->call('oeffne', $session->id)->call('gibFrei', $step->id)->call('neuAnreichern', $step->id);
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\EnrichRecipeJob::class);
+
+    [$s2, $r2, $step2] = ($this->lauf)('Verwerfen');
+    handyPr7()->call('oeffne', $s2->id)->call('verwirf', $step2->id)->call('alleVerwerfen');
+    expect($step2->refresh()->status)->toBe('done')->and($r2->refresh()->trashed())->toBeFalse();
 });
