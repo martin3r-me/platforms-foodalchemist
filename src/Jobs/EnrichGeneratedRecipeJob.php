@@ -37,6 +37,11 @@ class EnrichGeneratedRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\S
         public bool $extern = false,   // #1002 P2c-2
         public int $versuch = 0,
     ) {
+        // #1002 Kaskade: aus einem externen MCP-Aufruf/Lauf angestoßen → selbst extern, Dispatch erst nach dem Commit
+        $this->extern = $this->extern || app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        if ($this->extern && $this->versuch === 0) {
+            $this->afterCommit = true;
+        }
         $this->knowledgeRunId = $knowledgeRunId;
         if ($this->knowledgeRunId === null && true) {
             $this->knowledgeRunId = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()

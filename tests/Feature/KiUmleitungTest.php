@@ -90,6 +90,10 @@ dataset('umgeleitete_tools', function () {
         'concepts.GENERATE' => ['foodalchemist.concepts.GENERATE', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], 'concept.brief_geruest'],
         'foodbook_kapitel.WORDING_GENERATE' => ['foodalchemist.foodbook_kapitel.WORDING_GENERATE', fn ($t) => ['kapitel_id' => $t->kapitelId], 'concept.wording'],
         'speisekarte_wording.GENERATE' => ['foodalchemist.speisekarte_wording.GENERATE', fn ($t) => ['speisekarte_id' => $t->karteId], 'foodbook.kundentext'],
+        'foodbook.PLAN_FROM_BRIEF' => ['foodalchemist.foodbook.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
+        'angebot.PLAN_FROM_BRIEF' => ['foodalchemist.angebot.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
+        'format.PLAN_FROM_BRIEF' => ['foodalchemist.format.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
+        'speisekarte.PLAN_FROM_BRIEF' => ['foodalchemist.speisekarte.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
         'signale.FIX' => ['foodalchemist.signale.FIX', fn ($t) => ['signal_id' => $t->signalId], 'signal.margin_levers'],
         'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
@@ -104,6 +108,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'],
             ['foodalchemist.concepts.GENERATE'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
+            ['foodalchemist.foodbook.PLAN_FROM_BRIEF'], ['foodalchemist.angebot.PLAN_FROM_BRIEF'], ['foodalchemist.format.PLAN_FROM_BRIEF'], ['foodalchemist.speisekarte.PLAN_FROM_BRIEF'],
         ];
     })());
     expect($ds)->toEqualCanonicalizing(array_keys(KiUmleitung::TOOLS));

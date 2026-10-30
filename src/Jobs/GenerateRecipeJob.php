@@ -60,6 +60,11 @@ class GenerateRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services
         public bool $extern = false,   // #1002 P2c-2: per MCP gestartet → KI-Aufträge statt Provider-Calls (erbt auf Kinder und Folge-Jobs)
         public int $versuch = 0,
     ) {
+        // #1002 Kaskade: aus einem externen MCP-Aufruf/Lauf angestoßen → selbst extern, Dispatch erst nach dem Commit
+        $this->extern = $this->extern || app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        if ($this->extern && $this->versuch === 0) {
+            $this->afterCommit = true;
+        }
     }
 
     // ── #1002 P2c-2 · KiExternWiederholbar ──

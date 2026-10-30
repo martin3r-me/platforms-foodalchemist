@@ -26,9 +26,9 @@ use Platform\FoodAlchemist\Services\ConceptGeneratorService;
  * VK-Gerichten (keine Erfindung — Slot ohne Treffer bleibt leer). Beide erben die Menü-Achsen.
  * Ergebnis ist immer `status=draft`.
  */
-class GenerateConceptJob implements ShouldQueue
+class GenerateConceptJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     /** Gerüst-Propose (~1 Call) + deterministischer Assembler — unter dem Worker-Timeout (600 s). */
     public int $timeout = 180;
@@ -52,7 +52,33 @@ class GenerateConceptJob implements ShouldQueue
         public ?int $attachContainerId = null,
         /** Concept-Tab Menü-Leitplanken (kanonische menue_*_pp-Keys); speisen den Gerüst-Kopf. */
         public array $menueAchsen = [],
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "generate-concept:{$this->teamId}:{$this->runId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['run_id' => $this->runId, 'team_id' => $this->teamId, 'user_id' => $this->userId, 'brief' => $this->brief, 'name' => $this->name,
+            'planning_session_id' => $this->planningSessionId, 'cascade_step_id' => $this->cascadeStepId, 'creative_mode' => $this->creativeMode,
+            'use_favorites' => $this->useFavorites, 'favorites_convenience_only' => $this->favoritesConvenienceOnly,
+            'attach_owner_type' => $this->attachOwnerType, 'attach_container_id' => $this->attachContainerId, 'menue_achsen' => $this->menueAchsen];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((string) $n['run_id'], (int) $n['team_id'], (int) $n['user_id'], (string) $n['brief'], $n['name'] ?? null,
+            isset($n['planning_session_id']) ? (int) $n['planning_session_id'] : null, isset($n['cascade_step_id']) ? (int) $n['cascade_step_id'] : null,
+            (string) $n['creative_mode'], (bool) $n['use_favorites'], (bool) $n['favorites_convenience_only'], $n['attach_owner_type'] ?? null,
+            isset($n['attach_container_id']) ? (int) $n['attach_container_id'] : null, (array) ($n['menue_achsen'] ?? []), true, $versuch);
+    }
 
     public static function cacheKey(string $runId): string
     {
@@ -60,6 +86,12 @@ class GenerateConceptJob implements ShouldQueue
     }
 
     public function handle(ConceptGeneratorService $generator): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($generator));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(ConceptGeneratorService $generator): void
     {
         if ($this->kaskadeAbgebrochen()) {
             $this->schreibe(['status' => 'cancelled']);
@@ -149,6 +181,8 @@ class GenerateConceptJob implements ShouldQueue
                 }
             }
             $this->meldeKaskade(true, (int) $concept->id, null);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
+            // wartet auf die externe Antwort — Step bleibt `running`, Cache bleibt `pending`; ANTWORT startet den Job neu
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
             $this->meldeKaskade(false, null, $e->getMessage());
@@ -267,7 +301,8 @@ class GenerateConceptJob implements ShouldQueue
 
     private function schreibe(array $data): void
     {
-        Cache::put(self::cacheKey($this->runId), $data, now()->addMinutes(15));
+        // Extern im Rollback-Rumpf: der Cache-Spiegel erst nach dem Commit (ein zurückgerollter Lauf darf kein „done" hinterlassen)
+        \Illuminate\Support\Facades\DB::afterCommit(fn () => Cache::put(self::cacheKey($this->runId), $data, now()->addMinutes(15)));
     }
 
     /**

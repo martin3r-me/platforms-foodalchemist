@@ -20,9 +20,9 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
  * planning_session_id). Die LLM-Divergenz ({@see PlanningCascadeService::fanoutConceptInvention})
  * läuft hier im Worker (nicht im Web-Request der Freigabe). Danach Run-Status neu bestimmen.
  */
-class FanoutConceptJob implements ShouldQueue
+class FanoutConceptJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;   // Spec 84 A-3: Job läuft im Auftragsteam
 
     public int $timeout = 180;
     public int $tries = 1;
@@ -31,9 +31,35 @@ class FanoutConceptJob implements ShouldQueue
         public int $teamId,
         public int $userId,
         public int $cascadeStepId,
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "fanout-concept:{$this->teamId}:{$this->cascadeStepId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'cascade_step_id' => $this->cascadeStepId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['cascade_step_id'], true, $versuch);
+    }
 
     public function handle(PlanningCascadeService $cascade): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($cascade));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(PlanningCascadeService $cascade): void
     {
         $team = Team::find($this->teamId);
         $step = FoodAlchemistCascadeRunStep::find($this->cascadeStepId);

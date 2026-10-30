@@ -21,9 +21,9 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  *
  * Fail-soft: scheitert der Lauf, bleibt die Hülle stehen (Signal «rezept_sub_stub_offen» führt sie weiter). Kein Auto-Retry (KI-Kosten).
  */
-class StubAusrezeptierenJob implements ShouldQueue
+class StubAusrezeptierenJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher, \Platform\FoodAlchemist\Services\Ai\KiExternJobTeil;
 
     public int $timeout = 540;
 
@@ -36,7 +36,27 @@ class StubAusrezeptierenJob implements ShouldQueue
         public int $stubId,
         public ?int $elternId = null,
         public array $parameter = [],
-    ) {}
+        public bool $extern = false,   // #1002 Kaskade: aus einem externen Lauf/MCP-Aufruf → KI-Auftrag statt Plattform-Provider
+        public int $versuch = 0,
+    ) {
+        $this->erbeExtern();
+    }
+
+    // ── #1002 Kaskade · KiExternWiederholbar ──
+    public function externSchluessel(): string
+    {
+        return "stub-ausrezeptieren:{$this->teamId}:{$this->stubId}";
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'stub_id' => $this->stubId, 'eltern_id' => $this->elternId, 'parameter' => $this->parameter];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['stub_id'], isset($n['eltern_id']) ? (int) $n['eltern_id'] : null, (array) ($n['parameter'] ?? []), true, $versuch);
+    }
 
     /** Brief für den Generator: der Name der Hülle plus der Zweck im Eltern-Rezept (damit „Nussbutter" zum Püree passt). */
     public static function brief(string $stubName, ?string $elternName): string
@@ -77,6 +97,12 @@ class StubAusrezeptierenJob implements ShouldQueue
 
     public function handle(RecipeGeneratorService $generator): void
     {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($generator));
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(RecipeGeneratorService $generator): void
+    {
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
         $stub = $team === null ? null : FoodAlchemistRecipe::query()->where('team_id', $this->teamId)->where('status', 'stub')->find($this->stubId);
@@ -99,6 +125,8 @@ class StubAusrezeptierenJob implements ShouldQueue
                 ]),
                 createdVia: 'import_ki_unterrezept',
             );
+        } catch (\Platform\FoodAlchemist\Exceptions\KiAuftragAusstehendException) {
+            // wartet auf die externe Antwort — kein Fehler; ANTWORT startet den Job neu
         } catch (\Throwable $e) {
             Log::warning('[StubAusrezeptierenJob] Ausrezeptieren fehlgeschlagen', ['stub' => $this->stubId, 'error' => $e->getMessage()]);
         }
