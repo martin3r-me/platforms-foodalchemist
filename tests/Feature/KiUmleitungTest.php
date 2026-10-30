@@ -51,6 +51,20 @@ beforeEach(function () {
         'article_number' => 'A1', 'qty' => 1, 'unit_code' => 'kg'])->id;
     $this->signalId = app(\Platform\FoodAlchemist\Services\SignalService::class)->erzeuge($this->rootTeam, \Platform\FoodAlchemist\Enums\SignalTyp::MargeUnterZiel,
         \Platform\FoodAlchemist\Enums\SignalSeverity::Warnung, 'Marge unter Ziel')->id;
+    // Wording-Fixtures: Kapitel mit Schreibstil + Konzept-Block mit Gericht; Karte mit Schreibstil + Position
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create(['team_id' => $this->rootTeam->id, 'slug' => 'um-stil', 'name' => 'Verspielt', 'sprach_duktus' => 'locker.']);
+    $gericht = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'um-g1', 'name' => 'Rinderfilet', 'status' => 'approved',
+        'is_sales_recipe' => true]);
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $menue = $concepts->create($this->rootTeam, ['name' => 'Wording-Menü', 'status' => 'active']);
+    $slot = $concepts->addSlot($this->rootTeam, $menue->id, ['role' => 'Hauptgang']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $gericht->id]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::whereKey($this->kapitelId)->update(['writing_style_id' => $stil->id]);
+    app(\Platform\FoodAlchemist\Services\FoodbookService::class)->addBlock($this->rootTeam, $this->kapitelId, ['type' => 'concept_ref', 'concept_id' => $menue->id]);
+    $karten = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $rubrik = $karten->addRubrik($this->rootTeam, $this->karteId);
+    $karten->addPosition($this->rootTeam, $rubrik->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $gericht->id]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::whereKey($this->karteId)->update(['writing_style_id' => $stil->id]);
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
 });
 
@@ -73,6 +87,9 @@ dataset('umgeleitete_tools', function () {
         'recipes.REVISE' => ['foodalchemist.recipes.REVISE', fn ($t) => ['recipe_id' => $t->basisId, 'anweisung' => 'Etwas weniger süß'], 'recipe.ueberarbeiten'],
         'verkaufsrezepte.REVISE' => ['foodalchemist.verkaufsrezepte.REVISE', fn ($t) => ['recipe_id' => $t->vkId, 'anweisung' => 'Etwas leichter'], 'vk.ueberarbeiten'],
         'la.GP_ABGLEICH' => ['foodalchemist.la.GP_ABGLEICH', fn ($t) => ['artikel_id' => $t->laId], 'gp.suggest'],
+        'concepts.GENERATE' => ['foodalchemist.concepts.GENERATE', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], 'concept.brief_geruest'],
+        'foodbook_kapitel.WORDING_GENERATE' => ['foodalchemist.foodbook_kapitel.WORDING_GENERATE', fn ($t) => ['kapitel_id' => $t->kapitelId], 'concept.wording'],
+        'speisekarte_wording.GENERATE' => ['foodalchemist.speisekarte_wording.GENERATE', fn ($t) => ['speisekarte_id' => $t->karteId], 'foodbook.kundentext'],
         'signale.FIX' => ['foodalchemist.signale.FIX', fn ($t) => ['signal_id' => $t->signalId], 'signal.margin_levers'],
         'recipes.GENERATE' => ['foodalchemist.recipes.GENERATE', fn ($t) => ['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], '*'],
     ];
@@ -86,6 +103,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'],
+            ['foodalchemist.concepts.GENERATE'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
         ];
     })());
     expect($ds)->toEqualCanonicalizing(array_keys(KiUmleitung::TOOLS));

@@ -61,23 +61,23 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 36 | `src/Services/BulkEnrichService.php::proposeGpFeld` | dyn. $key (gp.condition, gp.tags, gp.anker, gp.sensorik, gp.allergene, gp.naehrwerte) | 1 | b | P1 | gps.ENRICH | offen | P1-Kern |
 | 37 | `src/Services/CoherenceService.php::judge` | vk.kohaerenz | 1 | a | P2 | recipe_coherence.POST | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 38 | `src/Services/CoherenceService.php::tellerHeber` | vk.teller_heber | 1 | a | P2 | recipe_coherence.POST | angeschlossen | MCP-Umleitung (Tabelle D). |
-| 39 | `src/Services/ConceptGeneratorService.php::generiereAusBrief` | concept.brief_geruest | 1 | c | P2 | concepts.GENERATE | offen | Kaskade mit Schreibzugriffen dazwischen |
-| 40 | `src/Services/ConceptGeneratorService.php::fuelleCanvasAusPlan` | concept.plan | 1 | c | P2 | concepts.GENERATE | offen | Schleife über Slots, Schreiben je Slot |
+| 39 | `src/Services/ConceptGeneratorService.php::generiereAusBrief` | concept.brief_geruest | 1 | c | P2 | concepts.GENERATE | angeschlossen | Tool-Umleitung (Tabelle D, KiUmleitungTest, KiExternKonzepteTest Vergleich Plattform/MCP). Kaskade läuft rundenweise: die Tool-Transaktion rollt bis zur Antwort zurück, jede Wiederholung baut dieselben Prompts. Nur DB-Schreiben. |
+| 40 | `src/Services/ConceptGeneratorService.php::fuelleCanvasAusPlan` | concept.plan | 1 | c | P2 | kein Tool (UI Planung + GenerateConceptJob) | offen | Korrektur 30.10.: concepts.GENERATE erreicht `concept.plan` nicht (nur `generiereAusBrief`); `fuelleCanvasAusPlan` läuft über `planAusBrief` aus der Planungs-Oberfläche und `GenerateConceptJob` — gehört zur Planungs-Kaskade (Paket 2d). |
 | 41 | `src/Services/ConceptGeneratorService.php::geruestAusBriefFuerOwner` | dyn. $promptKey (foodbook.grundgeruest, format.grundgeruest …) | 1 | b | P2 | 4 *_plan_from_brief-Tools | offen |  |
 | 42 | `src/Services/ConceptService.php::generateWording` | concept.wording | 1 | a | P2 | ConceptWordingGenerateTool | angeschlossen | MCP-Umleitung concept_wording.GENERATE (Tabelle D, KiUmleitungTest). |
 | 43 | `src/Services/Conformance/GpConformanceAdapter.php::revise` | gp.conformance_revise | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 44 | `src/Services/Conformance/RecipeConformanceAdapter.php::revise` | dyn. $promptKey | 1 | b | P2 | Zuordnung prüfen | offen |  |
 | 45 | `src/Services/ConformanceService.php::pruefeAdapter` | conformance.check | 1 | b | P2 | Zuordnung prüfen | offen |  |
-| 46 | `src/Services/FoodbookService.php::kapitelWordingRegenerieren` | concept.wording | 1 | a | P2 | FoodbookKapitelWordingTool | offen |  |
+| 46 | `src/Services/FoodbookService.php::kapitelWordingRegenerieren` | concept.wording | 1 | a | P2 | FoodbookKapitelWordingTool | angeschlossen | Tool-Umleitung foodbook_kapitel.WORDING_GENERATE (Tabelle D, KiUmleitungTest + KiExternKonzepteTest; Fixture Kapitel mit Schreibstil und Konzept-Block). Fail-soft je Block bleibt, Wartezustand über den Modus. |
 | 47 | `src/Services/FoodbookService.php::kiKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKundentextTool | angeschlossen | MCP-Umleitung foodbook.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
 | 48 | `src/Services/FoodbookService.php::kiKapitelKundentextVorschlag` | foodbook.kundentext | 1 | a | P2 | FoodbookKapitelKundentextTool | angeschlossen | MCP-Umleitung foodbook_kapitel.KUNDENTEXT_GENERATE (Tabelle D, KiUmleitungTest). |
 | 49 | `src/Services/GpAbgleich/GpAbgleichService.php::entscheiderKi` | gp.la_abgleich | 1 | b | P2 | LaGpAbgleichTool | angeschlossen | MCP-Umleitung la.GP_ABGLEICH (Tabelle D, zweite Runde). KiExternLaTest |
 | 50 | `src/Services/GpAbgleich/LaFelderService.php::fuer` | gp.suggest | 1 | a | P2 | LaGpAbgleichTool | angeschlossen | MCP-Umleitung la.GP_ABGLEICH (erste Runde). KiExternLaTest |
 | 51 | `src/Services/GpAromaService.php::schaetze` | gp.sensorik | 1 | a | P1 | Backfill, gps.ENRICH | angeschlossen | Backfill ANGESCHLOSSEN (#611); Tool-Weg offen. 29.10.: 7 Achsen + Grenzen nach der Antwort (Nachverarbeitung beim Aufrufer, `SensorikService::begrenze`); Anzahl bleibt 1, Einstufung a, Backfill `--neu-schaetzen` |
 | 52 | `src/Services/GpFormService.php::estimateKi` | gp.zaehl_einheiten | 1 | a | P2 | GpFormsEstimateTool | angeschlossen | MCP-Umleitung (Tabelle D). |
-| 53 | `src/Services/IdeenService.php::kiDivergenzConcept` | foodbook.kapitel_ideen | 1 | b | P2 | KapitelIdeen*Tool | offen |  |
-| 54 | `src/Services/IdeenService.php::kiDivergenzSession` | foodbook.kapitel_ideen | 1 | b | P2 | KapitelIdeen*Tool | offen |  |
-| 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | Zuordnung prüfen (offer_chapter/offer_block) | offen | Schleife über Kapitel |
+| 53 | `src/Services/IdeenService.php::kiDivergenzConcept` | foodbook.kapitel_ideen | 1 | b | P2 | kein Tool (Aufrufer PlanningCascadeService::fanoutConceptInvention) | offen | Korrektur 30.10.: die KapitelIdeen*-Tools rufen keine KI (nur liste/anlegen/ändern); die KI-Stelle läuft in der Planungs-Kaskade — Paket 2d. |
+| 54 | `src/Services/IdeenService.php::kiDivergenzSession` | foodbook.kapitel_ideen | 1 | b | P2 | kein Tool (Aufrufer GenerateDishProposalJob) | offen | Korrektur 30.10.: Aufrufer ist `GenerateDishProposalJob` (Kaskade) — Paket 2d. |
+| 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | kein Tool (nur UI: Angebote-Editor) | offen | Geprüft 30.10.: kein MCP-Tool ruft diese Methode (per grep), nur `Angebote/Editor.php`. Bleibt Plattform-KI (UI). |
 | 56 | `src/Services/Pairing/AnkerWissenAuslese.php::lese` | anker.wissen_auslese | 1 | a | P1 | Artisan AnkerWissenCommand | offen | Anker-Pfad |
 | 57 | `src/Services/PresentationDesignService.php::generateCss` | praesentation.design_css | 1 | a | P2 | PresentationDesignsGenerateCssTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | offen | ANHANG (PDF/Bild): Entscheidung Punkt 5 |
@@ -97,7 +97,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 72 | `src/Services/ReplacementSuggestionService.php::forGp` | component.replacement_suggest | 1 | a | P2 | kein Tool (nur UI) | offen |  |
 | 73 | `src/Services/SensorikService.php::schaetzeRezept` | recipe.sensorik | 1 | a | P2 | RecipeSensorikPostTool | angeschlossen | MCP-Umleitung (Tabelle D). 29.10.: KI-Aufruf aus `bewerteRezept` hierher gezogen (bewerteRezept = schaetzeRezept + Speichern; der Abnahme-Befehl `gp-sensorik-referenz` liest nur). Nährwerte als Fakt im Kontext, Grenzen nach der Antwort (Nachverarbeitung); Einstufung a; Backfill `--neu-schaetzen=rezept` |
 | 74 | `src/Services/SignalFixService.php::assist` | dyn. $plan (signal.*) | 1 | a | P2 | SignaleFixTool | angeschlossen | MCP-Umleitung signale.FIX (Tabelle D, KiUmleitungTest, KiExternSignaleTest je Assist-Signaltyp). Nur der Assist-Plan ruft die KI; deterministische Pläne, Weg-Absagen und dry_run bleiben unverändert. |
-| 75 | `src/Services/SpeisekarteService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
+| 75 | `src/Services/SpeisekarteService.php::kiWordingVorschlag` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | angeschlossen | Tool-Umleitung speisekarte_wording.GENERATE über `speisekarteWordingRegenerieren` (Tabelle D, Test mit Karte mit Schreibstil und Position). Je Position ein Auftrag, fail-soft je Position bleibt. |
 | 76 | `src/Services/SpeisekarteService.php::kiKartenText` | foodbook.kundentext | 1 | a | P2 | SpeisekarteWordingTool | offen |  |
 | 77 | `src/Services/SpeisenKlassenService.php::classify` | vk.speisen_klasse | 1 | a | P2 | RecipeKlassePostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
 | 78 | `src/Services/SpeisenKlassenService.php::verteileRollen` | vk.rollen | 1 | a | P2 | RecipeRollenPostTool | angeschlossen | MCP-Umleitung (Tabelle D). |
@@ -159,7 +159,10 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.recipes.ENRICH` | Job-Mechanik (P2a/P2b) | `EnrichRecipeJob` ist `KiExternWiederholbar`: Rumpf in Sammel-Transaktion, Rollback bis zur Antwort, `ki_auftraege.ANTWORT` startet den Lauf neu, ein Lauf je Rezept (`enrich-recipe:{team}:{rezept}`). Inventur der Nicht-DB-Nebenwirkungen: Wartezustand/Fortschritt nur DB; Cache nur im Modal-Pfad ohne Step (nicht MCP); KI-Bilder und Produktfoto bleiben Plattform (im Extern-Weg aus); die Wache (`KiExternLauf::$nebenwirkungen`) meldet Queue-Dispatch/Cache/Mail im Test und im Log |
 | `foodalchemist.gp_aroma_backfill.RUN` | Service-Weg (#630) | startet `GpAromaBackfillService` (derselbe wie der Befehl); per MCP immer extern (`KiUmleitung::externFuerLauf`), KI-Aufträge je Lücke, Aufruf nach ANTWORT wiederholen; Trockenlauf Standard, Scope: eigenes Team (Master zusätzlich globale Stamm-GPs) |
 | `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
-| `foodalchemist.concepts.GENERATE` | ausgenommen (Klasse c) | Kaskade mit Schreibzugriffen dazwischen |
+| `foodalchemist.concepts.GENERATE` | umgeleitet (mehrere Runden) | Brief-Pfad: `concept.brief_geruest`, danach Gerüst-Befüllung und Wording-Pass (`concept.wording`, fail-soft); Rollback bis alles beantwortet, nur DB-Schreiben, keine Queue-Jobs |
+| `foodalchemist.foodbook_kapitel.WORDING_GENERATE` | umgeleitet | je Konzept-Block ein `propose()` (`concept.wording`), danach Overrides am Block; ohne Kapitel-Schreibstil kein KI-Aufruf |
+| `foodalchemist.speisekarte_wording.GENERATE` | umgeleitet | je Position ein `propose()` (`foodbook.kundentext`), fail-soft je Position; ohne Schreibstil der Karte kein KI-Aufruf |
+| `foodalchemist.{foodbook,angebot,format,speisekarte,speiseplan}.PLAN_FROM_BRIEF` | ausgenommen (Planungs-Kaskade, Paket 2d) | nach dem Gerüst-`propose()` startet der Aufruf Queue-Jobs (GenerateRecipeJob, GenerateDishProposalJob …), deren KI-Stufen noch nicht alle `KiExternWiederholbar` sind und deren `_extern`-Flag der Einstieg erst setzen muss; nur das Gerüst umzuleiten ließe die Kaskade still auf der Plattform-KI laufen. Speiseplan hat gar keinen Gerüst-Aufruf (KI nur im Job) |
 | `foodalchemist.la.GP_ABGLEICH` | umgeleitet (2 Runden) | `gp.suggest` (Felder), danach `gp.la_abgleich`; der zweite Prompt hängt von der ersten Antwort ab. Schreibt nur DB (Abgleich-Log, bei `apply` Verknüpfung/neues GP). `ki=false` = Sparsamkeit: nie ein Auftrag |
 | MCP-Herkunft → Folge-Jobs | Merker `KiExternModus::imMcp` (Hülle, jedes FA-Tool) | Ein externer MCP-Aufruf markiert den Lauf; Jobs, die er anstößt (`ClassifyLaJob`, `GpAromaNachholenJob`, `SensorikNachholenJob`, `ConformanceCheckJob` bei GP), laufen mit `extern=true` (`fuerDispatch`). Kein Auftrag, keine Transaktion im Tool selbst |
 | `signale.FIX` (Assist) | `KiUmleitung::TOOLS` | Ein `propose()` je Signal-Typ (`signal.supplier_inquiry`, `signal.margin_levers`, `price.plausi`, `signal.vk_release_advice`, `signal.serving_form_suggest`, `signal.recipe_category_suggest`, `signal.recipe_naming_suggest`), Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne und `dry_run` rufen keine KI. `SignalFixJob` bleibt deterministisch ohne KI (geprüft per Code-Lesen: nur `SignalFixService::execute`, kein Gateway-Aufruf) |
@@ -219,13 +222,13 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `vk.generator` | 123 | 35763 | 4.398.888 | RecipesGenerateTool. StubAusrezeptierenJob (Import-Hülle. 29.10.) | angeschlossen | 2d (übrige) |
 | `recipe.steps` | 94 | 15843 | 1.489.199 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (steps) | teilweise | 2d (übrige) |
 | `recipe.ueberarbeiten` | 124 | 10019 | 1.242.373 | RecipesReviseTool | angeschlossen | 2d (übrige) |
-| `foodbook.kapitel_ideen` | 43 | 18734 | 805.576 | KapitelIdeen*Tool | Plattform | 2c-3c/d (Konzepte. Kaskade) |
-| `concept.plan` | 31 | 20770 | 643.869 | concepts.GENERATE | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `foodbook.kapitel_ideen` | 43 | 18734 | 805.576 | kein Tool (Kaskade) | Plattform | 2d (Planungs-Kaskade) |
+| `concept.plan` | 31 | 20770 | 643.869 | GenerateConceptJob; planAusBrief (Planung UI) | Plattform | 2d (Planungs-Kaskade) |
 | `recipe.review` | 82 | 5440 | 446.046 | RecipesReviewTool | angeschlossen | 2d (übrige) |
 | `recipe.eigenschaften` | 87 | 4139 | 360.056 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.sensorik` | 70 | 3732 | 261.262 | RecipeSensorikPostTool | angeschlossen | 2d (übrige) |
 | `recipe.category` | 54 | 4537 | 245.015 | recipes.ENRICH (Schritt) | Plattform | 2d (übrige) |
-| `concept.brief_geruest` | 52 | 4016 | 208.828 | concepts.GENERATE | Plattform | 2c-3c/d (Konzepte. Kaskade) |
+| `concept.brief_geruest` | 52 | 4016 | 208.828 | concepts.GENERATE (generiereAusBrief); geruestAusBriefFuerOwner (PLAN_FROM_BRIEF, Planung UI) | teilweise | Konzepte angeschlossen; Rest 2d (Planungs-Kaskade) |
 | `recipe.equipment` | 70 | 2872 | 201.062 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt) | teilweise | 2d (übrige) |
 | `recipe.production_depth` | 69 | 2438 | 168.204 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.level` | 42 | 3485 | 146.379 | DetailPanel::kiEignung; RecipesGenerateTool (One-Shot-Kette) | teilweise | 2d (übrige) |
@@ -234,7 +237,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `recipe.komponenten_plan` | 56 | 1695 | 94.943 | im Generator | Plattform | 2d (übrige) |
 | `recipe.verpackungsmasse` | 126 | 725 | 91.390 | Artisan-Befehl | Plattform | 2d (übrige) |
 | `vk.plating` | 36 | 2145 | 77.223 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
-| `concept.wording` | 26 | 2736 | 71.146 | ConceptWordingGenerateTool; FoodbookKapitelWordingTool; – (offer_chapter/offer_block) | teilweise | 2c-3c/d (Konzepte. Kaskade) |
+| `concept.wording` | 26 | 2736 | 71.146 | ConceptWordingGenerateTool; FoodbookKapitelWordingTool; – (offer_chapter/offer_block, nur UI) | teilweise | Konzepte angeschlossen; Angebote-Editor (UI) bleibt Plattform |
 | `gp.suggest` | 44 | 1606 | 70.671 | GpModal::einordnungKiVorschlagen; GpModal::kiVorschlagNaming; GpModal::nameAusLeadLa; Job nach LA-Import; LaGpAbgleichTool | teilweise (LaGpAbgleichTool, Job nach LA-Import); UI-Knöpfe Plattform | LA-Wege (UI bleibt) |
 | `recipe.dichteklasse` | 26 | 2655 | 69.038 | recipes.ENRICH; recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.geschmack` | 24 | 2499 | 59.978 | recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
