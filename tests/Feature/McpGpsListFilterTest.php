@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 use Platform\FoodAlchemist\Tools\GpsListTool;
@@ -119,7 +120,8 @@ it('Spec 91 D17 · felder=voll liefert Lead-Preis, Vergleichspreis, Anzahl Liefe
     FoodAlchemistSupplierItemStructure::create(['team_id' => $t, 'supplier_item_id' => $this->jus->lead_la_supplier_item_id, 'gp_id' => $this->jus->id]);
     FoodAlchemistItemAllergen::create(['team_id' => $t, 'supplier_item_id' => $this->jus->lead_la_supplier_item_id, 'allergen_celery' => 'enthalten']);
     $rezept = $this->makeRecipe($this->rootTeam, 'Rinderschmorbraten');
-    FoodAlchemistRecipeIngredient::create(['team_id' => $t, 'recipe_id' => $rezept->id, 'gp_id' => $this->jus->id, 'raw_text' => 'Kalbsjus', 'position' => 1]);
+    $gramm = FoodAlchemistVocabEinheit::create(['team_id' => $t, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    FoodAlchemistRecipeIngredient::create(['team_id' => $t, 'recipe_id' => $rezept->id, 'gp_id' => $this->jus->id, 'raw_text' => 'Kalbsjus', 'quantity' => '100', 'unit_vocab_id' => $gramm->id, 'position' => 1]);
 
     $voll = collect(app(GpsListTool::class)->execute(['felder' => 'voll', 'sub_category' => '13.3 Saucen & Fonds'], $this->ctx)->data['gps'])->keyBy('id');
 
