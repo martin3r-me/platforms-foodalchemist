@@ -23,9 +23,9 @@ class AngeboteListTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Listet die Angebote des Teams vollständig und seitenweise auf (ohne Suchbegriff, ohne 50er-Cap). '
-            . 'Optional status-gefiltert; page/per_page-Paging (last_page zum Weiterblättern). Liefert je Angebot '
-            . 'id, name, status, occasion, personen. Detail + Kalkulation via foodalchemist.angebote.GET, gezielte Suche via foodalchemist.angebote.SEARCH.';
+        return 'Listet die Angebote des Teams vollständig und seitenweise auf (ohne 50er-Cap). '
+            . 'Optional q (Name/Anlass wie die Browser-Suche) und status; page/per_page-Paging (last_page zum Weiterblättern). Liefert je Angebot '
+            . 'id, name, status, occasion, personen, datum (Eventdatum), summe (Angebotssumme, null = noch kein Preis). Detail + Kalkulation via foodalchemist.angebote.GET, gezielte Suche via foodalchemist.angebote.SEARCH.';
     }
 
     public function getSchema(): array
@@ -33,6 +33,7 @@ class AngeboteListTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return [
             'type' => 'object',
             'properties' => [
+                'q' => ['type' => 'string', 'description' => 'Suche in Name und Anlass.'],
                 'status' => ['type' => 'string', 'description' => 'Optionaler Status-Filter. Leer = alle.'],
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
                 'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
@@ -52,11 +53,11 @@ class AngeboteListTool extends FoodAlchemistTool implements ToolContract, ToolMe
         Paginator::currentPageResolver(fn () => $page);
         $svc = app(AngebotService::class);
         $treffer = $svc->paginateBrowser([
-            'search' => '',
+            'search' => trim((string) ($arguments['q'] ?? '')),
             'status' => (string) ($arguments['status'] ?? ''),
         ], $team, $perPage);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $treffer->total(),
             'page' => $treffer->currentPage(),
             'last_page' => $treffer->lastPage(),
@@ -66,8 +67,9 @@ class AngeboteListTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'id' => $a->id, 'name' => $a->name,
                 'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
                 'occasion' => $a->occasion, 'personen' => $a->personen,
+                'datum' => $a->event_date?->toDateString(), 'summe' => $a->total_price !== null ? (float) $a->total_price : null,
             ])->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array

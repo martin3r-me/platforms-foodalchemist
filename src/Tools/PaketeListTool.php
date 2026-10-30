@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
+use Illuminate\Pagination\Paginator;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -18,7 +19,7 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Listet sichtbare Pakete (paginiert). Optional role-Filter. Für Freitextsuche: pakete.SEARCH.';
+        return 'Listet sichtbare Pakete seitenweise (page, per_page, last_page) mit Anzahl Gerichte wie im Pakete-Browser. Filter: q (Name/Rolle), role. Freitextsuche auch: pakete.SEARCH.';
     }
 
     public function getSchema(): array
@@ -27,7 +28,9 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'type' => 'object',
             'properties' => [
                 'role' => ['type' => 'string', 'description' => 'Optionaler Rollen-Filter.'],
+                'q' => ['type' => 'string', 'description' => 'Suche in Name und Rolle.'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
+                'page' => ['type' => 'integer', 'description' => 'Seite (ab 1, last_page im Ergebnis).'],
                 'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Kalkulationsprofil — VK/Person je Kalkulationsprofil (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline. IDs via outlets.GET.'],
             ],
         ];
@@ -53,14 +56,21 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         if (($role = trim((string) ($arguments['role'] ?? ''))) !== '') {
             $filters['role'] = $role;
         }
+        if (($q = trim((string) ($arguments['q'] ?? ''))) !== '') {
+            $filters['search'] = $q;
+        }
+        $seite = max(1, (int) ($arguments['page'] ?? 1));
+        Paginator::currentPageResolver(fn () => $seite);
         $perPage = (int) ($arguments['per_page'] ?? 100);
         $page = app(PaketService::class)->paginateBrowser($filters, $team, $perPage > 0 ? $perPage : 100);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
             'active_outlet_id' => $outlet?->id,
-            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, $outlet, $team))->all(),
-        ]);
+            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, $outlet, $team) + ['gerichte' => (int) $p->dishes_count])->all(),
+        ], $arguments);
     }
 
     public function getMetadata(): array

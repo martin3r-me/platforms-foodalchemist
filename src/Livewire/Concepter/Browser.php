@@ -283,14 +283,8 @@ class Browser extends Component
             'klassen' => $klassen,
             'rollen' => $rollen,
             // Facetten-Vokabulare (geteilte Dimension: Concepts- UND Pakete-Reiter)
-            'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'code', 'label']),
-            'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            // Spec 91 PR 5: dasselbe Vokabular wie concepts.LIST/formats.LIST facetten_werte
+            ...\Platform\FoodAlchemist\Support\FacettenWerte::fuer($team),
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 

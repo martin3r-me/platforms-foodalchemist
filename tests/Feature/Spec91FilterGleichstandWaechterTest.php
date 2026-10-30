@@ -114,6 +114,61 @@ function spec91_gleichstand(): array
                 'inventurId' => 'Auswahl einer Inventur (Detail via inventory_counts.GET count_id), kein Listenfilter',
             ],
         ],
+        \Platform\FoodAlchemist\Livewire\Concepter\Browser::class => [
+            'filter' => [
+                'tab' => ['foodalchemist.concepts.LIST', 'kind'],
+                'search' => ['foodalchemist.concepts.LIST', 'q'],
+                'klasse' => ['foodalchemist.concepts.LIST', 'klasse'],
+                'categoryFilter' => ['foodalchemist.concepts.LIST', 'kategorie'],
+                'showVorlagen' => ['foodalchemist.concepts.LIST', 'vorlagen'],
+                'statusFilter' => ['foodalchemist.concepts.LIST', 'status'],
+                'servierformFilter' => ['foodalchemist.concepts.LIST', 'servierform'],
+                'eventtypFilter' => ['foodalchemist.concepts.LIST', 'eventtyp'],
+                'momentFilter' => ['foodalchemist.concepts.LIST', 'einsatzmoment'],
+                'saisonFilter' => ['foodalchemist.concepts.LIST', 'saison'],
+            ],
+            'ausnahmen' => [
+                'rolleFilter' => 'ohne Wirkung seit der Kaskade (Pakete-Reiter hat keine Rolle mehr), nur noch zurückgesetzt',
+                'selectedId' => 'Auswahl eines Konzepts (Detail via concepts.GET), kein Listenfilter',
+                'editId' => 'Editor-Zustand',
+            ],
+        ],
+        \Platform\FoodAlchemist\Livewire\Concepts\Index::class => [
+            'filter' => [
+                'search' => ['foodalchemist.concepts.LIST', 'q'],
+                'showVorlagen' => ['foodalchemist.concepts.LIST', 'vorlagen'],
+                'categoryFilter' => ['foodalchemist.concepts.LIST', 'kategorie'],
+                'phaseFilter' => ['foodalchemist.concepts.LIST', 'phase'],
+            ],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Konzepts (Detail via concepts.GET), kein Listenfilter'],
+        ],
+        \Platform\FoodAlchemist\Livewire\Formate\Browser::class => [
+            'filter' => [
+                'search' => ['foodalchemist.formats.LIST', 'q'],
+                'statusFilter' => ['foodalchemist.formats.LIST', 'status'],
+                'originFilter' => ['foodalchemist.formats.LIST', 'origin'],
+                'servierformFilter' => ['foodalchemist.formats.LIST', 'servierform'],
+                'eventtypFilter' => ['foodalchemist.formats.LIST', 'eventtyp'],
+                'momentFilter' => ['foodalchemist.formats.LIST', 'einsatzmoment'],
+                'saisonFilter' => ['foodalchemist.formats.LIST', 'saison'],
+            ],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Formats (Detail via formats.GET), kein Listenfilter'],
+        ],
+        \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class => [
+            'filter' => ['search' => ['foodalchemist.foodbooks.LIST', 'q']],
+            'ausnahmen' => [
+                'selectedId' => 'Auswahl eines Foodbooks (Detail via foodbooks.GET), kein Listenfilter',
+                'selectedKapitelId' => 'Auswahl eines Kapitels im Detail, kein Listenfilter',
+            ],
+        ],
+        \Platform\FoodAlchemist\Livewire\Speisekarte\Index::class => [
+            'filter' => ['search' => ['foodalchemist.speisekarten.LIST', 'q']],
+            'ausnahmen' => ['karteId' => 'Auswahl einer Karte (Detail via speisekarten.GET), kein Listenfilter'],
+        ],
+        \Platform\FoodAlchemist\Livewire\Pakete\Index::class => [
+            'filter' => ['search' => ['foodalchemist.pakete.LIST', 'q'], 'rolleFilter' => ['foodalchemist.pakete.LIST', 'role']],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Pakets (Detail via pakete.GET), kein Listenfilter'],
+        ],
         \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class => [
             'filter' => ['search' => ['foodalchemist.speiseplaene.LIST', 'search']],
             'ausnahmen' => ['selectedId' => 'Auswahl eines Plans (Detail via speiseplaene.GET), kein Listenfilter'],

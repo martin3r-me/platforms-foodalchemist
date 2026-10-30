@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
+use Illuminate\Pagination\Paginator;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -18,7 +19,7 @@ class FoodbooksListTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Listet sichtbare Foodbooks (paginiert). Optional status-Filter. Für Freitext: foodbooks.SEARCH.';
+        return 'Listet sichtbare Foodbooks seitenweise (page, per_page, last_page) mit Kundenname und Kapitelzahl wie im Foodbook-Browser. Filter: q (wie die Browser-Suche), status. Semantische Suche: foodbooks.SEARCH.';
     }
 
     public function getSchema(): array
@@ -27,7 +28,9 @@ class FoodbooksListTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'Optionaler Status-Filter (entwurf/aktiv/inaktiv/archiviert).'],
+                'q' => ['type' => 'string', 'description' => 'Suche wie im Browser.'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
+                'page' => ['type' => 'integer', 'description' => 'Seite (ab 1, last_page im Ergebnis).'],
             ],
         ];
     }
@@ -42,17 +45,25 @@ class FoodbooksListTool extends FoodAlchemistTool implements ToolContract, ToolM
         if (($status = trim((string) ($arguments['status'] ?? ''))) !== '') {
             $filters['status'] = $status;
         }
+        if (($q = trim((string) ($arguments['q'] ?? ''))) !== '') {
+            $filters['search'] = $q;
+        }
+        $seite = max(1, (int) ($arguments['page'] ?? 1));
+        Paginator::currentPageResolver(fn () => $seite);
         $perPage = (int) ($arguments['per_page'] ?? 100);
         $page = app(FoodbookService::class)->paginateBrowser($filters, $team, $perPage > 0 ? $perPage : 100);
 
-        return ToolResult::success([
+        return $this->erfolgMitWarnungen([
             'total' => $page->total(),
+            'page' => $page->currentPage(),
+            'last_page' => $page->lastPage(),
             'foodbooks' => collect($page->items())->map(fn ($f) => [
                 'id' => (int) $f->id, 'label' => $f->label, 'status' => $f->status,
                 'jahr' => $f->jahr, 'personen' => $f->personen,
                 'crm_company_id' => $f->crm_company_id !== null ? (int) $f->crm_company_id : null,
+                'kunde' => $f->crmCompany?->display_name, 'kapitel' => (int) $f->chapters_count,
             ])->all(),
-        ]);
+        ], $arguments);
     }
 
     public function getMetadata(): array
