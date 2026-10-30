@@ -30,6 +30,8 @@ class FoodAlchemistTrend extends Model
         'suchbegriffe' => 'array',
         'manuell_felder' => 'array',          // Spec 93 C: von Hand gesetzte Felder — die Automatik fasst sie nie an
         'automatik_ereignisse' => 'array',    // Spec 93 C: letzte Ereignisse der Automatik (Quelle der Signale)
+        'ableitung' => 'array',               // Spec 93 D: „Was heißt das für uns“ (Kurzfazit, Bedeutung je Sparte, Impulse)
+        'ableitung_at' => 'datetime',
         'hashtags' => 'array',
         'sparten' => 'array',
         'geprueft_at' => 'datetime',

@@ -103,7 +103,7 @@
                     </x-fa::field>
                 @endforeach
             </div>
-            <x-fa::field label="Trend-KI-Budget je Monat in €" for="ta-budget" optional hint="Leer = kein eigener Deckel (es gilt der KI-Deckel des Teams). Nur Plattform-KI zählt.">
+            <x-fa::field label="Trend-KI-Budget je Monat in €" for="ta-budget" optional hint="Erschließen und Ableitung zählen zusammen (ein Topf). Leer = kein eigener Deckel (es gilt der KI-Deckel des Teams). Nur Plattform-KI zählt.">
                 <x-fa::input id="ta-budget" type="number" min="0" step="0.5" wire:model="kiBudget" numeric class="max-w-[8rem]" />
             </x-fa::field>
         </div>

@@ -27,6 +27,7 @@ const REGISTRY_KLASSEN = [
         'signal.margin_levers', 'signal.vk_release_advice',
     ],
     'mittel' => [
+        'trend.ableitung',   // Spec 93 D
         'gp.suggest',   // Dominique 19.10. (vorher stark)
         'recipe.geschmack', 'gp.domain',
         'recipe.posten', 'recipe.garverlust', 'recipe.ruestschritt', 'vk.rollen', 'gp.piece_default_g', 'gp.verluste',

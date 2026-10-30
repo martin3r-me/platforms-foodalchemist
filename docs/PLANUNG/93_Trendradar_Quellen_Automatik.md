@@ -238,6 +238,8 @@ reproduzierbar (gleicher Datenstand = gleiche Liste).
   Monate, Anteil sozial über 12 Monate; Anteil „Bedürfnis“ nur über Artikel mit Tiefe (Pinnwand hat keine).
   „Spitze ohne Sockel“ nur, wenn das Thema schon an einem gemessenen Trend hängt.
 - **Kandidat ohne Typ** (weder Hype- noch Trend-Regel): kein Trend, in der Liste „Kandidat, Typ offen“.
+- **Thema nur aus Pinnwand-Sichtungen** (keine Artikel mit Tiefe, Anteil „Bedürfnis“ = 0) wird höchstens Hype, nie
+  Trend — so gewollt (Kurator 30.10.): ein Trend braucht belegte Tiefe aus erschlossenen Artikeln.
 - **Schutz:** Bestandstrends (`herkunft = manuell`, z. B. Sarahs 27) bekommen nur Belege und `neuBewerten()`, ihre
   Felder ändert die Automatik nie. Eigene Trends (`herkunft = automatisch`): nur Felder ohne Merker
   (`manuell_felder`, gesetzt von jedem menschlichen Schreibweg), Status nur anheben, nie mega/meta.
@@ -258,6 +260,15 @@ erkannt“, „Hype wird Trend“, „Auf das Radar gesetzt“, „Thema abgeklu
 Ableitung (KI, Job `TrendAbleitungJob`, Prompt `trend.ableitung`, KiExternWiederholbar): sobald ein automatischer
 Trend `geprueft` oder `auf_radar` erreicht, schreibt die KI einen Abschnitt „Was heißt das für uns“ (Bedeutung je
 Sparte, 3–5 Gericht-/Konzept-Impulse) an den Trend; „In Planung öffnen“ übernimmt ihn (Spec 79 Planung).
+
+**Stand D (gebaut 30.10., Kurator-Entscheide):** eigene Spalten `ableitung` (Kurzfazit, Bedeutung je Sparte,
+Impulse), `ableitung_quelle` (ki | manuell), `ableitung_at`, `ableitung_fehler`. Die KI schreibt nur dorthin — nie in
+Definition, historische Einordnung oder Begründung, nie über eine von Hand bearbeitete Ableitung (manuell gilt
+dauerhaft; „entfernen“ gibt sie wieder frei). Prompt-Klasse mittel. Automatisch nur bei `herkunft = automatisch`;
+Bestandstrends nur per Knopf im Trend-Detail oder `trends.ABLEITUNG`. Trend-KI-Budget: **ein Topf** für Erschließen
+und Ableitung. Ins Planungs-Briefing (`PlanningSessionService::trendKombination`, damit auch der Ursprungs-Block der
+Konzepte) kommt die Ableitung nur, wenn sie gültig ist (ki | manuell, **ohne** `ableitung_fehler`). Ungültige Antwort
+(nicht 3–5 Impulse) → `ableitung_fehler`, die bisherige Ableitung bleibt.
 
 ## Einstellungen und Startwerte
 
@@ -299,7 +310,11 @@ Alle Werte je Team in den Trendradar-Einstellungen, per MCP `foodalchemist.trend
   Schutz manueller Felder, Signale. *Gebaut 30.10. (Branch `feat/spec93-c-einordnung-automatik`):* Migrationen
   `2026_12_01_100500` (Trend herkunft, manuell_felder, automatik_ereignisse), `…100600` (Team: Stufe, Schatten, Regeln,
   Budget, letzter Lauf); Tools `trend_automatik.GET|PUT|LAUF`; Reiter „Automatik“; Test `Spec93CEinordnungAutomatikTest`.
-- **D · Ableitung:** Prompt + Job (dual), Anzeige am Trend, Übergabe an die Planung.
+- **D · Ableitung:** Prompt + Job (dual), Anzeige am Trend, Übergabe an die Planung. *Gebaut 30.10. (Branch
+  `feat/spec93-d-ableitung`):* Migration `2026_12_01_100700` (ableitung, ableitung_quelle, ableitung_at,
+  ableitung_fehler); Tool `trends.ABLEITUNG`, `trends.PUT` mit `ableitung`; Block „Was heißt das für uns“ im Detail;
+  Pflichtliste Spec 90 Zeile 88; Test `Spec93DAbleitungTest`. Nebenbei (Befund aus C): Pinnwand-Inspirationen je Lauf
+  zwischengespeichert.
 
 ## Tests (Pflicht)
 

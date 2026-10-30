@@ -275,8 +275,8 @@ class TrendEingangService
     }
 
     /**
-     * Spec 93 C: Trend-KI-Budget des Monats erreicht? Gezählt werden die Plattform-Kosten des Prompts `trend.eingang_erschliessen`
-     * im Team (Call-Log, € zum eingefrorenen Kurs). null-Budget = kein eigener Deckel (es gilt nur der allgemeine Team-Deckel).
+     * Spec 93 C/D: Trend-KI-Budget des Monats erreicht? Gezählt werden die Plattform-Kosten von Erschließen und Ableitung
+     * (ein Topf) im Team (Call-Log, € zum eingefrorenen Kurs). null-Budget = kein eigener Deckel (es gilt nur der allgemeine Team-Deckel).
      */
     public function budgetErreicht(int $teamId): bool
     {
@@ -289,14 +289,17 @@ class TrendEingangService
         return $this->trendKiVerbrauch($teamId) >= $budget - 1e-9;
     }
 
-    /** Plattform-KI-Kosten des Erschließens im laufenden Monat, in € (ohne Kosten = MCP-Antworten zählen nicht). */
+    /** Spec 93 D: ein Topf für das Trend-KI-Budget — Erschließen und Ableitung zählen zusammen. */
+    public const TREND_KI_FEATURES = ['trend.eingang_erschliessen', 'trend.ableitung'];
+
+    /** Plattform-KI-Kosten des Trendradars (Erschließen + Ableitung) im laufenden Monat, in € (ohne Kosten = MCP-Antworten zählen nicht). */
     public function trendKiVerbrauch(int $teamId): float
     {
         if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'usd_eur')) {
             return 0.0;
         }
 
-        return round((float) DB::table('foodalchemist_ai_call_log')->where('team_id', $teamId)->where('feature', 'trend.eingang_erschliessen')
+        return round((float) DB::table('foodalchemist_ai_call_log')->where('team_id', $teamId)->whereIn('feature', self::TREND_KI_FEATURES)
             ->where('created_at', '>=', now()->startOfMonth())->whereNotNull('kosten_usd')->whereNotNull('usd_eur')
             ->sum(DB::raw('kosten_usd * usd_eur')), 4);
     }
