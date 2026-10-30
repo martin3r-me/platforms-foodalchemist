@@ -3,6 +3,9 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemNutritional;
+use Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertBefund;
+use Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertPruefService;
 
 /**
  * Nährwerte eines GP aus seinen Lieferantenartikeln — EINE Regel für Erdung (SensorikService) und Rezept/Panel
@@ -47,6 +50,8 @@ class NaehrwertAggregatService
 
     /**
      * Zählende Artikelzeilen je GP (Guard angewandt), Werte als float|null. EINE Query je 1.000 GPs.
+     * Im Modus `scharf` der Nährwert-Prüfung fallen Artikel mit hartem Befund heraus (außer freigegeben), eine eindeutige
+     * Einheiten-Probe liefert die umgerechneten Werte ({@see NaehrwertPruefService}).
      *
      * @param  list<int>  $gpIds
      * @param  list<string>  $felder
@@ -54,13 +59,41 @@ class NaehrwertAggregatService
      */
     public function zeilen(array $gpIds, array $felder): array
     {
+        $scharf = \Platform\FoodAlchemist\Support\NaehrwertPruefModus::istScharf();
+        $out = [];
+        foreach ($this->pruefung($gpIds, $scharf) as $gpId => $artikel) {
+            foreach ($artikel as $a) {
+                if ($scharf && ! $a['zaehlt']) {
+                    continue;
+                }
+                $werte = $scharf ? $a['wirksam'] : $a['roh'];
+                $out[$gpId][] = array_map(fn ($f) => $werte[$f] ?? null, array_combine($felder, $felder));
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Prüfung je Artikel der GPs (Guard angewandt): Rohwerte, wirksame Werte, Befunde, ob er zählt (modus scharf).
+     * Grundlage für die Aggregation und den Trockenlauf.
+     *
+     * @param  list<int>  $gpIds
+     * @return array<int, list<array{la_id: int, lieferant: ?string, bezeichnung: ?string, roh: array<string, ?float>, wirksam: array<string, ?float>,
+     *     faktor: ?int, befunde: list<NaehrwertBefund>, freigegeben: bool, zaehlt: bool}>>
+     */
+    public function pruefung(array $gpIds, bool $mitBefunden = true): array
+    {
         $gpIds = array_values(array_unique(array_filter(array_map('intval', $gpIds))));
-        $spalten = array_values(array_unique(array_merge($felder, self::GUARD_FELDER)));
+        $spalten = array_values(array_unique(array_merge(FoodAlchemistItemNutritional::KERNWERTE, NaehrwertPruefService::FELDER, self::GUARD_FELDER)));
+        $pruefer = app(NaehrwertPruefService::class);
         $out = [];
         foreach (array_chunk($gpIds, 1000) as $chunk) {
             $rows = DB::table('foodalchemist_item_nutritionals AS n')
                 ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'n.supplier_item_id')
                 ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 'n.supplier_item_id')
+                ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 's.gp_id')
+                ->leftJoin('foodalchemist_suppliers AS l', 'l.id', '=', 'i.supplier_id')
                 ->whereIn('s.gp_id', $chunk)
                 ->where('i.is_discontinued', false)
                 ->whereNull('n.deleted_at')->whereNull('s.deleted_at')->whereNull('i.deleted_at')
@@ -69,14 +102,37 @@ class NaehrwertAggregatService
                         $q->orWhere("n.{$f}", '>', 0);
                     }
                 })
-                ->select(array_merge(['s.gp_id'], array_map(fn ($f) => "n.{$f}", $spalten)))
+                ->orderBy('n.supplier_item_id')
+                ->select(array_merge(['s.gp_id', 'i.id AS la_id', 'i.designation', 'l.name AS lieferant', 'g.name AS gp_name',
+                    'g.commodity_group_code AS wg', 'g.sub_category AS sub'], array_map(fn ($f) => "n.{$f}", $spalten)))
                 ->get();
+            $gruppen = [];
             foreach ($rows as $r) {
-                $zeile = [];
-                foreach ($felder as $f) {
-                    $zeile[$f] = $r->{$f} !== null ? (float) $r->{$f} : null;
+                $gruppen[(int) $r->gp_id][] = $r;
+            }
+            // Tabelle fehlt (Migration noch nicht gelaufen) = keine Freigaben — der Trockenlauf darf daran nicht scheitern.
+            $freigaben = $mitBefunden && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_item_nutrition_freigaben') ? DB::table('foodalchemist_item_nutrition_freigaben')
+                ->whereIn('supplier_item_id', $rows->pluck('la_id')->all())->pluck('werte_hash', 'supplier_item_id')->all() : [];
+            foreach ($gruppen as $gpId => $gRows) {
+                $roh = array_map(function ($r) use ($spalten) {
+                    $z = [];
+                    foreach ($spalten as $f) {
+                        $z[$f] = $r->{$f} !== null ? (float) $r->{$f} : null;
+                    }
+
+                    return $z;
+                }, $gRows);
+                $befunde = $mitBefunden ? $pruefer->pruefeGruppe($roh, ['wg' => $gRows[0]->wg, 'sub' => $gRows[0]->sub, 'name' => $gRows[0]->gp_name]) : [];
+                foreach ($gRows as $i => $r) {
+                    $b = $befunde[$i] ?? [];
+                    $wirk = $mitBefunden ? $pruefer->wirksameWerte($roh[$i]) : ['werte' => [], 'faktor' => null];
+                    $frei = isset($freigaben[$r->la_id]) && hash_equals($freigaben[$r->la_id], NaehrwertPruefService::werteHash($roh[$i]));
+                    $out[$gpId][] = [
+                        'la_id' => (int) $r->la_id, 'lieferant' => $r->lieferant, 'bezeichnung' => $r->designation,
+                        'roh' => $roh[$i], 'wirksam' => array_merge($roh[$i], $wirk['werte']), 'faktor' => $wirk['faktor'],
+                        'befunde' => $b, 'freigegeben' => $frei, 'zaehlt' => $frei || ! NaehrwertPruefService::istHart($b),
+                    ];
                 }
-                $out[(int) $r->gp_id][] = $zeile;
             }
         }
 

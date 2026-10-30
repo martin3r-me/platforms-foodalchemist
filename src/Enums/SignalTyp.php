@@ -20,6 +20,9 @@ enum SignalTyp: string
     case WareneinsatzIstAbweichung = 'wareneinsatz_ist_abweichung';
     case DatenqualitaetGpLa = 'datenqualitaet_gp_la';
     case NaehrwertPlausi = 'naehrwert_plausi';
+    // Nährwert-Prüfung (Plan 29.10.2026): EIN Lieferantenartikel mit hartem Befund — zählt im Modus scharf nicht in den GP-Nährwerten.
+    // Eigener Typ neben naehrwert_plausi (Rezept-Ebene, Summen-Signal): hier je Artikel, aufzulösen durch Freigeben oder Korrigieren.
+    case NaehrwertPruefen = 'naehrwert_pruefen';
     // Datenqualitäts-Kaskade (Ampel, DataQualityService) — Ebenen-übergreifende Lücken.
     case AnkerFehlt = 'anker_fehlt';
     case ServierformUnbestimmt = 'servierform_unbestimmt';
@@ -179,6 +182,7 @@ enum SignalTyp: string
             self::WareneinsatzIstAbweichung => 'Einkauf weicht von der Rezeptur ab',
             self::DatenqualitaetGpLa => 'Lücken bei Grundprodukten',
             self::NaehrwertPlausi => 'Unplausible Nährwerte',
+            self::NaehrwertPruefen => 'Nährwerte am Artikel prüfen',
             self::AnkerFehlt => 'Aromaprofil fehlt',
             self::ServierformUnbestimmt => 'Servierform nicht festgelegt',
             self::EkKetteUnvollstaendig => 'Einkaufspreis unvollständig',
@@ -243,6 +247,7 @@ enum SignalTyp: string
             self::WareneinsatzIstAbweichung => 'heroicon-o-arrows-right-left',
             self::DatenqualitaetGpLa => 'heroicon-o-exclamation-triangle',
             self::NaehrwertPlausi => 'heroicon-o-beaker',
+            self::NaehrwertPruefen => 'heroicon-o-beaker',
             self::AnkerFehlt => 'heroicon-o-link-slash',
             self::ServierformUnbestimmt => 'heroicon-o-question-mark-circle',
             self::EkKetteUnvollstaendig => 'heroicon-o-currency-euro',

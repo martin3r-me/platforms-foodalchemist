@@ -975,6 +975,32 @@ return [
         ],
     ],
 
+    /*
+     * Nährwert-Prüfung je Lieferantenartikel (Plan 29.10.2026, Dominique: „nicht dass uns alles um die Ohren fliegt“).
+     * modus: aus = die GP-Nährwerte rechnen ohne Prüfung · trocken = wie aus, Bericht per naehrwert_pruefung.GET ·
+     * scharf = Artikel mit hartem Befund zählen nicht, eine eindeutige Einheiten-Probe wird beim Rechnen angewendet
+     * (Rohwert bleibt gespeichert). Schwellen aus dem Trockenlauf 29.10. (lokal 6.282 Artikel, 3,1 % markiert).
+     * Wirksam ist {@see \Platform\FoodAlchemist\Support\NaehrwertPruefModus}: die Plattform-Einstellung (MCP naehrwert_pruefung.PUT,
+     * nur Master-Team) vor dieser env als Standard; `notaus` = true erzwingt „aus“, gleich was eingestellt ist.
+     */
+    'naehrwert_pruefung' => [
+        'modus' => env('FOODALCHEMIST_NAEHRWERT_PRUEFUNG', 'aus'),
+        'notaus' => (bool) env('FOODALCHEMIST_NAEHRWERT_PRUEFUNG_NOTAUS', false),
+        'signale_je_lauf' => 25,                    // neue Signale „Nährwerte prüfen“ je Detektor-Lauf (kein Signal-Sturm)
+        'summe_max_g' => 105,                       // H2: Fett+Eiweiß+KH+Ballast+Alkohol+Salz
+        'energie' => ['abstand_kcal' => 60, 'anteil' => 0.30],                      // H4: Atwater 4/4/9 gegen kcal
+        'kj' => ['min' => 3.8, 'max' => 4.6, 'abstand_kj' => 50, 'ab_kcal' => 20],  // H5 (Hinweis)
+        'einheit' => ['faktoren' => [1000, 100], 'ab_kcal' => 40, 'toleranz_kcal' => 25, 'toleranz_anteil' => 0.20],   // H6
+        'oel_fett_min' => 90, 'oel_salz_max' => 0.5,                                // W1 hart, W2 Hinweis
+        'gewuerz_zucker_max' => 40,                                                 // W3 Hinweis (Dominique 29.10.)
+        'gemuese_fett_max' => 5,                                                    // W4 Hinweis
+        'wasser' => ['kcal' => 10, 'fett' => 0.5, 'zucker' => 1],                   // W5 hart
+        'essig' => ['fett' => 1, 'kcal' => 300],                                    // W6 Hinweis
+        // A: Geschwister-Vergleich ab 3 Artikeln mit Wert, Faktor gegen den Median UND Mindestabstand
+        'geschwister' => ['min_artikel' => 3, 'faktor' => 3,
+            'abstand' => ['fat' => 10, 'sugar' => 10, 'protein' => 10, 'carbs_absorbable' => 15, 'sodium' => 400, 'energy_kcal' => 150]],
+    ],
+
     // Spec 52/E: Kandidaten werden vor der kontextspezifischen Endauswahl fusioniert.
     'knowledge_search' => [
         'candidate_limit' => 100,

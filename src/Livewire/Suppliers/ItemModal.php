@@ -421,6 +421,8 @@ class ItemModal extends Component
             'nonfoodUnterkategorien' => \Platform\FoodAlchemist\Support\NonFoodRegeln::unterkategorien(),
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
             'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
+            'naehrwertPruefung' => $item !== null ? app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertEntscheidService::class)->pruefen((int) $item->id) : null,
+            'naehrwertModus' => \Platform\FoodAlchemist\Support\NaehrwertPruefModus::aktuell(),
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,
             'deklarationQuelle' => $item?->declarations?->source,
             'haltbarkeitAusPass' => $item !== null ? $this->haltbarkeitAusPass($item) : [],

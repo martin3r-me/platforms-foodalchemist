@@ -15,6 +15,9 @@ class FoodAlchemistPlattformEinstellung extends Model
 
     public const MASTER_TEAM = 'master_team_id';
 
+    /** Nährwert-Prüfung aus | trocken | scharf ({@see \Platform\FoodAlchemist\Support\NaehrwertPruefModus}); fehlt die Zeile, gilt die env. */
+    public const NAEHRWERT_PRUEFUNG_MODUS = 'naehrwert_pruefung_modus';
+
     protected $table = 'foodalchemist_plattform_einstellungen';
 
     protected $guarded = ['id'];

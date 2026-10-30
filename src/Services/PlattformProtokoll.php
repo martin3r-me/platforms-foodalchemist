@@ -25,6 +25,7 @@ class PlattformProtokoll
         'stamm_paket_abbestellt' => 'Stamm-Paket abbestellt',
         'stamm_lieferanten_gesetzt' => 'Stamm-Lieferanten freigeschaltet',   // Spec 82: Lieferanten je Mandant
         'master_team_gesetzt' => 'Master-Team festgelegt',
+        'naehrwert_pruefung_modus_gesetzt' => 'Nährwert-Prüfung: Modus geändert',
         'mandant_modus_geaendert' => 'Mandanten-Modus geändert',
         'mandant_gepflegt' => 'Mandant gepflegt',
         'mandant_beenden_gestartet' => 'Mandant beenden: Lauf gestartet',

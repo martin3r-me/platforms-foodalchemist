@@ -416,7 +416,25 @@
                 </div>
 
                 <x-fa::section title="Nährwerte je 100 g" icon="heroicon-o-chart-bar"
-                    description="Fließen als Mittelwert über alle Artikel in die Nährwerte des Grundprodukts.">
+                    description="Fließen als Median über alle Artikel in die Nährwerte des Grundprodukts.">
+                    @if($naehrwertPruefung !== null && $naehrwertPruefung['befunde'] !== [])
+                        @php
+                            $scharf = $naehrwertModus === 'scharf';
+                            $wirkung = fn ($b) => match ($b->schwere) {
+                                'umrechnung' => ($scharf ? 'umgerechnet' : 'würde umgerechnet') . ' × ' . $b->vorschlag['faktor'],
+                                'hart' => $naehrwertPruefung['freigegeben'] ? 'freigegeben' : ($scharf ? 'zählt nicht' : 'würde nicht zählen'),
+                                default => 'Hinweis',
+                            };
+                        @endphp
+                        <ul class="mb-3 flex flex-col gap-1.5" data-naehrwert-befunde>
+                            @foreach($naehrwertPruefung['befunde'] as $b)
+                                <li class="flex items-start gap-2 text-[length:var(--fa-text-sm)]" data-naehrwert-befund="{{ $b->regel }}">
+                                    <x-fa::badge :tone="$b->schwere === 'hart' && ! $naehrwertPruefung['freigegeben'] ? 'warn' : 'neutral'" class="shrink-0">{{ $wirkung($b) }}</x-fa::badge>
+                                    <span class="text-[var(--fa-ink-2)]">{{ $b->grund }}@if(is_scalar($b->wert)) · {{ $b->feld }} {{ $b->wert }}, erwartet {{ $b->erwartet }}@endif</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-naehrwerte>
                         @foreach($naehrwertFelder as $feld => $meta)
                             <div class="flex flex-col gap-1.5 min-w-0">
