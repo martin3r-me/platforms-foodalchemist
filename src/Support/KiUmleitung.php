@@ -28,12 +28,22 @@ final class KiUmleitung
      * @var array<string, string>
      */
     public const TOOLS = [
+        'foodalchemist.concept_wording.GENERATE' => 'Ein propose() (concept.wording) je Slot/Kopf, danach DB-Schreiben der Texte (ConceptService::generateWording, keine Folge-Jobs).',
+        'foodalchemist.angebot.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über AngebotService, liefert nur den Vorschlag, schreibt nichts.',
+        'foodalchemist.foodbook.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
+        'foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE' => 'Ein propose() (foodbook.kundentext) über FoodbookService, liefert nur den Vorschlag, schreibt nichts.',
         'foodalchemist.gp_forms.ESTIMATE' => 'Ein propose() (gp.zaehl_einheiten), danach nur DB-Schreiben der Formen.',
         'foodalchemist.presentation_designs.GENERATE_CSS' => 'Ein propose() (praesentation.design_css), liefert nur den Vorschlag, schreibt nicht.',
+        'foodalchemist.planung_leitplanken.EXTRACT' => 'Ein propose() (planung.leitplanken), schreibt höchstens die Regler der Planungssitzung (DB).',
+        'foodalchemist.planung_vorschlag.POST' => 'Ein propose() (planung.leitplanken) über BriefingLeitplankenService, schreibt nichts (Vorschlag).',
         'foodalchemist.recipe_coherence.POST' => 'Ein propose() je Modus (vk.kohaerenz / vk.teller_heber), danach DB-Schreiben der Bewertung.',
         'foodalchemist.recipe_klasse.POST' => 'Ein propose() (vk.speisen_klasse), optional DB-Übernahme (accept). Das Tool fängt Throwable: darum meldet die Hülle über den Modus, nicht über die Ausnahme.',
         'foodalchemist.recipe_rollen.POST' => 'Ein propose() (vk.rollen), optional DB-Übernahme (accept).',
+        'foodalchemist.verkaufsrezepte.REVISE' => 'Ein propose() (vk.ueberarbeiten), optional DB-Übernahme (accept); Folge-Job SensorikNachholen erbt den Extern-Modus.',
         'foodalchemist.recipe_sensorik.POST' => 'Ein propose() (recipe.sensorik), danach DB-Schreiben des Profils.',
+        'foodalchemist.recipes.REVIEW' => 'Read-only: ein propose() (recipe.review / vk.review) über RecipeReviewService, schreibt nichts.',
+        'foodalchemist.recipes.REVISE' => 'Ein propose() (recipe.ueberarbeiten), optional DB-Übernahme (accept) über RecipeService — dessen Folge-Job SensorikNachholen erbt den Extern-Modus (P2c-1).',
+        'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
 
     /**
@@ -42,9 +52,9 @@ final class KiUmleitung
      * @var array<string, string>
      */
     public const AUSGENOMMEN = [
+        'foodalchemist.foodbook_kapitel.WORDING_GENERATE' => 'Noch nicht belegt: der Service tut bei einem Kapitel ohne Konzept-Slots nichts (kein KI-Aufruf), der Test braucht ein Kapitel mit belegten Slots (Fixture). Services ohne Folge-Jobs — Aufnahme nach Fixture-Bau.',
+        'foodalchemist.speisekarte_wording.GENERATE' => 'Noch nicht belegt: bei einer Karte ohne Positionen entsteht kein KI-Aufruf; der Test braucht eine Karte mit Positionen (Fixture).',
         'foodalchemist.concepts.GENERATE' => 'Klasse c: Kaskade, mehrere propose() mit Schreibzugriffen dazwischen (Phase 2).',
-        'foodalchemist.recipes.ENRICH' => 'Queue-Dispatch wie gps.ENRICH (Phase 2).',
-        'foodalchemist.recipes.GENERATE' => 'Klasse c: Generator-Kaskade (Phase 2).',
     ];
 
     /**
@@ -73,6 +83,7 @@ final class KiUmleitung
      */
     public const LAUF_FLAG = [
         'foodalchemist.gps.ENRICH' => 'BulkEnrichService::starteGp(extern) → BulkEnrichGpJob setzt KiExternModus im Worker; verarbeiteGp legt bei „ausstehend“ keinen Leer-Vorschlag an.',
+        'foodalchemist.recipes.ENRICH' => 'PlanningCascadeService::enrichBestehendesRezept(extern) → EnrichRecipeJob (KiExternWiederholbar, P2b): Sammel-Transaktion im Job, ANTWORT startet den Lauf neu.',
     ];
 
     /** Soll ein Lauf, den dieser Aufruf startet, extern laufen? (nur Aufruf über den externen MCP-Server, Schalter an) */
@@ -87,11 +98,12 @@ final class KiUmleitung
     }
 
     /** @param callable(): ToolResult $lauf */
-    public static function ausfuehren(callable $lauf): ToolResult
+    public static function ausfuehren(callable $lauf, string $toolName = 'tool'): ToolResult
     {
         $db = DB::connection();
         $modus = app(KiExternModus::class);
         $niveau = $db->transactionLevel();
+        \Platform\FoodAlchemist\Services\Ai\KiExternLauf::wacheStart();   // Nicht-DB-Nebenwirkungen vor dem Rollback sichtbar machen
         $db->beginTransaction();
         $ergebnis = null;
         $fehler = null;
@@ -100,6 +112,7 @@ final class KiUmleitung
         } catch (\Throwable $e) {
             $fehler = $e;
         }
+        \Platform\FoodAlchemist\Services\Ai\KiExternLauf::wacheEnde("tool:{$toolName}");
         $merker = $modus->entnimm();
 
         if ($merker['wartet'] === []) {

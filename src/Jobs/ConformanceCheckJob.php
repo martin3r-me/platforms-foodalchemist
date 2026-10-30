@@ -24,7 +24,7 @@ use Platform\FoodAlchemist\Services\ConformanceService;
  * nie zum Fehler machen — jeder Fehler bleibt im Job (tries=1, kein Rethrow). Auth-Restore
  * wie bei {@see GenerateRecipeJob} (AiGatewayService liest Auth::user() für Kill-Switch/DNA/Log).
  */
-class ConformanceCheckJob implements ShouldQueue
+class ConformanceCheckJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
@@ -43,6 +43,8 @@ class ConformanceCheckJob implements ShouldQueue
         ?string $knowledgeRunId = null,
         /** Spec 53 / Paket C: Kaskaden-Step, an dem die Phase „Konformität wird geprüft …" sichtbar wird. */
         public ?int $cascadeStepId = null,
+        public bool $extern = false,   // #1002 P2c-2
+        public int $versuch = 0,
     ) {
         $this->knowledgeRunId = $knowledgeRunId;
         if ($this->knowledgeRunId === null && in_array($this->artifactTyp, ['recipe', 'basisrezept'], true)) {
@@ -51,7 +53,45 @@ class ConformanceCheckJob implements ShouldQueue
         }
     }
 
+    // ── #1002 P2c-2 · KiExternWiederholbar ──
+    public function externAktiv(): bool
+    {
+        return $this->extern;
+    }
+
+    public function externSchluessel(): string
+    {
+        return "conformance:{$this->artifactTyp}:{$this->artifactId}";
+    }
+
+    public function externTeamId(): int
+    {
+        return $this->teamId;
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'artifact_typ' => $this->artifactTyp, 'artifact_id' => $this->artifactId,
+            'knowledge_run_id' => $this->knowledgeRunId, 'cascade_step_id' => $this->cascadeStepId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (string) $n['artifact_typ'], (int) $n['artifact_id'], $n['knowledge_run_id'] ?? null,
+            $n['cascade_step_id'] === null ? null : (int) $n['cascade_step_id'], true, $versuch);
+    }
+
     public function handle(ConformanceService $conformance): void
+    {
+        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($conformance));
+    }
+
+    private function arbeite(ConformanceService $conformance): void
     {
         $team = Team::find($this->teamId);
         if ($this->knowledgeRunId === null || $team === null) {
@@ -90,6 +130,9 @@ class ConformanceCheckJob implements ShouldQueue
             // Korrelation: Befunde tragen den Kaskaden-Lauf (vorher run_id = null), der Step den Heil-Status.
             $ergebnis = $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId, $this->laufId());
         } catch (\Throwable $e) {
+            if (app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->wartet()) {
+                return;                                              // wartet auf eine externe Antwort — keine „fehlgeschlagene Prüfung“, die Wiederholung folgt
+            }
             // Best-effort — eine gescheiterte Prüfung ist nie ein Grund, das fertige Artefakt zu kippen.
             // Spec 80 C6: aber protokolliert, sonst ist eine ausgefallene Prüfung unsichtbar.
             \Illuminate\Support\Facades\Log::warning('[Konformität] Prüfung fehlgeschlagen', [

@@ -31,7 +31,7 @@ use Platform\FoodAlchemist\Services\RecipeGeneratorService;
  * → wir loggen ihn wieder ein, damit die Generierung deckungsgleich zum
  * Web-Pfad läuft (currentTeamRelation = reine current_team_id-Relation).
  */
-class GenerateRecipeJob implements ShouldQueue
+class GenerateRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
@@ -57,7 +57,42 @@ class GenerateRecipeJob implements ShouldQueue
         public bool $vkModus = false,
         /** Nach erfolgreicher Generierung einen separaten Anreicherungs-Job starten. */
         public bool $vollAnreichern = false,
+        public bool $extern = false,   // #1002 P2c-2: per MCP gestartet → KI-Aufträge statt Provider-Calls (erbt auf Kinder und Folge-Jobs)
+        public int $versuch = 0,
     ) {
+    }
+
+    // ── #1002 P2c-2 · KiExternWiederholbar ──
+    public function externAktiv(): bool
+    {
+        return $this->extern;
+    }
+
+    public function externSchluessel(): string
+    {
+        return "generate-recipe:{$this->runId}";
+    }
+
+    public function externTeamId(): int
+    {
+        return $this->teamId;
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['run_id' => $this->runId, 'team_id' => $this->teamId, 'user_id' => $this->userId, 'description' => $this->description,
+            'parameter' => $this->parameter, 'vk_modus' => $this->vkModus, 'voll_anreichern' => $this->vollAnreichern];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((string) $n['run_id'], (int) $n['team_id'], (int) $n['user_id'], (string) $n['description'], (array) ($n['parameter'] ?? []),
+            (bool) ($n['vk_modus'] ?? false), (bool) ($n['voll_anreichern'] ?? false), true, $versuch);
     }
 
     public static function cacheKey(string $runId): string
@@ -66,6 +101,16 @@ class GenerateRecipeJob implements ShouldQueue
     }
 
     public function handle(RecipeGeneratorService $generator): void
+    {
+        $stand = app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($generator));
+        if ($stand === \Platform\FoodAlchemist\Services\Ai\KiExternLauf::WARTET) {
+            // sichtbar, nie als Fehler: der Lauf wartet auf eine externe KI-Antwort (ki_auftraege.GET → ANTWORT, das System startet ihn neu)
+            $this->schreibe(['status' => 'pending', 'progress' => 'wartet auf KI-Antwort (ki_auftraege)', 'wartet_auf' => 'ki_auftraege', 'gestartet_at' => now()->timestamp]);
+        }
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(RecipeGeneratorService $generator): void
     {
         if ($this->kaskadeAbgebrochen()) {
             $this->schreibe(['status' => 'cancelled']);
@@ -146,7 +191,7 @@ class GenerateRecipeJob implements ShouldQueue
                 'kontext' => $r['kontext'] ?? null,   // Kontext-Inspektor: verwendetes Wissen fürs UI
             ];
             if ($stepId !== null) {
-                $workflowParameter = [...$this->parameter, '_voll_anreichern' => $this->vollAnreichern];
+                $workflowParameter = [...$this->parameter, '_voll_anreichern' => $this->vollAnreichern, '_extern' => $this->extern];
                 app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
                     $team, $stepId, $this->userId, $r['recipe'], $r['offene'], $workflowParameter,
                 );
@@ -166,15 +211,18 @@ class GenerateRecipeJob implements ShouldQueue
             try {
                 EnrichGeneratedRecipeJob::dispatch(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(), null, $stepId,
-                );
+                    $payload, $this->zielVk(), null, $stepId, extern: $this->extern,
+                )->afterCommit();   // #1002: im externen Lauf erst nach dem Commit (ein Rollback darf kein Kind hinterlassen)
             } catch (\Throwable $e) {
                 (new EnrichGeneratedRecipeJob(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(), null, $stepId,
+                    $payload, $this->zielVk(), null, $stepId, extern: $this->extern,
                 ))->failed($e);
             }
         } catch (\Throwable $e) {
+            if (app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->wartet()) {
+                return;                                              // wartet auf eine externe Antwort: kein Fehler, Rollback + Wiederholung folgen
+            }
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
             $this->meldeKaskade(false, null, $e->getMessage());
         }
@@ -288,8 +336,8 @@ class GenerateRecipeJob implements ShouldQueue
     {
         try {
             ConformanceCheckJob::dispatch(
-                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId, null, $stepId,
-            );
+                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId, null, $stepId, extern: $this->extern,
+            )->afterCommit();
         } catch (\Throwable $e) {
             // Dispatch-Fehler (Queue down o. ä.) darf das fertige Rezept nicht zum Fehler machen.
         }

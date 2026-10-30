@@ -49,7 +49,7 @@ use Platform\FoodAlchemist\Services\RecipeOneShotService;
  * {@see \Platform\FoodAlchemist\Jobs\GenerateRecipeJob::cacheKey()} (`HatGeneratorLauf`-Trait,
  * VK-/Basisrezept-Generator).
  */
-class EnrichRecipeJob implements ShouldQueue
+class EnrichRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
@@ -68,7 +68,45 @@ class EnrichRecipeJob implements ShouldQueue
         public bool $completeCoverage = true,   // Phase 0.3: Anreicherungs-Tiefe (Step-by-Step/Sensorik/…); Default an = Bestandsverhalten
         public bool $nurProduktfoto = false,
         public array $leitplanken = [],   // 27.10.: Rezept-Leitplanken (bio_pref/frische/convenience) für die Bestandssuche vor jedem GP-Mint
+        public bool $extern = false,   // #1002 P2b: per MCP gestartet → KI-Aufträge statt Provider-Calls (Sammel-Transaktion, Wiederholung durch ANTWORT)
+        public int $versuch = 0,
     ) {}
+
+    // ── #1002 P2b · KiExternWiederholbar ────────────────────────────────────────────────────────────
+    // Nur die Voll-Anreicherung läuft extern; „nur Bilder“/„nur Produktfoto“ bleiben beim Plattform-Provider (Bildgenerierung).
+
+    public function externAktiv(): bool
+    {
+        return $this->extern && ! $this->nurBilder && ! $this->nurProduktfoto;
+    }
+
+    public function externSchluessel(): string
+    {
+        return "enrich-recipe:{$this->teamId}:{$this->recipeId}";
+    }
+
+    public function externTeamId(): int
+    {
+        return $this->teamId;
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['team_id' => $this->teamId, 'user_id' => $this->userId, 'recipe_id' => $this->recipeId, 'ziel_vk' => $this->zielVk,
+            'step_id' => $this->stepId, 'refresh' => $this->refresh, 'complete_coverage' => $this->completeCoverage, 'leitplanken' => $this->leitplanken];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((int) $n['team_id'], (int) $n['user_id'], (int) $n['recipe_id'], $n['ziel_vk'] === null ? null : (float) $n['ziel_vk'],
+            false, $n['step_id'] === null ? null : (int) $n['step_id'], false, (bool) ($n['refresh'] ?? false),
+            (bool) ($n['complete_coverage'] ?? true), false, (array) ($n['leitplanken'] ?? []), true, $versuch);
+    }
 
     /** Cache-Schlüssel für den stepId-freien Produktfoto-Lauf (Modal-Knopf) — Status + Doppel-Enqueue-Guard. */
     public static function produktfotoCacheKey(int $teamId, int $recipeId): string
@@ -94,6 +132,15 @@ class EnrichRecipeJob implements ShouldQueue
     private ?array $volltext = null;
 
     public function handle(RecipeOneShotService $oneShot): void
+    {
+        $stand = app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($oneShot));
+        if ($stand === \Platform\FoodAlchemist\Services\Ai\KiExternLauf::WARTET) {
+            $this->markEnrichWartet();
+        }
+    }
+
+    /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
+    private function arbeite(RecipeOneShotService $oneShot): void
     {
         if ($this->kaskadeAbgebrochen()) {
             return;
@@ -327,6 +374,17 @@ class EnrichRecipeJob implements ShouldQueue
         } catch (\Throwable $e) {
             Log::warning('[EnrichRecipeJob] Freigabe nach Anreicherung nicht abgeschlossen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
         }
+    }
+
+    /** #1002: Der Lauf wartet auf eine externe KI-Antwort (Rollback hat `running` zurückgenommen) — am Step sichtbar, kein Fehler. */
+    private function markEnrichWartet(): void
+    {
+        if ($this->stepId === null || ($step = FoodAlchemistCascadeRunStep::find($this->stepId)) === null) {
+            return;
+        }
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        $deferred['enrich'] = ['status' => 'queued', 'wartet_auf' => 'ki_auftraege', 'at' => now()->toIso8601String()];
+        $step->update(['deferred' => $deferred]);
     }
 
     private function markEnrich(string $status, ?string $error = null, ?array $coverage = null, ?int $dauerMs = null): void

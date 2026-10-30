@@ -192,7 +192,7 @@ class RecipeDependencyWorkflowService
         'diaet_hart', 'allergen_nogo',
         'convenience', 'frische', 'frische_erlaubt', 'bio', 'bio_pref', 'bio_praeferenz', 'bestand', 'level', 'niveau', 'sektor',
         'ki_bilder', 'complete_coverage', 'use_favorites_list', 'favorites_convenience_only',
-        'planning_session_id', 'cascade_step_id', 'auto_dependencies',
+        'planning_session_id', 'cascade_step_id', 'auto_dependencies', '_extern',   // #1002: Kinder eines externen Laufs sind extern
     ];
 
     /**
@@ -379,7 +379,7 @@ class RecipeDependencyWorkflowService
             ...$params,
             'cascade_step_id' => $child->id,
             'auto_dependencies' => true,
-        ], false, $vollAnreichern)->onQueue(Warteschlange::rezepte());
+        ], false, $vollAnreichern, extern: (bool) ($params['_extern'] ?? false))->afterCommit()->onQueue(Warteschlange::rezepte());
     }
 
     /**

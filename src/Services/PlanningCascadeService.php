@@ -269,7 +269,7 @@ class PlanningCascadeService
         // noch nicht freigegebenen Draft liefe dieselbe teure Coverage-Kette ein zweites Mal — darum im
         // staged-Modus unterdrücken. Nicht-gestuft (Direkt-Materialisierung) behält das Alt-Verhalten.
         $vorFreigabeAnreichern = $vollAnreichern && ! $staged;   // Spec 80 H: nicht gestufte Läufe haben kein Freigabe-Tor — dort bleibt es bewusst so
-        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern);
+        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern, extern: (bool) ($jobParams['_extern'] ?? false));
     }
 
     /**
@@ -2572,7 +2572,7 @@ class PlanningCascadeService
         // Spec 50 · E-1: die zwei Regler, die der MCP-Weg braucht (Defaults = bisheriges Verhalten). `kiBilder` bleibt AUS — Bilder sind teuer.
         bool $completeCoverage = true,
         bool $kiBilder = false,
-        array $leitplanken = [],   // 27.10.: Rezept-Leitplanken des Imports (Session bzw. Abgleich-Auswahl) → Bestandssuche vor jedem GP-Mint
+        array $leitplanken = [], bool $extern = false,   // 27.10.: Rezept-Leitplanken des Imports → Bestandssuche vor jedem GP-Mint · #1002 P2b: extern = per MCP, Jobs legen KI-Aufträge an (KI-Bilder bleiben Plattform: aus)
     ): FoodAlchemistCascadeRun {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException::wennNichtEigen($recipe, $team, 'Rezept');   // Spec 84 B2: Anreicherung schreibt KI-Felder
@@ -2601,14 +2601,14 @@ class PlanningCascadeService
         ]);
 
         $this->markEnrichQueued($step);
-        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, $kiBilder, (int) $step->id, false, false, $completeCoverage, false, $leitplanken);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, $kiBilder && ! $extern, (int) $step->id, false, false, $completeCoverage, false, $leitplanken, $extern);
 
         // Sub-Rezepte im Hintergrund mit-anreichern (nicht am Worker-Step sichtbar, wie allesAnreichern).
         foreach (app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id) as $subId) {
             // Schleife über alle Sub-Rezepte eines Gerichts — viele kleine Läufe hinter EINEM
             // Klick. Eigene Schlange, damit sie den interaktiven Einzel-Anreicherungs-Klick
             // (Rezept-/VK-Modal) nicht blockieren.
-            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true, $completeCoverage, false, $leitplanken)
+            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true, $completeCoverage, false, $leitplanken, $extern)
                 ->onQueue(Warteschlange::anreichern());
         }
 

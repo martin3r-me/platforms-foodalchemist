@@ -66,6 +66,10 @@ class KiAuftragService
             'status' => 'offen', 'laeuft_ab_at' => now()->addHours(self::TTL_STUNDEN),
             'created_at' => now(), 'updated_at' => now(),
         ];
+        if (($wdh = $modus->wiederholung()) !== null) {              // P2a: Job-Lauf — ANTWORT darf ihn neu anstoßen
+            $zeile['wiederholung'] = json_encode($wdh, JSON_UNESCAPED_UNICODE);
+            $zeile['lauf_key'] = (string) ($wdh['lauf_key'] ?? '');
+        }
         if ($modus->sammelt()) {
             // MCP-Tool-Hülle: erst nach dem Rollback der Tool-Transaktion schreiben (legeAn), sonst rollt der Auftrag mit zurück
             $modus->merkeVor($zeile);
@@ -76,10 +80,64 @@ class KiAuftragService
         throw new KiAuftragAusstehendException($uuid, $feature);
     }
 
+    /** Wartet für dieses Ziel schon ein Lauf (offener oder beantworteter, noch nicht verbrauchter Auftrag)? Dann startet kein zweiter. */
+    public function laufAktiv(int $teamId, string $laufKey): bool
+    {
+        return DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $laufKey)
+            ->whereIn('status', ['offen', 'beantwortet'])->where('laeuft_ab_at', '>', now())->exists();
+    }
+
+    /**
+     * Startet die Job-Läufe neu, deren letzter offener Auftrag mit dieser Antwort-Runde beantwortet ist (P2a). Nur Klassen, die
+     * {@see KiExternWiederholbar} umsetzen; je Lauf höchstens einmal je Versuch.
+     *
+     * @param  list<string>  $uuids soeben beantwortete Aufträge
+     * @return list<array{lauf_key: string, job: string, versuch: int}>
+     */
+    public function stoesseWiederholungAn(int $teamId, array $uuids): array
+    {
+        $gestartet = [];
+        $rows = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->whereIn('uuid', $uuids)
+            ->where('status', 'beantwortet')->whereNotNull('wiederholung')->get()->groupBy('lauf_key');
+        foreach ($rows as $key => $_) {
+            $key = (string) $key;
+            if ($key === ''
+                || DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $key)->where('status', 'offen')
+                    ->where('laeuft_ab_at', '>', now())->exists()) {
+                continue;                                            // der Lauf wartet noch auf weitere Antworten
+            }
+            $alle = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $key)->where('status', 'beantwortet')
+                ->whereNotNull('wiederholung')->orderBy('id')->get()
+                ->map(fn ($r) => ['zeile' => $r, 'p' => json_decode((string) $r->wiederholung, true) ?: []]);
+            $maxV = (int) $alle->max(fn ($a) => (int) ($a['p']['versuch'] ?? 0));
+            $letzte = $alle->filter(fn ($a) => (int) ($a['p']['versuch'] ?? 0) === $maxV);
+            if ($letzte->contains(fn ($a) => isset($a['p']['gestartet_at']))) {
+                continue;                                            // für diesen Versuch schon angestoßen
+            }
+            $p = $letzte->last()['p'];
+            $klasse = $p['klasse'] ?? null;
+            if (! is_string($klasse) || ! class_exists($klasse) || ! is_subclass_of($klasse, KiExternWiederholbar::class)) {
+                continue;                                            // nie eine fremde Klasse aus der Datenbank instanziieren
+            }
+            foreach ($letzte as $a) {
+                DB::table('foodalchemist_ki_auftraege')->where('id', $a['zeile']->id)
+                    ->update(['wiederholung' => json_encode($a['p'] + ['gestartet_at' => now()->toIso8601String()], JSON_UNESCAPED_UNICODE)]);
+            }
+            dispatch($klasse::fromExternNutzlast((array) ($p['nutzlast'] ?? []), $maxV + 1));
+            $gestartet[] = ['lauf_key' => $key, 'job' => class_basename($klasse), 'versuch' => $maxV + 1];
+        }
+
+        return $gestartet;
+    }
+
     /** @param list<array<string, mixed>> $zeilen vorgemerkte Aufträge — außerhalb jeder Tool-Transaktion aufrufen */
     public function legeAn(array $zeilen): void
     {
         foreach ($zeilen as $zeile) {
+            // Der Wissens-Lauf (knowledge_run) entstand in der zurückgerollten Transaktion und existiert nicht mehr — kein hängender Verweis
+            if (! empty($zeile['knowledge_run_id']) && ! DB::table('foodalchemist_knowledge_runs')->where('id', $zeile['knowledge_run_id'])->exists()) {
+                $zeile['knowledge_run_id'] = null;
+            }
             DB::table('foodalchemist_ki_auftraege')->insert($zeile);
         }
     }
@@ -127,8 +185,10 @@ class KiAuftragService
     /**
      * Bilanz des externen Wegs (#1002): wie viele Aufträge entstanden, wie viele Antworten wirklich verbraucht wurden, was liegen blieb.
      * `angelegt`/`beantwortet`/`verbraucht` zählen ab `$seit` (Lauf-Beginn); `offen`, `liegt_beantwortet`, `abgelaufen` sind Bestand.
-     * `doppelt` = Aufträge über dem ersten je (Feature, Ziel) ab `$seit` — wäre der Fingerabdruck instabil (andere Reihenfolge der Treffer,
-     * anderer Kontext), entstünden hier mehrere Aufträge für dasselbe Ziel. `verwaist` = abgelaufen + seit über 1 Stunde beantwortet, nie verbraucht.
+     * `doppelt` = verschiedene Prompts über dem ersten je (Feature, Ziel) ab `$seit` — wäre der Fingerabdruck instabil (andere Reihenfolge der
+     * Treffer, anderer Kontext), entstünden hier mehrere Aufträge für dasselbe Ziel. `wiederholt` = derselbe Prompt mehrfach beauftragt: der
+     * Re-Roll der Antwortprüfung (`structural_retry`, bis 3 Versuche) fragt bei unbrauchbarer Antwort neu — erwartet, kein Fehler.
+     * `verwaist` = abgelaufen + seit über 1 Stunde beantwortet, nie verbraucht.
      *
      * @return array<string, int>
      */
@@ -137,10 +197,13 @@ class KiAuftragService
         $basis = fn () => DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->when($feature, fn ($q) => $q->where('feature', $feature));
         $ab = fn ($q, string $spalte) => $seit !== null ? $q->where($spalte, '>=', $seit) : $q;
         $doppelt = 0;
-        $ab($basis()->whereNotNull('target_id'), 'created_at')->select('feature', 'target_table', 'target_id')->selectRaw('COUNT(*) AS n')
+        $wiederholt = 0;
+        $ab($basis()->whereNotNull('target_id'), 'created_at')->select('feature', 'target_table', 'target_id')
+            ->selectRaw('COUNT(*) AS n, COUNT(DISTINCT messages_hash) AS h')
             ->groupBy('feature', 'target_table', 'target_id')->havingRaw('COUNT(*) > 1')->get()
-            ->each(function ($z) use (&$doppelt) {
-                $doppelt += (int) $z->n - 1;
+            ->each(function ($z) use (&$doppelt, &$wiederholt) {
+                $doppelt += max(0, (int) $z->h - 1);                 // verschiedener Prompt für dasselbe Ziel: Fingerabdruck instabil (oder Kontext hat sich geändert)
+                $wiederholt += (int) $z->n - (int) $z->h;           // derselbe Prompt nochmal: Re-Roll der Prüfung (structural_retry), die Antwort war unbrauchbar
             });
         $abgelaufen = (int) $basis()->where('status', 'abgelaufen')->count();
         $alt = (int) $basis()->where('status', 'beantwortet')->where('beantwortet_at', '<', now()->subHour())->count();
@@ -154,6 +217,7 @@ class KiAuftragService
             'abgelaufen' => $abgelaufen,
             'verwaist' => $abgelaufen + $alt,
             'doppelt' => $doppelt,
+            'wiederholt' => $wiederholt,
         ];
     }
 

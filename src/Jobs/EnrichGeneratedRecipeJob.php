@@ -15,7 +15,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeOneShotService;
 
 /** Zweite Phase der KI-Erstellung: reichert ein bereits gespeichertes Rezept an. */
-class EnrichGeneratedRecipeJob implements ShouldQueue
+class EnrichGeneratedRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;   // Spec 84 A-3: Job läuft im Auftragsteam
 
@@ -34,6 +34,8 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
         ?string $knowledgeRunId = null,
         /** Spec 53 / Paket C: Kaskaden-Step, an dem Phase + Konformitätsprüfung sichtbar werden. */
         public ?int $cascadeStepId = null,
+        public bool $extern = false,   // #1002 P2c-2
+        public int $versuch = 0,
     ) {
         $this->knowledgeRunId = $knowledgeRunId;
         if ($this->knowledgeRunId === null && true) {
@@ -42,7 +44,48 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
         }
     }
 
+    // ── #1002 P2c-2 · KiExternWiederholbar ──
+    public function externAktiv(): bool
+    {
+        return $this->extern;
+    }
+
+    public function externSchluessel(): string
+    {
+        return "enrich-generated:{$this->runId}";
+    }
+
+    public function externTeamId(): int
+    {
+        return $this->teamId;
+    }
+
+    public function externVersuch(): int
+    {
+        return $this->versuch;
+    }
+
+    public function externNutzlast(): array
+    {
+        return ['run_id' => $this->runId, 'team_id' => $this->teamId, 'user_id' => $this->userId, 'recipe_id' => $this->recipeId,
+            'recipe_payload' => $this->recipePayload, 'ziel_vk' => $this->zielVk, 'knowledge_run_id' => $this->knowledgeRunId, 'cascade_step_id' => $this->cascadeStepId];
+    }
+
+    public static function fromExternNutzlast(array $n, int $versuch): static
+    {
+        return new static((string) $n['run_id'], (int) $n['team_id'], (int) $n['user_id'], (int) $n['recipe_id'], (array) ($n['recipe_payload'] ?? []),
+            $n['ziel_vk'] === null ? null : (float) $n['ziel_vk'], $n['knowledge_run_id'] ?? null, $n['cascade_step_id'] === null ? null : (int) $n['cascade_step_id'], true, $versuch);
+    }
+
     public function handle(RecipeOneShotService $oneShot): void
+    {
+        $stand = app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($oneShot));
+        if ($stand === \Platform\FoodAlchemist\Services\Ai\KiExternLauf::WARTET) {
+            Cache::put(GenerateRecipeJob::cacheKey($this->runId), [...$this->recipePayload, 'status' => 'enriching', 'progress' => 'wartet auf KI-Antwort (ki_auftraege)', 'wartet_auf' => 'ki_auftraege'], now()->addMinutes(15));
+        }
+    }
+
+    private function arbeite(RecipeOneShotService $oneShot): void
     {
         $team = Team::find($this->teamId);
         if ($this->knowledgeRunId === null || $team === null) {
@@ -83,12 +126,15 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
             try {
                 ConformanceCheckJob::dispatch(
                     $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id,
-                    $this->knowledgeRunId, $this->cascadeStepId,
-                );
+                    $this->knowledgeRunId, $this->cascadeStepId, extern: $this->extern,
+                )->afterCommit();
             } catch (\Throwable $e) {
                 // schlucken — Konformität ist nachgelagert, nie ein Grund für einen Enrich-Fehler.
             }
         } catch (\Throwable $e) {
+            if (app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->wartet()) {
+                return;                                              // wartet auf eine externe Antwort: kein „fertig mit Fehler“, die Wiederholung folgt
+            }
             $this->fertigMitFehler($e->getMessage());
         } finally {
             if ($this->cascadeStepId !== null) {

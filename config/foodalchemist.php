@@ -562,6 +562,12 @@ return [
         'mcp_extern' => (bool) env('FOODALCHEMIST_AI_MCP_EXTERN', true),
 
         /*
+         * #1002 (P2a): Wiederholungs-Schranke je externem Job-Lauf. Ein stabiler Fingerabdruck braucht höchstens so viele Wiederholungen
+         * wie der Lauf KI-Glieder hat (EnrichRecipeJob ≈ 15) + Puffer; danach bricht der Lauf mit klarem Fehler ab.
+         */
+        'extern_max_wiederholungen' => (int) env('FOODALCHEMIST_AI_EXTERN_MAX_WIEDERHOLUNGEN', 30),
+
+        /*
          * Output-Budget-Default (max_output_tokens). Der Core-OpenAiService fällt ohne
          * expliziten Wert auf 1000 zurück — für Reasoning-Modelle (gpt-5.x: ein Teil geht
          * für Reasoning-Tokens drauf) zu knapp, große Struktur-JSONs werden abgeschnitten.
