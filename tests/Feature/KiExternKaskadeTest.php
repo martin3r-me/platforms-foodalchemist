@@ -196,3 +196,25 @@ it('Wächter: im Verzeichnis Jobs bleibt kein Job mit KI-Aufruf ohne KiExternWie
     }
 });
 
+
+it('Mitwartende werden je Antwort genau einmal neu gestartet (idempotent), der Besitzer ebenfalls', function () {
+    \Illuminate\Support\Facades\Queue::fake();
+    $nutz = fn (int $idee) => ['team_id' => $this->rootTeam->id, 'user_id' => $this->user->id, 'idea_id' => $idee, 'cascade_step_id' => 1, 'planning_session_id' => null];
+    $klasse = \Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob::class;
+    DB::table('foodalchemist_ki_auftraege')->insert([
+        'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->rootTeam->id, 'feature' => 'vk.generator', 'messages' => '[]', 'messages_hash' => 'h1',
+        'status' => 'beantwortet', 'antwort' => '{}', 'laeuft_ab_at' => now()->addDay(), 'created_at' => now(), 'updated_at' => now(), 'lauf_key' => 'materialize-idea:1:1',
+        'wiederholung' => json_encode(['klasse' => $klasse, 'nutzlast' => $nutz(1), 'versuch' => 0, 'lauf_key' => 'materialize-idea:1:1', 'weitere' => [
+            ['klasse' => $klasse, 'nutzlast' => $nutz(2), 'versuch' => 0, 'lauf_key' => 'materialize-idea:1:2'],
+            ['klasse' => $klasse, 'nutzlast' => $nutz(3), 'versuch' => 0, 'lauf_key' => 'materialize-idea:1:3'],
+        ]]),
+    ]);
+    $uuid = DB::table('foodalchemist_ki_auftraege')->value('uuid');
+
+    $erst = app(\Platform\FoodAlchemist\Services\Ai\KiAuftragService::class)->stoesseWiederholungAn($this->rootTeam->id, [$uuid]);
+    $zweit = app(\Platform\FoodAlchemist\Services\Ai\KiAuftragService::class)->stoesseWiederholungAn($this->rootTeam->id, [$uuid]);
+
+    expect(array_column($erst, 'lauf_key'))->toBe(['materialize-idea:1:1', 'materialize-idea:1:2', 'materialize-idea:1:3'])
+        ->and($zweit)->toBe([]);
+    \Illuminate\Support\Facades\Queue::assertPushed($klasse, 3);
+});
