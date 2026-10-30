@@ -23,6 +23,9 @@ class FoodAlchemistPriceImportRun extends Model
     /** Datenblätter/Produktpässe, die ein Lieferant über seinen Link eingereicht hat (2c): eine Zeile je Datei, Übernehmen = Produktpass-Weg. */
     public const ART_DOKUMENTE = 'dokumente';
 
+    /** Stammdatenblatt des Lieferanten (Firmendaten, Kontakte, Liefergebiete, Zertifikate), über den Link im Formular eingereicht (2d): eine Zeile je Datensatz. */
+    public const ART_LIEFERANT = 'lieferant';
+
     /** Herkunft eines Laufs, den ein Lieferant über seinen Link (Portal) eingereicht hat; Standard ist „user“ (Team). */
     public const HERKUNFT_LIEFERANTEN_LINK = 'lieferanten_link';
 

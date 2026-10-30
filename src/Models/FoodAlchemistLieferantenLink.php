@@ -17,7 +17,7 @@ class FoodAlchemistLieferantenLink extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    public const BEREICHE = ['preisliste' => 'Preisliste hochladen', 'stammdaten' => 'Stammdaten-Datei hochladen', 'dokumente' => 'Datenblätter und Produktpässe', 'formular' => 'Artikel im Formular pflegen'];
+    public const BEREICHE = ['preisliste' => 'Preisliste hochladen', 'stammdaten' => 'Stammdaten-Datei hochladen', 'dokumente' => 'Datenblätter und Produktpässe', 'formular' => 'Stammdatenblatt im Formular pflegen'];
 
     protected $table = 'foodalchemist_lieferanten_links';
 

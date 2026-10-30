@@ -41,6 +41,56 @@
                 <button type="submit">Einreichen</button>
             </form>
         @endif
+        @if(!empty($blatt))
+            @php
+                $felder = \Platform\FoodAlchemist\Services\LieferantenStammdatenblattService::STAMM_FELDER;
+                $rollen = \Platform\FoodAlchemist\Services\LieferantenStammdatenblattService::ROLLEN;
+                $kanaele = \Platform\FoodAlchemist\Services\LieferantenStammdatenblattService::KANAELE;
+                $gebiete = array_pad($blatt['gebiete'], count($blatt['gebiete']) + 2, []);
+            @endphp
+            <form class="upload blatt" method="POST" action="{{ route('foodalchemist.presentation.lieferanten_portal_stammdatenblatt', ['token' => $token]) }}" enctype="multipart/form-data" data-portal-upload="stammdatenblatt">
+                @csrf
+                <h3>Stammdatenblatt</h3>
+                <p class="hinweis">Trage ein, was sich geändert hat oder noch fehlt. Leere Felder bleiben unverändert. Das Team prüft deine Angaben, bevor sie übernommen werden.</p>
+                <fieldset><legend>Firma, Bestellung, Konditionen</legend>
+                @foreach($felder as $feld => [$label, $art])
+                    @if($art === 'kanaele')
+                        <div class="gruppe">{{ $label }}:
+                            @foreach($kanaele as $k => $kl)<label class="inline"><input type="checkbox" name="stamm[{{ $feld }}][]" value="{{ $k }}" @checked(in_array($k, (array) ($blatt['stamm'][$feld] ?? []), true))> {{ $kl }}</label>@endforeach
+                        </div>
+                    @else
+                        <label>{{ $label }} <input type="text" name="stamm[{{ $feld }}]" value="{{ $blatt['stamm'][$feld] ?? '' }}" maxlength="1000"></label>
+                    @endif
+                @endforeach
+                </fieldset>
+                <fieldset><legend>Ansprechpartner</legend>
+                @foreach($rollen as $rk => $rl)
+                    <div class="gruppe"><strong>{{ $rl }}</strong>
+                        @foreach(['name' => 'Name', 'phone' => 'Telefon', 'mobile' => 'Mobil', 'email' => 'E-Mail'] as $f => $fl)
+                            <label>{{ $fl }} <input type="text" name="kontakt[{{ $rk }}][{{ $f }}]" value="{{ $blatt['kontakte'][$rk][$f] ?? '' }}" maxlength="255"></label>
+                        @endforeach
+                    </div>
+                @endforeach
+                </fieldset>
+                <fieldset><legend>Liefergebiete</legend>
+                @foreach($gebiete as $i => $g)
+                    <div class="gruppe"><strong>Gebiet {{ $i + 1 }}</strong>
+                        @foreach(['name' => 'Name', 'postal_codes' => 'PLZ-Bereiche', 'delivery_days' => 'Liefertage (1–7)', 'delivery_von' => 'Lieferung von (HH:MM)', 'delivery_bis' => 'bis (HH:MM)', 'order_cutoff_time' => 'Bestellschluss (HH:MM)', 'lead_days' => 'Vorlauf (Tage)', 'min_order_value' => 'Mindestbestellwert (€)', 'note' => 'Hinweis'] as $f => $fl)
+                            <label>{{ $fl }} <input type="text" name="gebiet[{{ $i }}][{{ $f }}]" value="{{ $g[$f] ?? '' }}" maxlength="1000"></label>
+                        @endforeach
+                    </div>
+                @endforeach
+                </fieldset>
+                <fieldset><legend>Zertifikat (eins je Einreichung)</legend>
+                    <label>Art (z. B. IFS, BRC, Bio) <input type="text" name="zertifikat[cert_type]" maxlength="64"></label>
+                    <label>Nummer <input type="text" name="zertifikat[cert_number]" maxlength="64"></label>
+                    <label>Aussteller <input type="text" name="zertifikat[issuer]" maxlength="128"></label>
+                    <label>Gültig bis (TT.MM.JJJJ) <input type="text" name="zertifikat[term_end]" maxlength="10"></label>
+                    <input type="file" name="zertifikat_datei" accept=".pdf,.jpg,.jpeg,.png">
+                </fieldset>
+                <button type="submit">Einreichen</button>
+            </form>
+        @endif
         <ul class="liste">@foreach($bereiche as $b)<li>{{ $b }}</li>@endforeach</ul>
         <p class="hinweis">Alles, was du einreichst, wird vom Team geprüft, bevor es übernommen wird.</p>
     </section>

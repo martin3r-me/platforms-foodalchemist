@@ -9,6 +9,7 @@ use Platform\Core\Http\Controllers\Controller;
 use Platform\FoodAlchemist\Models\FoodAlchemistLieferantenLink;
 use Platform\FoodAlchemist\Services\LieferantenDokumentService;
 use Platform\FoodAlchemist\Services\LieferantenLinkService;
+use Platform\FoodAlchemist\Services\LieferantenStammdatenblattService;
 use Platform\FoodAlchemist\Services\LieferantenUploadService;
 
 /**
@@ -29,6 +30,7 @@ class LieferantenPortalController extends Controller
         return $this->antwort(response()->view('foodalchemist::lieferanten-portal.show', [
             'link' => $link, 'lieferant' => $link->supplier, 'bereiche' => collect($link->bereiche)->map(fn ($b) => FoodAlchemistLieferantenLink::BEREICHE[$b] ?? $b)->all(),
             'token' => $token, 'meldung' => session('portal_meldung'), 'fehler' => session('portal_fehler'),
+            'blatt' => in_array('formular', (array) $link->bereiche, true) ? app(LieferantenStammdatenblattService::class)->vorbelegung($link) : null,
             'cssVersion' => substr((string) @md5_file($this->cssPfad()), 0, 8),
         ]));
     }
@@ -88,6 +90,28 @@ class LieferantenPortalController extends Controller
         return $weiter->with('portal_meldung', $r['zugeordnet']
             ? 'Danke, das Dokument ist angekommen. Wir prüfen es, bevor es dem Artikel zugeordnet wird.'
             : 'Danke, das Dokument ist angekommen. Zu dieser Artikelnummer haben wir keinen Artikel gefunden; wir melden uns, falls etwas unklar ist.');
+    }
+
+    /** Stammdatenblatt (Formular) einreichen (2d): je geänderter Datensatz eine Prüflisten-Zeile, nie direkt in den Bestand. */
+    public function stammdatenblatt(string $token, Request $request, LieferantenLinkService $svc, LieferantenStammdatenblattService $blatt): Response|RedirectResponse
+    {
+        $link = $svc->aufloesen($token);
+        if ($link === null) {
+            return $this->antwort(response()->view('foodalchemist::lieferanten-portal.ungueltig', [], 410));
+        }
+        $weiter = redirect()->route('foodalchemist.presentation.lieferanten_portal', ['token' => $token]);
+        $datei = $request->file('zertifikat_datei');
+        try {
+            $r = $blatt->einreichen($link, $request->only(['stamm', 'kontakt', 'gebiet', 'zertifikat']), $datei instanceof \Illuminate\Http\UploadedFile ? $datei : null, $request);
+        } catch (\RuntimeException $e) {
+            return $weiter->with('portal_fehler', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $weiter->with('portal_fehler', 'Die Angaben konnten nicht verarbeitet werden. Bitte prüfe sie oder melde dich bei uns.');
+        }
+
+        return $weiter->with('portal_meldung', "Danke, {$r['zeilen']} Angabe(n) sind angekommen. Wir prüfen sie, bevor sie übernommen werden.");
     }
 
     /** Stylesheet des Portals (Farben als CSS-Variablen, kein Inline-Style in der View). Öffentlich. */

@@ -163,6 +163,8 @@ enum SignalTyp: string
     case MarkenNachlauf = 'marken_nachlauf';
     // #1002 KI dualisieren: KI-Aufträge des externen Wegs (MCP-Client) liegen unbeantwortet oder sind abgelaufen. Ein Signal je Team und Feature, kein Dauerfeuer.
     case KiAuftraegeOffen = 'ki_auftraege_offen';
+    // Link-Stufe 2d: Zertifikate eines Lieferanten (IFS, BRC, Bio …) laufen ab oder sind abgelaufen. Ein Signal je Team und Lieferant, schließt sich selbst.
+    case ZertifikatLaeuftAb = 'zertifikat_laeuft_ab';
 
     public function label(): string
     {
@@ -173,6 +175,7 @@ enum SignalTyp: string
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
             self::MarkenNachlauf => 'Marke offen bei Rezepturware',
             self::KiAuftraegeOffen => 'KI-Aufträge warten auf Antwort',
+            self::ZertifikatLaeuftAb => 'Zertifikat läuft ab',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
             self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
@@ -239,6 +242,7 @@ enum SignalTyp: string
             self::NectaLieferantNeu => 'heroicon-o-truck',
             self::MarkenNachlauf => 'heroicon-o-tag',
             self::KiAuftraegeOffen => 'heroicon-o-clock',
+            self::ZertifikatLaeuftAb => 'heroicon-o-shield-check',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
             self::WechselkursVeraltet => 'heroicon-o-currency-euro',

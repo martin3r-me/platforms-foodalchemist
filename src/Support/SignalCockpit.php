@@ -283,6 +283,8 @@ final class SignalCockpit
     private const OHNE_WEG = [
         'rezept_verwaist' => 'Urteilssache ohne Hebel: ein Rezept ohne Verwendung ist kein Fehler. Behalten '
             . '(Archiv, Saison, Baustein) oder ausmustern — beides ist eine Entscheidung, keine Reparatur.',
+        'zertifikat_laeuft_ab' => 'Die Ursache liegt beim Lieferanten: das Zertifikat muss erneuert werden. Neues Zertifikat beim Lieferanten anfordern '
+            . '(oder ihm über den Lieferanten-Link das Stammdatenblatt schicken); das Signal schließt sich, sobald ein gültiges Ablaufdatum eingetragen ist.',
         'vertragsfrist_faellig' => 'Die Ursache liegt ausserhalb der App: die Frist läuft beim Lieferanten. Kündigen, '
             . 'verlängern oder neu verhandeln passiert am Vertrag — im System ist nichts zu korrigieren.',
         // Spec 32 C4: bewusst knopflos. Die Differenz zwischen eingekauftem und laut Rezeptur
