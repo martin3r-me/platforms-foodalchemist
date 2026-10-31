@@ -6,7 +6,8 @@
     Login/Teams laufen vorerst weiter über platform-core (Stufe 1 der Herauslösung).
 --}}
 <!DOCTYPE html>
-<html lang="de">
+{{-- data-fa-handy schon vom Server (Cookie fa_handy): wire:navigate übernimmt die <html>-Attribute der neuen Seite --}}
+<html lang="de" @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) data-fa-handy @endif>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

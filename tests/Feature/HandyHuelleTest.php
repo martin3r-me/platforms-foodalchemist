@@ -29,7 +29,9 @@ it('Untere Leiste: Reiter und Mehr folgen der Desktop-Navigation, Dashboard steh
 
     expect(collect($nav['reiter'])->pluck('route')->all())->toBe(['foodalchemist.recipes.index', 'foodalchemist.planung.index', 'foodalchemist.review'])
         ->and($nav['mehr'][0]['route'])->toBe('foodalchemist.dashboard')
-        ->and(collect($nav['mehr'])->pluck('route'))->toContain('foodalchemist.verkauf.index', 'foodalchemist.gps.index');
+        ->and(collect($nav['mehr'])->pluck('route'))->toContain('foodalchemist.verkauf.index', 'foodalchemist.gps.index')
+        // Hotfix 31.10.: Trend und Wissen haben Handy-Ansichten (HandyTrendsLesen/HandyWissenLesen), also auch einen Einstieg
+        ->and(collect($nav['mehr'])->pluck('route'))->toContain('foodalchemist.trendradar.index', 'foodalchemist.knowledge.index');
 });
 
 it('Untere Leiste: abgeschalteter Bereich erscheint auch am Handy nicht', function () {
@@ -50,7 +52,7 @@ it('Untere Leiste rendert Suche, Reiter, Mehr und den Konto-Platz; am Computer p
         ->toContain(route('foodalchemist.suche'))
         ->toContain('data-fa-handy-mehr')
         ->toContain('KONTO-MARKER')
-        ->toContain('Desktop-Ansicht');
+        ->not->toContain('Desktop-Ansicht');   // Hotfix 31.10.: aus dem Schalter kam man am Handy nicht zurück
 });
 
 it('Kopf-Baustein: Manifest, iOS-Vollbild und Handy-Entscheidung vor dem ersten Zeichnen', function () {

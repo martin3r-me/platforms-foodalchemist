@@ -16,7 +16,8 @@ Stand 30.10.2026 (Entscheidungen Dominique 29./30.10.).
 - **Erst nur Lesen:** Ändern-Aktionen am Handy aus, Hinweis „Am Computer bearbeiten“. Zentral freischaltbar
   für spätere kleine Änderungen am Handy (erster Kandidat: Signal abhaken). **Ausnahme Planung:** voll bedienbar.
 - **Am Laptop ändert sich nichts.** Handy-Oberfläche = Touch-Gerät ohne Hover und schmaler als 768 px, oder
-  bewusst gewählt; nie ein schmales Laptop-Fenster. Notausgang „Desktop-Ansicht“.
+  bewusst gewählt (`?ansicht=handy`); nie ein schmales Laptop-Fenster. Am Handy gilt immer die Handy-Oberfläche
+  (31.10.: Schalter „Desktop-Ansicht“ entfernt, aus ihm kam man nicht zurück; eine gemerkte Wahl „desktop“ wird gelöscht).
 
 Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1024 px.
 
@@ -37,10 +38,10 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | Rechte Detail-Leiste `x-foodalchemist::detail-sidebar` | ganze Breite, öffnet beim Antippen eines Eintrags, Zurück schließt sie; ohne Auswahl keine Leiste |
 | Kopfzeile oben (io-Hülle, Host food-alchemist.de) | schlank (Logo, Titel, Benutzer); eigener PR im Host |
 | Untere Leiste (Daumenzone) | Suche · Rezepte/Gerichte · Planung · Signale (mit Zähler offener Signale) · Mehr |
-| „Mehr“ | Dashboard ganz oben, dann Grundprodukte, Lieferanten, Produktion, Bestellungen, Concepter, Formate, Projekte, Speiseplan, Speisekarten, Foodbooks; Mandant wechseln (vorhandener Umschalter); Desktop-Ansicht |
+| „Mehr“ | Dashboard ganz oben, dann Grundprodukte, Lieferanten, Produktion, Bestellungen, Concepter, Formate, Projekte, Speiseplan, Speisekarten, Foodbooks, Trendradar, Wissen; Mandant wechseln (vorhandener Umschalter) |
 | Globale Suche | Rezept, Gericht, GP, Lieferant, Artikelnummer/EAN über die vorhandenen Such-Dienste; darunter „Zuletzt angesehen“ (pro Gerät) und Favoriten |
 | Mandantenwechsel | vorhandener Core-/Host-Umschalter, danach dieselbe Seite bzw. Startseite des Bereichs |
-| Server weiß „Handy“ | Cookie `fa_handy` (gleiche Entscheidung wie `<html data-fa-handy>`, gesetzt von HandyLesemodus::JS_MODUS) plus Kopfzeile X-FA-Handy bei Livewire-Anfragen. Darauf schalten Listen (Karten statt Tabelle) und Detail (Handbuch statt Desktop-Detail) und die Server-Sperre (HandyLesebereich). Erster Besuch ohne Cookie: Desktop-Aufbau, ab dem nächsten Laden Handy. |
+| Server weiß „Handy“ | Cookie `fa_handy` (gleiche Entscheidung wie `<html data-fa-handy>`, gesetzt von HandyLesemodus::JS_MODUS) plus Kopfzeile X-FA-Handy bei Livewire-Anfragen. Darauf schalten Listen (Karten statt Tabelle) und Detail (Handbuch statt Desktop-Detail) und die Server-Sperre (HandyLesebereich). Erster Besuch ohne Cookie: Desktop-Aufbau, ab dem nächsten Laden Handy. Die FA-Hülle schreibt `data-fa-handy` schon serverseitig ins `<html>`, und JS_MODUS läuft nach `livewire:navigated` erneut — sonst löscht `wire:navigate` das Attribut (Hotfix 31.10.). |
 | App auf dem Startbildschirm (PWA Stufe 1) | Manifest, Icons, Vollbild ohne Browserleiste, iOS-Hinweis „Zum Home-Bildschirm“ einmalig; kein Service Worker (Stufe 2 → 92_PWA_Offline_Push.md) |
 
 ## Seiten

@@ -20,7 +20,6 @@
             this.iosHinweis = ios && ! window.navigator.standalone && ! gesehen;
         },
         hinweisWeg() { this.iosHinweis = false; try { localStorage.setItem('fa-ios-hinweis', '1'); } catch (e) {} },
-        desktop() { window.faAnsicht('desktop'); },
      }"
      @keydown.escape.window="mehr = false">
 
@@ -59,11 +58,6 @@
             @if(! isset($konto) && $user)
                 <p class="py-2 text-[length:var(--fa-text-base)] text-[var(--fa-ink-2)]">{{ $user->name }} · {{ $user->currentTeam?->name }}</p>
             @endif
-            <button type="button" x-on:click="desktop()"
-                    class="flex items-center gap-4 min-h-[52px] text-[length:var(--fa-text-lg)] text-[var(--fa-ink)]" data-fa-desktop-ansicht>
-                @svg('heroicon-o-computer-desktop', 'w-6 h-6 shrink-0 text-[var(--fa-ink-3)]')
-                <span>Desktop-Ansicht</span>
-            </button>
         </div>
     </div>
 

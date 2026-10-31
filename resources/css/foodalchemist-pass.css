@@ -597,3 +597,5 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
 [data-fa-handy] [data-fa-nur-desktop] { display: none; }
 [data-fa-handy] [data-fa-huelle] { height: calc(100dvh - 4rem - env(safe-area-inset-bottom)); }
 [data-fa-handy] [data-fa-huelle] > main { height: 100%; }
+/* Übersicht „Heute zu tun“: Namen am Handy eine Stufe kleiner (base → md), sonst brechen sie zweizeilig um (Dominique 31.10.). */
+[data-fa-handy] [data-fa-aufgabe-titel] { font-size: var(--fa-text-md); }

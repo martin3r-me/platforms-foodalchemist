@@ -97,16 +97,24 @@ it('Handy-Entscheidung setzt das Cookie, das der Server liest (dieselbe Entschei
     expect(HandyLesemodus::JS_MODUS)->toContain("document.cookie = 'fa_handy='")
         ->toContain('location.reload()')            // Cookie passte nicht zum Aufbau → einmal neu laden
         ->toContain("sessionStorage.getItem('fa-handy-neu')")   // je Ziel nur einmal, keine Schleife
-        ->toContain('window.faAnsicht = function');
+        ->toContain("addEventListener('livewire:navigated'")     // wire:navigate löscht sonst data-fa-handy
+        ->not->toContain('"');                                   // steht auch in x-data
 });
 
-it('„Desktop-Ansicht“ setzt das Cookie vor dem Neuladen (faAnsicht), sonst käme noch einmal die Handy-Ansicht', function () {
+it('Hotfix 31.10.: kein Desktop-Schalter am Handy mehr, eine gemerkte Wahl „desktop“ wird gelöscht', function () {
     $kopf = \Illuminate\Support\Facades\Blade::render('<x-fa::detail-kopf title="T"><x-slot:aktion><span>A</span></x-slot:aktion></x-fa::detail-kopf>');
     $nav = \Illuminate\Support\Facades\Blade::render('<x-foodalchemist::handy.nav />');
     $handbuch = file_get_contents(__DIR__ . '/../../resources/views/livewire/handy/rezept-handbuch.blade.php');
 
     foreach ([$kopf, $nav, $handbuch] as $html) {
-        expect($html)->toContain("window.faAnsicht('desktop')")
-            ->not->toContain("localStorage.setItem('fa-ansicht', 'desktop'); } catch (e) {} location.reload()");
+        expect($html)->not->toContain('Desktop-Ansicht')->not->toContain('faAnsicht');
     }
+    expect(HandyLesemodus::JS_MODUS)->toContain("localStorage.getItem('fa-ansicht') === 'desktop') localStorage.removeItem('fa-ansicht')")
+        ->not->toContain("a !== 'desktop'");
+});
+
+it('Hotfix 31.10.: FA-Hülle setzt data-fa-handy schon vom Server (wire:navigate übernimmt die <html>-Attribute)', function () {
+    $layout = file_get_contents(__DIR__ . '/../../resources/views/layouts/standalone.blade.php');
+
+    expect($layout)->toContain('<html lang="de" @if(\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) data-fa-handy @endif>');
 });
