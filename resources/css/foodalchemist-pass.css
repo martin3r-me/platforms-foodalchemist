@@ -599,3 +599,7 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
 [data-fa-handy] [data-fa-huelle] > main { height: 100%; }
 /* Übersicht „Heute zu tun“: Namen am Handy eine Stufe kleiner (base → md), sonst brechen sie zweizeilig um (Dominique 31.10.). */
 [data-fa-handy] [data-fa-aufgabe-titel] { font-size: var(--fa-text-md); }
+/* Listen-Zeilen am Handy (Karten-Listen aller Browser, Lieferanten, Artikel): der Name erbte 16 px und brach auf
+   2–3 Zeilen um (Dominique 31.10.). Zentral eine Stufe kleiner auf --fa-text-base (14 px), gleich wie die Treffer der
+   Suche und die Signale. Unterzeile und Preis haben eigene Größen und bleiben. */
+[data-fa-handy] :is([data-fa-handy-karte], [data-fa-handy-lieferant], [data-fa-handy-artikel]) { font-size: var(--fa-text-base); }

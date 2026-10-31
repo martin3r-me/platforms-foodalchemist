@@ -55,6 +55,14 @@ it('Untere Leiste rendert Suche, Reiter, Mehr und den Konto-Platz; am Computer p
         ->not->toContain('Desktop-Ansicht');   // Hotfix 31.10.: aus dem Schalter kam man am Handy nicht zurück
 });
 
+it('Hotfix 31.10.: Namen in Listen-Zeilen am Handy zentral eine Stufe kleiner (14 px), am Computer unverändert', function () {
+    $css = file_get_contents(__DIR__ . '/../../resources/css/foodalchemist-pass.css');
+    $liste = file_get_contents(__DIR__ . '/../../resources/views/livewire/handy/karten-liste.blade.php');
+
+    expect($css)->toContain('[data-fa-handy] :is([data-fa-handy-karte], [data-fa-handy-lieferant], [data-fa-handy-artikel]) { font-size: var(--fa-text-base); }')
+        ->and($liste)->toContain('data-fa-handy-karte=');
+});
+
 it('Kopf-Baustein: Manifest, iOS-Vollbild und Handy-Entscheidung vor dem ersten Zeichnen', function () {
     $html = Blade::render('<x-foodalchemist::handy.kopf />');
 
