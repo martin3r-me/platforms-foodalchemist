@@ -180,7 +180,8 @@ class LeadLaService
     {
         $out = ['geprueft' => 0, 'unveraendert' => 0, 'ohne_preis' => 0, 'manuell_geschuetzt' => 0, 'kein_aktiver_ersatz' => 0, 'wechsel' => []];
 
-        FoodAlchemistGp::where('team_id', $team->id)
+        FoodAlchemistGp::where(fn ($q) => $q->where('team_id', $team->id)   // das Master-Team pflegt zusätzlich die globalen Stamm-GPs (io 31.10.: sonst 0 geprüft)
+                ->when(\Platform\FoodAlchemist\Support\MasterTeam::istMaster($team), fn ($m) => $m->orWhereNull('team_id')))
             ->where('status', 'approved')->where('requires_la', true)
             ->when($warengruppeCode !== null && $warengruppeCode !== '', fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
             ->when($nurGpIds !== null, fn ($q) => $q->whereIn('id', $nurGpIds))
