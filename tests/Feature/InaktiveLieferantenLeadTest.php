@@ -237,3 +237,22 @@ it('MCP lead_la.REPICK mit nur_inaktive_lieferanten: Vorschau gefiltert, dry_run
     $echt = $tool->execute(['nur_inaktive_lieferanten' => true, 'dry_run' => false, 'gp_ids' => [$gp->id]], $ctx);
     expect($echt->data['umgestellt'])->toBe(1)->and((int) $gp->fresh()->lead_la_supplier_item_id)->toBe($neu->id);
 });
+
+it('Master-Team erreicht beim Repick auch die globalen Stamm-GPs, ein Mandant nicht (io 31.10.: 0 geprüft)', function () {
+    $gp = ($this->gp)('Stamm Dressing');
+    $alt = ($this->la)($gp, $this->inaktiv, 5.29);
+    $neu = ($this->la)($gp, $this->aktiv, 6.50);
+    $gp->update(['team_id' => null, 'lead_la_supplier_item_id' => $alt->id]);
+
+    config(['foodalchemist.master_team_id' => $this->childA->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    expect($this->leads->repickVorschau($this->rootTeam, null, null, true)['geprueft'])->toBe(0, 'Mandant: globales GP bleibt außen vor');
+
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    $v = $this->leads->repickVorschau($this->rootTeam, null, null, true);
+    expect($v['geprueft'])->toBe(1)->and($v['wechsel'][0]['neu_la_id'])->toBe($neu->id);
+
+    expect($this->leads->repickAnwenden($this->rootTeam, [$gp->id])['umgestellt'])->toBe(1)
+        ->and((int) $gp->fresh()->lead_la_supplier_item_id)->toBe($neu->id);
+});

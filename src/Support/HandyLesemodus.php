@@ -34,26 +34,28 @@ final class HandyLesemodus
     /**
      * EINE Entscheidung „Handy-Oberfläche“ für Layout, CSS und Server — nie die Fensterbreite allein:
      * Touch-Gerät ohne Maus (hover: none, pointer: coarse) UND schmaler als 768 px, oder bewusst gewählt. Ein schmales Laptop-Fenster
-     * (Maus) ist nie Handy. Notausgang: ?ansicht=desktop bzw. ?ansicht=handy (merkt sich das Gerät, localStorage).
+     * (Maus) ist nie Handy. ?ansicht=handy erzwingt die Handy-Oberfläche (merkt sich das Gerät, localStorage), ?ansicht=desktop
+     * hebt das wieder auf. Am Handy gilt immer die Handy-Oberfläche (Dominique 31.10.: kein Desktop-Schalter mehr, aus ihm kam man
+     * nicht zurück); eine früher gemerkte Wahl „desktop“ wird gelöscht.
      * Setzt <html data-fa-handy>, daran hängen die CSS-Regeln, und das Cookie fa_handy für den Server. Weicht das Cookie, mit
-     * dem der Server gerendert hat, ab, lädt die Seite einmal neu. window.faAnsicht('desktop'|'handy') für Umschalt-Knöpfe.
+     * dem der Server gerendert hat, ab, lädt die Seite einmal neu. Nach wire:navigate noch einmal (livewire:navigated): Livewire
+     * übernimmt die <html>-Attribute der neuen Seite und würde data-fa-handy sonst löschen (Hotfix 31.10.).
      * Für x-data-Attribute: keine doppelten Anführungszeichen.
      */
     public const JS_MODUS = "(window.faHandyModus = window.faHandyModus || function () {"
         ." let a = null;"
         ." try { const p = new URLSearchParams(location.search).get('ansicht');"
-        ." if (p === 'handy' || p === 'desktop') localStorage.setItem('fa-ansicht', p);"
+        ." if (p === 'handy') localStorage.setItem('fa-ansicht', p);"
+        ." if (p === 'desktop' || localStorage.getItem('fa-ansicht') === 'desktop') localStorage.removeItem('fa-ansicht');"
         ." a = localStorage.getItem('fa-ansicht'); } catch (e) {}"
-        ." const h = a === 'handy' || (a !== 'desktop' && window.matchMedia('(hover: none) and (pointer: coarse) and (max-width: 47.99rem)').matches);"
+        ." if (! window.faHandyNavigiert) { window.faHandyNavigiert = true; document.addEventListener('livewire:navigated', function () { window.faHandyModus(); }); }"
+        ." const h = a === 'handy' || window.matchMedia('(hover: none) and (pointer: coarse) and (max-width: 47.99rem)').matches;"
         ." document.documentElement.toggleAttribute('data-fa-handy', h);"
         ." const war = (document.cookie.match(/(?:^|; )fa_handy=([01])/) || [])[1];"
         ." document.cookie = 'fa_handy=' + (h ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax';"
         // Server hat mit dem alten Cookie gerendert (erster Besuch am Handy, ?ansicht=…): einmal neu laden, je Ziel nur einmal (Cookies gesperrt → keine Schleife)
         ." if ((war === '1') !== h) { try { const z = h ? 'handy' : 'desktop';"
         ." if (sessionStorage.getItem('fa-handy-neu') !== z) { sessionStorage.setItem('fa-handy-neu', z); location.reload(); } } catch (e) {} }"
-        // Notausgang-Knöpfe („Desktop-Ansicht“): Wahl merken UND Cookie setzen, BEVOR neu geladen wird
-        ." window.faAnsicht = function (z) { try { localStorage.setItem('fa-ansicht', z); } catch (e) {}"
-        ." document.cookie = 'fa_handy=' + (z === 'handy' ? '1' : '0') + '; path=/; max-age=31536000; SameSite=Lax'; location.reload(); };"
         ." return h; })";
 
     public static function frei(string $schluessel): bool

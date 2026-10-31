@@ -118,7 +118,7 @@ class GpAromaBackfillService
         }
 
         // ── KI-Teil ──
-        Auth::login($user);
+        Auth::setUser($user);   // MCP läuft über den Token-Guard (kein login()); setUser gilt für jeden Guard, CLI wie MCP
         $offen = array_values(array_unique(array_merge($nur !== 'profil' ? $this->ohneAnker($scope) : [], $nur !== 'anker' ? $this->ohneProfil($scope) : [])));
         sort($offen);
         $eigene = [];                                                // nur, was dieses Team pflegen darf — sonst zählt limit Leerläufe mit

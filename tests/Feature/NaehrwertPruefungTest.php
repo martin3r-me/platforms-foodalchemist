@@ -48,7 +48,7 @@ it('H6: eindeutige Probe → Umrechnung × 1000 mit Kennzeichen, Rohwert bleibt 
     $u = collect($befunde)->firstWhere('regel', 'H6');
 
     expect($u->schwere)->toBe(NaehrwertBefund::UMRECHNUNG)->and($u->vorschlag['faktor'])->toBe(1000)
-        ->and($u->vorschlag['werte']['fat'])->toBe(10.9)->and($u->vorschlag['werte']['sodium'])->toBe(516.0)
+        ->and($u->vorschlag['werte']['fat'])->toBe(10.9)->and($u->vorschlag['werte'])->not->toHaveKey('sodium')   // Natrium (mg) wird nie mit umgerechnet — sonst 20 g Salz je 100 g Pastinake
         ->and(NaehrwertPruefService::istHart($befunde))->toBeFalse();                                      // H4 prüft die umgerechneten Werte
 
     $gp = $this->makeGp($this->rootTeam, 'Eieromelett: TK, 80 g pro Stück');

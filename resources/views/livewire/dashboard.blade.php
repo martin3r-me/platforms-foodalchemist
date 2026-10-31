@@ -63,7 +63,7 @@
                                     @svg($aufgabe['icon'], 'w-5 h-5')
                                 </span>
                                 <span class="min-w-0 flex-1">
-                                    <span class="block text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)] group-hover:text-[var(--fa-accent)]">{{ $aufgabe['titel'] }}</span>
+                                    <span data-fa-aufgabe-titel class="block text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)] group-hover:text-[var(--fa-accent)]">{{ $aufgabe['titel'] }}</span>
                                     <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $aufgabe['text'] }}</span>
                                 </span>
                                 <span class="shrink-0 tabular-nums text-[length:var(--fa-text-lg)] font-semibold {{ $tonText[$aufgabe['ton']] ?? 'text-[var(--fa-ink)]' }}">{{ $zahl($aufgabe['zahl']) }}</span>

@@ -36,6 +36,8 @@ final class HandyNavigation
         'foodalchemist.speiseplan.index',
         'foodalchemist.speisekarte.index',
         'foodalchemist.foodbooks.index',
+        'foodalchemist.trendradar.index',
+        'foodalchemist.knowledge.index',
     ];
 
     /**

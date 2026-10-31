@@ -24,6 +24,9 @@ class NaehrwertPruefService
     /** Mengenspalten, die eine Einheiten-Umrechnung mitnimmt (alles außer der Energie). */
     public const MENGEN = ['fat', 'saturated_fat', 'carbs_absorbable', 'sugar', 'protein', 'sodium', 'roughage', 'alcohol'];
 
+    /** H6 rechnet nur die Gramm-Felder um. Natrium (mg) steht bei den Elbfrost-Proben roh schon richtig (Veggie-Burger 440 mg, Pastinake 8 mg) — × 1000 machte daraus 20 g Salz je 100 g Pastinake (io 31.10.). */
+    public const MENGEN_UMRECHNUNG = ['fat', 'saturated_fat', 'carbs_absorbable', 'sugar', 'protein', 'roughage', 'alcohol'];
+
     /**
      * Befunde EINES Artikels. `$geschwister` = die übrigen Artikelzeilen desselben GP (für Regel A); ohne sie entfällt A.
      *
@@ -124,7 +127,7 @@ class NaehrwertPruefService
         }
         $f = $treffer[0];
         $werte = [];
-        foreach (self::MENGEN as $feld) {
+        foreach (self::MENGEN_UMRECHNUNG as $feld) {
             if ($z[$feld] !== null) {
                 $werte[$feld] = round($z[$feld] * $f, 4);
             }
