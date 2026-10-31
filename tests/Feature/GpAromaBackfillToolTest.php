@@ -110,6 +110,17 @@ it('apply (MCP): legt KI-Aufträge nur für eigene GPs an, nach ANTWORT übernim
         ->and($r2->data['ki_teil']['zaehler']['doppelt'])->toBe(0);
 });
 
+it('apply (MCP) über einen Token-Guard ohne login(): legt Aufträge an statt abzubrechen (io 31.10.: TokenGuard::login does not exist)', function () {
+    \Illuminate\Support\Facades\Auth::extend('nur_token', fn ($app, $name, array $cfg) => new \Illuminate\Auth\RequestGuard(fn () => null, $app['request']));
+    config(['auth.guards.nur_token' => ['driver' => 'nur_token']]);
+    \Illuminate\Support\Facades\Auth::shouldUse('nur_token');   // wie Passport auf io: Standard-Guard hat kein login()
+
+    $r = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+
+    expect($r->success)->toBeTrue($r->error ?? '')->and($r->data['ki_teil']['schritte_wartend'])->toBe(4)
+        ->and(\Illuminate\Support\Facades\Auth::id())->toBe($this->mandantUser->id);
+});
+
 it('Master-Team erreicht zusätzlich die globalen Stamm-GPs', function () {
     $r = ($this->run)($this->masterUser, $this->master, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
 
