@@ -25,8 +25,10 @@
     </div>
     <div class="flex items-center gap-0.5 border-t border-[var(--fa-line)] px-1.5 py-1" data-planung-karten-aktionen>
         <x-fa::button variant="ghost" size="sm" icon="heroicon-o-pencil-square" wire:click="oeffne({{ $s->id }})" title="Im Editor öffnen" data-planung-karte-oeffnen>Öffnen</x-fa::button>
+        @unless($handy ?? false){{-- #1003 PR7: Duplizieren und Verwerfen bleiben am Computer --}}
         <x-fa::icon-button size="sm" icon="heroicon-o-document-duplicate" label="Planung duplizieren" wire:click="planungDuplizieren({{ $s->id }})" data-planung-karte-duplizieren />
         <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Planung verwerfen und laufende Erstellung stoppen" class="ml-auto"
             wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="Diese Planung verwerfen? Laufende Erstellungen dieser Planung werden ebenfalls gestoppt. Sie wird archiviert, nicht endgültig gelöscht." data-planung-karte-verwerfen />
+        @endunless
     </div>
 </div>
