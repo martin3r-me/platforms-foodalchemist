@@ -50,7 +50,62 @@ class GpAromaService
         return DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gpId)->whereNull('deleted_at')->exists();
     }
 
-    /** Fehlt ein brauchbares Profil? Kein Eintrag oder lauter Nullen (Import-Artefakt). */
+    /**
+     * Ist die Anker-Frage beantwortet? Ein Anker ODER „geprüft, kein Aroma-Träger" (neutral, io-Probe 01.11.2026: sonst fragt jeder Lauf
+     * dieselben GPs neu). Mit `$neutralNeu` zählt neutral wieder als offen (Wiederholungslauf neu_schaetzen = anker_neutral).
+     */
+    public function ankerGeklaert(int $gpId, bool $neutralNeu = false): bool
+    {
+        return $this->hatAnker($gpId) || (! $neutralNeu && $this->istAnkerNeutral($gpId));
+    }
+
+    public function istAnkerNeutral(int $gpId): bool
+    {
+        return self::neutralTabelle() && DB::table(self::NEUTRAL_TABELLE)->where('gp_id', $gpId)->exists();
+    }
+
+    /** „Geprüft, kein Anker" festhalten (eine Zeile je GP, die jüngste Antwort gilt). */
+    public function merkeAnkerNeutral(int $gpId, ?int $teamId, string $quelle, ?float $conf, ?string $begr): void
+    {
+        if (! self::neutralTabelle()) {
+            return;
+        }
+        DB::table(self::NEUTRAL_TABELLE)->updateOrInsert(['gp_id' => $gpId], ['team_id' => $teamId, 'source' => $quelle,
+            'ai_confidence' => $conf !== null ? max(0.0, min(1.0, round($conf, 2))) : null,
+            'ai_reasoning' => $begr !== null ? mb_strimwidth($begr, 0, 2000) : null, 'updated_at' => now(), 'created_at' => now()]);
+    }
+
+    /** Ein echter Anker ersetzt ein früheres „neutral". */
+    public function vergissAnkerNeutral(int $gpId): void
+    {
+        if (self::neutralTabelle()) {
+            DB::table(self::NEUTRAL_TABELLE)->where('gp_id', $gpId)->delete();
+        }
+    }
+
+    public const NEUTRAL_TABELLE = 'foodalchemist_gp_anker_neutral';
+
+    private static ?bool $neutralTabelle = null;
+
+    /** Zwischen Code-Deploy und Migration fehlt die Tabelle — dann gilt nur der Anker (wie vorher). */
+    public static function neutralTabelle(): bool
+    {
+        return self::$neutralTabelle ??= \Illuminate\Support\Facades\Schema::hasTable(self::NEUTRAL_TABELLE);
+    }
+
+    public static function flushNeutralTabelle(): void
+    {
+        self::$neutralTabelle = null;
+    }
+
+    /** Quellen, deren Profil mit lauter Nullen eine Antwort ist („schmeckt nach nichts"), keine Lücke. Alte Importe (gemini/rule) nicht. */
+    public const NULL_PROFIL_IST_ANTWORT = ['manual', 'ai', 'geschwister'];
+
+    /**
+     * Fehlt ein brauchbares Profil? Kein Eintrag, oder lauter Nullen aus einem alten Import (Artefakt). Lauter Nullen von Hand, von der
+     * KI oder von einigen Geschwistern sind ein Ergebnis (io-Probe 01.11.2026: Brennpaste/Unbestimmbares wurde sonst bei jedem Lauf neu
+     * gefragt) — ein KI-Nullprofil erreicht ein Wiederholungslauf über neu_schaetzen = ai.
+     */
     public function profilFehlt(int $gpId): bool
     {
         $t = DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gpId)->first();
@@ -63,13 +118,14 @@ class GpAromaService
             }
         }
 
-        return $t->source !== 'manual';
+        return ! in_array($t->source, self::NULL_PROFIL_IST_ANTWORT, true);
     }
 
-    /** Lebendes, gepflegtes GP (kein Platzhalter, nicht gemergt/gelöscht)? Nur solche werden angereichert. */
+    /** Lebendes, gepflegtes Lebensmittel-GP (kein Platzhalter, nicht gemergt/gelöscht, kein Non-Food)? Nur solche werden angereichert. */
     public function anreicherbar(?FoodAlchemistGp $gp): bool
     {
-        return $gp !== null && $gp->deleted_at === null && $gp->merged_into_id === null && ! $gp->is_platzhalter;
+        // Non-Food (WG 16) hat keinen Geschmack und keinen Aroma-Anker — nie fragen (io-Probe 01.11.2026: Brennpaste)
+        return $gp !== null && $gp->deleted_at === null && $gp->merged_into_id === null && ! $gp->is_platzhalter && ! $gp->istNonFood();
     }
 
     /** Das Team, das die Anker dieses GP pflegen darf (Besitzer; globales GP = Master). */

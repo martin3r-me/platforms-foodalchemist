@@ -72,6 +72,10 @@ trait HatGpAromaKi
             return;
         }
         if ($slug === 'neutral') {
+            // wie der Bulk-Weg: festhalten, damit der Backfill das GP nicht erneut fragt (io-Probe 01.11.2026)
+            if (! $aroma->hatAnker($gp->id) && $pairing->darfAnkerPflegen($gp, $team)) {
+                $aroma->merkeAnkerNeutral($gp->id, (int) $team->id, 'ai', (float) ($v['confidence'] ?? 0.5), 'GP-Editor: KI-Vorschlag neutral'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''));
+            }
             $this->aromaMeldung(null, 'KI: kein Aroma-Träger (neutral) — kein Anker gesetzt.');
 
             return;
@@ -85,6 +89,7 @@ trait HatGpAromaKi
         try {
             $pairing->setGpAnkerInference($team, $gp->id, (int) $ankerId, (float) ($v['confidence'] ?? 0.5),
                 'GP-Editor: KI-Vorschlag aus dem Anker-Vokabular'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''));
+            $aroma->vergissAnkerNeutral($gp->id);
         } catch (\RuntimeException $e) {
             $this->aromaMeldung($e->getMessage());
 

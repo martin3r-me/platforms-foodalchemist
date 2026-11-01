@@ -937,21 +937,40 @@ class BulkEnrichService
     {
         $runId = $this->laufAnlegen($team, count($gpIds), BulkRunType::EnrichGp, ['schritte' => array_values($schritte), 'quelle' => $quelle]);
         $ausstehend = 0;
+        $uebernommen = 0;
+        $beide = in_array('anker', $schritte, true) && in_array('sensorik', $schritte, true);
         foreach ($gpIds as $gpId) {
+            if ($beide) {
+                // io-Probe 01.11.2026: der Profil-Prompt trägt den Kern-Anker im Kontext. Erst den Anker klären und übernehmen, dann das Profil
+                // fragen — sonst ändert der später gesetzte Anker den Fingerabdruck des Profil-Auftrags, die externe Antwort wird nie verbraucht
+                // und jeder Lauf legt einen neuen an. Wartet der Anker auf eine externe Antwort, wartet das Profil mit.
+                $warten = $this->verarbeiteGp($team, $runId, (int) $gpId, ['anker'], $neuSchaetzen, fortschritt: false);
+                $uebernommen += $this->alleUebernehmenGp($team, $runId);
+                if ($warten > 0) {
+                    $ausstehend += $warten;
+                    $this->zaehleFortschritt($runId, false);
+
+                    continue;
+                }
+                $ausstehend += $this->verarbeiteGp($team, $runId, (int) $gpId, array_values(array_diff($schritte, ['anker'])), $neuSchaetzen);
+
+                continue;
+            }
             $ausstehend += $this->verarbeiteGp($team, $runId, (int) $gpId, $schritte, $neuSchaetzen);
         }
 
         return ['run_id' => $runId, 'geprueft' => count($gpIds), 'ausstehend' => $ausstehend,
-            'uebernommen' => $this->alleUebernehmenGp($team, $runId), 'offen' => $this->offeneGpVorschlaege($team, $runId)];
+            'uebernommen' => $uebernommen + $this->alleUebernehmenGp($team, $runId), 'offen' => $this->offeneGpVorschlaege($team, $runId)];
     }
 
     /**
      * Job-Kern: ein GP × Schritte → Vorschläge (kein Fach-Write).
      *
+     * @param  bool  $fortschritt  false = das GP nicht als erledigt zählen (Teilschritt; {@see nachziehenGp()} zählt es nach dem letzten Teil)
      * @return int Schritte, die auf eine externe KI-Antwort warten (#1002) — dafür entsteht KEIN Leer-Vorschlag mit Fehlertext:
      *             der Lauf ist nicht gescheitert, er wird nach der Antwort wiederholt
      */
-    public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte, bool $neuSchaetzen = false): int
+    public function verarbeiteGp(Team $team, int $runId, int $gpId, array $schritte, bool $neuSchaetzen = false, bool $fortschritt = true): int
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->with('commodity_group')->find($gpId);
         $fehler = false;
@@ -990,7 +1009,9 @@ class BulkEnrichService
             }
         }
 
-        $this->zaehleFortschritt($runId, $fehler || $gp === null);
+        if ($fortschritt) {
+            $this->zaehleFortschritt($runId, $fehler || $gp === null);
+        }
 
         return $ausstehend;
     }
@@ -1178,12 +1199,24 @@ class BulkEnrichService
             // Override-First: ein manuell gesetzter Kern-Anker (Inv. 3) blockt die KI-Inferenz komplett.
             $manuell = DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)
                 ->where('source', 'manual')->whereNull('deleted_at')->exists();
-            $ankerId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $wert['anchor_slug'])
-                ->whereNull('deleted_at')->value('id');
-            if (! $manuell && $ankerId !== null) {
-                app(PairingService::class)->setGpAnkerInference($team, $gp->id, (int) $ankerId,
-                    (float) ($prop->confidence ?? 0.0), (string) ($prop->reasoning ?: 'Bulk-Anreicherung'));
-                $ok = true;
+            $aroma = app(GpAromaService::class);
+            if (! $manuell && $wert['anchor_slug'] === 'neutral') {
+                // Kein Aroma-Träger ist eine Antwort, kein Leerlauf: festhalten, sonst fragt jeder Lauf neu (io-Probe 01.11.2026).
+                // Ein vorhandener KI-Anker bleibt — neutral setzt nie einen Anker ab.
+                if (! $aroma->hatAnker($gp->id) && GpAromaService::neutralTabelle() && app(PairingService::class)->darfAnkerPflegen($gp, $team)) {
+                    $aroma->merkeAnkerNeutral($gp->id, (int) $team->id, 'ai', $prop->confidence !== null ? (float) $prop->confidence : null,
+                        (string) ($prop->reasoning ?: 'Bulk-Anreicherung: kein Aroma-Träger'));
+                    $ok = true;
+                }
+            } else {
+                $ankerId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $wert['anchor_slug'])
+                    ->whereNull('deleted_at')->value('id');
+                if (! $manuell && $ankerId !== null) {
+                    app(PairingService::class)->setGpAnkerInference($team, $gp->id, (int) $ankerId,
+                        (float) ($prop->confidence ?? 0.0), (string) ($prop->reasoning ?: 'Bulk-Anreicherung'));
+                    $aroma->vergissAnkerNeutral($gp->id);
+                    $ok = true;
+                }
             }
         } elseif ($prop->field === 'naehrwerte' && is_array($wert) && $gp->nutri_source !== 'manual') {
             $num = fn ($v) => is_numeric($v) && (float) $v >= 0 ? round((float) $v, 2) : null;

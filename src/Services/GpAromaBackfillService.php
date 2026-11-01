@@ -18,8 +18,11 @@ use Platform\FoodAlchemist\Support\GpAromaNachholen;
  */
 class GpAromaBackfillService
 {
-    /** Quellen, deren Profil neu geschätzt werden darf (manual nie). `rezept` = gegarte Profile in recipe_taste_vectors (source ai). */
-    public const NEU_QUELLEN = ['ai', 'geschwister', 'gemini', 'rule', 'rezept'];
+    /**
+     * Quellen, deren Profil neu geschätzt werden darf (manual nie). `rezept` = gegarte Profile in recipe_taste_vectors (source ai).
+     * `anker_neutral` = Anker-Frage für GPs mit „geprüft, kein Anker" erneut stellen (io-Probe 01.11.2026).
+     */
+    public const NEU_QUELLEN = ['ai', 'geschwister', 'gemini', 'rule', 'rezept', 'anker_neutral'];
 
     /** Token-Annahme ohne Call-Historie (gemessen an recipe.sensorik/gp.anker auf demo, 19.09.). */
     private const ANNAHME = ['gp.sensorik' => ['in' => 1200, 'out' => 250], 'gp.anker' => ['in' => 1500, 'out' => 120]];
@@ -49,7 +52,8 @@ class GpAromaBackfillService
         $aroma = app(GpAromaService::class);
         $bulk = app(BulkEnrichService::class);
 
-        $ohneAnker = $nur !== 'profil' ? $this->ohneAnker($scope) : [];
+        $neutralNeu = in_array('anker_neutral', $neuQuellen, true);
+        $ohneAnker = $nur !== 'profil' ? $this->ohneAnker($scope, $neutralNeu) : [];
         $ohneProfil = $nur !== 'anker' ? $this->ohneProfil($scope) : [];
         $alle = array_values(array_unique(array_merge($ohneAnker, $ohneProfil)));
         sort($alle);
@@ -119,7 +123,7 @@ class GpAromaBackfillService
 
         // ── KI-Teil ──
         Auth::setUser($user);   // MCP läuft über den Token-Guard (kein login()); setUser gilt für jeden Guard, CLI wie MCP
-        $offen = array_values(array_unique(array_merge($nur !== 'profil' ? $this->ohneAnker($scope) : [], $nur !== 'anker' ? $this->ohneProfil($scope) : [])));
+        $offen = array_values(array_unique(array_merge($nur !== 'profil' ? $this->ohneAnker($scope, $neutralNeu) : [], $nur !== 'anker' ? $this->ohneProfil($scope) : [])));
         sort($offen);
         $eigene = [];                                                // nur, was dieses Team pflegen darf — sonst zählt limit Leerläufe mit
         foreach (array_chunk($offen, 500) as $chunk) {
@@ -148,7 +152,7 @@ class GpAromaBackfillService
                 if (! $aroma->anreicherbar($gp) || ! $gp->isOwnedBy($team)) {
                     continue;
                 }
-                $schritte = array_values(array_filter(GpAromaNachholen::schritte($gpId),
+                $schritte = array_values(array_filter(GpAromaNachholen::schritte($gpId, $neutralNeu),
                     fn ($s) => $nur === 'beide' || ($nur === 'anker' && $s === 'anker') || ($nur === 'profil' && $s === 'sensorik')));
                 if ($schritte === []) {
                     continue;                                            // inzwischen gefüllt (Wiederaufnahme)
@@ -203,20 +207,30 @@ class GpAromaBackfillService
             ->whereNull('r.deleted_at')->when($scope !== null, fn ($q) => $q->where('r.team_id', $scope->id))->where('t.source', 'ai')->orderBy('t.recipe_id')->pluck('t.recipe_id')->map(fn ($v) => (int) $v)->all();
     }
 
-    /** @return list<int> lebende, gepflegte GPs ohne Anker */
-    private function ohneAnker(?Team $scope = null): array
+    /**
+     * @param  bool  $neutralNeu  auch GPs mit „geprüft, kein Anker" (Wiederholungslauf)
+     * @return list<int> lebende, gepflegte GPs ohne Anker und ohne neutral-Antwort — dieselbe Regel wie {@see GpAromaService::ankerGeklaert()}
+     */
+    private function ohneAnker(?Team $scope = null, bool $neutralNeu = false): array
     {
         return $this->basis($scope)->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_gp_anchor_mappings AS m')
-            ->whereColumn('m.gp_id', 'g.id')->whereNull('m.deleted_at'))->pluck('g.id')->map(fn ($v) => (int) $v)->all();
+            ->whereColumn('m.gp_id', 'g.id')->whereNull('m.deleted_at'))
+            ->when(! $neutralNeu && GpAromaService::neutralTabelle(), fn ($q) => $q->whereNotExists(fn ($n) => $n->select(DB::raw(1))
+                ->from(GpAromaService::NEUTRAL_TABELLE.' AS n')->whereColumn('n.gp_id', 'g.id')))
+            ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
     }
 
-    /** @return list<int> lebende, gepflegte GPs ohne brauchbares Profil (keins oder lauter Nullen, nie manual) */
+    /**
+     * @return list<int> lebende, gepflegte GPs ohne brauchbares Profil: keins, oder lauter Nullen aus einem alten Import — dieselbe Regel
+     *                   wie {@see GpAromaService::profilFehlt()} (lauter Nullen von Hand, KI oder Geschwistern sind eine Antwort)
+     */
     private function ohneProfil(?Team $scope = null): array
     {
         $summe = implode(' + ', array_map(fn ($d) => "t.{$d}", SensorikService::DIMS));
 
         return $this->basis($scope)->leftJoin('foodalchemist_gp_taste_vectors AS t', 't.gp_id', '=', 'g.id')
-            ->where(fn ($q) => $q->whereNull('t.id')->orWhere(fn ($w) => $w->whereRaw("({$summe}) = 0")->where(fn ($s) => $s->whereNull('t.source')->orWhere('t.source', '!=', 'manual'))))
+            ->where(fn ($q) => $q->whereNull('t.id')->orWhere(fn ($w) => $w->whereRaw("({$summe}) = 0")
+                ->where(fn ($s) => $s->whereNull('t.source')->orWhereNotIn('t.source', GpAromaService::NULL_PROFIL_IST_ANTWORT))))
             ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
     }
 
@@ -251,15 +265,18 @@ class GpAromaBackfillService
     }
 
     /**
-     * Lebende, gepflegte GPs. Mit `$scope`: nur, was dieses Team besitzt (team-eigen; das Master-Team zusätzlich die globalen, deren
-     * Pflegbarkeit {@see GpAromaService::pflegbar} danach entscheidet).
+     * Lebende, gepflegte Lebensmittel-GPs (Non-Food/WG 16 hat weder Geschmack noch Anker, {@see GpAromaService::anreicherbar}). Mit `$scope`:
+     * nur, was dieses Team besitzt (team-eigen; das Master-Team zusätzlich die globalen, deren Pflegbarkeit {@see GpAromaService::pflegbar}
+     * danach entscheidet).
      */
     public function basis(?Team $scope = null): \Illuminate\Database\Query\Builder
     {
         return DB::table('foodalchemist_gps AS g')->whereNull('g.deleted_at')->whereNull('g.merged_into_id')
             ->when($scope !== null, fn ($q) => $q->where(fn ($w) => $w->where('g.team_id', $scope->id)
                 ->when(\Platform\FoodAlchemist\Support\MasterTeam::istMaster($scope), fn ($m) => $m->orWhereNull('g.team_id'))))
-            ->where('g.is_platzhalter', false)->whereIn('g.status', ['approved', 'tentative'])->orderBy('g.id');
+            ->where('g.is_platzhalter', false)->whereIn('g.status', ['approved', 'tentative'])
+            ->where(fn ($w) => $w->whereNull('g.commodity_group_code')->orWhere('g.commodity_group_code', '!=', \Platform\FoodAlchemist\Support\NonFoodRegeln::WG_CODE))
+            ->orderBy('g.id');
     }
 
     /** @return array{eur: ?float, tin: float, tout: float, basis: string} eur = null: keine Preisdaten */

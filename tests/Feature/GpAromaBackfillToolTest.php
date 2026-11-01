@@ -177,3 +177,106 @@ it('interner Aufruf ohne MCP-Herkunft läuft über den Plattform-Provider (kein 
     expect($r->data['extern'] ?? null)->toBeFalse()
         ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
 });
+
+/*
+ * io-Probe 01.11.2026 (Kurator, limit 20, extern): 11 von 20 Anker-Antworten waren neutral und wurden nicht gespeichert, ein KI-Profil mit lauter
+ * Nullen galt weiter als Lücke, Non-Food wurde gefragt — die Lücken schrumpften kaum, der Großlauf endete nie.
+ */
+function gpAromaAntworten(ToolContext $k, array $jeFeature): mixed
+{
+    $offen = DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->whereIn('feature', array_keys($jeFeature))->get();
+    $liste = $offen->map(fn ($a) => ['auftrag_id' => $a->uuid, 'werte' => ['werte' => $jeFeature[$a->feature], 'confidence' => 0.3, 'reasoning' => 'Test']])->all();
+
+    return app(ToolRegistry::class)->get('foodalchemist.ki_auftraege.ANTWORT')->execute(['antworten' => $liste, 'anbieter' => 'anthropic', 'modell' => 'claude-opus-5-5'], $k);
+}
+
+it('Anker-Antwort neutral wird festgehalten: kein Anker, keine Lücke mehr, kein neuer Auftrag — neu_schaetzen=anker_neutral fragt erneut', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+    $a = gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'neutral']]);
+    expect($a->success)->toBeTrue($a->error ?? '');
+
+    $r2 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+    $neutral = DB::table('foodalchemist_gp_anker_neutral')->where('gp_id', $this->quitte->id)->first();
+    expect($r2->data['ki_teil']['uebernommen'])->toBe(4)
+        ->and(($this->ankerZeilen)($this->quitte->id))->toBe(0, 'neutral setzt keinen Anker')
+        ->and($neutral)->not->toBeNull()->and($neutral->source)->toBe('ai')->and((float) $neutral->ai_confidence)->toBe(0.3);
+
+    $r3 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+    expect($r3->data['luecken']['anker'])->toBe(0)
+        ->and($r3->data['hinweis'])->toContain('Keine pflegbaren GPs mit Lücke')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.anker')->count())->toBe(4, 'kein zweiter Auftrag je GP');
+
+    $r4 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10, 'neu_schaetzen' => ['anker_neutral']]);
+    expect($r4->success)->toBeTrue($r4->error ?? '')->and($r4->data['luecken']['anker'])->toBe(4)
+        ->and($r4->data['ki_teil']['schritte_wartend'])->toBe(4, 'der Wiederholungslauf fragt die neutralen GPs erneut');
+
+    gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'pineapple']]);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10, 'neu_schaetzen' => ['anker_neutral']]);
+    expect(($this->ankerZeilen)($this->quitte->id))->toBe(1)
+        ->and(DB::table('foodalchemist_gp_anker_neutral')->where('gp_id', $this->quitte->id)->exists())->toBeFalse('ein echter Anker ersetzt neutral');
+});
+
+it('KI-Profil mit lauter Nullen ist ein Ergebnis, keine Lücke — ein alter Import mit lauter Nullen bleibt Lücke, neu_schaetzen=ai erreicht es', function () {
+    $null = array_fill_keys(SensorikService::DIMS, 0);
+    DB::table('foodalchemist_gp_taste_vectors')->insert($null + ['gp_id' => $this->quitte->id, 'source' => 'ai', 'ai_confidence' => 0.3, 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('foodalchemist_gp_taste_vectors')->insert($null + ['gp_id' => $this->kuerbis->id, 'source' => 'gemini', 'created_at' => now(), 'updated_at' => now()]);
+
+    $r = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'profil', 'apply' => true, 'limit' => 10]);
+
+    expect($r->data['luecken']['profil'])->toBe(1, 'nur das alte Import-Nullprofil (Kürbis)')
+        ->and(app(\Platform\FoodAlchemist\Services\GpAromaService::class)->profilFehlt($this->quitte->id))->toBeFalse()
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.sensorik')->pluck('target_id')->map(fn ($v) => (int) $v)->all())->toBe([$this->kuerbis->id]);
+
+    $neu = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'profil', 'apply' => true, 'limit' => 10, 'neu_schaetzen' => ['ai']]);
+    expect($neu->success)->toBeTrue($neu->error ?? '')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.sensorik')->where('target_id', $this->quitte->id)->exists())->toBeTrue('neu_schaetzen=ai fragt das KI-Nullprofil erneut');
+});
+
+it('Non-Food (Warengruppe 16) wird nie gefragt: weder Lücke noch Auftrag', function () {
+    $brennpaste = ($this->gp)($this->rootTeam->id, 'Brennpaste', 'brennpaste', ['commodity_group_code' => '16']);
+
+    $r = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'beide', 'apply' => true, 'limit' => 10]);
+
+    expect($r->data['luecken'])->toBe(['anker' => 4, 'profil' => 2])
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('target_id', $brennpaste->id)->count())->toBe(0);
+});
+
+it('MCP-Weg beide: das Profil wartet auf den Anker, danach fragt der nächste Aufruf das Profil mit dem endgültigen Prompt — die Antwort wird verbraucht, kein doppelter Auftrag', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    $je = fn (string $f, ?string $status = null) => DB::table('foodalchemist_ki_auftraege')->where('feature', $f)->when($status, fn ($q) => $q->where('status', $status))
+        ->pluck('target_id')->map(fn ($v) => (int) $v)->sort()->values()->all();
+    $beideLuecken = collect([$this->quitte->id, $this->kuerbis->id])->sort()->values()->all();
+
+    $r1 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'beide', 'apply' => true, 'limit' => 10]);
+    expect($r1->data['ki_teil']['schritte_wartend'])->toBe(4)
+        ->and($je('gp.anker'))->toBe(collect([$this->quitte->id, $this->kuerbis->id, $this->manuell->id, $this->manuellNull->id])->sort()->values()->all())
+        ->and($je('gp.sensorik'))->toBe([], 'kein Profil-Auftrag, solange der Anker offen ist (der Anker steht im Profil-Prompt)');
+
+    gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'lime']]);
+    $r2 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'beide', 'apply' => true, 'limit' => 10]);
+    expect($r2->data['ki_teil']['uebernommen'])->toBe(4)
+        ->and($r2->data['ki_teil']['schritte_wartend'])->toBe(2)
+        ->and($je('gp.sensorik', 'offen'))->toBe($beideLuecken, 'nach dem Anker im selben Aufruf: Profil-Aufträge mit Anker im Prompt');
+
+    $ant = gpAromaAntworten($k, ['gp.sensorik' => ['geschmack' => ['suess' => 0.6, 'salzig' => 0, 'sauer' => 0.5, 'bitter' => 0.1, 'umami' => 0, 'fettig' => 0, 'scharf' => 0], 'texturen' => []]]);
+    expect($ant->success)->toBeTrue($ant->error ?? '');
+    $r3 = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'beide', 'apply' => true, 'limit' => 10]);
+    expect($r3->data['ki_teil']['uebernommen'])->toBe(2)
+        ->and($r3->data['ki_teil']['zaehler']['doppelt'])->toBe(0)
+        ->and($je('gp.sensorik', 'verbraucht'))->toBe($beideLuecken, 'die Profil-Antworten sind verbraucht, keine liegt beantwortet herum')
+        ->and(DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $this->quitte->id)->value('source'))->toBe('ai');
+    expect(($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'beide'])->data['luecken'])->toBe(['anker' => 0, 'profil' => 0]);
+});
+
+it('limit-Fenster rückt weiter: ein neutral beantwortetes GP belegt den Platz im nächsten Lauf nicht mehr', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 1]);
+    $erstes = (int) DB::table('foodalchemist_ki_auftraege')->value('target_id');
+    gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'neutral']]);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 1]);   // übernimmt neutral
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 1]);
+
+    $offen = DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->pluck('target_id')->map(fn ($v) => (int) $v)->all();
+    expect($offen)->toHaveCount(1)->and($offen[0])->not->toBe($erstes);
+});
