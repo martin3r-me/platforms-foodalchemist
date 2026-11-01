@@ -177,6 +177,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
                 \Platform\FoodAlchemist\Console\VollstaendigkeitReportCommand::class,
+                \Platform\FoodAlchemist\Console\GpAnkerVorauswahlMessenCommand::class,
                 \Platform\FoodAlchemist\Console\AllergenLaVorrangCommand::class,
                 \Platform\FoodAlchemist\Console\AllergeneNurPositivCommand::class,   // Spec 85
                 \Platform\FoodAlchemist\Console\MarkenEinspielenCommand::class,   // GP-Regelwerk v3.7.1 §5 Ausnahme 3

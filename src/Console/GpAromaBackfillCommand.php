@@ -37,6 +37,9 @@ class GpAromaBackfillCommand extends Command
         {--pause=3 : Sekunden Pause zwischen den Paketen}
         {--vergleich=0 : N GPs mit vorhandenem Profil neu schätzen, NICHT speichern, alt/neu als CSV}
         {--neu-schaetzen= : vorhandene Profile dieser Quellen neu schätzen und überschreiben (ai,geschwister,gemini,rule; dazu rezept = gegarte Rezept-Profile). Ein manuelles Profil wird nie angefasst}
+        {--neu-seit= : nur mit --neu-schaetzen=anker_ki: KI-Anker, die ab diesem Zeitpunkt übernommen wurden}
+        {--neu-bis= : nur mit --neu-schaetzen=anker_ki: KI-Anker, die bis zu diesem Zeitpunkt übernommen wurden}
+        {--neu-gp= : nur mit --neu-schaetzen=anker_ki: GP-IDs, kommagetrennt}
         {--bericht= : Ordner für Protokoll und CSV (Standard: storage/app/fa-gp-aroma-backfill)}';
 
     protected $description = 'Kern-Anker + Geschmacksprofil für GPs mit Lücke nachziehen: Geschwister zuerst (kostenlos), dann KI (Trockenlauf, Kosten, Chunks, Protokoll)';
@@ -94,6 +97,8 @@ class GpAromaBackfillCommand extends Command
             'nur' => $nur, 'apply' => $apply, 'nur_geschwister' => (bool) $this->option('nur-geschwister'), 'limit' => (int) $this->option('limit'),
             'extern' => $this->option('anbieter') === 'extern', 'neu_quellen' => $neuQuellen, 'chunk' => (int) $this->option('chunk'),
             'pause' => (int) $this->option('pause'), 'bericht' => $bericht,
+            'neu_seit' => $this->option('neu-seit') ?: null, 'neu_bis' => $this->option('neu-bis') ?: null,
+            'neu_gp_ids' => array_values(array_filter(array_map('intval', explode(',', (string) $this->option('neu-gp'))))),
         ], $ausgabe);
 
         if (! $apply || $this->option('nur-geschwister')) {

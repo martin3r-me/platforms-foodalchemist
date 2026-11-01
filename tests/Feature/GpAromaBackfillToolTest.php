@@ -335,3 +335,82 @@ it('Vollständigkeit unterscheidet eigener Anker / Pate / neutral / ohne', funct
     expect($c['aromaanker'])->toBe(['echt' => 1, 'pate' => 2, 'neutral' => 1, 'ohne' => $c['gps'] - 4])
         ->and($c['ohne_aromaanker'])->toBe($c['gps'] - 4, 'ein gelöschtes Mapping zählt nicht als Anker');
 });
+
+/*
+ * io-Lauf 01.11.2026: liegt_beantwortet stieg 2 → 13, beantwortete Aufträge wurden nicht verbraucht, dasselbe GP bekam einen neuen. Ursache: der
+ * Kontext desselben Ziels ändert sich zwischen zwei Runden (Geschwister-Profil in `nachbarn`, gesetzter Anker, Vorauswahl), der Fingerabdruck wird neu.
+ */
+it('Profil-Antwort wird verbraucht, auch wenn sich der Kontext (nachbarn) seit dem Auftrag geändert hat — kein neuer Auftrag, nichts bleibt liegen', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) Str::uuid7(), 'team_id' => $this->rootTeam->id, 'gp_id' => $this->quitte->id,
+        'anchor_id' => $this->anker['lime'], 'role' => 'kern', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'profil', 'apply' => true, 'limit' => 10]);
+    gpAromaAntworten($k, ['gp.sensorik' => ['geschmack' => ['suess' => 0.5, 'salzig' => 0, 'sauer' => 0.6, 'bitter' => 0.1, 'umami' => 0, 'fettig' => 0, 'scharf' => 0], 'texturen' => []]]);
+    // zwischen den Runden bekommt ein Geschwister (anderer Zustand, also kein Profil-Spender) sein Profil: es steht ab jetzt in `nachbarn`
+    $tk = ($this->gp)($this->rootTeam->id, 'Quitte: TK', 'quitte', ['condition' => 'TK']);
+    DB::table('foodalchemist_gp_taste_vectors')->insert(array_fill_keys(SensorikService::DIMS, 0.2) + ['gp_id' => $tk->id, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+
+    $r = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'profil', 'apply' => true, 'limit' => 10]);
+
+    $quitte = DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.sensorik')->where('target_id', $this->quitte->id)->get();
+    expect($quitte)->toHaveCount(1, 'kein zweiter Auftrag für dieselbe Quitte')
+        ->and($quitte->first()->status)->toBe('verbraucht')
+        ->and($r->data['ki_teil']['zaehler']['liegt_beantwortet'])->toBe(0)
+        ->and((float) DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $this->quitte->id)->value('sauer'))->toBe(0.6);
+});
+
+it('eine Antwort auf eine andere Prompt-Fassung (z. B. vor dem Deploy) wird für dasselbe Ziel nicht verbraucht', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+    $alt = DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.anker')->where('target_id', $this->quitte->id)->first();
+    $m = json_decode($alt->messages, true);
+    $m[1]['content'] = 'Bestimme den Kern-Anker (alte Fassung, nur {anchor_slug}).'.mb_substr($m[1]['content'], mb_strpos($m[1]['content'], "\n\nKontext:\n"));
+    DB::table('foodalchemist_ki_auftraege')->where('id', $alt->id)->update(['messages' => json_encode($m, JSON_UNESCAPED_UNICODE), 'messages_hash' => 'alte-fassung']);
+    gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'pineapple']]);
+
+    ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10]);
+
+    expect(DB::table('foodalchemist_ki_auftraege')->where('id', $alt->id)->value('status'))->toBe('beantwortet')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.anker')->where('target_id', $this->quitte->id)->where('status', 'offen')->count())->toBe(1)
+        ->and(($this->ankerZeilen)($this->quitte->id))->toBe(0);
+});
+
+/*
+ * io-Lauf 01.11.2026, Runde 1: lief nach dem Deploy noch mit dem alten gp.anker-Prompt (ohne art/pate_begruendung); 44 Antworten wurden als ai_inferred
+ * übernommen, Paten ohne Kennzeichen. neu_schaetzen=anker_ki fragt genau diese (Zeitfenster der Übernahme bzw. GP-Liste) mit dem neuen Prompt erneut.
+ */
+it('anker_ki: fragt nur KI-Anker im Zeitfenster erneut, die neue Antwort ersetzt den alten — auch neutral; Katalog-Anker und Anker außerhalb bleiben', function () {
+    $k = ($this->mcp)($this->mandantUser, $this->rootTeam);
+    $setze = fn (int $gpId, string $slug, string $source, string $zeit) => DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) Str::uuid7(),
+        'team_id' => $this->rootTeam->id, 'gp_id' => $gpId, 'anchor_id' => $this->anker[$slug], 'role' => 'kern', 'source' => $source, 'ai_reasoning' => 'alt',
+        'created_at' => $zeit, 'updated_at' => $zeit]);
+    $setze($this->quitte->id, 'pineapple', 'ai_inferred', '2026-11-01 10:00:00');      // Runde 1: im Fenster
+    $setze($this->kuerbis->id, 'pineapple', 'ai_inferred', '2026-11-01 12:00:00');     // später: außerhalb
+    $setze($this->manuell->id, 'lime', 'inspire_katalog', '2026-11-01 10:00:00');      // Katalog: nie
+    $frueher = ($this->gp)($this->rootTeam->id, 'Mango: frisch', 'mango');
+    $setze($frueher->id, 'pineapple', 'ai_inferred', '2026-11-01 08:00:00');            // vor dem Fenster
+    $fenster = ['nur' => 'anker', 'apply' => true, 'limit' => 10, 'neu_schaetzen' => ['anker_ki'], 'neu_seit' => '2026-11-01 09:00', 'neu_bis' => '2026-11-01 11:00'];
+
+    $ohne = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'neu_schaetzen' => ['anker_ki']]);
+    expect($ohne->success)->toBeFalse()->and($ohne->error)->toContain('neu_seit');
+
+    $trocken = ($this->run)($this->mandantUser, $this->rootTeam, ['apply' => false] + $fenster);
+    expect($trocken->data['neu_schaetzen']['anker'])->toBe(1, 'der Trockenlauf zeigt, wie viele KI-Anker das Fenster trifft')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
+
+    ($this->run)($this->mandantUser, $this->rootTeam, $fenster);
+    $gefragt = DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.anker')->pluck('target_id')->map(fn ($v) => (int) $v)->all();
+    expect($gefragt)->toContain($this->quitte->id)->not->toContain($this->kuerbis->id)->not->toContain($this->manuell->id)->not->toContain($frueher->id);
+
+    gpAromaAntworten($k, ['gp.anker' => ['anchor_slug' => 'neutral', 'art' => 'neutral']]);
+    ($this->run)($this->mandantUser, $this->rootTeam, $fenster);
+
+    expect(($this->ankerZeilen)($this->quitte->id))->toBe(0, 'die neue Antwort neutral ersetzt den alten KI-Anker')
+        ->and(DB::table('foodalchemist_gp_anker_neutral')->where('gp_id', $this->quitte->id)->exists())->toBeTrue()
+        ->and(($this->ankerZeilen)($this->kuerbis->id))->toBe(1)
+        ->and(DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $this->manuell->id)->whereNull('deleted_at')->value('source'))->toBe('inspire_katalog');
+
+    $liste = ($this->run)($this->mandantUser, $this->rootTeam, ['nur' => 'anker', 'apply' => true, 'limit' => 10, 'neu_schaetzen' => ['anker_ki'], 'neu_gp_ids' => [$this->kuerbis->id]]);
+    expect($liste->success)->toBeTrue($liste->error ?? '')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'gp.anker')->where('target_id', $this->kuerbis->id)->where('status', 'offen')->exists())->toBeTrue('neu_gp_ids grenzt auf diese GPs ein');
+});
