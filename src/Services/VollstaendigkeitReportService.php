@@ -227,10 +227,24 @@ class VollstaendigkeitReportService
         $gesamt = FoodAlchemistGp::visibleToTeam($team)->count();
         $tentative = FoodAlchemistGp::visibleToTeam($team)->where('status', 'tentative')->count();
 
-        $ohneAnker = FoodAlchemistGp::visibleToTeam($team)
-            ->whereNotExists(fn ($q) => $q->from('foodalchemist_gp_anchor_mappings AS m')
-                ->whereColumn('m.gp_id', 'foodalchemist_gps.id'))
+        // Aroma-Anker getrennt nach echt (eigener Anker der Zutat) / Pate (Ersatz-Anker, KI oder Behelf) / neutral (geprüft, kein
+        // Aroma-Träger) / ohne (noch nie geklärt) — dieselbe Regel wie der Backfill (GpAromaService::ankerGeklaert). Ein gelöschtes Mapping
+        // zählt nicht (vorher zählte es mit). Pate = nur Ersatz-Anker, kein eigener.
+        $mapping = fn (array $quellen, bool $nur) => fn ($q) => $q->from('foodalchemist_gp_anchor_mappings AS m')->whereColumn('m.gp_id', 'foodalchemist_gps.id')
+            ->whereNull('m.deleted_at')->when($quellen !== [], fn ($w) => $nur ? $w->whereIn('m.source', $quellen) : $w->whereNotIn('m.source', $quellen));
+        $paten = \Platform\FoodAlchemist\Support\AnkerQuelle::PATEN_QUELLEN;
+        $neutralTabelle = \Platform\FoodAlchemist\Services\GpAromaService::neutralTabelle();
+        $aromaanker = [
+            'echt' => FoodAlchemistGp::visibleToTeam($team)->whereExists($mapping($paten, false))->count(),
+            'pate' => FoodAlchemistGp::visibleToTeam($team)->whereNotExists($mapping($paten, false))->whereExists($mapping($paten, true))->count(),
+            'neutral' => $neutralTabelle ? FoodAlchemistGp::visibleToTeam($team)->whereNotExists($mapping([], true))
+                ->whereExists(fn ($q) => $q->from(\Platform\FoodAlchemist\Services\GpAromaService::NEUTRAL_TABELLE.' AS n')->whereColumn('n.gp_id', 'foodalchemist_gps.id'))->count() : 0,
+        ];
+        $ohneAnker = FoodAlchemistGp::visibleToTeam($team)->whereNotExists($mapping([], true))
+            ->when($neutralTabelle, fn ($q) => $q->whereNotExists(fn ($n) => $n->from(\Platform\FoodAlchemist\Services\GpAromaService::NEUTRAL_TABELLE.' AS n')
+                ->whereColumn('n.gp_id', 'foodalchemist_gps.id')))
             ->count();
+        $aromaanker['ohne'] = $ohneAnker;
 
         $ohneDomain = FoodAlchemistGp::visibleToTeam($team)->whereNull('food_domain_source')->count();
 
@@ -256,6 +270,7 @@ class VollstaendigkeitReportService
             'gps' => $gesamt,
             'tentative' => $tentative,
             'ohne_aromaanker' => $ohneAnker,
+            'aromaanker' => $aromaanker,
             'ohne_food_domain' => $ohneDomain,
             'ki_abgeschirmt_trotz_la_profil' => $abgeschirmt->count(),
             'beispiele_abgeschirmt' => $beispiele,

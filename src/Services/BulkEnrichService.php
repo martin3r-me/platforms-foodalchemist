@@ -1016,6 +1016,28 @@ class BulkEnrichService
         return $ausstehend;
     }
 
+    /**
+     * Anker-Antwort prüfen: nur ein Slug aus der Vorauswahl. Ein Pate (Entscheid Dominique 01.11.2026) braucht eine Begründung — ohne sie
+     * ist die Antwort ungültig (Feta → Halloumi entsteht genau dort, wo niemand Geschmack und Funktion verglichen hat).
+     *
+     * @param  array<string, mixed>  $w
+     * @param  list<string>  $vokabular
+     * @return array{anchor_slug: string, pate?: true, pate_begruendung?: string}|null
+     */
+    public static function ankerWert(array $w, array $vokabular): ?array
+    {
+        $slug = $w['anchor_slug'] ?? null;
+        if (! is_string($slug) || ! in_array($slug, $vokabular, true)) {
+            return null;
+        }
+        if ($slug === 'neutral' || ($w['art'] ?? null) !== 'pate') {
+            return ['anchor_slug' => $slug];
+        }
+        $begruendung = trim((string) ($w['pate_begruendung'] ?? ''));
+
+        return $begruendung === '' ? null : ['anchor_slug' => $slug, 'pate' => true, 'pate_begruendung' => mb_strimwidth($begruendung, 0, 600)];
+    }
+
     /** @return array{wert: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int} */
     private function proposeGpFeld(Team $team, FoodAlchemistGp $gp, string $feld, bool $neuSchaetzen = false): array
     {
@@ -1051,9 +1073,7 @@ class BulkEnrichService
                 fn (array $w) => array_intersect_key($w, array_flip(['kcal', 'protein_g', 'fat_g', 'carbs_g', 'salt_g'])) ?: null],
             // B-7: die KI wählt aus einer begründeten Vorauswahl (lexikalisch + semantisch + neutral);
             // nur ein Slug aus dem mitgegebenen Vokabular ist ein gültiger Wert.
-            'anker' => ['gp.anker', $basis + ['vokabular' => $vokabular],
-                fn (array $w) => is_string($w['anchor_slug'] ?? null) && in_array($w['anchor_slug'], $vokabular, true)
-                    ? ['anchor_slug' => $w['anchor_slug']] : null],
+            'anker' => ['gp.anker', $basis + ['vokabular' => $vokabular], fn (array $w) => self::ankerWert($w, $vokabular)],
             default => throw new \RuntimeException("Unbekannter GP-Bulk-Schritt [{$feld}]."),
         };
 
@@ -1088,6 +1108,9 @@ class BulkEnrichService
         }
         if ($feld === 'anker') {
             $slug = $werte['anchor_slug'] ?? null;
+            if (($werte['art'] ?? null) === 'pate' && is_string($slug) && in_array($slug, $vokabular, true)) {
+                return 'KI schlug den Paten „'.mb_strimwidth($slug, 0, 60).'“ ohne Begründung vor (Pflicht: Geschmack und Funktion)';
+            }
 
             return is_string($slug) && $slug !== ''
                 ? 'KI wählte „'.mb_strimwidth($slug, 0, 60).'“, nicht in der Vorauswahl ('.count($vokabular).' Anker)'
@@ -1212,8 +1235,12 @@ class BulkEnrichService
                 $ankerId = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $wert['anchor_slug'])
                     ->whereNull('deleted_at')->value('id');
                 if (! $manuell && $ankerId !== null) {
+                    $pate = ($wert['pate'] ?? false) === true;
                     app(PairingService::class)->setGpAnkerInference($team, $gp->id, (int) $ankerId,
-                        (float) ($prop->confidence ?? 0.0), (string) ($prop->reasoning ?: 'Bulk-Anreicherung'));
+                        (float) ($prop->confidence ?? 0.0),
+                        $pate ? '[Pate] '.($wert['pate_begruendung'] ?? '').(($prop->reasoning ?? '') !== '' ? ' — '.$prop->reasoning : '')
+                            : (string) ($prop->reasoning ?: 'Bulk-Anreicherung'),
+                        $pate ? \Platform\FoodAlchemist\Support\AnkerQuelle::PATE : \Platform\FoodAlchemist\Support\AnkerQuelle::KI);
                     $aroma->vergissAnkerNeutral($gp->id);
                     $ok = true;
                 }
