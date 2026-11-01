@@ -87,15 +87,18 @@ trait HatGpAromaKi
             return;
         }
         try {
+            $pate = ($v['value']['pate'] ?? false) === true;   // wie der Bulk-Weg: Ersatz-Anker gekennzeichnet, mit Begründung
             $pairing->setGpAnkerInference($team, $gp->id, (int) $ankerId, (float) ($v['confidence'] ?? 0.5),
-                'GP-Editor: KI-Vorschlag aus dem Anker-Vokabular'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''));
+                ($pate ? '[Pate] '.$v['value']['pate_begruendung'].' — ' : '').'GP-Editor: KI-Vorschlag aus dem Anker-Vokabular'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''),
+                $pate ? \Platform\FoodAlchemist\Support\AnkerQuelle::PATE : \Platform\FoodAlchemist\Support\AnkerQuelle::KI);
             $aroma->vergissAnkerNeutral($gp->id);
         } catch (\RuntimeException $e) {
             $this->aromaMeldung($e->getMessage());
 
             return;
         }
-        $this->aromaMeldung(null, "Anker „{$slug}\" per KI gesetzt (Konfidenz ".round((float) ($v['confidence'] ?? 0) * 100).' %).');
+        $this->aromaMeldung(null, ($pate ? "Pate „{$slug}\" per KI gesetzt (Ersatz, die Zutat hat keinen eigenen Anker; " : "Anker „{$slug}\" per KI gesetzt (")
+            .'Konfidenz '.round((float) ($v['confidence'] ?? 0) * 100).' %).');
     }
 
     /** „Mit KI schätzen": Vorschau der Wahrnehmung auf allen 7 Achsen (+ Texturen, wenn keine da sind). Schreibt nichts. */

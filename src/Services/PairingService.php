@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Enums\AussageTyp;
 use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Services\Pairing\AnkerGraph;
+use Platform\FoodAlchemist\Support\AnkerQuelle;
 
 /**
  * M5-04/05: GL-10 — Pairing-Kohäsion & Anker-Graph (deterministisch, ohne KI).
@@ -1131,11 +1132,10 @@ class PairingService
 
     /**
      * Spec 50 · B-7: KI-Inferenz des GP-Kern-Ankers (Bulk-Schritt `anker`). Manuelle Mappings
-     * werden nie ersetzt (Inv. 3); ältere `ai_inferred`-Mappings desselben GPs weichen, damit
-     * der Bulk-Lauf EINEN Kern-Anker setzt und den CAP_GP nicht mit KI-Resten füllt.
-     * `neutral` ist ein gültiger Anker („kein Aroma-Träger" ist eine Entscheidung).
+     * werden nie ersetzt (Inv. 3); ältere KI-Mappings ({@see AnkerQuelle::KI_QUELLEN}) desselben GPs weichen, damit
+     * der Bulk-Lauf EINEN Kern-Anker setzt und den CAP_GP nicht mit KI-Resten füllt. Neutral: {@see GpAromaService::merkeAnkerNeutral()}.
      */
-    public function setGpAnkerInference(Team $team, int $gpId, int $ankerId, float $confidence, string $reasoning = 'Bulk-Anreicherung'): void
+    public function setGpAnkerInference(Team $team, int $gpId, int $ankerId, float $confidence, string $reasoning = 'Bulk-Anreicherung', string $quelle = AnkerQuelle::KI): void
     {
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
         $this->pruefeAnkerPflege($gp, $team);
@@ -1145,12 +1145,12 @@ class PairingService
             return;
         }
         DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)
-            ->where('anchor_id', '!=', $ankerId)->where('source', 'ai_inferred')->whereNull('deleted_at')
+            ->where('anchor_id', '!=', $ankerId)->whereIn('source', AnkerQuelle::KI_QUELLEN)->whereNull('deleted_at')
             ->update(['deleted_at' => now(), 'updated_at' => now()]);
         DB::table('foodalchemist_gp_anchor_mappings')->updateOrInsert(
             ['gp_id' => $gp->id, 'anchor_id' => $ankerId],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
-                'role' => 'kern', 'source' => 'ai_inferred', 'ai_confidence' => max(0, min(1, $confidence)),
+                'role' => 'kern', 'source' => $quelle === AnkerQuelle::PATE ? $quelle : AnkerQuelle::KI, 'ai_confidence' => max(0, min(1, $confidence)),
                 'ai_reasoning' => mb_strimwidth($reasoning, 0, 500), 'deleted_at' => null,
                 'updated_at' => now(), 'created_at' => now()],
         );

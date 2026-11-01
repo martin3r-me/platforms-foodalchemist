@@ -119,7 +119,10 @@ class VollstaendigkeitReportCommand extends Command
         $this->table(['Kennzahl', 'Wert'], [
             ['GPs', $c['gps']],
             ['davon tentative', $c['tentative']],
-            ['ohne Aroma-Anker (gp.anker ist eine Waise)', $this->mitQuote($c['ohne_aromaanker'], $c['gps'])],
+            ['Aroma-Anker: eigener', $this->mitQuote($c['aromaanker']['echt'], $c['gps'])],
+            ['Aroma-Anker: Pate (Ersatz)', $this->mitQuote($c['aromaanker']['pate'], $c['gps'])],
+            ['Aroma-Anker: neutral (geprüft, kein Aroma-Träger)', $this->mitQuote($c['aromaanker']['neutral'], $c['gps'])],
+            ['ohne Aroma-Anker (noch nicht geklärt)', $this->mitQuote($c['ohne_aromaanker'], $c['gps'])],
             ['ohne Food-Domain', $this->mitQuote($c['ohne_food_domain'], $c['gps'])],
             ['⚠ KI-abgeschirmt TROTZ LA-Profil (A8)', $c['ki_abgeschirmt_trotz_la_profil']],
         ]);

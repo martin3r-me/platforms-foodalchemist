@@ -1883,10 +1883,20 @@ return [
                 . 'Unsicher oder produktabhaengig => weglassen, NICHT raten: '
                 . 'werte = {masse_je_verpackung, einheit: g|ml, begruendung}.',
         ],
+        // Entscheid Dominique 01.11.2026: fehlt der Zutat ein eigener Anker, ist ein VERGLEICHBARER Ersatz (Pate) erlaubt — gekennzeichnet und
+        // begruendet, sonst neutral. Regel aus feedback „Pate nie aus dem Kopf" (Feta ≠ Halloumi): nie nach Oberflaechen-Aehnlichkeit.
         'gp.anker' => [
             'klasse' => 'leicht',
-            'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
-                . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
+            'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem mitgegebenen Anker-Vokabular. '
+                . '(1) Steht die Zutat selbst im Vokabular (auch in anderer Schreibweise oder als Sorte derselben Art): art = eigen. '
+                . '(2) Fehlt sie, darf ein VERGLEICHBARER Ersatz-Anker (Pate) gewaehlt werden: gleiche Produktgruppe UND aehnlicher Geschmack '
+                . 'UND aehnliche Funktion in der Kueche (Saeure, Salz, Fett, Textur, Garverhalten). Dorade -> Wolfsbarsch ja (beide magere '
+                . 'weisse Meeresfische, gleiche Garung); Feta -> Halloumi NEIN (Feta frisch, kruemelig, salzig-saeuerlich in Lake; Halloumi mild, '
+                . 'quietschend, Grillkaese). Nie nach Name, Herkunft oder Tierart allein. Dann art = pate und pate_begruendung PFLICHT: welche '
+                . 'Gemeinsamkeit in Geschmack UND Funktion traegt den Ersatz. Bei Zweifel kein Pate. '
+                . '(3) Kein Aroma-Traeger oder kein vergleichbarer Ersatz: anchor_slug = neutral, art = neutral. '
+                . 'confidence = wie sicher die Zuordnung traegt: '
+                . 'werte = {anchor_slug, art: eigen|pate|neutral, pate_begruendung}.',
         ],
         // Kurator/Dominique 27.10.2026, umgebaut 29.10.2026: Geschmacksprofil des ROHEN Grundprodukts = WAHRNEHMUNG auf allen 7 Achsen.
         // Zucker/Salz/Fett stehen als Fakt in `naehrwerte` (g/100 g aus den LA); `konzentration_ohne_maskierung` ist nur ein Hinweis.

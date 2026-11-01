@@ -15,7 +15,9 @@
         'is_organic' => 'Bio', 'is_regional' => 'Regional', 'is_staple_food' => 'Grundnahrungsmittel',
         'is_convenience' => 'Convenience', 'is_lactose_free' => 'Laktosefrei', 'is_gluten_free' => 'Glutenfrei',
     ];
-    $quelleLabel = ['ki' => 'KI', 'manual' => 'von Hand', 'auto' => 'automatisch'];
+    $quelleLabel = ['ki' => 'KI', 'manual' => 'von Hand', 'auto' => 'automatisch', 'ai_inferred' => 'KI', 'geschwister' => 'von Geschwister-GPs',
+        'ai_pate' => 'Pate (KI): Ersatz, die Zutat hat keinen eigenen Anker', 'inspire_behelf' => 'Pate (Behelf): Ersatz aus der Stamm-Pflege'];
+    $patenQuellen = \Platform\FoodAlchemist\Support\AnkerQuelle::PATEN_QUELLEN;
     $formLabel = fn (?string $slug) => ['stk' => 'Stück'][$slug] ?? ucfirst((string) $slug);
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $titelKlein = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
@@ -642,13 +644,13 @@
                             @forelse($gpAnker as $a)
                                 <x-fa::badge wire:key="ga-{{ $a->id }}" :tone="$a->role === 'kern' ? 'accent' : 'neutral'" :icon="$a->role === 'kern' ? 'heroicon-s-star' : null"
                                     title="{{ $a->role === 'kern' ? 'Hauptanker' : 'Nebenanker' }} · {{ $quelleLabel[$a->source] ?? $a->source }}{{ $a->ai_confidence !== null ? ' ' . round($a->ai_confidence * 100) . ' %' : '' }}">
-                                    {{ $a->display_de }}
+                                    {{ $a->display_de }}@if(in_array($a->source, $patenQuellen, true))<span class="opacity-70" data-gp-anker-pate> · Pate</span>@endif
                                     <button type="button" wire:click="gpAnkerLoesen({{ $a->id }})" class="-mr-1 inline-flex items-center rounded-full hover:text-[var(--fa-crit)]" aria-label="Anker {{ $a->display_de }} lösen" title="Anker lösen" data-gp-anker-loesen>
                                         @svg('heroicon-m-x-mark', 'w-3.5 h-3.5')
                                     </button>
                                 </x-fa::badge>
                             @empty
-                                <p class="{{ $leise }}">Noch kein Aroma-Anker gesetzt.</p>
+                                <p class="{{ $leise }}" @if($gpAnkerNeutral ?? false) data-gp-anker-neutral @endif>{{ ($gpAnkerNeutral ?? false) ? 'Geprüft: kein Aroma-Träger (neutral), kein Anker.' : 'Noch kein Aroma-Anker gesetzt.' }}</p>
                             @endforelse
                         </div>
                         @if($gpAnkerFehler !== null)<x-fa::signal tone="crit" data-gp-anker-fehler>{{ $gpAnkerFehler }}</x-fa::signal>@endif

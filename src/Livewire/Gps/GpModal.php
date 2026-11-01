@@ -1321,6 +1321,8 @@ class GpModal extends Component
             'gpAnker' => $this->gpId !== null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->gpAnkerAlle($this->gpId)
                 : collect(),
+            // „geprüft, kein Aroma-Träger" (Backfill/KI-Knopf) — sonst sähe es aus wie noch nie gefragt
+            'gpAnkerNeutral' => $this->gpId !== null && app(\Platform\FoodAlchemist\Services\GpAromaService::class)->istAnkerNeutral($this->gpId),
             'gpAnkerKandidaten' => $this->gpAnkerSuche !== '' && $team !== null
                 ? \Platform\FoodAlchemist\Support\TeamScope::applyVisible(
                     \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at'),

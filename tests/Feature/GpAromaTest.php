@@ -497,3 +497,20 @@ it('Referenz-Befehl (nur lesend): Amerikaner im Rahmen → Erfolg; Gegenprobe au
 
     expect(DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $gp->id)->where('source', 'ai')->exists())->toBeFalse();
 });
+
+it('GP-Dialog: „Anker vorschlagen" setzt einen Paten gekennzeichnet (Quelle ai_pate), der Dialog zeigt „Pate"; neutral zeigt „Geprüft: kein Aroma-Träger"', function () {
+    $this->actingAs($this->user);
+    ($this->ki)(['gp.anker' => ['anchor_slug' => 'lime', 'art' => 'pate', 'pate_begruendung' => 'Zitrusfrucht, gleiche Säure und Funktion']]);
+    $gp = ($this->gp)('Kalamansi: frisch', 'kalamansi');
+
+    Livewire::test(GpModal::class)->call('oeffnen', $gp->id)->call('ankerKiVorschlagen')
+        ->assertSeeHtml('data-gp-anker-pate');
+    $m = DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)->whereNull('deleted_at')->first();
+    expect($m->source)->toBe('ai_pate')->and($m->ai_reasoning)->toStartWith('[Pate] Zitrusfrucht');
+
+    ($this->ki)(['gp.anker' => ['anchor_slug' => 'neutral', 'art' => 'neutral']]);
+    $neutral = ($this->gp)('Speisestärke: trocken', 'speisestaerke');
+    Livewire::test(GpModal::class)->call('oeffnen', $neutral->id)->call('ankerKiVorschlagen')
+        ->assertSeeHtml('data-gp-anker-neutral');
+    expect(app(GpAromaService::class)->istAnkerNeutral($neutral->id))->toBeTrue();
+});
