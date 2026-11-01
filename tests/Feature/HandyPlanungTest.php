@@ -123,7 +123,10 @@ it('Freigabe vom Handy (Dominique 30.10.): schreibt dasselbe wie am Computer, Kn
 
     expect($stepHandy->refresh()->status)->toBe($stepPc->refresh()->status)->toBe('freigegeben')
         ->and($rHandy->refresh()->status->value)->toBe($rPc->refresh()->status->value)->toBe('review')   // freigegeben nach Anreicherung
-        ->and($stepHandy->deferred)->toBe($stepPc->deferred);
+        // `deferred.enrich.at` ist der Zeitpunkt der Freigabe (Sekundengenau): Handy und Computer geben nacheinander frei und liegen je nach Sekundenwechsel
+        // um 1 s auseinander — das war das Wackeln (7 von 12 Läufen rot). Verglichen wird alles außer dem Zeitstempel; der muss nur gesetzt sein.
+        ->and(\Illuminate\Support\Arr::except($stepHandy->deferred, 'enrich.at'))->toBe(\Illuminate\Support\Arr::except($stepPc->deferred, 'enrich.at'))
+        ->and($stepHandy->deferred['enrich']['at'])->not->toBeEmpty()->and($stepPc->deferred['enrich']['at'])->not->toBeEmpty();
     Queue::assertPushed(\Platform\FoodAlchemist\Jobs\EnrichRecipeJob::class, 2);   // Handy und Computer je einmal
 });
 
