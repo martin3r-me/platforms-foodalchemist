@@ -79,15 +79,18 @@ it('erkennt ein LA-Allergenprofil — und sein Fehlen', function () {
 it('A8: der Bulk-Pfad schreibt KEINEN KI-Override über ein LA-Profil', function () {
     $gp = ($this->mkGpMitLa)('Schalotte', ['allergen_gluten' => 'nicht_enthalten', 'allergen_celery' => 'enthalten']);
     $prop = ($this->mkVorschlag)($gp);
+    // Seit dem sofortigen Nachziehen (Regelwerk LA §10) setzt schon das Anlegen des LA-Profils die LA-Quelle `la_union` — das ist die LA-Kette selbst.
+    // Maßgeblich ist, dass der Bulk-Pfad daran nichts ändert und keine KI-Quelle schreibt.
+    $quelleVorher = $gp->fresh()->allergens_source;
 
     $ok = app(BulkEnrichService::class)->uebernehmenGp($this->rootTeam, $prop->id);
 
     expect($ok)->toBeFalse();
     $gp->refresh();
-    // Kein Override, keine Quelle, keine Konfidenz — die LA-Kette bleibt zuständig.
+    // Kein Override, keine KI-/Hand-Quelle — die LA-Kette bleibt zuständig.
     expect($gp->allergen_gluten)->toBeNull()
         ->and($gp->allergen_celery)->toBeNull()
-        ->and($gp->allergens_source)->toBeNull();
+        ->and($gp->allergens_source)->toBe($quelleVorher)->and($gp->allergens_source)->not->toBeIn(['ki', 'manual']);
     // Der Vorschlag bleibt offen (Haus-Vertrag: `false` = nicht übernommen, nicht verworfen).
     expect($prop->fresh()->status)->toBe(BulkProposalStatus::Offen);
 });
