@@ -148,6 +148,13 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
             }
         }
 
+        // Pflichtfelder: der MCP-Weg (execute-Tool, Adapter) ruft execute() direkt auf und umgeht die Schema-Prüfung des Core-ToolExecutors. Ohne diese
+        // Prüfung wirft ein Tool mit fehlendem `id` „Undefined array key“. Gleiche Regel wie der Core (fehlt oder null = fehlt), nach den Rechte-Prüfungen.
+        $fehlend = array_values(array_filter((array) ($this->getSchema()['required'] ?? []), fn ($feld) => ! isset($arguments[$feld])));
+        if ($fehlend !== []) {
+            return ToolResult::error("Validierung fehlgeschlagen für Tool '".$this->getName()."':\n".implode("\n", array_map(fn ($f) => "- Feld '{$f}' ist erforderlich", $fehlend)), 'VALIDATION_ERROR');
+        }
+
         // #1002: KI-Tools laufen per MCP extern (Auftrag statt OpenAI-Call), in Transaktion mit Rollback bis zur Antwort
         if (\Platform\FoodAlchemist\Support\KiUmleitung::umleiten($this->getName(), $context)) {
             return \Platform\FoodAlchemist\Support\KiUmleitung::ausfuehren(fn () => $this->innen()->execute($arguments, $context), $this->getName());
