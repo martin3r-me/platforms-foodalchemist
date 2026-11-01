@@ -96,6 +96,58 @@ class GpAggregateService
         return $this->laKonfidenz($gp);
     }
 
+    /**
+     * Beleg zum Allergen-Widerspruch (§10): je Allergen-Feld, welche Artikel „enthalten“ und welche „nicht enthalten“ melden. Gleiche Artikelmenge wie die
+     * Konfidenz ({@see laProfile}: Sicht des Besitzer-Teams), Spuren und unbekannt kommen nicht vor.
+     *
+     * @param  list<string>  $felder  Allergen-Felder (Schlüssel ohne `allergen_`), meist `konflikt_felder` aus {@see allergenKonfidenz}
+     * @return array<string, array{enthalten: list<array{item_id:int, lieferant_id:?int}>, nicht_enthalten: list<array{item_id:int, lieferant_id:?int}>}>
+     */
+    public function allergenWiderspruchBeleg(FoodAlchemistGp $gp, array $felder): array
+    {
+        $profile = $this->laProfile($gp);
+        $out = [];
+        foreach ($felder as $feld) {
+            foreach (['enthalten', 'nicht_enthalten'] as $wert) {
+                $out[$feld][$wert] = $profile->filter(fn ($la) => (string) $la->getAttribute("allergen_{$feld}") === $wert)
+                    ->map(fn ($la) => ['item_id' => (int) $la->supplier_item_id, 'lieferant_id' => $la->lieferant_id !== null ? (int) $la->lieferant_id : null])->values()->all();
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Konfidenz (und damit der Review-Stand) der GPs SOFORT nachziehen, wenn sich ihre Artikel ändern (verknüpfen, lösen, LA-Allergen ändern) — über
+     * {@see backfillAllergenKonfidenz}, kein zweiter Rechenweg. Schreibt nur Metadaten, nie die Allergen-WERTE (ALL-MAXIMAL bleibt). Ein Fehler hier darf den
+     * auslösenden Schreibvorgang nie reißen: er wird geloggt, der nächste Backfill holt es nach.
+     *
+     * @param  iterable<int|null>  $gpIds
+     */
+    public function konfidenzNachziehen(iterable $gpIds): void
+    {
+        $ids = collect($gpIds)->filter()->map(fn ($i) => (int) $i)->unique()->values();
+        if ($ids->isEmpty()) {
+            return;
+        }
+        try {
+            // Derivate lesen die Werte LIVE von der Mutter: ihre Konfidenz zieht mit
+            $alle = $ids->merge(FoodAlchemistGp::query()->whereIn('derivat_von_gp_id', $ids)->pluck('id'))->unique();
+            foreach (FoodAlchemistGp::query()->whereIn('id', $alle)->get() as $gp) {
+                $this->backfillAllergenKonfidenz($gp, true);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[FoodAlchemist] Allergen-Konfidenz nicht nachgezogen: ' . $e->getMessage(), ['gp_ids' => $ids->all()]);
+        }
+    }
+
+    /** Wie {@see konfidenzNachziehen}, ausgehend von einem Lieferantenartikel (alle GPs, auf die er zeigt). */
+    public function konfidenzNachziehenFuerArtikel(int $itemId): void
+    {
+        $this->konfidenzNachziehen(\Illuminate\Support\Facades\DB::table('foodalchemist_supplier_item_structures')
+            ->where('supplier_item_id', $itemId)->whereNull('deleted_at')->whereNotNull('gp_id')->pluck('gp_id'));
+    }
+
     /** Konfidenz aus dem eigenen LA-Profil des GP (ohne Derivat-Auflösung). */
     private function laKonfidenz(FoodAlchemistGp $gp): array
     {

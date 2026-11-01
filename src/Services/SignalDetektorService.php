@@ -8,6 +8,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignalSnapshot;
@@ -68,6 +69,7 @@ class SignalDetektorService
             + $this->vkAnpassungEmpfohlen($team)
             + $this->vertragsfristFaellig($team)
             + $this->zertifikateAblaufend($team)   // Link-Stufe 2d: Zertifikat-Ablauf je Lieferant
+            + $this->gpAllergenWiderspruch($team)   // Regelwerk LA §10: Artikel eines GP widersprechen sich bei einem Allergen
             + app(\Platform\FoodAlchemist\Services\Pairing\PairingSignale::class)->alle($team)   // Spec 60 · P8
             + $this->naehrwertPlausi($team)
             + app(\Platform\FoodAlchemist\Services\Naehrwerte\NaehrwertSignalService::class)->laufen($team)   // Nährwert-Prüfung je Artikel (nur Modus scharf, gedrosselt)
@@ -1145,4 +1147,70 @@ class SignalDetektorService
     }
 
     private const ZERTIFIKAT_VORLAUF_TAGE = 60;
+
+    /**
+     * Regelwerk LA §10 — Grundprodukte, deren lieferbare Artikel sich bei einem Allergen widersprechen: NUR „enthalten“ gegen „nicht enthalten“ (Spuren zählen
+     * nicht, kein Spuren-Mittelweg), genau die Regel von {@see GpAggregateService::allergenKonfidenz} (`needs_review`), deren Ergebnis hier gezählt wird — keine
+     * zweite Definition. Ein Summen-Signal je Team (Zahl + Beispiele mit Allergen, Artikel und Lieferant), selbstschließend, sobald nichts mehr widerspricht.
+     * Der Allergen-Wert ändert sich dadurch nie (ALL-MAXIMAL).
+     */
+    public function gpAllergenWiderspruch(Team $team): int
+    {
+        $agg = app(GpAggregateService::class);
+        // Vorauswahl in SQL: nur GPs, bei denen irgendein Allergen-Feld beide Werte trägt; die Entscheidung trifft danach der Service.
+        $bedingungen = [];
+        foreach (array_keys(FoodAlchemistItemAllergen::ALLERGENE) as $feld) {
+            $bedingungen[] = "(SUM(a.allergen_{$feld} = 'enthalten') > 0 AND SUM(a.allergen_{$feld} = 'nicht_enthalten') > 0)";
+        }
+        $kandidaten = DB::table('foodalchemist_item_allergens AS a')
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'a.supplier_item_id')
+            ->whereNull('s.deleted_at')->whereNotNull('s.gp_id')
+            ->groupBy('s.gp_id')->havingRaw(implode(' OR ', $bedingungen))->pluck('s.gp_id');
+
+        $treffer = [];
+        if ($kandidaten->isNotEmpty()) {
+            foreach (FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->where('status', 'approved')->whereIn('id', $kandidaten)->orderBy('id')->get() as $gp) {
+                $k = $agg->allergenKonfidenz($gp);
+                if (! empty($k['needs_review']) && ($k['konflikt_felder'] ?? []) !== []) {
+                    $treffer[] = [$gp, $k['konflikt_felder']];
+                }
+            }
+        }
+
+        $anzahl = count($treffer);
+        if ($anzahl === 0) {
+            $this->signals->schliesseVerschwundene($team, SignalTyp::GpAllergenWiderspruch, 'detektor', [], 'Kein Grundprodukt mit Allergen-Widerspruch mehr — automatisch geschlossen');
+
+            return 0;
+        }
+
+        $beispiele = [];
+        foreach (array_slice($treffer, 0, 10) as [$gp, $felder]) {
+            $beleg = $agg->allergenWiderspruchBeleg($gp, $felder);
+            $ids = collect($beleg)->flatten(2)->pluck('item_id')->unique()->all();
+            $namen = DB::table('foodalchemist_supplier_items AS i')->leftJoin('foodalchemist_suppliers AS sp', 'sp.id', '=', 'i.supplier_id')
+                ->whereIn('i.id', $ids)->get(['i.id', 'i.article_number', 'i.designation', 'sp.name AS lieferant'])->keyBy('id');
+            $zeile = fn (array $l) => ['artikel_id' => $l['item_id'], 'artikel' => trim(($namen[$l['item_id']]->article_number ?? '') . ' ' . ($namen[$l['item_id']]->designation ?? '')),
+                'lieferant' => $namen[$l['item_id']]->lieferant ?? null];
+            $beispiele[] = ['gp_id' => (int) $gp->id, 'name' => (string) $gp->name, 'allergene' => collect($beleg)->map(fn ($b, $feld) => [
+                'allergen' => FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld,
+                'enthalten' => array_map($zeile, array_slice($b['enthalten'], 0, 3)), 'nicht_enthalten' => array_map($zeile, array_slice($b['nicht_enthalten'], 0, 3)),
+            ])->values()->all()];
+        }
+
+        $this->signals->erzeuge(
+            $team,
+            SignalTyp::GpAllergenWiderspruch,
+            SignalSeverity::Warnung,
+            $anzahl . ($anzahl === 1 ? ' Grundprodukt' : ' Grundprodukte') . ' mit Allergen-Widerspruch',
+            [
+                'dedup_key' => 'gp-allergen-widerspruch',
+                'description' => 'Lieferbare Artikel dieser Grundprodukte widersprechen sich bei einem Allergen (enthalten gegen nicht enthalten; Spuren zählen nicht). Bis zur Klärung gilt das Maximum (enthalten). '
+                    . 'Mit Datenblatt/Produktpass klären, welcher Artikel recht hat, und den falschen Artikel korrigieren oder aus dem Grundprodukt lösen.',
+                'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
+            ]
+        );
+
+        return 1;
+    }
 }

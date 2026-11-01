@@ -176,6 +176,10 @@ final class SignalCockpit
         'ki_auftraege_offen' => 'Im MCP-Client: foodalchemist.ki_auftraege.GET holt die offenen Aufträge, ki_auftraege.ANTWORT beantwortet sie (Ablauf: Dossier workflow.ki_auftrag_beantworten_mcp). '
             . 'Abgelaufene Aufträge werden nicht verworfen, der Nachlauf bzw. foodalchemist.gp_aroma_backfill.RUN erkennt die Lücke wieder und legt neue Aufträge an.',
         // Plan GP-Stamm 3g: Kuratierungs-Entscheidung des Masters, kein Auto-Fix (eine Marke darf nie geraten werden).
+        // Regelwerk LA §10: welcher Artikel recht hat, ist eine Sach-Entscheidung (Datenblatt/Produktpass), kein Auto-Fix; ALL-MAXIMAL bleibt bis dahin.
+        'gp_allergen_widerspruch' => 'Grundprodukt öffnen → Allergene: je Allergen den Beleg ansehen (welcher Artikel welchen Lieferanten meldet), mit Datenblatt/Produktpass klären, '
+            . 'welcher Artikel recht hat, und den falschen Artikel korrigieren oder aus dem Grundprodukt lösen. Bis dahin gilt das Maximum (enthalten) — am Allergen-Wert ändert das Signal nichts. '
+            . 'Es schließt sich selbst, sobald sich die Artikel nicht mehr widersprechen.',
         'marken_nachlauf' => 'Lieferanten → „Marke offen“: je unbekanntem Kürzel die Marke zuordnen (Vorschau zeigt, welche GPs neu benannt werden; '
             . 'GPs mit Artikeln mehrerer Marken oder ohne Marke bleiben offen). Lieferanten mit Rolle „offen“ beim Lieferanten als Hersteller oder Händler einstufen.',
         // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.
