@@ -59,6 +59,7 @@ abstract class TestCase extends BaseTestCase
         TeamAncestryRegistry::flushAll();
         \Platform\FoodAlchemist\Support\TeamSperre::flush();   // Spec 82 §13 C3: Sperr-Merker je Prozess, Team-Ids wiederholen sich je Test
         \Platform\FoodAlchemist\Support\NaehrwertPruefModus::flush();   // Nährwert-Prüfung: Modus-Einstellung je Prozess gecacht
+        \Platform\FoodAlchemist\Services\GpAromaService::flushNeutralTabelle();   // GP-Aroma: Tabellen-Merker „neutral“ je Prozess
         \Platform\FoodAlchemist\Tests\Support\VkAltspaltenBruecke::registrieren();   // Spec 85 D-1 PR-C: Altspalten-Fixtures → Standard-Darreichung (Abbau per Sperrklinke)
     }
 

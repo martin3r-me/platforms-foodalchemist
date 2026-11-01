@@ -32,7 +32,8 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             . 'Stamm-GPs). Erst der kostenlose Geschwister-Teil (gleiche Hauptzutat), dann die KI — per MCP immer über KI-AUFTRÄGE: ki_auftraege.GET holen, '
             . 'ki_auftraege.ANTWORT beantworten, dieses Tool erneut aufrufen (beantwortete Aufträge werden dabei übernommen). Ohne apply=true ein '
             . 'Trockenlauf (Zählung + Kostenschätzung, schreibt nichts). Nur Lücken: ein vorhandenes Profil/ein Anker wird nie neu bezahlt, ein manuelles '
-            . 'Profil nie angefasst. limit begrenzt die KI-Calls je Aufruf (Standard 50, max 300). Antwort: Zählung, Auftrags-Zähler (angelegt/beantwortet/'
+            . 'Profil nie angefasst. Keine Lücke sind: die Anker-Antwort neutral (kein Aroma-Träger, wird festgehalten), ein Profil mit lauter Nullen von '
+            . 'Hand/KI/Geschwistern und Non-Food (Warengruppe 16, wird nie gefragt). limit begrenzt die KI-Calls je Aufruf (Standard 50, max 300). Antwort: Zählung, Auftrags-Zähler (angelegt/beantwortet/'
             . 'verbraucht/doppelt/verwaist) und der Hinweis zur Schleife.';
     }
 
@@ -43,8 +44,9 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             'properties' => [
                 'nur' => ['type' => 'string', 'enum' => ['anker', 'profil', 'beide'], 'default' => 'beide', 'description' => 'Was nachgezogen wird.'],
                 'nur_geschwister' => ['type' => 'boolean', 'default' => false, 'description' => 'Nur den kostenlosen Geschwister-Teil, keine KI.'],
-                'neu_schaetzen' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['ai', 'geschwister', 'gemini', 'rule']],
-                    'description' => 'Vorhandene Profile dieser Quellen neu schätzen und überschreiben (manuell wird nie angefasst).'],
+                'neu_schaetzen' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral']],
+                    'description' => 'Vorhandene Profile dieser Quellen neu schätzen und überschreiben (manuell wird nie angefasst). anker_neutral = die Anker-Frage '
+                        . 'für GPs mit „geprüft, kein Anker" erneut stellen (sie zählen sonst nicht als Lücke).'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::LIMIT_MAX, 'default' => self::LIMIT_STANDARD,
                     'description' => 'Höchstens so viele GPs je Aufruf in den KI-Teil (Standard ' . self::LIMIT_STANDARD . ', max ' . self::LIMIT_MAX . ').'],
                 'apply' => ['type' => 'boolean', 'default' => false, 'description' => 'true = schreiben (Geschwister) und KI-Aufträge anlegen; false = Trockenlauf.'],
@@ -66,8 +68,8 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error('nur muss anker, profil oder beide sein.', 'VALIDATION_ERROR');
         }
         $neu = array_values(array_unique(array_map('strval', (array) ($arguments['neu_schaetzen'] ?? []))));
-        if (array_diff($neu, ['ai', 'geschwister', 'gemini', 'rule']) !== []) {
-            return ToolResult::error('neu_schaetzen erlaubt nur ai, geschwister, gemini, rule (ein manuelles Profil wird nie neu geschätzt).', 'VALIDATION_ERROR');
+        if (array_diff($neu, ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral']) !== []) {
+            return ToolResult::error('neu_schaetzen erlaubt nur ai, geschwister, gemini, rule, anker_neutral (ein manuelles Profil wird nie neu geschätzt).', 'VALIDATION_ERROR');
         }
         $limit = (int) ($arguments['limit'] ?? self::LIMIT_STANDARD);
         if ($limit < 1 || $limit > self::LIMIT_MAX) {

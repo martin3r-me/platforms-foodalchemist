@@ -47,13 +47,16 @@ final class GpAromaNachholen
             ->afterCommit();
     }
 
-    /** @return list<string> die KI-Schritte, die dieses GP noch braucht (anker, sensorik) */
-    public static function schritte(int $gpId): array
+    /**
+     * @param  bool  $neutralNeu  „geprüft, kein Anker" (neutral) wieder fragen — nur der Wiederholungslauf (neu_schaetzen = anker_neutral)
+     * @return list<string> die KI-Schritte, die dieses GP noch braucht (anker, sensorik)
+     */
+    public static function schritte(int $gpId, bool $neutralNeu = false): array
     {
         $aroma = app(GpAromaService::class);
 
         return array_values(array_filter([
-            $aroma->hatAnker($gpId) ? null : 'anker',
+            $aroma->ankerGeklaert($gpId, $neutralNeu) ? null : 'anker',
             $aroma->profilFehlt($gpId) ? 'sensorik' : null,
         ]));
     }
