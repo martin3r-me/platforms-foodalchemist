@@ -175,3 +175,29 @@ it('GP-Panel: Verwendungen listen Basis- und VK-Rezepte, ★-Lead-Klick setzt de
         ->assertSet('fehler', null);
     expect((int) $this->gp->fresh()->lead_la_supplier_item_id)->toBe($this->la->id);
 });
+
+it('Verpackungsangabe (Schutzatmosphäre) ist KEIN Produktunterschied: Verknüpfung geht durch; echte Zusatzstoffe/Allergene und Warnhinweise bleiben streng', function () {
+    app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp, $this->la->id);
+    FoodAlchemistItemDeclaration::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $this->la->id, 'packaged_modified_atmosphere' => 1, 'with_preservative' => 1, 'contains_phenylalanine' => 1]);
+
+    $neuer = fn (string $name, array $decl) => tap(FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $this->la->supplier_id, 'designation' => $name]),
+        fn ($i) => FoodAlchemistItemDeclaration::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $i->id] + $decl));
+
+    // Richtung 1: nur die Schutzatmosphäre weicht ab (1 gegen 3) ⇒ erlaubt
+    $nurPackung = $neuer('Serrano 1', ['packaged_modified_atmosphere' => 3, 'with_preservative' => 1, 'contains_phenylalanine' => 1]);
+    app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $nurPackung->id);
+    expect(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $nurPackung->id)->where('gp_id', $this->gp->id)->exists())->toBeTrue();
+
+    // Richtung 2: Schutzatmosphäre gleich, aber ein ECHTER Zusatzstoff weicht ab ⇒ abgelehnt, und der Grund nennt den echten Stoff, nicht die Verpackung
+    $konservierung = $neuer('Serrano 2', ['packaged_modified_atmosphere' => 1, 'with_preservative' => 3, 'contains_phenylalanine' => 1]);
+    expect(fn () => app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $konservierung->id))
+        ->toThrow(RuntimeException::class, 'mit Konservierungsstoff');
+    // Warnhinweis (Phenylalanin) bleibt streng
+    $phenyl = $neuer('Serrano 3', ['packaged_modified_atmosphere' => 1, 'with_preservative' => 1, 'contains_phenylalanine' => 3]);
+    expect(fn () => app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $phenyl->id))->toThrow(RuntimeException::class, 'Phenylalanin');
+    // Allergen bleibt streng, auch wenn die Verpackung ignoriert wird
+    $milch = $neuer('Serrano 4', ['packaged_modified_atmosphere' => 3, 'with_preservative' => 1, 'contains_phenylalanine' => 1]);
+    FoodAlchemistItemAllergen::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $milch->id, 'allergen_milk' => 'enthalten']);
+    FoodAlchemistItemAllergen::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $this->la->id, 'allergen_milk' => 'nicht_enthalten']);
+    expect(fn () => app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $milch->id))->toThrow(RuntimeException::class, 'Milch');
+});

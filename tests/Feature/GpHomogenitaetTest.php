@@ -157,3 +157,22 @@ it('Befehl schreibt mit --detail-csv die Detail-Zeilen und ändert keine Verknü
         ->and($zeilen[1][4])->toBe('Allergen „Milch“')
         ->and(DB::table('foodalchemist_supplier_item_structures')->orderBy('id')->get(['id', 'gp_id'])->toArray())->toEqual($vorher);
 });
+
+it('Bericht: Schutzatmosphäre allein macht ein GP nicht uneinheitlich, ein echter Zusatzstoff schon', function () {
+    $decl = fn ($la, array $d) => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id] + $d);
+    $nurPackung = [($this->la)('S1', false), ($this->la)('S2', false)];
+    $decl($nurPackung[0], ['packaged_modified_atmosphere' => 1]);
+    $decl($nurPackung[1], ['packaged_modified_atmosphere' => 3]);
+    DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', collect($nurPackung)->pluck('id'))->update(['gp_id' => $this->gp->id]);
+
+    $gp2 = $this->makeGp($this->rootTeam, 'Salami');
+    $echt = [($this->la)('E1', false), ($this->la)('E2', false)];
+    $decl($echt[0], ['with_preservative' => 1]);
+    $decl($echt[1], ['with_preservative' => 3]);
+    DB::table('foodalchemist_supplier_item_structures')->whereIn('supplier_item_id', collect($echt)->pluck('id'))->update(['gp_id' => $gp2->id]);
+
+    $bericht = app(GpHomogenitaetService::class)->bericht();
+
+    expect(collect($bericht['gps'])->pluck('gp_id')->all())->toBe([$gp2->id])
+        ->and($bericht['gps'][0]['abweichungen'])->toBe(['Zusatzstoff „mit Konservierungsstoff“']);
+});
