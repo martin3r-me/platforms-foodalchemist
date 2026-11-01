@@ -1070,6 +1070,23 @@ return [
         'semantic_scan_limit' => 5000,
     ],
 
+    // io-Lauf 01.11.2026: Anker-Vorauswahl für gp.anker ({@see \Platform\FoodAlchemist\Support\GpAnkerVorauswahl}). Lexikalische und
+    // semantische Kandidaten nur aus diesen Anker-Kategorien (Kategorie oder Unterkategorie-Pfad); Geschwister-Anker sind nie gefiltert.
+    // Abgeleitet aus den bestehenden Kern-Mappings je Warengruppe (lokal 01.11.: 01 → 97 % Gemüse, 04 → 99 % Protein, 06 → 98 % Milchprodukte).
+    // Warengruppen ohne Eintrag (08, 09, 10, 11, 12, 13, 14) filtern nicht: dort verteilen sich die Anker über viele Kategorien.
+    'gp_anker_vorauswahl' => [
+        'kategorien_je_wg' => [
+            '01' => ['Gemüse', 'Kräuter', 'Gewuerze', 'Würzmittel', 'Blüten', 'Nüsse und Samen', 'Obst'],
+            '02' => ['Obst', 'Gemüse', 'Nüsse und Samen', 'Blüten'],
+            '03' => ['Kräuter', 'Gemüse', 'Blüten', 'Gewuerze', 'Obst'],
+            '04' => ['Protein/Fleisch', 'Protein/Charcuterie', 'Fette und Öle', 'Aufstriche und Dips'],
+            '05' => ['Protein/Fisch', 'Protein/Meeresfrüchte'],
+            '06' => ['Milchprodukte'],
+            '07' => ['Getreide', 'Gemüse', 'Nüsse und Samen'],
+            '15' => ['Getränke', 'Obst', 'Gewuerze', 'Kräuter', 'Milchprodukte', 'Getreide', 'Nüsse und Samen'],
+        ],
+    ],
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.

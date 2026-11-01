@@ -1059,7 +1059,7 @@ class BulkEnrichService
                 'grund' => $v === null ? 'KI lieferte kein vollständiges Geschmacksprofil' : null];
         }
         $basis = ['name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name];
-        $vokabular = $feld === 'anker' ? $this->gpAnkerKandidaten($gp) : [];
+        $vokabular = $feld === 'anker' ? app(\Platform\FoodAlchemist\Support\GpAnkerVorauswahl::class)->fuer($gp, $team) : [];
 
         [$key, $kontext, $extract] = match ($feld) {
             'condition' => ['gp.condition', ['name' => $gp->name, 'condition' => $gp->condition ?: null],
@@ -1079,6 +1079,9 @@ class BulkEnrichService
 
         $p = $this->ki->propose($key, $kontext, ['target_table' => 'foodalchemist_gps', 'target_id' => $gp->id]);
         $wert = $extract($p->werte);
+        if ($feld === 'anker' && $neuSchaetzen && is_array($wert)) {
+            $wert['neu'] = true;                                       // Neu-Fragen (io 01.11.2026): auch „neutral" ersetzt den alten KI-Anker
+        }
 
         return [
             'value' => $wert,
@@ -1129,36 +1132,6 @@ class BulkEnrichService
     {
         return FoodAlchemistBulkGpProposal::where('run_id', $runId)->where('team_id', $team->id)->whereNotNull('error')
             ->orderBy('id')->get(['field', 'error'])->map(fn ($p) => ['field' => (string) $p->field, 'error' => (string) $p->error])->all();
-    }
-
-    /**
-     * B-7: Anker-Vokabular für EIN GP — dieselbe Idee wie `RecipeOneShotService::ankerKandidaten`:
-     * (a) lexikalische Wort-Treffer im GP-Namen, (b) semantischer Recall (Beigabe, nie Bedingung),
-     * (c) `neutral` immer. Kein (a) und kein (b) → Vollvokabular statt geratener Teilmenge (eine
-     * falsche Whitelist macht die richtige Antwort unerreichbar; der teure Call ist das kleinere Übel).
-     *
-     * @return list<string>
-     */
-    private function gpAnkerKandidaten(FoodAlchemistGp $gp): array
-    {
-        $ids = app(PairingService::class)->lexicalAnkerKandidaten((string) $gp->name);
-        // #1002: feste Reihenfolge (orderBy slug) — der Fingerabdruck des externen KI-Auftrags hängt an der Vokabular-Liste im Prompt,
-        // ein unsortiertes whereIn ließe dieselbe Anfrage je Lauf anders ausfallen (doppelte Aufträge)
-        $slugs = $ids === [] ? [] : DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereIn('id', $ids)->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
-        try {
-            $semantisch = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)
-                ->searchAnkerSlugs((string) $gp->name, 40);
-        } catch (\Throwable) {
-            $semantisch = [];
-        }
-        $vereint = array_values(array_unique(array_merge($slugs, $semantisch)));
-        if ($vereint === []) {
-            $vereint = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
-                ->where('slug', '!=', 'neutral')->orderBy('slug')->pluck('slug')->all();
-        }
-
-        return array_values(array_unique([...array_slice($vereint, 0, 120), 'neutral']));
     }
 
     /** Review: EIN GP-Vorschlag übernehmen (Override-First, Lineage ki, Stempel). */
@@ -1225,7 +1198,12 @@ class BulkEnrichService
             $aroma = app(GpAromaService::class);
             if (! $manuell && $wert['anchor_slug'] === 'neutral') {
                 // Kein Aroma-Träger ist eine Antwort, kein Leerlauf: festhalten, sonst fragt jeder Lauf neu (io-Probe 01.11.2026).
-                // Ein vorhandener KI-Anker bleibt — neutral setzt nie einen Anker ab.
+                // Ein vorhandener KI-Anker bleibt — neutral setzt nie einen Anker ab. Ausnahme Neu-Fragen (`anker_ki`): die neue Antwort
+                // ersetzt die alte KI-Antwort; Katalog-, Paket- und Hand-Anker bleiben immer.
+                if (($wert['neu'] ?? false) === true && app(PairingService::class)->darfAnkerPflegen($gp, $team)) {
+                    DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)->whereNull('deleted_at')
+                        ->whereIn('source', \Platform\FoodAlchemist\Support\AnkerQuelle::KI_QUELLEN)->update(['deleted_at' => now(), 'updated_at' => now()]);
+                }
                 if (! $aroma->hatAnker($gp->id) && GpAromaService::neutralTabelle() && app(PairingService::class)->darfAnkerPflegen($gp, $team)) {
                     $aroma->merkeAnkerNeutral($gp->id, (int) $team->id, 'ai', $prop->confidence !== null ? (float) $prop->confidence : null,
                         (string) ($prop->reasoning ?: 'Bulk-Anreicherung: kein Aroma-Träger'));

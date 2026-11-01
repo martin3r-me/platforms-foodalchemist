@@ -21,14 +21,16 @@ class GpAromaBackfillService
     /**
      * Quellen, deren Profil neu geschätzt werden darf (manual nie). `rezept` = gegarte Profile in recipe_taste_vectors (source ai).
      * `anker_neutral` = Anker-Frage für GPs mit „geprüft, kein Anker" erneut stellen (io-Probe 01.11.2026).
+     * `anker_ki` = KI-Anker ohne Paten-Kennzeichen (Quelle ai_inferred) erneut fragen; nur mit `neu_seit`/`neu_bis` oder `neu_gp_ids` (io-Lauf
+     * 01.11.2026: Runde 1 lief nach dem Deploy noch mit dem alten Prompt ohne art/pate_begruendung, Paten wurden ohne Kennzeichen übernommen).
      */
-    public const NEU_QUELLEN = ['ai', 'geschwister', 'gemini', 'rule', 'rezept', 'anker_neutral'];
+    public const NEU_QUELLEN = ['ai', 'geschwister', 'gemini', 'rule', 'rezept', 'anker_neutral', 'anker_ki'];
 
     /** Token-Annahme ohne Call-Historie (gemessen an recipe.sensorik/gp.anker auf demo, 19.09.). */
     private const ANNAHME = ['gp.sensorik' => ['in' => 1200, 'out' => 250], 'gp.anker' => ['in' => 1500, 'out' => 120]];
 
     /**
-     * @param  array{fuer_team?: bool, nur?: string, apply?: bool, nur_geschwister?: bool, limit?: int, extern?: bool, neu_quellen?: list<string>, chunk?: int, pause?: int, bericht?: ?string}  $o
+     * @param  array{fuer_team?: bool, nur?: string, apply?: bool, nur_geschwister?: bool, limit?: int, extern?: bool, neu_quellen?: list<string>, neu_seit?: ?string, neu_bis?: ?string, neu_gp_ids?: list<int>, chunk?: int, pause?: int, bericht?: ?string}  $o
      * @param  callable(string, mixed): void|null  $ausgabe  (Art 'line'|'warn'|'ergebnis', Text bzw. Zwischenergebnis) — Fortschritt für den Befehl
      * @return array<string, mixed>
      */
@@ -96,8 +98,10 @@ class GpAromaBackfillService
         $nProfil = $limit > 0 ? min($limit, $kiProfil) : $kiProfil;
         $neuGps = array_values(array_intersect($neuQuellen, ['ai', 'geschwister', 'gemini', 'rule'])) !== [] ? $this->neuGps($neuQuellen, $scope) : [];
         $neuRezepte = in_array('rezept', $neuQuellen, true) ? $this->neuRezepte($scope) : [];
+        $neuAnker = in_array('anker_ki', $neuQuellen, true) ? $this->neuAnker($scope, $o) : [];
         if ($neuQuellen !== []) {
             $nProfil += $limit > 0 ? min($limit, count($neuGps)) : count($neuGps);
+            $nAnker += $limit > 0 ? min($limit, count($neuAnker)) : count($neuAnker);
         }
         $teile = [$this->kosten('gp.anker', $nAnker), $this->kosten('gp.sensorik', $nProfil)];
 
@@ -107,7 +111,7 @@ class GpAromaBackfillService
             'ki_geplant' => ['anker' => $kiAnker, 'profil' => $kiProfil],
             'ki_calls' => ['anker' => $nAnker, 'profil' => $nProfil],
             'geschrieben' => $geschrieben,
-            'neu' => $neuQuellen === [] ? null : ['quellen' => $neuQuellen, 'gp' => count($neuGps), 'rezepte' => count($neuRezepte)],
+            'neu' => $neuQuellen === [] ? null : ['quellen' => $neuQuellen, 'gp' => count($neuGps), 'rezepte' => count($neuRezepte), 'anker' => count($neuAnker)],
             'kosten' => ['eur' => array_sum(array_column($teile, 'eur')), 'eur_unbekannt' => in_array(null, array_column($teile, 'eur'), true),
                 'tin' => array_sum(array_column($teile, 'tin')), 'tout' => array_sum(array_column($teile, 'tout')), 'basis' => array_column($teile, 'basis')],
             'pflegbar_gesamt' => count($alle), 'apply' => $apply, 'nur_geschwister' => $nurGeschwister, 'limit' => $limit, 'extern' => $extern,
@@ -172,7 +176,7 @@ class GpAromaBackfillService
             $ausgabe('line', 'Paket '.($i + 1).": {$n} GPs bearbeitet");
         }
         if ($neuQuellen !== []) {
-            $n += $this->neuSchaetzen($bulk, $team, $neuGps, $neuRezepte, $limit, $extern, $protokoll, $ausgabe);
+            $n += $this->neuSchaetzen($bulk, $team, $neuGps, $neuRezepte, $limit, $extern, $protokoll, $ausgabe, $neuAnker);
         }
         $ki = ['bearbeitet' => $n, 'ausstehend' => $ausstehend, 'uebernommen' => $uebernommen, 'protokoll' => $protokoll, 'zaehler' => null, 'offene_auftraege' => null];
         if ($extern) {
@@ -197,6 +201,36 @@ class GpAromaBackfillService
 
         return $this->basis($scope)->join('foodalchemist_gp_taste_vectors AS t', 't.gp_id', '=', 'g.id')
             ->whereIn('t.source', $gp)->where('t.source', '!=', 'manual')
+            ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /**
+     * GPs mit KI-Anker ohne Paten-Kennzeichen (ai_inferred), eingegrenzt auf ein Zeitfenster der Mapping-Anlage und/oder eine GP-Liste.
+     * Ohne Eingrenzung kein Lauf: sonst würde jeder KI-Anker des Bestands neu bezahlt.
+     *
+     * @param  array<string, mixed>  $o
+     * @return list<int>
+     */
+    private function neuAnker(?Team $scope, array $o): array
+    {
+        $seit = ($o['neu_seit'] ?? null) ?: null;
+        $bis = ($o['neu_bis'] ?? null) ?: null;
+        $ids = array_values(array_map('intval', (array) ($o['neu_gp_ids'] ?? [])));
+        if ($seit === null && $bis === null && $ids === []) {
+            throw new \RuntimeException('anker_ki braucht neu_seit/neu_bis (Zeitfenster der Anker-Übernahme) oder neu_gp_ids.');
+        }
+        try {
+            $seit = $seit !== null ? \Illuminate\Support\Carbon::parse($seit) : null;
+            $bis = $bis !== null ? \Illuminate\Support\Carbon::parse($bis) : null;
+        } catch (\Throwable) {
+            throw new \RuntimeException('neu_seit/neu_bis: Zeitpunkt nicht lesbar (z. B. 2026-11-01 17:40).');
+        }
+
+        return $this->basis($scope)->whereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_gp_anchor_mappings AS m')
+            ->whereColumn('m.gp_id', 'g.id')->whereNull('m.deleted_at')->where('m.source', \Platform\FoodAlchemist\Support\AnkerQuelle::KI)
+            ->when($seit !== null, fn ($w) => $w->where('m.created_at', '>=', $seit))
+            ->when($bis !== null, fn ($w) => $w->where('m.created_at', '<=', $bis)))
+            ->when($ids !== [], fn ($q) => $q->whereIn('g.id', $ids))
             ->pluck('g.id')->map(fn ($v) => (int) $v)->all();
     }
 
@@ -312,10 +346,23 @@ class GpAromaBackfillService
      *
      * @param  list<int>  $gpIds
      * @param  list<int>  $rezeptIds
+     * @param  list<int>  $ankerIds  GPs, deren KI-Anker neu gefragt wird (`anker_ki`)
      */
-    private function neuSchaetzen(BulkEnrichService $bulk, Team $team, array $gpIds, array $rezeptIds, int $limit, bool $extern, string $protokoll, callable $ausgabe): int
+    private function neuSchaetzen(BulkEnrichService $bulk, Team $team, array $gpIds, array $rezeptIds, int $limit, bool $extern, string $protokoll, callable $ausgabe, array $ankerIds = []): int
     {
         $n = 0;
+        $ankerIds = array_values(array_filter($this->streueNachWg($ankerIds), fn ($id) => ($gp = FoodAlchemistGp::find($id)) !== null && app(GpAromaService::class)->anreicherbar($gp) && $gp->isOwnedBy($team)));
+        foreach ($limit > 0 ? array_slice($ankerIds, 0, $limit) : $ankerIds as $gpId) {
+            try {
+                $r = $extern
+                    ? app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->within(fn () => $bulk->nachziehenGp($team, [$gpId], ['anker'], 'backfill-neu', true))
+                    : $bulk->nachziehenGp($team, [$gpId], ['anker'], 'backfill-neu', true);
+            } catch (\Throwable $e) {
+                $r = ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+            }
+            File::append($protokoll, json_encode(['gp_id' => $gpId, 'schritte' => ['anker-neu'], 'zeit' => now()->toIso8601String()] + $r, JSON_UNESCAPED_UNICODE) . "\n");
+            $n++;
+        }
         $gpIds = array_values(array_filter($this->streueNachWg($gpIds), fn ($id) => ($gp = FoodAlchemistGp::find($id)) !== null && app(GpAromaService::class)->anreicherbar($gp) && $gp->isOwnedBy($team)));
         foreach ($limit > 0 ? array_slice($gpIds, 0, $limit) : $gpIds as $gpId) {
             try {

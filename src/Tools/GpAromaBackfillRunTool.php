@@ -44,9 +44,14 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             'properties' => [
                 'nur' => ['type' => 'string', 'enum' => ['anker', 'profil', 'beide'], 'default' => 'beide', 'description' => 'Was nachgezogen wird.'],
                 'nur_geschwister' => ['type' => 'boolean', 'default' => false, 'description' => 'Nur den kostenlosen Geschwister-Teil, keine KI.'],
-                'neu_schaetzen' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral']],
+                'neu_schaetzen' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral', 'anker_ki']],
                     'description' => 'Vorhandene Profile dieser Quellen neu schätzen und überschreiben (manuell wird nie angefasst). anker_neutral = die Anker-Frage '
-                        . 'für GPs mit „geprüft, kein Anker" erneut stellen (sie zählen sonst nicht als Lücke).'],
+                        . 'für GPs mit „geprüft, kein Anker" erneut stellen (sie zählen sonst nicht als Lücke). anker_ki = KI-Anker ohne Paten-Kennzeichen '
+                        . '(Quelle ai_inferred) erneut fragen, z. B. Antworten auf eine alte Prompt-Fassung; nur mit neu_seit/neu_bis oder neu_gp_ids. '
+                        . 'Die neue Antwort ersetzt den alten KI-Anker, auch „neutral"; Katalog-, Paket- und Hand-Anker bleiben.'],
+                'neu_seit' => ['type' => 'string', 'description' => 'anker_ki: nur Anker, die ab diesem Zeitpunkt übernommen wurden (Serverzeit, z. B. 2026-11-01 17:40).'],
+                'neu_bis' => ['type' => 'string', 'description' => 'anker_ki: nur Anker, die bis zu diesem Zeitpunkt übernommen wurden.'],
+                'neu_gp_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'anker_ki: nur diese GPs.'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::LIMIT_MAX, 'default' => self::LIMIT_STANDARD,
                     'description' => 'Höchstens so viele GPs je Aufruf in den KI-Teil (Standard ' . self::LIMIT_STANDARD . ', max ' . self::LIMIT_MAX . ').'],
                 'apply' => ['type' => 'boolean', 'default' => false, 'description' => 'true = schreiben (Geschwister) und KI-Aufträge anlegen; false = Trockenlauf.'],
@@ -68,8 +73,8 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error('nur muss anker, profil oder beide sein.', 'VALIDATION_ERROR');
         }
         $neu = array_values(array_unique(array_map('strval', (array) ($arguments['neu_schaetzen'] ?? []))));
-        if (array_diff($neu, ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral']) !== []) {
-            return ToolResult::error('neu_schaetzen erlaubt nur ai, geschwister, gemini, rule, anker_neutral (ein manuelles Profil wird nie neu geschätzt).', 'VALIDATION_ERROR');
+        if (array_diff($neu, ['ai', 'geschwister', 'gemini', 'rule', 'anker_neutral', 'anker_ki']) !== []) {
+            return ToolResult::error('neu_schaetzen erlaubt nur ai, geschwister, gemini, rule, anker_neutral, anker_ki (ein manuelles Profil wird nie neu geschätzt).', 'VALIDATION_ERROR');
         }
         $limit = (int) ($arguments['limit'] ?? self::LIMIT_STANDARD);
         if ($limit < 1 || $limit > self::LIMIT_MAX) {
@@ -82,6 +87,8 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             $r = app(GpAromaBackfillService::class)->lauf($team, $context->user, [
                 'fuer_team' => true, 'nur' => $nur, 'apply' => $apply, 'nur_geschwister' => ($arguments['nur_geschwister'] ?? false) === true,
                 'limit' => $limit, 'extern' => $extern, 'neu_quellen' => $neu, 'chunk' => 25, 'pause' => 0,
+                'neu_seit' => isset($arguments['neu_seit']) ? (string) $arguments['neu_seit'] : null, 'neu_bis' => isset($arguments['neu_bis']) ? (string) $arguments['neu_bis'] : null,
+                'neu_gp_ids' => array_values(array_map('intval', (array) ($arguments['neu_gp_ids'] ?? []))),
             ]);
         } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
             return ToolResult::error('KI ist für dieses Team deaktiviert — der KI-Teil braucht sie. Mit nur_geschwister=true läuft der kostenlose Teil.', 'KI_DEAKTIVIERT');
@@ -102,6 +109,7 @@ class GpAromaBackfillRunTool extends FoodAlchemistTool implements ToolContract, 
             'geschwister' => $r['geschwister'],
             'ki_geplant' => $r['ki_geplant'],
             'ki_calls_dieser_lauf' => $r['ki_calls'],
+            'neu_schaetzen' => $r['neu'],                            // Trockenlauf: wie viele GPs (Profil/Anker) neu gefragt würden
             'kosten_schaetzung' => ['eur' => $r['kosten']['eur_unbekannt'] ? null : round($r['kosten']['eur'], 2), 'tokens_in' => (int) $r['kosten']['tin'], 'tokens_out' => (int) $r['kosten']['tout'], 'basis' => $r['kosten']['basis']],
             'geschwister_uebernommen' => $apply ? $r['geschrieben'] : null,
             'ki_teil' => $ki === null ? null : [

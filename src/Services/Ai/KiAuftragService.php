@@ -19,6 +19,9 @@ class KiAuftragService
 {
     public const TTL_STUNDEN = 24;
 
+    /** Features, deren Antwort für dasselbe Ziel auch bei geändertem Kontext gilt ({@see zumZiel()}); die Antwort prüft der Aufrufer wie immer. */
+    public const ZIEL_GILT = ['gp.anker', 'gp.sensorik'];
+
     /** @param array<int, array<string, mixed>> $messages @param array<string, mixed> $optionen */
     public function antwortOderAuftrag(string $feature, array $messages, array $optionen, array $audit = []): array
     {
@@ -30,7 +33,8 @@ class KiAuftragService
 
         $fertig = DB::table('foodalchemist_ki_auftraege')
             ->where('team_id', $teamId)->where('feature', $feature)->where('messages_hash', $hash)
-            ->where('status', 'beantwortet')->orderBy('id')->first();
+            ->where('status', 'beantwortet')->orderBy('id')->first()
+            ?? $this->zumZiel($teamId, $feature, $messages, $audit, 'beantwortet');
         if ($fertig !== null) {
             // einmalig verbrauchen: UPDATE mit Statusbedingung, damit zwei parallele Läufe nicht dieselbe Antwort ziehen
             $n = DB::table('foodalchemist_ki_auftraege')->where('id', $fertig->id)->where('status', 'beantwortet')
@@ -49,7 +53,8 @@ class KiAuftragService
 
         $offen = DB::table('foodalchemist_ki_auftraege')
             ->where('team_id', $teamId)->where('feature', $feature)->where('messages_hash', $hash)
-            ->where('status', 'offen')->where('laeuft_ab_at', '>', now())->first();
+            ->where('status', 'offen')->where('laeuft_ab_at', '>', now())->first()
+            ?? $this->zumZiel($teamId, $feature, $messages, $audit, 'offen');
         $modus = app(KiExternModus::class);
         if ($offen !== null) {
             $modus->meldeWartend($offen->uuid, $feature);
@@ -307,6 +312,50 @@ class KiAuftragService
             'doppelt' => $doppelt,
             'wiederholt' => $wiederholt,
         ];
+    }
+
+    /**
+     * io-Lauf 01.11.2026 (liegt_beantwortet 2 → 13): Bei {@see ZIEL_GILT} ändert sich der Kontext desselben Ziels zwischen zwei Runden —
+     * ein Geschwister bekommt sein Profil (`nachbarn`), ein Anker wird gesetzt (`kern_anker`), die semantische Vorauswahl schwankt an der
+     * Schnittkante. Der Fingerabdruck ist dann neu, die beantwortete Antwort bliebe liegen und das Ziel bekäme einen neuen Auftrag.
+     * Darum gilt dort ein Auftrag desselben Ziels mit DERSELBEN Anweisung (Prompt ohne den Kontext-Block) auch bei geändertem Kontext.
+     * Eine andere Anweisung (neue Prompt-Fassung nach einem Deploy) gilt nie: deren Antwortformat passt nicht.
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     * @param  array<string, mixed>  $audit
+     */
+    private function zumZiel(int $teamId, string $feature, array $messages, array $audit, string $status): ?object
+    {
+        if (! in_array($feature, self::ZIEL_GILT, true) || empty($audit['target_table']) || empty($audit['target_id'])) {
+            return null;
+        }
+        $vorlage = self::vorlage($messages);
+        $kandidaten = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('feature', $feature)
+            ->where('target_table', $audit['target_table'])->where('target_id', $audit['target_id'])->where('status', $status)
+            ->when($status === 'offen', fn ($q) => $q->where('laeuft_ab_at', '>', now()))
+            ->orderByDesc('id')->get();
+        foreach ($kandidaten as $k) {
+            if (self::vorlage((array) json_decode((string) $k->messages, true)) === $vorlage) {
+                return $k;                                           // die jüngste passende Antwort zuerst
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Anweisung ohne den Kontext-Block, den der Gateway hinter „Kontext:" anhängt ({@see AiGatewayService}).
+     *
+     * @param  array<int, array<string, mixed>>  $messages
+     */
+    public static function vorlage(array $messages): string
+    {
+        return hash('sha256', json_encode(array_map(function ($m) {
+            $text = is_array($m) ? (string) ($m['content'] ?? '') : '';
+            $pos = mb_strpos($text, "\n\nKontext:\n");
+
+            return [is_array($m) ? ($m['role'] ?? '') : '', $pos === false ? $text : mb_substr($text, 0, $pos)];
+        }, $messages), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     public static function hash(array $messages): string
