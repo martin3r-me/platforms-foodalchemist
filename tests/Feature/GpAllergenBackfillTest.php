@@ -73,6 +73,8 @@ it('dry-run schreibt nichts', function () {
     $gp = $this->makeGp($this->rootTeam, 'Trockentest');
     $gp->update(['status' => 'approved']);
     laMitGluten($this->rootTeam->id, $this->sup->id, $gp->id, 'enthalten');
+    // Altdaten-Stand: das sofortige Nachziehen beim Anlegen des LA-Profils (Observer) zurücksetzen — der Befehl soll im Trockenlauf nichts schreiben
+    \Illuminate\Support\Facades\DB::table('foodalchemist_gps')->where('id', $gp->id)->update(['allergens_confidence' => null]);
 
     $this->artisan('foodalchemist:gp-allergen-backfill', ['--team' => $this->rootTeam->id])->assertSuccessful();
     expect($gp->refresh()->allergens_confidence)->toBeNull();
