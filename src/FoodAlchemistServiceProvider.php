@@ -544,6 +544,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // RAG-Autoindex A3: Lieferartikel-Einzeledits synchron halten. Der Katalog-Bulk-Import
         // umgeht Eloquent → bleibt der explizite Backfill (foodalchemist:embed --pool=la).
         \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::observe(\Platform\FoodAlchemist\Observers\SupplierItemEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::observe(\Platform\FoodAlchemist\Observers\ItemAllergenKonfidenzObserver::class);   // Allergen-Konfidenz/Review sofort nachziehen
 
         // Ausbau (b): Ausgabe-/Container-Pools (Speisekarte/Angebot/Paket/Format) — Einzeledits
         // synchron; Bulk je Pool via foodalchemist:embed --pool=speisekarten|angebote|pakete|formate.

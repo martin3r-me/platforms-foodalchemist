@@ -165,6 +165,8 @@ enum SignalTyp: string
     case KiAuftraegeOffen = 'ki_auftraege_offen';
     // Link-Stufe 2d: Zertifikate eines Lieferanten (IFS, BRC, Bio …) laufen ab oder sind abgelaufen. Ein Signal je Team und Lieferant, schließt sich selbst.
     case ZertifikatLaeuftAb = 'zertifikat_laeuft_ab';
+    // Regelwerk LA §10: lieferbare Artikel EINES Grundprodukts widersprechen sich bei einem Allergen (enthalten ↔ nicht enthalten, Spuren zählen nicht). Summen-Signal je Team.
+    case GpAllergenWiderspruch = 'gp_allergen_widerspruch';
     // Spec 93 C · Trend-Automatik: Ereignisse (je Team und Ereignis ein Signal, schließen sich selbst), Quellen-Zustand, Pinnwand-Vorschlag.
     case TrendradarNeuerHype = 'trendradar_neuer_hype';
     case TrendradarNeuerTrend = 'trendradar_neuer_trend';
@@ -186,6 +188,7 @@ enum SignalTyp: string
             self::MarkenNachlauf => 'Marke offen bei Rezepturware',
             self::KiAuftraegeOffen => 'KI-Aufträge warten auf Antwort',
             self::ZertifikatLaeuftAb => 'Zertifikat läuft ab',
+            self::GpAllergenWiderspruch => 'Grundprodukte mit Allergen-Widerspruch',
             self::TrendradarNeuerHype => 'Neuer Hype erkannt',
             self::TrendradarNeuerTrend => 'Neuer Trend erkannt',
             self::TrendradarHypeWirdTrend => 'Hype wird Trend',
@@ -262,6 +265,7 @@ enum SignalTyp: string
             self::MarkenNachlauf => 'heroicon-o-tag',
             self::KiAuftraegeOffen => 'heroicon-o-clock',
             self::ZertifikatLaeuftAb => 'heroicon-o-shield-check',
+            self::GpAllergenWiderspruch => 'heroicon-o-exclamation-triangle',
             self::TrendradarNeuerHype => 'heroicon-o-bolt',
             self::TrendradarNeuerTrend => 'heroicon-o-arrow-trending-up',
             self::TrendradarHypeWirdTrend => 'heroicon-o-arrow-up-circle',
