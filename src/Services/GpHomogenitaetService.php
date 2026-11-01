@@ -90,6 +90,9 @@ class GpHomogenitaetService
                     }
                 }
                 foreach (FoodAlchemistItemDeclaration::STOFFE as $feld => $label) {
+                    if (! DeklarationsProfil::zaehlt($feld)) {
+                        continue;   // reine Verpackungsangabe (Schutzatmosphäre): kein Produktunterschied
+                    }
                     $werte = $artikel->map(fn ($z) => (int) ($stoffe->get($z->supplier_item_id)?->{$feld}))->all();
                     if (in_array(1, $werte, true) && in_array(3, $werte, true)) {
                         $abw[] = 'Zusatzstoff „' . $label . '“';
