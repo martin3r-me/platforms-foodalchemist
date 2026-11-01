@@ -150,3 +150,35 @@ it('Lieferanten am Handy: Server-Sperre lässt nur Auswahl, Zurück, Artikel-Kar
         ->assertSeeHtml('data-artikel-tabelle')->assertSeeHtml('data-supplier-liste')->assertDontSeeHtml('data-fa-handy-lieferanten')
         ->assertSet('supplierId', $this->metro->id);                       // Computer: erster Lieferant vorgewählt wie bisher
 });
+
+it('Fund 01.11.: GP-Detail am Handy öffnet die Lese-Artikelkarte statt „Artikel bearbeiten“; Bearbeiten-Teile als Ändern markiert und am Server gesperrt', function () {
+    $karte = route('foodalchemist.suppliers.index', ['artikel' => $this->butter->id]);
+
+    amHandy(GpDetail::class)->call('zeige', $this->gp->id)
+        ->assertSeeHtml("Livewire.navigate('" . $karte . "')")
+        ->assertDontSeeHtml("item-modal.oeffnen', { id: " . $this->butter->id)
+        ->assertSeeHtml('data-lead-stern data-fa-aendern="gp.lead-setzen"')
+        ->assertSeeHtml('data-la-aktionen data-fa-aendern="gp.artikel-aktionen"');
+
+    Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(GpDetail::class)->call('zeige', $this->gp->id)
+        ->assertSeeHtml("item-modal.oeffnen', { id: " . $this->butter->id)
+        ->assertDontSeeHtml('Livewire.navigate(');
+
+    // Ziel des Links: ?artikel= öffnet am Handy direkt die Artikel-Karte
+    Livewire::withCookie(HandyLesemodus::COOKIE, '1')->withQueryParams(['artikel' => $this->butter->id])->test(LieferantenIndex::class)
+        ->assertSeeHtml('data-fa-handy-artikel-karte="' . $this->butter->id . '"')->assertSee('5,00 €');
+
+    request()->cookies->set(HandyLesemodus::COOKIE, '1');
+    foreach (['leadSetzen', 'verknuepfe', 'pinToggle', 'sperreToggle', 'loesen', 'laVorschlaege'] as $gesperrt) {
+        expect(HandyLesemodus::abgewiesen(new GpDetail, $gesperrt))->toBeTrue();
+    }
+    request()->cookies->set(HandyLesemodus::COOKIE, '0');
+});
+
+it('Fund 01.11.: Lead-Grund und „Artikel verknüpfen“ tragen die Ändern-Markierung (am Handy aus)', function () {
+    $view = file_get_contents(__DIR__ . '/../../resources/views/livewire/gps/detail-panel.blade.php');
+
+    expect($view)->toContain("HandyLesemodus::attr('gp.lead-grund')")
+        ->toContain("data-la-verknuepfen {{ \\Platform\\FoodAlchemist\\Support\\HandyLesemodus::attr('gp.artikel-verknuepfen') }}")
+        ->toContain("data-la-kandidaten {{ \\Platform\\FoodAlchemist\\Support\\HandyLesemodus::attr('gp.artikel-verknuepfen') }}");
+});

@@ -30,7 +30,8 @@ class Index extends Component
         return ['waehleLieferant', 'handyZurueck', 'handyArtikel', 'gpGespeichert', 'nextPage', 'previousPage', 'gotoPage', 'setPage', 'resetPage'];
     }
 
-    /** #1003: am Handy geöffnete Artikel-Karte (Stufe 3). */
+    /** #1003: am Handy geöffnete Artikel-Karte (Stufe 3). In der URL (?artikel=), damit das GP-Detail am Handy dieselbe Lese-Karte öffnet. */
+    #[Url(as: 'artikel')]
     public ?int $handyArtikelId = null;
 
     public function handyArtikel(int $id): void

@@ -6,6 +6,8 @@
      Die Editor-Karteien im GP-Dialog (embedded, section=las|allergene|zusatzstoffe|naehrwerte|ersatz)
      laufen über dieselben @if($section)-Guards wie vorher. --}}
 @php
+    // #1003: am Handy öffnet eine Artikel-Zeile die Lese-Artikelkarte der Lieferanten-Seite statt des Desktop-Dialogs „Artikel bearbeiten“
+    $handyArtikelLink = \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy();
     $tagLabels = [
         'is_vegan' => 'vegan', 'is_vegetarian' => 'vegetarisch', 'is_halal' => 'halal',
         'contains_pork' => 'enthält Schwein', 'contains_beef' => 'enthält Rind',
@@ -324,7 +326,9 @@
                         <p class="text-[var(--fa-ink-3)]" data-ausweichquellen>{{ count($leadSteuerung['ausweichquellen']) }} {{ count($leadSteuerung['ausweichquellen']) === 1 ? 'Ausweichquelle' : 'Ausweichquellen' }}: {{ collect($leadSteuerung['ausweichquellen'])->pluck('supplier')->filter()->take(3)->implode(', ') ?: '–' }}</p>
                     @endif
                     @if($kannKuratieren)
-                        <x-fa::input size="sm" wire:model="leadReason" maxlength="255" placeholder="Grund für einen Lead von Hand (optional)" aria-label="Grund für einen Lead von Hand" data-lead-reason-input />
+                        <div {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('gp.lead-grund') }}>
+                            <x-fa::input size="sm" wire:model="leadReason" maxlength="255" placeholder="Grund für einen Lead von Hand (optional)" aria-label="Grund für einen Lead von Hand" data-lead-reason-input />
+                        </div>
                     @endif
                 </div>
             @endif
@@ -339,10 +343,10 @@
                             <button type="button" wire:click="leadSetzen({{ $la->id }})"
                                     class="shrink-0 mt-px transition-colors {{ $istLead ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink-3)] hover:text-[var(--fa-accent)]' }}"
                                     aria-label="{{ $istLead ? 'Lead-Artikel' : 'Als Lead setzen' }}"
-                                    title="{{ $istLead ? 'Lead-Artikel für dein Team' : 'Als Lead setzen (nur Kurations-Team)' }}" data-lead-stern>
+                                    title="{{ $istLead ? 'Lead-Artikel für dein Team' : 'Als Lead setzen (nur Kurations-Team)' }}" data-lead-stern {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('gp.lead-setzen') }}>
                                 @svg($istLead ? 'heroicon-s-star' : 'heroicon-o-star', 'w-[18px] h-[18px]')
                             </button>
-                            <div class="min-w-0 flex-1 cursor-pointer" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })" title="Artikel öffnen, Allergene und Preise dort pflegen" data-la-oeffnen>
+                            <div class="min-w-0 flex-1 cursor-pointer" @if($handyArtikelLink) x-on:click="Livewire.navigate('{{ route('foodalchemist.suppliers.index', ['artikel' => $la->id]) }}')" title="Artikel ansehen" @else wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })" title="Artikel öffnen, Allergene und Preise dort pflegen" @endif data-la-oeffnen>
                                 <p class="text-[length:var(--fa-text-md)] font-medium leading-snug text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline">{{ $la->designation }}</p>
                                 <p class="mt-0.5 {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }}@if($la->qty !== null && $la->unit_code !== null) · <x-fa::menge :value="$la->qty" :unit="$la->unit_code" />@endif @if(filled($la->article_number)) · <span data-la-artnr>Art.-Nr. {{ $la->article_number }}</span>@endif</p>
                                 @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->locked || ($la->lieferant_inaktiv ?? false))
@@ -386,7 +390,7 @@
                                 @endif
                             </div>
                         </div>
-                        <div class="hidden group-hover:flex group-focus-within:flex flex-wrap items-center gap-1 mt-2 ml-7" data-la-aktionen>
+                        <div class="hidden group-hover:flex group-focus-within:flex flex-wrap items-center gap-1 mt-2 ml-7" data-la-aktionen {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('gp.artikel-aktionen') }}>
                             <x-fa::button size="sm" variant="ghost" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})">{{ $la->gepinnt ? 'Nicht mehr anheften' : 'Anheften' }}</x-fa::button>
                             <x-fa::button size="sm" variant="ghost" wire:click="sperreToggle({{ $la->id }}, {{ $la->locked ? 'false' : 'true' }})">{{ $la->locked ? 'Entsperren' : 'Sperren' }}</x-fa::button>
                             @if($kannKuratieren)
@@ -403,7 +407,7 @@
                 @endforelse
 
                 @if($laKandidaten !== null)
-                    <div class="flex flex-col gap-1 p-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)]" data-la-kandidaten>
+                    <div class="flex flex-col gap-1 p-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)]" data-la-kandidaten {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('gp.artikel-verknuepfen') }}>
                         <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">@svg('heroicon-m-sparkles', 'w-4 h-4 text-[var(--fa-accent)]') Passende Artikel ohne Zuordnung <span class="font-normal text-[var(--fa-ink-3)]">Klick verknüpft</span></p>
                         @foreach($laKandidaten as $kandidat)
                             <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})" class="{{ $listenKnopf }} hover:bg-[var(--fa-surface)]">
@@ -416,7 +420,7 @@
                 @endif
 
                 @if($kannKuratieren)
-                    <div class="flex flex-col gap-1 pt-1" data-la-verknuepfen>
+                    <div class="flex flex-col gap-1 pt-1" data-la-verknuepfen {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('gp.artikel-verknuepfen') }}>
                         <div class="relative">
                             @svg('heroicon-m-plus', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
                             <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Artikel verknüpfen: Bezeichnung, Artikelnummer oder Marke" aria-label="Lieferantenartikel suchen und verknüpfen" class="pl-8" />
