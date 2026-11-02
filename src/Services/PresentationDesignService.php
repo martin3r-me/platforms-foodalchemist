@@ -301,7 +301,70 @@ class PresentationDesignService
             $tokens = $this->deepMerge($tokens, $settings['tokens']);
         }
 
+        // Spec 94: Schrift auf Primärflächen (CTA, Weiter, gewählte Chips) aus den Design-Farben mit dem besten Kontrast —
+        // nie fest Weiß. Gilt für jedes Design, auch eigene und dunkle.
+        $pal = is_array($tokens['palette'] ?? null) ? $tokens['palette'] : [];
+        $tokens['palette']['on_primary'] = self::schriftAuf((string) ($pal['primary'] ?? '#6d28d9'), [(string) ($pal['bg'] ?? ''), (string) ($pal['text'] ?? '')]);
+
         return $tokens;
+    }
+
+    /** Kontrastverhältnis nach WCAG (1–21) zweier Farben (#rgb, #rrggbb, rgb()/rgba()); null, wenn eine nicht lesbar ist. */
+    public static function kontrast(string $a, string $b): ?float
+    {
+        $la = self::luminanz($a);
+        $lb = self::luminanz($b);
+        if ($la === null || $lb === null) {
+            return null;
+        }
+
+        return (max($la, $lb) + 0.05) / (min($la, $lb) + 0.05);
+    }
+
+    /**
+     * Schriftfarbe für eine Fläche: der Kandidat aus dem Design mit dem höchsten Kontrast; erreicht keiner 4,5,
+     * dann Schwarz oder Weiß, je nachdem, was mehr Kontrast bringt.
+     *
+     * @param  list<string>  $kandidaten
+     */
+    public static function schriftAuf(string $flaeche, array $kandidaten): string
+    {
+        $beste = null;
+        $besterWert = 0.0;
+        foreach (array_filter($kandidaten) as $k) {
+            $w = self::kontrast($flaeche, $k);
+            if ($w !== null && $w > $besterWert) {
+                [$beste, $besterWert] = [$k, $w];
+            }
+        }
+        if ($beste !== null && $besterWert >= 4.5) {
+            return $beste;
+        }
+        $weiss = self::kontrast($flaeche, '#ffffff') ?? 21.0;
+        $schwarz = self::kontrast($flaeche, '#111111') ?? 1.0;
+
+        return $weiss >= $schwarz ? '#ffffff' : '#111111';
+    }
+
+    private static function luminanz(string $farbe): ?float
+    {
+        $f = strtolower(trim($farbe));
+        if (preg_match('/^#([0-9a-f]{3})$/', $f, $m)) {
+            $rgb = array_map(fn ($c) => hexdec($c . $c), str_split($m[1]));
+        } elseif (preg_match('/^#([0-9a-f]{6})([0-9a-f]{2})?$/', $f, $m)) {
+            $rgb = array_map('hexdec', str_split($m[1], 2));
+        } elseif (preg_match('/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/', $f, $m)) {
+            $rgb = [(int) $m[1], (int) $m[2], (int) $m[3]];
+        } else {
+            return null;
+        }
+        $lin = array_map(function ($c) {
+            $c = $c / 255;
+
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        }, $rgb);
+
+        return 0.2126 * $lin[0] + 0.7152 * $lin[1] + 0.0722 * $lin[2];
     }
 
     /** Sandboxed Custom-CSS des Designs (Stufe 2 „Leinwand via Code"); built-ins tragen keins. */

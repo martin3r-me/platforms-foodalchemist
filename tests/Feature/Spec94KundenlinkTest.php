@@ -166,3 +166,17 @@ it('Stufe 5: keine festen Farben und kein !important in den Konfigurator-Partial
     }
 });
 
+it('Kontrast: Schrift auf Primärflächen (CTA, Weiter) erreicht in jedem eingebauten Design mindestens 4,5', function () {
+    $designs = app(PresentationDesignService::class);
+    foreach (PresentationDesignService::BUILTIN_SLUGS as $slug) {
+        $t = $designs->resolveTokens($slug, $this->rootTeam);
+        $k = PresentationDesignService::kontrast($t['palette']['primary'], $t['palette']['on_primary']);
+        expect($k)->not->toBeNull($slug)->and($k)->toBeGreaterThanOrEqual(4.5, $slug . ': ' . $t['palette']['primary'] . ' / ' . $t['palette']['on_primary']);
+    }
+    // eigene, kontrastarme Palette: fällt auf Schwarz/Weiß zurück
+    expect(PresentationDesignService::schriftAuf('#f2efe9', ['#ffffff']))->toBe('#111111');
+    // der öffentliche Link setzt die Variable, die CTA nutzt sie (kein festes Weiß)
+    $html = $this->get($this->link['url'])->getContent();
+    expect($html)->toContain('--pt-on-primary:')->toMatch('/\.pt-cta-btn \{[^}]*color: var\(--pt-on-primary\)/');
+});
+
