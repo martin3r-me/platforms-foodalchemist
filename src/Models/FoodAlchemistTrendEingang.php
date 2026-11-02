@@ -30,7 +30,7 @@ class FoodAlchemistTrendEingang extends Model
     /** Spec 93 E: Link zum Anzeigen — ohne das interne Fragment `#signal=…` eines Einzelsignals (das bleibt nur im gespeicherten url). */
     public function link(): string
     {
-        return (string) preg_replace('/#signal=[^#]*$/', '', (string) $this->url);
+        return \Platform\FoodAlchemist\Support\TrendUrl::ohneSignal($this->url);
     }
 
     public function quelle(): BelongsTo

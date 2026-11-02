@@ -1,5 +1,5 @@
 {{-- #1003 Teil 8 · Trendradar am Handy (Concerns\HandyTrendsLesen): Reiter Trends (Karten nach Ebene oder Kategorie) |
-     Pinnwand (Fundstücke mit Bild, „Fundstück ablegen“ bedienbar) → Trend lesbar über die ganze Breite. Keine Einordnung,
+     Themen (Spec 93: automatische Themen + Pinnwand-Karten, nur lesen) | Pinnwand (Fundstücke mit Bild, „Fundstück ablegen“ bedienbar) → Trend lesbar über die ganze Breite. Keine Einordnung,
      keine Belege anhängen, kein Status, kein Messen. Das Radar bleibt am Computer (bei 375 px nicht eindeutig antippbar). --}}
 @php
     use Platform\FoodAlchemist\Support\TrendVokabular as V;
@@ -97,19 +97,77 @@
             </article>
         @elseif($trendFehlt)
             <x-fa::empty compact icon="heroicon-o-signal" title="Trend nicht verfügbar">Er ist für diesen Mandanten nicht sichtbar oder wurde gelöscht.</x-fa::empty>
+        @elseif($thema !== null || $themaFehlt)
+            {{-- Spec 93 · Thema lesbar: Belege mit Quelle und Link, keine Einordnung, kein Entscheiden --}}
+            <button type="button" wire:click="$set('handyThemaId', null)" class="-ml-1 inline-flex items-center gap-1 min-h-11 pr-3 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-accent)]" data-fa-handy-thema-zurueck>
+                @svg('heroicon-m-chevron-left', 'w-5 h-5') Zurück
+            </button>
+            @if($thema !== null)
+                <article class="space-y-4 min-w-0 wrap-anywhere" data-fa-handy-thema="{{ $thema->id }}">
+                    <div>
+                        <h1 class="text-[length:var(--fa-text-2xl)] font-semibold leading-tight text-[var(--fa-ink)]">{{ $thema->titel }}</h1>
+                        <p class="{{ $leise }}">{{ $thema->herkunft === 'automatisch' ? 'Automatisches Thema aus dem Eingang' : 'Pinnwand' }}@if($thema->trend) · Trend: {{ $thema->trend->name }}@endif</p>
+                    </div>
+                    <section class="space-y-2" data-fa-handy-thema-belege>
+                        <h2 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Belege <span class="font-normal {{ $leise }}">{{ $themaBelege->count() }}</span></h2>
+                        <ul class="{{ $liste }}">
+                            @forelse($themaBelege as $eintrag)
+                                @php $b = $eintrag['b']; @endphp
+                                <li class="px-4 py-3 space-y-1" wire:key="htb-{{ $b->id }}">
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <x-fa::badge>{{ V::QUELLEN[$b->quelle] ?? $b->quelle }}</x-fa::badge>
+                                        @if($b->fundort)<span class="{{ $leise }}">{{ $b->fundort }}</span>@endif
+                                        @if($b->beobachtet_am)<span class="{{ $leise }}">{{ $b->beobachtet_am->format('d.m.Y') }}</span>@endif
+                                    </div>
+                                    @if($b->titel)<p class="text-[var(--fa-ink)]">{{ $b->titel }}</p>@endif
+                                    @if($b->notiz)<p class="{{ $leise }}">{{ $b->notiz }}</p>@endif
+                                    <div class="flex flex-wrap gap-x-4">
+                                        @if($eintrag['link'])<a href="{{ $eintrag['link'] }}" target="_blank" rel="noopener" class="inline-flex items-center min-h-11 text-[var(--fa-accent)] underline">Link öffnen</a>@endif
+                                        @if($eintrag['url'])<a href="{{ $eintrag['url'] }}" target="_blank" rel="noopener" class="inline-flex items-center min-h-11 text-[var(--fa-accent)] underline">{{ $b->datei_name ?: 'Datei öffnen' }}</a>@endif
+                                    </div>
+                                </li>
+                            @empty
+                                <li class="px-4 py-3 {{ $leise }}">Noch kein Beleg.</li>
+                            @endforelse
+                        </ul>
+                    </section>
+                </article>
+            @else
+                <x-fa::empty compact icon="heroicon-o-light-bulb" title="Thema nicht verfügbar">Es ist für diesen Mandanten nicht sichtbar oder wurde gelöscht.</x-fa::empty>
+            @endif
         @else
             <h1 class="text-[length:var(--fa-text-2xl)] font-semibold text-[var(--fa-ink)]">Trendradar</h1>
             <div role="tablist" aria-label="Ansicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-fa-handy-reiter>
-                @foreach(['trends' => 'Trends', 'pinnwand' => 'Pinnwand'] as $rk => $rt)
+                @foreach(['trends' => 'Trends', 'themen' => 'Themen', 'pinnwand' => 'Pinnwand'] as $rk => $rt)
                     <button type="button" role="tab" wire:click="$set('handyReiter', '{{ $rk }}')" aria-selected="{{ $reiter === $rk ? 'true' : 'false' }}"
                             class="flex-1 min-h-11 rounded-[5px] text-[length:var(--fa-text-md)] font-medium {{ $reiter === $rk ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)]' }}">{{ $rt }}</button>
                 @endforeach
             </div>
-            <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $reiter === 'pinnwand' ? 'Fundstück suchen' : 'Trend suchen' }}" aria-label="Suchen"
+            <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ ['pinnwand' => 'Fundstück suchen', 'themen' => 'Thema suchen'][$reiter] ?? 'Trend suchen' }}" aria-label="Suchen"
                    class="fa-control h-12 text-[length:var(--fa-text-base)]" data-fa-handy-suche>
 
             @if($reiter === 'pinnwand')
                 @include('foodalchemist::livewire.handy.trend-pinnwand')
+            @elseif($reiter === 'themen')
+                <ul class="{{ $liste }}" data-fa-handy-themen>
+                    @forelse($themen as $z)
+                        @php $i = $z['i']; @endphp
+                        <li wire:key="hth-{{ $i->id }}">
+                            <button type="button" wire:click="$set('handyThemaId', {{ $i->id }})" class="flex w-full items-center gap-3 px-4 py-3 min-h-[60px] text-left" data-fa-handy-thema-karte="{{ $i->id }}">
+                                <span class="min-w-0 flex-1 space-y-1">
+                                    <span class="block font-medium leading-snug text-[var(--fa-ink)] wrap-anywhere">{{ $i->titel }}</span>
+                                    <span class="block {{ $leise }}">{{ $z['belege'] }} {{ $z['belege'] === 1 ? 'Beleg' : 'Belege' }}@if($z['beitraege'] !== $z['belege']) · {{ $z['beitraege'] }} {{ $z['beitraege'] === 1 ? 'Beitrag' : 'Beiträge' }}@endif{{ $i->herkunft === 'manuell' ? ' · Pinnwand' : '' }}</span>
+                                    @if($z['arten'] !== [])
+                                        <span class="flex flex-wrap gap-1">@foreach($z['arten'] as $art)<x-fa::badge>{{ V::QUELLEN[$art] ?? $art }}</x-fa::badge>@endforeach</span>
+                                    @endif
+                                </span>
+                                @svg('heroicon-m-chevron-right', 'w-5 h-5 shrink-0 text-[var(--fa-ink-3)]')
+                            </button>
+                        </li>
+                    @empty
+                        <li class="px-4 py-3 {{ $leise }}">Noch keine Themen.</li>
+                    @endforelse
+                </ul>
             @else
                 <div class="flex gap-2">
                     <select wire:model.live="handyGruppe" aria-label="Gruppieren" class="fa-select h-11 flex-1 min-w-0" data-fa-handy-gruppe>

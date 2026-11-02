@@ -8,7 +8,8 @@ use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
 /**
  * #1003 Teil 8 · Trendradar am Handy (Trendradar\Index). Reiter Trends (Karten, gruppiert nach Ebene oder Kategorie) ·
- * Pinnwand (Fundstücke mit Bild). Antippen öffnet den Trend lesbar über die ganze Breite. Das Radar bleibt am Computer:
+ * Themen (Spec 93: automatische Themen aus dem Eingang und Pinnwand-Karten mit Belegen, nur lesen; der Eingang selbst bleibt
+ * am Computer) · Pinnwand (Fundstücke mit Bild). Antippen öffnet den Trend lesbar über die ganze Breite. Das Radar bleibt am Computer:
  * bei 375 px liegen schon 25 Punkte nur 17,6 px auseinander — keine eindeutige Tippfläche (Befund 30.10.).
  * Dieselbe Sicht wie am Computer (TrendService::liste / inspirationen, gewaehlt() über visibleToTeam).
  *
@@ -22,8 +23,11 @@ trait HandyTrendsLesen
 {
     use HandyLesebereich;
 
-    /** Reiter am Handy: trends | pinnwand. */
+    /** Reiter am Handy: trends | themen | pinnwand. */
     public string $handyReiter = 'trends';
+
+    /** Spec 93 · Thema (Inspiration) im Reiter „Themen“, lesbar über die ganze Breite; null = Liste. */
+    public ?int $handyThemaId = null;
 
     /** Gruppierung der Trend-Karten: ebene | kategorie. */
     public string $handyGruppe = 'ebene';
@@ -72,9 +76,22 @@ trait HandyTrendsLesen
     {
         $team = $this->team();
         $gewaehlt = $this->gewaehlt();
-        $reiter = in_array($this->handyReiter, ['trends', 'pinnwand'], true) ? $this->handyReiter : 'trends';
+        $reiter = in_array($this->handyReiter, ['trends', 'themen', 'pinnwand'], true) ? $this->handyReiter : 'trends';
         $gruppe = $this->handyGruppe === 'kategorie' ? 'kategorie' : 'ebene';
-        $trends = $gewaehlt !== null || $reiter === 'pinnwand' ? collect()
+        // Spec 93 · Reiter „Themen“: automatische Themen aus dem Eingang und Pinnwand-Karten des Teams, nur lesen (Sicht über visibleToTeam
+        // wie am Computer). Jüngste Sichtung zuerst; Belege-Links ohne das interne #signal=-Fragment.
+        $themaBasis = fn () => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::visibleToTeam($team)->whereIn('herkunft', ['automatisch', 'manuell']);
+        $thema = $gewaehlt === null && $reiter === 'themen' && $this->handyThemaId !== null
+            ? $themaBasis()->with(['quellen', 'trend:id,name'])->find($this->handyThemaId) : null;
+        $themen = $gewaehlt === null && $reiter === 'themen' && $this->handyThemaId === null
+            ? $themaBasis()->with('quellen:id,inspiration_id,quelle,url,beobachtet_am')->withMax('quellen', 'beobachtet_am')
+                ->when(trim((string) $this->suche) !== '', fn ($q) => $q->where('titel', 'like', '%'.trim((string) $this->suche).'%'))
+                ->orderByDesc('quellen_max_beobachtet_am')->orderByDesc('updated_at')->limit(100)->get()
+                ->map(fn ($i) => ['i' => $i, 'belege' => $i->quellen->count(),
+                    'beitraege' => $i->quellen->map(fn ($b) => $b->url ? \Platform\FoodAlchemist\Support\TrendUrl::ohneSignal($b->url) : 'beleg:'.$b->id)->unique()->count(),
+                    'arten' => $i->quellen->pluck('quelle')->unique()->sort()->values()->all()])
+            : collect();
+        $trends = $gewaehlt !== null || $reiter !== 'trends' ? collect()
             : $svc->liste($team, ['suche' => $this->suche, 'status' => $this->statusFilter !== '' ? [$this->statusFilter] : []]);
         $labels = $gruppe === 'kategorie' ? V::KATEGORIEN : V::EBENEN;
 
@@ -83,6 +100,10 @@ trait HandyTrendsLesen
             'gruppe' => $gruppe,
             'gewaehlt' => $gewaehlt,
             'trendFehlt' => $this->selectedId !== null && $gewaehlt === null,
+            'themen' => $themen,
+            'thema' => $thema,
+            'themaFehlt' => $gewaehlt === null && $reiter === 'themen' && $this->handyThemaId !== null && $thema === null,
+            'themaBelege' => $thema ? $thema->quellen->map(fn ($b) => ['b' => $b, 'link' => $b->url ? \Platform\FoodAlchemist\Support\TrendUrl::ohneSignal($b->url) : null, 'url' => $svc->dateiUrl($b)]) : collect(),
             'trends' => $trends,
             // Karten-Gruppen in der Reihenfolge des Vokabulars (Ebene innen → außen), „nicht eingeordnet“ zuletzt
             'gruppen' => collect($labels)->map(fn ($label, $key) => ['label' => $label, 'trends' => $trends->filter(fn ($t) => $t->{$gruppe} === $key)->values()])

@@ -44,6 +44,12 @@ final class TrendUrl
         return $schema.'://'.$host.$port.$pfad.$query;
     }
 
+    /** Spec 93 E: Link zum Anzeigen ohne das interne Fragment `#signal=…` eines Einzelsignals; andere Fragmente bleiben. */
+    public static function ohneSignal(?string $url): string
+    {
+        return (string) preg_replace('/#signal=[^#]*$/', '', (string) $url);
+    }
+
     public static function hash(string $url): string
     {
         return hash('sha256', self::normalisieren($url));
