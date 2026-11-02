@@ -303,6 +303,12 @@ return [
                     'icon'  => 'heroicon-o-document-text',
                 ],
                 [
+                    // Spec 94: All-in-Preise je Concept und Pax-Paket als Kundenlink
+                    'label' => 'Konfiguratoren',
+                    'route' => 'foodalchemist.angebote.konfiguratoren',
+                    'icon'  => 'heroicon-o-adjustments-horizontal',
+                ],
+                [
                     // Spec 94: Personal, Equipment, Logistik einmal pflegen — Konfiguratoren übernehmen sie als Kopie.
                     'label' => 'Leistungs-Vorlagen',
                     'route' => 'foodalchemist.angebote.leistung_vorlagen',

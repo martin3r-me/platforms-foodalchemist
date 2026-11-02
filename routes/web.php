@@ -457,6 +457,8 @@ Route::get('/angebote', \Platform\FoodAlchemist\Livewire\Angebote\Index::class)
  */
 Route::get('/angebote/leistung-vorlagen', \Platform\FoodAlchemist\Livewire\Angebote\LeistungVorlagen::class)
     ->name('foodalchemist.angebote.leistung_vorlagen');
+Route::get('/angebote/konfiguratoren', \Platform\FoodAlchemist\Livewire\Angebote\Konfiguratoren::class)
+    ->name('foodalchemist.angebote.konfiguratoren');
 
 /**
  * #384: Versendbares Angebots-Dokument — Druck-HTML; ?pdf=1 = PDF-Download (DomPDF, guarded).
