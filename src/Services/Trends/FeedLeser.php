@@ -192,8 +192,18 @@ class FeedLeser
             'titel' => mb_substr($titel, 0, 500),
             'url' => $this->absolut($link, $basisUrl),
             'veroeffentlicht_am' => $this->datum($datum),
-            'teaser' => $this->kuerzen($this->saeubern($teaser)),
+            'teaser' => $this->kuerzen($this->ohneFusszeile($this->saeubern($teaser))),
         ];
+    }
+
+    /**
+     * WordPress hängt jedem Feed-Teaser „The post X appeared first on Y.“ an (deutsch: „Der Beitrag X erschien zuerst auf Y.“).
+     * Nur als letzter Satz weg — der Seitenname Y enthält kein Satzende, steht die Floskel mitten im Text, bleibt sie.
+     * Auch direkt nach einem Satzende: zwei <p> hintereinander verlieren beim Säubern das Leerzeichen.
+     */
+    private function ohneFusszeile(string $s): string
+    {
+        return trim(preg_replace('/(?:^|\s|(?<=[.!?…]))(The post .+? appeared first on|Der Beitrag .+? erschien zuerst auf) (?:(?!\.\s).){1,80}$/u', '', $s) ?? $s);
     }
 
     private function istArtikelPfad(string $pfad, ?string $query): bool
