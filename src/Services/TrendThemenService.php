@@ -2,6 +2,8 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
@@ -40,14 +42,7 @@ class TrendThemenService
         }
 
         return DB::transaction(function () use ($e, $thema, $schluessel) {
-            $insp = FoodAlchemistTrendInspiration::where('team_id', $e->team_id)->where('herkunft', 'automatisch')
-                ->where('thema_schluessel', $schluessel)->orderBy('id')->first();
-            if ($insp === null) {
-                $insp = FoodAlchemistTrendInspiration::create([
-                    'team_id' => $e->team_id, 'titel' => mb_substr($thema, 0, 255), 'herkunft' => 'automatisch',
-                    'thema_schluessel' => $schluessel, 'schlagworte' => null,
-                ]);
-            }
+            $insp = $this->themaZu((int) $e->team_id, $schluessel)->first() ?? $this->themaAnlegen((int) $e->team_id, $thema, $schluessel);
             $beleg = $this->beleg($e);
             if ($beleg === null) {
                 FoodAlchemistTrendBeleg::create([
@@ -93,11 +88,37 @@ class TrendThemenService
             ->withCount('quellen')->orderByDesc('updated_at')->limit($limit)->get();
     }
 
-    /** @return list<string> Namen der automatischen Themen des Teams, sortiert (stabiler Prompt-Fingerabdruck) */
+    /**
+     * @return list<string> Namen der automatischen Themen des Teams, sortiert und je Name einmal (stabiler Prompt-Fingerabdruck:
+     *                      eine Dublette darf den Prompt nicht ändern, sonst legt der externe Weg den KI-Auftrag neu an)
+     */
     public function themenNamen(int $teamId, int $limit = 80): array
     {
         return FoodAlchemistTrendInspiration::where('team_id', $teamId)->where('herkunft', 'automatisch')
-            ->orderByDesc('updated_at')->limit($limit)->pluck('titel')->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()->all();
+            ->orderByDesc('updated_at')->limit($limit)->pluck('titel')->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()->all();
+    }
+
+    private function themaZu(int $teamId, string $schluessel): Builder
+    {
+        return FoodAlchemistTrendInspiration::where('team_id', $teamId)->where('herkunft', 'automatisch')
+            ->where('thema_schluessel', $schluessel)->orderBy('id');
+    }
+
+    /**
+     * Legt das Thema an; hat ein paralleler Job es inzwischen angelegt, greift der eindeutige Index (team_id, auto_schluessel)
+     * und es gilt dessen Thema. Savepoint, damit die äußere Transaktion weiterläuft; der Sperr-Lesezugriff sieht die fremde
+     * Zeile auch unter REPEATABLE READ, wo ein einfaches first() noch den alten Schnappschuss liefert.
+     */
+    private function themaAnlegen(int $teamId, string $thema, string $schluessel): FoodAlchemistTrendInspiration
+    {
+        try {
+            return DB::transaction(fn () => FoodAlchemistTrendInspiration::create([
+                'team_id' => $teamId, 'titel' => mb_substr($thema, 0, 255), 'herkunft' => 'automatisch',
+                'thema_schluessel' => $schluessel, 'schlagworte' => null,
+            ]));
+        } catch (UniqueConstraintViolationException $ex) {
+            return $this->themaZu($teamId, $schluessel)->lockForUpdate()->first() ?? throw $ex;
+        }
     }
 
     /** Beleg dieses Artikels in seinem automatischen Thema (gleicher Link im Thema aus thema_inspiration_id). */

@@ -21,7 +21,7 @@ class FoodAlchemistTrendInspiration extends Model
 
     protected $table = 'foodalchemist_trend_inspirationen';
 
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'auto_schluessel'];
 
     protected $casts = ['uuid' => 'string', 'schlagworte' => 'array'];
 
