@@ -264,6 +264,31 @@ return [
     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
     \Platform\FoodAlchemist\Tools\KnowledgeVersorgungGetTool::class,
     \Platform\FoodAlchemist\Tools\KombinationGetTool::class,
+    \Platform\FoodAlchemist\Tools\KonfiguratorenBrandingTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenDeleteTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenGetTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenPaketeVorschlagenTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenPaketeVorschlagUebernehmenTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenPostTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenPreiseTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenPutTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorenSchnuerenTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorKonzepteDeleteTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorKonzeptePostTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorKonzeptePutTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorKonzepteReorderTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenAusVorlageTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenDeleteTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenPostTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenPutTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenVorlageAbgleichTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPaketeDeleteTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPaketePostTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPaketePutTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPaketMengenPutTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPresentationGetTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPresentationPublishTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorPresentationWithdrawTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\KontextResolveTool::class,
     \Platform\FoodAlchemist\Tools\LabelsPostTool::class,
     \Platform\FoodAlchemist\Tools\LabelTemplatesGetTool::class,
@@ -278,6 +303,10 @@ return [
     \Platform\FoodAlchemist\Tools\LaGpAbgleichTool::class,
     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
     \Platform\FoodAlchemist\Tools\LeadSichtGetTool::class,   // Lead-Sicht 29.10.: Nachlauf-Vorschau read-only
+    \Platform\FoodAlchemist\Tools\LeistungVorlagenDeleteTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\LeistungVorlagenGetTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\LeistungVorlagenPostTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\LeistungVorlagenPutTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\LeitstelleGetTool::class,
     \Platform\FoodAlchemist\Tools\LieferantenDokumentEntscheidenTool::class,   // Dokumente vom Lieferanten übernehmen/verwerfen (Stufe 2c)
     \Platform\FoodAlchemist\Tools\LieferantenDokumentGetTool::class,

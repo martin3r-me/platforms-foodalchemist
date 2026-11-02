@@ -1,6 +1,6 @@
 # Spec 94 · Konfigurator: All-in-Preise je Concept als Kundenlink
 
-Stand 02.11.2026 · **Freigegeben von Dominique am 02.11.2026** · Stufe 1 in Umsetzung (Branch `feat/spec94-stufe1-konfigurator-basis`)
+Stand 02.11.2026 · **Freigegeben von Dominique am 02.11.2026** · Stufen 1–4 umgesetzt (Branches `feat/spec94-stufe1-…` bis `feat/spec94-stufe4-mcp`, Merge je Stufe über den Kurator)
 Entscheide Dominique 02.11.: eigenes Modul unter Angebote · Leistungen über Vorlagen · EK und VK je Leistung, VK über Aufschlagsklasse mit Basissatz wie Speisen · Vorlagen vererbbar · nur Deutsch · Anfrage per Mail und Signal · eigenes Lunch-Concept · Editor wie im Angebot, CI über die Präsentations-Designs
 Vorbild: DOEC „Diva.licious" (Konfigurator-Demo v0.4.1) und `DOEC_AllIn_Preise_v2.xlsx` (Kunde DOEC Catering, Projekt Oceandiva 2026)
 
@@ -589,6 +589,18 @@ Dateigrößen (Editor-Komponenten nach Spec 84 aufteilen, z. B. ein Livewire-Tei
 EnumStatusVergleichWaechter. Die Handbuch-Seite (Stufe 4) folgt Spec 86.
 
 Merge als reiner Docs-PR über den Kurator (Spec 82); Freigabe durch Dominique liegt vor (02.11.2026).
+
+### Umsetzungsnotizen Stufen 2–4
+
+- Editor: `Livewire/Angebote/Konfiguratoren` (Liste) und `KonfiguratorEditor` (Vollbild, Reiter als Partials unter
+  `angebote/partials/konfigurator/`), Reiter Präsentation als eigenes Livewire `KonfiguratorPraesentation`. Bearbeitungssperre Spec 65.
+- Kundenlink: Snapshot in `Services/Konfigurator/KonfiguratorSnapshot` (Preistabelle je Paket: `k{id}:lunch|dinner`,
+  `dn{k1}:{k2}`, `a{id}`), Bilder nur als Identifier. Jedes gewählte Design wird über `PresentationDesignService::konfiguratorLayout`
+  auf die fünf Konfigurator-Blöcke ergänzt. Die Seite rechnet ohne Framework (`presentation/blocks/_konfigurator_script`).
+- Anfrage: `KonfiguratorAnfrageController` + `KonfiguratorAnfrageService`; Limiter `fa-konfigurator-anfrage` (5/min je IP, 20/h je Link).
+- MCP: 29 Tools auf `KonfiguratorToolBasis`; Bereich `angebote` über die Präfixe `konfigurator` und `leistung_vorlagen`.
+- Nicht umgesetzt (bewusst klein): CRM-Picker im Editor, Logo-/Titelbild-Upload im Konfigurator (kommt über „übernehmen von“),
+  Beispieldaten in der Builder-Vorschau (Vorschau nutzt einen vorhandenen Konfigurator), Handbuch-Seite = `docs/konfigurator.md`.
 
 ### Umsetzungsnotizen Stufe 1
 

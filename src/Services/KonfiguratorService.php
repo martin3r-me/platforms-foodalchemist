@@ -45,7 +45,7 @@ class KonfiguratorService
 
     public function anlegen(Team $team, array $in): FoodAlchemistKonfigurator
     {
-        $werte = $this->kopfWerte(['name' => 'Neuer Konfigurator'] + $in);
+        $werte = $this->kopfWerte(['name' => 'Neuer Konfigurator'] + $in, null, $team);
 
         return FoodAlchemistKonfigurator::create($werte + [
             'team_id' => $team->id,
@@ -57,7 +57,7 @@ class KonfiguratorService
     public function aendern(Team $team, int $id, array $in): FoodAlchemistKonfigurator
     {
         $k = $this->eigener($team, $id);
-        $k->update($this->kopfWerte($in, $k));
+        $k->update($this->kopfWerte($in, $k, $team));
         if (array_intersect(['stunden_lunch', 'stunden_dinner', 'stunden_day_night'], array_keys($in)) !== []) {
             $k->touch();
         }
@@ -426,12 +426,24 @@ class KonfiguratorService
         return $zeile;
     }
 
-    private function kopfWerte(array $in, ?FoodAlchemistKonfigurator $bisher = null): array
+    private function kopfWerte(array $in, ?FoodAlchemistKonfigurator $bisher = null, ?Team $team = null): array
     {
         $w = array_intersect_key($in, array_flip(self::KOPF_FELDER));
         foreach (['kunden_titel', 'claim', 'intro', 'ort', 'crm_company_id', 'verantwortlich_user_id', 'gueltig_bis'] as $f) {
             if (array_key_exists($f, $w) && ($w[$f] === '' || $w[$f] === null)) {
                 $w[$f] = null;
+            }
+        }
+        // Anfragen gehen per Mail an diese Person: nur Mitglieder des Teams (keine fremden Adressen über die Id)
+        if (($w['verantwortlich_user_id'] ?? null) !== null && $team !== null
+            && ! $team->users()->where('users.id', (int) $w['verantwortlich_user_id'])->exists()) {
+            throw new \InvalidArgumentException('„Anfragen gehen an“: die Person ist kein Mitglied dieses Teams.');
+        }
+        if (($w['gueltig_bis'] ?? null) !== null) {
+            try {
+                $w['gueltig_bis'] = \Illuminate\Support\Carbon::parse((string) $w['gueltig_bis'])->format('Y-m-d');
+            } catch (\Throwable) {
+                throw new \InvalidArgumentException('„Gültig bis“: bitte als Datum YYYY-MM-DD angeben.');
             }
         }
         if (array_key_exists('name', $w) && trim((string) $w['name']) === '') {
