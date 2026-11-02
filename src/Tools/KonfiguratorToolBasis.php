@@ -35,6 +35,15 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
         return false;
     }
 
+    /**
+     * Destruktive Tools verlangen confirm=true wie angebote.DELETE. Geprüft im Tool selbst, nicht über `required` im Schema:
+     * so bleibt der Fehlercode CONFIRM_REQUIRED, egal ob die Registry Pflichtfelder vorab prüft.
+     */
+    protected function destruktiv(): bool
+    {
+        return false;
+    }
+
     /** @return list<string> */
     protected function beispiele(): array
     {
@@ -64,6 +73,9 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if ($this->destruktiv() && ($arguments['confirm'] ?? false) !== true) {
+            return ToolResult::error('Löschen erfordert confirm=true (destruktive Aktion).', 'CONFIRM_REQUIRED');
+        }
         try {
             return ToolResult::success($this->ausfuehren($team, $arguments));
         } catch (GeerbtNurLesenException $e) {
@@ -80,6 +92,7 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
         $lesend = $this->lesend();
 
         return [
+            'confirmation_required' => $this->destruktiv(),
             'category' => $lesend ? 'query' : 'action',
             'tags' => ['foodalchemist', 'konfigurator', 'spec94', $lesend ? 'read' : 'write'],
             'read_only' => $lesend, 'idempotent' => $lesend, 'risk_level' => $lesend ? 'safe' : 'write',

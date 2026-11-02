@@ -60,3 +60,16 @@ it('Metadaten: lesende Tools read_only, schreibende nicht; Fremdteam bekommt NOT
     $r = ($this->tool)('foodalchemist.konfiguratoren.PREISE', ['id' => $kid], $fremd);
     expect($r->success)->toBeFalse()->and($r->errorCode)->toBe('NOT_FOUND');
 });
+
+it('DELETE von Konfigurator und Vorlage verlangt confirm=true (CONFIRM_REQUIRED, wie angebote.DELETE)', function () {
+    $kid = ($this->tool)('foodalchemist.konfiguratoren.POST', ['name' => 'Weg damit'])->data['konfigurator']['id'];
+    $vid = ($this->tool)('foodalchemist.leistung_vorlagen.POST', ['kategorie' => 'sonstiges', 'bezeichnung' => 'Reinigung', 'mengen_regel' => 'fest', 'anzahl' => 1,
+        'preis_je' => 'stueck', 'haeufigkeit' => 'je_event', 'ek_satz' => 90])->data['vorlage']['id'];
+
+    foreach (['foodalchemist.konfiguratoren.DELETE' => $kid, 'foodalchemist.leistung_vorlagen.DELETE' => $vid] as $tool => $id) {
+        expect(($this->tool)($tool, ['id' => $id])->errorCode)->toBe('CONFIRM_REQUIRED', $tool)
+            ->and(($this->tool)($tool, ['id' => $id, 'confirm' => false])->errorCode)->toBe('CONFIRM_REQUIRED', $tool)
+            ->and(($this->tool)($tool, ['id' => $id, 'confirm' => true])->success)->toBeTrue($tool)
+            ->and($this->registry->get($tool)->getMetadata()['confirmation_required'])->toBeTrue();
+    }
+});

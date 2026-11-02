@@ -22,14 +22,19 @@ class LeistungVorlagenDeleteTool extends KonfiguratorToolBasis
         return 'Eigene Leistungs-Vorlage löschen. Kopien in Konfiguratoren bleiben unverändert.';
     }
 
+    protected function destruktiv(): bool
+    {
+        return true;
+    }
+
     protected function felder(): array
     {
-        return [['id' => ['type' => 'integer']], ['id']];
+        return [['id' => ['type' => 'integer'], 'confirm' => ['type' => 'boolean', 'description' => 'true = wirklich löschen']], ['id']];
     }
 
     protected function beispiele(): array
     {
-        return ['Lösche Vorlage 12.'];
+        return ['Lösche Vorlage 12 (confirm=true).'];
     }
 
     protected function ausfuehren(Team $team, array $a): mixed
