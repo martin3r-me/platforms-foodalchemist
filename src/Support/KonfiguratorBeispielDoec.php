@@ -21,6 +21,14 @@ final class KonfiguratorBeispielDoec
 
     public const PAKETE = [[100, 199], [200, 499], [500, 799], [800, 1200]];
 
+    /** Add-ons wie in der DOEC-Vorlage (Diva.licious): Titel → [Abschnitt, Tageszeit, Claim]. Concepts kommen per --addon. */
+    public const ADDONS = [
+        'Captain Breakfast' => ['Frühstück', 'lunch', 'Think Big. Start Fresh. Ein guter Tag beginnt klar.'],
+        'Captain on Board' => ['Fingerfood', 'dinner', 'Empfangsmomente: Fingerfood und Table Bites zum Boarding.'],
+        'Afternoon Break' => ['Pausen', 'lunch', 'Refresh Point mit süßen und herzhaften Upgrades.'],
+        'Mitternachtsnack' => ['Mitternachts-Bites', 'dinner', 'Premium oder regional NL · DE · BE, für späte Stunden.'],
+    ];
+
     /** @return list<array<string,mixed>> */
     public static function vorlagen(): array
     {
@@ -45,13 +53,14 @@ final class KonfiguratorBeispielDoec
      * Legt Vorlagen, Konfigurator, Grundausstattung und Pakete im Team an.
      *
      * @param  array<string, array{lunch?:int, dinner?:int}>  $konzepte  Kundentitel → Concept-Ids (optional)
+     * @param  array<string, int>  $addons  Add-on-Titel → Concept-Id; bekannte Titel aus ADDONS bekommen Abschnitt, Tageszeit, Claim
      */
-    public function anlegen(Team $team, array $konzepte = []): FoodAlchemistKonfigurator
+    public function anlegen(Team $team, array $konzepte = [], array $addons = []): FoodAlchemistKonfigurator
     {
         $vorlagen = app(LeistungVorlageService::class);
         $konfig = app(KonfiguratorService::class);
 
-        return DB::transaction(function () use ($team, $konzepte, $vorlagen, $konfig) {
+        return DB::transaction(function () use ($team, $konzepte, $addons, $vorlagen, $konfig) {
             $ids = [];
             foreach (self::vorlagen() as $i => $v) {
                 $ids[] = $vorlagen->anlegen($team, $v + ['position' => $i, 'vk_modus' => 'fixed', 'vk_satz' => round($v['ek_satz'] * 2.5, 2),
@@ -65,6 +74,11 @@ final class KonfiguratorBeispielDoec
             foreach ($konzepte as $titel => $c) {
                 $konfig->konzeptHinzu($team, $k->id, ['rolle' => 'haupt', 'kunden_titel' => $titel,
                     'lunch_concept_id' => $c['lunch'] ?? null, 'dinner_concept_id' => $c['dinner'] ?? null]);
+            }
+            foreach ($addons as $titel => $conceptId) {
+                [$abschnitt, $tageszeit, $claim] = self::ADDONS[$titel] ?? ['Extras', 'beide', null];
+                $konfig->konzeptHinzu($team, $k->id, ['rolle' => 'addon', 'concept_id' => $conceptId, 'kunden_titel' => $titel,
+                    'abschnitt' => $abschnitt, 'addon_tageszeit' => $tageszeit, 'claim' => $claim]);
             }
             $konfig->ausVorlagen($team, $k->id, $ids);
             foreach (self::PAKETE as [$von, $bis]) {

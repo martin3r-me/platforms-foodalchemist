@@ -40,3 +40,16 @@ it('legt den Beispiel-Datensatz an und rechnet Mengen und Preise je DOEC-Paket',
     // Fixkosten verteilen sich: der Preis je Person sinkt mit der Paketgröße
     expect($preise)->toHaveCount(4)->and($preise[0])->toBeGreaterThan($preise[3])->and($preise[3])->toBeGreaterThan(21.83);
 });
+
+it('Add-ons wie in der DOEC-Vorlage: Abschnitt, Tageszeit und Claim aus der Liste, Extras im Link', function () {
+    $c = fn (string $n, float $vk) => FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => $n, 'kind' => 'concept', 'status' => 'active',
+        'price_per_person_cache' => $vk, 'ek_per_person_cache' => $vk / 3]);
+    $k = app(KonfiguratorBeispielDoec::class)->anlegen($this->rootTeam, ['Culture' => ['dinner' => $c('Culture', 21.83)->id]],
+        ['Captain Breakfast' => $c('Breakfast', 6.78)->id, 'Mitternachtsnack' => $c('Midnight', 5.88)->id]);
+    $addons = $k->konzepte()->where('rolle', 'addon')->get()->keyBy('kunden_titel');
+
+    expect($addons)->toHaveCount(2)
+        ->and($addons['Captain Breakfast']->abschnitt)->toBe('Frühstück')->and($addons['Captain Breakfast']->addon_tageszeit)->toBe('lunch')
+        ->and($addons['Mitternachtsnack']->abschnitt)->toBe('Mitternachts-Bites')->and($addons['Mitternachtsnack']->addon_tageszeit)->toBe('dinner');
+});
+

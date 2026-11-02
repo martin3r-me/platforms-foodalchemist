@@ -95,6 +95,7 @@
     <style>
         :root {
             --pt-primary: {{ $pal['primary'] ?? '#6d28d9' }};
+            --pt-on-primary: {{ $pal['on_primary'] ?? 'white' }};   /* Spec 94: Schrift auf Primärflächen, aus resolveTokens mit Kontrast ≥ 4,5 */
             --pt-accent: {{ $pal['accent'] ?? '#b8874a' }};
             --pt-bg: {{ $pal['bg'] ?? '#fbfaf8' }};
             --pt-surface: {{ $pal['surface'] ?? 'rgba(0,0,0,0.02)' }};
@@ -175,7 +176,6 @@
         .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
         .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
         .pt-konfig-weiter [data-konfig-weiter] { margin-left: auto; }
-        .pt-konfig-weiter button:disabled { opacity: .45; cursor: not-allowed; }
         .pt-konfig-wahl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .pt-konfig-chip { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--pt-line); background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; }
         .pt-konfig-abend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
@@ -299,7 +299,8 @@
         .pt-legend .pt-code { color: var(--pt-accent); font-weight: 700; }
         .pt-legend-note { margin-top: 8px; opacity: .8; }
         .pt-cta { text-align: center; margin: calc(var(--pt-gap) * 1.4) 0 0; }
-        .pt-cta-btn { display: inline-block; background: var(--pt-primary); color: #fff; text-decoration: none; padding: 15px 40px; border-radius: 999px; font-weight: 600; letter-spacing: .01em; transition: transform .15s ease, box-shadow .15s ease; }
+        .pt-cta-btn { display: inline-block; border: 0; cursor: pointer; font: inherit; font-weight: 600; background: var(--pt-primary); color: var(--pt-on-primary); text-decoration: none; padding: 15px 40px; border-radius: 999px; font-weight: 600; letter-spacing: .01em; transition: transform .15s ease, box-shadow .15s ease; }
+        .pt-cta-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }   /* erkennbar aus, Schrift bleibt kontraststark */
         .pt-cta-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px color-mix(in srgb, var(--pt-primary) 35%, transparent); }
         .pt-text { margin-top: var(--pt-gap); font-size: 1.06rem; }
         .pt-heading { font-size: clamp(1.5rem,4vw,2.2rem); margin-top: calc(var(--pt-gap)*1.2); }
@@ -362,7 +363,7 @@
 
         /* Navigation — Anker-Sprungmenü (light, in allen Vorlagen) */
         .pt-nav-anchor .pt-toc { display: block; position: fixed; bottom: 20px; right: 20px; z-index: 50; }
-        .pt-toc-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--pt-primary); color: #fff; border: 0; cursor: pointer; padding: 12px 20px; border-radius: 999px; font: 600 .86rem/1 var(--pt-body-font); box-shadow: 0 8px 24px color-mix(in srgb, var(--pt-primary) 34%, transparent); }
+        .pt-toc-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--pt-primary); color: var(--pt-on-primary); border: 0; cursor: pointer; padding: 12px 20px; border-radius: 999px; font: 600 .86rem/1 var(--pt-body-font); box-shadow: 0 8px 24px color-mix(in srgb, var(--pt-primary) 34%, transparent); }
         .pt-toc-panel { display: none; position: absolute; bottom: calc(100% + 10px); right: 0; min-width: 220px; max-width: 78vw; max-height: 60vh; overflow-y: auto; padding: 8px; background: var(--pt-bg); border: 1px solid var(--pt-line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
         .pt-toc.pt-open .pt-toc-panel { display: block; }
         .pt-toc-panel a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--pt-text); text-decoration: none; font-size: .9rem; }
