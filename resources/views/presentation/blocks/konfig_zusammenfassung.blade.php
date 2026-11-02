@@ -1,24 +1,15 @@
-{{-- Spec 94 · Konfigurator-Schritt: Gäste, Paket, Preis pro Person und gesamt. Das Skript liest nur aus der Preistabelle. --}}
-@php
-    $pakete = $content['pakete'] ?? [];
-    $min = $pakete[0]['von'] ?? 1;
-    $max = $pakete !== [] ? end($pakete)['bis'] : 1;
-    $start = max($min, min($max, (int) ($content['pax_vorgabe'] ?? $min)));
-@endphp
-<section class="pt-wide pt-konfig-schritt pt-konfig-summe" id="konfig-summe" data-konfig-schritt="summe">
+{{-- Spec 94 · Konfigurator-Schritt Anfrage, Teil 1: Zusammenfassung der Auswahl mit Paket und Preis. Gästezahl steuert der Kopf
+     (große Zahl, Regler, Preisleisten); das Skript liest nur aus der Preistabelle. --}}
+<section class="pt-wide pt-konfig-schritt pt-konfig-summe" id="konfig-summe" data-konfig-schritt="summe" data-konfig-gruppe="anfrage">
     <p class="pt-kicker pt-konfig-nr"></p>
-    <h2>{{ $style['titel'] ?? 'Ihr Preis' }}</h2>
-    @if($pakete === [])
+    <h2>{{ $style['titel'] ?? 'Eure Zusammenstellung' }}</h2>
+    @if(($content['pakete'] ?? []) === [])
         <p class="pt-section-text">Für diesen Konfigurator sind noch keine Preise hinterlegt.</p>
     @else
-        <label class="pt-konfig-pax">
-            <span>Gäste</span>
-            <input type="range" min="{{ $min }}" max="{{ $max }}" value="{{ $start }}" data-konfig-pax-regler>
-            <input type="number" min="{{ $min }}" max="{{ $max }}" value="{{ $start }}" data-konfig-pax>
-        </label>
+        <ul class="pt-konfig-auswahl" data-konfig-auswahl></ul>
         <p class="pt-konfig-paket" data-konfig-paket></p>
-        <p class="pt-konfig-preis"><span data-konfig-pp>–</span> <small>pro Person, netto</small></p>
-        @if($style['show_gesamt'] ?? true)<p class="pt-konfig-gesamt">Gesamt <span data-konfig-gesamt>–</span> netto</p>@endif
+        <p class="pt-konfig-preis"><strong data-konfig-pp>—</strong> <small>pro Person, all-in netto</small></p>
+        @if($style['show_gesamt'] ?? true)<p class="pt-konfig-gesamt">Gesamt <strong data-konfig-gesamt>—</strong> netto</p>@endif
         <p class="pt-section-text" data-konfig-indikativ hidden>Der Preis ist indikativ und wird im Angebot bestätigt.</p>
         <p class="pt-section-text" data-konfig-hinweis>Bitte ein Konzept wählen.</p>
         <div class="pt-konfig-wahl">

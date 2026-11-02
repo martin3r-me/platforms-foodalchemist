@@ -119,3 +119,50 @@ it('Design: jedes Layout bekommt die fünf Konfigurator-Schritte, fremde Blöcke
     expect(array_column($l, 'block_type'))->toBe(['cover', 'konfig_anfrage', 'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung']);
     expect(collect(app(PresentationDesignService::class)->pickerOptions($this->rootTeam, 'konfigurator'))->pluck('value'))->toContain('konfigurator');
 });
+
+it('Stufe 5: Preisleisten, große Gästezahl mit Preisstufe und Schritt-Leiste mit allen vorhandenen Schritten', function () {
+    auth()->logout();
+    $html = $this->get($this->link['url'])->assertOk()->getContent();
+    expect(substr_count($html, 'data-konfig-preisleiste'))->toBe(2)   // oben (Desktop) und unten (Handy)
+        ->and($html)->toContain('data-konfig-gaeste')->toContain('Preisstufe')->toContain('100–199')
+        ->and($html)->toContain('data-konfig-zu="konzepte"')->toContain('data-konfig-zu="tageszeit"')->toContain('data-konfig-zu="addons"')->toContain('data-konfig-zu="anfrage"');
+    if (getenv('FA_KONFIG_HTML')) {   // Sichtprüfung: gerenderte Seite ablegen
+        file_put_contents(getenv('FA_KONFIG_HTML'), $html);
+    }
+});
+
+it('Stufe 5: Schritt-Leiste zeigt nur vorhandene Schritte; Karte ohne Bild fällt sauber zurück', function () {
+    $svc = app(KonfiguratorService::class);
+    $svc->konzeptEntfernen($this->rootTeam, $this->addon->id);
+    $svc->aendern($this->rootTeam, $this->k->id, ['tageszeit_aktiv' => false]);
+    $link = app(PresentationService::class)->publish($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id,
+        ['expires_at' => now()->addMonth()->toIso8601String(), 'design' => 'konfigurator_dunkel', 'price_mode' => 'auto']);
+    auth()->logout();
+    $html = $this->get($link['url'])->assertOk()->getContent();
+    expect($html)->toContain('data-konfig-zu="konzepte"')->toContain('data-konfig-zu="anfrage"')
+        ->not->toContain('data-konfig-zu="tageszeit"')->not->toContain('data-konfig-zu="addons"')
+        ->and($html)->toContain('pt-konfig-karte--ohne-bild')->not->toContain('class="pt-konfig-bild"');
+    if (getenv('FA_KONFIG_HTML_DUNKEL')) {
+        file_put_contents(getenv('FA_KONFIG_HTML_DUNKEL'), $html);
+    }
+});
+
+it('Stufe 5: Karte mit Bild zeigt das Bild; kompakter Kopf ohne feste Höhe; dunkles Design im Picker', function () {
+    $this->haupt->update(['bild_path' => 'konfigurator/test.jpg']);
+    $snap = app(PresentationService::class)->previewData($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id);
+    $html = view('foodalchemist::presentation.show', ['snapshot' => $snap, 'preview' => true])->render();
+    expect($html)->toContain('class="pt-konfig-bild"')->toContain('pt-konfig-karte--bild');
+    $cover = collect($snap['resolved_design']['layout'])->firstWhere('block_type', 'cover');
+    expect($cover['style'] ?? [])->not->toHaveKey('cover_height');
+    expect(collect(app(PresentationDesignService::class)->pickerOptions($this->rootTeam, 'konfigurator'))->pluck('value'))->toContain('konfigurator_dunkel');
+});
+
+it('Stufe 5: keine festen Farben und kein !important in den Konfigurator-Partials', function () {
+    $dir = dirname(__DIR__, 2) . '/resources/views/presentation/blocks';
+    foreach (array_merge(glob($dir . '/konfig_*.blade.php'), glob($dir . '/_konfigurator_*.blade.php')) as $datei) {
+        $inhalt = file_get_contents($datei);
+        expect(preg_match('/#[0-9a-fA-F]{3,8}\b/', $inhalt))->toBe(0, basename($datei))
+            ->and(str_contains($inhalt, '!important'))->toBeFalse(basename($datei));
+    }
+});
+

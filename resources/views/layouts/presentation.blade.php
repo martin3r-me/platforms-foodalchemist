@@ -123,40 +123,75 @@
         .pt-wrap { overflow-x: hidden; }
         .pt-measure { max-width: var(--pt-measure); margin-inline: auto; padding-inline: clamp(22px, 6vw, 40px); }
         .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: clamp(22px, 6vw, 48px); }
-        /* Spec 94 · Konfigurator-Link */
+        /* Spec 94 · Konfigurator-Link (Stufe 5: PRO.KOPF-Aufbau). Nur Design-Tokens (--pt-*), keine festen Farben. */
         .pt-wrap { counter-reset: konfig-schritt; }
+        .pt-konfig-seite { --pt-konfig-leiste: color-mix(in srgb, var(--pt-bg) 92%, var(--pt-text)); }
+        .pt-konfig-seite .pt-hero.pt-hero { min-height: auto; padding-block: clamp(28px, 7vw, 72px); }   /* stärker als .pt-hero.no-media und die Höhen-Stufen */
+        .pt-konfig-seite .pt-hero-title { font-size: clamp(2rem, 7vw, 4rem); }
+        .pt-konfig-seite .pt-hero-sub { margin-top: 10px; }
+        .pt-konfig-kopfleiste { position: sticky; top: 0; z-index: 30; background: var(--pt-konfig-leiste); border-bottom: 1px solid var(--pt-line); }
+        .pt-konfig-schritte { display: flex; gap: 4px; overflow-x: auto; max-width: var(--pt-wide); margin-inline: auto; padding: 0 clamp(16px, 5vw, 48px); scrollbar-width: none; }
+        .pt-konfig-schritt-knopf { flex: none; font: inherit; font-size: .72rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; padding: 14px 10px 12px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--pt-muted); cursor: pointer; }
+        .pt-konfig-schritt-knopf[aria-current="step"] { color: var(--pt-text); border-bottom-color: var(--pt-accent); }
+        .pt-konfig-preisleiste { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px clamp(16px, 5vw, 48px); background: var(--pt-konfig-leiste); }
+        .pt-konfig-preisleiste--oben { max-width: var(--pt-wide); margin-inline: auto; border-top: 1px solid var(--pt-line); }
+        .pt-konfig-preisleiste--unten { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; border-top: 1px solid var(--pt-line); }
+        .pt-konfig-seite { padding-bottom: 72px; }
+        @media (min-width: 900px) { .pt-konfig-preisleiste--unten { display: none; } .pt-konfig-seite { padding-bottom: 0; } }
+        @media (max-width: 899px) { .pt-konfig-preisleiste--oben { display: none; } }
+        .pt-konfig-stepper { display: flex; align-items: center; gap: 8px; }
+        .pt-konfig-stepper-knopf { width: 32px; height: 32px; border: 1px solid var(--pt-line); border-radius: 6px; background: var(--pt-surface); color: var(--pt-text); font: inherit; font-size: 1.1rem; cursor: pointer; }
+        .pt-konfig-stepper-zahl { width: 64px; text-align: center; font: inherit; padding: 5px 4px; border: 1px solid var(--pt-line); border-radius: 6px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-summen { display: flex; gap: clamp(14px, 4vw, 36px); text-align: right; }
+        .pt-konfig-summen p { margin: 0; display: flex; flex-direction: column; white-space: nowrap; }
+        .pt-konfig-summen strong { font-family: var(--pt-heading-font); font-size: 1.05rem; color: var(--pt-text); }
+        .pt-konfig-leise { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--pt-muted); white-space: nowrap; }
+        @media (max-width: 420px) { .pt-konfig-stepper > .pt-konfig-leise { display: none; } .pt-konfig-preisleiste { gap: 10px; padding-inline: 14px; } .pt-konfig-summen { gap: 14px; } }
+        .pt-konfig-gaeste { padding-block: clamp(28px, 6vw, 56px) 8px; }
+        .pt-konfig-gaeste-zahl { font-family: var(--pt-heading-font); font-size: clamp(3.4rem, 14vw, 6.5rem); line-height: 1; margin: 8px 0 18px; font-weight: 700; }
+        .pt-konfig-gaeste-einheit { font-family: var(--pt-body-font); font-size: clamp(1rem, 3vw, 1.5rem); font-weight: 400; color: var(--pt-muted); }
+        .pt-konfig-regler { width: min(100%, 520px); accent-color: var(--pt-accent); }
+        .pt-konfig-stufe { margin-top: 10px; color: var(--pt-muted); }
         .pt-konfig-schritt { padding-block: var(--pt-gap); counter-increment: konfig-schritt; }
-        .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Tageszeit oder Add-ons fehlen */
-        .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form) { max-width: var(--pt-measure); }
-        .pt-konfig-schritt h2 { margin: 8px 0 18px; }
-        .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
-        .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; }
-        .pt-konfig-karte, .pt-konfig-addon { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1px solid var(--pt-line); border-radius: 10px; background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; }
+        .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Zeitfenster oder Extras fehlen */
+        .pt-konfig-nr[data-nr]::before { content: "Schritt " attr(data-nr); }     /* mit Skript: Nummer aus der Schritt-Leiste (ausgeblendete Schritte zählen sonst nicht mit) */
+        @media (max-width: 480px) { .pt-konfig-schritte { justify-content: space-between; padding-inline: 10px; } .pt-konfig-schritt-knopf { letter-spacing: .06em; font-size: .66rem; padding-inline: 6px; } }
+        .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form):not(.pt-konfig-weiter) { max-width: var(--pt-measure); }
+        .pt-konfig-schritt h2 { margin: 8px 0 14px; font-size: clamp(1.6rem, 5vw, 2.6rem); }
+        .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); margin-top: 20px; }
+        .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .pt-konfig-karte { position: relative; display: flex; flex-direction: column; text-align: left; padding: 0; overflow: hidden; border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 8px; background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+        .pt-konfig-karte:hover { border-color: var(--pt-accent); }
         .pt-konfig-karte[aria-pressed="true"], .pt-konfig-addon:has(input:checked) { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
-        .pt-konfig-bild { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; }
-        .pt-konfig-titel { font-family: var(--pt-heading-font); font-size: 1.2rem; font-weight: 600; }
+        .pt-konfig-karte:disabled { opacity: .4; cursor: not-allowed; }
+        .pt-konfig-bild { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+        .pt-konfig-karte-text { display: flex; flex-direction: column; gap: 6px; padding: 18px; }
+        .pt-konfig-karte--ohne-bild .pt-konfig-karte-text { min-height: 150px; }
+        .pt-konfig-titel { font-family: var(--pt-heading-font); font-size: 1.35rem; font-weight: 600; line-height: 1.15; }
         .pt-konfig-claim, .pt-konfig-zeiten { color: var(--pt-muted); font-size: .92rem; }
-        .pt-konfig-ab { color: var(--pt-accent); font-weight: 600; font-size: .95rem; }
-        .pt-konfig-abschnitt { font-size: 1.1rem; margin: 22px 0 10px; }
+        .pt-konfig-ab { color: var(--pt-accent); font-weight: 600; font-size: .95rem; margin-top: auto; padding-top: 8px; }
+        .pt-konfig-ab small { color: var(--pt-muted); font-weight: 400; }
+        .pt-konfig-haken { position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; accent-color: var(--pt-accent); }
+        .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
+        .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
+        .pt-konfig-weiter [data-konfig-weiter] { margin-left: auto; }
+        .pt-konfig-weiter button:disabled { opacity: .45; cursor: not-allowed; }
         .pt-konfig-wahl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .pt-konfig-chip { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--pt-line); background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; }
-        .pt-konfig-chip[aria-pressed="true"] { background: var(--pt-primary); border-color: var(--pt-primary); color: var(--pt-bg); }
-        .pt-konfig-chip:disabled { opacity: .4; cursor: not-allowed; }
-        .pt-konfig-abend, .pt-konfig-pax { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
-        .pt-konfig-pax input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--pt-accent); }
-        .pt-konfig-pax input[type="number"] { width: 90px; }
-        .pt-konfig-preis { font-family: var(--pt-heading-font); font-size: clamp(2rem, 6vw, 3rem); margin: 18px 0 4px; }
+        .pt-konfig-abend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+        .pt-konfig-auswahl { margin: 0 0 8px; padding-left: 18px; color: var(--pt-text); }
+        .pt-konfig-preis { font-family: var(--pt-heading-font); font-size: clamp(2rem, 6vw, 3rem); margin: 14px 0 4px; }
         .pt-konfig-preis small, .pt-konfig-paket, .pt-konfig-gesamt { color: var(--pt-muted); font-family: var(--pt-body-font); font-size: 1rem; }
-        .pt-konfig-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+        .pt-konfig-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); max-width: var(--pt-measure); }
         .pt-konfig-form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--pt-muted); }
-        .pt-konfig-form input, .pt-konfig-form textarea, .pt-konfig-abend select, .pt-konfig-pax input[type="number"] { font: inherit; padding: 8px 10px; border: 1px solid var(--pt-line); border-radius: 6px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-form input, .pt-konfig-form textarea, .pt-konfig-abend select { font: inherit; padding: 8px 10px; border: 1px solid var(--pt-line); border-radius: 6px; background: var(--pt-bg); color: var(--pt-text); }
         .pt-konfig-breit { grid-column: 1 / -1; }
         .pt-konfig-form label.pt-konfig-check { flex-direction: row; align-items: flex-start; }
         .pt-konfig-honig { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
         .pt-konfig-ok { padding: 16px; border-radius: 10px; border: 1px solid var(--pt-accent); }
         .pt-konfig-fehler { color: var(--pt-accent); font-weight: 600; }
-        [data-konfig-addon-zeile][hidden] { display: none; }
-        @media print { .pt-konfig-form, [data-konfig-teilen] { display: none; } }
+        .pt-konfig-seite [hidden] { display: none; }
+        @media print { .pt-konfig-form, [data-konfig-teilen], .pt-konfig-kopfleiste, .pt-konfig-preisleiste, .pt-konfig-weiter { display: none; } .pt-konfig-seite [hidden] { display: block; } }
         h1,h2,h3,h4 { font-family: var(--pt-heading-font); color: var(--pt-text); margin: 0; line-height: 1.08; font-weight: 600; letter-spacing: -0.01em; }
         /* Überlange Einzelwörter (z.B. „BROICHCATERING.EMPFANG") in Titeln umbrechen statt abschneiden.
            Greift nur, wenn ein Wort die Zeile sonst sprengen würde → Desktop mit breitem Container unberührt. */
