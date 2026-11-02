@@ -31,6 +31,12 @@ Preisklassen sind relative Produktabweichungen. `100 %` übernimmt den Unternehm
 unverändert; sie sind kein harter Gesamtaufschlag mehr. Der Katalogpreis verwendet weder
 Produktionszeit noch eine angenommene Auftragsgröße.
 
+Preisklassen haben einen Bereich (Spec 94): `speisen` für Darreichungen, Concepter und den
+Team-Standard, `leistung` für Personal, Equipment und Logistik im Konfigurator. Beide rechnen mit
+derselben Formel (`CatalogPricingService::klassenVk`), mischen sich aber nie in einer Auswahl.
+Eine Leistung ohne Klasse fällt nicht auf den Team-Standard zurück, sondern rechnet neutral mit
+100 % und zeigt eine Warnung.
+
 ## Preiszustände
 
 - `auto`: Vergleichspreis und gültiger VK werden neu berechnet.
@@ -72,6 +78,7 @@ und Monatsbasen. Diese Werte sind Rechenbeispiele, keine Branchen-Norm.
 - `ProductionTimeService`: Vorgänge, aktive Personenzeit und passive Standzeit.
 - `OrderCostingService`: Bedarfsexplosion und auftragsspezifischer HK2.
 - `PricingCascadeService`: Darreichung → Paket → Concept → offenes Angebot.
+- `KonfiguratorPricingService`: Leistungs-VK, Pakete schnüren und All-in je Concept und Pax-Paket (Spec 94).
 
 Die Datenumstellung läuft trocken oder schreibend:
 

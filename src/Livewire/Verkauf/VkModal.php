@@ -1452,7 +1452,7 @@ class VkModal extends Component
             // während die Nachbarzeilen darunter es korrekt machten.
             'klassen' => FoodAlchemistDishClass::visibleToTeam($team)
                 ->whereNull('dish_main_group_id')->orderBy('id')->get(['id', 'label', 'diet_form']),
-            'aufschlagsklassen' => FoodAlchemistMarkupClass::visibleToTeam($team)
+            'aufschlagsklassen' => FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')
                 ->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
             // Entscheid 2026-09-04: die VERKAUFS-Einheit ist eine eigene, kurze Liste —

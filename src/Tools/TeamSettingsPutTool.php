@@ -192,7 +192,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                 if ($id <= 0) {
                     return ToolResult::error('default_markup_class_id muss eine positive ID sein.', 'VALIDATION_ERROR');
                 }
-                $sichtbar = FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->where('is_inactive', false)->exists();
+                $sichtbar = FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')->whereKey($id)->where('is_inactive', false)->exists();
                 if (! $sichtbar) {
                     return ToolResult::error('Aufschlagsklasse nicht sichtbar/aktiv im Team.', 'NOT_FOUND');
                 }

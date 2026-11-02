@@ -302,6 +302,12 @@ return [
                     'route' => 'foodalchemist.angebote.index',
                     'icon'  => 'heroicon-o-document-text',
                 ],
+                [
+                    // Spec 94: Personal, Equipment, Logistik einmal pflegen — Konfiguratoren übernehmen sie als Kopie.
+                    'label' => 'Leistungs-Vorlagen',
+                    'route' => 'foodalchemist.angebote.leistung_vorlagen',
+                    'icon'  => 'heroicon-o-wrench-screwdriver',
+                ],
             ],
         ],
         [

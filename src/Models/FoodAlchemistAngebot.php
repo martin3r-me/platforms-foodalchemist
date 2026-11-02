@@ -45,6 +45,7 @@ class FoodAlchemistAngebot extends Model
         'price_calculated_at' => 'datetime',
         'price_override_at' => 'datetime',
         'price_override_expires_at' => 'datetime',
+        'konfiguration_json' => 'array',   // Spec 94: Auswahl aus dem Konfigurator-Link
     ];
 
     /** Verknüpfte CRM-Firma (optional, MVP: nur verlinken — kein Rücksync). */
