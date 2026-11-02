@@ -73,3 +73,21 @@ it('DELETE von Konfigurator und Vorlage verlangt confirm=true (CONFIRM_REQUIRED,
             ->and($this->registry->get($tool)->getMetadata()['confirmation_required'])->toBeTrue();
     }
 });
+
+it('PUBLISH setzt „Anfragen gehen an“ und „Gültig bis“; fremde Person wird abgelehnt', function () {
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Menü', 'kind' => 'concept', 'status' => 'active', 'price_per_person_cache' => 40, 'ek_per_person_cache' => 12]);
+    $kid = ($this->tool)('foodalchemist.konfiguratoren.POST', ['name' => 'Link'])->data['konfigurator']['id'];
+    ($this->tool)('foodalchemist.konfigurator_konzepte.POST', ['konfigurator_id' => $kid, 'rolle' => 'haupt', 'dinner_concept_id' => $c->id]);
+    ($this->tool)('foodalchemist.konfigurator_pakete.POST', ['konfigurator_id' => $kid, 'von_pax' => 50, 'bis_pax' => 99]);
+    $fremd = $this->makeUser($this->childB, 'Fremd');
+    $bis = now()->addMonths(2)->format('Y-m-d');
+
+    $abgelehnt = ($this->tool)('foodalchemist.konfigurator_presentation.PUBLISH', ['id' => $kid, 'verantwortlich_user_id' => $fremd->id]);
+    expect($abgelehnt->success)->toBeFalse()->and($abgelehnt->errorCode)->toBe('VALIDATION_ERROR');
+
+    $r = ($this->tool)('foodalchemist.konfigurator_presentation.PUBLISH', ['id' => $kid, 'verantwortlich_user_id' => $this->user->id, 'gueltig_bis' => $bis]);
+    expect($r->success)->toBeTrue($r->error ?? '')
+        ->and($r->data['verantwortlich_user_id'])->toBe($this->user->id)->and($r->data['gueltig_bis'])->toBe($bis)
+        ->and(substr($r->data['expires_at'], 0, 10))->toBe($bis);
+});
+
