@@ -124,7 +124,10 @@
         .pt-measure { max-width: var(--pt-measure); margin-inline: auto; padding-inline: clamp(22px, 6vw, 40px); }
         .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: clamp(22px, 6vw, 48px); }
         /* Spec 94 · Konfigurator-Link */
-        .pt-konfig-schritt { padding-block: var(--pt-gap); }
+        .pt-wrap { counter-reset: konfig-schritt; }
+        .pt-konfig-schritt { padding-block: var(--pt-gap); counter-increment: konfig-schritt; }
+        .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Tageszeit oder Add-ons fehlen */
+        .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form) { max-width: var(--pt-measure); }
         .pt-konfig-schritt h2 { margin: 8px 0 18px; }
         .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
         .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; }

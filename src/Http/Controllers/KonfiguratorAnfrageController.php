@@ -22,12 +22,19 @@ class KonfiguratorAnfrageController
         abort_if($k === null, 404);
         $zurueck = route('foodalchemist.presentation.show', ['type' => 'konfigurator', 'token' => $token]);
 
+        // Auswahl im Hash zurückgeben: das Skript stellt sie wieder her und springt zur Anfrage (s=anfrage)
+        $hash = '#' . http_build_query(array_filter([
+            'k' => (int) $request->input('konzept') ?: null, 't' => preg_replace('/[^a-z_]/', '', (string) $request->input('tageszeit')) ?: null,
+            'ab' => (int) $request->input('abend_konzept') ?: null,
+            'a' => implode('.', array_filter(array_map('intval', explode(',', (string) $request->input('addons'))))) ?: null,
+            'p' => (int) $request->input('pax') ?: null, 's' => 'anfrage',
+        ]));
         try {
             $svc->anfragen($k, $request->only(self::FELDER));
         } catch (ValidationException $e) {
-            return redirect()->to($zurueck . '?anfrage=fehler#konfig-anfrage')->withErrors($e->errors())->withInput($request->except(['website', 'ts']));
+            return redirect()->to($zurueck . '?anfrage=fehler' . $hash)->withErrors($e->errors())->withInput($request->except(['website', 'ts']));
         }
 
-        return redirect()->to($zurueck . '?anfrage=ok#konfig-anfrage');
+        return redirect()->to($zurueck . '?anfrage=ok' . $hash);
     }
 }

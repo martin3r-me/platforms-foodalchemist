@@ -1,7 +1,7 @@
-{{-- Spec 94 · Konfigurator-Schritt 3: Add-ons nach Abschnitten; Bindung an ein Konzept und Tageszeit filtert das Skript. --}}
+{{-- Spec 94 · Konfigurator-Schritt: Add-ons nach Abschnitten; Bindung an ein Konzept und Tageszeit filtert das Skript. --}}
 @if(! empty($content['addons']))
     <section class="pt-wide pt-konfig-schritt" id="konfig-addons" data-konfig-schritt="addons">
-        <p class="pt-kicker">Schritt 3</p>
+        <p class="pt-kicker pt-konfig-nr"></p>
         <h2>{{ $style['titel'] ?? 'Dazu buchen' }}</h2>
         @foreach(collect($content['addons'])->groupBy('abschnitt') as $abschnitt => $liste)
             <h3 class="pt-konfig-abschnitt">{{ $abschnitt }}</h3>
