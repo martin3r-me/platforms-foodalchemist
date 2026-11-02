@@ -1,4 +1,4 @@
-{{-- Spec 94 · Konfigurator-Schritt 1: Konzept wählen (Karten). Preise nur aus der Preistabelle des Snapshots. --}}
+{{-- Spec 94 · Konfigurator-Schritt: Konzept wählen (Karten). Preise nur aus der Preistabelle des Snapshots. --}}
 @php
     $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
     $ansicht = ($style['ansicht'] ?? 'raster') === 'liste' ? 'pt-konfig-liste' : 'pt-konfig-raster';
@@ -6,7 +6,7 @@
     $mitAb = $style['show_ab_preis'] ?? true;
 @endphp
 <section class="pt-wide pt-konfig-schritt" id="konfig-konzepte" data-konfig-schritt="konzepte">
-    <p class="pt-kicker">Schritt 1</p>
+    <p class="pt-kicker pt-konfig-nr"></p>
     <h2>{{ $style['titel'] ?? 'Konzept wählen' }}</h2>
     @if(! empty($content['intro']))<p class="pt-section-text">{{ $content['intro'] }}</p>@endif
     <div class="{{ $ansicht }}">

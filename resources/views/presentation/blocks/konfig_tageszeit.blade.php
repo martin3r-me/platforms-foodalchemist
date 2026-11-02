@@ -1,7 +1,7 @@
-{{-- Spec 94 · Konfigurator-Schritt 2: Tageszeit (nur wenn aktiv), bei Day-into-Night optional ein zweites Konzept für den Abend. --}}
+{{-- Spec 94 · Konfigurator-Schritt: Tageszeit (nur wenn aktiv), bei Day-into-Night optional ein zweites Konzept für den Abend. --}}
 @if($content['tageszeit_aktiv'] ?? false)
-    <section class="pt-measure pt-konfig-schritt" id="konfig-tageszeit" data-konfig-schritt="tageszeit">
-        <p class="pt-kicker">Schritt 2</p>
+    <section class="pt-wide pt-konfig-schritt" id="konfig-tageszeit" data-konfig-schritt="tageszeit">
+        <p class="pt-kicker pt-konfig-nr"></p>
         <h2>{{ $style['titel'] ?? 'Tageszeit' }}</h2>
         <div class="pt-konfig-wahl">
             <button type="button" class="pt-konfig-chip" data-konfig-tageszeit="lunch" aria-pressed="false">Lunch</button>

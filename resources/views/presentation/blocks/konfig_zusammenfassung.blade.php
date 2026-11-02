@@ -1,12 +1,12 @@
-{{-- Spec 94 · Konfigurator-Schritt 4: Gäste, Paket, Preis pro Person und gesamt. Das Skript liest nur aus der Preistabelle. --}}
+{{-- Spec 94 · Konfigurator-Schritt: Gäste, Paket, Preis pro Person und gesamt. Das Skript liest nur aus der Preistabelle. --}}
 @php
     $pakete = $content['pakete'] ?? [];
     $min = $pakete[0]['von'] ?? 1;
     $max = $pakete !== [] ? end($pakete)['bis'] : 1;
     $start = max($min, min($max, (int) ($content['pax_vorgabe'] ?? $min)));
 @endphp
-<section class="pt-measure pt-konfig-schritt pt-konfig-summe" id="konfig-summe" data-konfig-schritt="summe">
-    <p class="pt-kicker">Schritt 4</p>
+<section class="pt-wide pt-konfig-schritt pt-konfig-summe" id="konfig-summe" data-konfig-schritt="summe">
+    <p class="pt-kicker pt-konfig-nr"></p>
     <h2>{{ $style['titel'] ?? 'Ihr Preis' }}</h2>
     @if($pakete === [])
         <p class="pt-section-text">Für diesen Konfigurator sind noch keine Preise hinterlegt.</p>

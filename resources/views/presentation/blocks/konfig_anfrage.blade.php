@@ -1,12 +1,12 @@
-{{-- Spec 94 · Konfigurator-Schritt 5: Anfrage. Sendet nur die Auswahl; den Preis bestimmt der Server aus der Preistabelle.
+{{-- Spec 94 · Konfigurator-Schritt: Anfrage. Sendet nur die Auswahl; den Preis bestimmt der Server aus der Preistabelle.
      Honeypot (website) und Mindest-Ausfüllzeit (ts); in der internen Vorschau ohne Ziel. --}}
 @php
     $ref = request()->route('token');
     $ziel = $ref !== null && request()->route('type') === 'konfigurator' ? route('foodalchemist.presentation.konfigurator_anfrage', ['token' => $ref]) : null;
     $status = request()->query('anfrage');
 @endphp
-<section class="pt-measure pt-konfig-schritt" id="konfig-anfrage" data-konfig-schritt="anfrage">
-    <p class="pt-kicker">Schritt 5</p>
+<section class="pt-wide pt-konfig-schritt" id="konfig-anfrage" data-konfig-schritt="anfrage">
+    <p class="pt-kicker pt-konfig-nr"></p>
     <h2>{{ $style['titel'] ?? 'Unverbindlich anfragen' }}</h2>
     @if($status === 'ok')
         <p class="pt-konfig-ok" data-konfig-anfrage-ok>Vielen Dank. Ihre Anfrage ist angekommen, wir melden uns zeitnah.</p>

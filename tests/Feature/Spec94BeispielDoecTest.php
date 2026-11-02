@@ -28,7 +28,8 @@ it('legt den Beispiel-Datensatz an und rechnet Mengen und Preise je DOEC-Paket',
         ->where('leistung_id', $leistung($teil))->whereNull('konfigurator_konzept_id')->value('anzahl');
     $pakete = $k->pakete()->get();
 
-    expect($pakete->map(fn ($p) => [$p->von_pax, $p->bis_pax])->all())->toBe(KonfiguratorBeispielDoec::PAKETE)
+    expect($k->name)->toBe('Diva.licious 2026 (Beispiel DOEC)')   // Befund io-Durchklick: übergebener Name gewinnt
+        ->and($pakete->map(fn ($p) => [$p->von_pax, $p->bis_pax])->all())->toBe(KonfiguratorBeispielDoec::PAKETE)
         ->and($pakete->map(fn ($p) => $anzahl($p->id, 'LKW'))->all())->toBe([1.0, 2.0, 2.0, 3.0])
         ->and($pakete->map(fn ($p) => $anzahl($p->id, 'Equipment'))->all())->toBe([149.0, 349.0, 649.0, 1000.0])
         ->and($pakete->map(fn ($p) => $anzahl($p->id, 'F&B'))->all())->toBe([0.0, 1.0, 1.0, 1.0])

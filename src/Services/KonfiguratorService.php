@@ -45,7 +45,7 @@ class KonfiguratorService
 
     public function anlegen(Team $team, array $in): FoodAlchemistKonfigurator
     {
-        $werte = $this->kopfWerte(['name' => 'Neuer Konfigurator'] + $in, null, $team);
+        $werte = $this->kopfWerte($in + ['name' => 'Neuer Konfigurator'], null, $team);   // übergebener Name gewinnt
 
         return FoodAlchemistKonfigurator::create($werte + [
             'team_id' => $team->id,

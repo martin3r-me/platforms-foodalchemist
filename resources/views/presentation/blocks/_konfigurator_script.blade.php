@@ -110,5 +110,6 @@
     if (h.p) { setzePax(h.p); }
     if (h.a) { h.a.split('.').forEach(function (a) { var box = q('[data-konfig-addon][value="' + a + '"]'); if (box) { box.checked = true; } }); }
     render();
+    if (h.s === 'anfrage') { var ziel = document.getElementById('konfig-anfrage'); if (ziel) { ziel.scrollIntoView({ block: 'start' }); } }
 })();
 </script>

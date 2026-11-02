@@ -57,7 +57,8 @@ it('Snapshot: nur Preistabelle, keine Kalkulation (EK, Klassen, Mengen, Leistung
 
 it('öffentliche Seite rendert den Konfigurator', function () {
     auth()->logout();
-    $this->get($this->link['url'])->assertOk()->assertSee('Diva.licious')->assertSee('Culture')->assertSee('Mitternachtssnack')->assertSee('pt-konfig-daten', false);
+    $this->get($this->link['url'])->assertOk()->assertSee('Diva.licious')->assertSee('Culture')->assertSee('Mitternachtssnack')->assertSee('pt-konfig-daten', false)
+        ->assertSee('pt-konfig-nr', false)->assertDontSee('Schritt 4');   // Nummern fortlaufend per CSS-Zähler, nie fest im HTML
 });
 
 it('Anfrage: Angebot mit Status anfrage, Preis aus der Tabelle, Mail an die verantwortliche Person, Signal; Status weiter schließt es', function () {
@@ -66,7 +67,8 @@ it('Anfrage: Angebot mit Status anfrage, Preis aus der Tabelle, Mail an die vera
     $token = $this->k->fresh()->presentation_token;
     $this->post(route('foodalchemist.presentation.konfigurator_anfrage', ['token' => $token]),
         anfrage94(['konzept' => (string) $this->haupt->id, 'addons' => (string) $this->addon->id, 'total_price' => '1']))
-        ->assertRedirect()->assertRedirectContains('anfrage=ok');
+        ->assertRedirect()->assertRedirectContains('anfrage=ok')
+        ->assertRedirectContains('#k=' . $this->haupt->id . '&t=dinner&a=' . $this->addon->id . '&p=150&s=anfrage');   // Auswahl bleibt nach dem Absenden
 
     $a = FoodAlchemistAngebot::where('konfigurator_id', $this->k->id)->first();
     $pp = round(50 + 5 * 300 / 149, 2) + 6 + round(0 / 149, 2);
