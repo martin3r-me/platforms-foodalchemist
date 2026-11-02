@@ -107,6 +107,14 @@ aus der Klasse, fixierbar), Stunden-Quelle, Häufigkeit, Notiz, aktiv. Die Liste
 Vorlagen folgen der Team-Hierarchie (Spec 82): Das Oberteam pflegt, Unterteams sehen und übernehmen sie und
 können eigene ergänzen. Ein Unterteam ändert eine geerbte Vorlage nicht, es legt eine eigene an.
 
+Umsetzung ohne eigene Logik über den bestehenden Trait `Models/Concerns/BelongsToTeamHierarchy`:
+sichtbar ist das eigene Team plus Eltern-Kette (`scopeVisibleToTeam` bzw. Global Scope `TeamSicht`), editierbar nur
+das eigene Team (`isOwnedBy`). Kein `withoutGlobalScope`; die einzige Umgehung ist `ohneTeamSicht('<grund>')` (Spec 84 B3,
+geprüft von Spec84SichtWaechter und ServiceEigentumWaechter). Konfiguratoren, Pakete und Leistungszeilen nutzen denselben Trait.
+
+Abgrenzung (Spec 82 §12 A): Die Vererbung gilt nur für Unter-Teams. Ein Mandant neben dem Master ist kein Nachfahre und
+sieht die Vorlagen nicht. Leistungs-Vorlagen sind in Phase 1 **nicht im Abo und nicht im Stamm-Paket**.
+
 ### Konfigurator-Editor
 
 Aufgebaut wie der Angebots-Editor (`Livewire/Angebote/Editor`): Liste der Konfiguratoren, ein Klick öffnet den
@@ -254,6 +262,10 @@ Gleiche Rechen- und Preisfelder wie die Vorlage (**Kopie beim Übernehmen**), da
 
 Vorlagen werden **kopiert, nicht live verknüpft**: Ein veröffentlichter Preis darf sich nicht still ändern.
 Ändert sich eine Vorlage später, zeigt der Editor „Vorlage geändert, übernehmen?" je Zeile und als Sammelaktion.
+Das ist eine Kopie mit `vorlage_id` und `vorlage_stand_at`, verglichen mit `updated_at` der Vorlage, kein Live-Verweis.
+Geprüft: Das Fassungs-Muster (`Concerns/HatFassungen`, `*_fassungen.UEBERNEHMEN_GET/POST` bei Rezept und Baustein)
+dient dem Abo mit eingefrorenen Fassungen. Solange Vorlagen nicht im Abo sind, reicht die Kopie mit Stand;
+kommen sie später ins Abo, wechseln sie auf `HatFassungen` statt eines dritten Wegs.
 
 ### `foodalchemist_konfigurator_pakete`
 
@@ -291,6 +303,10 @@ Eindeutig je (`paket_id`, `leistung_id`, `konfigurator_konzept_id`).
 ### Neuer Signal-Typ
 
 `SignalTyp::KonfiguratorAnfrage` (`konfigurator_anfrage`): eine offene Anfrage aus einem Kundenlink, verweist auf das neue Angebot.
+Mit Eintrag in der Signal-Weg-Registry und in der Policy (Tests SignalWegRegistryTest, SignalPolicyDrift, SignalLifecycleTest).
+Geschlossen wird über `SignalService::schliesseGemessen`, sobald das Angebot den Status `anfrage` verlässt.
+
+Status: Das Angebot nutzt den vorhandenen `AngebotStatus::Anfrage`; es gibt keinen neuen Status.
 
 ## Rechenweg
 
@@ -301,7 +317,10 @@ oder direkt am Konfigurator. Es gibt keine automatische Preisquelle (kein Liefer
 Für den VK gibt es einen Vorschlag aus der **Aufschlagsklasse** (dieselben Klassen wie im Concepter und bei den
 Darreichungen); er lässt sich mit Begründung fest setzen.
 
-Gleicher Weg wie bei den Speisen (`CatalogPricingService`, siehe `docs/kalkulation.md`):
+Gleicher Weg wie bei den Speisen (`CatalogPricingService`, siehe `docs/kalkulation.md`). Die Formel wird nicht
+neu geschrieben: Der `KonfiguratorPricingService` holt den Basissatz über `CatalogPricingService::enterpriseBaseRate`
+und den Klassenfaktor über denselben Weg wie `catalogPrice`. Dafür wird die Formel dort in einen gemeinsamen Helfer
+gezogen, den Speisen und Leistungen aufrufen (eine Wahrheit):
 
 ```text
 VK-Satz (auto)  = EK-Satz × Basissatz × Klassenfaktor / 100
@@ -315,6 +334,11 @@ Hinweis: Der Basissatz enthält Gemeinkosten, die auf den Wareneinsatz bezogen s
 er deshalb einen hohen VK ergeben. Gesteuert wird das über eigene Aufschlagsklassen für Leistungen
 (z. B. „Personal", „Logistik", „Equipment") mit passendem Klassenfaktor. Die Preisvorschau zeigt je Leistung
 den Aufschlag in Prozent, damit Ausreißer auffallen.
+
+Damit sich Leistungs- und Speisenklassen nicht mischen, bekommt `foodalchemist_markup_classes` eine Spalte
+`bereich` (`speisen` | `leistung`, Standard `speisen`, Bestand bleibt `speisen`). Concepter und Darreichungen zeigen nur
+`speisen`, Vorlagen und Leistungszeilen nur `leistung`. Das ist die einzige Änderung an einer bestehenden Tabelle
+außer `foodalchemist_offers` (zur Bestätigung, siehe Entscheidungen).
 
 ### Speisen
 
@@ -415,7 +439,8 @@ Handwerte gelten auch an den Rändern, sie sind fest gewollt. Liegt die Abweichu
 
 ### Paketgrenzen vorschlagen
 
-Optionale Hilfe beim Anlegen der Pakete, auf Knopfdruck und per MCP. Eingaben: Gästebereich (z. B. 50–1.200),
+Optionale Hilfe beim Anlegen der Pakete, auf Knopfdruck und per MCP. **Deterministisch, ohne KI**
+(Spec 90 greift nicht). Eingaben: Gästebereich (z. B. 50–1.200),
 Toleranz (Standard `paket_toleranz_pct`), Raster für glatte Grenzen (Standard 25 Gäste), Mindestbreite (Standard 25).
 
 ```text
@@ -488,6 +513,9 @@ Neuer Typ `PresentationService::TYPE_KONFIGURATOR = 'konfigurator'` mit eigenem 
 gewählten Design gerendert (Layout und Tokens über `PresentationDesignService`, Branding darüber); die Schritte unten
 sind die Konfigurator-Blöcke aus „CI und Design“.
 
+Registrierung: Typ in `routes/public.php` (`/p/{type}/{token}`) und in `HasPresentation` eintragen.
+Leak-Test analog Angebot: Snapshot ohne EK, ohne Aufschlagsklassen, ohne Mengen und ohne Leistungszeilen.
+
 Ablauf wie im DOEC-Vorbild:
 
 1. Konzept wählen (Karten mit Bild, Claim, Preis ab).
@@ -500,34 +528,51 @@ eine serverseitig vorberechnete **Preistabelle**: je Pax-Paket (von / bis) und j
 der VK pro Person, für Day-into-Night je Paar aus Lunch- und Dinner-Konzept. Der Browser sucht das Paket zur
 eingestellten Gästezahl und liest nur ab. Ein Test prüft, dass im Snapshot kein EK steht.
 
-**Anfrage:** Formular mit Name, Firma, E-Mail, Telefon, Datum, Nachricht und Datenschutz-Einwilligung;
-Honeypot und Rate-Limit. Ergebnis:
+**Anfrage:** Formular mit Name, Firma, E-Mail, Telefon, Datum, Nachricht und Datenschutz-Einwilligung.
+Erster schreibender Endpunkt aus einem Präsentations-Link; Vorbild sind die POST-Routen des Lieferanten-Portals
+(`/l/{token}/…` in `routes/public.php`):
+
+- Route `POST /p/konfigurator/{token}/anfrage`, Token per `where` eingeschränkt, `NoCacheHeaders`.
+- Eigener Limiter `throttle:fa-konfigurator-anfrage` (z. B. 5 je Minute und IP, 20 je Stunde und Token).
+- Honeypot-Feld und Mindest-Ausfüllzeit; Treffer werden still verworfen.
+- Validierung mit festen Größen: Texte max. 2.000 Zeichen, E-Mail-Format, Pax nur im Bereich der Pakete,
+  Konzepte und Add-ons nur aus dem Snapshot dieses Links (IDs gegen den Snapshot geprüft).
+- Der Preis wird serverseitig aus der Preistabelle neu bestimmt, nie aus dem Formular übernommen.
+- Keine URLs oder Dateien annehmen, keine Abrufe nach außen auslösen (SSRF-Lehre aus #671).
+- Abgelaufener oder zurückgezogener Link nimmt keine Anfrage an.
+
+Ergebnis:
 
 1. Neues Angebot (`status = anfrage`, `personen`, `event_date`, `brief` mit der Auswahl als Text, `total_price`, `konfigurator_id`, `konfiguration_json`).
-2. **Mail** an die verantwortliche Person (`verantwortlich_user_id`, Adresse aus dem Benutzerkonto) mit Auswahl, Preis und Link zum Angebot. Ohne hinterlegte Adresse nur das Signal und eine Warnung im Konfigurator.
+2. **Mail** an die verantwortliche Person (`verantwortlich_user_id`, Adresse aus dem Benutzerkonto) mit Auswahl, Preis und Link zum Angebot. Ohne hinterlegte Adresse nur das Signal und eine Warnung im Konfigurator. Versand über den Mail-Weg, den das Modul schon hat (Muster `OrderMailService`); keine Änderung an platforms-core. Später kann Spec 92 (PWA/Push) die Meldung zusätzlich als Push tragen.
 3. **Signal** `konfigurator_anfrage` im Team, schließt sich, wenn das Angebot den Status `anfrage` verlässt.
 
 ## MCP-Tools
 
-Namensschema wie bestehende Tools (`…GetTool`, `…PostTool`, `…PutTool`, `…DeleteTool`):
+Namensschema `foodalchemist.<ressource>.<VERB>` wie im Bestand; Klassen heißen `…GetTool`, `…PostTool` usw.
 
-- `leistung_vorlagen` GET / POST / PUT / DELETE
-- `konfiguratoren` GET / POST / PUT / DELETE, LIST
-- `konfigurator_konzepte` POST / PUT / DELETE / REORDER
-- `konfigurator_leistungen` POST / PUT / DELETE, `aus_vorlage` (Mehrfachübernahme), `vorlage_abgleich`
-- `konfigurator_pakete` GET / POST / PUT / DELETE, **`SCHNUEREN`** (alle Pakete oder eines; Antwort: Mengen je Leistung, Abweichungen Handwert gegen Regel, EK/VK/DB je Paket), **`VORSCHLAGEN`** (Gästebereich, Toleranz, Raster, Mindestbreite; liefert nur den Vorschlag, schreibt nichts), **`VORSCHLAG_UEBERNEHMEN`**
-- `konfigurator_paket_mengen` PUT (Handwert setzen oder zurück auf Regel)
-- `konfigurator_preise` GET (Matrix Konzept × Paket mit EK, VK, DB inkl. Unter- und Obergrenze; nur intern)
-- `konfigurator_presentation` GET / PUBLISH / WITHDRAW (mit Design-Wahl)
-- `konfiguratoren.BRANDING` (Farben, Footer; „übernehmen von“ Foodbook, Angebot oder Betrieb), wie `foodbooks.BRANDING`
-- bestehende `presentation_designs`-Tools: Ausgabeform `konfigurator` und die neuen Blöcke im Vokabular
+- `foodalchemist.leistung_vorlagen.GET / POST / PUT / DELETE`
+- `foodalchemist.konfiguratoren.GET / POST / PUT / DELETE`
+- `foodalchemist.konfiguratoren.BRANDING` (Farben, Footer; „übernehmen von“ Foodbook, Angebot oder Betrieb), wie `foodalchemist.foodbooks.BRANDING`
+- `foodalchemist.konfigurator_konzepte.POST / PUT / DELETE / REORDER`
+- `foodalchemist.konfigurator_leistungen.POST / PUT / DELETE`, `.AUS_VORLAGE` (Mehrfachübernahme), `.VORLAGE_ABGLEICH`
+- `foodalchemist.konfigurator_pakete.GET / POST / PUT / DELETE`
+- `foodalchemist.konfiguratoren.SCHNUEREN` (alle Pakete oder eines; Antwort: Mengen je Leistung, Abweichungen Handwert gegen Regel, EK/VK/DB je Paket)
+- `foodalchemist.konfiguratoren.PAKETE_VORSCHLAGEN` (Gästebereich, Toleranz, Raster, Mindestbreite; liefert nur den Vorschlag, schreibt nichts) und `.PAKETE_VORSCHLAG_UEBERNEHMEN`
+- `foodalchemist.konfigurator_paket_mengen.PUT` (Handwert setzen oder zurück auf Regel)
+- `foodalchemist.konfiguratoren.PREISE` (Matrix Konzept × Paket mit EK, VK, DB inkl. Unter- und Obergrenze; nur intern)
+- `foodalchemist.konfigurator_presentation.GET / PUBLISH / WITHDRAW` (mit Design-Wahl)
+- bestehende `foodalchemist.presentation_designs.*`: Ausgabeform `konfigurator` und die neuen Blöcke im Vokabular
+
+Jedes neue Tool steht in `src/Tools/_liste.php` (sonst Spec84ToolListeTest und McpToolsTest rot), hat `read_only`
+korrekt gesetzt (GET, PREISE, PAKETE_VORSCHLAGEN: `true`) und läuft für die Rechte über `FaRechteToolHuelle`.
 
 Die Rechenlogik liegt nur im `KonfiguratorPricingService`. Oberfläche und MCP-Tools rufen denselben Service auf;
-es gibt keine zweite Rechnung im Tool oder im Browser. EK- und VK-Sätze der Leistungen kommen per `…PostTool` /
-`…PutTool` herein, Speisenpreise nie (die liest der Service aus dem Concept).
+es gibt keine zweite Rechnung im Tool oder im Browser. EK- und VK-Sätze der Leistungen kommen per POST /
+PUT herein, Speisenpreise nie (die liest der Service aus dem Concept).
 
 Typischer MCP-Ablauf: Konfigurator anlegen → Concepts verknüpfen → Leistungen aus Vorlagen übernehmen (oder frei mit
-EK/VK anlegen) → Pakete anlegen (oder `VORSCHLAGEN` und übernehmen) → `SCHNUEREN` → `konfigurator_preise` prüfen → veröffentlichen.
+EK/VK anlegen) → Pakete anlegen (oder `PAKETE_VORSCHLAGEN` und übernehmen) → `SCHNUEREN` → `PREISE` prüfen → veröffentlichen.
 
 ## Umsetzung in Stufen
 
@@ -538,6 +583,12 @@ EK/VK anlegen) → Pakete anlegen (oder `VORSCHLAGEN` und übernehmen) → `SCHN
 | 3 | Präsentationstyp `konfigurator`; Einstellungsseite Präsentations-Designs erweitert (Ausgabeform, Konfigurator-Blöcke, eingebautes Design, Beispiel-Vorschau); Branding mit „übernehmen von“; Anfrage → Angebot, Mail, Signal | Design im Builder gestaltet und im Konfigurator gewählt, Branding aus einem Foodbook übernommen, Link live, Snapshot ohne EK (Test), Anfrage erzeugt Angebot, Mail und Signal |
 | 4 | MCP-Tools, Handbuch-Seite, DOEC als erster echter Fall | Diva.licious im Food Alchemist nachgebaut, Kevin Gerling bekommt den Link |
 | 5 (optional) | Vorlagen-Sets, Auswahl einer Anfrage als Kapitel ins Angebot übernehmen, weitere Sprachen | |
+
+Je Stufe läuft der Testkreis der Wächter mit: Spec84* (Sicht, Tool-Liste, Service-Eigentum), Spec77b, Policy,
+Dateigrößen (Editor-Komponenten nach Spec 84 aufteilen, z. B. ein Livewire-Teil je Reiter), BladeCompiles, UiRegeln,
+EnumStatusVergleichWaechter. Die Handbuch-Seite (Stufe 4) folgt Spec 86.
+
+Merge als reiner Docs-PR über den Kurator (Spec 82), erst nach Freigabe durch Dominique.
 
 ## Entscheidungen
 
@@ -573,6 +624,8 @@ Vorschlag in dieser Spec, zu bestätigen:
 - Branding wird aus Foodbook, Angebot oder Betrieb einmalig kopiert, nicht live gekoppelt. Das Design dagegen bleibt live verknüpft.
 - Konfigurator-Blöcke sind Pflicht und kommen je einmal vor; nur Reihenfolge und Stil sind frei.
 - Ein Link je Konfigurator, keine Veröffentlichung je Betrieb in dieser Spec.
+- Leistungs-Vorlagen in Phase 1 nicht im Abo und nicht im Stamm-Paket; Mandanten neben dem Master sehen sie nicht.
+- Neue Spalte `bereich` an den Aufschlagsklassen, damit Leistungsklassen nicht im Concepter auftauchen.
 
 ## Offene Fragen
 
