@@ -36,7 +36,7 @@ class PresentationDesignService
     /** Spec 94: Blöcke, die im Konfigurator nichts bedeuten (Kapitel-, Raster- und Preisblöcke anderer Ausgaben). */
     private const KONFIG_FREMD = ['chapter_loop', 'dish_list', 'grid', 'price_summary', 'preis_aufschluesselung', 'legend'];
 
-    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot', 'konfigurator'];
+    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot', 'konfigurator', 'konfigurator_dunkel'];
 
     // ── MCP-Vokabular (damit die MCP-Tools alle setzbaren Keys dokumentieren) ──
 
@@ -177,13 +177,34 @@ class PresentationDesignService
                     'lightbox' => true,
                 ],
             ],
+            // Spec 94 Stufe 5: dunkles Beispiel im PRO.KOPF-Stil — nur Tokens, im Builder änderbar und duplizierbar.
+            'konfigurator_dunkel' => [
+                'name' => 'Konfigurator dunkel (PRO.KOPF-Stil)',
+                'base_slug' => 'konfigurator',
+                'output_types' => ['konfigurator'],
+                'layout' => [
+                    ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => false, 'show_logo' => true]],
+                    ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
+                    ['block_type' => 'konfig_tageszeit', 'style' => []],
+                    ['block_type' => 'konfig_addons', 'style' => []],
+                    ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
+                    ['block_type' => 'konfig_anfrage', 'style' => []],
+                ],
+                'tokens' => [
+                    'palette' => ['primary' => '#f2efe9', 'accent' => '#8fb0d4', 'bg' => '#121212', 'surface' => 'rgba(255,255,255,0.04)', 'text' => '#f2efe9', 'muted' => '#9a948a'],
+                    'typography' => ['heading' => 'sans', 'body' => 'sans', 'scale' => 1.0],
+                    'spacing' => 'comfortable',
+                    'nav' => 'none',
+                    'lightbox' => false,
+                ],
+            ],
             // Spec 94: Kundenlink des Konfigurators — Cover, dann die fünf Konfigurator-Schritte.
             'konfigurator' => [
                 'name' => 'Konfigurator',
                 'base_slug' => 'konfigurator',
                 'output_types' => ['konfigurator'],
                 'layout' => [
-                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true, 'cover_height' => 60]],
+                    ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => true, 'show_logo' => true]],
                     ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
                     ['block_type' => 'konfig_tageszeit', 'style' => []],
                     ['block_type' => 'konfig_addons', 'style' => []],
@@ -218,6 +239,9 @@ class PresentationDesignService
                 continue;
             }
             $gesehen[$t] = true;
+            if ($t === 'cover') {   // Stufe 5: kompakter Kopf (Titel, Claim, Ort), keine feste Höhe — am Handy kein halber Bildschirm Weißraum
+                unset($b['style']['cover_height'], $b['style']['cover_height_max_px']);
+            }
             $out[] = $b;
         }
         foreach (self::KONFIG_BLOCKS as $t) {
