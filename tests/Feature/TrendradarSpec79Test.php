@@ -306,7 +306,9 @@ it('Google Trends: Messung speichert Kurve, Richtung, Kosten und einen Beleg, z�
 
     $reg = app(ToolRegistry::class);
     $ctx = new ToolContext($this->inhaber, $this->rootTeam);
-    expect($reg->get('foodalchemist.trends.MESSEN')->execute(['trend_id' => $t->id], $ctx)->errorCode)->toBe('CONFIRM_REQUIRED');
+    // confirm ist Pflichtfeld im Schema: fehlt es, antwortet die Tool-Hülle wie der Core mit VALIDATION_ERROR (#686); ohne Bestätigung = confirm=false
+    expect($reg->get('foodalchemist.trends.MESSEN')->execute(['trend_id' => $t->id, 'confirm' => false], $ctx)->errorCode)->toBe('CONFIRM_REQUIRED')
+        ->and($fake->abgefragt)->toBe([]);
     $res = $reg->get('foodalchemist.trends.MESSEN')->execute(['trend_id' => $t->id, 'confirm' => true], $ctx);
 
     expect($res->success)->toBeTrue()
