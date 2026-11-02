@@ -32,6 +32,7 @@ class PresentationService
     public const TYPE_SPEISEKARTE = 'speisekarte';
     public const TYPE_SPEISEPLAN = 'speiseplan';
     public const TYPE_ANGEBOT = 'angebot';
+    public const TYPE_KONFIGURATOR = 'konfigurator';   // Spec 94
 
     public const SCHEMA_VERSION = 1;
 
@@ -381,6 +382,7 @@ class PresentationService
             self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean, $outlet),
             self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean, $outlet),
             self::TYPE_ANGEBOT => $this->normalizeAngebot($team, $entity, $clean, $outlet),
+            self::TYPE_KONFIGURATOR => app(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorSnapshot::class)->normalize($team, $entity, $clean),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
 
@@ -1125,6 +1127,9 @@ class PresentationService
      */
     private function adaptLayoutForType(string $type, array $layout, string $mode = 'grid'): array
     {
+        if ($type === self::TYPE_KONFIGURATOR) {
+            return PresentationDesignService::konfiguratorLayout($layout);
+        }
         if ($type !== self::TYPE_SPEISEPLAN) {
             return $layout;
         }
@@ -1259,6 +1264,7 @@ class PresentationService
             self::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
             self::TYPE_SPEISEPLAN => FoodAlchemistSpeiseplan::class,
             self::TYPE_ANGEBOT => FoodAlchemistAngebot::class,
+            self::TYPE_KONFIGURATOR => \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::class,
             default => throw new \InvalidArgumentException("Unbekannter Präsentations-Typ '{$type}'."),
         };
     }

@@ -26,9 +26,17 @@ class PresentationDesignService
     public const BLOCK_TYPES = [
         'cover', 'chapter_loop', 'dish_list', 'price_summary', 'preis_aufschluesselung', 'legend', 'grid',
         'text', 'heading', 'image', 'spacer', 'cta',
+        // Spec 94: Konfigurator-Schritte (nur für die Ausgabeform `konfigurator`, je genau einmal)
+        'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage',
     ];
 
-    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot'];
+    /** Spec 94: Pflicht-Blöcke des Konfigurators in Standard-Reihenfolge. */
+    public const KONFIG_BLOCKS = ['konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage'];
+
+    /** Spec 94: Blöcke, die im Konfigurator nichts bedeuten (Kapitel-, Raster- und Preisblöcke anderer Ausgaben). */
+    private const KONFIG_FREMD = ['chapter_loop', 'dish_list', 'grid', 'price_summary', 'preis_aufschluesselung', 'legend'];
+
+    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot', 'konfigurator'];
 
     // ── MCP-Vokabular (damit die MCP-Tools alle setzbaren Keys dokumentieren) ──
 
@@ -50,12 +58,14 @@ class PresentationDesignService
     public static function layoutVocabDoc(): string
     {
         return 'Geordnete Blockliste: [{block_type, style{}}]. block_type ∈ '
-            . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta. '
+            . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta|konfig_konzepte|konfig_tageszeit|konfig_addons|konfig_zusammenfassung|konfig_anfrage. '
             . 'style je Typ: '
             . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
             . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
             . 'image{context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
-            . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}. '
+            . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}; '
+            . 'konfig_konzepte{ansicht:raster|liste, show_bild:bool, show_ab_preis:bool}; konfig_tageszeit/konfig_addons/konfig_anfrage{titel}; konfig_zusammenfassung{show_gesamt:bool} '
+            . '(Spec 94: nur Ausgabeform konfigurator, je genau einmal; fehlende werden beim Rendern ergänzt). '
             . 'Datengebunden & interna-frei — es gibt keinen EK-/Marge-Block.';
     }
 
@@ -167,7 +177,56 @@ class PresentationDesignService
                     'lightbox' => true,
                 ],
             ],
+            // Spec 94: Kundenlink des Konfigurators — Cover, dann die fünf Konfigurator-Schritte.
+            'konfigurator' => [
+                'name' => 'Konfigurator',
+                'base_slug' => 'konfigurator',
+                'output_types' => ['konfigurator'],
+                'layout' => [
+                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true, 'cover_height' => 60]],
+                    ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
+                    ['block_type' => 'konfig_tageszeit', 'style' => []],
+                    ['block_type' => 'konfig_addons', 'style' => []],
+                    ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
+                    ['block_type' => 'konfig_anfrage', 'style' => []],
+                ],
+                'tokens' => [
+                    'palette' => ['primary' => '#1f2a44', 'accent' => '#b8874a', 'bg' => '#fbfaf8', 'surface' => 'rgba(26,23,18,0.04)', 'text' => '#1a1712', 'muted' => '#8a8178'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
+                    'spacing' => 'comfortable',
+                    'nav' => 'none',
+                    'lightbox' => false,
+                ],
+            ],
         ];
+    }
+
+    /**
+     * Spec 94: Layout für den Konfigurator — fremde Inhaltsblöcke raus, jeder Konfigurator-Block genau einmal; fehlende
+     * werden in Standard-Reihenfolge angehängt. So rendert jedes gewählte Design einen vollständigen Konfigurator.
+     *
+     * @param  list<array{block_type:string, style:array}>  $layout
+     * @return list<array{block_type:string, style:array}>
+     */
+    public static function konfiguratorLayout(array $layout): array
+    {
+        $out = [];
+        $gesehen = [];
+        foreach ($layout as $b) {
+            $t = $b['block_type'] ?? '';
+            if (in_array($t, self::KONFIG_FREMD, true) || (in_array($t, self::KONFIG_BLOCKS, true) && isset($gesehen[$t]))) {
+                continue;
+            }
+            $gesehen[$t] = true;
+            $out[] = $b;
+        }
+        foreach (self::KONFIG_BLOCKS as $t) {
+            if (! isset($gesehen[$t])) {
+                $out[] = ['block_type' => $t, 'style' => []];
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -319,7 +378,7 @@ class PresentationDesignService
     }
 
     /** Die drei Ausgabeformen, für die ein Design gelten kann. */
-    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'etikett'];   // Spec 70: Etiketten
+    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'etikett', 'konfigurator'];   // Spec 70: Etiketten, Spec 94: Konfigurator
 
     /** Nur gültige Formen; leer/keine → null (= gilt für alle Formen). */
     private function sanitizeOutputTypes(mixed $raw): ?array

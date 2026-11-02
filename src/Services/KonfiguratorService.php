@@ -78,6 +78,69 @@ class KonfiguratorService
         });
     }
 
+    // ── Branding (wie Angebot) ───────────────────────────────────────────────────
+
+    /** Farben und Footer setzen (Hex-Farben, leere Bandfarbe = aus der Primärfarbe abgeleitet). */
+    public function branding(Team $team, int $id, array $in): FoodAlchemistKonfigurator
+    {
+        $k = $this->eigener($team, $id);
+        $hex = function (mixed $wert, string $was, bool $leerErlaubt = false): ?string {
+            $w = trim((string) $wert);
+            if ($w === '' && $leerErlaubt) {
+                return null;
+            }
+            if (! preg_match('/^#[0-9a-fA-F]{6}$/', $w)) {
+                throw new \InvalidArgumentException("{$was}: bitte als #RRGGBB angeben.");
+            }
+
+            return strtolower($w);
+        };
+        $daten = [];
+        if (array_key_exists('brand_color', $in)) {
+            $daten['brand_color'] = $hex($in['brand_color'], 'Primärfarbe');
+        }
+        if (array_key_exists('band_color', $in)) {
+            $daten['band_color'] = $hex($in['band_color'], 'Bandfarbe', true);
+        }
+        if (array_key_exists('footer_text', $in)) {
+            $daten['footer_text'] = mb_substr(trim((string) $in['footer_text']), 0, 250) ?: null;
+        }
+        if (array_key_exists('presentation_design', $in)) {
+            $daten['presentation_design'] = (string) $in['presentation_design'];
+        }
+        $k->update($daten);
+
+        return $k->fresh();
+    }
+
+    /**
+     * Branding einmalig übernehmen (Kopie, keine Kopplung): aus einem Foodbook oder Angebot Farben, Footer, Logo und Titelbild;
+     * aus einem Betrieb Logo und Design.
+     */
+    public function brandingUebernehmen(Team $team, int $id, string $quelle, int $quelleId): FoodAlchemistKonfigurator
+    {
+        $k = $this->eigener($team, $id);
+        $klasse = match ($quelle) {
+            'foodbook' => \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class,
+            'angebot' => \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class,
+            'betrieb' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class,
+            default => throw new \InvalidArgumentException('Quelle: foodbook, angebot oder betrieb.'),
+        };
+        $q = $klasse::visibleToTeam($team)->find($quelleId);
+        if ($q === null) {
+            throw new \InvalidArgumentException('Die Quelle gibt es nicht oder sie ist für dieses Team nicht sichtbar.');
+        }
+        $felder = $quelle === 'betrieb'
+            ? ['logo_path', 'logo_context_file_id', 'presentation_design']
+            : ['brand_color', 'band_color', 'footer_text', 'logo_path', 'logo_context_file_id', 'cover_image_path', 'cover_context_file_id'];
+        $daten = array_filter($q->only($felder), fn ($w) => $w !== null && $w !== '');
+        if ($daten !== []) {
+            $k->update($daten);
+        }
+
+        return $k->fresh();
+    }
+
     // ── Konzepte ─────────────────────────────────────────────────────────────────
 
     public function konzeptHinzu(Team $team, int $konfiguratorId, array $in): FoodAlchemistKonfiguratorKonzept

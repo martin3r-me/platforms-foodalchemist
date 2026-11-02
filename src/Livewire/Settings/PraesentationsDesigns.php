@@ -168,13 +168,27 @@ class PraesentationsDesigns extends Component
         'image' => ['context_file_id' => null, 'path' => null, 'alt' => ''],
         'spacer' => ['height' => 24],
         'cta' => [],
+        // Spec 94: Konfigurator-Schritte
+        'konfig_konzepte' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true],
+        'konfig_tageszeit' => [],
+        'konfig_addons' => [],
+        'konfig_zusammenfassung' => ['show_gesamt' => true],
+        'konfig_anfrage' => [],
     ];
 
     public const BLOCK_LABELS = [
         'cover' => 'Titelseite', 'chapter_loop' => 'Alle Kapitel', 'dish_list' => 'Gerichteliste',
         'price_summary' => 'Preis je Person', 'preis_aufschluesselung' => 'Preis-Aufschlüsselung (Angebot)', 'legend' => 'Legende (LMIV)', 'grid' => 'Wochenraster',
         'text' => 'Text', 'heading' => 'Überschrift', 'image' => 'Bild', 'spacer' => 'Abstand', 'cta' => 'Kontakt-Aufruf',
+        'konfig_konzepte' => 'Konfigurator: Konzepte', 'konfig_tageszeit' => 'Konfigurator: Tageszeit', 'konfig_addons' => 'Konfigurator: Add-ons',
+        'konfig_zusammenfassung' => 'Konfigurator: Preis und Gäste', 'konfig_anfrage' => 'Konfigurator: Anfrage',
     ];
+
+    /** Spec 94: Konfigurator-Blöcke gibt es nur, wenn das Design (auch) für den Konfigurator gilt. */
+    private function konfiguratorDesign(): bool
+    {
+        return in_array('konfigurator', $this->outputTypes, true) || $this->previewType === 'konfigurator';
+    }
 
     public function mount(): void
     {
@@ -276,6 +290,11 @@ class PraesentationsDesigns extends Component
         if (! in_array($type, PresentationDesignService::BLOCK_TYPES, true)) {
             return;
         }
+        // Spec 94: Konfigurator-Blöcke nur im Konfigurator-Design und je genau einmal
+        if (in_array($type, PresentationDesignService::KONFIG_BLOCKS, true)
+            && (! $this->konfiguratorDesign() || in_array($type, array_column($this->layout, 'block_type'), true))) {
+            return;
+        }
         $this->layout[] = ['block_type' => $type, 'style' => self::BLOCK_DEFAULTS[$type] ?? []];
         $this->selectedBlockIndex = count($this->layout) - 1;
         $this->markiereGeaendert();
@@ -285,6 +304,11 @@ class PraesentationsDesigns extends Component
     public function blockEntfernen(int $index): void
     {
         if (! isset($this->layout[$index])) {
+            return;
+        }
+        if (in_array($this->layout[$index]['block_type'] ?? '', PresentationDesignService::KONFIG_BLOCKS, true) && in_array('konfigurator', $this->outputTypes, true)) {
+            $this->fehler = 'Konfigurator-Blöcke sind Pflicht. Verschieben und gestalten geht, entfernen nicht.';
+
             return;
         }
         array_splice($this->layout, $index, 1);
@@ -386,6 +410,7 @@ class PraesentationsDesigns extends Component
             'speisekarte' => [FoodAlchemistSpeisekarte::class, ['name', 'code']],
             'speiseplan' => [FoodAlchemistSpeiseplan::class, ['name']],
             'angebot' => [FoodAlchemistAngebot::class, ['name']],
+            'konfigurator' => [\Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::class, ['name']],
             default => [FoodAlchemistFoodbook::class, ['label', 'code']],
         };
 
@@ -438,7 +463,8 @@ class PraesentationsDesigns extends Component
             'sperr' => $this->sperrZustand(),   // Spec 65
             'designs' => $this->designListe(),
             'quellenOptionen' => $this->quellenOptionen(),
-            'blockTypen' => PresentationDesignService::BLOCK_TYPES,
+            'blockTypen' => $this->konfiguratorDesign() ? PresentationDesignService::BLOCK_TYPES
+                : array_values(array_diff(PresentationDesignService::BLOCK_TYPES, PresentationDesignService::KONFIG_BLOCKS)),
             'blockLabels' => self::BLOCK_LABELS,
             'blockImageUrl' => $this->blockImageUrl(),
             'vorschauHtml' => $this->vorschauHtml(),

@@ -6,25 +6,25 @@ use Platform\FoodAlchemist\Http\Controllers\PresentationController;
 
 // Spec 43 — Öffentliches digitales Kundenbuch (Präsentation) ohne Login. Token-aufgelöst,
 // rendert NUR aus dem eingefrorenen Snapshot. NoCacheHeaders NUR hier (die fa-assets-Route
-// unten braucht ihren immutable-Cache). Typen: foodbook, speisekarte, speiseplan, angebot.
+// unten braucht ihren immutable-Cache). Typen: foodbook, speisekarte, speiseplan, angebot, konfigurator (Spec 94).
 // Web-App-Manifest (PWA „Zum Startbildschirm hinzufügen") — additiv zur Präsentation,
 // spezifischer 3-Segment-Pfad, daher VOR der 2-Segment-show-Route registriert.
 Route::get('/p/{type}/{token}/app.webmanifest', [PresentationController::class, 'manifest'])
-    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'konfigurator'])
     ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.manifest');
 
 // Share-Card fürs Link-Vorschaubild (Open Graph 1200×630) — additiv, spezifischer 3-Segment-Pfad.
 Route::get('/p/{type}/{token}/share-card.png', [PresentationController::class, 'shareCard'])
-    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'konfigurator'])
     ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.share_card');
 
 // PWA-/Homescreen-Icon (Logo auf Marken-Quadrat) — additiv, spezifischer 3-Segment-Pfad.
 Route::get('/p/{type}/{token}/app-icon.png', [PresentationController::class, 'appIcon'])
-    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'konfigurator'])
     ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.app_icon');
@@ -65,8 +65,15 @@ Route::post('/l/{token}/stammdatenblatt', [\Platform\FoodAlchemist\Http\Controll
     ->middleware(['throttle:fa-lieferanten-upload', NoCacheHeaders::class])
     ->name('foodalchemist.presentation.lieferanten_portal_stammdatenblatt');
 
+// Spec 94 — Anfrage aus dem Konfigurator-Link: erster schreibender Endpunkt einer Präsentation. Throttle je Token + IP,
+// NoCache; Prüfung (Honeypot, Mindestzeit, Auswahl nur aus dem Snapshot, Preis neu) im KonfiguratorAnfrageService.
+Route::post('/p/konfigurator/{token}/anfrage', [\Platform\FoodAlchemist\Http\Controllers\KonfiguratorAnfrageController::class, 'store'])
+    ->where('token', '[A-Za-z0-9-]+')
+    ->middleware(['throttle:fa-konfigurator-anfrage', NoCacheHeaders::class])
+    ->name('foodalchemist.presentation.konfigurator_anfrage');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
-    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'konfigurator'])
     ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.show');

@@ -31,6 +31,12 @@
                 'image' => 'foodalchemist::presentation.blocks.image',
                 'spacer' => 'foodalchemist::presentation.blocks.spacer',
                 'cta' => 'foodalchemist::presentation.blocks.cta',
+                // Spec 94: Konfigurator-Schritte (nur im Typ konfigurator, Layout erzwingt sie je einmal)
+                'konfig_konzepte' => 'foodalchemist::presentation.blocks.konfig_konzepte',
+                'konfig_tageszeit' => 'foodalchemist::presentation.blocks.konfig_tageszeit',
+                'konfig_addons' => 'foodalchemist::presentation.blocks.konfig_addons',
+                'konfig_zusammenfassung' => 'foodalchemist::presentation.blocks.konfig_zusammenfassung',
+                'konfig_anfrage' => 'foodalchemist::presentation.blocks.konfig_anfrage',
                 default => null,
             };
         @endphp
@@ -46,4 +52,7 @@
             ])
         @endif
     @endforeach
+    @if(($snapshot['type'] ?? null) === 'konfigurator')
+        @include('foodalchemist::presentation.blocks._konfigurator_script', ['content' => $content])
+    @endif
 @endsection

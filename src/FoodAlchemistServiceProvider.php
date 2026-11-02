@@ -761,6 +761,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         $this->registerLivewireComponents();
 
+        // Spec 94: Konfigurator-Anfrage — 5 je Minute je IP und 20 je Stunde je Link.
+        \Illuminate\Support\Facades\RateLimiter::for('fa-konfigurator-anfrage', fn (\Illuminate\Http\Request $r) => [
+            \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by('ip|' . $r->ip()),
+            \Illuminate\Cache\RateLimiting\Limit::perHour(20)->by('link|' . sha1((string) $r->route('token'))),
+        ]);
         // Lieferanten-Link (2b): Rate-Limit je Token + IP, austauschbarer Upload-Scanner, Benachrichtigungstyp „neuer Upload“.
         \Illuminate\Support\Facades\RateLimiter::for('fa-lieferanten-upload', fn (\Illuminate\Http\Request $r) => \Illuminate\Cache\RateLimiting\Limit::perMinutes(
             max(1, (int) config('foodalchemist.lieferanten_link.upload_fenster_minuten', 10)), max(1, (int) config('foodalchemist.lieferanten_link.upload_versuche', 10)),

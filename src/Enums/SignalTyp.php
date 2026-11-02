@@ -177,6 +177,8 @@ enum SignalTyp: string
     case TrendradarMcpQuelleUeberfaellig = 'trendradar_mcp_quelle_ueberfaellig';
     case TrendradarPinnwandPasst = 'trendradar_pinnwand_passt';
     case TrendradarKandidatenGestaut = 'trendradar_kandidaten_gestaut';
+    // Spec 94: Anfrage aus einem Konfigurator-Link (wurde ein Angebot mit Status anfrage), schließt sich, sobald das Angebot die Anfrage verlässt
+    case KonfiguratorAnfrage = 'konfigurator_anfrage';
 
     public function label(): string
     {
@@ -198,6 +200,7 @@ enum SignalTyp: string
             self::TrendradarMcpQuelleUeberfaellig => 'MCP-Quelle überfällig',
             self::TrendradarPinnwandPasst => 'Pinnwand-Karte passt zu einem Trend',
             self::TrendradarKandidatenGestaut => 'Trend-Kandidaten warten (Lauf-Grenze)',
+            self::KonfiguratorAnfrage => 'Neue Anfrage aus einem Konfigurator',
             self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::NectaRezepteNachrechnenFehler => 'Rezepte nach Necta-Allergenänderung nicht nachgerechnet',
             self::WechselkursVeraltet => 'EZB-Wechselkurs nicht aktuell',
@@ -275,6 +278,7 @@ enum SignalTyp: string
             self::TrendradarMcpQuelleUeberfaellig => 'heroicon-o-clock',
             self::TrendradarPinnwandPasst => 'heroicon-o-light-bulb',
             self::TrendradarKandidatenGestaut => 'heroicon-o-queue-list',
+            self::KonfiguratorAnfrage => 'heroicon-o-inbox-arrow-down',
             self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::NectaRezepteNachrechnenFehler => 'heroicon-o-shield-exclamation',
             self::WechselkursVeraltet => 'heroicon-o-currency-euro',

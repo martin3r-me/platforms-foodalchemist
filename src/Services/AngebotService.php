@@ -129,6 +129,7 @@ class AngebotService
         return \Illuminate\Support\Facades\DB::transaction(function () use ($team, $id, $neu, $status, $einfrieren, $angebot, $verwerfen) {
             $user = \Illuminate\Support\Facades\Auth::user();
             $ergebnis = $this->update($team, $id, ['status' => $status]);
+            app(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorAnfrageService::class)->angebotWeiter($team, $ergebnis);   // Spec 94: Anfrage-Signal schließen
             if ($verwerfen) {
                 $einfrieren->verwerfen($team, $user, $angebot);
             } elseif (in_array($neu, [AngebotStatus::Angebot, AngebotStatus::Versendet, AngebotStatus::Angenommen], true)) {
