@@ -90,8 +90,29 @@ class RecipeReviewService
         return [
             'gesamturteil' => trim((string) ($vorschlag->werte['gesamturteil'] ?? '')),
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'befunde' => is_array($roh) ? $this->normalisiere($team, $r, $roh) : [],
+            'befunde' => is_array($roh) ? $this->normalisiere($team, $r, $this->nummernZuIds($r, $roh)) : [],
         ];
+    }
+
+    /**
+     * Der Prompt nennt die Zutaten mit ihrer laufenden Nummer statt der Zeilen-ID ({@see kontext()}): hier zurück auf die echte
+     * Zeile. Eine Nummer ohne Zeile wird zu null (dann greift der Namens-Rückfall in normalisiere()), nie zu einer fremden ID.
+     *
+     * @param  array<int, mixed>  $roh
+     * @return array<int, mixed>
+     */
+    private function nummernZuIds(FoodAlchemistRecipe $r, array $roh): array
+    {
+        $ids = $r->ingredients->values()->pluck('id')->all();
+
+        return array_map(function ($b) use ($ids) {
+            if (is_array($b) && ($b['zutat_id'] ?? null) !== null) {
+                $nr = filter_var($b['zutat_id'], FILTER_VALIDATE_INT);
+                $b['zutat_id'] = $nr !== false && $nr >= 1 ? ($ids[$nr - 1] ?? null) : null;
+            }
+
+            return $b;
+        }, $roh);
     }
 
     /**
@@ -137,8 +158,12 @@ class RecipeReviewService
             // für süß-in-herzhaft — ohne sie kann der Prüf-Pass einen Dessert-Fremdkörper
             // in einem herzhaften Gericht gar nicht sehen. Sicht-neutral (schadet VK nicht).
             'geschmack' => $r->taste_direction,
-            'zutaten' => $r->ingredients->map(fn ($z) => [
-                'id' => $z->id,
+            // id = laufende Nummer (1..n in Positions-Reihenfolge), NICHT die Zeilen-ID: der Prompt-Hash ist der
+            // Wiedererkennungs-Schlüssel des externen KI-Wegs (KiAuftragService). Läuft der Prüf-Pass auf einem Rezept, das
+            // die Tool-Transaktion danach zurückrollt (recipes.EXTRACT/GENERATE → Kritiker), bekäme die Wiederholung neue
+            // Zeilen-IDs, einen neuen Hash und einen neuen Auftrag — die Antwort griffe nie. Rückweg: nummernZuIds().
+            'zutaten' => $r->ingredients->values()->map(fn ($z, $i) => [
+                'id' => $i + 1,
                 'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,

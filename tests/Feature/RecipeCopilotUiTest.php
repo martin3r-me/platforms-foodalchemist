@@ -105,7 +105,7 @@ it('L6b: beide Editoren tragen den Copilot-Knopf', function () {
 
 it('L6b: Prüfen füllt die Befunde und rendert Karten — ohne irgendetwas zu schreiben', function () {
     bindCopilotUiStub([
-        ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.', 'konfidenz' => 0.8],
+        ['art' => 'menge', 'zutat_id' => 2, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.', 'konfidenz' => 0.8],   // Prompt-Nr. (Position 2 = Butter), nicht die Zeilen-ID
         ['art' => 'hinweis', 'begruendung' => 'Butter erst nach dem Stampfen einrühren.'],
     ]);
 
@@ -127,7 +127,7 @@ it('L6b: Prüfen füllt die Befunde und rendert Karten — ohne irgendetwas zu s
 
 it('L6b: ein Befund wird einzeln übernommen — Zeile geschrieben, Karte weg, Editor neu gemountet', function () {
     bindCopilotUiStub([
-        ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.'],
+        ['art' => 'menge', 'zutat_id' => 2, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.'],
         ['art' => 'hinweis', 'begruendung' => 'Salz am Ende abschmecken.'],
     ]);
 
@@ -169,7 +169,7 @@ it('L6b: ein nicht anwendbarer Befund schreibt nichts, sondern erklärt sich', f
 
 it('L6b: «Alle übernehmen» nimmt nur die anwendbaren und lässt den Rest zur Ansicht stehen', function () {
     bindCopilotUiStub([
-        ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.'],
+        ['art' => 'menge', 'zutat_id' => 2, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.'],
         ['art' => 'fehlt', 'zutat_text' => 'Trüffel-Espuma vom Périgord', 'quantity' => 20, 'begruendung' => 'Würde heben.'],
         ['art' => 'hinweis', 'begruendung' => 'Butter zuletzt.'],
     ]);
@@ -188,8 +188,8 @@ it('L6b: «Alle übernehmen» nimmt nur die anwendbaren und lässt den Rest zur 
 
 it('L6b: nach einem «entfernen» wird der Befund auf derselben Zeile neu bewertet (kein toter Knopf)', function () {
     bindCopilotUiStub([
-        ['art' => 'entfernen', 'zutat_id' => $this->idButter, 'begruendung' => 'Gehört nicht ins vegane Püree.'],
-        ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 150, 'begruendung' => 'Und mehr davon.'],
+        ['art' => 'entfernen', 'zutat_id' => 2, 'begruendung' => 'Gehört nicht ins vegane Püree.'],
+        ['art' => 'menge', 'zutat_id' => 2, 'quantity' => 150, 'begruendung' => 'Und mehr davon.'],
     ]);
 
     Livewire::test(RecipeModal::class)
@@ -206,7 +206,7 @@ it('L6b: nach einem «entfernen» wird der Befund auf derselben Zeile neu bewert
 });
 
 it('L6b: die Befunde lecken nicht ins nächste Rezept', function () {
-    bindCopilotUiStub([['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.']]);
+    bindCopilotUiStub([['art' => 'menge', 'zutat_id' => 2, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett.']]);
 
     $andere = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'l6b-zweit', 'name' => 'Rotweinjus', 'status' => 'draft',
@@ -234,7 +234,7 @@ it('L6b: das Gericht prüft über denselben Weg (VK-Zweig, Komponenten-Wort in d
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    bindCopilotUiStub([['art' => 'menge', 'zutat_id' => $zeileId, 'quantity' => 200, 'begruendung' => 'Portion zu klein für die Klasse.']]);
+    bindCopilotUiStub([['art' => 'menge', 'zutat_id' => 1, 'quantity' => 200, 'begruendung' => 'Portion zu klein für die Klasse.']]);
 
     $test = Livewire::test(VkModal::class)
         ->call('oeffnen', $vk->id)
