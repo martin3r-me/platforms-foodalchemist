@@ -18,6 +18,14 @@ final class Sprungziel
             : '/foodalchemist/gps?gp=' . $id;
     }
 
+    /** #1003 Handy-Ansicht des Grundprodukts (nur lesen); ohne Route der normale GP-Sprung. */
+    public static function gpHandy(int $id): string
+    {
+        return Route::has('foodalchemist.gps.handy')
+            ? route('foodalchemist.gps.handy', ['gp' => $id])
+            : self::gp($id);
+    }
+
     public static function rezept(int $id): string
     {
         return Route::has('foodalchemist.recipes.index')

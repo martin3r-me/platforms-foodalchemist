@@ -56,7 +56,7 @@
     <section class="space-y-1.5">
         <h2 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Grundprodukt</h2>
         @if($a->structure?->gp)
-            <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gp($a->structure->gp_id) }}" class="inline-flex items-center gap-1 min-h-11 text-[var(--fa-accent)]" data-fa-artikel-gp>
+            <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gpHandy($a->structure->gp_id) }}" class="inline-flex items-center gap-1 min-h-11 text-[var(--fa-accent)]" data-fa-artikel-gp>
                 {{ $a->structure->gp->name }} @svg('heroicon-m-chevron-right', 'w-4 h-4 shrink-0')
             </a>
         @else

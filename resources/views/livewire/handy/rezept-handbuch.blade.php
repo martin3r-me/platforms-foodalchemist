@@ -122,8 +122,11 @@
                                     <a href="{{ route('foodalchemist.recipes.index', ['rezept' => $z->referenced_recipe_id]) }}" class="text-[var(--fa-info)] underline underline-offset-2">{{ $z->referencedRecipe->name }}</a>
                                 @endif
                                 <span class="{{ $leise }}">(Rezept)</span>
+                            @elseif($z->gp !== null)
+                                {{-- GP antippen = Handy-Ansicht des Grundprodukts (Rezept und Gericht gleich) --}}
+                                <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::gpHandy($z->gp->id) }}" wire:navigate class="text-[var(--fa-info)] underline underline-offset-2" data-fa-handbuch-gp="{{ $z->gp->id }}">{{ $z->gp->name }}</a>
                             @else
-                                {{ $z->gp?->name ?? $z->display_name ?? $z->raw_text }}
+                                {{ $z->display_name ?? $z->raw_text }}
                             @endif
                             @if($z->is_optional)<span class="{{ $leise }}"> (optional)</span>@endif
                         </span>
