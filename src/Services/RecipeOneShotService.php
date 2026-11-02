@@ -1048,7 +1048,7 @@ class RecipeOneShotService
         // Spec 84 (18.10.): ein Default zählt nur, wenn die Klasse für das Team sichtbar ist — sonst gab die Speisen-Klasse
         // (Master-Vokabular) dem Mandanten die Master-Aufschlagsklasse (BHG-Marge im Mandanten-VK). Unsichtbar = nicht gesetzt.
         $sichtbar = fn (?int $id) => $id === null ? null
-            : \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->first(['id', 'code']);
+            : \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')->whereKey($id)->first(['id', 'code']);
 
         if (($ak = $sichtbar($recipe->dishClass?->default_markup_class_id)) !== null) {
             return ['id' => (int) $ak->id, 'code' => $ak->code, 'quelle' => 'speisen_klasse'];

@@ -143,7 +143,7 @@ class DarreichungService
     public function vorbelegteKlasseId(Team $team, FoodAlchemistRecipe $recipe): ?int
     {
         $sichtbar = fn (?int $id) => $id !== null
-            && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($id)->exists() ? $id : null;
+            && \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')->whereKey($id)->exists() ? $id : null;
 
         return $sichtbar($recipe->dishClass?->default_markup_class_id)
             ?? $sichtbar($recipe->dishMainGroup?->default_markup_class_id)

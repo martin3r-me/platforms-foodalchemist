@@ -453,6 +453,12 @@ Route::get('/angebote', \Platform\FoodAlchemist\Livewire\Angebote\Index::class)
     ->name('foodalchemist.angebote.index');
 
 /**
+ * Spec 94: Leistungs-Vorlagen (Personal, Equipment, Logistik) für die Konfiguratoren — Bereich Angebote.
+ */
+Route::get('/angebote/leistung-vorlagen', \Platform\FoodAlchemist\Livewire\Angebote\LeistungVorlagen::class)
+    ->name('foodalchemist.angebote.leistung_vorlagen');
+
+/**
  * #384: Versendbares Angebots-Dokument — Druck-HTML; ?pdf=1 = PDF-Download (DomPDF, guarded).
  * Team-scoped via AngebotService::detail.
  */

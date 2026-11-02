@@ -84,37 +84,19 @@ class CatalogPricingService
     {
         $presentation->loadMissing('markupClass');
         $base = $preBase ?? $this->enterpriseBaseRate($team, $outlet);
-        // Spec 84 (18.10.): EIN Riegel im Preisweg — eine Klasse an Darreichung oder Gericht zählt nur, wenn sie für das Team sichtbar ist.
-        // Abo-Fassungen tragen die Klasse des Masters (Anzeige liest deren Label per 'verweis'); ihr Faktor darf nie in den Mandanten-VK.
-        // Bewusst KEIN Abgleich über den Code: hat der Mandant eine eigene Klasse mit gleichem Code, gilt trotzdem nur der Team-Standard —
-        // das Umhängen auf die eigene Kopie macht das Grundeinstellungs-Paket, nicht der Preisweg.
-        $sichtbar = fn ($klasse) => $klasse !== null && FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($klasse->id)->exists() ? $klasse : null;
-        $class = $sichtbar($presentation->markupClass);
-        $classSource = $class !== null ? 'darreichung' : null;
-        if ($class === null && ($defaultId = $this->settings->defaultMarkupClassId($team)) !== null) {
-            $class = FoodAlchemistMarkupClass::visibleToTeam($team)
-                ->whereKey($defaultId)->where('is_inactive', false)->first();
-            $classSource = $class !== null ? 'team_standard' : null;
-        }
-        $classFactor = $class !== null ? (float) ($class->class_factor_pct ?? 100) : 100.0;
         $mek = $presentation->ek_portion !== null ? (float) $presentation->ek_portion : null;
-        $warnings = $base['warnings'];
-        if ($class === null) {
-            $warnings[] = 'Keine Preisklasse und kein Team-Standard gesetzt: neutraler Klassenfaktor 100 % verwendet.';
-        }
+        $klasse = $this->klassenVk($team, $mek, $presentation->markupClass, $base);
+        $class = $klasse['class'];
+        $classSource = $klasse['class_source'];
+        $classFactor = $klasse['class_factor_pct'];
+        $warnings = $klasse['warnings'];
         if ($mek === null || $mek <= 0) {
             $warnings[] = 'Darreichungs-MEK fehlt; es wird kein Nullpreis erzeugt.';
         }
-
-        $unrounded = $mek !== null && $mek > 0 && $base['factor'] !== null
-            ? $mek * $base['factor'] * $classFactor / 100
-            : null;
-        $rounding = $this->settings->rundung($team);
-        $decimals = $class?->rounding_decimals !== null
-            ? (int) $class->rounding_decimals
-            : (int) ($rounding['nachkommastellen'] ?? 2);
-        $mode = $class?->rounding_mode ?: ($rounding['mode'] ?? 'kaufmaennisch');
-        $calculated = $unrounded !== null ? $this->roundPrice($unrounded, $decimals, $mode) : null;
+        $unrounded = $klasse['unrounded'];
+        $decimals = $klasse['rounding']['decimals'];
+        $mode = $klasse['rounding']['mode'];
+        $calculated = $klasse['calculated'];
 
         $expired = $presentation->price_override_expires_at !== null
             && $presentation->price_override_expires_at->isPast();
@@ -148,6 +130,58 @@ class CatalogPricingService
             'calculation_version' => self::VERSION,
             'warnings' => $warnings,
             'complete' => $calculated !== null,
+        ];
+    }
+
+    /**
+     * Die eine VK-Formel aus Klasse und Basissatz, gemeinsam für Darreichungen und Konfigurator-Leistungen (Spec 94):
+     * VK = EK × Basissatz × Klassenfaktor / 100, gerundet nach Klasse bzw. Team. Darreichungen fallen ohne Klasse auf den
+     * Team-Standard zurück. Leistungen (`bereich = leistung`) nicht: der Team-Standard ist eine Speisenklasse, dann gilt
+     * neutral 100 % mit Warnung, und eine Klasse aus dem falschen Bereich zählt nicht.
+     *
+     * @param  array{factor:?float,warnings:list<string>}  $base  aus enterpriseBaseRate()
+     * @return array{class:?FoodAlchemistMarkupClass,class_source:?string,class_factor_pct:float,unrounded:?float,calculated:?float,rounding:array{decimals:int,mode:string},warnings:list<string>}
+     */
+    public function klassenVk(Team $team, ?float $ek, ?FoodAlchemistMarkupClass $klasse, array $base, string $bereich = 'speisen'): array
+    {
+        // Spec 84 (18.10.): EIN Riegel im Preisweg — eine Klasse an Darreichung oder Gericht zählt nur, wenn sie für das Team sichtbar ist.
+        // Abo-Fassungen tragen die Klasse des Masters (Anzeige liest deren Label per 'verweis'); ihr Faktor darf nie in den Mandanten-VK.
+        // Bewusst KEIN Abgleich über den Code: hat der Mandant eine eigene Klasse mit gleichem Code, gilt trotzdem nur der Team-Standard —
+        // das Umhängen auf die eigene Kopie macht das Grundeinstellungs-Paket, nicht der Preisweg.
+        $sichtbar = fn ($k) => $k !== null && ($k->bereich ?? 'speisen') === $bereich
+            && FoodAlchemistMarkupClass::visibleToTeam($team)->whereKey($k->id)->exists() ? $k : null;
+        $class = $sichtbar($klasse);
+        $classSource = $class !== null ? ($bereich === 'leistung' ? 'leistung' : 'darreichung') : null;
+        if ($class === null && $bereich === 'speisen' && ($defaultId = $this->settings->defaultMarkupClassId($team)) !== null) {
+            $class = FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')
+                ->whereKey($defaultId)->where('is_inactive', false)->first();
+            $classSource = $class !== null ? 'team_standard' : null;
+        }
+        $classFactor = $class !== null ? (float) ($class->class_factor_pct ?? 100) : 100.0;
+        $warnings = $base['warnings'];
+        if ($class === null) {
+            $warnings[] = $bereich === 'leistung'
+                ? 'Keine Leistungs-Preisklasse gesetzt: neutraler Klassenfaktor 100 % verwendet.'
+                : 'Keine Preisklasse und kein Team-Standard gesetzt: neutraler Klassenfaktor 100 % verwendet.';
+        }
+
+        $unrounded = $ek !== null && $ek > 0 && $base['factor'] !== null
+            ? $ek * $base['factor'] * $classFactor / 100
+            : null;
+        $rounding = $this->settings->rundung($team);
+        $decimals = $class?->rounding_decimals !== null
+            ? (int) $class->rounding_decimals
+            : (int) ($rounding['nachkommastellen'] ?? 2);
+        $mode = $class?->rounding_mode ?: ($rounding['mode'] ?? 'kaufmaennisch');
+
+        return [
+            'class' => $class,
+            'class_source' => $classSource,
+            'class_factor_pct' => $classFactor,
+            'unrounded' => $unrounded,
+            'calculated' => $unrounded !== null ? $this->roundPrice($unrounded, $decimals, $mode) : null,
+            'rounding' => ['decimals' => $decimals, 'mode' => $mode],
+            'warnings' => $warnings,
         ];
     }
 

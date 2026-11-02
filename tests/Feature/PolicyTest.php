@@ -122,6 +122,13 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // kein uuid/deleted_at, kein Audit — bewusst ohne die vier Standard-Traits (wie ProductionEvent).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistKonfiguratorPaketMenge') {
+            // Spec 94: Zelle der Mengen-Matrix Paket × Leistung (× Konzept), unique(paket, leistung, konzept) und
+            // firstOrNew/Neu-Schnüren — eine trashed Zeile wäre unsichtbar und kollidierte am Unique (wie StorageBinItem).
+            // Kein eigener Lebenszyklus (lebt/stirbt mit Paket und Leistung, Schnüren räumt hart), keine externe ID;
+            // team_id + BelongsToTeamHierarchy wie das Paket. Audit trägt der Konfigurator.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistStorageBinItem') {
             // Spec 66b: reiner Zuordnungs-ZEIGER Grundprodukt → Stellplatz je (Team, Lagerort), wie
             // ActiveOutlet. unique(team_id, inventory_location_id, gp_id) + updateOrCreate — eine

@@ -166,7 +166,7 @@ class RecipeGeneratorService
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Services\SpeisenKlassenService::taxonomie($team);
                 // Spec 84 (18.10.): nur die für das Team sichtbaren Aufschlagsklassen — vorher gingen die Klassen ALLER Teams
                 // (auch die BHG-Margen des Masters) in den Prompt. Bei gleichem Code gewinnt die eigene Klasse (letzte Zuweisung zählt).
-                $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)
+                $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')
                     ->where('is_inactive', false)->orderByRaw('team_id = ? asc', [$team->id])->orderBy('code')
                     ->get(['code', 'label'])->pluck('label', 'code')->sortKeys()->all();
             }
@@ -285,7 +285,7 @@ class RecipeGeneratorService
                 }
                 $ak = isset($kiRezept['aufschlagsklasse_code'])
                     // Spec 84 (18.10.): Code nur unter den sichtbaren Klassen auflösen, eigene vor geerbter — nie die Klasse eines fremden Teams
-                    ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->where('code', $kiRezept['aufschlagsklasse_code'])
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')->where('code', $kiRezept['aufschlagsklasse_code'])
                         ->where('is_inactive', false)->orderByRaw('team_id = ? desc', [$team->id])->orderBy('id')->first()
                     : null;
                 $recipe->update(array_filter([

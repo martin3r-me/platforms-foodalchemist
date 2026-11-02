@@ -1,6 +1,6 @@
 # Spec 94 · Konfigurator: All-in-Preise je Concept als Kundenlink
 
-Stand 02.11.2026 · Branch `docs/spec94-konfigurator-allin` · **Freigegeben von Dominique am 02.11.2026**
+Stand 02.11.2026 · **Freigegeben von Dominique am 02.11.2026** · Stufe 1 in Umsetzung (Branch `feat/spec94-stufe1-konfigurator-basis`)
 Entscheide Dominique 02.11.: eigenes Modul unter Angebote · Leistungen über Vorlagen · EK und VK je Leistung, VK über Aufschlagsklasse mit Basissatz wie Speisen · Vorlagen vererbbar · nur Deutsch · Anfrage per Mail und Signal · eigenes Lunch-Concept · Editor wie im Angebot, CI über die Präsentations-Designs
 Vorbild: DOEC „Diva.licious" (Konfigurator-Demo v0.4.1) und `DOEC_AllIn_Preise_v2.xlsx` (Kunde DOEC Catering, Projekt Oceandiva 2026)
 
@@ -589,6 +589,19 @@ Dateigrößen (Editor-Komponenten nach Spec 84 aufteilen, z. B. ein Livewire-Tei
 EnumStatusVergleichWaechter. Die Handbuch-Seite (Stufe 4) folgt Spec 86.
 
 Merge als reiner Docs-PR über den Kurator (Spec 82); Freigabe durch Dominique liegt vor (02.11.2026).
+
+### Umsetzungsnotizen Stufe 1
+
+- Rechenkern: `KonfiguratorPricingService` mit zwei reinen Teilen ohne Datenbank (`Services/Konfigurator/KonfiguratorMengenRechner`,
+  `KonfiguratorPaketVorschlag`). Pflege über `LeistungVorlageService` und `KonfiguratorService`; Prüfung der Regel-Felder einmal in
+  `LeistungsRegelPruefung`.
+- Mengen-Zeilen je Paket: eine Grundzeile (Konzept leer) je Leistung, Konzeptzeilen nur bei Abweichung, Zusatz-Leistung oder Handwert.
+  Ersetzungen, die nur für eine Tageszeit gelten, wirken in der Preisrechnung je Tageszeit; die gespeicherte Konzeptmenge rechnet mit
+  allen Zusatz-Leistungen des Konzepts.
+- Day-into-Night: `je_event`-Leistungen einmal mit der größeren Menge aus Lunch- und Dinner-Kontext und den Day-into-Night-Stunden.
+- Leistung ohne Klasse: neutral 100 % mit Warnung, kein Rückfall auf den Speisen-Team-Standard.
+- Beispiel-Datensatz: `php artisan foodalchemist:konfigurator-beispiel-doec --team=<id> [--concept="Titel=LunchId/DinnerId"] --anlegen`
+  (ohne `--anlegen` nur Vorschau). Stundensätze sind Beispielwerte, mit DOEC abzustimmen.
 
 ## Entscheidungen
 

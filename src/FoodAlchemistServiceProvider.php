@@ -73,6 +73,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\LangsameAbfragenCommand::class,   // Spec 84 E-1: Auswertung fa-langsam
                 \Platform\FoodAlchemist\Console\FremdSchreibenCommand::class,   // Spec 84 B4: Auswertung fa-fremdschreiben
                 \Platform\FoodAlchemist\Console\NectaNachholenCommand::class,   // Necta-Abgleich: Einmal-Nachholer (Bauauftrag 15.10.2026)
+                \Platform\FoodAlchemist\Console\KonfiguratorBeispielDoecCommand::class,   // Spec 94: DOEC-Beispiel-Datensatz (Vorschau ohne --anlegen)
                 \Platform\FoodAlchemist\Console\NectaAbgleichCommand::class,    // Necta-Abgleich: nächtlich + wöchentlich (PR 2)
                 \Platform\FoodAlchemist\Console\NectaDeklarationReparierenCommand::class,   // Einmal-Reparatur Deklarationen (Lauf 3, 15.10.2026)
                 \Platform\FoodAlchemist\Console\NectaDeklarationNachfuellenCommand::class,  // neue Deklarations-Spalte nachfüllen (Jod, 15.10.2026)

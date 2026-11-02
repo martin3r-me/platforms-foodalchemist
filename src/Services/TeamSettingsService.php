@@ -468,7 +468,7 @@ class TeamSettingsService
             return null;
         }
 
-        return FoodAlchemistMarkupClass::visibleToTeam($team)
+        return FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')
             ->whereKey($id)->where('is_inactive', false)->exists() ? $id : null;
     }
 

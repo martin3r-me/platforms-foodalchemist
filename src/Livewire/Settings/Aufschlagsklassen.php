@@ -30,7 +30,7 @@ class Aufschlagsklassen extends Component
 
     public array $form = [];
 
-    public array $neu = ['code' => '', 'label' => '', 'class_factor_pct' => '100', 'vat_profile_key' => '', 'rounding_decimals' => '', 'rounding_mode' => '', 'note' => ''];
+    public array $neu = ['code' => '', 'label' => '', 'class_factor_pct' => '100', 'vat_profile_key' => '', 'rounding_decimals' => '', 'rounding_mode' => '', 'note' => '', 'bereich' => 'speisen'];
 
     public ?string $fehler = null;
 
@@ -130,6 +130,8 @@ class Aufschlagsklassen extends Component
         }
         FoodAlchemistMarkupClass::create($werte + [
             'code' => $code,
+            // Spec 94: Bereich nur beim Anlegen — eine Klasse wechselt nie zwischen Speisen und Leistungen
+            'bereich' => in_array($this->neu['bereich'] ?? '', FoodAlchemistMarkupClass::BEREICHE, true) ? $this->neu['bereich'] : 'speisen',
             'team_id' => Auth::user()?->currentTeamRelation?->id,
         ]);
         app(PricingCascadeService::class)->recomputeTeam(Auth::user()->currentTeamRelation);
@@ -155,10 +157,10 @@ class Aufschlagsklassen extends Component
         if ($team === null) {
             return;
         }
-        $ak = FoodAlchemistMarkupClass::visibleToTeam($team)
+        $ak = FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('speisen')
             ->whereKey($id)->where('is_inactive', false)->first();
         if ($ak === null) {
-            $this->fehler = 'Die Preisklasse ist nicht verfügbar oder deaktiviert.';
+            $this->fehler = 'Die Preisklasse ist nicht verfügbar, deaktiviert oder eine Leistungsklasse (Standard gilt nur für Speisen).';
 
             return;
         }

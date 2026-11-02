@@ -121,12 +121,13 @@
                             </tr>
                         @else
                             <tr wire:key="ak-{{ $ak->id }}" class="{{ $ak->is_inactive ? 'opacity-60' : '' }}">
-                                <td class="text-center"><input type="radio" name="standard-preisklasse" @checked($standardId === $ak->id) @disabled($ak->is_inactive) wire:click="setDefault({{ $ak->id }})" title="Als Standard-Preisklasse verwenden" aria-label="{{ $ak->label }} als Standard-Preisklasse verwenden" class="accent-[var(--fa-accent)]" data-standard-preisklasse="{{ $ak->id }}" /></td>
+                                <td class="text-center"><input type="radio" name="standard-preisklasse" @checked($standardId === $ak->id) @disabled($ak->is_inactive || $ak->bereich === 'leistung') wire:click="setDefault({{ $ak->id }})" title="Als Standard-Preisklasse verwenden" aria-label="{{ $ak->label }} als Standard-Preisklasse verwenden" class="accent-[var(--fa-accent)]" data-standard-preisklasse="{{ $ak->id }}" /></td>
                                 <td class="font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $ak->code }}</td>
                                 <td>
                                     <span class="font-medium">{{ $ak->label }}</span>
                                     @if($standardId === $ak->id)<x-fa::badge tone="accent" class="ml-1.5">Standard</x-fa::badge>@endif
                                     @if($ak->is_inactive)<x-fa::badge class="ml-1.5">Inaktiv</x-fa::badge>@endif
+                                    @if($ak->bereich === 'leistung')<x-fa::badge class="ml-1.5" title="Nur für Leistungen im Konfigurator (Personal, Equipment, Logistik)">Leistung</x-fa::badge>@endif
                                 </td>
                                 <td class="num">{{ number_format($factor, 1, ',', '.') }}&nbsp;%</td>
                                 <td class="num font-medium">
@@ -199,6 +200,7 @@
         </div>
         <div class="flex flex-wrap items-end justify-between gap-3">
             <x-fa::choice name="neu.vat_profile_key" :live="false" label="Mehrwertsteuer" :options="$mwstWahl" />
+            <x-fa::choice name="neu.bereich" :live="false" label="Gilt für" :options="['speisen' => 'Speisen', 'leistung' => 'Leistungen im Konfigurator']" />
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create">Preisklasse anlegen</x-fa::button>
         </div>
     </x-fa::section>

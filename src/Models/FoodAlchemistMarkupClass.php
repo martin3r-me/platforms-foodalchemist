@@ -27,6 +27,14 @@ class FoodAlchemistMarkupClass extends Model
         'is_inactive' => 'boolean',
     ];
 
+    /** Spec 94: Klassen für Speisen (Concepter, Darreichungen) und für Leistungen (Konfigurator) mischen sich nie. */
+    public const BEREICHE = ['speisen', 'leistung'];
+
+    public function scopeBereich(\Illuminate\Database\Eloquent\Builder $query, string $bereich): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where($this->getTable() . '.bereich', $bereich);
+    }
+
     /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
     public static function istBasisKatalog(): bool
     {
