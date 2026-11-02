@@ -59,6 +59,11 @@ Route::get('/gps/{foodAlchemistGp}', fn (\Platform\FoodAlchemist\Models\FoodAlch
     ->route('foodalchemist.gps.index', ['gp' => $foodAlchemistGp->id]))
     ->name('foodalchemist.gps.show');
 
+/** #1003 Grundprodukt am Handy (nur lesen): Ziel der GP-Links im Rezept- und Gericht-Handbuch. Bereich wie gps (stammdaten). */
+Route::get('/gps/{gp}/handy', \Platform\FoodAlchemist\Livewire\Handy\GpAnsicht::class)
+    ->whereNumber('gp')
+    ->name('foodalchemist.gps.handy');
+
 
 /**
  * 06·H2 Favoriten-GPs — Kuratierungs-Screen (Auto-Score + Pin/Exclude).
