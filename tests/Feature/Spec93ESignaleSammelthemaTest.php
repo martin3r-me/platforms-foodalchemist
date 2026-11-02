@@ -228,6 +228,34 @@ it('Quellenart verbraucherstudie: eigenes Vokabular, als Quelle anlegbar, zählt
     expect($b['konfidenz'])->toBe('mittel')->and($b['begruendung'])->toContain('Bestätigt durch Verbraucherstudie')->and($b['befragung'])->toBeFalse();
 });
 
+it('Externer Weg: 5 Signale mit 5 neuen Themen in EINER Antwort-Runde erschlossen — Ziel gilt trotz geänderter Themenliste, keine neuen Aufträge', function () {
+    $this->stub->werfen = true;
+    $signale = array_map(fn ($n) => ['titel' => 'TEST-93 '.$n, 'teaser' => 'TEST-93 Teaser '.$n], ['Pulque', 'Banane', 'Yuzu', 'Koji', 'Sumach']);
+    $res = $this->reg->get('foodalchemist.trend_eingang.POST')->execute(['quelle_id' => $this->quelle->id, 'artikel' => [$this->beitrag + ['signale' => $signale]]], $this->mcp);
+    expect($res->data['zaehler'])->toBe(['neu' => 5]);
+    $offen = fn () => DB::table('foodalchemist_ki_auftraege')->where('feature', 'trend.eingang_erschliessen')->where('status', 'offen');
+    expect($offen()->count())->toBe(5)
+        ->and($offen()->pluck('target_table')->unique()->all())->toBe(['foodalchemist_trend_eingang']);
+
+    // alle in einer Runde, jedes Signal mit eigenem, neuem Thema (der Titel vor „ — “)
+    $antworten = $offen()->get()->map(function ($a) {
+        $kontext = json_decode(explode("Kontext:\n", json_decode($a->messages, true)[1]['content'], 2)[1], true);
+        $thema = trim(explode(' — ', $kontext['titel'])[0]);
+
+        return ['auftrag_id' => $a->uuid, 'werte' => ['werte' => ['relevant' => true, 'zusammenfassung' => 'TEST-93', 'thema' => $thema, 'kategorie' => 'food',
+            'sparten' => [], 'tiefe' => 'unklar', 'tiefe_begruendung' => 'TEST-93', 'passt_zu_trend_id' => null, 'begruendung' => 'TEST-93'], 'confidence' => 0.9, 'reasoning' => 'TEST-93']];
+    })->all();
+    $r = $this->reg->get('foodalchemist.ki_auftraege.ANTWORT')->execute(['antworten' => $antworten, 'anbieter' => 'anthropic', 'modell' => 'claude-opus-5-5'], $this->mcp);
+    expect($r->data['angenommen'])->toBe(5);
+
+    $e = FoodAlchemistTrendEingang::orderBy('id')->get();
+    expect($e->pluck('status')->unique()->all())->toBe(['gebuendelt'])
+        ->and($offen()->count())->toBe(0)
+        ->and($this->stub->calls)->toBe(0)
+        ->and(FoodAlchemistTrendInspiration::where('herkunft', 'automatisch')->pluck('titel')->sort()->values()->all())
+        ->toBe(['TEST-93 Banane', 'TEST-93 Koji', 'TEST-93 Pulque', 'TEST-93 Sumach', 'TEST-93 Yuzu']);
+});
+
 it('Budget greift je Signal: erreicht → jedes Signal fehler, Provider nicht gerufen', function () {
     app(TeamSettingsService::class)->update($this->rootTeam, ['trend_ki_budget_eur' => 0]);
     $this->eingang->signaleEinreichen($this->rootTeam, $this->beitrag, $this->signale, 'hand', $this->user->id);

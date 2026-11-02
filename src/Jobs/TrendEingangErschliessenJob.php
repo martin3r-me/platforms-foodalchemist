@@ -99,7 +99,8 @@ class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemis
         }
 
         try {
-            $vorschlag = $ki->propose('trend.eingang_erschliessen', $kontext);
+            // Ziel = der Eintrag: im externen Weg gilt die Antwort auch, wenn sich `themen` inzwischen geändert hat (KiAuftragService::ZIEL_GILT)
+            $vorschlag = $ki->propose('trend.eingang_erschliessen', $kontext, ['target_table' => 'foodalchemist_trend_eingang', 'target_id' => $e->id]);
         } catch (\Throwable $ex) {
             // Plattformweg: roter Call = Fehler am Eintrag (nicht still). Externer Weg: wartet auf den Auftrag, das Schreiben rollt zurück.
             app(TrendEingangService::class)->erschliessungFehlgeschlagen($e, 'KI nicht erreichbar ('.class_basename($ex).')');
