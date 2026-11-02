@@ -58,6 +58,7 @@
 
             <section class="{{ $karte }} p-3 space-y-3" data-fa-handy-kf-link>
                 <h2 class="font-semibold">Kundenlink</h2>
+                <p class="{{ $leise }}" data-fa-handy-kf-reihenfolge>Reihenfolge im Link: {{ ($k->reihenfolge ?? 'tageszeit_zuerst') === 'konzept_zuerst' ? 'Konzept zuerst' : 'Zeitfenster zuerst' }} (am Computer änderbar)</p>
                 @if($live && $url)
                     <p class="flex flex-wrap items-center gap-2"><x-fa::badge tone="ok">Live bis {{ $k->presentation_expires_at?->format('d.m.Y') }}</x-fa::badge></p>
                     <p class="break-all {{ $leise }}" data-fa-handy-kf-url>{{ $url }}</p>
