@@ -9,7 +9,7 @@
     $hilfe = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $menuPunkt = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
     $menuGefahr = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]';
-    $formen = ['foodbook' => 'Foodbook', 'angebot' => 'Angebot', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan'];
+    $formen = ['foodbook' => 'Foodbook', 'angebot' => 'Angebot', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'konfigurator' => 'Konfigurator'];
     $farbFelder = ['primary' => 'Hauptfarbe', 'accent' => 'Akzentfarbe', 'bg' => 'Hintergrund', 'text' => 'Schriftfarbe'];
 @endphp
 
@@ -66,6 +66,7 @@
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('angebot')">Angebot</x-fa::button>
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('menu')">Speisekarte</x-fa::button>
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('kiosk')">Kiosk</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('konfigurator')">Konfigurator</x-fa::button>
                     </div>
                 </div>
             </x-fa::section>

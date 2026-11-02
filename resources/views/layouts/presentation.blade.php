@@ -123,6 +123,37 @@
         .pt-wrap { overflow-x: hidden; }
         .pt-measure { max-width: var(--pt-measure); margin-inline: auto; padding-inline: clamp(22px, 6vw, 40px); }
         .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: clamp(22px, 6vw, 48px); }
+        /* Spec 94 · Konfigurator-Link */
+        .pt-konfig-schritt { padding-block: var(--pt-gap); }
+        .pt-konfig-schritt h2 { margin: 8px 0 18px; }
+        .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+        .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; }
+        .pt-konfig-karte, .pt-konfig-addon { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1px solid var(--pt-line); border-radius: 10px; background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; }
+        .pt-konfig-karte[aria-pressed="true"], .pt-konfig-addon:has(input:checked) { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
+        .pt-konfig-bild { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; }
+        .pt-konfig-titel { font-family: var(--pt-heading-font); font-size: 1.2rem; font-weight: 600; }
+        .pt-konfig-claim, .pt-konfig-zeiten { color: var(--pt-muted); font-size: .92rem; }
+        .pt-konfig-ab { color: var(--pt-accent); font-weight: 600; font-size: .95rem; }
+        .pt-konfig-abschnitt { font-size: 1.1rem; margin: 22px 0 10px; }
+        .pt-konfig-wahl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .pt-konfig-chip { padding: 8px 16px; border-radius: 999px; border: 1px solid var(--pt-line); background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; }
+        .pt-konfig-chip[aria-pressed="true"] { background: var(--pt-primary); border-color: var(--pt-primary); color: var(--pt-bg); }
+        .pt-konfig-chip:disabled { opacity: .4; cursor: not-allowed; }
+        .pt-konfig-abend, .pt-konfig-pax { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+        .pt-konfig-pax input[type="range"] { flex: 1; min-width: 180px; accent-color: var(--pt-accent); }
+        .pt-konfig-pax input[type="number"] { width: 90px; }
+        .pt-konfig-preis { font-family: var(--pt-heading-font); font-size: clamp(2rem, 6vw, 3rem); margin: 18px 0 4px; }
+        .pt-konfig-preis small, .pt-konfig-paket, .pt-konfig-gesamt { color: var(--pt-muted); font-family: var(--pt-body-font); font-size: 1rem; }
+        .pt-konfig-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+        .pt-konfig-form label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--pt-muted); }
+        .pt-konfig-form input, .pt-konfig-form textarea, .pt-konfig-abend select, .pt-konfig-pax input[type="number"] { font: inherit; padding: 8px 10px; border: 1px solid var(--pt-line); border-radius: 6px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-breit { grid-column: 1 / -1; }
+        .pt-konfig-form label.pt-konfig-check { flex-direction: row; align-items: flex-start; }
+        .pt-konfig-honig { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+        .pt-konfig-ok { padding: 16px; border-radius: 10px; border: 1px solid var(--pt-accent); }
+        .pt-konfig-fehler { color: var(--pt-accent); font-weight: 600; }
+        [data-konfig-addon-zeile][hidden] { display: none; }
+        @media print { .pt-konfig-form, [data-konfig-teilen] { display: none; } }
         h1,h2,h3,h4 { font-family: var(--pt-heading-font); color: var(--pt-text); margin: 0; line-height: 1.08; font-weight: 600; letter-spacing: -0.01em; }
         /* Überlange Einzelwörter (z.B. „BROICHCATERING.EMPFANG") in Titeln umbrechen statt abschneiden.
            Greift nur, wenn ein Wort die Zeile sonst sprengen würde → Desktop mit breitem Container unberührt. */

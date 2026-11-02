@@ -1,0 +1,24 @@
+{{-- Spec 94 · Konfigurator-Schritt 1: Konzept wählen (Karten). Preise nur aus der Preistabelle des Snapshots. --}}
+@php
+    $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
+    $ansicht = ($style['ansicht'] ?? 'raster') === 'liste' ? 'pt-konfig-liste' : 'pt-konfig-raster';
+    $mitBild = $style['show_bild'] ?? true;
+    $mitAb = $style['show_ab_preis'] ?? true;
+@endphp
+<section class="pt-wide pt-konfig-schritt" id="konfig-konzepte" data-konfig-schritt="konzepte">
+    <p class="pt-kicker">Schritt 1</p>
+    <h2>{{ $style['titel'] ?? 'Konzept wählen' }}</h2>
+    @if(! empty($content['intro']))<p class="pt-section-text">{{ $content['intro'] }}</p>@endif
+    <div class="{{ $ansicht }}">
+        @foreach($content['konzepte'] ?? [] as $kz)
+            @php $bild = $mitBild && ! empty($kz['bild']) ? $media->url($kz['bild']['context_file_id'] ?? null, $kz['bild']['path'] ?? null) : null; @endphp
+            <button type="button" class="pt-konfig-karte" data-konfig-konzept="{{ $kz['id'] }}" aria-pressed="false">
+                @if($bild)<img src="{{ $bild }}" alt="" class="pt-konfig-bild" loading="lazy">@endif
+                <span class="pt-konfig-titel">{{ $kz['titel'] }}</span>
+                @if(! empty($kz['claim']))<span class="pt-konfig-claim">{{ $kz['claim'] }}</span>@endif
+                <span class="pt-konfig-zeiten">{{ collect(['lunch' => 'Lunch', 'dinner' => 'Dinner'])->filter(fn ($l, $t) => $kz[$t])->implode(' · ') }}</span>
+                @if($mitAb && $kz['ab'] !== null)<span class="pt-konfig-ab">ab {{ number_format($kz['ab'], 2, ',', '.') }} € pro Person</span>@endif
+            </button>
+        @endforeach
+    </div>
+</section>

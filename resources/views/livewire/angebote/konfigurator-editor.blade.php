@@ -61,6 +61,7 @@
                     'leistungen' => 'Leistungen',
                     'pakete' => 'Pax-Pakete',
                     'kalkulation' => 'Kalkulation',
+                    'praesentation' => 'Branding und Präsentation',
                 ]">
                 <div x-show="tab === 'uebersicht'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="uebersicht">
                     @include('foodalchemist::livewire.angebote.partials.konfigurator.uebersicht')
@@ -76,6 +77,9 @@
                 </div>
                 <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="kalkulation">
                     @include('foodalchemist::livewire.angebote.partials.konfigurator.kalkulation')
+                </div>
+                <div x-show="tab === 'praesentation'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="praesentation">
+                    <livewire:foodalchemist.angebote.konfigurator-praesentation :konfigurator-id="$k->id" :wire:key="'kfpraes-' . $k->id" />
                 </div>
             </x-foodalchemist::editor-tabs>
         </div>

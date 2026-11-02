@@ -170,6 +170,9 @@ final class SignalCockpit
             . 'foodalchemist.trend_eingang.POST und quelle_id einreichen — das setzt den letzten Besuch und schließt das Signal.',
         'trendradar_pinnwand_passt' => 'Trendradar → Reiter „Inspiration“: die Karte öffnen und mit „An Trend hängen“ dem vorgeschlagenen Trend zuordnen — oder '
             . 'liegen lassen. Zuordnen bleibt Handarbeit; die Karte zählt schon jetzt als Sichtung.',
+        // Spec 94: der Weg ist das Angebot selbst — bearbeiten und den Status weitersetzen schließt das Signal.
+        'konfigurator_anfrage' => 'Angebote → das Angebot mit Status „Anfrage“ öffnen (Auswahl, Gäste und Preis stehen im Briefing), Kontakt aufnehmen und das Angebot '
+            . 'ausarbeiten. Sobald das Angebot den Status „Anfrage“ verlässt, schließt sich das Signal.',
         'trendradar_kandidaten_gestaut' => 'Trendradar → Reiter „Automatik“: Die Lauf-Grenze (neue Trends je Lauf) war erreicht; der Rest folgt im nächsten Lauf '
             . '(„Lauf jetzt“ oder der tägliche Lauf). Die Grenze steht in den Trendradar-Einstellungen.',
         // #1002: der Weg ist der MCP-Client, kein Knopf (die KI-Antwort kommt von außen).

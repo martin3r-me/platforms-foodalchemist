@@ -149,6 +149,12 @@ class PresentationController extends Controller
         return $this->doPreview(PresentationService::TYPE_ANGEBOT, $id, $svc);
     }
 
+    /** Spec 94: interne Vorschau des Konfigurator-Links (team-gescopt, nicht persistiert). */
+    public function previewKonfigurator(int $id, PresentationService $svc): View
+    {
+        return $this->doPreview(PresentationService::TYPE_KONFIGURATOR, $id, $svc);
+    }
+
     private function doPreview(string $type, int $id, PresentationService $svc): View
     {
         $team = auth()->user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
