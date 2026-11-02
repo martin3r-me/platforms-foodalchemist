@@ -64,6 +64,8 @@ final class TrendVokabular
         'marktforschung' => 'Marktforschung',
         'kaufverhalten' => 'Kaufverhalten',
         'befragung' => 'Mitarbeiterbefragung',
+        // Spec 93 E (Dominique 02.11.): externe Verbraucherbefragungen (z. B. BMEL-Ernährungsreport) — nicht die eigene Mitarbeiterbefragung
+        'verbraucherstudie' => 'Verbraucherstudie',
         'literatur' => 'Literatur',
         'branchenquelle' => 'Branchenquelle',
         'presse' => 'Fachpresse',
@@ -73,8 +75,8 @@ final class TrendVokabular
         'google_trends' => 'Google Trends',
     ];
 
-    /** Bestätigende Quellen (Kap. 3.3): Marktforschung, Kaufverhalten, interne Befragung. */
-    public const HARTE_QUELLEN = ['marktforschung', 'kaufverhalten', 'befragung'];
+    /** Bestätigende Quellen (Kap. 3.3): Marktforschung, Kaufverhalten, interne Befragung, externe Verbraucherstudie. */
+    public const HARTE_QUELLEN = ['marktforschung', 'kaufverhalten', 'befragung', 'verbraucherstudie'];
 
     /** Reine Social-/Suchsignale: entdecken und messen, bestätigen nie allein (Kap. 3.3). */
     public const SOZIALE_QUELLEN = ['instagram', 'social_media', 'google_trends'];

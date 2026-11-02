@@ -205,6 +205,29 @@ it('MCP-Tool: signale je Artikel → je Signal ein KI-Auftrag statt Provider; me
     expect($zuViel->success)->toBeFalse()->and($zuViel->error)->toContain('Höchstens 50 Einträge je Aufruf');
 });
 
+it('Quellenart verbraucherstudie: eigenes Vokabular, als Quelle anlegbar, zählt in trend_quellenarten als eigene Art und bestätigt', function () {
+    expect(\Platform\FoodAlchemist\Support\TrendVokabular::QUELLEN['verbraucherstudie'])->toBe('Verbraucherstudie')
+        ->and(\Platform\FoodAlchemist\Support\TrendVokabular::QUELLEN['befragung'])->toBe('Mitarbeiterbefragung');
+    $q = $this->reg->get('foodalchemist.trend_quellen.POST')->execute(['url' => 'https://ernaehrungsreport.beispiel.test/', 'name' => 'TEST-93 Ernährungsreport',
+        'art' => 'verbraucherstudie', 'abruf_weg' => 'mcp', 'rhythmus' => 'aus'], $this->mcp);
+    expect($q->success)->toBeTrue()->and($q->data['quelle']['art'])->toBe('verbraucherstudie')->and($q->data['quelle']['art_label'])->toBe('Verbraucherstudie');
+
+    $this->stub->festesThema = 'Fermentation';
+    $this->eingang->einreichen($this->rootTeam, ['url' => 'https://ernaehrungsreport.beispiel.test/2026', 'titel' => 'TEST-93 Report',
+        'quelle_id' => $q->data['quelle']['id']], 'hand', $this->user->id);
+    $this->eingang->einreichen($this->rootTeam, ['url' => 'https://studie.beispiel.test/fermentation', 'titel' => 'TEST-93 Studie',
+        'quelle_id' => $this->quelle->id], 'hand', $this->user->id);
+    $thema = FoodAlchemistTrendInspiration::where('herkunft', 'automatisch')->sole();
+    $k = app(TrendAutomatikService::class)->kennzahlen($this->rootTeam, $thema, TrendAutomatikRegeln::startwerte());
+    expect($k['quellenarten'])->toBe(['marktforschung', 'verbraucherstudie']);
+
+    $trend = app(\Platform\FoodAlchemist\Services\TrendService::class)->anlegen($this->rootTeam, ['name' => 'TEST-93 Fermentation',
+        'beleg' => ['quelle' => 'verbraucherstudie', 'titel' => 'TEST-93 Report']]);
+    // bestätigende Quelle allein = „mittel“ mit Bestätigung (eine bloße sonstige Quelle allein wäre „niedrig“); kein Befragungs-Siegel
+    $b = app(\Platform\FoodAlchemist\Services\TrendService::class)->bewertung($trend);
+    expect($b['konfidenz'])->toBe('mittel')->and($b['begruendung'])->toContain('Bestätigt durch Verbraucherstudie')->and($b['befragung'])->toBeFalse();
+});
+
 it('Budget greift je Signal: erreicht → jedes Signal fehler, Provider nicht gerufen', function () {
     app(TeamSettingsService::class)->update($this->rootTeam, ['trend_ki_budget_eur' => 0]);
     $this->eingang->signaleEinreichen($this->rootTeam, $this->beitrag, $this->signale, 'hand', $this->user->id);
