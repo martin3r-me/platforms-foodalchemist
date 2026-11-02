@@ -25,7 +25,13 @@ class NectaApiQuelle implements NectaQuelle
         $this->verbindung ??= (self::VERBINDUNG)::find($this->verbindungId)
             ?? throw new \RuntimeException("Necta-Abgleich: Verbindung {$this->verbindungId} nicht gefunden.");
 
-        $antwort = app(self::SERVICE)->list($this->verbindung, $ressource, $seite, $groesse, $filter);
+        try {
+            $antwort = app(self::SERVICE)->list($this->verbindung, $ressource, $seite, $groesse, $filter);
+        } catch (\Throwable $e) {
+            // Server-Störung bei Necta (5xx) oder Rate-Limit: als vorübergehend kennzeichnen, der Lauf holt die Seite erneut
+            $voruebergehend = (method_exists($e, 'isServerError') && $e->isServerError()) || (method_exists($e, 'isRateLimited') && $e->isRateLimited());
+            throw $voruebergehend ? new NectaVoruebergehendException($e->getMessage(), (int) $e->getCode(), $e) : $e;
+        }
 
         return self::normalisiere($antwort, $seite, $groesse);
     }

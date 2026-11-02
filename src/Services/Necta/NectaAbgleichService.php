@@ -120,6 +120,9 @@ class NectaAbgleichService extends NectaLaufBasis
             }
             $this->rezepteNachrechnen($log);
             $this->laufBeenden('fertig');
+            if (! $this->probe) {
+                $this->signalFehlerSchliessen($verbindungId);
+            }
         } catch (\Throwable $e) {
             $this->laufBeenden('fehler', $e->getMessage());
             if (! $this->probe) {
@@ -649,6 +652,16 @@ class NectaAbgleichService extends NectaLaufBasis
         $offen !== null
             ? DB::table('foodalchemist_necta_pruefaelle')->where('id', $offen)->update($werte)
             : DB::table('foodalchemist_necta_pruefaelle')->insert(['uuid' => (string) UuidV7::generate()] + $schluessel + $werte + ['created_at' => now()]);
+    }
+
+    /** Ein durchgelaufener Abgleich erledigt das Fehler-Signal derselben Verbindung (vorher blieb es nach einer einzelnen Störung offen). */
+    private function signalFehlerSchliessen(int $verbindungId): void
+    {
+        $master = $this->masterTeam();
+        if ($master !== null) {
+            app(SignalService::class)->schliesseGemessen($master, SignalTyp::NectaAbgleichFehler, "necta_abgleich_fehler:{$verbindungId}", 'necta_abgleich',
+                'Lauf '.$this->laufId.' lief durch');
+        }
     }
 
     private function signalFehler(int $verbindungId, string $fehler): void

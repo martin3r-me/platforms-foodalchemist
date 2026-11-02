@@ -6,6 +6,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\Necta\NectaAbgleichService;
 use Platform\FoodAlchemist\Services\Necta\NectaQuelle;
+use Platform\FoodAlchemist\Services\Necta\NectaVoruebergehendException;
 use Platform\FoodAlchemist\Support\StammPaket;
 use Platform\FoodAlchemist\Tests\Support\NectaAttrappe;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -270,6 +271,55 @@ it('Fehlschlag: Lauf steht auf fehler und das Master-Team bekommt ein Signal (Pr
 
     expect(fn () => ($this->lauf)(['probe' => true]))->toThrow(RuntimeException::class);
     expect(DB::table('foodalchemist_signals')->where('type', SignalTyp::NectaAbgleichFehler->value)->count())->toBe(1);
+});
+
+/** Quelle, die die ersten $n Aufrufe mit einer Necta-Störung beantwortet und danach an die Attrappe durchreicht. */
+function nectaGestoert(NectaQuelle $echt, int $n): NectaQuelle
+{
+    return new class($echt, $n) implements NectaQuelle {
+        public int $stoerungen = 0;
+
+        public function __construct(private NectaQuelle $echt, private int $n) {}
+
+        public function seite(string $ressource, int $seite, int $groesse, array $filter = []): array
+        {
+            if ($this->stoerungen < $this->n) {
+                $this->stoerungen++;
+                throw new NectaVoruebergehendException('HTTP 500: An unexpected error occurred.');
+            }
+
+            return $this->echt->seite($ressource, $seite, $groesse, $filter);
+        }
+    };
+}
+
+it('kurze Necta-Störung (5xx): dieselbe Seite wird wiederholt, der Lauf läuft durch', function () {
+    config(['foodalchemist.necta.wiederholen_pausen_s' => [0, 0]]);
+    $this->app->instance(NectaQuelle::class, $quelle = nectaGestoert($this->attrappe, 2));
+
+    $r = ($this->lauf)();
+    expect($r['status'])->toBe('fertig')->and($quelle->stoerungen)->toBe(2)->and($r['zaehler']['api_wiederholt'])->toBe(2)
+        ->and((float) DB::table('foodalchemist_prices')->where('legacy_id', 900)->value('price'))->toBe(1.05)
+        ->and(DB::table('foodalchemist_signals')->where('type', SignalTyp::NectaAbgleichFehler->value)->count())->toBe(0);
+});
+
+it('Dauerstörung: nach der letzten Pause Abbruch mit Signal; der nächste durchgelaufene Lauf schließt das Signal', function () {
+    config(['foodalchemist.necta.wiederholen_pausen_s' => [0, 0]]);
+    $this->app->instance(NectaQuelle::class, nectaGestoert($this->attrappe, 3));
+    expect(fn () => ($this->lauf)())->toThrow(NectaVoruebergehendException::class);
+    $signal = DB::table('foodalchemist_signals')->where('type', SignalTyp::NectaAbgleichFehler->value)->sole();
+    expect($signal->status)->toBe('offen');
+
+    $this->app->instance(NectaQuelle::class, $this->attrappe);
+    expect(($this->lauf)()['status'])->toBe('fertig')
+        ->and(DB::table('foodalchemist_signals')->find($signal->id)->status)->toBe('erledigt');
+});
+
+it('anderer Fehler als eine Necta-Störung wird nicht wiederholt', function () {
+    config(['foodalchemist.necta.wiederholen_pausen_s' => [0, 0]]);
+    $this->attrappe->fehler = new RuntimeException('Verbindung 1 nicht gefunden');
+    expect(fn () => ($this->lauf)())->toThrow(RuntimeException::class, 'nicht gefunden');
+    expect(DB::table('foodalchemist_necta_laeufe')->latest('id')->value('zaehler'))->not->toContain('api_wiederholt');
 });
 
 it('Vollvergleich nur nach erfolgreichem nächtlichem Lauf seit dem letzten Vollvergleich; --erzwingen übergeht das', function () {

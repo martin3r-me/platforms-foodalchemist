@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services\Necta;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
@@ -287,7 +288,20 @@ abstract class NectaLaufBasis
         }
         $this->zaehler['api_seiten']++;
 
-        return $this->quelle->seite($ressource, $seite, (int) $this->opt['seite'], $filter);
+        // Kurze Necta-Störung: dieselbe Seite nach einer Pause erneut holen, erst nach der letzten Wartezeit bricht der Lauf ab
+        $pausen = (array) config('foodalchemist.necta.wiederholen_pausen_s', [30, 120]);
+        foreach ([...$pausen, null] as $pause) {
+            try {
+                return $this->quelle->seite($ressource, $seite, (int) $this->opt['seite'], $filter);
+            } catch (NectaVoruebergehendException $e) {
+                if ($pause === null) {
+                    throw $e;
+                }
+                $this->zaehler['api_wiederholt'] = ($this->zaehler['api_wiederholt'] ?? 0) + 1;
+                Log::warning('[FoodAlchemist] Necta vorübergehend gestört, Seite wird wiederholt', ['ressource' => $ressource, 'seite' => $seite, 'pause_s' => $pause, 'fehler' => $e->getMessage()]);
+                sleep((int) $pause);
+            }
+        }
     }
 
     /** @return \Generator<array<string,mixed>> */

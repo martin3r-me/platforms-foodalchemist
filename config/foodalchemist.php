@@ -488,6 +488,8 @@ return [
         'abgleich_zeit' => env('FOODALCHEMIST_NECTA_ABGLEICH_ZEIT', '02:30'),
         'vollvergleich_tag' => (int) env('FOODALCHEMIST_NECTA_VOLL_TAG', 0),   // 0 = Sonntag
         'vollvergleich_zeit' => env('FOODALCHEMIST_NECTA_VOLL_ZEIT', '03:30'),
+        // Kurze Necta-Störung (HTTP 5xx/Rate-Limit): dieselbe Seite nach diesen Pausen (Sekunden) erneut holen, danach Abbruch
+        'wiederholen_pausen_s' => [30, 120],
     ],
 
     'scheduler' => [
