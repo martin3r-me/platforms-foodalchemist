@@ -6,15 +6,16 @@
     $min = $pakete[0]['von'] ?? 1;
     $max = $pakete !== [] ? end($pakete)['bis'] : 1;
     $start = max($min, min($max, (int) ($content['pax_vorgabe'] ?? $min)));
-    $schritte = array_filter([
-        'konzepte' => 'Konzept',
-        'tageszeit' => ($content['tageszeit_aktiv'] ?? false) ? 'Zeitfenster' : null,
+    $zeitZuerst = ($content['reihenfolge'] ?? 'tageszeit_zuerst') === 'tageszeit_zuerst';
+    $zeit = ($content['tageszeit_aktiv'] ?? false) ? ['tageszeit' => 'Zeitfenster'] : [];
+    // Stufe 5b: Reihenfolge je Konfigurator, Standard Tageszeit zuerst
+    $schritte = array_filter(($zeitZuerst ? $zeit + ['konzepte' => 'Konzept'] : ['konzepte' => 'Konzept'] + $zeit) + [
         'addons' => ! empty($content['addons']) ? 'Extras' : null,
         'anfrage' => 'Anfrage',
     ]);
     $startPaket = collect($pakete)->first(fn ($p) => $start >= $p['von'] && $start <= $p['bis']);
 @endphp
-<div class="pt-konfig-kopfleiste" data-konfig-kopfleiste>
+<div class="pt-konfig-kopfleiste" data-konfig-kopfleiste data-konfig-reihenfolge="{{ $zeitZuerst ? 'tageszeit_zuerst' : 'konzept_zuerst' }}">
     <nav class="pt-konfig-schritte" aria-label="Schritte" data-konfig-schritte>
         @foreach($schritte as $schluessel => $label)
             <button type="button" class="pt-konfig-schritt-knopf" data-konfig-zu="{{ $schluessel }}" aria-current="{{ $loop->first ? 'step' : 'false' }}">{{ $label }}</button>

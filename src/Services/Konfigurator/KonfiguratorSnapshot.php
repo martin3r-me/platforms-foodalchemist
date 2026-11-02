@@ -26,16 +26,19 @@ final class KonfiguratorSnapshot
 
         $konzepte = [];
         foreach ($s['haupt'] as $h) {
+            $detail = $this->detail($h);
             $konzepte[] = [
                 'id' => (int) $h->id,
                 'titel' => (string) ($h->kunden_titel ?: 'Konzept'),
                 'claim' => $h->claim,
-                // nur Identifier einfrieren, die URL signiert der Renderer frisch (wie hydrateImages)
-                'bild' => ($h->bild_context_file_id || $h->bild_path) ? ['context_file_id' => $h->bild_context_file_id, 'path' => $h->bild_path] : null,
+                // nur Identifier einfrieren, die URL signiert der Renderer frisch (wie hydrateImages).
+                // Stufe 5b: Überschreib-Bild am Konfigurator-Konzept, sonst Concept-Titelbild bzw. Galerie (wie im Foodbook)
+                'bild' => $detail['bilder'][0] ?? null,
                 'lunch' => $h->lunch_concept_id !== null,
                 'dinner' => $h->dinner_concept_id !== null,
                 'indikativ_lunch' => (bool) $h->indikativ_lunch,
                 'indikativ_dinner' => (bool) $h->indikativ_dinner,
+                'detail' => $detail,
             ];
         }
         $addons = [];
@@ -95,10 +98,77 @@ final class KonfiguratorSnapshot
                 'preise' => $preise,
                 'pax_vorgabe' => (int) $k->pax_vorgabe,
                 'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv,
+                'reihenfolge' => in_array($k->reihenfolge, \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, true) ? $k->reihenfolge : 'tageszeit_zuerst',
                 'kombi_rabatt_pct' => (float) $k->kombi_rabatt_pct,
                 'anfrage' => true,
             ],
         ];
+    }
+
+    /**
+     * Stufe 5b · Kundensicht eines Hauptkonzepts für die Detailansicht — wie im Foodbook: Gericht-Zeilen über die
+     * Wording-Kette (Konfigurator-Überschreibung → Concept-Slot-Wording → Kundenname, WordingResolver::gerichtZeilen),
+     * Gericht-Fotos am Gericht, Bilder: Überschreib-Bild am Konfigurator-Konzept, sonst Concept-Titelbild + Galerie.
+     * Allergen-/Zusatzstoff-Codes je Gericht wie im Foodbook (ConcepterAggregateService). ALLOWLIST: nur Texte, Codes,
+     * Bild-Identifier — keine Rezept-, Slot- oder Concept-Ids, keine Preise, keine internen Namen.
+     *
+     * @return array{beschreibung:?string, bilder:list<array>, zeiten:array<string,list<array>>, legende:list<array>}
+     */
+    private function detail(object $h): array
+    {
+        $wording = app(\Platform\FoodAlchemist\Services\WordingResolver::class);
+        $kz = app(\Platform\FoodAlchemist\Services\ConcepterAggregateService::class);
+        $katalog = $kz->kennzeichnungKatalog();
+        $usedAlg = [];
+        $usedZus = [];
+        $bilder = [];
+        if ($h->bild_context_file_id || $h->bild_path) {
+            $bilder[] = ['context_file_id' => $h->bild_context_file_id, 'path' => $h->bild_path];
+        }
+        $beschreibung = null;
+        $zeiten = [];
+        foreach (['lunch' => $h->lunch_concept_id, 'dinner' => $h->dinner_concept_id] as $t => $cid) {
+            if ($cid === null) {
+                continue;
+            }
+            $c = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::query()->ohneTeamSicht('verweis')
+                ->with(['slots.dish', 'slots.embeddedConcept.slots.dish', 'slots.package.dishes.dish', 'images'])->find($cid);
+            if ($c === null) {
+                continue;
+            }
+            $beschreibung ??= trim((string) ($c->description ?: $c->claim)) ?: null;
+            if ($c->image_context_file_id || $c->image_path) {
+                $bilder[] = ['context_file_id' => $c->image_context_file_id, 'path' => $c->image_path];
+            }
+            foreach ($c->images ?? [] as $gi) {
+                if ($gi->context_file_id || $gi->path) {
+                    $bilder[] = ['context_file_id' => $gi->context_file_id, 'path' => $gi->path];
+                }
+            }
+            $zeilen = $wording->gerichtZeilen($c, $h);
+            $ids = collect($zeilen)->pluck('recipe_id')->filter()->map(fn ($v) => (int) $v)->unique()->all();
+            $gerichte = $ids !== [] ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->ohneTeamSicht('verweis')->whereIn('id', $ids)->get()->keyBy('id') : collect();
+            $zeiten[$t] = array_values(array_map(function ($z) use ($gerichte, $kz, $katalog, &$usedAlg, &$usedZus) {
+                $g = ! empty($z['recipe_id']) ? $gerichte->get((int) $z['recipe_id']) : null;
+
+                return [
+                    'kind' => (string) ($z['type'] ?? 'gericht'),
+                    'label' => (string) ($z['text'] ?? ''),
+                    'indent' => (int) ($z['einrueckung'] ?? 0),
+                    'codes' => $g !== null ? $kz->gerichtCodes($g, $usedAlg, $usedZus, $katalog) : [],
+                    'image' => $g !== null && ($g->image_context_file_id || $g->image_path) ? ['context_file_id' => $g->image_context_file_id, 'path' => $g->image_path] : null,
+                ];
+            }, $zeilen));
+        }
+        $legende = [];
+        foreach (array_keys($usedAlg) as $slug) {
+            $legende[] = ['code' => $katalog['allergene'][$slug]['code'], 'label' => $katalog['allergene'][$slug]['label']];
+        }
+        foreach (array_keys($usedZus) as $slug) {
+            $legende[] = ['code' => $katalog['zusatzstoffe'][$slug]['code'], 'label' => $katalog['zusatzstoffe'][$slug]['label']];
+        }
+
+        return ['beschreibung' => $beschreibung, 'bilder' => array_slice($bilder, 0, 5), 'zeiten' => $zeiten, 'legende' => $legende];
     }
 
     /**

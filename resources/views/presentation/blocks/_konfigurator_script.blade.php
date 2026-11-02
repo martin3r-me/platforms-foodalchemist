@@ -29,6 +29,12 @@
 
     // Schritte: nur die in der Leiste stehen (= vorhandene)
     var schritte = qa('[data-konfig-zu]').map(function (b) { return b.getAttribute('data-konfig-zu'); });
+    var kopf = q('[data-konfig-kopfleiste]');
+    var zeitZuerst = !kopf || kopf.getAttribute('data-konfig-reihenfolge') !== 'konzept_zuerst';
+    var hatZeit = schritte.indexOf('tageszeit') >= 0;
+    var erfuellt = function (s) { return s === 'konzepte' ? !!z.konzept : (s === 'tageszeit' ? !!z.tageszeit : true); };
+    // Konzept zur Tageszeit verfügbar? (Tag = Lunch-Concept, Abend = Dinner-Concept, Tag und Abend = Lunch-Concept)
+    var passt = function (k, t) { return !t || (t === 'dinner' ? k.dinner : k.lunch); };
     qa('[data-konfig-gruppe]').forEach(function (sec) {
         var g = sec.getAttribute('data-konfig-gruppe'), i = schritte.indexOf(g);
         var nr = sec.querySelector('.pt-konfig-nr'); if (nr && i >= 0) { nr.setAttribute('data-nr', String(i + 1)); }
@@ -41,7 +47,8 @@
     });
     function zeige(schritt, scrollen) {
         if (schritte.indexOf(schritt) < 0) { schritt = schritte[0]; }
-        if (schritt !== schritte[0] && !z.konzept) { schritt = schritte[0]; }
+        // vorwärts nur, wenn die Schritte davor erfüllt sind (Konzept gewählt, ggf. Zeitfenster gewählt)
+        for (var j = 0; j < schritte.indexOf(schritt); j++) { if (!erfuellt(schritte[j])) { schritt = schritte[j]; break; } }
         z.schritt = schritt;
         qa('[data-konfig-gruppe]').forEach(function (sec) { sec.hidden = sec.getAttribute('data-konfig-gruppe') !== schritt; });
         var gaeste = q('[data-konfig-gaeste]'); if (gaeste) { gaeste.hidden = schritt !== schritte[0]; }
@@ -69,20 +76,36 @@
         return tz === 'beide' || t === 'day_night' || tz === t;
     }
     function render() {
+        if (zeitZuerst && hatZeit && z.konzept && z.tageszeit && !passt(konzept(z.konzept), z.tageszeit)) { z.konzept = null; }
         var k = z.konzept ? konzept(z.konzept) : null;
-        var t = k ? zeitFuer(k) : null;
+        var t = k ? zeitFuer(k) : (hatZeit ? z.tageszeit : null);
         if (k && !d.tageszeit_aktiv) { z.tageszeit = t; }
         var i = paketIndex(), tab = i !== null ? d.preise[i] || {} : {};
 
         qa('[data-konfig-konzept]').forEach(function (b) { b.setAttribute('aria-pressed', String(parseInt(b.getAttribute('data-konfig-konzept'), 10) === z.konzept)); });
+        var sichtbar = 0;
+        qa('[data-konfig-karte]').forEach(function (karte) {
+            var kk = konzept(parseInt(karte.getAttribute('data-konfig-karte'), 10));
+            var an = !(zeitZuerst && hatZeit && z.tageszeit) || passt(kk, z.tageszeit);
+            karte.hidden = !an; if (an) { sichtbar++; }
+            var tz = z.tageszeit || (kk.dinner ? 'dinner' : 'lunch');
+            var badge = karte.querySelector('[data-konfig-indikativ-badge]');
+            if (badge) { badge.hidden = !((tz === 'lunch' && kk.indikativ_lunch) || (tz === 'dinner' && kk.indikativ_dinner) || (tz === 'day_night' && (kk.indikativ_lunch || kk.indikativ_dinner))); }
+        });
+        var keins = q('[data-konfig-kein-konzept]'); if (keins) { keins.hidden = sichtbar > 0; }
         qa('[data-konfig-tageszeit]').forEach(function (b) {
             var wert = b.getAttribute('data-konfig-tageszeit');
             var moeglich = !k || (wert === 'day_night' ? (k.lunch && d.konzepte.some(function (x) { return x.dinner; })) : k[wert]);
             b.disabled = !moeglich;
             b.setAttribute('aria-pressed', String(t === wert));
             var p = k && moeglich ? tab[schluessel(k, wert)] : undefined;
+            if (!k) {   // noch kein Konzept (Tageszeit zuerst): günstigster Preis der Stufe für dieses Zeitfenster
+                d.konzepte.forEach(function (x) { if (passt(x, wert)) { var v = tab[wert === 'day_night' ? 'dn' + x.id + ':' + x.id : 'k' + x.id + ':' + wert]; if (v !== undefined && (p === undefined || v < p)) { p = v; } } });
+                b.disabled = !d.konzepte.some(function (x) { return passt(x, wert) && (wert !== 'day_night' || d.konzepte.some(function (y) { return y.dinner; })); });
+                if (b.disabled && z.tageszeit === wert) { z.tageszeit = null; }
+            }
             var pe = b.querySelector('[data-konfig-tageszeit-preis]');
-            if (pe) { pe.textContent = p !== undefined ? euro(p) + ' pro Person, all-in netto' : ''; }
+            if (pe) { pe.textContent = p !== undefined ? (k ? '' : 'ab ') + euro(p) + ' pro Person, all-in netto' : ''; }
         });
         var abendFeld = q('[data-konfig-abend-feld]'); if (abendFeld) { abendFeld.hidden = t !== 'day_night'; }
         qa('[data-konfig-addon-zeile]').forEach(function (zeile) {
@@ -123,7 +146,7 @@
             liste.innerHTML = '';
             zeilen.forEach(function (text) { var li = document.createElement('li'); li.textContent = text; liste.appendChild(li); });
         }
-        qa('[data-konfig-weiter]').forEach(function (b) { b.disabled = !k; });
+        qa('[data-konfig-weiter]').forEach(function (b) { var sec = b.closest('[data-konfig-gruppe]'); b.disabled = !erfuellt(sec ? sec.getAttribute('data-konfig-gruppe') : 'konzepte'); });
 
         var feld = function (n, v) { var f = q('[data-konfig-feld="' + n + '"]'); if (f) { f.value = v === null || v === undefined ? '' : v; } };
         feld('konzept', z.konzept); feld('tageszeit', t); feld('abend_konzept', t === 'day_night' ? (z.abend || (k && k.id)) : '');
@@ -135,6 +158,11 @@
 
     var setzePax = function (v) { var n = parseInt(v, 10); if (!isNaN(n)) { z.pax = Math.max(min, Math.min(max, n)); render(); } };
     qa('[data-konfig-konzept]').forEach(function (b) { b.addEventListener('click', function () { z.konzept = parseInt(b.getAttribute('data-konfig-konzept'), 10); render(); }); });
+    // Stufe 5b: Detailansicht je Konzept (Dialog), „Konzept wählen“ direkt daraus
+    qa('[data-konfig-details]').forEach(function (b) { b.addEventListener('click', function () { var dlg = q('[data-konfig-detail="' + b.getAttribute('data-konfig-details') + '"]'); if (dlg && dlg.showModal) { dlg.showModal(); } }); });
+    qa('[data-konfig-detail-zu]').forEach(function (b) { b.addEventListener('click', function () { b.closest('dialog').close(); }); });
+    qa('[data-konfig-detail]').forEach(function (dlg) { dlg.addEventListener('click', function (e) { if (e.target === dlg) { dlg.close(); } }); });
+    qa('[data-konfig-waehlen]').forEach(function (b) { b.addEventListener('click', function () { z.konzept = parseInt(b.getAttribute('data-konfig-waehlen'), 10); b.closest('dialog').close(); render(); }); });
     qa('[data-konfig-tageszeit]').forEach(function (b) { b.addEventListener('click', function () { z.tageszeit = b.getAttribute('data-konfig-tageszeit'); render(); }); });
     var abend = q('[data-konfig-abend]'); if (abend) { abend.addEventListener('change', function () { z.abend = parseInt(abend.value, 10); render(); }); }
     qa('[data-konfig-addon]').forEach(function (b) { b.addEventListener('change', render); });

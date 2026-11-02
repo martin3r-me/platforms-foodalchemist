@@ -22,6 +22,9 @@ class FoodAlchemistKonfigurator extends Model
 
     public const RUNDUNGEN = [0.01, 0.10, 0.50, 1.00];
 
+    /** Stufe 5b: Reihenfolge der Schritte im Kundenlink (Standard: Tageszeit zuerst). */
+    public const REIHENFOLGEN = ['tageszeit_zuerst', 'konzept_zuerst'];
+
     protected $table = 'foodalchemist_konfiguratoren';
 
     protected $guarded = ['id'];

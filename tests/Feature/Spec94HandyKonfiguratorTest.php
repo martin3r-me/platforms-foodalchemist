@@ -52,7 +52,7 @@ it('Liste: Kundentitel, Link-Status und Zahl offener Anfragen (nur Status anfrag
 it('Detail: veröffentlichen mit „Anfragen gehen an“ und „Gültig bis“, dann zurückziehen; offene Anfragen verlinkt', function () {
     $bis = now()->addMonths(2)->format('Y-m-d');
     $t = handyKf()->call('waehle', $this->k->id)
-        ->assertSeeHtml('data-fa-handy-kf-kennzahlen')->assertSee('Preise je Paket')->assertSee('Culture Dinner')
+        ->assertSeeHtml('data-fa-handy-kf-kennzahlen')->assertSee('Preise je Paket')->assertSee('Culture Dinner')->assertSee('Reihenfolge im Link: Zeitfenster zuerst')
         ->assertSeeHtml('data-fa-handy-kf-anfrage=')
         ->set('handyLink', ['verantwortlich_user_id' => (string) $this->user->id, 'gueltig_bis' => $bis])
         ->call('handyVeroeffentlichen')->assertSet('fehler', null)->assertSeeHtml('data-fa-handy-kf-url');

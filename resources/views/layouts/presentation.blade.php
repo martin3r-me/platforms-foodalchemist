@@ -163,7 +163,23 @@
         .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
         .pt-konfig-karte { position: relative; display: flex; flex-direction: column; text-align: left; padding: 0; overflow: hidden; border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 8px; background: var(--pt-surface); color: var(--pt-text); font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
         .pt-konfig-karte:hover { border-color: var(--pt-accent); }
-        .pt-konfig-karte[aria-pressed="true"], .pt-konfig-addon:has(input:checked) { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
+        .pt-konfig-karte[aria-pressed="true"], .pt-konfig-karte:has([aria-pressed="true"]), .pt-konfig-addon:has(input:checked) { border-color: var(--pt-accent); box-shadow: 0 0 0 2px var(--pt-accent); }
+        .pt-konfig-karte-knopf { display: flex; flex-direction: column; flex: 1; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+        .pt-konfig-details { margin: 0 18px 16px; align-self: flex-start; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--pt-line); background: none; color: var(--pt-text); font: inherit; font-size: .85rem; cursor: pointer; }
+        .pt-konfig-indikativ { align-self: flex-start; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--pt-muted); border: 1px dashed var(--pt-line); border-radius: 999px; padding: 2px 8px; }
+        .pt-konfig-detail { width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); overflow: auto; padding: clamp(18px, 4vw, 32px); border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 12px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-detail::backdrop { background: color-mix(in srgb, var(--pt-text) 45%, transparent); }
+        @media (max-width: 640px) { .pt-konfig-detail { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 14px 14px 0 0; max-height: 88vh; } }
+        .pt-konfig-detail-kopf { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .pt-konfig-detail-bilder { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0; }
+        .pt-konfig-detail-bilder img { height: 150px; border-radius: 8px; object-fit: cover; }
+        .pt-konfig-gerichte { list-style: none; margin: 10px 0 0; padding: 0; }
+        .pt-konfig-gericht { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--pt-line); }
+        .pt-konfig-gericht img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex: none; }
+        .pt-konfig-gericht[data-indent="1"] { padding-left: 18px; }
+        .pt-konfig-gericht--paket, .pt-konfig-gericht--header { font-weight: 600; color: var(--pt-muted); text-transform: uppercase; font-size: .78rem; letter-spacing: .1em; }
+        .pt-konfig-codes { color: var(--pt-muted); margin-left: 4px; }
+        .pt-konfig-legende { color: var(--pt-muted); font-size: .78rem; margin-top: 12px; }
         .pt-konfig-karte:disabled { opacity: .4; cursor: not-allowed; }
         .pt-konfig-bild { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
         .pt-konfig-karte-text { display: flex; flex-direction: column; gap: 6px; padding: 18px; }
