@@ -1,7 +1,7 @@
 # Spec 94 · Konfigurator: All-in-Preise je Concept als Kundenlink
 
 Stand 02.11.2026 · Branch `docs/spec94-konfigurator-allin` · **Entwurf: Umsetzung erst nach Freigabe Dominique**
-Entscheide Dominique 02.11.: eigenes Modul unter Angebote · Leistungen über Vorlagen · EK und VK je Leistung, VK über Aufschlagsklasse mit Basissatz wie Speisen · Vorlagen vererbbar · nur Deutsch · Anfrage per Mail und Signal · eigenes Lunch-Concept
+Entscheide Dominique 02.11.: eigenes Modul unter Angebote · Leistungen über Vorlagen · EK und VK je Leistung, VK über Aufschlagsklasse mit Basissatz wie Speisen · Vorlagen vererbbar · nur Deutsch · Anfrage per Mail und Signal · eigenes Lunch-Concept · Editor wie im Angebot, CI über die Präsentations-Designs
 Vorbild: DOEC „Diva.licious" (Konfigurator-Demo v0.4.1) und `DOEC_AllIn_Preise_v2.xlsx` (Kunde DOEC Catering, Projekt Oceandiva 2026)
 
 ## Warum
@@ -66,12 +66,15 @@ Ziel:
 - Das Modul **schnürt Pax-Pakete selbst**: aus den Regeln der Leistungen entsteht je Pax-Paket die Zusammenstellung
   (wie viele Servicekräfte, Touren, Sets), in der Oberfläche und per MCP.
 - All-in-Preis je Concept und Pax-Paket, intern immer mit EK, VK und Deckungsbeitrag sichtbar.
-- Veröffentlichung als **Kundenlink** auf Basis der bestehenden Präsentationen (`/p/{type}/{token}`).
+- Ein **Editor wie im Angebot**: alles an einer Stelle bearbeiten, einfügen, rechnen und den Link erzeugen.
+- Veröffentlichung als **Kundenlink** auf Basis der bestehenden Präsentationen (`/p/{type}/{token}`), wie beim Foodbook.
+- **CI** über die vorhandenen Präsentations-Designs (Einstellungen) und das Branding wie bei Foodbook und Angebot.
+  Es entsteht keine eigene CI-Verwaltung; die Einstellungsseite Präsentations-Designs wird um den Konfigurator erweitert.
 - Kundenanfrage aus dem Link wird ein normales **Angebot mit Status `anfrage`**, Meldung per Mail und Signal.
 
 Nicht-Ziel:
 
-- Keine Änderung am Angebots-Editor (Kapitel, Blöcke) in dieser Spec.
+- Keine Änderung am Angebots-Editor (Kapitel, Blöcke) in dieser Spec; der Konfigurator-Editor übernimmt nur Aufbau und Bausteine.
 - Keine Produktionsplanung, kein Auftrags-HK2 aus dem Konfigurator.
 - Keine Online-Buchung oder Bezahlung: der Link liefert eine Anfrage, kein verbindliches Angebot.
 - Vorerst nur Deutsch.
@@ -106,16 +109,63 @@ können eigene ergänzen. Ein Unterteam ändert eine geerbte Vorlage nicht, es l
 
 ### Konfigurator-Editor
 
-Ein Konfigurator ist eine Seite mit Abschnitten (keine Unter-Tabs nötig):
+Aufgebaut wie der Angebots-Editor (`Livewire/Angebote/Editor`): Liste der Konfiguratoren, ein Klick öffnet den
+Editor im Vollbild. Oben eine Kennzahlen-Leiste, darunter Reiter. Ein **Speichern** sichert alle Reiter, wie im Angebot.
 
-1. **Grunddaten:** Name, Kunde (CRM optional), Veranstaltungsort, Gültigkeit, verantwortliche Person für Anfragen.
-2. **Konzepte:** Hauptkonzepte anlegen; je Eintrag Lunch-Concept und Dinner-Concept aus dem Concepter, Kundentitel, Claim, Bild, Indikativ-Markierung je Tageszeit. EK und VK je Person werden aus dem Concept angezeigt, nicht eingegeben.
-3. **Add-ons:** Concepts als Add-on verknüpfen; Abschnitt (Frühstück, Pausen …), Bindung an ein Hauptkonzept oder an alle, Tageszeit.
-4. **Leistungen:** Grundausstattung und Zusatz-Leistungen je Concept oder Add-on. Hinzufügen **aus Vorlage** (Mehrfachauswahl) oder frei. EK und VK werden von Hand eingetragen (VK mit Vorschlag aus der Aufschlagsklasse). Jede Zeile bleibt editierbar.
-5. **Pax-Pakete:** Pakete selbst anlegen (von / bis; Referenz-Pax rechnet das System, änderbar), optional Knopf **Paketgrenzen vorschlagen**, dann **Pakete schnüren**. Ergebnis ist eine Matrix Leistung × Paket mit den Mengen; jede Zelle lässt sich überschreiben und ist dann als „von Hand“ markiert. Darunter EK, VK und Deckungsbeitrag je Paket.
-6. **Regeln:** Einsatzzeiten je Tageszeit, Kombi-Rabatt, Rundung.
-7. **Preisvorschau:** Matrix Konzept × Pax-Paket mit EK, VK und Deckungsbeitrag, getrennt nach Speisen und Leistungen, dazu der Deckungsbeitrag an Unter- und Obergrenze jedes Pakets und Warnungen.
-8. **Veröffentlichen:** Design, Link, Ablaufdatum, Vorschau, Zurückziehen.
+**Kennzahlen-Leiste:** Status, Anzahl Konzepte, Anzahl Pakete, All-in „ab“ (günstigstes Konzept im größten Paket),
+schwächster Deckungsbeitrag mit Paket und Konzept, Zahl der Warnungen, Link-Status (live, abgelaufen, Design geändert seit Veröffentlichung).
+
+| Reiter | Inhalt |
+|:--|:--|
+| **Übersicht** | Grunddaten: Name, Kundentitel, Claim, Intro, Kunde (CRM optional), Veranstaltungsort, Gültigkeit, verantwortliche Person für Anfragen. Darunter die letzten Anfragen aus dem Link mit Sprung ins Angebot. |
+| **Konzepte** | Hauptkonzepte und Add-ons. Hinzufügen über denselben Concept-Picker wie im Angebot (Facetten, Suche). Je Hauptkonzept Lunch- und Dinner-Concept, Kundentitel, Claim, Bild, Indikativ je Tageszeit. Je Add-on Abschnitt (Frühstück, Pausen …), Bindung, Tageszeit. EK und VK je Person kommen aus dem Concept und werden nur angezeigt; „Menü bearbeiten“ springt in den Concepter wie im Angebot. Reihenfolge per Ziehen. |
+| **Leistungen** | Grundausstattung und Zusatz-Leistungen je Concept oder Add-on, gruppiert nach Kategorie. Einfügen **aus Vorlage** (Mehrfachauswahl) oder frei. EK von Hand, VK mit Vorschlag aus der Aufschlagsklasse. Jede Zeile bleibt editierbar; Abgleich-Hinweis, wenn sich die Vorlage geändert hat. |
+| **Pax-Pakete** | Pakete selbst anlegen (von / bis; Referenz-Pax rechnet das System, änderbar), optional **Paketgrenzen vorschlagen**, dann **Pakete schnüren**. Matrix Leistung × Paket mit Mengen; jede Zelle überschreibbar und dann als „von Hand“ markiert. Darunter EK, VK und Deckungsbeitrag je Paket. |
+| **Kalkulation** | Regeln (Einsatzzeiten je Tageszeit, Kombi-Rabatt, Rundung, Paket-Toleranz) und die Preisvorschau: Matrix Konzept × Paket mit EK, VK und Deckungsbeitrag, getrennt nach Speisen und Leistungen, Deckungsbeitrag an Unter- und Obergrenze jedes Pakets, Warnungen. Ändert sich ein Wert, rechnet die Vorschau sofort neu. |
+| **Branding und Präsentation** | wie im Angebot, siehe „CI und Design“: Design wählen, Branding, Live-Vorschau, Link erzeugen, Ablaufdatum, Zurückziehen. |
+
+Alle Reiter holen ihre Zahlen nur aus dem `KonfiguratorPricingService`. Die Preisvorschau im Editor und die Preistabelle
+im Link stammen aus derselben Rechnung.
+
+### CI und Design
+
+Der Konfigurator nutzt die vorhandene Präsentations-Maschinerie und bekommt **keine eigene CI-Verwaltung**.
+
+**Design (Auswahl):** Im Reiter „Branding und Präsentation“ wählt man ein Design aus derselben Auswahl wie beim
+Foodbook (`PresentationDesignService::pickerOptions($team, 'konfigurator')`): eingebaute Designs und die
+team-eigenen Designs aus **Einstellungen → Präsentations-Designs**. Das Design ist wie heute live verknüpft
+(`presentation_design = design:{id}`). Ändert jemand das Design nach der Veröffentlichung, zeigt der Editor den
+bekannten Hinweis „Design geändert seit Veröffentlichung“ mit Knopf zum erneuten Veröffentlichen.
+
+**Weiterentwicklung der Einstellungsseite Präsentations-Designs** (`Livewire/Settings/PraesentationsDesigns`, Spec 43):
+
+1. Neue Ausgabeform `konfigurator` in `PresentationDesignService::OUTPUT_TYPES`. Ein Design kann für Foodbook und
+   Konfigurator zugleich gelten; dann sehen beide Ausgaben dieselben Farben, Schriften und Abstände.
+2. Neue Blöcke, die die Block-Palette nur bei Ausgabeform `konfigurator` anbietet:
+   - `konfig_konzepte`: Konzeptkarten (Stil: Raster oder Liste, Bild an/aus, „Preis ab“ an/aus)
+   - `konfig_tageszeit`: Schritt Tageszeit (ausgeblendet, wenn `tageszeit_aktiv` aus ist)
+   - `konfig_addons`: Add-ons nach Abschnitten
+   - `konfig_zusammenfassung`: Pax-Regler, Paket-Anzeige, Preis pro Person und gesamt, Indikativ-Hinweise, Drucken, Teilen
+   - `konfig_anfrage`: Anfrageformular
+
+   Dazu die vorhandenen Blöcke `cover`, `heading`, `text`, `image`, `spacer` und `legend`. Die Konfigurator-Blöcke
+   sind Pflicht und kommen je genau einmal vor; der Builder verhindert Löschen und Verdoppeln.
+3. Neues eingebautes Design `konfigurator` in `BUILTIN_SLUGS` mit Standard-Reihenfolge
+   (Cover, Konzepte, Tageszeit, Add-ons, Zusammenfassung, Anfrage) als Startpunkt für „Neu aus Vorlage“.
+4. Die Live-Vorschau des Builders zeigt einen Konfigurator mit Beispieldaten (zwei Konzepte, zwei Add-ons, drei Pakete),
+   damit man das Design ohne echten Konfigurator gestalten kann.
+
+Datengebunden wie bisher: Die Konfigurator-Blöcke legen nur Anordnung und Stil fest. Was sie zeigen, kommt aus der
+Preistabelle im Snapshot. Ein Block kann deshalb keine EK-Werte oder Mengen anzeigen.
+
+**Branding je Konfigurator:** dieselben Felder wie beim Angebot (Primärfarbe, Bandfarbe, Logo, Titelbild, Footer).
+Knopf **„Branding übernehmen von …“** mit Auswahl Foodbook, Angebot oder Betrieb (bei Betrieb: Logo und Design).
+Übernehmen kopiert die Werte einmalig; danach ist das Branding des Konfigurators unabhängig. Gesetztes Branding
+übersteuert die Palette des Designs, wie heute bei Foodbook und Angebot (`brandingIdentifiers` → `resolveTokens`).
+
+**Link erzeugen:** wie beim Foodbook über `PresentationService::publish` mit Typ `konfigurator`: Token, optional Slug,
+Ablaufdatum aus `gueltig_bis`, Vorschau vor dem Veröffentlichen (`previewData`), Zurückziehen. Ein Link je
+Konfigurator; eine Veröffentlichung je Betrieb (wie bei der Speisekarte) ist nicht Teil dieser Spec.
 
 ## Datenmodell
 
@@ -167,7 +217,8 @@ Alle Tabellen mit `id`, `uuid`, `team_id`, `timestamps`, `softDeletes` und Team-
 | `paket_toleranz_pct` | decimal(5,2) | erlaubte Abweichung Paketpreis zu genauem Preis, Standard 10 % (Vorschlag und Warnung) |
 | `rundung` | decimal(4,2) | 0,01 \| 0,10 \| 0,50 \| 1,00 |
 | `gueltig_bis` | date null | |
-| Präsentations-Spalten | | wie `foodalchemist_offers` (Trait `HasPresentation`) |
+| Präsentations-Spalten | | wie `foodalchemist_offers` (Trait `HasPresentation`), darunter `presentation_design` |
+| Branding-Spalten | | wie `foodalchemist_offers`: `brand_color`, `band_color`, `logo_path`, `logo_context_file_id`, `cover_image_path`, `cover_context_file_id`, `footer_text` |
 
 ### `foodalchemist_konfigurator_konzepte`
 
@@ -433,7 +484,9 @@ die Ergebnisse gegen die Excel plausibel zu halten.
 
 ## Kundenlink (Präsentationstyp `konfigurator`)
 
-Neuer Typ `PresentationService::TYPE_KONFIGURATOR = 'konfigurator'` mit eigenem `normalize…` und eigener Blade-Ansicht.
+Neuer Typ `PresentationService::TYPE_KONFIGURATOR = 'konfigurator'` mit eigenem `normalize…`. Die Seite wird aus dem
+gewählten Design gerendert (Layout und Tokens über `PresentationDesignService`, Branding darüber); die Schritte unten
+sind die Konfigurator-Blöcke aus „CI und Design“.
 
 Ablauf wie im DOEC-Vorbild:
 
@@ -465,7 +518,9 @@ Namensschema wie bestehende Tools (`…GetTool`, `…PostTool`, `…PutTool`, `�
 - `konfigurator_pakete` GET / POST / PUT / DELETE, **`SCHNUEREN`** (alle Pakete oder eines; Antwort: Mengen je Leistung, Abweichungen Handwert gegen Regel, EK/VK/DB je Paket), **`VORSCHLAGEN`** (Gästebereich, Toleranz, Raster, Mindestbreite; liefert nur den Vorschlag, schreibt nichts), **`VORSCHLAG_UEBERNEHMEN`**
 - `konfigurator_paket_mengen` PUT (Handwert setzen oder zurück auf Regel)
 - `konfigurator_preise` GET (Matrix Konzept × Paket mit EK, VK, DB inkl. Unter- und Obergrenze; nur intern)
-- `konfigurator_presentation` GET / PUBLISH / WITHDRAW
+- `konfigurator_presentation` GET / PUBLISH / WITHDRAW (mit Design-Wahl)
+- `konfiguratoren.BRANDING` (Farben, Footer; „übernehmen von“ Foodbook, Angebot oder Betrieb), wie `foodbooks.BRANDING`
+- bestehende `presentation_designs`-Tools: Ausgabeform `konfigurator` und die neuen Blöcke im Vokabular
 
 Die Rechenlogik liegt nur im `KonfiguratorPricingService`. Oberfläche und MCP-Tools rufen denselben Service auf;
 es gibt keine zweite Rechnung im Tool oder im Browser. EK- und VK-Sätze der Leistungen kommen per `…PostTool` /
@@ -479,8 +534,8 @@ EK/VK anlegen) → Pakete anlegen (oder `VORSCHLAGEN` und übernehmen) → `SCHN
 | Stufe | Inhalt | Fertig, wenn |
 |:--|:--|:--|
 | 1 | Datenmodell, `KonfiguratorPricingService` inkl. Pakete schnüren, Vorlagen-UI mit EK/VK/Aufschlagsklasse, Vererbung | alle Testfälle aus „Testfälle" grün, DOEC-Beispiel-Datensatz angelegt |
-| 2 | Konfigurator-Editor mit allen Abschnitten, Paket-Matrix und Preisvorschau | Konfigurator anlegen, Lunch-/Dinner-Concepts und Add-ons verknüpfen, Leistungen aus Vorlage übernehmen, Pakete schnüren und Mengen überschreiben, Vorschau stimmt mit Service überein |
-| 3 | Präsentationstyp `konfigurator`, Anfrage → Angebot, Mail, Signal | Link live, Snapshot ohne EK (Test), Anfrage erzeugt Angebot, Mail und Signal |
+| 2 | Konfigurator-Editor wie im Angebot (Vollbild, Kennzahlen-Leiste, Reiter), Paket-Matrix und Preisvorschau | Konfigurator anlegen, Lunch-/Dinner-Concepts und Add-ons verknüpfen, Leistungen aus Vorlage übernehmen, Pakete schnüren und Mengen überschreiben, Vorschau stimmt mit Service überein |
+| 3 | Präsentationstyp `konfigurator`; Einstellungsseite Präsentations-Designs erweitert (Ausgabeform, Konfigurator-Blöcke, eingebautes Design, Beispiel-Vorschau); Branding mit „übernehmen von“; Anfrage → Angebot, Mail, Signal | Design im Builder gestaltet und im Konfigurator gewählt, Branding aus einem Foodbook übernommen, Link live, Snapshot ohne EK (Test), Anfrage erzeugt Angebot, Mail und Signal |
 | 4 | MCP-Tools, Handbuch-Seite, DOEC als erster echter Fall | Diva.licious im Food Alchemist nachgebaut, Kevin Gerling bekommt den Link |
 | 5 (optional) | Vorlagen-Sets, Auswahl einer Anfrage als Kapitel ins Angebot übernehmen, weitere Sprachen | |
 
@@ -489,6 +544,8 @@ EK/VK anlegen) → Pakete anlegen (oder `VORSCHLAGEN` und übernehmen) → `SCHN
 Getroffen (Dominique, 02.11.2026):
 
 - Eigenes Modul unter Angebote, eigene Logik, nicht als Tab im Angebots-Editor.
+- Der Konfigurator-Editor ist aufgebaut wie der Angebots-Editor: bearbeiten, einfügen, rechnen und Link erzeugen an einer Stelle.
+- CI über die Präsentations-Designs mit Auswahl wie beim Foodbook; weiterentwickelt wird die Einstellungsseite, keine eigene CI-Verwaltung.
 - Leistungen werden als Vorlagen einmal gepflegt und in Konfiguratoren übernommen.
 - Ziel ist ein All-in-Preis je Concept, bereitgestellt als Konfigurator-Link.
 - Je Leistung EK und VK; VK über eine Aufschlagsklasse, damit die Kosten sichtbar bleiben.
@@ -513,6 +570,9 @@ Vorschlag in dieser Spec, zu bestätigen:
 - Vorlagen kopieren statt live verknüpfen, mit Abgleich-Hinweis.
 - Day-into-Night über Einsatzzeiten am Konfigurator und Häufigkeit je Leistung (`je_event` / `je_tageszeit`).
 - Preistabelle serverseitig, keine Kalkulationsdaten im Kundenlink.
+- Branding wird aus Foodbook, Angebot oder Betrieb einmalig kopiert, nicht live gekoppelt. Das Design dagegen bleibt live verknüpft.
+- Konfigurator-Blöcke sind Pflicht und kommen je einmal vor; nur Reihenfolge und Stil sind frei.
+- Ein Link je Konfigurator, keine Veröffentlichung je Betrieb in dieser Spec.
 
 ## Offene Fragen
 
