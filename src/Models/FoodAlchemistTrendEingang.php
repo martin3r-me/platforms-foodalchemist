@@ -27,6 +27,12 @@ class FoodAlchemistTrendEingang extends Model
         'sparten' => 'array', 'relevant' => 'boolean',
     ];
 
+    /** Spec 93 E: Link zum Anzeigen — ohne das interne Fragment `#signal=…` eines Einzelsignals (das bleibt nur im gespeicherten url). */
+    public function link(): string
+    {
+        return (string) preg_replace('/#signal=[^#]*$/', '', (string) $this->url);
+    }
+
     public function quelle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistTrendQuelle::class, 'quelle_id');
