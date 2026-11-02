@@ -338,7 +338,7 @@ den Aufschlag in Prozent, damit Ausreißer auffallen.
 Damit sich Leistungs- und Speisenklassen nicht mischen, bekommt `foodalchemist_markup_classes` eine Spalte
 `bereich` (`speisen` | `leistung`, Standard `speisen`, Bestand bleibt `speisen`). Concepter und Darreichungen zeigen nur
 `speisen`, Vorlagen und Leistungszeilen nur `leistung`. Das ist die einzige Änderung an einer bestehenden Tabelle
-außer `foodalchemist_offers` (zur Bestätigung, siehe Entscheidungen).
+außer `foodalchemist_offers`.
 
 ### Speisen
 
@@ -612,6 +612,8 @@ Getroffen (Dominique, 02.11.2026):
 - Paketgrenzen legt der Mensch an; Referenz-Pax (Standard Mitte), Mengen und Preise rechnet das System.
 - Preis je Person fest je Paket; Randkontrolle an Unter- und Obergrenze mit Mengen nach Regel für genau diese Gästezahl.
 - Das Modul kann Paketgrenzen nach Kosten vorschlagen (Toleranz Standard 10 %); übernommen wird nur auf Wunsch.
+- Leistungs-Vorlagen in Phase 1 nicht im Abo und nicht im Stamm-Paket; Mandanten neben dem Master sehen sie nicht.
+- Neue Spalte `bereich` an den Aufschlagsklassen, damit Leistungsklassen nicht im Concepter auftauchen.
 - Die Spec bleibt Entwurf; Umsetzung erst nach Freigabe.
 
 Vorschlag in dieser Spec, zu bestätigen:
@@ -624,8 +626,6 @@ Vorschlag in dieser Spec, zu bestätigen:
 - Branding wird aus Foodbook, Angebot oder Betrieb einmalig kopiert, nicht live gekoppelt. Das Design dagegen bleibt live verknüpft.
 - Konfigurator-Blöcke sind Pflicht und kommen je einmal vor; nur Reihenfolge und Stil sind frei.
 - Ein Link je Konfigurator, keine Veröffentlichung je Betrieb in dieser Spec.
-- Leistungs-Vorlagen in Phase 1 nicht im Abo und nicht im Stamm-Paket; Mandanten neben dem Master sehen sie nicht.
-- Neue Spalte `bereich` an den Aufschlagsklassen, damit Leistungsklassen nicht im Concepter auftauchen.
 
 ## Offene Fragen
 
