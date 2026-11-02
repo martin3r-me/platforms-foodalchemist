@@ -55,8 +55,8 @@ it('L6: normalisiert die Befunde und entscheidet je Befund, ob er anwendbar IST'
     $this->makeGp($this->rootTeam, 'Muskatnuss');                     // fehlt-Befund findet ein Ziel
 
     CopilotStub::bind([
-        ['art' => 'menge', 'zutat_id' => $this->idButter, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett für 1 kg Kartoffeln.', 'konfidenz' => 0.8],
-        ['art' => 'einheit', 'zutat_id' => $this->idKartoffel, 'einheit_slug' => 'kg', 'quantity' => 1, 'begruendung' => 'kg ist die übliche Ansatz-Einheit.', 'konfidenz' => 'hoch'],
+        ['art' => 'menge', 'zutat_id' => 2, 'quantity' => 120, 'begruendung' => 'Zu wenig Fett für 1 kg Kartoffeln.', 'konfidenz' => 0.8],   // Prompt-Nr. 2 = Butter
+        ['art' => 'einheit', 'zutat_id' => 1, 'einheit_slug' => 'kg', 'quantity' => 1, 'begruendung' => 'kg ist die übliche Ansatz-Einheit.', 'konfidenz' => 'hoch'],
         ['art' => 'fehlt', 'zutat_text' => 'Muskatnuss', 'quantity' => 1, 'einheit_slug' => 'g', 'begruendung' => 'Klassische Würzung fehlt.', 'konfidenz' => 90],
         ['art' => 'fehlt', 'zutat_text' => 'Trüffel-Espuma vom Périgord', 'quantity' => 50, 'begruendung' => 'Würde das Püree heben.', 'konfidenz' => 0.4],
         ['art' => 'menge', 'zutat_id' => 99999, 'quantity' => 5, 'begruendung' => 'Zeile gibt es nicht.'],
@@ -83,6 +83,19 @@ it('L6: normalisiert die Befunde und entscheidet je Befund, ob er anwendbar IST'
         ->and($b[4]['status'])->toBe('kein_ziel')
         ->and($b[5]['art'])->toBe('hinweis')                          // unbekannte Art wird entschärft
         ->and($b[5]['status'])->toBe('nur_hinweis');
+});
+
+it('L6: der Prompt nennt die Zutaten mit Nummer 1..n statt Zeilen-ID, die Antwort wird auf die echte Zeile zurückgemappt', function () {
+    // Abstand zwischen Nummer und ID erzwingen: sonst fiele ein falscher Rückweg nicht auf (frische DB: ID 1/2 = Nummer 1/2)
+    DB::table('foodalchemist_recipe_ingredients')->whereIn('id', [$this->idKartoffel, $this->idButter])->update(['id' => DB::raw('id + 500')]);
+    CopilotStub::bind([['art' => 'menge', 'zutat_id' => 2, 'quantity' => 150, 'begruendung' => 'Mehr Fett.'], ['art' => 'menge', 'zutat_id' => 7, 'quantity' => 5, 'begruendung' => 'Nummer gibt es nicht.']]);
+
+    $befunde = app(RecipeReviewService::class)->pruefe($this->rootTeam, $this->recipe->id)['befunde'];
+    $kontext = json_decode(mb_substr($GLOBALS['l6_user_prompt'], mb_strpos($GLOBALS['l6_user_prompt'], "\n\nKontext:\n") + 11), true);
+
+    expect(array_column($kontext['zutaten'], 'id'))->toBe([1, 2])
+        ->and($befunde[0]['zutat_id'])->toBe($this->idButter + 500)->and($befunde[0]['auto_applicable'])->toBeTrue()
+        ->and($befunde[1]['zutat_id'])->toBeNull()->and($befunde[1]['status'])->toBe('kein_ziel');
 });
 
 it('L6: findet die Zielzeile auch über den Namen, wenn das Modell keine id mitschickt', function () {
