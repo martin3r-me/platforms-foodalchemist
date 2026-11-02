@@ -211,4 +211,45 @@ describe('Trendradar', function () {
         Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(TrendradarIndex::class)
             ->assertSeeHtml('data-tab-inspiration')->assertDontSeeHtml('data-fa-handy-trends');
     });
+
+    // ── Spec 93 · Reiter „Themen“ ───────────────────────────────────────
+
+    it('Themen am Handy: automatische Themen + Pinnwand-Karten mit Belegzahl und Quellenarten, Detail mit Link ohne #signal=, nur lesen', function () {
+        $thema = FoodAlchemistTrendInspiration::create(['team_id' => $this->childA->id, 'titel' => 'Hülsenfrucht NUR-A', 'herkunft' => 'automatisch', 'thema_schluessel' => 'huelsenfrucht nur a']);
+        $studie = 'https://studie.beispiel.test/trends-2027';
+        foreach (['bean-boom' => 'marktforschung', 'linsen' => 'marktforschung'] as $signal => $art) {
+            FoodAlchemistTrendBeleg::create(['team_id' => $this->childA->id, 'inspiration_id' => $thema->id, 'quelle' => $art, 'titel' => 'Signal '.$signal,
+                'url' => $studie.'#signal='.$signal, 'beobachtet_am' => now()->subDays(2)->toDateString(), 'fundstueck' => false]);
+        }
+        FoodAlchemistTrendBeleg::create(['team_id' => $this->childA->id, 'inspiration_id' => $thema->id, 'quelle' => 'presse', 'titel' => 'Presse-Artikel Bohnen',
+            'url' => 'https://presse.beispiel.test/bohnen#kommentare', 'fundort' => 'Rolling Pin', 'beobachtet_am' => now()->toDateString(), 'fundstueck' => false]);
+
+        $this->fundA->update(['beobachtet_am' => now()->subDays(10)->toDateString()]);   // Pinnwand-Fund älter als die jüngste Sichtung des Themas
+
+        $c = amHandyTeil8(TrendradarIndex::class)->set('handyReiter', 'themen')
+            ->assertSeeHtml('data-fa-handy-themen')
+            ->assertSeeHtml('data-fa-handy-thema-karte="'.$thema->id.'"')->assertSee('Hülsenfrucht NUR-A')
+            ->assertSee('3 Belege')->assertSee('2 Beiträge')->assertSee('Marktforschung')->assertSee('Fachpresse')
+            ->assertSeeHtml('data-fa-handy-thema-karte="'.$this->fundA->inspiration_id.'"')   // Pinnwand-Karte gehört dazu
+            ->assertDontSee('Einordnen')->assertDontSeeHtml('data-fa-eingang');
+        // jüngste Sichtung zuerst: das Thema (heute) vor der Pinnwand-Karte (vor 10 Tagen)
+        $html = $c->html();
+        expect(strpos($html, 'data-fa-handy-thema-karte="'.$thema->id.'"'))->toBeLessThan(strpos($html, 'data-fa-handy-thema-karte="'.$this->fundA->inspiration_id.'"'));
+
+        $c->set('handyThemaId', $thema->id)
+            ->assertSeeHtml('data-fa-handy-thema="'.$thema->id.'"')->assertSee('Automatisches Thema aus dem Eingang')
+            ->assertSee('Signal bean-boom')->assertSee('Rolling Pin')
+            ->assertSeeHtml('href="'.$studie.'"')->assertDontSeeHtml('#signal=')
+            ->assertSeeHtml('href="https://presse.beispiel.test/bohnen#kommentare"')   // anderes Fragment bleibt
+            ->set('handyThemaId', null)->assertSeeHtml('data-fa-handy-themen');
+    });
+
+    it('Themen am Handy: fremdes Team sieht die Themen von A weder in der Liste noch per ID', function () {
+        $thema = FoodAlchemistTrendInspiration::create(['team_id' => $this->childA->id, 'titel' => 'Pulque NUR-A', 'herkunft' => 'automatisch', 'thema_schluessel' => 'pulque nur a']);
+        $fremd = Team::create(['name' => 'Fremder Kunde', 'user_id' => 1, 'personal_team' => false]);
+        $this->actingAs($this->makeUser($fremd, 'Koch Fremd', 'member'));
+        amHandyTeil8(TrendradarIndex::class)->set('handyReiter', 'themen')
+            ->assertDontSee('Pulque NUR-A')->assertDontSee('Lolli-Fund NUR-A')
+            ->set('handyThemaId', $thema->id)->assertSee('Thema nicht verfügbar')->assertDontSeeHtml('data-fa-handy-thema="'.$thema->id.'"');
+    });
 });
