@@ -77,27 +77,21 @@ class KonfiguratorPraesentation extends Component
         }
     }
 
-    public function veroeffentlichen(PresentationService $praes, KonfiguratorService $svc): void
+    public function veroeffentlichen(KonfiguratorService $svc): void
     {
-        $k = $this->k();
-        $ablauf = $k?->gueltig_bis?->endOfDay() ?? now()->addMonths(6);
         $ergebnis = null;
-        if ($this->tue(function () use ($praes, $svc, $ablauf, &$ergebnis) {
+        if ($this->tue(function () use ($svc, &$ergebnis) {
             $svc->branding($this->team(), $this->konfiguratorId, $this->branding);
-            $ergebnis = $praes->publish($this->team(), PresentationService::TYPE_KONFIGURATOR, $this->konfiguratorId, [
-                'expires_at' => $ablauf->toIso8601String(), 'design' => $this->branding['presentation_design'], 'slug' => $this->slug,
-                'price_mode' => 'auto',   // Konfigurator: Preistabelle immer neu rechnen
-            ]);
-            $svc->aendern($this->team(), $this->konfiguratorId, ['status' => 'live']);
+            $ergebnis = $svc->veroeffentlichen($this->team(), $this->konfiguratorId, ['design' => $this->branding['presentation_design'], 'slug' => $this->slug]);
         }, null)) {
-            $this->hinweis = 'Veröffentlicht bis ' . $ablauf->format('d.m.Y') . '.';
+            $this->hinweis = 'Veröffentlicht bis ' . \Illuminate\Support\Carbon::parse($ergebnis['expires_at'])->format('d.m.Y') . '.';
             $this->dispatch('konfigurator-gespeichert');
         }
     }
 
-    public function zurueckziehen(PresentationService $praes): void
+    public function zurueckziehen(KonfiguratorService $svc): void
     {
-        $this->tue(fn () => $praes->withdraw($this->team(), PresentationService::TYPE_KONFIGURATOR, $this->konfiguratorId), 'Link zurückgezogen.');
+        $this->tue(fn () => $svc->zurueckziehen($this->team(), $this->konfiguratorId), 'Link zurückgezogen.');
     }
 
     public function render(PresentationDesignService $designs, PresentationService $praes)

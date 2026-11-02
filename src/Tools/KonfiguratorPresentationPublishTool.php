@@ -35,17 +35,7 @@ class KonfiguratorPresentationPublishTool extends KonfiguratorToolBasis
 
     protected function ausfuehren(Team $team, array $a): mixed
     {
-        $svc = app(\Platform\FoodAlchemist\Services\KonfiguratorService::class);
-        $k = $svc->finde($team, self::id($a));
-        $kopf = array_intersect_key($a, array_flip(['verantwortlich_user_id', 'gueltig_bis']));
-        if ($kopf !== []) {
-            $k = $svc->aendern($team, $k->id, $kopf);   // „Anfragen gehen an“ und „Gültig bis“ vor dem Einfrieren setzen
-        }
-        $ablauf = $a['expires_at'] ?? $k->gueltig_bis?->endOfDay()->toIso8601String() ?? now()->addMonths(6)->toIso8601String();
-        $erg = app(\Platform\FoodAlchemist\Services\PresentationService::class)->publish($team, \Platform\FoodAlchemist\Services\PresentationService::TYPE_KONFIGURATOR, $k->id,
-            array_filter(['expires_at' => $ablauf, 'design' => $a['design'] ?? ($k->presentation_design ?: 'konfigurator'), 'slug' => $a['slug'] ?? null], fn ($v) => $v !== null) + ['price_mode' => 'auto']);
-        $k = $svc->aendern($team, $k->id, ['status' => 'live']);
-
-        return $erg + ['verantwortlich_user_id' => $k->verantwortlich_user_id, 'gueltig_bis' => $k->gueltig_bis?->format('Y-m-d')];
+        return app(\Platform\FoodAlchemist\Services\KonfiguratorService::class)->veroeffentlichen($team, self::id($a),
+            array_intersect_key($a, array_flip(['verantwortlich_user_id', 'gueltig_bis', 'expires_at', 'design', 'slug'])));
     }
 }

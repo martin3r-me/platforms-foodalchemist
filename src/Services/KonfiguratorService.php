@@ -141,6 +141,40 @@ class KonfiguratorService
         return $k->fresh();
     }
 
+    // ── Kundenlink ───────────────────────────────────────────────────────────────
+
+    /**
+     * Kundenlink veröffentlichen — ein Weg für Editor, Handy und MCP: optional vorher „Anfragen gehen an“
+     * (verantwortlich_user_id) und „Gültig bis“ setzen, dann einfrieren (Preise immer neu), Status live.
+     * Ablauf: expires_at, sonst Gültig bis, sonst 6 Monate.
+     *
+     * @param  array{verantwortlich_user_id?:?int, gueltig_bis?:?string, expires_at?:?string, design?:?string, slug?:?string}  $in
+     * @return array<string,mixed> Ergebnis von PresentationService::publish plus verantwortlich_user_id und gueltig_bis
+     */
+    public function veroeffentlichen(Team $team, int $id, array $in = []): array
+    {
+        $k = $this->eigener($team, $id);
+        $kopf = array_intersect_key($in, array_flip(['verantwortlich_user_id', 'gueltig_bis']));
+        if ($kopf !== []) {
+            $k = $this->aendern($team, $k->id, $kopf);
+        }
+        $ablauf = ($in['expires_at'] ?? null) ?: ($k->gueltig_bis?->endOfDay()->toIso8601String() ?? now()->addMonths(6)->toIso8601String());
+        $einstellungen = ['expires_at' => $ablauf, 'design' => ($in['design'] ?? null) ?: ($k->presentation_design ?: 'konfigurator'), 'price_mode' => 'auto'];
+        if (array_key_exists('slug', $in)) {
+            $einstellungen['slug'] = $in['slug'];
+        }
+        $erg = app(PresentationService::class)->publish($team, PresentationService::TYPE_KONFIGURATOR, $k->id, $einstellungen);
+        $k = $this->aendern($team, $k->id, ['status' => 'live']);
+
+        return $erg + ['verantwortlich_user_id' => $k->verantwortlich_user_id, 'gueltig_bis' => $k->gueltig_bis?->format('Y-m-d')];
+    }
+
+    public function zurueckziehen(Team $team, int $id): void
+    {
+        $this->eigener($team, $id);
+        app(PresentationService::class)->withdraw($team, PresentationService::TYPE_KONFIGURATOR, $id);
+    }
+
     // ── Konzepte ─────────────────────────────────────────────────────────────────
 
     public function konzeptHinzu(Team $team, int $konfiguratorId, array $in): FoodAlchemistKonfiguratorKonzept
