@@ -6,7 +6,7 @@
     $euro = fn ($w) => $w !== null && $w !== '' ? number_format((float) $w, 2, ',', '.') . ' €' : '–';
 @endphp
 <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3">
-    <x-fa::field label="Bezeichnung" for="{{ $px }}-bez" required><x-fa::input id="{{ $px }}-bez" wire:model="{{ $m }}.bezeichnung" placeholder="z. B. Servicekraft" data-{{ $px }}-bezeichnung /></x-fa::field>
+    <x-fa::field label="Bezeichnung" for="{{ $px }}-bez" required><x-fa::input id="{{ $px }}-bez" wire:model="{{ $m }}.bezeichnung" placeholder="z. B. Servicekraft" data-regel-bezeichnung /></x-fa::field>
     <x-fa::field label="Kategorie" for="{{ $px }}-kat"><x-fa::select id="{{ $px }}-kat" wire:model="{{ $m }}.kategorie" :options="$kategorien" /></x-fa::field>
     <x-fa::field label="Häufigkeit" for="{{ $px }}-haeuf" hint="Je Tageszeit: fällt bei Day-into-Night für Lunch und Dinner getrennt an.">
         <x-fa::select id="{{ $px }}-haeuf" wire:model="{{ $m }}.haeufigkeit" :options="['je_event' => 'Je Event', 'je_tageszeit' => 'Je Tageszeit']" />
@@ -52,7 +52,7 @@
 </div>
 
 <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3 items-start">
-    <x-fa::field label="EK-Satz" for="{{ $px }}-ek" required hint="EK je Stück, Einsatz oder Stunde, netto"><x-fa::input id="{{ $px }}-ek" wire:model.live.debounce.400ms="{{ $m }}.ek_satz" numeric data-{{ $px }}-ek /></x-fa::field>
+    <x-fa::field label="EK-Satz" for="{{ $px }}-ek" required hint="EK je Stück, Einsatz oder Stunde, netto"><x-fa::input id="{{ $px }}-ek" wire:model.live.debounce.400ms="{{ $m }}.ek_satz" numeric data-regel-ek /></x-fa::field>
     <x-fa::field label="Aufschlagsklasse" for="{{ $px }}-klasse">
         <x-fa::select id="{{ $px }}-klasse" wire:model.live="{{ $m }}.markup_class_id" placeholder="Ohne Klasse (100 %)">
             @foreach($klassen as $k)<option value="{{ $k->id }}">{{ $k->code }} · {{ $k->label }} ({{ number_format((float) $k->class_factor_pct, 0, ',', '.') }} %)</option>@endforeach
@@ -63,7 +63,7 @@
         <x-fa::field label="VK-Satz" for="{{ $px }}-vk" required><x-fa::input id="{{ $px }}-vk" wire:model="{{ $m }}.vk_satz" numeric /></x-fa::field>
         <x-fa::field label="Begründung" for="{{ $px }}-vkb" required><x-fa::input id="{{ $px }}-vkb" wire:model="{{ $m }}.vk_begruendung" placeholder="z. B. Marktpreis Personaldienstleister" /></x-fa::field>
     @elseif($vorschau !== null)
-        <div class="flex flex-col gap-1 pt-6" data-{{ $px }}-vorschau>
+        <div class="flex flex-col gap-1 pt-6" data-regel-vorschau>
             <span class="font-medium">VK-Vorschlag {{ $euro($vorschau['vorschlag']) }}</span>
             @if($vorschau['aufschlag_pct'] !== null)<span class="{{ $leise }}">Aufschlag {{ number_format($vorschau['aufschlag_pct'], 1, ',', '.') }} % auf den EK</span>@endif
             @foreach($vorschau['warnungen'] as $w)<span class="{{ $leise }}">{{ $w }}</span>@endforeach
