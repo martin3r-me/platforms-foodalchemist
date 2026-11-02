@@ -277,6 +277,7 @@ return [
     \Platform\FoodAlchemist\Tools\KonfiguratorKonzeptePostTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\KonfiguratorKonzeptePutTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\KonfiguratorKonzepteReorderTool::class,   // Spec 94
+    \Platform\FoodAlchemist\Tools\KonfiguratorKonzepteWordingTool::class,   // Spec 94 Stufe 5b
     \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenAusVorlageTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenDeleteTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\KonfiguratorLeistungenPostTool::class,   // Spec 94

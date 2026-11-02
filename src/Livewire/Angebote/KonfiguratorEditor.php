@@ -187,6 +187,17 @@ class KonfiguratorEditor extends Component
         });
     }
 
+    /** Stufe 5b: Wording eines Gerichts nur für diesen Konfigurator (leer = zurück auf Concept-/Gericht-Wording). */
+    public function wordingSetzen(int $konzeptId, int $slotId, mixed $text, KonfiguratorService $svc): void
+    {
+        $this->tue(fn () => $svc->wordingSetzen($this->team(), $konzeptId, $slotId, (string) $text));
+    }
+
+    public function wordingZuruecksetzen(int $konzeptId, int $slotId, KonfiguratorService $svc): void
+    {
+        $this->tue(fn () => $svc->wordingSetzen($this->team(), $konzeptId, $slotId, null));
+    }
+
     // ── Leistungen ───────────────────────────────────────────────────────────────
 
     public function leistungNeu(string $konzeptId = ''): void
@@ -356,6 +367,10 @@ class KonfiguratorEditor extends Component
                     : null,
                 'nutzer' => $team->users()->orderBy('name')->get(['users.id', 'users.name'])->pluck('name', 'id')->all(),
                 'speisen' => fn ($c) => $c !== null ? $pricing->speisenPreis($c) : null,
+                // Stufe 5b: Gerichte je Hauptkonzept und Tageszeit mit Wording-Kette (Konfigurator → Concept → Gericht), wie im Foodbook
+                'gerichtZeilen' => $k->konzepte->where('rolle', 'haupt')->mapWithKeys(fn ($kz) => [$kz->id => collect(['lunch' => $kz->lunchConcept, 'dinner' => $kz->dinnerConcept])
+                    ->filter()->map(fn ($c) => app(\Platform\FoodAlchemist\Services\WordingResolver::class)->gerichtZeilen(
+                        $c->loadMissing(['slots.dish', 'slots.embeddedConcept.slots.dish', 'slots.package.dishes.dish']), $kz))->all()])->all(),
                 'anfragen' => \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->where('konfigurator_id', $k->id)->latest()->limit(10)->get(),
             ];
         }
@@ -404,6 +419,7 @@ class KonfiguratorEditor extends Component
             'stunden_lunch' => (string) (float) $k->stunden_lunch, 'stunden_dinner' => (string) (float) $k->stunden_dinner, 'stunden_day_night' => (string) (float) $k->stunden_day_night,
             'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv, 'kombi_rabatt_pct' => (string) (float) $k->kombi_rabatt_pct,
             'paket_toleranz_pct' => (string) (float) $k->paket_toleranz_pct, 'rundung' => number_format((float) $k->rundung, 2, '.', ''),
+            'reihenfolge' => $k->reihenfolge ?: 'tageszeit_zuerst',
         ];
     }
 

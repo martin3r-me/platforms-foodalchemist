@@ -24,7 +24,7 @@ use Platform\FoodAlchemist\Services\Konfigurator\LeistungsRegelPruefung;
 class KonfiguratorService
 {
     private const KOPF_FELDER = ['name', 'kunden_titel', 'claim', 'intro', 'crm_company_id', 'ort', 'status', 'verantwortlich_user_id', 'pax_vorgabe',
-        'stunden_lunch', 'stunden_dinner', 'stunden_day_night', 'tageszeit_aktiv', 'kombi_rabatt_pct', 'paket_toleranz_pct', 'rundung', 'gueltig_bis'];
+        'stunden_lunch', 'stunden_dinner', 'stunden_day_night', 'tageszeit_aktiv', 'kombi_rabatt_pct', 'paket_toleranz_pct', 'rundung', 'gueltig_bis', 'reihenfolge'];
 
     private const KONZEPT_FELDER = ['lunch_concept_id', 'dinner_concept_id', 'abschnitt', 'addon_tageszeit', 'gebunden_an_id',
         'indikativ_lunch', 'indikativ_dinner', 'kunden_titel', 'claim', 'position'];
@@ -211,6 +211,35 @@ class KonfiguratorService
             $konzept->delete();
         });
         $this->pricing->schnueren($team, $k);
+    }
+
+    /**
+     * Stufe 5b · Wording eines Gerichts NUR für diesen Konfigurator überschreiben — derselbe Mechanismus wie im Foodbook
+     * (payload_json['wording_overrides'][concept_slot_id], WordingResolver). Leerer Text = zurück auf die Kette
+     * (Concept-Slot-Wording → Kundenname des Gerichts). Der Slot muss zu einem Concept dieses Konzepts gehören
+     * (Lunch, Dinner oder ein darin eingebettetes Paket).
+     */
+    public function wordingSetzen(Team $team, int $konzeptId, int $slotId, ?string $text): FoodAlchemistKonfiguratorKonzept
+    {
+        $konzept = $this->eigenesKind($team, FoodAlchemistKonfiguratorKonzept::class, $konzeptId);
+        $conceptIds = array_filter([$konzept->lunch_concept_id, $konzept->dinner_concept_id]);
+        $erlaubt = \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::query()->whereIn('concept_id', $conceptIds)->pluck('embedded_concept_id')->filter()->all();
+        $gehoert = \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::query()->whereKey($slotId)->whereIn('concept_id', array_merge($conceptIds, $erlaubt))->exists();
+        if (! $gehoert) {
+            throw new \InvalidArgumentException('Diese Position gehört zu keinem Concept dieses Konzepts.');
+        }
+        $payload = $konzept->payload_json ?? [];
+        $overrides = $payload['wording_overrides'] ?? [];
+        $text = mb_substr(trim((string) $text), 0, 500);
+        if ($text === '') {
+            unset($overrides[(string) $slotId], $overrides[$slotId]);
+        } else {
+            $overrides[(string) $slotId] = $text;
+        }
+        $payload['wording_overrides'] = $overrides;
+        $konzept->update(['payload_json' => $payload]);
+
+        return $konzept->refresh();
     }
 
     // ── Leistungen ───────────────────────────────────────────────────────────────
@@ -485,6 +514,9 @@ class KonfiguratorService
         }
         if (isset($w['status']) && ! in_array($w['status'], FoodAlchemistKonfigurator::STATUS, true)) {
             throw new \InvalidArgumentException('Status entwurf, live oder archiv.');
+        }
+        if (isset($w['reihenfolge']) && ! in_array($w['reihenfolge'], FoodAlchemistKonfigurator::REIHENFOLGEN, true)) {
+            throw new \InvalidArgumentException('Reihenfolge: tageszeit_zuerst oder konzept_zuerst.');
         }
         if (isset($w['rundung']) && ! in_array(round((float) $w['rundung'], 2), FoodAlchemistKonfigurator::RUNDUNGEN, true)) {
             throw new \InvalidArgumentException('Rundung 0,01 · 0,10 · 0,50 oder 1,00.');

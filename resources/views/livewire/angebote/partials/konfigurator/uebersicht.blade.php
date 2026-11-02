@@ -10,6 +10,9 @@
             <x-fa::select id="kf-verantw" wire:model="form.verantwortlich_user_id" :options="$nutzer" placeholder="Niemand" />
         </x-fa::field>
         <x-fa::field label="Startwert Gäste im Link" for="kf-pax"><x-fa::input id="kf-pax" type="number" min="1" wire:model="form.pax_vorgabe" /></x-fa::field>
+        <x-fa::field label="Reihenfolge im Link" for="kf-reihe" hint="Standard: erst Zeitfenster, dann nur passende Konzepte">
+            <x-fa::select id="kf-reihe" wire:model="form.reihenfolge" :options="['tageszeit_zuerst' => 'Zeitfenster zuerst', 'konzept_zuerst' => 'Konzept zuerst']" />
+        </x-fa::field>
         <x-fa::field label="Status" for="kf-status"><x-fa::select id="kf-status" wire:model="form.status" :options="['entwurf' => 'Entwurf', 'live' => 'Live', 'archiv' => 'Archiv']" /></x-fa::field>
     </div>
     <x-fa::field label="Einleitung für den Kunden" for="kf-intro" optional><x-fa::textarea id="kf-intro" rows="3" wire:model="form.intro" /></x-fa::field>
