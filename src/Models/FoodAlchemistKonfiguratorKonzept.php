@@ -29,6 +29,7 @@ class FoodAlchemistKonfiguratorKonzept extends Model
         'indikativ_lunch' => 'boolean',
         'indikativ_dinner' => 'boolean',
         'position' => 'integer',
+        'payload_json' => 'array',   // Stufe 5b: wording_overrides je Concept-Slot-Id (wie Foodbook-Block)
     ];
 
     public function konfigurator(): BelongsTo

@@ -143,6 +143,7 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
             'stunden_lunch' => $zahl, 'stunden_dinner' => $zahl, 'stunden_day_night' => $zahl, 'tageszeit_aktiv' => ['type' => 'boolean'],
             'kombi_rabatt_pct' => $zahl, 'paket_toleranz_pct' => $zahl, 'rundung' => ['type' => 'number', 'enum' => [0.01, 0.1, 0.5, 1.0]],
             'gueltig_bis' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+            'reihenfolge' => ['type' => 'string', 'enum' => \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, 'description' => 'Schritte im Link: Zeitfenster zuerst (Standard) oder Konzept zuerst'],
         ];
     }
 

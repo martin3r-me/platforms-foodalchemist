@@ -6,6 +6,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistKonfiguratorKonzept;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
@@ -20,7 +21,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * 'standard'|'name'), damit die UIs zeigen können, woher ein Name kommt —
  * 'name' heißt: es würde der INTERNE Pipe-Name drucken → Handlungsbedarf.
  *
- * Per-Gericht-Override im Foodbook liegt in block.payload_json['wording_overrides']
+ * Per-Gericht-Override im Foodbook (ebenso Format-Slot, Angebots-Block, Konfigurator-Konzept) liegt in block.payload_json['wording_overrides']
  * (Map slot_id → Text) — Foodbooks komponieren Concepts (BLOCK_TYPES), daher
  * kein eigenes Schema pro Gericht-Zeile nötig. Verwaiste slot_ids (Concept
  * später umgebaut) matchen einfach nicht mehr und sind harmlos.
@@ -66,7 +67,7 @@ class WordingResolver
      *
      * @return array{text: string, source: string}
      */
-    public function fuerBlockSlot(FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock $block, FoodAlchemistConceptSlot $slot): array
+    public function fuerBlockSlot(FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|FoodAlchemistKonfiguratorKonzept $block, FoodAlchemistConceptSlot $slot): array
     {
         $override = trim((string) (($block->payload_json['wording_overrides'] ?? [])[(string) $slot->id]
             ?? ($block->payload_json['wording_overrides'] ?? [])[$slot->id] ?? ''));
@@ -110,7 +111,7 @@ class WordingResolver
      *
      * @return list<array{typ: string, text: string, source: ?string, einrueckung: int}>
      */
-    public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|null $block = null): array
+    public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|FoodAlchemistKonfiguratorKonzept|null $block = null): array
     {
         // Preisdarstellung (2026-08-25): bei `einzel` trägt jede DIREKTE Gericht-/Package-Zeile ihren
         // eigenen VK (kein Concept-Summenpreis). Die Preise kommen aus der EINEN Preis-Stelle
