@@ -1,12 +1,20 @@
-{{-- Spec 94 · Konfigurator-Schritt: Tageszeit (nur wenn aktiv), bei Day-into-Night optional ein zweites Konzept für den Abend. --}}
+{{-- Spec 94 · Konfigurator-Schritt: Zeitfenster (nur wenn aktiv) als Karten mit Preis je Option für das gewählte Konzept;
+     bei Tag und Abend optional ein anderes Konzept für den Abend. --}}
 @if($content['tageszeit_aktiv'] ?? false)
-    <section class="pt-wide pt-konfig-schritt" id="konfig-tageszeit" data-konfig-schritt="tageszeit">
+    <section class="pt-wide pt-konfig-schritt" id="konfig-tageszeit" data-konfig-schritt="tageszeit" data-konfig-gruppe="tageszeit">
         <p class="pt-kicker pt-konfig-nr"></p>
-        <h2>{{ $style['titel'] ?? 'Tageszeit' }}</h2>
-        <div class="pt-konfig-wahl">
-            <button type="button" class="pt-konfig-chip" data-konfig-tageszeit="lunch" aria-pressed="false">Lunch</button>
-            <button type="button" class="pt-konfig-chip" data-konfig-tageszeit="dinner" aria-pressed="false">Dinner</button>
-            <button type="button" class="pt-konfig-chip" data-konfig-tageszeit="day_night" aria-pressed="false">Day into Night</button>
+        <h2>{{ $style['titel'] ?? 'Wann startet euer Event?' }}</h2>
+        @if(($content['kombi_rabatt_pct'] ?? 0) > 0)<p class="pt-section-text">Tag, Abend oder beides. Zusammen gebucht kommen {{ number_format($content['kombi_rabatt_pct'], 0, ',', '.') }} % Kombi-Rabatt drauf.</p>@endif
+        <div class="pt-konfig-raster">
+            @foreach(['lunch' => ['Tag', 'Mittagessen und Pausen bei Tageslicht.'], 'dinner' => ['Abend', 'Dinner am Abend, mit dem vollen Programm.'], 'day_night' => ['Tag und Abend', 'Durchgehend von mittags bis in den Abend.']] as $t => [$titel, $text])
+                <button type="button" class="pt-konfig-karte pt-konfig-karte--ohne-bild" data-konfig-tageszeit="{{ $t }}" aria-pressed="false">
+                    <span class="pt-konfig-karte-text">
+                        <span class="pt-konfig-titel">{{ $titel }}</span>
+                        <span class="pt-konfig-claim">{{ $text }}</span>
+                        <span class="pt-konfig-ab" data-konfig-tageszeit-preis="{{ $t }}"></span>
+                    </span>
+                </button>
+            @endforeach
         </div>
         <label class="pt-konfig-abend" data-konfig-abend-feld hidden>
             <span>Konzept für den Abend</span>
@@ -16,6 +24,5 @@
                 @endforeach
             </select>
         </label>
-        @if(($content['kombi_rabatt_pct'] ?? 0) > 0)<p class="pt-section-text">Day into Night: {{ number_format($content['kombi_rabatt_pct'], 0, ',', '.') }} % Kombi-Vorteil auf die Konzepte.</p>@endif
     </section>
 @endif

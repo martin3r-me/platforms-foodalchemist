@@ -16,7 +16,14 @@
         $tokens = $snapshot['resolved_design']['tokens'] ?? [];
     @endphp
 
+    @php $istKonfigurator = ($snapshot['type'] ?? null) === 'konfigurator'; $konfigChrome = false; @endphp
+    @if($istKonfigurator)<div class="pt-konfig-seite" data-konfig-seite>@endif
     @foreach($layout as $block)
+        {{-- Spec 94 Stufe 5: vor dem ersten Konfigurator-Schritt Schritt-Leiste, Gäste und Preisleisten (gilt für jedes Design) --}}
+        @if($istKonfigurator && ! $konfigChrome && str_starts_with($block['block_type'] ?? '', 'konfig_'))
+            @include('foodalchemist::presentation.blocks._konfigurator_chrome', ['content' => $content])
+            @php $konfigChrome = true; @endphp
+        @endif
         @php
             $partial = match ($block['block_type'] ?? '') {
                 'cover' => 'foodalchemist::presentation.blocks.cover',
@@ -52,6 +59,7 @@
             ])
         @endif
     @endforeach
+    @if($istKonfigurator)</div>@endif
     @if(($snapshot['type'] ?? null) === 'konfigurator')
         @include('foodalchemist::presentation.blocks._konfigurator_script', ['content' => $content])
     @endif

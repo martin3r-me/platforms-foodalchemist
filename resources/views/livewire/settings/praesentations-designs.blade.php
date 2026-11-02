@@ -67,6 +67,7 @@
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('menu')">Speisekarte</x-fa::button>
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('kiosk')">Kiosk</x-fa::button>
                         <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('konfigurator')">Konfigurator</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('konfigurator_dunkel')">Konfigurator dunkel</x-fa::button>
                     </div>
                 </div>
             </x-fa::section>

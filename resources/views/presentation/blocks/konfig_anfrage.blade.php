@@ -5,8 +5,8 @@
     $ziel = $ref !== null && request()->route('type') === 'konfigurator' ? route('foodalchemist.presentation.konfigurator_anfrage', ['token' => $ref]) : null;
     $status = request()->query('anfrage');
 @endphp
-<section class="pt-wide pt-konfig-schritt" id="konfig-anfrage" data-konfig-schritt="anfrage">
-    <p class="pt-kicker pt-konfig-nr"></p>
+<section class="pt-wide pt-konfig-schritt" id="konfig-anfrage" data-konfig-schritt="anfrage" data-konfig-gruppe="anfrage">
+    <p class="pt-kicker">Kontakt</p>
     <h2>{{ $style['titel'] ?? 'Unverbindlich anfragen' }}</h2>
     @if($status === 'ok')
         <p class="pt-konfig-ok" data-konfig-anfrage-ok>Vielen Dank. Ihre Anfrage ist angekommen, wir melden uns zeitnah.</p>
