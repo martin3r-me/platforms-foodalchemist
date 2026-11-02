@@ -73,7 +73,7 @@ class TrendEingangService
     public function alsArray(FoodAlchemistTrendEingang $e, ?Team $team = null): array
     {
         return [
-            'id' => (int) $e->id, 'titel' => $e->titel, 'url' => $e->url,
+            'id' => (int) $e->id, 'titel' => $e->titel, 'url' => $e->link(),
             'quelle_id' => $e->quelle_id !== null ? (int) $e->quelle_id : null, 'quelle' => $e->quelle?->name,
             'veroeffentlicht_am' => $e->veroeffentlicht_am?->toIso8601String(), 'teaser' => $e->teaser,
             'zusammenfassung' => $e->zusammenfassung, 'thema' => $e->thema, 'kategorie' => $e->kategorie, 'sparten' => $e->sparten ?? [],
@@ -93,11 +93,15 @@ class TrendEingangService
     /**
      * Ein Artikel in den Eingang. `von` = abruf (System) | mcp | hand.
      *
+     * Spec 93 E: `$signal` = Schlüssel eines Einzelsignals aus einem Beitrag (siehe {@see signaleEinreichen()}). Dann gilt
+     * als Dublette erst dieselbe URL mit demselben Signal; gespeichert wird die URL mit Fragment `#signal=…`, damit jeder
+     * Beleg im Thema seinen eigenen Link hat und das Zählen der Automatik den Beitrag trotzdem erkennt (Fragment fällt weg).
+     *
      * @param  array{url:string, titel:string, veroeffentlicht_am?:?string, teaser?:?string, quelle_id?:?int}  $daten
      * @return array{ergebnis:string, eintrag:?FoodAlchemistTrendEingang, grund:?string}
      *                                                                                ergebnis: neu | dublette | gefiltert
      */
-    public function einreichen(Team $team, array $daten, string $von = 'mcp', ?int $userId = null): array
+    public function einreichen(Team $team, array $daten, string $von = 'mcp', ?int $userId = null, ?string $signal = null): array
     {
         if (! array_key_exists($von, V::EINGEREICHT_VON)) {
             throw new \RuntimeException('eingereicht_von „'.$von.'“ gibt es nicht.');
@@ -107,6 +111,10 @@ class TrendEingangService
         }
         $url = trim((string) ($daten['url'] ?? ''));
         $hash = TrendUrl::hash($url);   // wirft ohne http(s)/Host
+        if ($signal !== null) {
+            $hash = hash('sha256', TrendUrl::normalisieren($url)."\n#signal:".$signal);
+            $url = TrendUrl::normalisieren($url).'#signal='.rawurlencode(str_replace(' ', '-', $signal));
+        }
         $titel = trim(preg_replace('/\s+/u', ' ', (string) ($daten['titel'] ?? '')) ?? '');
         if ($titel === '') {
             throw new \RuntimeException('Ein Eintrag braucht einen Titel.');
@@ -166,6 +174,48 @@ class TrendEingangService
         $this->erschliessenDispatchen($eintrag);
 
         return ['ergebnis' => 'neu', 'eintrag' => $eintrag->refresh(), 'grund' => $filter['grund']];
+    }
+
+    /**
+     * Spec 93 E · Ein Beitrag mit mehreren Einzelsignalen (Studie, Trendliste): je Signal ein eigener Eingangs-Eintrag mit
+     * eigenem Thema — sonst bündelt das Erschließen die ganze Studie unter ein Sammelthema und keins der Signale zählt.
+     * Wer einreicht, kennt die Struktur; zerlegt wird hier deterministisch, ohne KI. Titel = „Signal — Beitrag“, damit das
+     * Erschließen den Zusammenhang sieht. Höchstens `trends.quellen.max_signale_je_beitrag` Signale (jedes kostet einen Call).
+     *
+     * @param  array{url:string, titel:string, veroeffentlicht_am?:?string, quelle_id?:?int}  $beitrag
+     * @param  list<array{titel?:string, teaser?:?string}>  $signale
+     * @return list<array{signal:string, ergebnis:string, eintrag:?FoodAlchemistTrendEingang, grund:?string}>
+     */
+    public function signaleEinreichen(Team $team, array $beitrag, array $signale, string $von = 'mcp', ?int $userId = null): array
+    {
+        $max = (int) config('foodalchemist.trends.quellen.max_signale_je_beitrag', 12);
+        if (count($signale) > $max) {
+            throw new \RuntimeException('Höchstens '.$max.' Signale je Beitrag ('.count($signale).' übergeben).');
+        }
+        $beitragTitel = trim(preg_replace('/\s+/u', ' ', (string) ($beitrag['titel'] ?? '')) ?? '');
+        // erst alle prüfen, dann anlegen — ein Signal ohne Titel soll nicht die Hälfte des Beitrags eingereicht zurücklassen
+        $liste = [];
+        foreach ($signale as $s) {
+            $s = (array) $s;
+            $signalTitel = trim(preg_replace('/\s+/u', ' ', (string) ($s['titel'] ?? '')) ?? '');
+            $schluessel = TrendThemenService::schluessel($signalTitel);
+            if ($schluessel === '') {
+                throw new \RuntimeException('Jedes Signal braucht einen Titel.');
+            }
+            $liste[$schluessel] ??= ['titel' => $signalTitel, 'teaser' => $s['teaser'] ?? null];   // gleiches Signal zweimal: einmal reicht
+        }
+        $ergebnisse = [];
+        foreach ($liste as $schluessel => $s) {
+            $signalTitel = $s['titel'];
+            $titel = $beitragTitel !== '' ? $signalTitel.' — '.$beitragTitel : $signalTitel;
+            $r = $this->einreichen($team, [
+                'url' => $beitrag['url'] ?? '', 'titel' => $titel, 'teaser' => $s['teaser'] ?? null,
+                'veroeffentlicht_am' => $beitrag['veroeffentlicht_am'] ?? null, 'quelle_id' => $beitrag['quelle_id'] ?? null,
+            ], $von, $userId, (string) $schluessel);   // Array-Schlüssel „2027“ wäre sonst int
+            $ergebnisse[] = ['signal' => $signalTitel] + $r;
+        }
+
+        return $ergebnisse;
     }
 
     /**
@@ -251,6 +301,11 @@ class TrendEingangService
         $thema = $e->thema_quelle === 'manuell' ? $e->thema : $this->kurz($w['thema'] ?? null, 190);
         if ($thema === null || TrendThemenService::schluessel($thema) === '') {
             return $this->erschliessungFehlgeschlagen($e, 'KI-Antwort ohne Thema');
+        }
+        // Spec 93 E: Sammelthemen („Trendprognose 2027“) bündeln ganze Studien und zählen kein Signal — ablehnen statt bündeln.
+        // Ein von Hand gesetztes Thema gilt immer.
+        if ($e->thema_quelle !== 'manuell' && \Platform\FoodAlchemist\Support\TrendSammelthema::ist($thema)) {
+            return $this->erschliessungFehlgeschlagen($e, 'Sammelthema „'.$thema.'“ abgelehnt: Beitrag mit Einzelsignalen (signale) neu einreichen oder das Thema von Hand setzen.');
         }
         $tiefe = (string) ($w['tiefe'] ?? 'unklar');
         $trend = isset($w['passt_zu_trend_id']) && in_array((int) $w['passt_zu_trend_id'], $trendIds, true) ? (int) $w['passt_zu_trend_id'] : null;
@@ -370,7 +425,7 @@ class TrendEingangService
                     throw new \RuntimeException('Dieser Artikel liegt schon auf der Pinnwand (Inspiration '.$eintrag->inspiration_id.').');
                 }
                 $beleg = $this->trends->fundstueckAblegen($team, [
-                    'titel' => $eintrag->titel, 'url' => $eintrag->url,
+                    'titel' => $eintrag->titel, 'url' => $eintrag->link(),
                     'quelle' => $eintrag->quelle?->art ?? 'presse',
                     'notiz' => $eintrag->zusammenfassung ?? $eintrag->teaser,
                     'fundort' => $eintrag->quelle?->name,

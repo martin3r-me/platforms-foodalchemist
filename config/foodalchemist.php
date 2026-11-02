@@ -434,6 +434,9 @@ return [
             'teaser_max' => 600,
             // Spec 93 B: Erschließen-Lauf per Tool „alle neu“ nimmt höchstens so viele je Aufruf (Kurator 30.10.)
             'erschliessen_max_je_aufruf' => 50,
+            // Spec 93 E: höchstens so viele Einzelsignale je eingereichtem Beitrag (Studie, Trendliste) — jedes Signal kostet einen
+            // Erschließen-Call (Kurator 02.11., Startwert).
+            'max_signale_je_beitrag' => 12,
             // Spec 93 B: Ähnlichkeit für das Bündeln über die Vektorsuche (Schritt 2). null = aus. Wert wird auf demo gemessen
             // (`foodalchemist:trend-themen-aehnlichkeit --team=…`), dann gesetzt — nicht raten.
             'buendel_aehnlichkeit' => env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') !== null ? (float) env('FOODALCHEMIST_TREND_BUENDEL_AEHNLICHKEIT') : null,
@@ -1422,7 +1425,9 @@ return [
             'task' => 'Erschließe einen Artikel für den Trendradar eines Caterers (Food & Beverage, Catering, Gastronomie). '
                 . 'Eingabe: titel, teaser, quelle (name, art, schwerpunkte), themen (vorhandene Themennamen des Teams), trends (id, name). '
                 . 'werte = {relevant: true|false, zusammenfassung: höchstens 400 Zeichen in EIGENEN Worten (kein Zitat), '
-                . 'thema: kurz, Singular, deutsch, 1–4 Wörter — ist es dasselbe wie ein Eintrag aus `themen`, übernimm genau dessen Schreibweise, '
+                . 'thema: kurz, Singular, deutsch, 1–4 Wörter — ist es dasselbe wie ein Eintrag aus `themen`, übernimm genau dessen Schreibweise; '
+                . 'das Thema ist das konkrete Signal (Zutat, Gericht, Technik, Getränk, Format), NIE eine Sammelrubrik wie „Trendprognose 2027“, '
+                . '„Foodtrends“ oder „Ausblick“ — nennt der Artikel mehrere Trends, nimm den ersten konkreten, '
                 . 'kategorie: food|getraenke|deko|format, sparten: Liste aus event_bankett|betriebsgastronomie|care|bildung|restaurant_hotel|delivery (leer = alle), '
                 . 'tiefe: beduerfnis (gesellschaftliches Bedürfnis, Dauer) | oberflaeche (medial, kurzlebig) | unklar, tiefe_begruendung: ein Satz, '
                 . 'passt_zu_trend_id: id NUR aus `trends`, sonst null, begruendung: ein Satz}. '

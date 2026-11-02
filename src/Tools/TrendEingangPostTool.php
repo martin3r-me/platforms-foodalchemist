@@ -21,7 +21,10 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
         return 'Reicht Artikel in den Eingang des Trendradars ein (Kuratieren). Je Artikel url, titel, optional veroeffentlicht_am (YYYY-MM-DD), '
             .'teaser (eigene kurze Beschreibung, KEIN Volltext) und quelle_id (setzt letzter_abruf_at der Quelle). Einzeln oder als artikel-Liste '
             .'(max. 50). Ergebnis je Artikel: neu | dublette (gleiche URL in der Teamfamilie, Tracking-Parameter egal) | gefiltert (Stichwort-Filter '
-            .'der Quelle bzw. des Teams; grund nennt das Stichwort). Landet nie auf der Pinnwand.';
+            .'der Quelle bzw. des Teams; grund nennt das Stichwort). Landet nie auf der Pinnwand. '
+            .'Studie oder Trendliste mit mehreren Trends: je Artikel signale = [{titel, teaser}] (max. 12) mitgeben — dann wird jedes '
+            .'Signal ein eigener Eintrag mit eigenem Thema (gleiche URL, Dublette = URL + Signal-Titel); ohne signale landet die ganze '
+            .'Studie in einem Thema, und Sammelthemen wie „Trendprognose 2027“ lehnt das Erschließen ab. Höchstens 50 Einträge je Aufruf (Signale zählen einzeln).';
     }
 
     public function getSchema(): array
@@ -29,6 +32,8 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
         $artikel = ['type' => 'object', 'properties' => [
             'url' => ['type' => 'string'], 'titel' => ['type' => 'string'],
             'veroeffentlicht_am' => ['type' => 'string'], 'teaser' => ['type' => 'string'],
+            'signale' => ['type' => 'array', 'description' => 'Einzelsignale des Beitrags (Studie/Trendliste), je {titel, teaser}; max. 12.',
+                'items' => ['type' => 'object', 'properties' => ['titel' => ['type' => 'string'], 'teaser' => ['type' => 'string']]]],
         ]];
 
         return ['type' => 'object', 'properties' => $artikel['properties'] + [
@@ -44,8 +49,9 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $liste = ! empty($arguments['artikel']) && is_array($arguments['artikel']) ? array_values($arguments['artikel']) : [$arguments];
-        if (count($liste) > 50) {
-            return ToolResult::error('Höchstens 50 Artikel je Aufruf.', 'VALIDATION_ERROR');
+        $eintraege = array_sum(array_map(fn ($a) => ! empty(((array) $a)['signale']) && is_array(((array) $a)['signale']) ? count(((array) $a)['signale']) : 1, $liste));
+        if (count($liste) > 50 || $eintraege > 50) {
+            return ToolResult::error('Höchstens 50 Einträge je Aufruf (Signale zählen einzeln).', 'VALIDATION_ERROR');
         }
         $svc = app(TrendEingangService::class);
         $ergebnisse = [];
@@ -53,6 +59,20 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
             $a = (array) $a;
             if (! empty($arguments['quelle_id'])) {
                 $a['quelle_id'] = (int) $arguments['quelle_id'];
+            }
+            if (! empty($a['signale']) && is_array($a['signale'])) {
+                try {
+                    foreach ($svc->signaleEinreichen($team, $a, array_values($a['signale']), 'mcp', $context->user?->id) as $r) {
+                        $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'signal' => $r['signal'], 'ergebnis' => $r['ergebnis'],
+                            'grund' => $r['grund'], 'id' => $r['eintrag'] !== null ? (int) $r['eintrag']->id : null];
+                    }
+                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    return ToolResult::error('Quelle nicht gefunden oder gehört einem anderen Team.', 'NOT_FOUND');
+                } catch (\RuntimeException $e) {
+                    $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'ergebnis' => 'fehler', 'grund' => $e->getMessage(), 'id' => null];
+                }
+
+                continue;
             }
             try {
                 $r = $svc->einreichen($team, $a, 'mcp', $context->user?->id);

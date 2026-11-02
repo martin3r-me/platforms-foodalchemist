@@ -45,7 +45,7 @@
                 <article class="p-3 flex flex-col gap-1.5 min-w-0" wire:key="eg-{{ $e->id }}" data-eingang-eintrag="{{ $e->id }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <a href="{{ $e->url }}" target="_blank" rel="noopener nofollow" class="font-medium hover:underline break-words">{{ $e->titel }}</a>
+                            <a href="{{ $e->link() }}" target="_blank" rel="noopener nofollow" class="font-medium hover:underline break-words">{{ $e->titel }}</a>
                             <div class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] flex flex-wrap gap-x-2">
                                 <span>{{ $e->quelle?->name ?? V::label(V::EINGEREICHT_VON, $e->eingereicht_von) }}</span>
                                 @if($e->veroeffentlicht_am)<span>{{ $e->veroeffentlicht_am->format('d.m.Y') }}</span>@endif

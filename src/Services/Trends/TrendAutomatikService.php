@@ -71,7 +71,17 @@ class TrendAutomatikService
         $jetzt ??= now();
         $schluessel = (string) ($thema->thema_schluessel ?: TrendThemenService::schluessel((string) $thema->titel));
         $sichtungen = [];
+        // Spec 93 E: Einzelsignale eines Beitrags tragen dieselbe URL (Fragment #signal=… fällt beim Normalisieren weg). Im
+        // selben Thema zählt ein Beitrag nur einmal — sonst hebt eine einzige Studie ein Thema über Sichtungs- und Quellen-Schwelle.
+        $beitraege = [];
         foreach (FoodAlchemistTrendBeleg::where('inspiration_id', $thema->id)->orderBy('id')->get() as $b) {
+            $beitrag = $this->beitragSchluessel($b);
+            if ($beitrag !== null && isset($beitraege[$beitrag])) {
+                continue;
+            }
+            if ($beitrag !== null) {
+                $beitraege[$beitrag] = true;
+            }
             $sichtungen[] = $this->sichtung($b, false);
         }
         // Regel 2: Pinnwand-Fundstücke mit gleichem Schlüssel (Titel oder Schlagwort) zählen als Sichtung, die Karte bleibt unverändert
@@ -382,6 +392,19 @@ class TrendAutomatikService
 
                 return false;
             })->values();
+    }
+
+    /** Normalisierte URL eines Belegs ohne Fragment (= derselbe Beitrag); null ohne gültigen Link. */
+    private function beitragSchluessel(FoodAlchemistTrendBeleg $b): ?string
+    {
+        if (! $b->url) {
+            return null;
+        }
+        try {
+            return \Platform\FoodAlchemist\Support\TrendUrl::normalisieren((string) $b->url);
+        } catch (\RuntimeException) {
+            return null;
+        }
     }
 
     /** @return array{datum: Carbon, art: string, quelle: string, pinnwand: bool} */
