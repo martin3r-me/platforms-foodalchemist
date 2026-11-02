@@ -1,6 +1,6 @@
 # Spec 94 · Konfigurator: All-in-Preise je Concept als Kundenlink
 
-Stand 02.11.2026 · Branch `docs/spec94-konfigurator-allin` · **Entwurf: Umsetzung erst nach Freigabe Dominique**
+Stand 02.11.2026 · Branch `docs/spec94-konfigurator-allin` · **Freigegeben von Dominique am 02.11.2026**
 Entscheide Dominique 02.11.: eigenes Modul unter Angebote · Leistungen über Vorlagen · EK und VK je Leistung, VK über Aufschlagsklasse mit Basissatz wie Speisen · Vorlagen vererbbar · nur Deutsch · Anfrage per Mail und Signal · eigenes Lunch-Concept · Editor wie im Angebot, CI über die Präsentations-Designs
 Vorbild: DOEC „Diva.licious" (Konfigurator-Demo v0.4.1) und `DOEC_AllIn_Preise_v2.xlsx` (Kunde DOEC Catering, Projekt Oceandiva 2026)
 
@@ -588,7 +588,7 @@ Je Stufe läuft der Testkreis der Wächter mit: Spec84* (Sicht, Tool-Liste, Serv
 Dateigrößen (Editor-Komponenten nach Spec 84 aufteilen, z. B. ein Livewire-Teil je Reiter), BladeCompiles, UiRegeln,
 EnumStatusVergleichWaechter. Die Handbuch-Seite (Stufe 4) folgt Spec 86.
 
-Merge als reiner Docs-PR über den Kurator (Spec 82), erst nach Freigabe durch Dominique.
+Merge als reiner Docs-PR über den Kurator (Spec 82); Freigabe durch Dominique liegt vor (02.11.2026).
 
 ## Entscheidungen
 
@@ -614,9 +614,9 @@ Getroffen (Dominique, 02.11.2026):
 - Das Modul kann Paketgrenzen nach Kosten vorschlagen (Toleranz Standard 10 %); übernommen wird nur auf Wunsch.
 - Leistungs-Vorlagen in Phase 1 nicht im Abo und nicht im Stamm-Paket; Mandanten neben dem Master sehen sie nicht.
 - Neue Spalte `bereich` an den Aufschlagsklassen, damit Leistungsklassen nicht im Concepter auftauchen.
-- Die Spec bleibt Entwurf; Umsetzung erst nach Freigabe.
+- Spec freigegeben am 02.11.2026; die Umsetzung kann in Stufen beginnen.
 
-Vorschlag in dieser Spec, zu bestätigen:
+Mit der Freigabe bestätigt (vorher Vorschlag der Spec):
 
 - Handwerte in der Paket-Matrix bleiben beim Neu-Schnüren erhalten und werden markiert, wenn sie von der Regel abweichen.
 - Leistungen als Grundausstattung plus Zusatz je Concept/Add-on.
@@ -629,4 +629,4 @@ Vorschlag in dieser Spec, zu bestätigen:
 
 ## Offene Fragen
 
-Keine. Die Spec wartet auf Freigabe.
+Keine. Die Spec ist freigegeben.
