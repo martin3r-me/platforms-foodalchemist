@@ -1,6 +1,7 @@
 {{-- Einstellungen → Trendradar: Google Trends über DataForSEO (Spec 79, pro Team). --}}
 @php
     $haken = 'mt-0.5 w-4 h-4 shrink-0 rounded accent-[var(--fa-accent)]';
+    $zeige = fn (string $a) => $abschnitt === null || $abschnitt === $a;   // eigener Reiter (03.11.): der Unter-Reiter zeigt nur seinen Abschnitt, null = alles
 @endphp
 
 <div class="flex flex-col gap-5" data-settings-trendradar>
@@ -20,7 +21,7 @@
         <x-fa::notice tone="ok" data-trendradar-meldung>{{ $meldung }}</x-fa::notice>
     @endif
 
-    @if(! $hostAktiv)
+    @if(! $hostAktiv && $zeige('google-trends'))
         <x-fa::notice tone="warn" title="Zeitplan auf dem Server abgeschaltet">
             Die wöchentliche Messung ist auf dem Server ausgeschaltet. Deine Einstellung wird gespeichert, wirkt aber erst, wenn der Zeitplan wieder läuft.
         </x-fa::notice>
@@ -28,6 +29,7 @@
 
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     {{-- Spec 79: Google Trends über DataForSEO --}}
+    @if($zeige('google-trends'))
     <x-fa::section title="Google Trends (DataForSEO)" icon="heroicon-o-chart-bar"
                    description="Misst für jeden Trend, wie sich das Suchinteresse in Deutschland über 12 Monate entwickelt. Jede Abfrage kostet etwa {{ number_format($kostenJeAbfrage, 3, ',', '.') }} $ je Suchbegriff. Die Messung bestätigt einen Trend nie allein, sie zeigt Richtung und Hype-Spitzen.">
         <div class="flex flex-col gap-4 max-w-[60ch]" data-trendradar-dataforseo>
@@ -54,8 +56,10 @@
             </div>
         @endunless
     </x-fa::section>
+    @endif
 
     {{-- Spec 93 A: Standards für die Quellen des Trendradars --}}
+    @if($zeige('trend-quellen'))
     <x-fa::section title="Quellen und Eingang" icon="heroicon-o-rss"
                    description="Standard für neue Quellen und für den Stichwort-Filter vor dem Eingang. Jede Quelle kann eigene Werte haben (Trendradar → Reiter „Quellen“).">
         <div class="flex flex-col gap-4 max-w-[60ch]" data-trendradar-quellen>
@@ -80,8 +84,10 @@
             </div>
         @endunless
     </x-fa::section>
+    @endif
 
     {{-- Spec 93 C: Trend-Automatik --}}
+    @if($zeige('trend-automatik'))
     <x-fa::section title="Trend-Automatik" icon="heroicon-o-cpu-chip"
                    description="Ordnet automatische Themen nach festen Regeln ein und legt Trends an. Im Schatten-Modus rechnet sie nur (Trendradar → Reiter „Automatik“). Von Hand gesetzte Felder fasst sie nie an, Mega- und Metatrends setzt sie nie selbst.">
         <div class="flex flex-col gap-4" data-trendradar-automatik>
@@ -117,6 +123,7 @@
             </div>
         @endunless
     </x-fa::section>
+    @endif
 
     </fieldset>
 </div>
