@@ -33,6 +33,12 @@ class FoodAlchemistOfferBlock extends Model
     // nach Aufwand aus einer Konfigurator-Anfrage. Kunden-Dokumente zeigen nie den EK.
     public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header', 'header_preis', 'text', 'spacer', 'position'];
 
+    /**
+     * Preis-Basen einer position: pauschal (in der Angebotssumme) oder aufwand (zzgl. nach Aufwand, geschätzt — NICHT in Summe,
+     * Preis pro Person und gesamt_ek; Dominique 2026-11-03). Ausgewertet nur über {@see istAufwand()}.
+     */
+    public const POSITION_BASES = ['pauschal', 'aufwand'];
+
     /** Kanonische Preis-Basen für header_preis (Vokabular-Pflicht). */
     public const PRICE_BASES = ['person', 'pauschal'];
 
@@ -65,6 +71,12 @@ class FoodAlchemistOfferBlock extends Model
     {
         return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
             ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Verweis löst auch Fassungen auf
+    }
+
+    /** Spec 94b: die eine Stelle für „zzgl. nach Aufwand“ — eine Position mit Preis-Basis aufwand zählt nicht in die Summe. */
+    public function istAufwand(): bool
+    {
+        return $this->type === 'position' && $this->price_basis === 'aufwand';
     }
 
     /** Spec 94b: Einheit einer Position als Text — Vokabular, sonst der mitgegebene Text (z. B. „Std.“ aus dem Konfigurator). */

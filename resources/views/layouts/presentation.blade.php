@@ -193,6 +193,12 @@
         .pt-konfig-aufteilung li { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-bottom: 1px solid var(--pt-line); color: var(--pt-muted); font-size: .92rem; }
         .pt-konfig-aufteilung li span:last-child { color: var(--pt-text); font-variant-numeric: tabular-nums; }
         .pt-konfig-zzgl { margin: 4px 0 16px; max-width: 560px; }
+        .pt-zzgl { margin-top: .9rem; padding-top: .5rem; border-top: 1px dashed var(--pt-line); font-size: .9rem; color: var(--pt-text); }
+        .pt-zzgl-titel { font-weight: 700; margin-bottom: .2rem; }
+        .pt-zzgl-zeile { display: flex; justify-content: space-between; gap: .75rem; padding: .15rem 0; color: var(--pt-muted); }
+        .pt-zzgl-zeile > span:last-child { text-align: right; white-space: nowrap; }
+        .pt-zzgl-summe { margin-top: .2rem; padding-top: .35rem; border-top: 1px solid var(--pt-line); font-weight: 700; color: var(--pt-text); }
+        .pt-zzgl-hinweis { display: block; margin-top: .4rem; font-size: .8rem; color: var(--pt-muted); }
         .pt-konfig-zzgl ul { list-style: none; margin: 4px 0; padding: 0; }
         .pt-konfig-zzgl li { padding: 4px 0; border-bottom: 1px solid var(--pt-line); font-size: .92rem; }
         @media (max-width: 420px) { .pt-konfig-zzgl-leiste { display: none; } }

@@ -45,6 +45,36 @@ it('Position über den echten create()-Weg: ek_value gespeichert, immer pauschal
     expect($b->ek_value)->toBeNull()->and($b->price_basis)->toBe('pauschal');
 });
 
+it('Aufwand-Position zählt nicht in Summe, Preis pro Person und gesamt_ek; eine manuelle Position (pauschal) zählt weiter', function () {
+    $this->comp->addBlock($this->rootTeam, $this->kap->id, ['type' => 'position', 'label' => 'Shuttle', 'quantity' => 2, 'price_value' => 150, 'ek_value' => 90]);
+    $aufwand = $this->comp->addBlock($this->rootTeam, $this->kap->id, ['type' => 'position', 'label' => 'Garderobe', 'quantity' => 14,
+        'unit_vocab_id' => $this->std->id, 'price_value' => 45, 'ek_value' => 25, 'price_basis' => 'aufwand']);
+    expect($aufwand->fresh()->istAufwand())->toBeTrue()
+        ->and($this->comp->blockPreis($aufwand->fresh()))->toMatchArray(['pauschal' => 0.0, 'ek_pauschal' => 0.0, 'aufwand' => 630.0, 'ek_aufwand' => 350.0]);
+
+    $kalk = app(AngebotService::class)->kalkulation($this->rootTeam, $this->angebot->fresh());
+    expect($kalk['gesamt_vk'])->toBe(300.0)->and($kalk['gesamt_ek'])->toBe(180.0)->and($kalk['vk_pro_person'])->toBe(3.0)   // nur der Shuttle
+        ->and($kalk['aufwand'])->toBe(['vk' => 630.0, 'ek' => 350.0, 'db' => 280.0]);
+
+    // Kundenlink: Aufwand unter der Summe, mit voraussichtlicher Gesamtsumme; kein EK
+    $snap = app(PresentationService::class)->buildSnapshot($this->rootTeam, $this->angebot->fresh(), 'angebot', ['design' => 'editorial']);
+    $pa = $snap['content']['preis_aufschluesselung'];
+    expect($pa['netto'])->toEqual(300.0)->and($pa['zzgl'][0])->toMatchArray(['titel' => 'Garderobe', 'menge' => '14', 'einheit' => 'Std.', 'betrag' => 630.0])
+        ->and($pa['voraussichtlich_netto'])->toEqual(930.0)->and($snap['content']['total']['zzgl_summe'])->toEqual(630.0)
+        ->and(collect($snap['content']['sections'][0]['blocks'])->pluck('label')->all())->toBe(['Shuttle']);
+    expect(json_encode($pa['zzgl']))->not->toContain('350')->not->toContain('ek');
+
+    // Angebots-PDF: Shuttle bei den Positionen, Garderobe unter der Summe als zzgl.
+    $pdf = $this->get(route('foodalchemist.angebote.dokument', $this->angebot->id))->assertOk()->getContent();
+    expect($pdf)->toContain('Weitere Positionen')->toContain('Shuttle')->toContain('Zzgl. nach Aufwand (geschätzt)')
+        ->toContain('Garderobe · ca. 14 Std. à 45,00 € ≈ 630,00 €')->toContain('Nicht im Gesamtpreis enthalten');
+    expect(strpos($pdf, 'Zzgl. nach Aufwand'))->toBeGreaterThan(strpos($pdf, 'class="total"'));
+
+    // Editor: Kennzeichnung und getrennte Zeile in der Kalkulation
+    Livewire::test(AngebotEditor::class)->call('oeffnen', $this->angebot->id)->call('kapitelWaehle', $this->kap->id)
+        ->assertSeeHtml('data-angebot-position-aufwand')->assertSeeHtml('data-angebot-aufwand')->assertSeeHtml('data-angebot-voraussichtlich');
+});
+
 it('Kundenlink und Dokumente zeigen Menge, Einheit, Satz und Betrag — nie den EK', function () {
     $this->comp->addBlock($this->rootTeam, $this->kap->id, ['type' => 'position', 'label' => 'Garderobe', 'quantity' => 14,
         'unit_vocab_id' => $this->std->id, 'price_value' => 45, 'ek_value' => 25]);
@@ -100,7 +130,11 @@ it('Konfigurator-Anfrage: Leistungen nach Aufwand werden Positionen im Kapitel �
         ->and($pos[0]->einheitText())->toBe('Std.')
         ->and($a->konfiguration_json['zzgl'][0])->toMatchArray(['bezeichnung' => 'Garderobe', 'menge' => 21.0, 'betrag' => 945.0])
         ->and($a->brief)->toContain('zzgl. nach Aufwand (geschätzt): ca. 21 Std. Garderobe ≈ 945,00 €')
-        ->and((float) $a->total_price)->toBe(6000.0);   // der Paketpreis bleibt ohne Aufwand (50 € × 120)
+        ->and((float) $a->total_price)->toBe(6000.0)   // der Paketpreis bleibt ohne Aufwand (50 € × 120)
+        ->and($pos[0]->price_basis)->toBe('aufwand');
+    // Angebot aus der Anfrage: Summe = Paketpreis, der Aufwand steht als zzgl. daneben
+    $kalk = app(AngebotService::class)->kalkulation($this->rootTeam, $a);
+    expect($kalk['aufwand']['vk'])->toBe(945.0);
 });
 
 it('MCP: offer_block.POST legt eine Position mit EK an', function () {

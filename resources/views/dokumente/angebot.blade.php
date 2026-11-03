@@ -85,6 +85,17 @@
         </table>
     </div>
 
+    @if(! empty($zzgl))
+        {{-- Spec 94b: zzgl. nach Aufwand — geschätzt, nicht im Gesamt --}}
+        <div class="menue">
+            <h2>Zzgl. nach Aufwand (geschätzt)</h2>
+            @foreach($zzgl as $p)
+                <div class="pos">{{ $p['label'] }} · ca. {{ rtrim(rtrim(number_format($p['menge'], 2, ',', '.'), '0'), ',') }} {{ $p['einheit'] }} à {{ number_format($p['satz'], 2, ',', '.') }} € ≈ {{ number_format($p['betrag'], 2, ',', '.') }} €</div>
+            @endforeach
+            <div class="pos sub">Nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand.</div>
+        </div>
+    @endif
+
     @if($angebot->description)
         <div class="note">{!! nl2br(e($angebot->description)) !!}</div>
     @endif

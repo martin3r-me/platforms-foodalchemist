@@ -176,7 +176,7 @@ class KonfiguratorAnfrageService
         return array_values(array_filter($summe, fn ($e) => $e['menge'] > 0));
     }
 
-    /** Kapitel „Nach Aufwand“ mit je einer Position (Blocktyp position, pauschal, Menge × VK-Satz, EK je Einheit). */
+    /** Kapitel „Nach Aufwand“ mit je einer Position (Blocktyp position, Preis-Basis aufwand: zzgl., nicht in der Summe). */
     private function mitPositionen(FoodAlchemistAngebot $angebot, array $aufwand): FoodAlchemistAngebot
     {
         if ($aufwand === []) {
@@ -186,7 +186,7 @@ class KonfiguratorAnfrageService
             'title' => 'Nach Aufwand', 'consumer_title' => 'Zzgl. nach Aufwand', 'price_mode' => 'auto', 'position' => 1]);
         foreach (array_values($aufwand) as $i => $e) {
             $kapitel->blocks()->create(['team_id' => $angebot->team_id, 'type' => 'position', 'label' => $e['bezeichnung'], 'quantity' => $e['menge'],
-                'unit_vocab_id' => $e['einheit_vocab_id'], 'price_value' => $e['satz'], 'ek_value' => $e['ek_satz'], 'price_basis' => 'pauschal',
+                'unit_vocab_id' => $e['einheit_vocab_id'], 'price_value' => $e['satz'], 'ek_value' => $e['ek_satz'], 'price_basis' => 'aufwand',
                 'customer_text' => 'Geschätzt, abgerechnet nach tatsächlichem Aufwand.', 'position' => $i + 1,
                 'payload_json' => ['einheit_text' => $e['einheit'], 'quelle' => 'konfigurator_aufwand', 'leistung_id' => $e['leistung_id']]]);
         }

@@ -775,6 +775,7 @@ class PresentationService
         $komp = app(OfferCompositionService::class)->komposition($team, $angebot, $outlet, false);
         $kalk = app(AngebotService::class)->kalkulation($team, $angebot, $outlet);
 
+        $zzgl = [];   // Spec 94b: Positionen nach Aufwand (unter der Summe)
         $sections = [];
         foreach ($komp['kapitel'] as $k) {
             $blocks = [];
@@ -824,6 +825,12 @@ class PresentationService
                     }
                     if (($b['type'] ?? '') === 'position') {   // Spec 94b: „Menge Einheit à Satz“ als Untertitel, Betrag pauschal (ohne EK)
                         $menge = rtrim(rtrim(number_format((float) $b['menge'], 2, ',', '.'), '0'), ',');
+                        if ($b['aufwand'] ?? false) {   // zzgl. nach Aufwand: nicht im Kapitel, sondern unter der Summe
+                            $zzgl[] = ['titel' => (string) ($b['label'] ?? ''), 'menge' => $menge, 'einheit' => (string) ($b['einheit'] ?? ''),
+                                'satz' => (float) $b['satz'], 'betrag' => (float) ($b['aufwand_betrag'] ?? 0)];
+
+                            continue;
+                        }
                         $blocks[] = ['kind' => 'position', 'label' => (string) ($b['label'] ?? ''), 'is_header' => false, 'per_item_price' => false,
                             'subtitle' => trim($menge . ' ' . ($b['einheit'] ?? '')) . ' à ' . number_format((float) $b['satz'], 2, ',', '.') . ' €',
                             'price' => $showPrice ? ['pp' => (float) ($b['pauschal'] ?? 0), 'pauschal' => 0.0, 'unit' => null] : null, 'codes' => [], 'items' => []];
@@ -840,6 +847,9 @@ class PresentationService
                     ];
                 }
             }
+            if ($blocks === [] && collect($k['bloecke'] ?? [])->contains(fn ($b) => $b['aufwand'] ?? false)) {
+                continue;   // Kapitel nur aus Aufwand-Positionen (z. B. „Nach Aufwand“ aus der Anfrage) erscheint unter der Summe
+            }
             $sections[] = [
                 'title' => (string) ($k['title'] ?? ''),
                 'text' => $k['text'] ?? null,
@@ -849,6 +859,7 @@ class PresentationService
                 'blocks' => $blocks,
             ];
         }
+        $zzglSumme = round(array_sum(array_column($zzgl, 'betrag')), 2);
 
         // MwSt-Satz einmal auflösen — für das Pro-Person-Brutto UND die Aufschlüsselung.
         $satz = null;
@@ -866,6 +877,7 @@ class PresentationService
             'pauschal' => null,
             'personen' => $kalk['pax'] ?? null,
             'gesamt_vk' => isset($kalk['gesamt_vk']) ? (float) $kalk['gesamt_vk'] : null,
+            'zzgl_summe' => $zzgl !== [] ? $zzglSumme : null,   // Spec 94b: geschätzt, nicht im Preis
         ] : null;
 
         // #380 Q2: kundensichere Preis-Aufschlüsselung (Kapitel · Pax · €/P · Zwischensumme + netto/MwSt/brutto,
@@ -898,6 +910,10 @@ class PresentationService
                 'mwst_satz' => $satz,
                 'mwst_betrag' => round($netto * $satz / 100, 2),
                 'brutto' => round($netto * (1 + $satz / 100), 2),
+                // Spec 94b: zzgl. nach Aufwand (geschätzt) und die voraussichtliche Gesamtsumme für den Kunden
+                'zzgl' => $zzgl,
+                'zzgl_summe' => $zzglSumme,
+                'voraussichtlich_netto' => round($netto + $zzglSumme, 2),
             ];
         }
 

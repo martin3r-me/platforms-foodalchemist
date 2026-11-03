@@ -356,6 +356,9 @@ class AngebotService
             'kapitel' => $kapitelBreakdown,
             'menue' => $menue,
             'mengen' => $mengen,
+            // Spec 94b: zzgl. nach Aufwand (geschätzt) — nicht in gesamt_vk, Preis pro Person und gesamt_ek
+            'aufwand' => ['vk' => (float) ($summe['aufwand_vk'] ?? 0), 'ek' => (float) ($summe['aufwand_ek'] ?? 0),
+                'db' => round((float) ($summe['aufwand_vk'] ?? 0) - (float) ($summe['aufwand_ek'] ?? 0), 2)],
         ];
     }
 
@@ -420,11 +423,13 @@ class AngebotService
             'menues' => $menues,
             'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
             'kontakt' => $angebot->crmContact?->display_name,
-            // Spec 94b: Positionen (Menge × Satz, pauschal) — ohne EK
-            'positionen' => \Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::visibleToTeam($team)->where('type', 'position')->where('visible', true)
-                ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))->with('unit')->orderBy('position')->get()
-                ->map(fn ($b) => ['label' => (string) $b->label, 'menge' => (float) $b->quantity, 'einheit' => $b->einheitText(),
-                    'satz' => (float) $b->price_value, 'betrag' => round((float) $b->quantity * (float) $b->price_value, 2)])->all(),
+            // Spec 94b: Positionen (Menge × Satz) ohne EK — in der Summe (positionen) bzw. zzgl. nach Aufwand (zzgl, unter der Summe)
+            ...collect(\Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::visibleToTeam($team)->where('type', 'position')->where('visible', true)
+                ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))->with('unit')->orderBy('position')->get())
+                ->groupBy(fn ($b) => $b->istAufwand() ? 'zzgl' : 'positionen')
+                ->map(fn ($g) => $g->map(fn ($b) => ['label' => (string) $b->label, 'menge' => (float) $b->quantity, 'einheit' => $b->einheitText(),
+                    'satz' => (float) $b->price_value, 'betrag' => round((float) $b->quantity * (float) $b->price_value, 2)])->values()->all())
+                ->union(['positionen' => [], 'zzgl' => []])->all(),
         ];
     }
 

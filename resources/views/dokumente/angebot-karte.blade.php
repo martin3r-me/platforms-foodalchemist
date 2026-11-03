@@ -81,6 +81,9 @@
         @if($angebot->valid_until)<strong>Gültig bis:</strong> {{ $angebot->valid_until->format('d.m.Y') }}@endif
     </div>
 
+    {{-- Spec 94b: Positionen nach Aufwand stehen unter der Summe (geschätzt, nicht im Gesamt); reine Aufwand-Kapitel entfallen oben --}}
+    @php($zzglKarte = collect($kapitelListe)->flatMap(fn ($k) => collect($k['bloecke'] ?? [])->filter(fn ($b) => $b['aufwand'] ?? false))->values())
+    @php($kapitelListe = collect($kapitelListe)->reject(fn ($k) => ! $k['ist_format'] && ($k['bloecke'] ?? []) !== [] && collect($k['bloecke'])->every(fn ($b) => $b['aufwand'] ?? false))->values()->all())
     @forelse($kapitelListe as $kap)
         <div class="kap">
             <div class="kap-title">{{ $kap['title'] }}
@@ -115,7 +118,7 @@
                         @endforeach
                     @elseif($b['type'] === 'text')
                         @if(($b['label'] ?? '') !== '')<div class="free-text">{{ $b['label'] }}</div>@endif
-                    @elseif($b['type'] === 'position')
+                    @elseif($b['type'] === 'position' && ! ($b['aufwand'] ?? false))
                         {{-- Spec 94b: Position Menge × Satz, pauschal (ohne EK) --}}
                         <div class="edition-title">{{ $b['label'] }}<span class="kp">{{ rtrim(rtrim(number_format((float) $b['menge'], 2, ',', '.'), '0'), ',') }} {{ $b['einheit'] }} à {{ $nf($b['satz']) }} € = {{ $nf($b['pauschal']) }} €</span></div>
                     @endif
@@ -135,6 +138,12 @@
                 <tr><td class="lbl">zzgl. MwSt ({{ rtrim(rtrim(number_format($mwstSatz, 1, ',', '.'), '0'), ',') }} %)</td><td class="right">{{ $nf($mwst_betrag) }} €</td></tr>
                 <tr><td class="total">Gesamt brutto</td><td class="right total">{{ $nf($brutto_gesamt) }} €</td></tr>
             </table>
+            @if($zzglKarte->isNotEmpty())
+                <div class="alt">Zzgl. nach Aufwand (geschätzt, nicht im Gesamtpreis):
+                    @foreach($zzglKarte as $z){{ $z['label'] }} ca. {{ rtrim(rtrim(number_format((float) $z['menge'], 2, ',', '.'), '0'), ',') }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} € ≈ {{ $nf($z['aufwand_betrag']) }} €@if(! $loop->last) · @endif @endforeach
+                    · voraussichtlich gesamt ca. {{ $nf($netto_gesamt + $zzglKarte->sum('aufwand_betrag')) }} € netto
+                </div>
+            @endif
             @if(count($kalk['alternativen'] ?? []))
                 <div class="alt">Wahl-Optionen (nicht im Gesamtpreis):
                     @foreach($kalk['alternativen'] as $alt){{ $alt['name'] }} ({{ $alt['min'] !== null ? $nf($alt['min']) : '—' }}–{{ $alt['max'] !== null ? $nf($alt['max']) : '—' }} €/Gast)@if(! $loop->last) · @endif @endforeach
