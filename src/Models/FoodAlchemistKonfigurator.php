@@ -39,7 +39,32 @@ class FoodAlchemistKonfigurator extends Model
         'paket_toleranz_pct' => 'decimal:2',
         'rundung' => 'decimal:2',
         'gueltig_bis' => 'date',
+        'outlet_id' => 'integer',
     ];
+
+    /** Spec 94: Betrieb, dessen Logo ohne eigenes Logo gilt (Rückfall wie beim Foodbook-Kopf). */
+    public function outlet(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+    }
+
+    /**
+     * Logo, das im Kundenlink gilt: das eigene, sonst das des Betriebs (eine Stelle für Snapshot und Editor-Vorschau).
+     *
+     * @return array{context_file_id:?int, path:?string, aus_betrieb:bool}
+     */
+    public function wirksamesLogo(): array
+    {
+        if ($this->logo_path || $this->logo_context_file_id) {
+            return ['context_file_id' => $this->logo_context_file_id, 'path' => $this->logo_path, 'aus_betrieb' => false];
+        }
+        $o = $this->outlet_id ? $this->outlet : null;
+        if ($o !== null && ($o->logo_path || $o->logo_context_file_id)) {
+            return ['context_file_id' => $o->logo_context_file_id, 'path' => $o->logo_path, 'aus_betrieb' => true];
+        }
+
+        return ['context_file_id' => null, 'path' => null, 'aus_betrieb' => false];
+    }
 
     public function konzepte(): HasMany
     {

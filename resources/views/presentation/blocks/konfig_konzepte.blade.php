@@ -1,5 +1,5 @@
 {{-- Spec 94 · Konfigurator-Schritt: Konzept wählen. Karten mit Bild (Rückfall ohne Bild: Fläche mit Akzentlinie), Claim,
-     „ab … pro Person, all-in netto“ aus der Preistabelle und „Details“: Detailansicht mit Beschreibung, Bildern und den
+     Preis pro Person aus der Preistabelle (live für Gästezahl und Tageszeit, bei „Tag und Abend“ der eigene Teil) und „Details“: Detailansicht mit Beschreibung, Bildern und den
      Gerichten je Tageszeit im Wording wie im Foodbook (Stufe 5b), dazu Allergen-Codes je Gericht und „Konzept wählen“. --}}
 @php
     $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
@@ -26,7 +26,8 @@
                         @if(! empty($kz['claim']))<span class="pt-konfig-claim">{{ $kz['claim'] }}</span>@endif
                         <span class="pt-konfig-zeiten">{{ collect($zeitName)->filter(fn ($l, $t) => $kz[$t])->implode(' · ') }}</span>
                         <span class="pt-konfig-indikativ" data-konfig-indikativ-badge hidden>Preis indikativ</span>
-                        @if($mitAb && $kz['ab'] !== null)<span class="pt-konfig-ab">ab {{ number_format($kz['ab'], 2, ',', '.') }} € <small>pro Person, all-in netto</small></span>@endif
+                        {{-- Ohne Skript „ab“ (günstigste Tageszeit, größtes Paket); mit Skript live für Gästezahl und Tageszeit (Dominique 2026-11-03). --}}
+                        @if($mitAb)<span class="pt-konfig-ab" data-konfig-karte-preis-feld @if($kz['ab'] === null) hidden @endif><span data-konfig-karte-preis>{{ $kz['ab'] !== null ? 'ab ' . number_format($kz['ab'], 2, ',', '.') . ' €' : '' }}</span> <small>pro Person, all-in netto</small><small class="pt-konfig-kombi" data-konfig-karte-kombi hidden>Kombipreis siehe Leiste</small></span>@endif
                     </span>
                 </button>
                 @if(! empty($d['zeiten']))

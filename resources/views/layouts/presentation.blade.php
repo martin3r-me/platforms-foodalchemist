@@ -148,11 +148,9 @@
         .pt-konfig-summen strong { font-family: var(--pt-heading-font); font-size: 1.05rem; color: var(--pt-text); }
         .pt-konfig-leise { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--pt-muted); white-space: nowrap; }
         @media (max-width: 420px) { .pt-konfig-stepper > .pt-konfig-leise { display: none; } .pt-konfig-preisleiste { gap: 10px; padding-inline: 14px; } .pt-konfig-summen { gap: 14px; } }
-        .pt-konfig-gaeste { padding-block: clamp(28px, 6vw, 56px) 8px; }
-        .pt-konfig-gaeste-zahl { font-family: var(--pt-heading-font); font-size: clamp(3.4rem, 14vw, 6.5rem); line-height: 1; margin: 8px 0 18px; font-weight: 700; }
-        .pt-konfig-gaeste-einheit { font-family: var(--pt-body-font); font-size: clamp(1rem, 3vw, 1.5rem); font-weight: 400; color: var(--pt-muted); }
-        .pt-konfig-regler { width: min(100%, 520px); accent-color: var(--pt-accent); }
-        .pt-konfig-stufe { margin-top: 10px; color: var(--pt-muted); }
+        .pt-konfig-gaeste { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding-block: 14px 4px; }
+        .pt-konfig-regler { flex: 1 1 240px; max-width: 520px; accent-color: var(--pt-accent); }
+        .pt-konfig-stufe { margin: 0; font-size: .85rem; color: var(--pt-muted); }
         .pt-konfig-schritt { padding-block: var(--pt-gap); counter-increment: konfig-schritt; }
         .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Zeitfenster oder Extras fehlen */
         .pt-konfig-nr[data-nr]::before { content: "Schritt " attr(data-nr); }     /* mit Skript: Nummer aus der Schritt-Leiste (ausgeblendete Schritte zählen sonst nicht mit) */
@@ -188,6 +186,7 @@
         .pt-konfig-claim, .pt-konfig-zeiten { color: var(--pt-muted); font-size: .92rem; }
         .pt-konfig-ab { color: var(--pt-accent); font-weight: 600; font-size: .95rem; margin-top: auto; padding-top: 8px; }
         .pt-konfig-ab small { color: var(--pt-muted); font-weight: 400; }
+        .pt-konfig-kombi:not([hidden]) { display: block; font-size: .8rem; }
         .pt-konfig-haken { position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; accent-color: var(--pt-accent); }
         .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
         .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }

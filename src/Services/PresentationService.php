@@ -387,6 +387,10 @@ class PresentationService
         };
 
         $branding = $this->brandingIdentifiers($entity);
+        // Spec 94: Konfigurator ohne eigenes Logo → Logo seines Betriebs, eingefroren im Snapshot.
+        if ($entity instanceof \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator) {
+            $branding['logo'] = array_intersect_key($entity->wirksamesLogo(), array_flip(['context_file_id', 'path']));
+        }
         // Ebene 2: eigenes Betriebs-Logo ersetzt beim Betriebs-Link das Dokument-Logo (sonst Dokument-Logo).
         if ($outlet !== null && (($outlet->logo_context_file_id ?? null) || ($outlet->logo_path ?? null))) {
             $branding['logo'] = ['context_file_id' => $outlet->logo_context_file_id, 'path' => $outlet->logo_path];

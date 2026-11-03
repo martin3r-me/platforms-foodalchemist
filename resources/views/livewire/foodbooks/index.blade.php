@@ -467,31 +467,10 @@
                             <x-fa::input id="fb-footer" x-model="footer" placeholder="Erstellt mit Food Alchemist" />
                         </x-fa::field>
 
-                        {{-- Logo + Titelbild --}}
-                        <div class="grid gap-4 md:grid-cols-2 pt-3 border-t border-[var(--fa-line)]">
-                            <x-fa::field label="Logo">
-                                @if($fb->logo_path)
-                                    <div class="flex items-center gap-2">
-                                        <img src="{{ $medien($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-1" />
-                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingLogoEntfernen" data-logo-entfernen>Logo entfernen</x-fa::button>
-                                    </div>
-                                @endif
-                                <input type="file" wire:model="logoUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Logo hochladen" data-logo-upload />
-                                <span wire:loading wire:target="logoUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
-                                @error('logoUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
-                            </x-fa::field>
-                            <x-fa::field label="Titelbild">
-                                @if($fb->cover_image_path)
-                                    <div class="flex items-center gap-2">
-                                        <img src="{{ $medien($fb->cover_context_file_id, $fb->cover_image_path) }}" alt="Titelbild" class="h-10 max-w-[120px] object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" />
-                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingCoverEntfernen" data-cover-entfernen>Titelbild entfernen</x-fa::button>
-                                    </div>
-                                @endif
-                                <input type="file" wire:model="coverUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Titelbild hochladen" data-cover-upload />
-                                <span wire:loading wire:target="coverUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
-                                @error('coverUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
-                            </x-fa::field>
-                        </div>
+                        {{-- Logo + Titelbild (gemeinsam mit dem Konfigurator) --}}
+                        <x-foodalchemist::branding-bilder class="pt-3 border-t border-[var(--fa-line)]"
+                            :logo-url="$fb->logo_path ? $medien($fb->logo_context_file_id, $fb->logo_path) : null"
+                            :cover-url="$fb->cover_image_path ? $medien($fb->cover_context_file_id, $fb->cover_image_path) : null" />
 
                         <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
                             <x-fa::button variant="ghost" :href="route('foodalchemist.foodbooks.dokument', $fb->id) . '?pdf=1'" target="_blank" icon="heroicon-m-arrow-top-right-on-square" title="Branding im PDF gegenprüfen">PDF prüfen</x-fa::button>

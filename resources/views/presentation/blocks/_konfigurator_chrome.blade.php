@@ -1,5 +1,5 @@
 {{-- Spec 94 Stufe 5 · Rahmen des Konfigurator-Links im PRO.KOPF-Aufbau, für jedes Design gleich (Farben nur über Tokens):
-     klebende Schritt-Leiste oben (nur vorhandene Schritte) mit Gäste und Preis am Desktop, große Gästezahl mit Preisstufe,
+     klebende Schritt-Leiste oben (nur vorhandene Schritte) mit Gäste und Preis am Desktop, darunter ein kompakter Regler mit Preisstufe,
      klebende Preisleiste unten am Handy. Preise schreibt nur das Skript aus der eingefrorenen Preistabelle. --}}
 @php
     $pakete = $content['pakete'] ?? [];
@@ -29,11 +29,11 @@
 </div>
 
 @if($pakete !== [])
+    {{-- Kompakter Regler unter der Leiste; die Gästezahl selbst steht nur in der Preisleiste (oben am Desktop, unten am Handy),
+         kein zweites Mal groß (Dominique 2026-11-03). --}}
     <section class="pt-wide pt-konfig-gaeste" id="konfig-gaeste" data-konfig-gaeste>
-        <p class="pt-kicker">Für</p>
-        <p class="pt-konfig-gaeste-zahl"><span data-konfig-pax-anzeige>{{ $start }}</span> <span class="pt-konfig-gaeste-einheit">Gäste</span></p>
         <input type="range" min="{{ $min }}" max="{{ $max }}" value="{{ $start }}" class="pt-konfig-regler" aria-label="Gästezahl" data-konfig-pax-regler>
-        <p class="pt-kicker pt-konfig-stufe">Preisstufe · <span data-konfig-stufe>{{ $startPaket ? $startPaket['von'] . '–' . $startPaket['bis'] : '–' }}</span></p>
+        <p class="pt-konfig-stufe">Preisstufe <span data-konfig-stufe>{{ $startPaket ? $startPaket['von'] . '–' . $startPaket['bis'] : '–' }}</span> Gäste</p>
     </section>
 
     <div class="pt-konfig-preisleiste pt-konfig-preisleiste--unten" data-konfig-preisleiste>

@@ -20,6 +20,7 @@
     var qa = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
     var euro = function (v) { return v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; };
     var setze = function (sel, text) { qa(sel).forEach(function (e) { e.textContent = text; }); };
+    var setzeIn = function (wurzel, sel, text) { var e = wurzel.querySelector(sel); if (e) { e.textContent = text; } };
     var z = { konzept: null, tageszeit: null, abend: null, addons: [], pax: null, schritt: null };
     var konzept = function (id) { return d.konzepte.filter(function (k) { return k.id === id; })[0] || null; };
     var min = d.pakete.length ? d.pakete[0].von : 1, max = d.pakete.length ? d.pakete[d.pakete.length - 1].bis : 1;
@@ -89,6 +90,17 @@
             var an = !(zeitZuerst && hatZeit && z.tageszeit) || passt(kk, z.tageszeit);
             karte.hidden = !an; if (an) { sichtbar++; }
             var tz = z.tageszeit || (kk.dinner ? 'dinner' : 'lunch');
+            // Kartenpreis live: dieses Konzept bei aktueller Gästezahl und Tageszeit (wie die Leiste bei einer Tageszeit ohne
+            // Extras); bei „Tag und Abend“ der eigene Teil, der Kombipreis steht in der Leiste.
+            var feld = karte.querySelector('[data-konfig-karte-preis-feld]');
+            if (feld && i !== null) {
+                var kt = zeitFuer(kk), kombi = kt === 'day_night';
+                if (kombi) { kt = kk.lunch ? 'lunch' : 'dinner'; }
+                var kp = tab['k' + kk.id + ':' + kt];
+                feld.hidden = kp === undefined;
+                setzeIn(feld, '[data-konfig-karte-preis]', kp !== undefined ? euro(kp) : '');
+                var kh = feld.querySelector('[data-konfig-karte-kombi]'); if (kh) { kh.hidden = !kombi; }
+            }
             var badge = karte.querySelector('[data-konfig-indikativ-badge]');
             if (badge) { badge.hidden = !((tz === 'lunch' && kk.indikativ_lunch) || (tz === 'dinner' && kk.indikativ_dinner) || (tz === 'day_night' && (kk.indikativ_lunch || kk.indikativ_dinner))); }
         });

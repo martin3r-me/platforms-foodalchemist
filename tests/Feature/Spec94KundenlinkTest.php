@@ -105,12 +105,13 @@ it('Editor-Reiter: Branding speichern, aus einem Foodbook übernehmen, veröffen
     $fb = app(\Platform\FoodAlchemist\Services\FoodbookService::class)->create($this->rootTeam, ['label' => 'FB']);
     $fb->update(['brand_color' => '#112233', 'footer_text' => 'DOEC Catering']);
 
+    // Farben kommen im Link aus dem Design (keine Farbwähler mehr); Übernehmen kopiert sie trotzdem mit
     Livewire::test(KonfiguratorPraesentation::class, ['konfiguratorId' => $this->k->id])
         ->set('quelle', 'foodbook')->set('quelleId', (string) $fb->id)->call('brandingUebernehmen')
-        ->assertSet('fehler', null)->assertSet('branding.brand_color', '#112233')
-        ->set('branding.band_color', 'rot')->call('brandingSpeichern')->assertSet('fehler', 'Bandfarbe: bitte als #RRGGBB angeben.')
-        ->set('branding.band_color', '')->call('veroeffentlichen')->assertSet('fehler', null);
-    expect($this->k->fresh()->footer_text)->toBe('DOEC Catering')->and($this->k->fresh()->status)->toBe('live');
+        ->assertSet('fehler', null)
+        ->set('gueltigBis', now()->addMonth()->format('Y-m-d'))->call('veroeffentlichen')->assertSet('fehler', null);
+    expect($this->k->fresh()->brand_color)->toBe('#112233')->and($this->k->fresh()->footer_text)->toBe('DOEC Catering')
+        ->and($this->k->fresh()->status)->toBe('live');
 });
 
 it('Design: jedes Layout bekommt die fünf Konfigurator-Schritte, fremde Blöcke fallen weg', function () {
@@ -120,7 +121,7 @@ it('Design: jedes Layout bekommt die fünf Konfigurator-Schritte, fremde Blöcke
     expect(collect(app(PresentationDesignService::class)->pickerOptions($this->rootTeam, 'konfigurator'))->pluck('value'))->toContain('konfigurator');
 });
 
-it('Stufe 5: Preisleisten, große Gästezahl mit Preisstufe und Schritt-Leiste mit allen vorhandenen Schritten', function () {
+it('Stufe 5: Preisleisten, Regler mit Preisstufe und Schritt-Leiste mit allen vorhandenen Schritten', function () {
     auth()->logout();
     $html = $this->get($this->link['url'])->assertOk()->getContent();
     expect(substr_count($html, 'data-konfig-preisleiste'))->toBe(2)   // oben (Desktop) und unten (Handy)
