@@ -115,7 +115,9 @@ final class KonfiguratorSnapshot
         return [
             'title' => (string) ($k->kunden_titel ?: $k->name),
             'subtitle' => $k->claim,
-            'meta' => ['kicker' => $k->ort ?: 'Konfigurator', 'ort' => $k->ort, 'gueltig_bis' => $k->gueltig_bis?->format('d.m.Y')],
+            'meta' => ['kicker' => $k->ort ?: 'Konfigurator', 'ort' => $k->ort, 'gueltig_bis' => $k->gueltig_bis?->format('d.m.Y'),
+                // Druckfassung: Betrieb als Rückfall ohne Logo, Kontakt = „Anfragen gehen an“ (nur Name und E-Mail)
+                'betrieb' => $k->outlet_id ? $k->outlet?->name : null, 'kontakt' => $this->kontakt($k)],
             'body' => [
                 'intro' => $k->intro,
                 'konzepte' => $konzepte,
@@ -131,6 +133,14 @@ final class KonfiguratorSnapshot
                 'anfrage' => true,
             ],
         ];
+    }
+
+    /** @return array{name:string, email:?string}|null */
+    private function kontakt(FoodAlchemistKonfigurator $k): ?array
+    {
+        $u = $k->verantwortlich_user_id !== null ? \Platform\Core\Models\User::find($k->verantwortlich_user_id) : null;
+
+        return $u !== null ? ['name' => (string) $u->name, 'email' => $u->email ?: null] : null;
     }
 
     /**
