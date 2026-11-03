@@ -148,6 +148,8 @@ class KonfiguratorPricingService
      * @param  array{typ:string, k?:int, t?:string, k1?:int, k2?:int, a?:int}  $fall
      * `gruppen` (Spec 94b): VK und EK pro Person je Speisen-Teil (speisen_tag | speisen_abend | speisen_extras) und je
      * Leistungskategorie (art kategorie, slug); Summe = vk_pp bzw. ek_pp. Der Kombi-Rabatt geht anteilig auf alle Gruppen.
+     * `einzel` (Spec 94b §4): Leistungen nach Aufwand — außerhalb von vk_pp/ek_pp, ohne Rabatt, je Leistung Menge (nach Regel,
+     * bei Preis je Stunde × Stunden), Satz (VK-Satz), Einheit und Betrag für das ganze Event.
      *
      * @return array{speisen_vk:float, speisen_ek:float, leistungen_vk:float, leistungen_ek:float, teiler:int, vk_pp:float, ek_pp:float, speisen_fehlen:bool, ungeschnuert:bool, gruppen:list<array{art:string, slug:?string, vk_pp:float, ek_pp:float}>}
      */
@@ -225,9 +227,18 @@ class KonfiguratorPricingService
 
         $lVk = 0.0;
         $lEk = 0.0;
+        $einzel = [];   // Spec 94b: Einzelabrechnung nach Aufwand — nicht im Preis pro Person, Menge geschätzt nach Regel
         foreach ($posten as [$id, $n, $t]) {
             $l = $s['leistungen'][$id];
             $menge = $l->preis_je === 'stunde' ? $n * $this->stunden($s['k'], $l, $t) : $n;
+            if ($l->abrechnung === 'aufwand') {
+                $einzel[$id] ??= ['leistung_id' => (int) $id, 'bezeichnung' => (string) $l->bezeichnung, 'kategorie' => (string) $l->kategorie,
+                    'einheit' => $s['einheiten'][(int) $l->abrechnung_einheit_vocab_id] ?? ($l->preis_je === 'stunde' ? 'Std.' : 'Stück'),
+                    'satz' => (float) ($l->vk_satz ?? 0), 'ek_satz' => (float) $l->ek_satz, 'menge' => 0.0];
+                $einzel[$id]['menge'] += $menge;
+
+                continue;
+            }
             $lVk += $menge * (float) ($l->vk_satz ?? 0);
             $lEk += $menge * (float) $l->ek_satz;
             $g = 'k:' . $l->kategorie;
@@ -243,6 +254,8 @@ class KonfiguratorPricingService
 
         return ['speisen_vk' => round($speisenVk, 4), 'speisen_ek' => round($speisenEk, 4), 'leistungen_vk' => round($lVk, 4), 'leistungen_ek' => round($lEk, 4),
             'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert,
+            'einzel' => array_values(array_map(fn ($e) => $e + ['menge' => round($e['menge'], 2), 'betrag' => round($e['menge'] * $e['satz'], 2),
+                'ek_betrag' => round($e['menge'] * $e['ek_satz'], 2)], $einzel)),
             'gruppen' => array_values(array_map(fn ($g) => ['art' => $g[0], 'slug' => $g[1], 'vk_pp' => $teiler > 0 ? $g[2] * $rabatt : 0.0, 'ek_pp' => $teiler > 0 ? $g[3] : 0.0], $gruppen))];
     }
 
@@ -325,7 +338,9 @@ class KonfiguratorPricingService
                     'rand' => $rand,
                     // Spec 94b §5: Zusammenfassung je Gruppe (Speisen Tag/Abend/Extras, je Kategorie), Summe = preis_pp
                     'gruppen' => array_map(fn ($g) => $g + ['db_pp' => round($g['vk_pp'] - $g['ek_pp'], 2)],
-                        \Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen))];
+                        \Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen)),
+                    // Spec 94b §4: Einzelabrechnung nach Aufwand, geschätzt an der Referenz-Pax, nicht im Preis pro Person
+                    'einzel' => $kern['einzel']];
             }
             $pakete[] = ['paket_id' => (int) $paket->id, 'name' => $paket->anzeigeName(), 'von_pax' => (int) $paket->von_pax, 'bis_pax' => (int) $paket->bis_pax,
                 'referenz_pax' => (int) $paket->referenz_pax, 'faelle' => $faelle];
@@ -387,6 +402,10 @@ class KonfiguratorPricingService
             'speisen' => $speisen,
             'pakete' => $konfigurator->pakete->all(),
             'mengen' => $mengen,
+            // Spec 94b: Einheit der Einzelabrechnung (Einheiten-Vokabular, beim Speichern auf Sicht geprüft)
+            'einheiten' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::query()->ohneTeamSicht('verweis')
+                ->whereIn('id', $konfigurator->leistungen->pluck('abrechnung_einheit_vocab_id')->filter()->unique()->all())
+                ->pluck('display_de', 'id')->map(fn ($v) => (string) $v)->all(),
         ];
     }
 

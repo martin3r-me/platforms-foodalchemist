@@ -1,6 +1,7 @@
 {{-- Spec 94 · Felder einer Leistungsregel (Vorlage und Konfigurator-Leistung): Bezeichnung, Mengenregel, Preis je, EK, Klasse, VK.
      Parameter: $f Formularwerte, $m Livewire-Pfad (z. B. form), $sm Pfad des Stufen-Textes, $px Id-Präfix,
-     $kategorien, $klassen (Leistungsklassen), $bezugOptionen (id → Bezeichnung), $vorschau (VK-Vorschlag oder null). --}}
+     $kategorien, $klassen (Leistungsklassen), $bezugOptionen (id → Bezeichnung), $vorschau (VK-Vorschlag oder null),
+     $einheiten (id → Anzeige, für die Einzelabrechnung). --}}
 @php
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $euro = fn ($w) => $w !== null && $w !== '' ? number_format((float) $w, 2, ',', '.') . ' €' : '–';
@@ -67,6 +68,19 @@
             <span class="font-medium">VK-Vorschlag {{ $euro($vorschau['vorschlag']) }}</span>
             @if($vorschau['aufschlag_pct'] !== null)<span class="{{ $leise }}">Aufschlag {{ number_format($vorschau['aufschlag_pct'], 1, ',', '.') }} % auf den EK</span>@endif
             @foreach($vorschau['warnungen'] as $w)<span class="{{ $leise }}">{{ $w }}</span>@endforeach
+        </div>
+    @endif
+</div>
+
+{{-- Spec 94b · Einzelabrechnung: im All-in oder nach Aufwand (Satz = VK-Satz, Menge geschätzt aus der Mengenregel) --}}
+<div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]" data-regel-abrechnung>
+    <x-fa::choice name="{{ $m }}.abrechnung" label="Abrechnung" :options="['all_in' => 'Im All-in-Preis', 'aufwand' => 'Einzeln nach Aufwand']" />
+    @if(($f['abrechnung'] ?? 'all_in') === 'aufwand')
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3 items-start">
+            <x-fa::field label="Einheit" for="{{ $px }}-abr-einheit" optional hint="Leer heißt: je Stunde bzw. je Stück wie unter „Preis je“.">
+                <x-fa::select id="{{ $px }}-abr-einheit" wire:model="{{ $m }}.abrechnung_einheit_vocab_id" :options="$einheiten ?? []" placeholder="wie „Preis je“" />
+            </x-fa::field>
+            <p class="{{ $leise }} pt-6">Zählt nicht in den Preis pro Person. Der Kunde sieht „zzgl. nach Aufwand“ mit Satz und einer geschätzten Menge aus der Mengenregel.</p>
         </div>
     @endif
 </div>

@@ -11,7 +11,8 @@ use Platform\FoodAlchemist\Services\KonfiguratorPricingService;
  * Konzepte, Add-ons, Pakete (von/bis) und eine serverseitig gerechnete Preistabelle — VK pro Person je Paket und
  * Hauptkonzept/Tageszeit, Day-into-Night-Paar und Add-on. Kein EK, keine Aufschlagsklassen, keine Mengen, keine
  * Leistungszeilen (Leak-Test Spec94KundenlinkTest). Spec 94b §5: je Preis die VK-Aufteilung nach Gruppen (`aufteilung`, nur
- * Gruppenname und VK pro Person, Summe = Preis). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
+ * Gruppenname und VK pro Person, Summe = Preis) und `zzgl` (Leistungen nach Aufwand: Titel, Satz, Einheit, geschätzte
+ * Menge und Betrag je Paket — Schätzung an der Referenz-Pax, nie im Paketpreis; keine Regel, kein EK). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
  */
 final class KonfiguratorSnapshot
 {
@@ -65,16 +66,21 @@ final class KonfiguratorSnapshot
             return array_map(fn ($g) => ['name' => $g['name'], 'vk' => $g['vk_pp']],
                 array_values(array_filter(KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen), fn ($g) => abs($g['vk_pp']) >= 0.005)));
         };
+        $zzgl = [];   // Spec 94b §4: je Paket und Preisschlüssel „zzgl. nach Aufwand“ — Titel, Satz, Einheit, geschätzte Menge und Betrag
+        $aufwand = fn (array $kern): array => array_map(fn ($e) => ['titel' => $e['bezeichnung'], 'satz' => round($e['satz'], 2), 'einheit' => $e['einheit'],
+            'menge' => $e['menge'], 'betrag' => $e['betrag']], $kern['einzel']);
         foreach ($s['pakete'] as $i => $p) {
             $pakete[] = ['von' => (int) $p->von_pax, 'bis' => (int) $p->bis_pax, 'name' => $p->anzeigeName()];
             $tabelle = [];
             $teilung = [];
+            $zusatz = [];
             foreach ($s['haupt'] as $h) {
                 foreach (['lunch' => $h->lunch_concept_id, 'dinner' => $h->dinner_concept_id] as $t => $cid) {
                     if ($cid !== null) {
                         $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'einzel', 'k' => (int) $h->id, 't' => $t], null, $s);
                         $tabelle["k{$h->id}:{$t}"] = $runde($kern['vk_pp']);
                         $teilung["k{$h->id}:{$t}"] = $teile($kern, $tabelle["k{$h->id}:{$t}"]);
+                        $zusatz["k{$h->id}:{$t}"] = $aufwand($kern);
                     }
                 }
             }
@@ -84,14 +90,18 @@ final class KonfiguratorSnapshot
                         $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'day_night', 'k1' => (int) $h1->id, 'k2' => (int) $h2->id], null, $s);
                         $tabelle["dn{$h1->id}:{$h2->id}"] = $runde($kern['vk_pp']);
                         $teilung["dn{$h1->id}:{$h2->id}"] = $teile($kern, $tabelle["dn{$h1->id}:{$h2->id}"]);
+                        $zusatz["dn{$h1->id}:{$h2->id}"] = $aufwand($kern);
                     }
                 }
             }
             foreach ($s['addons'] as $a) {
-                $tabelle["a{$a->id}"] = $runde($this->pricing->rechneFall($k, $p, ['typ' => 'addon', 'a' => (int) $a->id], null, $s)['vk_pp']);
+                $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'addon', 'a' => (int) $a->id], null, $s);
+                $tabelle["a{$a->id}"] = $runde($kern['vk_pp']);
+                $zusatz["a{$a->id}"] = $aufwand($kern);
             }
             $preise[$i] = $tabelle;
             $aufteilung[$i] = $teilung;
+            $zzgl[$i] = array_filter($zusatz);
         }
 
         // „ab“-Preis je Konzept: günstigste Tageszeit im größten Paket
@@ -113,6 +123,7 @@ final class KonfiguratorSnapshot
                 'pakete' => $pakete,
                 'preise' => $preise,
                 'aufteilung' => $aufteilung,
+                'zzgl' => $zzgl,
                 'pax_vorgabe' => (int) $k->pax_vorgabe,
                 'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv,
                 'reihenfolge' => in_array($k->reihenfolge, \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, true) ? $k->reihenfolge : 'tageszeit_zuerst',
