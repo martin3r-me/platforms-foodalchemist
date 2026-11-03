@@ -55,7 +55,7 @@
                     <thead><tr><th>Leistung</th><th>Menge</th><th>Preis je</th><th class="num">EK</th><th class="num">VK</th><th class="num">Aufschlag</th><th></th></tr></thead>
                     <tbody>
                         @foreach($gruppen as $kategorie => $vorlagen)
-                            <tr wire:key="lvk-{{ $kategorie }}" class="bg-[var(--fa-ground)]"><td colspan="7" class="font-semibold text-[var(--fa-ink-2)]">{{ $kategorien[$kategorie] ?? $kategorie }} <span class="{{ $leise }} font-normal">· {{ $vorlagen->count() }}</span></td></tr>
+                            <tr wire:key="lvk-{{ $kategorie }}" class="bg-[var(--fa-ground)]"><td colspan="7" class="font-semibold text-[var(--fa-ink-2)]">{{ $kategorieNamen[$kategorie] ?? $kategorie }} <span class="{{ $leise }} font-normal">· {{ $vorlagen->count() }}</span></td></tr>
                             @foreach($vorlagen as $v)
                                 @php
                                     $eigen = $v->isOwnedBy($team);

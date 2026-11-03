@@ -12,7 +12,7 @@
         @forelse($vorlagen as $v)
             <label wire:key="kfv-{{ $v->id }}" class="inline-flex items-start gap-2 py-0.5">
                 <input type="checkbox" value="{{ $v->id }}" wire:model="vorlageAuswahl" class="mt-1 accent-[var(--fa-accent)]" data-kf-vorlage="{{ $v->id }}" />
-                <span>{{ $v->bezeichnung }} <span class="{{ $leise }}">· {{ $kategorien[$v->kategorie] ?? $v->kategorie }} · EK {{ $euro($v->ek_satz) }}</span></span>
+                <span>{{ $v->bezeichnung }} <span class="{{ $leise }}">· {{ $kategorieNamen[$v->kategorie] ?? $v->kategorie }} · EK {{ $euro($v->ek_satz) }}</span></span>
             </label>
         @empty
             <p class="{{ $leise }}">Noch keine Vorlagen. Unter Konfiguratoren → Leistungs-Vorlagen anlegen.</p>
@@ -65,7 +65,7 @@
                             <tr wire:key="kfl-{{ $l->id }}" data-kf-leistung="{{ $l->id }}">
                                 <td>
                                     <span class="font-medium">{{ $l->bezeichnung }}</span>
-                                    <span class="{{ $leise }}">· {{ $kategorien[$l->kategorie] ?? $l->kategorie }}</span>
+                                    <span class="{{ $leise }}">· {{ $kategorieNamen[$l->kategorie] ?? $l->kategorie }}</span>
                                     @if($l->gilt_fuer && $l->gilt_fuer !== 'beide')<x-fa::badge class="ml-1">{{ $l->gilt_fuer === 'lunch' ? 'Lunch' : 'Dinner' }}</x-fa::badge>@endif
                                     @if($l->ersetzt_leistung_id)<div class="{{ $leise }}">ersetzt {{ optional($grund->firstWhere('id', $l->ersetzt_leistung_id))->bezeichnung }}</div>@endif
                                     @if(in_array($l->id, $geaendert, true))

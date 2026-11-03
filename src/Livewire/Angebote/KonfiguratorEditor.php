@@ -226,7 +226,7 @@ class KonfiguratorEditor extends Component
     {
         $this->leistungEditId = 0;
         $this->leistungStufen = '';
-        $this->leistungForm = LeistungVorlagen::leereRegel() + ['kategorie' => 'personal', 'konfigurator_konzept_id' => $konzeptId, 'gilt_fuer' => '', 'ersetzt_leistung_id' => ''];
+        $this->leistungForm = LeistungVorlagen::leereRegel() + ['kategorie' => (string) array_key_first(app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($this->team())), 'konfigurator_konzept_id' => $konzeptId, 'gilt_fuer' => '', 'ersetzt_leistung_id' => ''];
     }
 
     public function leistungBearbeiten(int $id): void
@@ -384,7 +384,8 @@ class KonfiguratorEditor extends Component
                 'kennzahlen' => self::kennzahlen($k, $matrix),
                 'geaendert' => $svc->vorlageGeaendert($team, $k->id),
                 'vorlagen' => $vorlagen->liste($team, null, null, true),
-                'kategorien' => FoodAlchemistLeistungVorlage::KATEGORIEN,
+                'kategorien' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($team),
+                'kategorieNamen' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->namen($team),
                 'klassen' => FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('leistung')->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
                 'conceptTreffer' => mb_strlen($q) >= 2
                     ? FoodAlchemistConcept::visibleToTeam($team)->where(fn ($w) => $w->where('name', 'like', "%{$q}%")->orWhere('consumer_name', 'like', "%{$q}%"))
