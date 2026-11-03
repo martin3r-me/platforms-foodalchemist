@@ -60,6 +60,10 @@ class KonfiguratorPraesentation extends Component
         $this->slug = (string) $k->presentation_slug;
     }
 
+    /** Der Editor meldet einen Wechsel der Bearbeitungssperre; das Neu-Rendern setzt `$gesperrt` aus sperrZustand(). */
+    #[On('konfigurator-sperre')]
+    public function sperreGeaendert(): void {}
+
     public function brandingSpeichern(KonfiguratorService $svc): void
     {
         $this->tue(fn () => $svc->branding($this->team(), $this->konfiguratorId, $this->branding), 'Branding gespeichert.');

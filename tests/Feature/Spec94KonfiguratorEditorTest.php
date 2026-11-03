@@ -86,3 +86,23 @@ it('Fremdteam: ein Geschwister-Team öffnet den Konfigurator nicht', function ()
     Livewire::test(KonfiguratorEditor::class)->call('oeffnen', $k->id)->assertSet('selectedId', null);
     Livewire::test(Konfiguratoren::class)->assertDontSee('Geheim');
 });
+
+it('Sperre: Bearbeiten im Editor entsperrt den Reiter Branding und Präsentation ohne Neuladen, Abbrechen sperrt ihn wieder', function () {
+    config(['foodalchemist.bearbeitungssperre' => true]);
+    $k = app(KonfiguratorService::class)->anlegen($this->rootTeam, ['name' => 'Gala']);
+
+    $editor = Livewire::test(KonfiguratorEditor::class)->call('oeffnen', $k->id);
+    $kind = Livewire::test(\Platform\FoodAlchemist\Livewire\Angebote\KonfiguratorPraesentation::class, ['konfiguratorId' => $k->id])
+        ->assertSeeHtml('<fieldset disabled');
+
+    // Eltern startet die Bearbeitung → meldet dem Kind den Wechsel; das Kind rendert mit offenen Feldern
+    $editor->call('bearbeitenStarten')->assertDispatched('konfigurator-sperre');
+    $kind->dispatch('konfigurator-sperre')->assertDontSeeHtml('<fieldset disabled');
+
+    // Abbrechen → wieder gesperrt
+    $editor->call('bearbeitenAbbrechen')->assertDispatched('konfigurator-sperre');
+    $kind->dispatch('konfigurator-sperre')->assertSeeHtml('<fieldset disabled');
+
+    // Ohne Wechsel meldet der Editor nichts (keine Dauer-Anfragen des Kinds)
+    $editor->set('form.name', 'Gala 2')->assertNotDispatched('konfigurator-sperre');
+});
