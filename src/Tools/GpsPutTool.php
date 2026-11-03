@@ -25,6 +25,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
         'name', 'hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id', 'bio', 'vegan', 'glutenfrei', 'laktosefrei',
         'rezepturware',   // §5 Ausnahme 3; marke_offen ist abgeleitet und nie Eingabe
+        'alkohol',        // Spec 94c: ja | nein | offen, gilt als manuell
     ];
 
     public function getName(): string
@@ -49,6 +50,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
                 'hauptzutat' => ['type' => 'string', 'description' => 'Hauptzutat (nötig, wenn name leer bleibt).'],
                 'flavor' => ['type' => 'string', 'description' => 'Geschmackszutat (§6.6): erste Eigenschaft im Namen vor dem Zustand, z. B. Chili → "Käse: Chili, frisch, …". Nur wenn im Artikel belegt; die Grundware bleibt hauptzutat.'],
                 'zusatz' => ['type' => 'string', 'description' => 'Klammer-Zusatz, steht hinten als "/ (…)": Fantasiename (§6.6) oder bei Rezepturware und Getränken mit Gattungsname (WG 15) die Marke (§5 Ausnahme 3; Getränke Dominique 28.10.; Wert aus foodalchemist.artikel.MARKE, z. B. Block House, Heisters, Happy Day). Nur exakt aus Artikel/Vermarktungsname bzw. aus artikel.MARKE, nie selbst bilden; Händlernamen nie.'],
+                'alkohol' => ['type' => 'string', 'enum' => ['ja', 'nein', 'offen'], 'description' => 'Enthält das Produkt Alkohol (Getränk ab 0,5 vol-%, Kochwein, Mirin, Rum-Aroma …)? Fester Wert mit Vorrang vor den Artikeldaten, wird bis ins Rezept hochgereicht (Kennzeichnung „Alk.“). Gilt als manuell gepflegt; offen = keine Aussage.'],
                 'rezepturware' => ['type' => 'boolean', 'description' => '§5 Ausnahme 3: Produkt mit eigener Rezeptur aus mehreren Zutaten (Marke/Hersteller in der Klammer, anderer Hersteller = eigenes GP). null bzw. weglassen = nicht entschieden. Wurst (WG 04) und Getränke (WG 15) immer false — Getränke mit Gattungsname + Hersteller-Marke tragen die Marke trotzdem als Klammer-Zusatz (zusatz, Dominique 28.10.: „Ananassaft: 1 l / (Happy Day)“); Markenprodukte ohne eigenen Gattungsnamen behalten die Marke als Name („Coca-Cola: 0,33 l“); ohne Marke bleibt die Klammer leer (generisch, kein marke_offen). marke_offen leitet das System ab.'],
                 'condition' => ['type' => 'string', 'description' => 'Zustand (§9): ' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '.'],
                 'serving_vehicle' => ['type' => 'string', 'description' => 'Non-Food (WG 16): Servier-Typ des Gefäßes als Name oder Id (als Text) aus dem Vokabular Servier-Vehikel (leer löscht); die Darreichung liest ihn von hier.'],
@@ -119,6 +121,7 @@ class GpsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'condition' => $gp->condition,
             'commodity_group_code' => $gp->commodity_group_code,
             'sub_category' => $gp->sub_category,
+            'alkohol' => $gp->alkohol === null ? 'offen' : ($gp->alkohol ? 'ja' : 'nein'),
             'is_derivat' => (bool) $gp->is_derivat,
             'derivat_von_gp_id' => $gp->derivat_von_gp_id !== null ? (int) $gp->derivat_von_gp_id : null,
             'groesse' => $gp->masseText(),

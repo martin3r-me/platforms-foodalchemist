@@ -57,6 +57,8 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'status' => $gp->status instanceof \BackedEnum ? $gp->status->value : (string) $gp->status,
             'main_ingredient_slug' => $gp->main_ingredient_slug, 'condition' => $gp->condition, 'bio' => $gp->bio,
             'commodity_group_code' => $gp->commodity_group_code, 'sub_category' => $gp->sub_category,
+            // Spec 94c: fester Alkohol-Wert (null = offen), Quelle abgeleitet | manuell
+            'alkohol' => $gp->alkohol, 'alkohol_source' => $gp->alkohol_source,
             'is_derivat' => (bool) $gp->is_derivat,
             'derivat_von_gp_id' => $gp->derivat_von_gp_id !== null ? (int) $gp->derivat_von_gp_id : null,
             'requires_la' => (bool) $gp->requires_la,

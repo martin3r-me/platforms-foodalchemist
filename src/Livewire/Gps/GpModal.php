@@ -68,6 +68,7 @@ class GpModal extends Component
         'commodity_group_code' => '', 'sub_category' => '',
         'is_derivat' => false, 'derivat_von_gp_id' => null,
         'rezepturware' => '',   // §5 Ausnahme 3: '' = nicht entschieden, '1' ja, '0' nein
+        'alkohol' => '',        // Spec 94c: '' offen, '1' ja, '0' nein
     ];
 
     public ?int $gpId = null;
@@ -200,6 +201,7 @@ class GpModal extends Component
                 'is_derivat' => (bool) $gp->is_derivat,
                 'derivat_von_gp_id' => $gp->derivat_von_gp_id,
                 'rezepturware' => $gp->rezepturware === null ? '' : ($gp->rezepturware ? '1' : '0'),
+                'alkohol' => $gp->alkohol === null ? '' : ($gp->alkohol ? '1' : '0'),
             ]);
             foreach (FoodAlchemistGp::TAG_FIELDS as $tag) {
                 $wert = $gp->getAttribute("tag_{$tag}");

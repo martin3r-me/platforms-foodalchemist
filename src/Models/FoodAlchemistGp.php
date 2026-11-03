@@ -92,6 +92,7 @@ class FoodAlchemistGp extends Model
         'tag_is_vegetarian' => 'boolean',
         'tag_is_halal' => 'boolean',
         'tag_contains_pork' => 'boolean',
+        'alkohol' => 'boolean',   // Spec 94c: nur WG 15, siehe Support\AlkoholAngabe
         'tag_contains_beef' => 'boolean',
         'tag_is_organic' => 'boolean',
         'tag_is_regional' => 'boolean',
