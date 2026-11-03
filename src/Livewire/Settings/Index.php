@@ -80,7 +80,7 @@ class Index extends Component
         'kunde-dna' => ['label' => 'Kunden-DNA', 'hint' => 'Marke, Ton und No-Gos je Kunde'],
         'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Tonfall für Karten- und Foodbook-Texte anlegen und pflegen'],
         'brief-vorlagen' => ['label' => 'Schnellstart-Vorlagen', 'hint' => 'Vorlagen für neue Planungen verwalten'],
-        'trendradar' => ['label' => 'Trendradar', 'hint' => 'Tägliche Konzeptideen aus Trends an- und abschalten, Trends einlesen'],
+        'trendradar' => ['label' => 'Trendradar', 'hint' => 'Google-Trends-Messung, Standards für Quellen und Eingang, Trend-Automatik'],
 
         // — Wissen (#469: Vokabular, das die KI mit Wissen füttert) —
         'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Ordnung der Wissensbasis'],
@@ -142,7 +142,9 @@ class Index extends Component
         'kueche' => ['label' => 'Küche & Produktion', 'sektionen' => ['teamprofil', 'kueche', 'posten', 'rollen', 'behaelter', 'hausstandards']],
         'einkauf' => ['label' => 'Einkauf & Lager', 'sektionen' => ['einkauf']],
         'kalkulation' => ['label' => 'Kalkulation & Preise', 'sektionen' => ['kalkulation', 'herstellkosten', 'aufschlagsklassen', 'betriebe']],
-        'stil' => ['label' => 'Küchenstil & Ausgabe', 'sektionen' => ['food-dna', 'dna-felder', 'kunde-dna', 'schreibstile', 'brief-vorlagen', 'praesentations-designs', 'etiketten', 'speiseplan-chips', 'trendradar']],
+        'stil' => ['label' => 'Küchenstil & Ausgabe', 'sektionen' => ['food-dna', 'dna-felder', 'kunde-dna', 'schreibstile', 'brief-vorlagen', 'praesentations-designs', 'etiketten', 'speiseplan-chips']],
+        // Dominique 03.11.: Trendradar als eigener Reiter, seine Blöcke als Unter-Reiter (wie KI) — in „Küchenstil & Ausgabe" war er unübersichtlich.
+        'trendradar' => ['label' => 'Trendradar', 'sektionen' => ['trendradar']],
         'kategorien' => ['label' => 'Kategorien', 'sektionen' => ['taxonomie', 'vk-taxonomie', 'concepter-dimensionen', 'wissenskategorien', 'einheiten', 'warengruppen']],
         'ki' => ['label' => 'KI', 'sektionen' => ['ki']],
         'plattform' => ['label' => 'Plattform', 'sektionen' => ['mandanten', 'wissenssteuerung', 'regeln']],
@@ -188,6 +190,11 @@ class Index extends Component
             'sprachbefehl' => ['label' => 'Sprachbefehl', 'hint' => 'Agenten-Modus, dauerhaft aktiv, Vorlesen und Stimme', 'stichworte' => 'KI Sprachbefehl Agenten-Modus Vorlesen Stimme'],
             'nutzung' => ['label' => 'Nutzung & Kosten', 'hint' => 'KI-Aufrufe und Kosten im Zeitraum, Abrechnung je Mandant', 'stichworte' => 'KI Kosten Verbrauch Abrechnung'],
         ],
+        'trendradar' => [
+            'google-trends' => ['label' => 'Google Trends', 'hint' => 'Wöchentliche Messung über DataForSEO, Monatsbudget, Verbindung', 'stichworte' => 'Trendradar Google Trends DataForSEO Budget Messung'],
+            'trend-quellen' => ['label' => 'Quellen & Eingang', 'hint' => 'Rhythmus neuer Quellen, Stichworte für den Eingang', 'stichworte' => 'Trendradar Quellen Rhythmus Stichworte Eingang Filter'],
+            'trend-automatik' => ['label' => 'Trend-Automatik', 'hint' => 'Stufe, Schatten-Modus, Schwellen, Trend-KI-Budget und Auswertung per KI', 'stichworte' => 'Trendradar Automatik Schatten Schwellen Trend-KI Budget MCP extern'],
+        ],
     ];
 
     /**
@@ -207,12 +214,12 @@ class Index extends Component
      * wiederholt → der innere Titel entfällt (Beschreibung und Knöpfe bleiben). Bewusst eine Liste statt einer CSS-Regel: „einziger
      * Abschnitt“ lässt sich in CSS nur je Eltern-Container zählen und traf dann auch Felder (Etiketten), Hauptgruppen, Arbeitsschritte
      * und die Food-DNA-Reiter (im Browser gemessen 24.10.). NICHT drin, weil der Titel etwas sagt: kunde-dna („Kunde“ = Auswahl),
-     * brief-vorlagen (eigene/geerbte), trendradar („Google Trends“), betriebe (zweiter Abschnitt „Standorte“ bei Unter-Teams).
+     * brief-vorlagen (eigene/geerbte), betriebe (zweiter Abschnitt „Standorte“ bei Unter-Teams).
      *
      * @var list<string>
      */
     public const EINZELTITEL = ['kennzahlen', 'ausstattung', 'flaechen', 'rollen', 'hausstandards', 'bestellversand', 'lagerorte',
-        'zuschlaege', 'fixkosten', 'dna-felder', 'anbieter', 'modellstufen', 'sprachbefehl', 'mandanten'];
+        'zuschlaege', 'fixkosten', 'dna-felder', 'anbieter', 'modellstufen', 'sprachbefehl', 'mandanten', 'google-trends', 'trend-quellen', 'trend-automatik'];
 
     /**
      * Zusätzliche Suchwörter je Sektion (Unterabschnitte, Fachwörter), damit die Suche „MwSt", „Drucker" oder „Lagerort" findet.
@@ -238,7 +245,7 @@ class Index extends Component
         'kunde-dna' => 'Kunde Marke Ton',
         'schreibstile' => 'Tonfall Text Karte Foodbook',
         'brief-vorlagen' => 'Vorlage Planung Brief Schnellstart',
-        'trendradar' => 'Google Trends DataForSEO Trend',
+        'trendradar' => 'Google Trends DataForSEO Trend Quellen Stichworte Automatik Trend-KI',
         'wissenskategorien' => 'Wissen Dossier Kategorie',
         'wissenssteuerung' => 'Wissen Kanon Routing Budget Leitplanken',
         'regeln' => 'Regelwerk Verbote Schwellen Vokabular',

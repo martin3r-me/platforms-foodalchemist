@@ -96,3 +96,22 @@ it('Abnahme: Leiste mit Kurznamen (volle Bezeichnung im Tooltip und auf der Kart
         ->and($c->call('tabWaehlen', 'kalkulation')->html())->not->toContain('data-settings-einzeltitel')         // verluste: zwei Abschnitte
         ->and($c->call('tabWaehlen', 'stil')->call('bereichWaehlen', 'etiketten')->html())->not->toContain('data-settings-einzeltitel');
 });
+
+it('Trendradar ist ein eigener Reiter (Dominique 03.11.): Google Trends, Quellen und Automatik als Unter-Reiter, je einer im DOM', function () {
+    expect(Einstellungen::gruppeVon('trendradar'))->toBe('trendradar')
+        ->and(Einstellungen::GRUPPEN['stil']['sektionen'])->not->toContain('trendradar');
+
+    $c = Livewire::test(Einstellungen::class)->call('tabWaehlen', 'trendradar');
+    preg_match_all('/data-settings-unter-reiter-knopf="([a-z-]+)"/', $c->html(), $knoepfe);
+    expect($knoepfe[1])->toBe(['google-trends', 'trend-quellen', 'trend-automatik'])
+        ->and($c->html())->toContain('data-trendradar-dataforseo')->not->toContain('data-trendradar-quellen')->not->toContain('data-trendradar-automatik')
+        ->toContain('data-settings-einzeltitel');
+
+    $c->call('bereichWaehlen', 'trend-quellen');
+    expect($c->html())->toContain('data-trendradar-quellen')->not->toContain('data-trendradar-dataforseo')->not->toContain('data-trendradar-automatik');
+    $c->call('bereichWaehlen', 'trend-automatik');
+    expect($c->html())->toContain('data-trendradar-automatik')->toContain('data-trendradar-ki-weg')->not->toContain('data-trendradar-quellen');
+
+    // alter Direktlink auf die Sektion landet im neuen Reiter, erster Unter-Reiter
+    Livewire::test(Einstellungen::class, ['sektion' => 'trendradar'])->assertSet('tab', 'trendradar')->assertSeeHtml('data-trendradar-dataforseo');
+});
