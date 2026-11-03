@@ -84,14 +84,18 @@ class IngredientMatchService
         string $convenience = 'standard',   // 27.10. (d): Convenience-Leitplanke — teil/voll erlaubt das Zukauf-GP für Basiskomponenten
         ?string $einheit = null,            // 28.10.: Einheit der Zeile (Stück → ganze Gewürzform)
         ?string $zubereitung = null,        // 29.10.: eigen | zukauf | ohne aus den Leitplanken (MatchLeitplanken::zubereitung)
+        ?float $menge = null,               // Spec 95c: Menge der Zeile (in $einheit) — Gewürzmenge wählt die getrocknete Form
     ): array {
         // Spec 95: Hinweis-Zusätze aus dem Rezepttext („(1 EL)“, „, Raumtemperatur“, „(optional)“) tragen keine Ware — vor jedem Abgleich weg
         $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);
+        // Spec 95c: die Zählform ist Einheit, nicht Ware („Knoblauchzehen“ sucht „Knoblauch“; die Zeile bekommt die Zehe als Einheit)
+        $ingredientName = \Platform\FoodAlchemist\Support\Zaehlform::ohneForm($ingredientName);
         // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
         if (preg_match('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', $ingredientName) === 1 && preg_match('/fl(?:ü|ue)ssig|pasteuris/iu', $ingredientName) !== 1) {
             $ingredientName = (string) preg_replace('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', 'Eier', $ingredientName);
         }
         $this->einheit = $einheit;
+        $this->menge = $menge;
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
 
@@ -111,7 +115,7 @@ class IngredientMatchService
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $this->aliasTokens = null;
         if ($weg === 'zukauf' && $this->zukaufTreffer !== null) {   // 29.10.: Leitplanken wählen das Zukauf-GP, das die Prüfung gefunden hat (auch „Fond: Geflügel“ → „Geflügelfond“)
-            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit);
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit, $menge);
         }
         $this->basisKomponente = $weg === 'basis';
         $zukaufHinweis = $this->basisKomponente ? $this->zukaufHinweis : null;
@@ -239,15 +243,52 @@ class IngredientMatchService
         if ($this->basisKomponente) {
             return $this->alsBasiskomponente($team, $ingredientName, $final, $pref, $bio) + ($zukaufHinweis !== null ? ['hinweis' => $zukaufHinweis] : []);
         }
+        // Spec 95c (Pilot: „Cheddar, gerieben“ → „Cheddar-Sauce“ 0,5, während „Cheddarkäse: gerieben“ in der Kandidatenliste vorn stand): der
+        // Treffer ist nie schlechter als Kandidat 1 — sofern der dieselben Schutzregeln besteht wie jeder Pool-Treffer.
+        if ($mode === 'gp_first' && ! self::istAutomatischVerdrahtbar($final) && ($besser = $this->kandidatEins($team, $ingredientName, $querySlug, (float) $final['score'])) !== null) {
+            $final = $besser;
+        }
 
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit) : $final);
+            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit, $this->menge) : $final);
+    }
+
+    /**
+     * Spec 95c: Kandidat 1 der Kandidatenliste ({@see candidatesFor}, lexikalisch oder lexikalisch+semantisch — nie rein semantisch, das ist
+     * der Draw), wenn er besser liegt als der Pool-Treffer und dessen Schutzregeln besteht: Produktform, Verwechslungs-Falle, Hauptzutat.
+     */
+    private function kandidatEins(Team $team, string $ingredientName, ?string $querySlug, float $score): ?array
+    {
+        $name = $this->currentIngredientName;
+        $c = collect($this->candidatesFor($team, $ingredientName, $querySlug, 3))->first(fn ($c) => ($c['kind'] ?? null) === 'gp');
+        $this->currentIngredientName = $name;
+        if ($c === null || ! in_array($c['origin'] ?? 'lexical', ['lexical', 'both'], true) || (float) $c['score'] <= $score + MatchHeuristics::SCORE_EPS) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)->find((int) $c['id']);
+        if ($gp === null || ! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition, $gp)
+            || $this->terminology->isAntiMarker($ingredientName, $gp->name) || ! $this->hauptzutatPasst($gp, [], true)) {
+            return null;
+        }
+        // Derivat-Form wie im Pool-Scan (Lauf 91/92): „Petersilie Stiele“ nie das ganze Kraut, „Grapefruitsaft“ nie die Zeste
+        $form = $this->heuristik->nebenproduktDerivat($name)['marker'] ?? null;
+        $gpForm = $gp->is_derivat ? ($this->heuristik->nebenproduktDerivat((string) $gp->name)['marker'] ?? null) : null;
+        if (($form !== null && ! $this->heuristik->nenntDerivatForm((string) $gp->name, $form)) || ($gpForm !== null && ! $this->heuristik->nenntDerivatForm($name, $gpForm))) {
+            return null;
+        }
+        $s = min(1.0, (float) $c['score']);
+
+        return ['target' => 'gp', 'status' => MatchBand::fuerScore($s), 'gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name,
+            'recipe_id' => null, 'recipe_name' => null, 'score' => $s];
     }
 
     /** Einheit der aktuellen Zeile (28.10.: Stück → ganze Gewürzform). */
     private ?string $einheit = null;
+
+    /** Menge der aktuellen Zeile in $einheit (Spec 95c: Gewürzmenge → getrocknete Form). */
+    private ?float $menge = null;
 
     /** @var array<int, list<list<string>>> Produktnamen je Team: Hauptzutat-Tokens trockener Fertigprodukte (WG 12/13) */
     private array $produktnamenCache = [];
@@ -336,7 +377,7 @@ class IngredientMatchService
                 $kandidaten[] = $m[2] . $fuge . mb_strtolower($m[1]);
             }
         }
-        $einheit = $this->einheit;
+        [$einheit, $menge] = [$this->einheit, $this->menge];
         $treffer = null;
         foreach ($kandidaten as $k) {
             $t = $this->matchIngredient($team, $k, null, 'gp_first', basisVariante: false);
@@ -345,7 +386,7 @@ class IngredientMatchService
                 break;
             }
         }
-        $this->einheit = $einheit;
+        [$this->einheit, $this->menge] = [$einheit, $menge];
 
         return $treffer;
     }
@@ -438,7 +479,7 @@ class IngredientMatchService
         }
         if ($ok && ($final['target'] ?? null) === 'gp'
             && ! in_array((string) FoodAlchemistGp::query()->whereKey((int) $final['gp_id'])->value('commodity_group_code'), ['13', '09'], true)) {
-            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit);
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit, $this->menge);
         }
 
         return ($ok && ($final['target'] ?? null) === 'gp' ? ['status' => MatchBand::FuzzyLow] + $final : $this->noMatch($final['score'])) + ['basiskomponente' => 'stub'];
@@ -844,14 +885,17 @@ class IngredientMatchService
     }
 
     /** 27.10.: Hauptzutat-Schutz — kein Treffer, wenn die Hauptzutat des GP nicht in der Zutat vorkommt (Apfelessig ≠ Apfelmus). */
-    private function hauptzutatPasst(FoodAlchemistGp $gp, array $passTokens = []): bool
+    private function hauptzutatPasst(FoodAlchemistGp $gp, array $passTokens = [], bool $ganz = false): bool   // $ganz: Spec 95c, ganze Hauptzutat
     {
         $alternativen = array_map(fn ($a) => array_values(array_filter($this->engine->tokenize($a), fn ($t) => ! $this->engine->istReinesMerkmal($t)
             && ! $this->engine->isCutFormToken($t))), preg_split('/\s+\/\s+/u', $this->hauptzutatText($gp)) ?: []);
         // Zutat-Seite: Originalzeile + Tokens dieses Pool-Laufs (Freitext-/Decompound-Fallback) + Terminologie-Aliase (Porree ↔ Lauch, Tamari → Sojasauce)
         $this->aliasTokens ??= array_merge([], ...array_map(fn ($p) => $this->engine->tokenize((string) $p), $this->terminology->aliasPhrasesFor($this->currentIngredientName)));
 
-        return \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst(array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens])), $alternativen);
+        $zutat = array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens]));
+
+        return $ganz ? \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatGedeckt($zutat, $alternativen)
+            : \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst($zutat, $alternativen);
     }
 
     /** Spec 95b: nennt die Zutat ein Wort der Hauptzutat wörtlich (gleich oder gleiches Lemma), nicht nur als Wortanfang? */

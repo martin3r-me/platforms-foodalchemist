@@ -105,3 +105,21 @@ Trifft der Draw, wird das Bestands-GP genommen statt eines neuen. Der Name eines
 Offen danach: gemintete GPs vollständig (Warengruppe, Zustand, Struktur, Slug); Mengen-Plausibilität (Kurkuma 3 g → gemahlen).
 
 Nicht Teil von Spec 95: Kaskaden-Runden, `onQueue`, Doppel-ENRICH, Lagerung (Kurator-Paket ENRICH).
+
+## Stufe 3 · Spec 95c (Entscheid Dominique 03.11., nach dem Neuabgleich der 286 Pilot-Zeilen)
+
+Gemessen nach Stufe 2: 65,4 % automatisch richtig, 3,5 % automatisch falsch, 29,7 % offen (44 davon mit richtigem Vorschlag).
+
+1. **Pflichtangabe mit nur einer Basis** ist keine offene Variante (`BasisVariante::hart`): „Weißwein“ → „Weißwein: zum Kochen“.
+   Mehrere Basen (Crème fraîche 30 % / 38 %) bleiben Review; nennt der Text einen anderen Wert, bleibt die Angabe hart.
+2. **Gewürzmenge** (bis 15 g/ml, 3 TL, 1 EL, Msp./Prise; `BasisVariante::istGewuerzmenge`): gibt es eine getrocknete Form, ist sie
+   gemeint — „Kurkuma 3 g“ → gemahlen, „Oregano (2 TL)“ → gerebelt. Gemahlen/gerebelt gilt dort als Naturform. Ein genannter Zustand
+   entscheidet weiter selbst; ohne Menge bleibt die Rohform. `matchIngredient` bekommt `menge`, der Generator und `gps.MATCH` geben sie mit.
+3. **Zehe als Einheit** (`Support\Zaehlform`): „Knoblauchzehen“ sucht „Knoblauch“; die Zeile mit Einheit Stück bekommt die Zehe als
+   Einheit, wenn ihr Gewicht bekannt ist (GP-Form, Zähl-Default oder Vokabular). Nur echte Zählformen am Wortende.
+   Daten: Form „zehe“ an GP 7877 über `gp_forms.ESTIMATE` bzw. von Hand (kein Datenlauf).
+4. **Synonyme** (`TerminologyService::ALIAS_GROUPS`): Abrieb = Schale (Zitrone, Orange, Limette), Limone = Zitrone.
+5. **Nie schlechter als Kandidat 1** (`IngredientMatchService::kandidatEins`): bleibt der Pool-Treffer unter dem Gate, zählt Kandidat 1
+   der Kandidatenliste (lexikalisch bzw. lexikalisch+semantisch), wenn er besser liegt und Produktform, Verwechslungs-Falle und
+   Hauptzutat besteht — „Cheddar, gerieben“ → Cheddarkäse, nicht Cheddar-Sauce.
+6. **`recipe_ingredients.PUT` erdet nie still** (eigener PR): bestehende Zeilen behalten ihren Stand, neue Zeilen nur ohne `offen_halten`.

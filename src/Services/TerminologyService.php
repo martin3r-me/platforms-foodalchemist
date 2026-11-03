@@ -162,6 +162,15 @@ class TerminologyService
         ['kohlrübe', 'steckrübe'],
         ['speisequark', 'quark', 'topfen'],               // topfen = AT
         ['schmand', 'saure sahne'],
+        // Spec 95c (Pilot-Neuabgleich 03.11.): Abrieb = Schale, Limone = Zitrone (Entscheid Dominique; „Limone“ meint hier nicht Limette)
+        ['zitronenabrieb', 'zitronenschale'],
+        ['orangenabrieb', 'orangenschale'],
+        ['limettenabrieb', 'limettenschale'],
+        ['limone', 'zitrone'],
+        ['limonen', 'zitronen'],
+        ['limonenöl', 'zitronenöl'],
+        ['limonensaft', 'zitronensaft'],
+        ['limonenabrieb', 'zitronenschale'],
         // ── AT/regional → DE ─────────────────────────────────────────────────
         ['erdapfel', 'kartoffel'],
         ['fisolen', 'grüne bohnen', 'gartenbohne'],

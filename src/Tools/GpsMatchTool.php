@@ -65,6 +65,9 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 'prefer_raw' => ['type' => 'boolean', 'default' => false,
                     'description' => 'From Scratch: straft Schnitt-/Größen-Formen ab, damit die Roh-Grundform gewinnt '
                         . '(«Zwiebel» statt «Zwiebel geachtelt»).'],
+                'menge' => ['type' => 'number', 'description' => 'Optional: Menge der Rezeptzeile (in einheit) — wie der Import. In Gewürzmenge '
+                    . '(bis 15 g/ml, 3 TL, 1 EL, Msp./Prise) wird die getrocknete Form gewählt (Spec 95c).'],
+                'einheit' => ['type' => 'string', 'description' => 'Optional: Einheit der Rezeptzeile (g, ml, tl, el, stk …) — wie der Import.'],
                 'commodity_group' => ['type' => 'string', 'description' => 'Optionaler Warengruppen-Code (Spec 16): verengt die LA-Suche beim Mint auf die WG-Lead-Lieferanten. Fehlt er → alle Leads.'],
                 'bestand' => ['type' => 'string', 'enum' => ['hybrid', 'nur_bestand', 'komplett_neu'], 'default' => 'hybrid',
                     'description' => 'Reuse-Achse wie im Kreativ-Modus — steuert den Boden des Post-Match-Draws: '
@@ -106,7 +109,9 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         $bio = (string) ($arguments['bio'] ?? 'neutral');
         $preferRaw = (bool) ($arguments['prefer_raw'] ?? false);
 
-        $match = $svc->matchIngredient($team, $zutat, $slug, $mode, $pref, $preferRaw, $bio);
+        $match = $svc->matchIngredient($team, $zutat, $slug, $mode, $pref, $preferRaw, $bio,
+            einheit: isset($arguments['einheit']) ? (string) $arguments['einheit'] : null,
+            menge: is_numeric($arguments['menge'] ?? null) ? (float) $arguments['menge'] : null);
 
         // Spec 80 B4 (Live-Test demo 09.10.): eine Basisrezept-Zeile („Püree: Petersilienwurzel") wird nur ein
         // freigegebenes Unterrezept oder bleibt eine Lücke — nie ein rohes GP. Der Generator und syncIngredients
