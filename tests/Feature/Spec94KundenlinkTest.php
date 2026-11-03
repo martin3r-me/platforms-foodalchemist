@@ -52,7 +52,7 @@ it('Snapshot: nur Preistabelle, keine Kalkulation (EK, Klassen, Mengen, Leistung
     expect($snap['type'])->toBe('konfigurator')
         ->and($json)->not->toContain('Geheime Servicekraft')->not->toContain('ek_')->not->toContain('markup')->not->toContain('anzahl')
         ->and($snap['content']['preise'][0]['k' . $this->haupt->id . ':dinner'])->toBe(round(50 + 5 * 300 / 149, 2))
-        ->and(collect($snap['resolved_design']['layout'])->pluck('block_type')->intersect(PresentationDesignService::KONFIG_BLOCKS)->count())->toBe(5);
+        ->and(collect($snap['resolved_design']['layout'])->pluck('block_type')->intersect(PresentationDesignService::KONFIG_BLOCKS)->count())->toBe(6);   // Spec 94c: + konfig_getraenke
 });
 
 it('öffentliche Seite rendert den Konfigurator', function () {
@@ -114,10 +114,10 @@ it('Editor-Reiter: Branding speichern, aus einem Foodbook übernehmen, veröffen
         ->and($this->k->fresh()->status)->toBe('live');
 });
 
-it('Design: jedes Layout bekommt die fünf Konfigurator-Schritte, fremde Blöcke fallen weg', function () {
+it('Design: jedes Layout bekommt alle Konfigurator-Schritte (fehlende vor dem nächsten vorhandenen), fremde Blöcke fallen weg', function () {
     $l = PresentationDesignService::konfiguratorLayout([['block_type' => 'cover', 'style' => []], ['block_type' => 'chapter_loop', 'style' => []],
         ['block_type' => 'konfig_anfrage', 'style' => []], ['block_type' => 'konfig_anfrage', 'style' => []]]);
-    expect(array_column($l, 'block_type'))->toBe(['cover', 'konfig_anfrage', 'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung']);
+    expect(array_column($l, 'block_type'))->toBe(['cover', 'konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage']);
     expect(collect(app(PresentationDesignService::class)->pickerOptions($this->rootTeam, 'konfigurator'))->pluck('value'))->toContain('konfigurator');
 });
 

@@ -98,7 +98,7 @@ class KonfiguratorPricingService
             foreach ($basis as $id => $w) {
                 $soll[$id . '|0'] = [$w['regel'], null];
             }
-            foreach (array_merge($s['haupt'], $s['addons']) as $konzept) {
+            foreach (array_merge($s['haupt'], $s['addons'], $s['getraenke']) as $konzept) {
                 [$satz, $ersetzt] = $this->satz($s, $konzept, null);
                 $erg = $this->rechner->rechne($s['leistungen'], $satz, $ersetzt, $r, $this->handwert($s, $paket, (int) $konzept->id));
                 foreach ($erg as $id => $w) {
@@ -198,6 +198,17 @@ class KonfiguratorPricingService
             foreach ($mengen($a, null) as $id => $n) {
                 $posten[] = [$id, $n, $a->addon_tageszeit === 'lunch' ? 'lunch' : 'dinner'];
             }
+        } elseif ($fall['typ'] === 'getraenk') {
+            // Spec 94c: Pauschale aus dem Concept (je Event, je Stunde oder Staffel), Gruppe „Getränke“; Zusatz-Leistungen des Pakets wie beim Add-on
+            $g = $s['konzepte'][$fall['g']];
+            [$gVk, $gEk] = $this->getraenkPauschale($s, $g, $fall['t']);
+            $speisenFehlen = $speisenFehlen || $gVk === null;
+            $speisenVk += (float) $gVk;
+            $speisenEk += (float) $gEk;
+            $gruppen['getraenke'] = ['getraenke', null, (float) $gVk, (float) $gEk];
+            foreach ($mengen($g, null) as $id => $n) {
+                $posten[] = [$id, $n, $fall['t']];
+            }
         } elseif ($fall['typ'] === 'day_night') {
             $k1 = $s['konzepte'][$fall['k1']];
             $k2 = $s['konzepte'][$fall['k2']];
@@ -249,14 +260,62 @@ class KonfiguratorPricingService
 
         $vkPp = $teiler > 0 ? $speisenVk + $lVk / $teiler : 0.0;
         $ekPp = $teiler > 0 ? $speisenEk + $lEk / $teiler : 0.0;
-        $rabatt = $fall['typ'] === 'day_night' ? 1 - (float) $s['k']->kombi_rabatt_pct / 100 : 1.0;
-        $vkPp *= $rabatt;   // Kombi-Rabatt auf den ganzen Konzeptanteil (Speisen + Leistungen, nicht Add-ons), EK bleibt
+        $kombi = $fall['typ'] === 'day_night' || ($fall['typ'] === 'getraenk' && $fall['t'] === 'day_night');
+        $rabatt = $kombi ? 1 - (float) $s['k']->kombi_rabatt_pct / 100 : 1.0;
+        $vkPp *= $rabatt;   // Kombi-Rabatt auf den ganzen Konzeptanteil (Speisen + Leistungen, nicht Add-ons) und auf Getränkepakete (Spec 94c), EK bleibt
 
         return ['speisen_vk' => round($speisenVk, 4), 'speisen_ek' => round($speisenEk, 4), 'leistungen_vk' => round($lVk, 4), 'leistungen_ek' => round($lEk, 4),
             'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert,
             'einzel' => array_values(array_map(fn ($e) => $e + ['menge' => round($e['menge'], 2), 'betrag' => round($e['menge'] * $e['satz'], 2),
                 'ek_betrag' => round($e['menge'] * $e['ek_satz'], 2)], $einzel)),
             'gruppen' => array_values(array_map(fn ($g) => ['art' => $g[0], 'slug' => $g[1], 'vk_pp' => $teiler > 0 ? $g[2] * $rabatt : 0.0, 'ek_pp' => $teiler > 0 ? $g[3] : 0.0], $gruppen))];
+    }
+
+    /**
+     * Spec 94c · Pauschale eines Getränkepakets pro Person zur Tageszeit (lunch, dinner, day_night), VK und EK; [null, null] ohne Concept-Preis.
+     * Je Teil: Concept-VK (je Event), × Einsatzzeit (je Stunde) oder Staffel = Concept-VK als Grundpreis für grund_stunden + je weitere Stunde
+     * folgestunde_satz (EK im selben Verhältnis wie der VK). Tag und Abend: ein Concept für beide = ein Teil mit der Day-into-Night-Einsatzzeit,
+     * eigenes Lunch- und Dinner-Concept = Tag-Teil + Abend-Teil mit ihren Einsatzzeiten. Den Kombi-Rabatt setzt rechneFall.
+     *
+     * @return array{0: ?float, 1: ?float}
+     */
+    public function getraenkPauschale(array $s, object $g, string $t): array
+    {
+        $teil = function (?int $conceptId, string $tz) use ($s, $g): array {
+            $p = $conceptId !== null ? ($s['speisen'][$conceptId] ?? null) : null;
+            if ($p === null || $p['vk'] === null) {
+                return [null, null];
+            }
+            $h = (float) match ($tz) {
+                'lunch' => $s['k']->stunden_lunch,
+                'dinner' => $s['k']->stunden_dinner,
+                default => $s['k']->stunden_day_night,
+            };
+            $faktor = match (true) {
+                $g->folgestunde_satz !== null => null,
+                $g->getraenk_dauer === 'stunde' => $h,
+                default => 1.0,
+            };
+            if ($faktor === null) {
+                $vk = (float) $p['vk'] + max(0.0, $h - (float) $g->grund_stunden) * (float) $g->folgestunde_satz;
+
+                return [$vk, (float) $p['vk'] > 0 ? (float) ($p['ek'] ?? 0) * $vk / (float) $p['vk'] : (float) ($p['ek'] ?? 0)];
+            }
+
+            return [(float) $p['vk'] * $faktor, (float) ($p['ek'] ?? 0) * $faktor];
+        };
+        if ($t !== 'day_night') {
+            return $teil($g->getraenkConceptId($t), $t);
+        }
+        $tag = $g->getraenkConceptId('lunch');
+        $abend = $g->getraenkConceptId('dinner');
+        if ($tag === $abend) {
+            return $teil($tag, 'day_night');
+        }
+        [$v1, $e1] = $teil($tag, 'lunch');
+        [$v2, $e2] = $teil($abend, 'dinner');
+
+        return $v1 === null || $v2 === null ? [null, null] : [$v1 + $v2, $e1 + $e2];
     }
 
     /** Stunden einer Leistung zu einer Tageszeit: feste Stunden oder Einsatzzeit des Konfigurators plus Zuschlag. */
@@ -399,6 +458,7 @@ class KonfiguratorPricingService
             'konzepte' => $konzepte,
             'haupt' => array_values(array_filter($konzepte, fn ($k) => $k->rolle === 'haupt')),
             'addons' => array_values(array_filter($konzepte, fn ($k) => $k->rolle === 'addon')),
+            'getraenke' => array_values(array_filter($konzepte, fn ($k) => $k->rolle === 'getraenk')),   // Spec 94c
             'speisen' => $speisen,
             'pakete' => $konfigurator->pakete->all(),
             'mengen' => $mengen,
@@ -428,7 +488,7 @@ class KonfiguratorPricingService
     private function satz(array $s, ?object $konzept, ?string $t): array
     {
         $gilt = fn ($l) => $t === null || in_array($l->gilt_fuer ?? 'beide', [null, 'beide', $t], true);
-        if ($konzept !== null && $konzept->rolle === 'addon') {
+        if ($konzept !== null && in_array($konzept->rolle, ['addon', 'getraenk'], true)) {
             return [array_values(array_map(fn ($l) => (int) $l->id, array_filter($s['leistungen'], fn ($l) => (int) $l->konfigurator_konzept_id === (int) $konzept->id))), []];
         }
         $zusatz = $konzept !== null
@@ -479,6 +539,11 @@ class KonfiguratorPricingService
         foreach ($s['addons'] as $a) {
             $faelle[] = ['typ' => 'addon', 'a' => (int) $a->id];
         }
+        foreach ($s['getraenke'] as $g) {   // Spec 94c: je Getränkepaket Tag, Abend und Tag und Abend
+            foreach (['lunch', 'dinner', 'day_night'] as $t) {
+                $faelle[] = ['typ' => 'getraenk', 'g' => (int) $g->id, 't' => $t];
+            }
+        }
 
         return $faelle;
     }
@@ -489,6 +554,7 @@ class KonfiguratorPricingService
 
         return match ($fall['typ']) {
             'addon' => 'Add-on ' . $name($fall['a']),
+            'getraenk' => 'Getränke ' . $name($fall['g']) . ' ' . ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Day-into-Night'][$fall['t']],
             'day_night' => $name($fall['k1']) . ' Day-into-Night' . ($fall['k1'] !== $fall['k2'] ? ' + ' . $name($fall['k2']) : ''),
             default => $name($fall['k']) . ' ' . ($fall['t'] === 'lunch' ? 'Lunch' : 'Dinner'),
         };

@@ -41,6 +41,7 @@
                 // Spec 94: Konfigurator-Schritte (nur im Typ konfigurator, Layout erzwingt sie je einmal)
                 'konfig_konzepte' => 'foodalchemist::presentation.blocks.konfig_konzepte',
                 'konfig_tageszeit' => 'foodalchemist::presentation.blocks.konfig_tageszeit',
+                'konfig_getraenke' => 'foodalchemist::presentation.blocks.konfig_getraenke',
                 'konfig_addons' => 'foodalchemist::presentation.blocks.konfig_addons',
                 'konfig_zusammenfassung' => 'foodalchemist::presentation.blocks.konfig_zusammenfassung',
                 'konfig_anfrage' => 'foodalchemist::presentation.blocks.konfig_anfrage',

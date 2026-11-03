@@ -40,6 +40,7 @@ class FoodAlchemistKonfigurator extends Model
         'rundung' => 'decimal:2',
         'gueltig_bis' => 'date',
         'outlet_id' => 'integer',
+        'getraenke_pflicht' => 'boolean',   // Spec 94c: mindestens ein Getränkepaket wählen
     ];
 
     /** Spec 94: Betrieb, dessen Logo ohne eigenes Logo gilt (Rückfall wie beim Foodbook-Kopf). */

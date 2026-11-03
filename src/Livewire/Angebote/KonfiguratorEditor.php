@@ -41,6 +41,9 @@ class KonfiguratorEditor extends Component
 
     public ?int $konzeptEditId = null;
 
+    /** Spec 94c: Suche im Reiter Getränke (Concepts der Kategorie „Getränke“, sonst alle). */
+    public string $getraenkSuche = '';
+
     /** Schreibstil für „Speisen per KI betexten“ (Id als String, leer = keiner gewählt). */
     public string $wordingStil = '';
 
@@ -151,6 +154,16 @@ class KonfiguratorEditor extends Component
         }
     }
 
+    /** Spec 94c: Concept als Getränkepaket hinzufügen (ein Concept für beide Tageszeiten, Pauschale je Event). */
+    public function getraenkHinzu(int $conceptId, KonfiguratorService $svc): void
+    {
+        $c = FoodAlchemistConcept::visibleToTeam($this->team())->whereKey($conceptId)->first(['id', 'name', 'consumer_name']);
+        if ($this->tue(fn () => $svc->konzeptHinzu($this->team(), $this->selectedId, ['rolle' => 'getraenk', 'concept_id' => $conceptId,
+            'getraenk_abrechnung' => 'pauschale', 'getraenk_dauer' => 'event', 'kunden_titel' => $c?->consumer_name ?: $c?->name]))) {
+            $this->getraenkSuche = '';
+        }
+    }
+
     public function konzeptBearbeiten(int $id): void
     {
         $k = $this->konfigurator()?->konzepte->firstWhere('id', $id);
@@ -159,7 +172,7 @@ class KonfiguratorEditor extends Component
         }
         $this->konzeptEditId = $id;
         $this->konzeptForm = array_map(fn ($w) => $w === null ? '' : $w, $k->only(['lunch_concept_id', 'dinner_concept_id', 'kunden_titel', 'claim', 'abschnitt',
-            'addon_tageszeit', 'gebunden_an_id', 'indikativ_lunch', 'indikativ_dinner']));
+            'addon_tageszeit', 'gebunden_an_id', 'indikativ_lunch', 'indikativ_dinner', 'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz']));
     }
 
     public function konzeptBearbeitenAbbrechen(): void
@@ -392,6 +405,7 @@ class KonfiguratorEditor extends Component
                     ? FoodAlchemistConcept::visibleToTeam($team)->where(fn ($w) => $w->where('name', 'like', "%{$q}%")->orWhere('consumer_name', 'like', "%{$q}%"))
                         ->orderBy('name')->limit(12)->get(['id', 'name', 'consumer_name', 'price_per_person_cache', 'ek_per_person_cache'])
                     : collect(),
+                'getraenkTreffer' => $this->getraenkTreffer($team),
                 'vkVorschau' => $this->leistungEditId !== null && ($this->leistungForm['vk_modus'] ?? 'auto') === 'auto' && is_numeric(str_replace(',', '.', (string) ($this->leistungForm['ek_satz'] ?? '')))
                     ? $pricing->vkVorschlag($team, (float) str_replace(',', '.', (string) $this->leistungForm['ek_satz']), ($this->leistungForm['markup_class_id'] ?? '') !== '' ? (int) $this->leistungForm['markup_class_id'] : null)
                     : null,
@@ -409,6 +423,25 @@ class KonfiguratorEditor extends Component
         return view('foodalchemist::livewire.angebote.konfigurator-editor', $daten);
     }
 
+    /**
+     * Spec 94c: Treffer für den Reiter Getränke — Concepts der Kategorie „Getränke“ (team-pflegbar, samt Unterkategorien) auch ohne Suche;
+     * ohne diese Kategorie jedes Concept ab 2 Zeichen.
+     */
+    private function getraenkTreffer(\Platform\Core\Models\Team $team): \Illuminate\Support\Collection
+    {
+        $q = trim($this->getraenkSuche);
+        $kat = \Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::visibleToTeam($team)->where('name', 'like', 'Getränke%')->pluck('id');
+        $kat = $kat->merge(\Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory::visibleToTeam($team)->whereIn('parent_id', $kat)->pluck('id'));
+        if ($kat->isEmpty() && mb_strlen($q) < 2) {
+            return collect();
+        }
+
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->when($kat->isNotEmpty(), fn ($w) => $w->whereIn('category_id', $kat))
+            ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('name', 'like', "%{$q}%")->orWhere('consumer_name', 'like', "%{$q}%")))
+            ->orderBy('name')->limit(12)->get(['id', 'name', 'consumer_name', 'price_per_person_cache', 'ek_per_person_cache']);
+    }
+
     /** Kennzahlen-Leiste: All-in „ab“ (günstigster Fall im größten Paket), schwächster DB, Zahl der Warnungen. */
     public static function kennzahlen(FoodAlchemistKonfigurator $k, array $matrix): array
     {
@@ -421,6 +454,7 @@ class KonfiguratorEditor extends Component
         return [
             'haupt' => $k->konzepte->where('rolle', 'haupt')->count(),
             'addons' => $k->konzepte->where('rolle', 'addon')->count(),
+            'getraenke' => $k->konzepte->where('rolle', 'getraenk')->count(),
             'pakete' => $k->pakete->count(),
             'ab' => $ab,
             'schwach' => $schwach,
@@ -451,6 +485,7 @@ class KonfiguratorEditor extends Component
             'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv, 'kombi_rabatt_pct' => (string) (float) $k->kombi_rabatt_pct,
             'paket_toleranz_pct' => (string) (float) $k->paket_toleranz_pct, 'rundung' => number_format((float) $k->rundung, 2, '.', ''),
             'reihenfolge' => $k->reihenfolge ?: 'tageszeit_zuerst',
+            'getraenke_pflicht' => (bool) $k->getraenke_pflicht,
         ];
     }
 

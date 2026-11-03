@@ -24,10 +24,11 @@ use Platform\FoodAlchemist\Services\Konfigurator\LeistungsRegelPruefung;
 class KonfiguratorService
 {
     private const KOPF_FELDER = ['name', 'kunden_titel', 'claim', 'intro', 'crm_company_id', 'ort', 'status', 'verantwortlich_user_id', 'pax_vorgabe',
-        'stunden_lunch', 'stunden_dinner', 'stunden_day_night', 'tageszeit_aktiv', 'kombi_rabatt_pct', 'paket_toleranz_pct', 'rundung', 'gueltig_bis', 'reihenfolge'];
+        'stunden_lunch', 'stunden_dinner', 'stunden_day_night', 'tageszeit_aktiv', 'kombi_rabatt_pct', 'paket_toleranz_pct', 'rundung', 'gueltig_bis', 'reihenfolge', 'getraenke_pflicht'];
 
     private const KONZEPT_FELDER = ['lunch_concept_id', 'dinner_concept_id', 'abschnitt', 'addon_tageszeit', 'gebunden_an_id',
-        'indikativ_lunch', 'indikativ_dinner', 'kunden_titel', 'claim', 'position'];
+        'indikativ_lunch', 'indikativ_dinner', 'kunden_titel', 'claim', 'position',
+        'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz'];   // Spec 94c: Getränkepaket
 
     public function __construct(
         private KonfiguratorPricingService $pricing,
@@ -655,8 +656,8 @@ class KonfiguratorService
     private function konzeptWerte(Team $team, FoodAlchemistKonfigurator $k, string $rolle, array $in, ?FoodAlchemistKonfiguratorKonzept $bisher = null): array
     {
         $w = array_intersect_key($in, array_flip(self::KONZEPT_FELDER));
-        if ($rolle === 'addon' && isset($in['concept_id'])) {
-            $w['dinner_concept_id'] = $in['concept_id'];   // Add-on: das Concept selbst
+        if (in_array($rolle, ['addon', 'getraenk'], true) && isset($in['concept_id'])) {
+            $w['dinner_concept_id'] = $in['concept_id'];   // Add-on bzw. Getränkepaket: das Concept selbst (gilt beim Getränk für beide Tageszeiten)
         }
         foreach (['lunch_concept_id', 'dinner_concept_id', 'gebunden_an_id'] as $f) {
             if (array_key_exists($f, $w)) {
@@ -669,8 +670,14 @@ class KonfiguratorService
                 throw new \InvalidArgumentException('Das Concept gibt es nicht oder es ist für dieses Team nicht sichtbar.');
             }
         }
-        if ($rolle === 'haupt' && ($ziel['lunch_concept_id'] ?? null) === null && ($ziel['dinner_concept_id'] ?? null) === null) {
-            throw new \InvalidArgumentException('Ein Hauptkonzept braucht ein Lunch- oder ein Dinner-Concept.');
+        if (in_array($rolle, ['haupt', 'getraenk'], true) && ($ziel['lunch_concept_id'] ?? null) === null && ($ziel['dinner_concept_id'] ?? null) === null) {
+            throw new \InvalidArgumentException($rolle === 'haupt' ? 'Ein Hauptkonzept braucht ein Lunch- oder ein Dinner-Concept.' : 'Ein Getränkepaket braucht ein Concept.');
+        }
+        if ($rolle === 'getraenk') {
+            return $this->getraenkWerte($k, $w, $ziel);
+        }
+        foreach (['getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz'] as $f) {
+            unset($w[$f]);
         }
         if ($rolle === 'addon') {
             if (($ziel['dinner_concept_id'] ?? null) === null) {
@@ -688,6 +695,40 @@ class KonfiguratorService
             $w['abschnitt'] = null;
             $w['addon_tageszeit'] = null;
             $w['gebunden_an_id'] = null;
+        }
+
+        return $w;
+    }
+
+    /**
+     * Spec 94c · Kommerzielles eines Getränkepakets: Abrechnung (8b: Pauschale), Dauer event | stunde, optional Staffel (Grundpreis für
+     * grund_stunden, je weitere Stunde folgestunde_satz; beides oder keines), Bindung an ein Hauptkonzept wie bei Add-ons.
+     */
+    private function getraenkWerte(FoodAlchemistKonfigurator $k, array $w, array $ziel): array
+    {
+        $w['abschnitt'] = null;
+        $w['addon_tageszeit'] = null;
+        $w['getraenk_abrechnung'] = $ziel['getraenk_abrechnung'] ?? null ?: 'pauschale';
+        $w['getraenk_dauer'] = $ziel['getraenk_dauer'] ?? null ?: 'event';
+        if (! in_array($w['getraenk_abrechnung'], FoodAlchemistKonfiguratorKonzept::GETRAENK_ABRECHNUNG, true)) {
+            throw new \InvalidArgumentException('Abrechnung des Getränkepakets: Pauschale (nach Verbrauch folgt mit Stufe 8c).');
+        }
+        if (! in_array($w['getraenk_dauer'], FoodAlchemistKonfiguratorKonzept::GETRAENK_DAUER, true)) {
+            throw new \InvalidArgumentException('Dauer der Pauschale: event (je Gast fürs ganze Event) oder stunde (je Gast und Stunde).');
+        }
+        foreach (['grund_stunden', 'folgestunde_satz'] as $f) {
+            $roh = $ziel[$f] ?? null;
+            $w[$f] = $roh === null || $roh === '' ? null : (float) str_replace(',', '.', (string) $roh);
+            if ($w[$f] !== null && $w[$f] < 0) {
+                throw new \InvalidArgumentException('Grundstunden und Folgestunden-Satz dürfen nicht negativ sein.');
+            }
+        }
+        if (($w['grund_stunden'] === null) !== ($w['folgestunde_satz'] === null)) {
+            throw new \InvalidArgumentException('Staffel: Grundstunden und Satz je Folgestunde gehören zusammen (beides oder keines).');
+        }
+        if (($ziel['gebunden_an_id'] ?? null) !== null && ! FoodAlchemistKonfiguratorKonzept::where('konfigurator_id', $k->id)->where('team_id', $k->team_id)
+            ->where('rolle', 'haupt')->whereKey($ziel['gebunden_an_id'])->exists()) {
+            throw new \InvalidArgumentException('Ein Getränkepaket kann nur an ein Hauptkonzept desselben Konfigurators gebunden werden.');
         }
 
         return $w;

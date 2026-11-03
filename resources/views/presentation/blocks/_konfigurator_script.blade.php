@@ -9,6 +9,9 @@
         'zzgl' => $content['zzgl'] ?? [],
         'konzepte' => $content['konzepte'] ?? [],
         'addons' => $content['addons'] ?? [],
+        // Spec 94c: Getränkepakete (nur Id, Titel, Bindung, Stunden-Hinweis; Preise stehen in der Preistabelle g{id}:lunch|dinner|dn)
+        'getraenke' => array_map(fn ($g) => array_intersect_key($g, array_flip(['id', 'titel', 'gebunden_an', 'je_stunde', 'stunden'])), $content['getraenke'] ?? []),
+        'getraenke_pflicht' => (bool) ($content['getraenke_pflicht'] ?? false),
         'tageszeit_aktiv' => (bool) ($content['tageszeit_aktiv'] ?? false),
     ];
 @endphp
@@ -23,7 +26,7 @@
     var euro = function (v) { return v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; };
     var setze = function (sel, text) { qa(sel).forEach(function (e) { e.textContent = text; }); };
     var setzeIn = function (wurzel, sel, text) { var e = wurzel.querySelector(sel); if (e) { e.textContent = text; } };
-    var z = { konzept: null, tageszeit: null, abend: null, addons: [], pax: null, schritt: null };
+    var z = { konzept: null, tageszeit: null, abend: null, addons: [], getraenke: [], pax: null, schritt: null };
     var konzept = function (id) { return d.konzepte.filter(function (k) { return k.id === id; })[0] || null; };
     var min = d.pakete.length ? d.pakete[0].von : 1, max = d.pakete.length ? d.pakete[d.pakete.length - 1].bis : 1;
     var start = q('[data-konfig-pax]');
@@ -35,7 +38,10 @@
     var kopf = q('[data-konfig-kopfleiste]');
     var zeitZuerst = !kopf || kopf.getAttribute('data-konfig-reihenfolge') !== 'konzept_zuerst';
     var hatZeit = schritte.indexOf('tageszeit') >= 0;
-    var erfuellt = function (s) { return s === 'konzepte' ? !!z.konzept : (s === 'tageszeit' ? !!z.tageszeit : true); };
+    var erfuellt = function (s) { return s === 'konzepte' ? !!z.konzept : (s === 'tageszeit' ? !!z.tageszeit : (s === 'getraenke' ? !d.getraenke_pflicht || z.getraenke.length > 0 : true)); };
+    // Spec 94c: Preisschlüssel eines Getränkepakets zur Tageszeit
+    var gKey = function (id, t) { return 'g' + id + ':' + (t === 'day_night' ? 'dn' : t); };
+    var getraenk = function (id) { return d.getraenke.filter(function (g) { return g.id === id; })[0] || null; };
     // Konzept zur Tageszeit verfügbar? (Tag = Lunch-Concept, Abend = Dinner-Concept, Tag und Abend = Lunch-Concept)
     var passt = function (k, t) { return !t || (t === 'dinner' ? k.dinner : k.lunch); };
     qa('[data-konfig-gruppe]').forEach(function (sec) {
@@ -131,11 +137,23 @@
             if (pe) { pe.textContent = tab['a' + id] !== undefined ? '+ ' + euro(tab['a' + id]) + ' pro Person' : ''; }
         });
         z.addons = qa('[data-konfig-addon]').filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.value, 10); });
+        qa('[data-konfig-getraenk-zeile]').forEach(function (zeile) {
+            var id = parseInt(zeile.getAttribute('data-konfig-getraenk-zeile'), 10), geb = zeile.getAttribute('data-gebunden');
+            var sicht = !geb || (!!z.konzept && String(z.konzept) === geb);
+            zeile.hidden = !sicht;
+            var box = zeile.querySelector('[data-konfig-getraenk]');
+            if (!sicht && box.checked) { box.checked = false; }
+            var pe = zeile.querySelector('[data-konfig-getraenk-preis]'), g = getraenk(id), v = t ? tab[gKey(id, t)] : undefined;
+            if (pe) { pe.textContent = v !== undefined ? '+ ' + euro(v) + ' pro Person' + (g && g.je_stunde && g.stunden[t] ? ' (' + String(g.stunden[t]).replace('.', ',') + ' Std.)' : '') : ''; }
+        });
+        z.getraenke = qa('[data-konfig-getraenk]').filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.value, 10); });
+        var getraenkePp = 0; z.getraenke.forEach(function (g) { var v = tab[gKey(g, t)]; if (v !== undefined) { getraenkePp += v; } });
 
         var pp = null, ab = false;
         if (k && i !== null && tab[schluessel(k, t)] !== undefined) {
             pp = tab[schluessel(k, t)];
             z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { pp += tab['a' + a]; } });
+            pp += getraenkePp;
         } else if (i !== null) {   // noch kein Konzept: günstigster Preis der Stufe als „ab“
             Object.keys(tab).forEach(function (s) { if (s.charAt(0) === 'k' && (pp === null || tab[s] < pp)) { pp = tab[s]; } });
             ab = pp !== null;
@@ -156,6 +174,7 @@
         if (teile) {
             var zeilenA = k && i !== null ? ((d.aufteilung[i] || {})[schluessel(k, t)] || []).slice() : [];
             var extras = 0; z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { extras += tab['a' + a]; } });
+            if (zeilenA.length && getraenkePp > 0) { zeilenA.push({ name: 'Getränke', vk: getraenkePp }); }
             if (zeilenA.length && extras > 0) { zeilenA.push({ name: 'Extras', vk: extras }); }
             teile.innerHTML = '';
             zeilenA.forEach(function (g) { var li = document.createElement('li'); var n = document.createElement('span'); n.textContent = g.name; var v = document.createElement('span'); v.textContent = euro(g.vk); li.appendChild(n); li.appendChild(v); teile.appendChild(li); });
@@ -166,6 +185,7 @@
         if (k && i !== null) {
             zz = ((d.zzgl[i] || {})[schluessel(k, t)] || []).slice();
             z.addons.forEach(function (a) { zz = zz.concat((d.zzgl[i] || {})['a' + a] || []); });
+            z.getraenke.forEach(function (g) { zz = zz.concat((d.zzgl[i] || {})[gKey(g, t)] || []); });
         }
         var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
         if (zzBox && zzListe) {
@@ -185,6 +205,7 @@
         if (liste) {
             var zeilen = [];
             if (k) { zeilen.push(k.titel + ' · ' + ({ lunch: 'Tag', dinner: 'Abend', day_night: 'Tag und Abend' })[t] + (t === 'day_night' && z.abend && z.abend !== k.id ? ' (Abend: ' + (konzept(z.abend) || {}).titel + ')' : '')); }
+            z.getraenke.forEach(function (g) { var x = getraenk(g); if (x) { zeilen.push('+ ' + x.titel); } });
             z.addons.forEach(function (a) { var x = d.addons.filter(function (y) { return y.id === a; })[0]; if (x) { zeilen.push('+ ' + x.titel); } });
             zeilen.push(z.pax + ' Gäste');
             liste.innerHTML = '';
@@ -194,10 +215,10 @@
 
         var feld = function (n, v) { var f = q('[data-konfig-feld="' + n + '"]'); if (f) { f.value = v === null || v === undefined ? '' : v; } };
         feld('konzept', z.konzept); feld('tageszeit', t); feld('abend_konzept', t === 'day_night' ? (z.abend || (k && k.id)) : '');
-        feld('addons', z.addons.join(',')); feld('pax', z.pax);
+        feld('addons', z.addons.join(',')); feld('getraenke', z.getraenke.join(',')); feld('pax', z.pax);
         var form = q('[data-konfig-form]'), sende = form ? form.querySelector('button[type="submit"]') : null;
         if (sende) { sende.disabled = !k || ab || form.getAttribute('action') === '#'; }
-        history.replaceState(null, '', '#k=' + (z.konzept || '') + '&t=' + (t || '') + '&ab=' + (z.abend || '') + '&a=' + z.addons.join('.') + '&p=' + z.pax + '&s=' + (z.schritt || ''));
+        history.replaceState(null, '', '#k=' + (z.konzept || '') + '&t=' + (t || '') + '&ab=' + (z.abend || '') + '&a=' + z.addons.join('.') + '&g=' + z.getraenke.join('.') + '&p=' + z.pax + '&s=' + (z.schritt || ''));
     }
 
     var setzePax = function (v) { var n = parseInt(v, 10); if (!isNaN(n)) { z.pax = Math.max(min, Math.min(max, n)); render(); } };
@@ -213,6 +234,12 @@
         if (box && !box.checked) { box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); }
         b.closest('dialog').close(); render();
     }); });
+    qa('[data-konfig-getraenk-waehlen]').forEach(function (b) { b.addEventListener('click', function () {
+        var box = q('[data-konfig-getraenk][value="' + b.getAttribute('data-konfig-getraenk-waehlen') + '"]');
+        if (box && !box.checked) { box.checked = true; }
+        b.closest('dialog').close(); render();
+    }); });
+    qa('[data-konfig-getraenk]').forEach(function (b) { b.addEventListener('change', render); });
     qa('[data-konfig-tageszeit]').forEach(function (b) { b.addEventListener('click', function () { z.tageszeit = b.getAttribute('data-konfig-tageszeit'); render(); }); });
     var abend = q('[data-konfig-abend]'); if (abend) { abend.addEventListener('change', function () { z.abend = parseInt(abend.value, 10); render(); }); }
     qa('[data-konfig-addon]').forEach(function (b) { b.addEventListener('change', render); });
@@ -234,6 +261,7 @@
     if (h.ab) { z.abend = parseInt(h.ab, 10) || null; if (abend && z.abend) { abend.value = z.abend; } }
     if (h.p) { var n = parseInt(h.p, 10); if (!isNaN(n)) { z.pax = Math.max(min, Math.min(max, n)); } }
     if (h.a) { h.a.split('.').forEach(function (a) { var box = q('[data-konfig-addon][value="' + a + '"]'); if (box) { box.checked = true; } }); }
+    if (h.g) { h.g.split('.').forEach(function (g) { var box = q('[data-konfig-getraenk][value="' + g + '"]'); if (box) { box.checked = true; } }); }
     var status = new URLSearchParams(location.search).get('anfrage');
     zeige(status ? 'anfrage' : (h.s || schritte[0]), !!status);
 })();

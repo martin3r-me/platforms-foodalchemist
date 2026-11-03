@@ -54,7 +54,9 @@ class KonfiguratorAnfrageService
         $body = $k->presentation_snapshot_json['content'] ?? [];
         $konzeptIds = array_column($body['konzepte'] ?? [], 'id');
         $addonIds = array_column($body['addons'] ?? [], 'id');
+        $getraenkIds = array_column($body['getraenke'] ?? [], 'id');   // Spec 94c
         $in['addons'] = array_values(array_filter(array_map('intval', explode(',', (string) ($in['addons'] ?? ''))), fn ($a) => $a > 0));
+        $in['getraenke'] = array_values(array_filter(array_map('intval', explode(',', (string) ($in['getraenke'] ?? ''))), fn ($a) => $a > 0));
 
         $v = Validator::make($in, [
             'name' => ['required', 'string', 'max:120'],
@@ -69,13 +71,18 @@ class KonfiguratorAnfrageService
             'abend_konzept' => ['nullable', 'integer', 'in:' . implode(',', $konzeptIds ?: [0])],
             'addons' => ['array', 'max:50'],
             'addons.*' => ['integer', 'in:' . implode(',', $addonIds ?: [0])],
+            'getraenke' => ['array', 'max:20'],
+            'getraenke.*' => ['integer', 'in:' . implode(',', $getraenkIds ?: [0])],
             'pax' => ['required', 'integer', 'min:1', 'max:100000'],
         ], [], ['konzept' => 'Konzept', 'pax' => 'Gäste', 'datenschutz' => 'Einwilligung']);
         $d = $v->validate();
+        if (($body['getraenke_pflicht'] ?? false) && ($d['getraenke'] ?? []) === []) {
+            throw ValidationException::withMessages(['getraenke' => 'Bitte mindestens ein Getränkepaket wählen.']);
+        }
 
         $preis = KonfiguratorSnapshot::preisFuer($body, [
             'konzept' => (int) $d['konzept'], 'tageszeit' => $d['tageszeit'], 'abend_konzept' => $d['abend_konzept'] ?? null,
-            'addons' => $d['addons'] ?? [], 'pax' => (int) $d['pax'],
+            'addons' => $d['addons'] ?? [], 'getraenke' => $d['getraenke'] ?? [], 'pax' => (int) $d['pax'],
         ]);
         if ($preis === null) {
             throw ValidationException::withMessages(['konzept' => 'Für diese Auswahl und Gästezahl gibt es keinen Preis.']);
@@ -88,11 +95,13 @@ class KonfiguratorAnfrageService
         $tageszeit = ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Day into Night'][$d['tageszeit']];
         $abend = $d['tageszeit'] === 'day_night' ? $titel((int) ($d['abend_konzept'] ?? $d['konzept']), $body['konzepte']) : null;
         $addons = array_map(fn ($a) => $titel($a, $body['addons'] ?? []), $d['addons'] ?? []);
+        $getraenke = array_map(fn ($g) => $titel($g, $body['getraenke'] ?? []), $d['getraenke'] ?? []);
         $euro = fn (float $w) => number_format($w, 2, ',', '.') . ' €';
 
         $text = implode("\n", array_filter([
             'Anfrage aus dem Konfigurator „' . ($k->kunden_titel ?: $k->name) . '“',
             'Konzept: ' . $konzeptTitel . ' · ' . $tageszeit . ($abend !== null ? ' (Abend: ' . $abend . ')' : ''),
+            $getraenke !== [] ? 'Getränke: ' . implode(', ', $getraenke) : null,
             $addons !== [] ? 'Add-ons: ' . implode(', ', $addons) : null,
             'Gäste: ' . $d['pax'] . ' (Paket ' . $preis['paket_name'] . ')',
             'Preis: ' . $euro($preis['pro_person']) . ' pro Person, gesamt ' . $euro($preis['gesamt']) . ' netto (Stand des Links)',
@@ -117,7 +126,7 @@ class KonfiguratorAnfrageService
             'konfigurator_id' => $k->id,
             'konfiguration_json' => [
                 'konzept' => (int) $d['konzept'], 'tageszeit' => $d['tageszeit'], 'abend_konzept' => $d['abend_konzept'] ?? null,
-                'addons' => $d['addons'] ?? [], 'pax' => (int) $d['pax'], 'paket' => $preis['paket_name'],
+                'addons' => $d['addons'] ?? [], 'getraenke' => $d['getraenke'] ?? [], 'pax' => (int) $d['pax'], 'paket' => $preis['paket_name'],
                 'pro_person' => $preis['pro_person'], 'gesamt' => $preis['gesamt'],
                 'preisstand' => $k->presentation_published_at?->toIso8601String(),
                 'kontakt' => array_intersect_key($d, array_flip(['name', 'firma', 'email', 'telefon'])),
@@ -160,6 +169,9 @@ class KonfiguratorAnfrageService
             : ['typ' => 'einzel', 'k' => (int) $d['konzept'], 't' => $d['tageszeit']]];
         foreach ($d['addons'] ?? [] as $a) {
             $faelle[] = ['typ' => 'addon', 'a' => (int) $a];
+        }
+        foreach ($d['getraenke'] ?? [] as $g) {   // Spec 94c: Zusatz-Leistungen der Getränkepakete nach Aufwand
+            $faelle[] = ['typ' => 'getraenk', 'g' => (int) $g, 't' => $d['tageszeit']];
         }
         $summe = [];
         foreach ($faelle as $fall) {

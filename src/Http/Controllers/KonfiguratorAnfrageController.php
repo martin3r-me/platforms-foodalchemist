@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorAnfrageService;
 class KonfiguratorAnfrageController
 {
     private const FELDER = ['name', 'firma', 'email', 'telefon', 'datum', 'nachricht', 'datenschutz', 'konzept', 'tageszeit',
-        'abend_konzept', 'addons', 'pax', 'website', 'ts'];
+        'abend_konzept', 'addons', 'getraenke', 'pax', 'website', 'ts'];
 
     public function store(string $token, Request $request, KonfiguratorAnfrageService $svc): RedirectResponse
     {
@@ -27,6 +27,7 @@ class KonfiguratorAnfrageController
             'k' => (int) $request->input('konzept') ?: null, 't' => preg_replace('/[^a-z_]/', '', (string) $request->input('tageszeit')) ?: null,
             'ab' => (int) $request->input('abend_konzept') ?: null,
             'a' => implode('.', array_filter(array_map('intval', explode(',', (string) $request->input('addons'))))) ?: null,
+            'g' => implode('.', array_filter(array_map('intval', explode(',', (string) $request->input('getraenke'))))) ?: null,   // Spec 94c
             'p' => (int) $request->input('pax') ?: null, 's' => 'anfrage',
         ]));
         try {

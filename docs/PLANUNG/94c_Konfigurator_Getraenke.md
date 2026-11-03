@@ -147,7 +147,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 | Stufe | Inhalt |
 |:--|:--|
 | 8a | Alkohol-Kennzeichnung (Artikel → GP → Rezept, Codes) — umgesetzt 03.11.2026 |
-| 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link |
+| 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link — umgesetzt 03.11.2026 (Umsetzungsnotizen unten) |
 | 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot |
 
 ## Entscheidungen (Dominique, 03.11.2026)
@@ -165,3 +165,21 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 ## Offene Fragen
 
 Keine.
+
+## Umsetzungsnotizen 8b (03.11.2026)
+
+- **Tag und Abend:**
+  - Ein Concept für beide Tageszeiten gilt **einmal** mit der Day-into-Night-Einsatzzeit: je Event der Concept-Preis, je Stunde × Stunden Tag und Abend, Staffel mit diesen Stunden.
+  - Eigenes Lunch- und Dinner-Concept: Tag-Teil + Abend-Teil, jeweils mit ihrer Einsatzzeit.
+  - Danach gilt der Kombi-Rabatt wie bei den Konzepten (auch auf die Zusatz-Leistungen des Pakets).
+- **Staffel-EK:** Der EK läuft im selben Verhältnis wie der VK (Grund-EK × Staffelpreis / Grundpreis), weil es für Folgestunden keinen eigenen EK gibt.
+- **Verbrauch:** Er ist im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Die Prüfung meldet „folgt mit Stufe 8c“.
+- **Preistabelle und Aufteilung:**
+  - Schlüssel `g{id}:lunch`, `g{id}:dinner`, `g{id}:dn`. Fehlt der Concept-Preis, fehlt der Schlüssel, und das Paket ist zu dieser Tageszeit nicht wählbar.
+  - Die Aufteilung bekommt die Zeile „Getränke“, die Kalkulation die Fälle „Getränke … Lunch / Dinner / Day-into-Night“.
+- **Layout:** Ein eigenes Design ohne `konfig_getraenke` bekommt den Block vor den Extras (`konfiguratorLayout` setzt neue Blöcke vor den nächsten vorhandenen).
+- **Editor:**
+  - Der Reiter „Getränke“ zeigt die Concepts der Kategorie „Getränke“ samt Unterkategorien auch ohne Suche. Ohne diese Kategorie sucht er ab 2 Zeichen über alle Concepts.
+  - „Getränke Pflicht“ steht im Reiter.
+- **Druckfassung (#733):** Die Getränke-Sektion zieht nach, sobald #733 auf main ist.
+

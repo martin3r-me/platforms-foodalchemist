@@ -27,11 +27,11 @@ class PresentationDesignService
         'cover', 'chapter_loop', 'dish_list', 'price_summary', 'preis_aufschluesselung', 'legend', 'grid',
         'text', 'heading', 'image', 'spacer', 'cta',
         // Spec 94: Konfigurator-Schritte (nur für die Ausgabeform `konfigurator`, je genau einmal)
-        'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage',
+        'konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage',
     ];
 
     /** Spec 94: Pflicht-Blöcke des Konfigurators in Standard-Reihenfolge. */
-    public const KONFIG_BLOCKS = ['konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage'];
+    public const KONFIG_BLOCKS = ['konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage'];
 
     /** Spec 94: Blöcke, die im Konfigurator nichts bedeuten (Kapitel-, Raster- und Preisblöcke anderer Ausgaben). */
     private const KONFIG_FREMD = ['chapter_loop', 'dish_list', 'grid', 'price_summary', 'preis_aufschluesselung', 'legend'];
@@ -58,13 +58,13 @@ class PresentationDesignService
     public static function layoutVocabDoc(): string
     {
         return 'Geordnete Blockliste: [{block_type, style{}}]. block_type ∈ '
-            . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta|konfig_konzepte|konfig_tageszeit|konfig_addons|konfig_zusammenfassung|konfig_anfrage. '
+            . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta|konfig_konzepte|konfig_tageszeit|konfig_getraenke|konfig_addons|konfig_zusammenfassung|konfig_anfrage. '
             . 'style je Typ: '
             . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
             . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
             . 'image{context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
             . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}; '
-            . 'konfig_konzepte{ansicht:raster|liste, show_bild:bool, show_ab_preis:bool}; konfig_tageszeit/konfig_addons/konfig_anfrage{titel}; konfig_zusammenfassung{show_gesamt:bool} '
+            . 'konfig_konzepte{ansicht:raster|liste, show_bild:bool, show_ab_preis:bool}; konfig_tageszeit/konfig_getraenke/konfig_addons/konfig_anfrage{titel}; konfig_zusammenfassung{show_gesamt:bool} '
             . '(Spec 94: nur Ausgabeform konfigurator, je genau einmal; fehlende werden beim Rendern ergänzt). '
             . 'Datengebunden & interna-frei — es gibt keinen EK-/Marge-Block.';
     }
@@ -186,6 +186,7 @@ class PresentationDesignService
                     ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => false, 'show_logo' => true]],
                     ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
                     ['block_type' => 'konfig_tageszeit', 'style' => []],
+                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_addons', 'style' => []],
                     ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
                     ['block_type' => 'konfig_anfrage', 'style' => []],
@@ -207,6 +208,7 @@ class PresentationDesignService
                     ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => true, 'show_logo' => true]],
                     ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
                     ['block_type' => 'konfig_tageszeit', 'style' => []],
+                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_addons', 'style' => []],
                     ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
                     ['block_type' => 'konfig_anfrage', 'style' => []],
@@ -245,9 +247,13 @@ class PresentationDesignService
             $out[] = $b;
         }
         foreach (self::KONFIG_BLOCKS as $t) {
-            if (! isset($gesehen[$t])) {
-                $out[] = ['block_type' => $t, 'style' => []];
+            if (isset($gesehen[$t])) {
+                continue;
             }
+            // Spec 94c: ein neu hinzugekommener Block steht vor dem nächsten vorhandenen (Getränke vor den Extras), nicht am Ende
+            $danach = array_slice(self::KONFIG_BLOCKS, array_search($t, self::KONFIG_BLOCKS, true) + 1);
+            $pos = collect($out)->search(fn ($b) => in_array($b['block_type'] ?? '', $danach, true));
+            array_splice($out, $pos === false ? count($out) : $pos, 0, [['block_type' => $t, 'style' => []]]);
         }
 
         return $out;

@@ -19,6 +19,7 @@
             <input type="hidden" name="tageszeit" data-konfig-feld="tageszeit">
             <input type="hidden" name="abend_konzept" data-konfig-feld="abend_konzept">
             <input type="hidden" name="addons" data-konfig-feld="addons">
+            <input type="hidden" name="getraenke" data-konfig-feld="getraenke">
             <input type="hidden" name="pax" data-konfig-feld="pax">
             <input type="hidden" name="ts" value="{{ encrypt(now()->timestamp) }}">
             <label class="pt-konfig-honig" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
