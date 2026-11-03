@@ -25,7 +25,9 @@
         <x-fa::notice tone="crit" data-fa-designs-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
-    <div class="grid grid-cols-1 gap-4 items-start @2xl:grid-cols-[13rem_minmax(0,1fr)] @6xl:grid-cols-[15rem_minmax(0,1fr)_minmax(0,23rem)]">
+    {{-- Drei Spalten schon ab Laptop-Breite mit Sidebar (Container ab 56rem): Einstellungen links und rechts, Vorschau in der
+         Mitte schmaler und klebend (Dominique 2026-11-03; vorher erst ab 72rem, darunter wanderte die rechte Spalte unter die Vorschau). --}}
+    <div class="grid grid-cols-1 gap-4 items-start @2xl:grid-cols-[13rem_minmax(0,1fr)] @4xl:grid-cols-[12rem_minmax(0,1fr)_18rem] @6xl:grid-cols-[15rem_minmax(0,1fr)_minmax(0,23rem)]">
         {{-- ── Links: Designs + Bausteine ─────────────────────────────── --}}
         <aside class="flex flex-col gap-4 min-w-0">
             <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
@@ -88,7 +90,7 @@
         </aside>
 
         {{-- ── Mitte: Kopf + Live-Vorschau ──────────────────────────── --}}
-        <section class="flex flex-col gap-3 min-w-0">
+        <section class="flex flex-col gap-3 min-w-0 @4xl:sticky @4xl:top-4">
             <div class="flex flex-wrap items-end gap-2">
                 <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
                 <x-fa::field label="Name des Designs" for="design-name" class="flex-1 min-w-[12rem]">
@@ -139,9 +141,9 @@
                         @svg($ungespeichert ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-eye', 'w-4 h-4 shrink-0')
                         {{ $ungespeichert ? 'Vorschau des ungespeicherten Stands, noch nicht im Kundenlink.' : 'Vorschau des gespeicherten Stands.' }}
                     </div>
-                    <iframe class="block w-full h-[640px] border-0 bg-[var(--fa-surface)]" srcdoc="{{ $vorschauHtml }}" title="Live-Vorschau" data-fa-preview-frame></iframe>
+                    <iframe class="block w-full h-[min(640px,calc(100dvh-12rem))] min-h-[24rem] border-0 bg-[var(--fa-surface)]" srcdoc="{{ $vorschauHtml }}" title="Live-Vorschau" data-fa-preview-frame></iframe>
                 @else
-                    <x-fa::empty icon="heroicon-o-eye" title="Vorschau erscheint hier" class="h-[640px] justify-center">
+                    <x-fa::empty icon="heroicon-o-eye" title="Vorschau erscheint hier" class="h-[min(640px,calc(100dvh-12rem))] min-h-[24rem] justify-center">
                         Oben Form und Quelle wählen, dann zeigt die Vorschau das Design mit echten Daten.
                     </x-fa::empty>
                 @endif
@@ -149,7 +151,7 @@
         </section>
 
         {{-- ── Rechts: Struktur + Block-Einstellungen + Farben/Schrift ────────────────────── --}}
-        <aside class="grid gap-4 items-start min-w-0 @2xl:col-span-2 @2xl:grid-cols-2 @6xl:col-span-1 @6xl:grid-cols-1">
+        <aside class="grid gap-4 items-start min-w-0 @2xl:col-span-2 @2xl:grid-cols-2 @4xl:col-span-1 @4xl:grid-cols-1">
             <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
             <x-fa::section title="Aufbau" icon="heroicon-o-queue-list" :meta="count($layout) . ' ' . (count($layout) === 1 ? 'Block' : 'Blöcke')" x-data="{ from: null }">
                 <div class="flex flex-col gap-1" data-fa-structure>
