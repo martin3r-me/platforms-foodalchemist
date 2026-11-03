@@ -46,6 +46,31 @@
                                 </td>
                             @endforeach
                         </tr>
+                        @if(! empty($f['gruppen']))
+                            {{-- Spec 94b §5: Zusammenfassung je Gruppe (Speisen Tag/Abend/Extras, je vorkommender Kategorie), gesamt = × Referenz-Pax --}}
+                            <tr wire:key="kfmx-{{ $p['paket_id'] }}-{{ $i }}-gruppen">
+                                <td colspan="8">
+                                    <details data-kf-zusammenfassung="{{ $p['paket_id'] }}-{{ $i }}">
+                                        <summary class="cursor-pointer {{ $leise }}">Zusammenfassung nach Gruppen</summary>
+                                        <table class="fa-table fa-table--compact mt-1">
+                                            <thead><tr><th>Gruppe</th><th class="num">VK / Person</th><th class="num">EK / Person</th><th class="num">DB / Person</th><th class="num">VK gesamt</th><th class="num">DB gesamt</th></tr></thead>
+                                            <tbody>
+                                                @foreach($f['gruppen'] as $g)
+                                                    <tr data-kf-gruppe="{{ $g['art'] === 'kategorie' ? $g['slug'] : $g['art'] }}">
+                                                        <td>{{ $g['name'] }}</td>
+                                                        <td class="num">{{ $euro($g['vk_pp']) }}</td>
+                                                        <td class="num">{{ $euro($g['ek_pp']) }}</td>
+                                                        <td class="num {{ $g['db_pp'] < 0 ? 'text-[var(--fa-crit)]' : '' }}">{{ $euro($g['db_pp']) }}</td>
+                                                        <td class="num">{{ $euro($g['vk_pp'] * $p['referenz_pax']) }}</td>
+                                                        <td class="num">{{ $euro($g['db_pp'] * $p['referenz_pax']) }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </details>
+                                </td>
+                            </tr>
+                        @endif
                     @endforeach
                 </tbody>
             </table>

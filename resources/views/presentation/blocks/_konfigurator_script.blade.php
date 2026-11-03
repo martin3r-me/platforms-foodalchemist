@@ -5,6 +5,7 @@
     $konfigDaten = [
         'pakete' => $content['pakete'] ?? [],
         'preise' => $content['preise'] ?? [],
+        'aufteilung' => $content['aufteilung'] ?? [],
         'konzepte' => $content['konzepte'] ?? [],
         'addons' => $content['addons'] ?? [],
         'tageszeit_aktiv' => (bool) ($content['tageszeit_aktiv'] ?? false),
@@ -149,6 +150,16 @@
         var hinweis = q('[data-konfig-hinweis]'); if (hinweis) { hinweis.hidden = !!k; }
         var indi = q('[data-konfig-indikativ]');
         if (indi) { indi.hidden = !(k && ((t === 'lunch' && k.indikativ_lunch) || (t === 'dinner' && k.indikativ_dinner) || (t === 'day_night' && (k.indikativ_lunch || k.indikativ_dinner)))); }
+        // Spec 94b §5: Aufteilung des Preises pro Person (Gruppen aus dem Snapshot, Extras als eigene Zeile), Summe = Preis
+        var teile = q('[data-konfig-aufteilung]');
+        if (teile) {
+            var zeilenA = k && i !== null ? ((d.aufteilung[i] || {})[schluessel(k, t)] || []).slice() : [];
+            var extras = 0; z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { extras += tab['a' + a]; } });
+            if (zeilenA.length && extras > 0) { zeilenA.push({ name: 'Extras', vk: extras }); }
+            teile.innerHTML = '';
+            zeilenA.forEach(function (g) { var li = document.createElement('li'); var n = document.createElement('span'); n.textContent = g.name; var v = document.createElement('span'); v.textContent = euro(g.vk); li.appendChild(n); li.appendChild(v); teile.appendChild(li); });
+            teile.hidden = zeilenA.length < 2;
+        }
         var liste = q('[data-konfig-auswahl]');
         if (liste) {
             var zeilen = [];

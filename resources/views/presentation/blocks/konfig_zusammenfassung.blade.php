@@ -9,6 +9,8 @@
         <ul class="pt-konfig-auswahl" data-konfig-auswahl></ul>
         <p class="pt-konfig-paket" data-konfig-paket></p>
         <p class="pt-konfig-preis"><strong data-konfig-pp>—</strong> <small>pro Person, all-in netto</small></p>
+        {{-- Spec 94b §5: Aufteilung des Preises pro Person nach Gruppen (Speisen Tag/Abend, Kategorien, Extras), ohne EK --}}
+        <ul class="pt-konfig-aufteilung" data-konfig-aufteilung hidden aria-label="Aufteilung pro Person"></ul>
         @if($style['show_gesamt'] ?? true)<p class="pt-konfig-gesamt">Gesamt <strong data-konfig-gesamt>—</strong> netto</p>@endif
         <p class="pt-section-text" data-konfig-indikativ hidden>Der Preis ist indikativ und wird im Angebot bestätigt.</p>
         <p class="pt-section-text" data-konfig-hinweis>Bitte ein Konzept wählen.</p>

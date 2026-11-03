@@ -10,7 +10,8 @@ use Platform\FoodAlchemist\Services\KonfiguratorPricingService;
  * Spec 94 · Kundensicht des Konfigurators für den Präsentations-Snapshot (Typ `konfigurator`). ALLOWLIST-Neubau:
  * Konzepte, Add-ons, Pakete (von/bis) und eine serverseitig gerechnete Preistabelle — VK pro Person je Paket und
  * Hauptkonzept/Tageszeit, Day-into-Night-Paar und Add-on. Kein EK, keine Aufschlagsklassen, keine Mengen, keine
- * Leistungszeilen (Leak-Test Spec94KundenlinkTest). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
+ * Leistungszeilen (Leak-Test Spec94KundenlinkTest). Spec 94b §5: je Preis die VK-Aufteilung nach Gruppen (`aufteilung`, nur
+ * Gruppenname und VK pro Person, Summe = Preis). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
  */
 final class KonfiguratorSnapshot
 {
@@ -58,20 +59,31 @@ final class KonfiguratorSnapshot
 
         $pakete = [];
         $preise = [];
+        $aufteilung = [];   // Spec 94b §5: je Paket und Preisschlüssel die VK-Aufteilung — nur Name und VK pro Person
+        $namen = app(LeistungsKategorieService::class)->namen($team);
+        $teile = function (array $kern, float $preis) use ($namen): array {
+            return array_map(fn ($g) => ['name' => $g['name'], 'vk' => $g['vk_pp']],
+                array_values(array_filter(KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen), fn ($g) => abs($g['vk_pp']) >= 0.005)));
+        };
         foreach ($s['pakete'] as $i => $p) {
             $pakete[] = ['von' => (int) $p->von_pax, 'bis' => (int) $p->bis_pax, 'name' => $p->anzeigeName()];
             $tabelle = [];
+            $teilung = [];
             foreach ($s['haupt'] as $h) {
                 foreach (['lunch' => $h->lunch_concept_id, 'dinner' => $h->dinner_concept_id] as $t => $cid) {
                     if ($cid !== null) {
-                        $tabelle["k{$h->id}:{$t}"] = $runde($this->pricing->rechneFall($k, $p, ['typ' => 'einzel', 'k' => (int) $h->id, 't' => $t], null, $s)['vk_pp']);
+                        $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'einzel', 'k' => (int) $h->id, 't' => $t], null, $s);
+                        $tabelle["k{$h->id}:{$t}"] = $runde($kern['vk_pp']);
+                        $teilung["k{$h->id}:{$t}"] = $teile($kern, $tabelle["k{$h->id}:{$t}"]);
                     }
                 }
             }
             foreach ($s['haupt'] as $h1) {
                 foreach ($s['haupt'] as $h2) {
                     if ($h1->lunch_concept_id !== null && $h2->dinner_concept_id !== null) {
-                        $tabelle["dn{$h1->id}:{$h2->id}"] = $runde($this->pricing->rechneFall($k, $p, ['typ' => 'day_night', 'k1' => (int) $h1->id, 'k2' => (int) $h2->id], null, $s)['vk_pp']);
+                        $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'day_night', 'k1' => (int) $h1->id, 'k2' => (int) $h2->id], null, $s);
+                        $tabelle["dn{$h1->id}:{$h2->id}"] = $runde($kern['vk_pp']);
+                        $teilung["dn{$h1->id}:{$h2->id}"] = $teile($kern, $tabelle["dn{$h1->id}:{$h2->id}"]);
                     }
                 }
             }
@@ -79,6 +91,7 @@ final class KonfiguratorSnapshot
                 $tabelle["a{$a->id}"] = $runde($this->pricing->rechneFall($k, $p, ['typ' => 'addon', 'a' => (int) $a->id], null, $s)['vk_pp']);
             }
             $preise[$i] = $tabelle;
+            $aufteilung[$i] = $teilung;
         }
 
         // „ab“-Preis je Konzept: günstigste Tageszeit im größten Paket
@@ -99,6 +112,7 @@ final class KonfiguratorSnapshot
                 'addons' => $addons,
                 'pakete' => $pakete,
                 'preise' => $preise,
+                'aufteilung' => $aufteilung,
                 'pax_vorgabe' => (int) $k->pax_vorgabe,
                 'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv,
                 'reihenfolge' => in_array($k->reihenfolge, \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, true) ? $k->reihenfolge : 'tageszeit_zuerst',

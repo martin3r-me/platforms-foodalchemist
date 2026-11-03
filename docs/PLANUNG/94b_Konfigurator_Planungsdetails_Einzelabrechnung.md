@@ -1,6 +1,6 @@
 # Spec 94b · Konfigurator Stufe 7: Planungsdetails, Einzelabrechnung, Zusammenfassung
 
-Stand 03.11.2026 · **Alle Fragen von Dominique entschieden (03.11.2026)**. Gebaut wird nach dem Design-Paket „Konzept-Detail und Extras“.
+Stand 03.11.2026 · **Alle Fragen von Dominique entschieden (03.11.2026)**, Nachtrag VK-Aufteilung im Kundenlink (03.11.2026). Gebaut wird nach dem Design-Paket „Konzept-Detail und Extras“.
 Baut auf [Spec 94](94_Konfigurator_AllIn_Preise.md) auf (Stufen 1–6 und 5b live).
 
 **Leitregel (Dominique): Nichts wird fest codiert.** Was eine Leistung ausmacht, ergibt sich aus dem, was an der Vorlage
@@ -182,6 +182,18 @@ Je Paket und Fall gibt es eine aufklappbare Zusammenfassung mit EK, VK und DB pr
 3. **Einzelabrechnung** als eigener Block unter dem All-in: Satz, Einheit, geschätzte Menge nach Regel und
    geschätzter Betrag, mit EK und DB. Ausdrücklich nicht im Preis pro Person.
 
+**Für den Kunden** (Dominique, 03.11.2026): „Eure Zusammenstellung“ zeigt dieselbe Aufteilung, aber **nur den VK pro Person**
+(Speisen Tag, Speisen Abend, je vorkommender Kategorie, dazu „Extras“ als Summe der gewählten Add-ons). EK, DB, Mengen und
+Regeln bleiben intern. Der Snapshot trägt dafür je Paket und Preisschlüssel (`k{id}:t`, `dn{k1}:{k2}`) eine Liste
+`aufteilung: [{name, vk}]` (Allowlist, Leak-Test).
+
+Regeln für die Aufteilung (eine Stelle: `Konfigurator/KonfiguratorAufteilung`):
+- **Kombi-Rabatt anteilig** auf alle Konzept-Zeilen (Speisen und Leistungskategorien), so wie `rechneFall` rechnet, Extras
+  ohne Rabatt. Eine negative Rabattzeile gibt es nicht. Beispiel 5 %: Speisen 90 und Personal 20 werden zu 85,50 und 19,00, zusammen 104,50.
+- **Gruppen mit 0 €** erscheinen nicht.
+- **Rundung:** jede Gruppe auf Cent, der Rest (Cent-Rundung und Preisrundung des Konfigurators) geht in die größte Gruppe.
+  Die Summe ist exakt der Preis pro Person.
+
 Technisch erweitert `matrix()` jeden Fall um `gruppen: [{art: speisen_tag|speisen_abend|speisen_extras|kategorie, slug, name, ek_pp, vk_pp, db_pp}]` und
 `einzel: [...]`. Die Werte kommen aus der vorhandenen Posten-Schleife in `rechneFall`. Gerechnet wird weiterhin nur
 dort, die Oberfläche summiert nichts selbst.
@@ -245,7 +257,10 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
   - Die Anfrage legt im Kapitel „Nach Aufwand“ je Aufwands-Leistung eine `position` mit Menge, Einheit, Satz und EK an.
   - Angebot: `position` rechnet VK und EK aus Menge mal Satz, das Kunden-Dokument zeigt keinen EK.
 - Zusammenfassung:
-  - Die Gruppen sind Speisen (Tag, Abend, Extras, soweit im Fall vorhanden) plus genau die vorkommenden Kategorien.
+  - Die Gruppen sind Speisen (Tag, Abend, Extras, soweit im Fall vorhanden) plus genau die vorkommenden Kategorien, 0-€-Gruppen fehlen.
+  - Kombi-Rabatt anteilig: Speisen 85,50 und Personal 19,00 ergeben 104,50.
+  - Die Summe der Teile ist gleich dem Preis pro Person, für jeden Preisschlüssel inklusive `dn`. Die Gegenprobe ohne Rest-Regel geht nicht auf.
+  - Leak-Test: In der Kunden-Aufteilung stehen nur `name` und `vk`, kein EK, DB, keine Menge und keine Regel.
   - Die Summe der Gruppen ergibt `preis_pp` bzw. `ek_pp` des Falls.
   - Die Einzelabrechnung steht getrennt.
 - Wächter: Spec84*, Spec77b, Policy, Dateigroessen, BladeCompiles, UiRegeln, McpToolSchemaExecutor (keine Union-Typen), Spec94*.
@@ -254,7 +269,7 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 
 | Stufe | Inhalt | Fertig, wenn |
 |:--|:--|:--|
-| 7a | Kategorien als Vokabular + Zusammenfassung im Reiter Kalkulation | Testfälle Vokabular und Zusammenfassung grün, Bestand unverändert gültig |
+| 7a | Kategorien als Vokabular + Zusammenfassung im Reiter Kalkulation + VK-Aufteilung im Kundenlink | Testfälle Vokabular und Zusammenfassung grün, Bestand unverändert gültig |
 | 7b | Einzelabrechnung (Preis, Kalkulation, Kundenlink mit Schätzung) | Aufwand nicht im Preis pro Person, im Link als „zzgl. nach Aufwand: ca. …“, Tests grün |
 | 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Blocktyp `position` + Aufwands-Positionen im Angebot | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
 
