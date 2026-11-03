@@ -31,7 +31,7 @@
     @foreach($gruppen as $gruppe)
         <x-ui-sidebar-list :label="$gruppe['group'] ?? ''">
             @foreach($gruppe['items'] ?? [] as $item)
-                <x-ui-sidebar-item :href="route($item['route'])">
+                <x-ui-sidebar-item :href="route($item['route'])" :active="request()->routeIs($item['route'], ...($item['aktiv_bei'] ?? []))">
                     @svg($item['icon'] ?? 'heroicon-o-cube', 'w-4 h-4 text-[var(--ui-secondary)]')
                     <span class="ml-2 text-xs">{{ $item['label'] }}</span>
                     @if(! empty($item['zusatz']))<span class="ml-auto text-xs uppercase tracking-wide text-[var(--ui-secondary)]">{{ $item['zusatz'] }}</span>@endif

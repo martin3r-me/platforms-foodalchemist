@@ -15,7 +15,7 @@
                 <span>{{ $v->bezeichnung }} <span class="{{ $leise }}">· {{ $kategorien[$v->kategorie] ?? $v->kategorie }} · EK {{ $euro($v->ek_satz) }}</span></span>
             </label>
         @empty
-            <p class="{{ $leise }}">Noch keine Vorlagen. Unter Angebote → Leistungs-Vorlagen anlegen.</p>
+            <p class="{{ $leise }}">Noch keine Vorlagen. Unter Konfiguratoren → Leistungs-Vorlagen anlegen.</p>
         @endforelse
     </div>
     <div class="flex flex-wrap items-end gap-2">

@@ -303,16 +303,12 @@ return [
                     'icon'  => 'heroicon-o-document-text',
                 ],
                 [
-                    // Spec 94: All-in-Preise je Concept und Pax-Paket als Kundenlink
+                    // Spec 94: All-in-Preise je Concept und Pax-Paket als Kundenlink. Die Leistungs-Vorlagen haben keinen
+                    // eigenen Eintrag (Dominique 2026-11-03): Zugang über den Knopf auf der Konfiguratoren-Seite, dort aktiv.
                     'label' => 'Konfiguratoren',
                     'route' => 'foodalchemist.angebote.konfiguratoren',
+                    'aktiv_bei' => ['foodalchemist.angebote.leistung_vorlagen'],
                     'icon'  => 'heroicon-o-adjustments-horizontal',
-                ],
-                [
-                    // Spec 94: Personal, Equipment, Logistik einmal pflegen — Konfiguratoren übernehmen sie als Kopie.
-                    'label' => 'Leistungs-Vorlagen',
-                    'route' => 'foodalchemist.angebote.leistung_vorlagen',
-                    'icon'  => 'heroicon-o-wrench-screwdriver',
                 ],
             ],
         ],
