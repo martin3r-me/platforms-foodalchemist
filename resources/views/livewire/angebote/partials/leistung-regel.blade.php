@@ -1,7 +1,7 @@
 {{-- Spec 94 · Felder einer Leistungsregel (Vorlage und Konfigurator-Leistung): Bezeichnung, Mengenregel, Preis je, EK, Klasse, VK.
      Parameter: $f Formularwerte, $m Livewire-Pfad (z. B. form), $sm Pfad des Stufen-Textes, $px Id-Präfix,
      $kategorien, $klassen (Leistungsklassen), $bezugOptionen (id → Bezeichnung), $vorschau (VK-Vorschlag oder null),
-     $einheiten (id → Anzeige, für die Einzelabrechnung). --}}
+     $einheiten (id → Anzeige, für die Einzelabrechnung), $pm Pfad der Planungstexte (komponenten, attribute, notiz). --}}
 @php
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $euro = fn ($w) => $w !== null && $w !== '' ? number_format((float) $w, 2, ',', '.') . ' €' : '–';
@@ -84,3 +84,19 @@
         </div>
     @endif
 </div>
+
+{{-- Spec 94b §3 · Planungsdetails: Übergabe-Struktur für die Event-Planung (OLIVIA), nie im Kundenlink. Als Text wie die Stufen. --}}
+@isset($pm)
+    <div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]" data-regel-planung>
+        <p class="font-medium">Planung <span class="{{ $leise }}">· intern, für die Event-Planung, nie beim Kunden</span></p>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3 items-start">
+            <x-fa::field label="Komponenten" for="{{ $px }}-pl-komp" optional hint="Je Zeile „Menge; je Einheit | Gast | Stunde; Bezeichnung; GP 812 oder Behälter 14“ (Bezug optional).">
+                <x-fa::textarea id="{{ $px }}-pl-komp" wire:model="{{ $pm }}.komponenten" rows="4" placeholder="1; Einheit; Stehtisch; GP 812&#10;1; Einheit; Hussen weiß&#10;2; Einheit; GN 1/1 65 mm; Behälter 14" data-regel-planung-komponenten />
+            </x-fa::field>
+            <x-fa::field label="Attribute" for="{{ $px }}-pl-attr" optional hint="Je Zeile „Schlüssel; Wert; Einheit“, z. B. Rolle, Schicht, Kapazität.">
+                <x-fa::textarea id="{{ $px }}-pl-attr" wire:model="{{ $pm }}.attribute" rows="4" placeholder="Rolle; Service&#10;Kapazität; 8; Gäste" data-regel-planung-attribute />
+            </x-fa::field>
+        </div>
+        <x-fa::field label="Interne Notiz" for="{{ $px }}-pl-notiz" optional><x-fa::textarea id="{{ $px }}-pl-notiz" wire:model="{{ $pm }}.notiz" rows="2" placeholder="z. B. Hussen in der Waschstraße vorbestellen." /></x-fa::field>
+    </div>
+@endisset

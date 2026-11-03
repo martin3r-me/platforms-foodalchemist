@@ -130,6 +130,15 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
             'vk_begruendung' => ['type' => 'string', 'description' => 'Pflicht bei vk_modus=fixed'],
             'abrechnung' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::ABRECHNUNGEN, 'description' => 'all_in (Standard) oder aufwand: Einzelabrechnung, nicht im Preis pro Person; im Kundenlink „zzgl. nach Aufwand“ mit Schätzung'],
             'abrechnung_einheit_vocab_id' => ['type' => 'integer', 'description' => 'nur bei aufwand: Einheit aus dem Einheiten-Vokabular; leer = Stunde bzw. Stück aus preis_je'],
+            'planung_json' => ['type' => 'object', 'description' => 'Spec 94b §3: Planungsdetails (intern, nie im Kundenlink), Übergabe an die Event-Planung', 'properties' => [
+                'komponenten' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                    'bezeichnung' => ['type' => 'string'], 'menge' => ['type' => 'number', 'description' => '> 0, je Einheit der Leistung, je Gast oder je Stunde'],
+                    'je' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::PLANUNG_JE],
+                    'gp_id' => ['type' => 'integer', 'description' => 'optional: sichtbares Non-Food-GP (WG 16)'], 'container_vocab_id' => ['type' => 'integer', 'description' => 'optional: Behälter'],
+                ]]],
+                'attribute' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['schluessel' => ['type' => 'string'], 'wert' => ['type' => 'string'], 'einheit' => ['type' => 'string']]]],
+                'notiz_intern' => ['type' => 'string'],
+            ]],
         ];
     }
 
