@@ -19,12 +19,12 @@ class KonfiguratorPaketMengenPutTool extends KonfiguratorToolBasis
 
     protected function beschreibung(): string
     {
-        return 'Handwert in der Mengen-Matrix setzen (anzahl) oder mit anzahl=null zurück auf die Regel. konfigurator_konzept_id leer = gilt für alle Hauptkonzepte.';
+        return 'Handwert in der Mengen-Matrix setzen (anzahl) oder ohne anzahl zurück auf die Regel. konfigurator_konzept_id leer = gilt für alle Hauptkonzepte.';
     }
 
     protected function felder(): array
     {
-        return [['paket_id' => ['type' => 'integer'], 'leistung_id' => ['type' => 'integer'], 'konfigurator_konzept_id' => ['type' => 'integer'], 'anzahl' => ['type' => ['number', 'null']], 'notiz' => ['type' => 'string']], ['paket_id', 'leistung_id']];
+        return [['paket_id' => ['type' => 'integer'], 'leistung_id' => ['type' => 'integer'], 'konfigurator_konzept_id' => ['type' => 'integer'], 'anzahl' => ['type' => 'number', 'description' => 'Handwert; weglassen = zurück auf die Regel'], 'notiz' => ['type' => 'string']], ['paket_id', 'leistung_id']];
     }
 
     protected function beispiele(): array

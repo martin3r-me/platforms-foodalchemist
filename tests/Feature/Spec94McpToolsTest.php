@@ -91,3 +91,10 @@ it('PUBLISH setzt „Anfragen gehen an“ und „Gültig bis“; fremde Person w
         ->and(substr($r->data['expires_at'], 0, 10))->toBe($bis);
 });
 
+
+it('Paket-PUT: referenz_pax 0 setzt zurück auf die Mitte (Schema ohne Union-Typ)', function () {
+    $kid = ($this->tool)('foodalchemist.konfiguratoren.POST', ['name' => 'Schema'])->data['konfigurator']['id'];
+    $pid = ($this->tool)('foodalchemist.konfigurator_pakete.POST', ['konfigurator_id' => $kid, 'von_pax' => 100, 'bis_pax' => 199, 'referenz_pax' => 120])->data['paket']['id'];
+    $r = ($this->tool)('foodalchemist.konfigurator_pakete.PUT', ['id' => $pid, 'referenz_pax' => 0]);
+    expect($r->success)->toBeTrue($r->error ?? '')->and($r->data['paket']['referenz_pax'])->toBe(149)->and($r->data['paket']['referenz_manuell'])->toBeFalse();
+});

@@ -118,7 +118,7 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
             'bezug_leistung_id' => ['type' => 'integer', 'description' => 'bei bezug=leistung: Id der Leistung, an der die Menge hängt (z. B. Teamleitung je 8 Servicekräfte)'],
             'schluessel_n' => $zahl, 'min' => $zahl, 'max' => $zahl, 'reserve_pct' => $zahl,
             'ab_pax' => ['type' => 'integer'], 'bis_pax' => ['type' => 'integer'],
-            'stufen_json' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['bis_pax' => ['type' => ['integer', 'null']], 'anzahl' => $zahl]]],
+            'stufen_json' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['bis_pax' => ['type' => 'integer', 'description' => 'bis zu dieser Gästezahl; weglassen = darüber hinaus (letzte Stufe)'], 'anzahl' => $zahl]]],
             'preis_je' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::PREIS_JE],
             'stunden_quelle' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::STUNDEN_QUELLEN],
             'stunden' => $zahl, 'stunden_zuschlag' => $zahl,
