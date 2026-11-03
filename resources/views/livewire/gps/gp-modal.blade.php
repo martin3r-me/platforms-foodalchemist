@@ -251,6 +251,9 @@
                                 <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-gp-marke-offen>Marke offen: Der Artikel nennt keine Marke und der Lieferant ist kein Hersteller. Das Grundprodukt steht dann auf der Nachlauf-Liste.</p>
                             @endif
                         </x-fa::field>
+                        <x-fa::field label="Alkohol" for="gp-alkohol" optional einklappen hint="Enthält das Produkt Alkohol (Getränk ab 0,5 vol-%, Kochwein, Mirin, Rum-Aroma …)? Gilt vor den Artikeldaten und wird bis ins Rezept hochgereicht (Kennzeichnung „Alk.“, z. B. für Kita). Offen lassen, wenn es nicht feststeht.">
+                            <x-fa::select id="gp-alkohol" wire:model="builder.alkohol" :options="['' => 'Offen', '1' => 'Ja, enthält Alkohol', '0' => 'Nein, ohne Alkohol']" data-gp-alkohol />
+                        </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung" optional>
                             <x-fa::input id="gp-verarbeitung" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
                         </x-fa::field>
@@ -293,6 +296,10 @@
                             @if(($builder['rezepturware'] ?? '') === '1' && trim((string) ($builder['zusatz'] ?? '')) === '')
                                 <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-gp-marke-offen>Marke offen: Der Artikel nennt keine Marke und der Lieferant ist kein Hersteller. Das Grundprodukt steht dann auf der Nachlauf-Liste.</p>
                             @endif
+                        </x-fa::field>
+                        {{-- Spec 94c: fester Alkohol-Wert am GP, Vorrang vor den Artikeldaten (GpAggregateService::enthaeltAlkohol) --}}
+                        <x-fa::field label="Alkohol" for="gp-alkohol-edit" optional einklappen hint="Enthält das Produkt Alkohol (Getränk ab 0,5 vol-%, Kochwein, Mirin, Rum-Aroma …)? Gilt vor den Artikeldaten und wird bis ins Rezept hochgereicht (Kennzeichnung „Alk.“, z. B. für Kita). Offen lassen, wenn es nicht feststeht.">
+                            <x-fa::select id="gp-alkohol-edit" wire:model="builder.alkohol" :options="['' => 'Offen', '1' => 'Ja, enthält Alkohol', '0' => 'Nein, ohne Alkohol']" data-gp-alkohol-edit />
                         </x-fa::field>
                         <x-fa::field label="Verarbeitung" for="gp-verarbeitung-edit" optional>
                             <x-fa::input id="gp-verarbeitung-edit" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />

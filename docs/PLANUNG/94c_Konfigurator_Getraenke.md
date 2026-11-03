@@ -18,7 +18,7 @@ aus dem Concepter, Grundprodukte der Warengruppe 15 und den Aufwands-Mechanismus
 | Thema | Heute |
 |:--|:--|
 | Getränke als Ware | Grundprodukte der Warengruppe 15 (GP-Regelwerk §3), Lieferantenartikel mit `is_alcohol` |
-| Alkohol am Rezept oder Concept | **gibt es nicht**, nur am Lieferantenartikel (`supplier_items.is_alcohol`) |
+| Alkohol am Rezept | 8a: `spec_contains_alcohol` aus der Kette Artikel → GP → Rezept. `supplier_items.is_alcohol` ist auf io flächig 0 (bei Necta „keine Angabe“), deshalb fester Wert am GP |
 | Getränke in Ausgaben | Speisekarte kennt `karten_typ` getraenkekarte/weinkarte und Rubrik `art = getraenke` |
 | Konfigurator-Konzepte | `rolle` haupt oder addon, Concept je Tageszeit (lunch/dinner), Preistabelle `k…`, `dn…`, `a…` |
 | Aufwand | Leistungen `abrechnung = aufwand` (7b) und Angebots-Position `price_basis = aufwand` (7c) |
@@ -40,7 +40,7 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
 
 - Neue `rolle = getraenk` an `foodalchemist_konfigurator_konzepte`. Es gibt keine neue Tabelle, weil die Rolle-Spalte das schon trägt.
   Das Concept steht wie bei Hauptkonzepten **je Tageszeit** in `lunch_concept_id` bzw. `dinner_concept_id` (Entscheid 4: optional).
-  Ist nur eines gesetzt, gilt es für beide Tageszeiten, z. B. ein eigenes Lunch-Paket ohne Alkohol.
+  Ist nur eines gesetzt, gilt es für beide Tageszeiten, z. B. ein eigenes Lunch-Paket.
 - Je Getränkepaket wird festgelegt:
   - `getraenk_abrechnung`: `pauschale` oder `verbrauch`
   - `getraenk_dauer`: `event` (je Gast fürs ganze Event) oder `stunde` (je Gast und Stunde, Stunden aus der Einsatzzeit) — je Paket wählbar (Entscheid 1)
@@ -82,19 +82,25 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
 
 ## 5 · Alkohol und Allergene
 
-- **Alkohol** (umgesetzt in 8a): Die Kennzeichnung „enthält Alkohol“ wird abgeleitet, wie `spec_contains_pork` (Warn-Regel: ja, sobald eine
-  Zutat Alkohol enthält).
-  - Quelle ist der Lieferantenartikel (`is_alcohol`, gepflegt im Artikel-Modal). Das ist zugleich die einzige Stelle für eine Korrektur.
-  - GP: `GpAggregateService::enthaeltAlkohol` (sichtbare Artikel, wie die Zusatzstoffe).
-  - Rezept: `spec_contains_alcohol` im Recompute, auch über Sub-Rezepte.
-  - Concept: live aus seinen Gerichten, wie die Allergene. Es gibt keine Spalte am Concept und keine Überschreibung am Slot.
-  - Codes: „Alk.“ in `gerichtCodes` und in der Legende („enthält Alkohol“).
-- **Im Link:**
-  - Gerichte mit Alkohol tragen ein Symbol bzw. den Code „Alk.“ in der Legende.
-  - Ein Paket mit Alkohol zeigt den **Alkohol-Hinweis des Teams** (Entscheid 7). Das ist ein neues Feld in den Team-Einstellungen mit Standardtext
-    „Enthält alkoholische Getränke. Ausschank nicht an Personen unter 16 bzw. 18 Jahren.“, je Team änderbar.
-  - Gibt es im Paket alkoholfreie Positionen, steht „alkoholfreie Alternativen enthalten“ dabei. Das wird aus den Positionen ohne Alkohol abgeleitet, nicht gepflegt.
-    Eine alkoholfreie Alternative ist **keine Pflicht** (Entscheid 8). Fehlt sie, warnt nur der Editor.
+- **Alkohol bei Gerichten** (8a, Quelle korrigiert 03.11.2026; Dominique: für Kita sehr hilfreich): Die Kette aus 8a bleibt — `GpAggregateService::enthaeltAlkohol`
+  → Recompute `spec_contains_alcohol` (Warn-Regel, auch über Sub-Rezepte) → Code „Alk.“ in `gerichtCodes` und Legende, Badge an der Rezept-Deklaration.
+  - **Quelle:** fester Wert am GP, `gps.alkohol` (ja / nein / NULL = offen) mit Herkunft `alkohol_source` (manuell | abgeleitet), **für alle Warengruppen**.
+    Er hat Vorrang vor den Artikeln. Ohne ihn zählt nur ein sichtbarer Artikel mit `is_alcohol = 1` als ja; `is_alcohol = 0` heißt bei Necta „keine Angabe“
+    und gilt als NULL. Aus den Artikeln wird nie ein nein.
+  - **Rezept:** „ohne Alkohol“ nur, wenn alle Zutaten ein echtes nein haben, sonst NULL. Für Kita erscheint „unbekannt“ nie als alkoholfrei.
+  - **Pflege:** im GP-Modal (Feld „Alkohol“), über `gps.POST/PUT` (`alkohol = ja | nein | offen`), `gps.GET` liefert Wert und Herkunft. Jede Pflege setzt `manuell`.
+    Eine GP-Änderung stößt keinen Recompute an; der läuft mit Ansage.
+  - **Einmalige Vorbelegung:** `php artisan foodalchemist:alkohol-vorbelegen` als getrennter Lauf, nur auf Ansage und mit Backup, danach Recompute mit Ansage.
+    Probelauf mit Zählung als Standard, `--apply` schreibt (Herkunft `abgeleitet`, manuell gepflegte Werte bleiben), `--offen` listet die offenen Getränke.
+    Geschrieben wird **nur WG 15**, nach `Support/AlkoholAngabe::ausGp`, das Erste, was zutrifft:
+    1. vol-% in Pflichtangabe bzw. Name (tolerant gegen „Vol%“, „vol.-%“; „vol“ nur mit Zahl) oder „alkoholfrei“: ≥ 0,5 = ja, sonst nein (alkoholfreies Bier in 15.2 = nein).
+    2. Unterkategorie 15.5 Wasser, 15.6 Säfte, 15.7 Erfrischungsgetränke, 15.8 Heißgetränke, 15.9 Sirupe = nein.
+    3. Unterkategorie 15.1 Wein, 15.3 Spirituosen und Liköre = ja, auch ohne vol-% (Kochwein).
+    4. Sonst offen (z. B. Bier ohne vol-%).
+  - `--vorschlaege` listet Koch-Alkoholika **außerhalb WG 15** ohne Wert (Kochwein WG 10, Mirin, Rum-Aroma …) mit Rezept-Zahl, als Vorschlag zur Freigabe durch
+    Dominique. Der Befehl schreibt sie nie; freigegeben wird im Modal bzw. über `gps.PUT`.
+- **Getränke im Konfigurator: kein Alkohol-Teil** (Dominique 03.11.2026). Es gibt keinen Alkohol-Hinweis im Link, kein „alkoholfreie Alternativen“ und kein
+  `team_settings.alkohol_hinweis`. Die Entscheide 7 und 8 sind damit gestrichen.
 - **Allergene** wie bei Speisen (Codes je Gericht, Legende, `ConcepterAggregateService`), z. B. Sulfite im Wein und Gluten im Bier.
 
 ## Datenmodell (Skizze)
@@ -106,8 +112,8 @@ foodalchemist_konfigurator_konzepte   =  rolle: haupt | addon | getraenk (string
                                       +  grund_stunden (decimal 5,2, null), folgestunde_satz (decimal 10,2, null)
                                       +  verbrauch_deckel (decimal 10,2, null)
 foodalchemist_konfiguratoren          +  getraenke_pflicht (boolean, default false)
-foodalchemist_team_settings           +  alkohol_hinweis (text, null = Standardtext)
-foodalchemist_recipes                 +  spec_contains_alcohol (boolean, null = unbekannt; abgeleitet im Recompute)   [8a]
+foodalchemist_gps                     +  alkohol (boolean, null = offen; alle WG), alkohol_source (manuell | abgeleitet)   [8a, Korrektur]
+foodalchemist_recipes                    spec_contains_alcohol (aus 8a, bleibt)
 ```
 
 Alle Migrationen sind additiv. `spec_contains_alcohol` wird beim Recompute der Rezepte mitgerechnet. Den Bestand füllt erst ein Recompute-Lauf, nur mit Ansage.
@@ -121,10 +127,10 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 | Stelle | Änderung |
 |:--|:--|
 | `KonfiguratorPricingService` | Fall `getraenk` je Tageszeit (lunch, dinner, Tag und Abend): Pauschale VK/EK pro Person (× Stunden bei `stunde`, Kombi-Rabatt bei Tag und Abend), Verbrauch als `einzel` mit Deckel |
-| `KonfiguratorSnapshot` | `getraenke` (Karten, Detail, Alkohol-Hinweis aus den Team-Einstellungen), Preistabelle `g{id}:t`, `zzgl` für Verbrauch, Gruppe „Getränke“ in der Aufteilung |
+| `KonfiguratorSnapshot` | `getraenke` (Karten, Detail), Preistabelle `g{id}:t`, `zzgl` für Verbrauch, Gruppe „Getränke“ in der Aufteilung |
 | `_konfigurator_script` / Blöcke | neuer Block `konfig_getraenke`; `konfiguratorLayout` ergänzt ihn wie die anderen Pflichtblöcke |
 | `KonfiguratorAnfrageService` | Auswahl `getraenk`; Pauschale im Preis, Verbrauch als `position` (`aufwand`, `art = verbrauch`) |
-| Alkohol (8a, umgesetzt) | `GpAggregateService::enthaeltAlkohol`, Recompute-Flag `spec_contains_alcohol`, `gerichtCodes` und Legende „Alk.“ |
+| Alkohol (8a, Quelle korrigiert) | `gps.alkohol` mit Vorrang in `GpAggregateService::enthaeltAlkohol`, GP-Modal, `gps.POST/PUT/GET`, Befehl `foodalchemist:alkohol-vorbelegen` |
 | Editor | Reiter „Getränke“ (eigenes Partial, Editor-Klasse unter der Dateigrößen-Grenze, ggf. eigenes Livewire-Kind) |
 | MCP | `konfigurator_konzepte.POST/PUT` mit `rolle = getraenk` und den neuen Feldern; Preis-Tool liefert `g…` |
 
@@ -137,8 +143,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 - Ein eigenes Lunch-Concept gilt mittags, sonst gilt das eine Concept für beide Tageszeiten.
 - Bei Tag und Abend gilt der Kombi-Rabatt auch auf die Getränke-Pauschale (anteilig).
 - Deckel: Die Schätzung über dem Deckel wird auf den Deckel begrenzt, und „höchstens … €“ steht im Link und an der Angebots-Position.
-- Der Alkohol-Hinweis kommt aus den Team-Einstellungen, der Standardtext greift, wenn nichts gepflegt ist.
-- Alkohol: ein Artikel mit `is_alcohol` → Rezept → Concept → Hinweis im Link. Gibt es alkoholfreie Positionen, steht „alkoholfreie Alternativen“ dabei.
+- Alkohol (8a): GP-Wert schlägt Artikel, `is_alcohol = 0` = NULL; Rezept nein nur bei echtem nein aller Zutaten. Vorbelegung: Coca-Cola (15.7) nein, Kochwein (15.1) ja, alkoholfreies Bier 0,0 vol-% (15.2) nein, Bier ohne vol-% offen, außerhalb WG 15 nie geschrieben (nur Vorschlag); manuell bleibt.
 - Leak-Test: kein EK und keine Mengen je Gast im Snapshot (nur die Schätzung je Paket wie in 94b).
 - Wächter: wie in 94b plus Spec90 bei neuem KI-Weg (es ist keiner geplant).
 
@@ -146,7 +151,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 
 | Stufe | Inhalt |
 |:--|:--|
-| 8a | Alkohol-Kennzeichnung (Artikel → GP → Rezept, Codes) — umgesetzt 03.11.2026 |
+| 8a | Alkohol-Kennzeichnung Artikel → GP → Rezept, Codes — umgesetzt 03.11.2026; Quelle korrigiert: fester GP-Wert mit Vorrang, Vorbelegung als Probelauf |
 | 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link |
 | 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot |
 
@@ -159,8 +164,8 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 4. **Tageszeit:** optional ein eigenes Lunch-Concept am Paket, sonst eines für beide.
 5. **Kombi-Rabatt:** gilt auch für die Getränke-Pauschale.
 6. **Verbrauch:** mit optionalem Höchstbetrag (Deckel) je Paket, angezeigt im Link und im Angebot.
-7. **Alkohol-Hinweis:** je Team pflegbar, mit Standardtext.
-8. **Alkoholfreie Alternative:** nur Hinweis, keine Pflicht; ohne sie warnt der Editor.
+7. ~~Alkohol-Hinweis~~ — gestrichen (Dominique 03.11.2026: Getränke im Konfigurator ohne Alkohol-Teil).
+8. ~~Alkoholfreie Alternative~~ — gestrichen (ebenso).
 
 ## Offene Fragen
 

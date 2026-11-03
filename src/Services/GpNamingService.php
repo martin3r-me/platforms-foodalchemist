@@ -815,6 +815,8 @@ class GpNamingService
         $rezeptur = \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::rezepturwareFuerWg(
             \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::dreiwertig($in['rezepturware'] ?? null), (string) ($in['commodity_group_code'] ?? ''));
 
+        $alkohol = \Platform\FoodAlchemist\Support\AlkoholAngabe::eingabe($in['alkohol'] ?? null);
+
         return FoodAlchemistGp::create([
             'team_id' => $team->id,                                          // D1: Kind-eigene GPs möglich
             'gp_key' => $gpKey,
@@ -840,6 +842,8 @@ class GpNamingService
             'requires_la' => ! (bool) ($in['is_derivat'] ?? false),          // §11.2: Derivat braucht keinen LA
             'rezepturware' => $rezeptur,
             'marke_offen' => \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::markeOffen($rezeptur, $this->bereinigeZusatz($in['zusatz'] ?? null)),
+            'alkohol' => $alkohol,   // Spec 94c: fester Wert, von Hand gesetzt = manuell
+            'alkohol_source' => $alkohol !== null ? 'manuell' : null,
             'first_seen_at' => now(),
         ]);
     }
@@ -896,6 +900,11 @@ class GpNamingService
             (string) $gp->commodity_group_code);
         $gp->update(['rezepturware' => $rezeptur,
             'marke_offen' => \Platform\FoodAlchemist\Services\Marken\MarkeAusArtikel::markeOffen($rezeptur, (string) $gp->zusatz)]);
+        // Spec 94c: fester Alkohol-Wert. Eine geänderte Eingabe gilt als manuell — die überschreibt kein Lauf.
+        $alkohol = array_key_exists('alkohol', $in) ? \Platform\FoodAlchemist\Support\AlkoholAngabe::eingabe($in['alkohol']) : $gp->alkohol;
+        if ($alkohol !== $gp->alkohol) {
+            $gp->update(['alkohol' => $alkohol, 'alkohol_source' => $alkohol === null ? null : 'manuell']);
+        }
 
         return $gp->refresh();
     }
