@@ -2173,9 +2173,13 @@ return [
                 . 'NICHT in eine Zahl umrechnen; `unit` wörtlich (»Stück«, »Zweig«, »EL«, »ml«). Liegt ein Foto oder Scan bei (quelle = bild), steht der Rezepttext '
                 . 'DORT: lies ihn wörtlich ab, auch Step-by-Step-Schritte und Bildunterschriften; Unleserliches '
                 . 'weglassen. werte = {typ (gericht|basisrezept), name, '
-                . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
-                . 'komponenten: [{name, zutaten: [{text, quantity, unit, sub_rezept}], preparation, komponenten: [… gleiche Form, '
-                . 'leer, wenn keine]}] (leer, wenn keine)}.',
+                . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false), gp_id}], preparation, '
+                . 'komponenten: [{name, zutaten: [{text, quantity, unit, sub_rezept, gp_id}], preparation, komponenten: [… gleiche Form, '
+                . 'leer, wenn keine]}] (leer, wenn keine)}. '
+                // Spec 95 Stufe 2: Bestands-Rückbindung wie bei recipe.generator — nur ein VORSCHLAG, `text` bleibt wörtlich.
+                . 'gp_id (OPTIONAL): numerische id EINES unter gp_kandidaten gelisteten Grundprodukts, wenn die Zutat EXAKT diesem '
+                . 'Grundprodukt entspricht (gleiche Ware, gleiche Form; Geschmacks-/Markenvarianten nur, wenn der Text sie nennt) — '
+                . 'sonst Feld weglassen, NIE raten. `text` bleibt trotzdem WÖRTLICH wie im Quelltext.',
         ],
         // Produktpass am Lieferantenartikel (Bauauftrag Kurator 16.10.2026): PDF/Foto des Produktpasses bzw. Datenblatts
         // TREU lesen. Nichts raten, nichts schätzen — was nicht im Dokument steht, kommt nicht in die Antwort. Die

@@ -126,3 +126,20 @@ it('Mint: kein neues GP mit Hinweis im Namen — der Bestand gewinnt, „(1 EL)�
         ->and(FoodAlchemistGp::count())->toBe($vorher)
         ->and(FoodAlchemistGp::where('name', 'like', '%(1 EL)%')->count())->toBe(0);
 });
+
+it('Spec 95b: „(½ TL)“ und Bereiche „(2–3 EL)“ sind Mengen', function (string $text, string $erwartet) {
+    expect(ZutatFreitext::ohneHinweise($text))->toBe($erwartet);
+})->with([
+    ['Salz (½ TL)', 'Salz'],
+    ['Limettensaft (2–3 EL)', 'Limettensaft'],
+    ['Zucker (1-2 TL)', 'Zucker'],
+    ['Orangensaft (½ Stk.)', 'Orangensaft (½ Stk.)'],   // Stück bleibt (ganze Frucht)
+]);
+
+it('Spec 95b: „Mango“ trifft Mango, nie „Mangold“ — Kompositum mit gleichem Anfang verliert den Gleichstand am Kopf-Boden', function () {
+    ($this->gp)('Mangold: Streifen 10 mm, frisch', '01', 'frisch', 'mangold');   // kleinste ID, wie auf io
+    $mango = ($this->gp)('Mango: ganz, frisch', '02', 'frisch', 'mango');
+    ($this->gp)('Mango: Würfel 15 mm, frisch', '02', 'frisch', 'mango');
+
+    expect(($this->match)('Mango')['gp_id'])->toBe($mango->id);
+});

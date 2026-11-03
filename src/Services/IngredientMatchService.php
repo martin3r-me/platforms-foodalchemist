@@ -854,6 +854,19 @@ class IngredientMatchService
         return \Platform\FoodAlchemist\Support\ZutatFreitext::hauptzutatPasst(array_values(array_unique([...$this->tiebreakQuery, ...$passTokens, ...$this->aliasTokens])), $alternativen);
     }
 
+    /** Spec 95b: nennt die Zutat ein Wort der Hauptzutat wörtlich (gleich oder gleiches Lemma), nicht nur als Wortanfang? */
+    private function kopfExakt(FoodAlchemistGp $gp, array $queryTokens): bool
+    {
+        $lemmata = array_map(\Platform\FoodAlchemist\Support\ZutatFreitext::lemma(...), $queryTokens);
+        foreach ($this->engine->tokenize($this->hauptzutatText($gp)) as $t) {
+            if (in_array($t, $queryTokens, true) || in_array(\Platform\FoodAlchemist\Support\ZutatFreitext::lemma($t), $lemmata, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ── Pool-Scans ───────────────────────────────────────────────────────
 
     private function bestGpMatch(Team $team, array $queryTokens, ?string $querySlug, string $pref, bool $preferRaw, string $bio): ?array
@@ -895,6 +908,11 @@ class IngredientMatchService
                 $take = true;
             } elseif ($score > $best['score'] + MatchHeuristics::SCORE_EPS) {
                 $take = true;
+            } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS
+                && ($kopf = $this->kopfExakt($gp, $qTokens) <=> $this->kopfExakt($bestGp, $qTokens)) !== 0) {
+                // Spec 95b (Neuabgleich 03.11.: „Mango“ → „Mangold: Streifen“): beide am Kopf-Boden 0,90 — die Hauptzutat, die die Zutat
+                // wörtlich nennt, schlägt das Kompositum mit gleichem Anfang
+                $take = $kopf > 0;
             } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS
                 && ($vorrang = $this->vorrangVergleich($team, $gp, $bestGp)) !== 0) {
                 // Marken-Varianten (Kurator 26.10.): erst Favorit des Teams, dann Lead-Artikel vom Stamm-Lieferanten — vor der bisherigen Logik

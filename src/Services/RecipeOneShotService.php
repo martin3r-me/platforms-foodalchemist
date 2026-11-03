@@ -245,9 +245,17 @@ class RecipeOneShotService
             $anker = null;
             if ($minted > 0) {
                 app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $recipe->id);
-                // Spec 50 · B-3: ein gemintetes GP ist erst mit Kern-Anker vollständig — sonst bleibt es
-                // im Pairing-Graph unsichtbar und das Pairing-Glied unten läuft ins Leere.
-                $anker = $this->bulk->ankerNachziehen($team, array_values(array_unique($gpIds)));
+                // Spec 50 · B-3: ein gemintetes GP ist erst mit Kern-Anker vollständig. Spec 95 Stufe 2 (Kurator-Befund 02.11.): nicht mehr
+                // synchron im Lauf — im externen KI-Modus wartete der ganze Enrich-Lauf auf die gp.anker-Antwort. Der Anker kommt als Folge-Job
+                // nach dem Commit ({@see GpAromaNachholen}, je GP eindeutig, nie auf einer sync-Queue); das Pairing-Glied holt ihn beim nächsten Lauf.
+                $nachgelagert = 0;
+                foreach (\Platform\FoodAlchemist\Models\FoodAlchemistGp::whereIn('id', array_values(array_unique($gpIds)))->get() as $gp) {
+                    if (\Platform\FoodAlchemist\Support\GpAromaNachholen::braucht((int) $gp->id)) {
+                        \Platform\FoodAlchemist\Support\GpAromaNachholen::ausloesen($gp);
+                        $nachgelagert++;
+                    }
+                }
+                $anker = ['nachgelagert' => $nachgelagert];
             }
 
             return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : ($basisrezeptLuecken > 0 ? 'basisrezept_luecken' : 'vollständig')),
