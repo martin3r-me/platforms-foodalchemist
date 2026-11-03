@@ -313,6 +313,54 @@ class KonfiguratorService
         return $konzept->refresh();
     }
 
+    /**
+     * KI-Wording wie im Foodbook-Kapitel (FoodbookService::kapitelWordingRegenerieren): je Concept des Konzepts (Tag, Abend)
+     * ein propose('concept.wording') im gewählten Schreibstil; die Texte landen als Überschreibung nur in diesem Konfigurator
+     * (wordingSetzen), das Concept bleibt unberührt. Fail-soft je Concept. Ergebnis: Anzahl gesetzter Texte.
+     */
+    public function wordingGenerieren(Team $team, int $konzeptId, int $schreibstilId): int
+    {
+        $konzept = $this->eigenesKind($team, FoodAlchemistKonfiguratorKonzept::class, $konzeptId);
+        $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)->find($schreibstilId);
+        if ($stil === null) {
+            throw new \InvalidArgumentException('Bitte einen Schreibstil wählen, den dieses Team sieht.');
+        }
+        $k = $this->finde($team, (int) $konzept->konfigurator_id);
+        $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
+        $n = 0;
+        foreach (array_filter([$konzept->lunch_concept_id, $konzept->dinner_concept_id]) as $cid) {
+            $c = FoodAlchemistConcept::query()->ohneTeamSicht('verweis')
+                ->with(['slots.dish:id,name,sales_wording_standard', 'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard'])->find($cid);
+            $positionen = $c !== null ? app(WordingResolver::class)->wordingPositionen($c) : [];
+            if ($positionen === []) {
+                continue;
+            }
+            try {
+                $vorschlag = $gateway->propose('concept.wording', [
+                    'concept' => $c->name, 'occasion' => $c->occasion, 'class' => $c->class,
+                    'schreibstil' => $stil->name,
+                    'schreibstil_anweisung' => trim((string) $stil->sprach_duktus) ?: null,
+                    'schreibstil_beispiele' => trim((string) $stil->beispiele_md) ?: null,
+                    'positionen' => $positionen,
+                ], [
+                    'food_dna_crm_company_id' => $k->crm_company_id !== null ? (int) $k->crm_company_id : null,
+                    'food_dna_concept_id' => $c->id,
+                    'target_table' => 'foodalchemist_konfigurator_konzepte', 'target_id' => $konzept->id,
+                ]);
+            } catch (\Throwable) {
+                continue;
+            }
+            foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
+                if (is_string($text) && trim($text) !== '') {
+                    $this->wordingSetzen($team, $konzept->id, (int) $slotId, trim($text));
+                    $n++;
+                }
+            }
+        }
+
+        return $n;
+    }
+
     // ── Leistungen ───────────────────────────────────────────────────────────────
 
     /** Leistung frei anlegen (EK und VK von Hand oder per MCP). */

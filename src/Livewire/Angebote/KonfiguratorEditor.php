@@ -41,6 +41,9 @@ class KonfiguratorEditor extends Component
 
     public ?int $konzeptEditId = null;
 
+    /** Schreibstil für „Speisen per KI betexten“ (Id als String, leer = keiner gewählt). */
+    public string $wordingStil = '';
+
     public array $konzeptForm = [];
 
     // ── Leistungen ──
@@ -194,6 +197,22 @@ class KonfiguratorEditor extends Component
     public function wordingSetzen(int $konzeptId, int $slotId, mixed $text, KonfiguratorService $svc): void
     {
         $this->tue(fn () => $svc->wordingSetzen($this->team(), $konzeptId, $slotId, (string) $text));
+    }
+
+    /** KI-Wording wie „Speisen neu betexten“ im Foodbook-Kapitel: Texte nur für diesen Konfigurator. */
+    public function wordingGenerieren(int $konzeptId, KonfiguratorService $svc): void
+    {
+        if ($this->wordingStil === '') {
+            $this->fehler = 'Bitte zuerst einen Schreibstil wählen.';
+
+            return;
+        }
+        $n = 0;
+        if ($this->tue(function () use ($svc, $konzeptId, &$n) {
+            $n = $svc->wordingGenerieren($this->team(), $konzeptId, (int) $this->wordingStil);
+        })) {
+            $this->hinweis = $n > 0 ? "{$n} Gericht(e) im gewählten Stil betextet." : 'Keine Texte erhalten. Bitte später erneut versuchen.';
+        }
     }
 
     public function wordingZuruecksetzen(int $konzeptId, int $slotId, KonfiguratorService $svc): void
@@ -376,10 +395,11 @@ class KonfiguratorEditor extends Component
                     : null,
                 'nutzer' => $team->users()->orderBy('name')->get(['users.id', 'users.name'])->pluck('name', 'id')->all(),
                 'speisen' => fn ($c) => $c !== null ? $pricing->speisenPreis($c) : null,
-                // Stufe 5b: Gerichte je Hauptkonzept und Tageszeit mit Wording-Kette (Konfigurator → Concept → Gericht), wie im Foodbook
-                'gerichtZeilen' => $k->konzepte->where('rolle', 'haupt')->mapWithKeys(fn ($kz) => [$kz->id => collect(['lunch' => $kz->lunchConcept, 'dinner' => $kz->dinnerConcept])
+                // Stufe 5b: Gerichte je Konzept (Haupt und Add-on) und Tageszeit mit Wording-Kette (Konfigurator → Concept → Gericht), wie im Foodbook
+                'gerichtZeilen' => $k->konzepte->mapWithKeys(fn ($kz) => [$kz->id => collect(['lunch' => $kz->lunchConcept, 'dinner' => $kz->dinnerConcept])
                     ->filter()->map(fn ($c) => app(\Platform\FoodAlchemist\Services\WordingResolver::class)->gerichtZeilen(
                         $c->loadMissing(['slots.dish', 'slots.embeddedConcept.slots.dish', 'slots.package.dishes.dish']), $kz))->all()])->all(),
+                'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)->orderBy('name')->pluck('name', 'id')->all(),
                 'anfragen' => \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->where('konfigurator_id', $k->id)->latest()->limit(10)->get(),
             ];
         }

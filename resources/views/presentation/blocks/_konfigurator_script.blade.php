@@ -175,6 +175,12 @@
     qa('[data-konfig-detail-zu]').forEach(function (b) { b.addEventListener('click', function () { b.closest('dialog').close(); }); });
     qa('[data-konfig-detail]').forEach(function (dlg) { dlg.addEventListener('click', function (e) { if (e.target === dlg) { dlg.close(); } }); });
     qa('[data-konfig-waehlen]').forEach(function (b) { b.addEventListener('click', function () { z.konzept = parseInt(b.getAttribute('data-konfig-waehlen'), 10); b.closest('dialog').close(); render(); }); });
+    // Extra aus dem Speisen-Detail dazunehmen: Haken setzen wie ein Klick auf die Karte
+    qa('[data-konfig-addon-waehlen]').forEach(function (b) { b.addEventListener('click', function () {
+        var box = q('[data-konfig-addon][value="' + b.getAttribute('data-konfig-addon-waehlen') + '"]');
+        if (box && !box.checked) { box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); }
+        b.closest('dialog').close(); render();
+    }); });
     qa('[data-konfig-tageszeit]').forEach(function (b) { b.addEventListener('click', function () { z.tageszeit = b.getAttribute('data-konfig-tageszeit'); render(); }); });
     var abend = q('[data-konfig-abend]'); if (abend) { abend.addEventListener('change', function () { z.abend = parseInt(abend.value, 10); render(); }); }
     qa('[data-konfig-addon]').forEach(function (b) { b.addEventListener('change', render); });

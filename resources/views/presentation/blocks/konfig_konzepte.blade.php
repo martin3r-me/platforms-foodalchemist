@@ -38,36 +38,8 @@
     </div>
 
     @foreach($content['konzepte'] ?? [] as $kz)
-        @php $d = $kz['detail'] ?? []; @endphp
-        @if(! empty($d['zeiten']))
-            <dialog class="pt-konfig-detail" data-konfig-detail="{{ $kz['id'] }}" aria-label="{{ $kz['titel'] }}">
-                <div class="pt-konfig-detail-kopf">
-                    <h3 class="pt-konfig-titel">{{ $kz['titel'] }}</h3>
-                    <button type="button" class="pt-konfig-chip" data-konfig-detail-zu aria-label="Schließen">×</button>
-                </div>
-                @if(! empty($d['bilder']))
-                    <div class="pt-konfig-detail-bilder">
-                        @foreach($d['bilder'] as $b)@if($u = $url($b))<img src="{{ $u }}" alt="" loading="lazy">@endif @endforeach
-                    </div>
-                @endif
-                @if(! empty($kz['claim']))<p class="pt-konfig-claim">{{ $kz['claim'] }}</p>@endif
-                @if(! empty($d['beschreibung']))<p class="pt-section-text">{{ $d['beschreibung'] }}</p>@endif
-                @foreach($d['zeiten'] as $t => $zeilen)
-                    @if(count($d['zeiten']) > 1)<h4 class="pt-konfig-abschnitt">{{ $zeitName[$t] ?? $t }}</h4>@endif
-                    <ul class="pt-konfig-gerichte">
-                        @foreach($zeilen as $z)
-                            <li class="pt-konfig-gericht pt-konfig-gericht--{{ $z['kind'] }}" data-indent="{{ $z['indent'] }}">
-                                @if(! empty($z['image']) && ($u = $url($z['image'])))<img src="{{ $u }}" alt="" loading="lazy">@endif
-                                <span>{{ $z['label'] }}@if(! empty($z['codes']))<sup class="pt-konfig-codes">{{ implode(', ', $z['codes']) }}</sup>@endif</span>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endforeach
-                @if(! empty($d['legende']))
-                    <p class="pt-konfig-legende">@foreach($d['legende'] as $l){{ $l['code'] }} {{ $l['label'] }}@if(! $loop->last) · @endif @endforeach · * Spuren</p>
-                @endif
-                <div class="pt-konfig-weiter"><button type="button" class="pt-cta-btn" data-konfig-waehlen="{{ $kz['id'] }}">Konzept wählen</button></div>
-            </dialog>
+        @if(! empty($kz['detail']['zeiten']))
+            @include('foodalchemist::presentation.blocks._konfigurator_detail', ['kz' => $kz, 'url' => $url, 'art' => 'konzept'])
         @endif
     @endforeach
 </section>

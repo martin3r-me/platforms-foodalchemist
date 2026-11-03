@@ -9,7 +9,7 @@ return [
     'src/Livewire/Planung/Index.php' => [3427, 'C1 PR-1 … PR-5 (Spec 85 §5)'],
     'src/Services/PlanningCascadeService.php' => [3542, 'nach Stufen schneiden (Spec 85 §9)'],
     'src/Services/SpeiseplanService.php' => [2875, 'Lifecycle / Aushang / Auswertung (Spec 85 §9)'],
-    'src/Services/FoodbookService.php' => [2412, 'mit C4 (Spec 85 §8/§9)'],
+    'src/Services/FoodbookService.php' => [2401, 'mit C4 (Spec 85 §8/§9); −11 durch WordingResolver::wordingPositionen (Spec 94)'],
     'src/Services/PairingService.php' => [2591, 'Lesen / Bewerten / Pflege (Spec 85 §9)'],
     'src/Services/Ai/KnowledgeContextService.php' => [2171, 'Routing / Budget / Prompt-Bau (Spec 85 §9)'],
     'src/Services/DataQualityService.php' => [2040, 'Metriken je Bereich (Spec 85 §9)'],

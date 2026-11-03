@@ -111,6 +111,30 @@ class WordingResolver
      *
      * @return list<array{typ: string, text: string, source: ?string, einrueckung: int}>
      */
+    /**
+     * Positionen für den KI-Wording-Pass (concept.wording): direkte Gericht-Slots und die Gerichte eingebetteter Pakete,
+     * je mit Slot-Id, internem Namen und Standard-Wording. Gemeinsam für Foodbook-Kapitel und Konfigurator.
+     *
+     * @return list<array{slot_id:int, name:string, sales_wording_standard:?string}>
+     */
+    public function wordingPositionen(FoodAlchemistConcept $concept): array
+    {
+        $positionen = [];
+        foreach ($concept->slots as $s) {
+            if ($s->sales_recipe_id !== null && $s->dish) {
+                $positionen[] = ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null];
+            } elseif ($s->embedded_concept_id !== null && $s->embeddedConcept) {
+                foreach ($s->embeddedConcept->slots as $ps) {
+                    if ($ps->sales_recipe_id !== null && $ps->dish) {
+                        $positionen[] = ['slot_id' => $ps->id, 'name' => $ps->dish->name, 'sales_wording_standard' => $ps->dish->sales_wording_standard ?? null];
+                    }
+                }
+            }
+        }
+
+        return $positionen;
+    }
+
     public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|FoodAlchemistKonfiguratorKonzept|null $block = null): array
     {
         // Preisdarstellung (2026-08-25): bei `einzel` trägt jede DIREKTE Gericht-/Package-Zeile ihren

@@ -1003,19 +1003,8 @@ class FoodbookService
                 continue;
             }
             // Positionen = direkte Gericht-Slots UND die Gerichte eingebetteter Pakete (deren Slot-IDs) —
-            // damit das Kapitel-Wording auch die Paket-Gerichte betextet (Dominique-Fund).
-            $positionen = [];
-            foreach ($block->concept->slots as $s) {
-                if ($s->sales_recipe_id !== null && $s->dish) {
-                    $positionen[] = ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null];
-                } elseif ($s->embedded_concept_id !== null && $s->embeddedConcept) {
-                    foreach ($s->embeddedConcept->slots as $ps) {
-                        if ($ps->sales_recipe_id !== null && $ps->dish) {
-                            $positionen[] = ['slot_id' => $ps->id, 'name' => $ps->dish->name, 'sales_wording_standard' => $ps->dish->sales_wording_standard ?? null];
-                        }
-                    }
-                }
-            }
+            // damit das Kapitel-Wording auch die Paket-Gerichte betextet (Dominique-Fund). Eine Stelle mit dem Konfigurator.
+            $positionen = app(WordingResolver::class)->wordingPositionen($block->concept);
             if ($positionen === []) {
                 continue;
             }

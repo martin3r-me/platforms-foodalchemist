@@ -155,7 +155,7 @@
         .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Zeitfenster oder Extras fehlen */
         .pt-konfig-nr[data-nr]::before { content: "Schritt " attr(data-nr); }     /* mit Skript: Nummer aus der Schritt-Leiste (ausgeblendete Schritte zählen sonst nicht mit) */
         @media (max-width: 480px) { .pt-konfig-schritte { justify-content: space-between; padding-inline: 10px; } .pt-konfig-schritt-knopf { letter-spacing: .06em; font-size: .66rem; padding-inline: 6px; } }
-        .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form):not(.pt-konfig-weiter) { max-width: var(--pt-measure); }
+        .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form):not(.pt-konfig-weiter):not(dialog) { max-width: var(--pt-measure); }
         .pt-konfig-schritt h2 { margin: 8px 0 14px; font-size: clamp(1.6rem, 5vw, 2.6rem); }
         .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); margin-top: 20px; }
         .pt-konfig-liste { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
@@ -165,18 +165,20 @@
         .pt-konfig-karte-knopf { display: flex; flex-direction: column; flex: 1; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
         .pt-konfig-details { margin: 0 18px 16px; align-self: flex-start; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--pt-line); background: none; color: var(--pt-text); font: inherit; font-size: .85rem; cursor: pointer; }
         .pt-konfig-indikativ { align-self: flex-start; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--pt-muted); border: 1px dashed var(--pt-line); border-radius: 999px; padding: 2px 8px; }
-        .pt-konfig-detail { width: min(720px, calc(100vw - 24px)); max-height: calc(100vh - 32px); overflow: auto; padding: clamp(18px, 4vw, 32px); border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 12px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-detail { width: min(1080px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: clamp(18px, 4vw, 36px); border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 12px; background: var(--pt-bg); color: var(--pt-text); }
+        .pt-konfig-detail-kopf.pt-konfig-detail-kopf--bild { display: grid; grid-template-columns: minmax(0, 1fr); position: relative; margin: calc(clamp(18px, 4vw, 36px) * -1) calc(clamp(18px, 4vw, 36px) * -1) 18px; }
+        .pt-konfig-detail-titelbild { width: 100%; height: clamp(180px, 32vh, 340px); object-fit: cover; grid-area: 1 / 1; }
+        .pt-konfig-detail-kopf--bild .pt-konfig-detail-titel { grid-area: 1 / 1; align-self: end; padding: clamp(18px, 4vw, 36px); background: linear-gradient(to top, color-mix(in srgb, var(--pt-bg) 92%, transparent), transparent); }
+        .pt-konfig-detail-kopf--bild .pt-konfig-detail-zu { position: absolute; top: 12px; right: 12px; background: var(--pt-bg); }
+        .pt-konfig-detail-titel h3 { font-family: var(--pt-heading-font); font-size: clamp(1.5rem, 3.4vw, 2.2rem); margin: 2px 0 4px; }
+        .pt-konfig-detail-zeiten { display: grid; gap: 8px clamp(24px, 4vw, 48px); }
+        @media (min-width: 900px) { .pt-konfig-detail-zeiten--zwei { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .pt-konfig-detail-zeit > .pt-block { margin-top: 8px; }
         .pt-konfig-detail::backdrop { background: color-mix(in srgb, var(--pt-text) 45%, transparent); }
         @media (max-width: 640px) { .pt-konfig-detail { margin: auto 0 0; width: 100vw; max-width: 100vw; border-radius: 14px 14px 0 0; max-height: 88vh; } }
         .pt-konfig-detail-kopf { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
         .pt-konfig-detail-bilder { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0; }
         .pt-konfig-detail-bilder img { height: 150px; border-radius: 8px; object-fit: cover; }
-        .pt-konfig-gerichte { list-style: none; margin: 10px 0 0; padding: 0; }
-        .pt-konfig-gericht { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--pt-line); }
-        .pt-konfig-gericht img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex: none; }
-        .pt-konfig-gericht[data-indent="1"] { padding-left: 18px; }
-        .pt-konfig-gericht--paket, .pt-konfig-gericht--header { font-weight: 600; color: var(--pt-muted); text-transform: uppercase; font-size: .78rem; letter-spacing: .1em; }
-        .pt-konfig-codes { color: var(--pt-muted); margin-left: 4px; }
         .pt-konfig-legende { color: var(--pt-muted); font-size: .78rem; margin-top: 12px; }
         .pt-konfig-karte:disabled { opacity: .4; cursor: not-allowed; }
         .pt-konfig-bild { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
