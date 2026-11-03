@@ -129,7 +129,10 @@ class LeistungVorlagen extends Component
     {
         $zahl = fn ($w) => rtrim(rtrim(number_format((float) $w, 2, ',', ''), '0'), ',');
         $text = match ($v->mengen_regel) {
-            'schluessel' => '1 je ' . $zahl($v->schluessel_n) . ' ' . ($v->bezug === 'leistung' ? ('× „' . ($v->bezugLeistung?->bezeichnung ?? '?') . '“') : 'Gäste')
+            // n = 1 ohne Zahl im Singular: „1 je Gast“, „1 je „Servicekraft““; sonst „1 je 30 Gäste“, „1 je 8 × „Servicekraft““
+            'schluessel' => '1 je ' . ((float) $v->schluessel_n === 1.0
+                    ? ($v->bezug === 'leistung' ? '„' . ($v->bezugLeistung?->bezeichnung ?? '?') . '“' : 'Gast')
+                    : $zahl($v->schluessel_n) . ' ' . ($v->bezug === 'leistung' ? '× „' . ($v->bezugLeistung?->bezeichnung ?? '?') . '“' : 'Gäste'))
                 . ($v->reserve_pct ? ' + ' . $zahl($v->reserve_pct) . ' %' : '')
                 . ($v->min !== null ? ', mind. ' . $zahl($v->min) : '') . ($v->max !== null ? ', max. ' . $zahl($v->max) : ''),
             'stufen' => 'Stufen (' . count($v->stufen_json ?? []) . ')',
