@@ -357,6 +357,20 @@ class TeamSettingsService
         return is_array($v) ? $v : null;
     }
 
+    /** Spec 93: erlaubte Wege der Trend-KI (Erschließen, Ableitung). */
+    public const TREND_KI_WEGE = ['plattform' => 'Plattform', 'extern' => 'Extern (MCP)'];
+
+    /**
+     * Spec 93 (Dominique 03.11., „Weg a“): Weg der Trend-KI. plattform = Plattform-Provider (Standard); extern = jeder Lauf legt einen
+     * KI-Auftrag an, auch vom Scheduler oder aus der Oberfläche — beantwortet per MCP (tägliche Claude-Aufgabe), keine Plattform-Kosten.
+     */
+    public function trendKiWeg(Team $team): string
+    {
+        $v = (string) ($this->for($team)->trend_ki_weg ?? 'plattform');
+
+        return array_key_exists($v, self::TREND_KI_WEGE) ? $v : 'plattform';
+    }
+
     /** Spec 93 C: Trend-KI-Budget je Monat in € (null = kein eigener Deckel, nur der Team-Deckel). */
     public function trendKiBudget(Team $team): ?float
     {

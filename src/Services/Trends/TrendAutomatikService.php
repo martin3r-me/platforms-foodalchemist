@@ -53,6 +53,7 @@ class TrendAutomatikService
             'regeln' => TrendAutomatikRegeln::wirksam($this->settings->trendAutomatikRegeln($team)),
             'startwerte' => TrendAutomatikRegeln::startwerte(),
             'ki_budget_eur' => $this->settings->trendKiBudget($team),
+            'ki_weg' => $this->settings->trendKiWeg($team),
             'letzter_lauf' => is_array($l = $this->settings->for($team)->trend_automatik_letzter_lauf) ? $l : null,
         ];
     }

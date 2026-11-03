@@ -22,7 +22,8 @@ class TrendAutomatikPutTool extends FoodAlchemistTool implements ToolContract, T
     {
         return 'Stellt die Trend-Automatik des Teams ein (FA-Admin): stufe (aus|bis_geprueft|radar), schatten (true = nur rechnen), regeln (Objekt mit '
             .'Schwellen, z. B. kandidat_sichtungen; null-Wert = Startwert), regeln_zuruecksetzen=true (alle Startwerte), ki_budget_eur (Monat; null = kein '
-            .'eigener Deckel). Schwellen werden gegen Grenzen geprüft.';
+            .'eigener Deckel), ki_weg (plattform | extern: jeder Erschließen-/Ableitungs-Lauf wird ein KI-Auftrag, auch vom Scheduler — per '
+            .'ki_auftraege.GET/ANTWORT beantworten, keine Plattform-Kosten). Schwellen werden gegen Grenzen geprüft.';
     }
 
     public function getSchema(): array
@@ -38,6 +39,7 @@ class TrendAutomatikPutTool extends FoodAlchemistTool implements ToolContract, T
             'regeln' => ['type' => 'object', 'properties' => $regeln],
             'regeln_zuruecksetzen' => ['type' => 'boolean'],
             'ki_budget_eur' => ['type' => 'number', 'description' => 'Euro je Monat; null = kein eigener Deckel'],
+            'ki_weg' => ['type' => 'string', 'enum' => ['plattform', 'extern'], 'description' => 'Weg der Trend-KI: plattform (Plattform-Provider) | extern (jeder Lauf wird ein KI-Auftrag, per MCP beantworten)'],
         ]];
     }
 
@@ -74,6 +76,12 @@ class TrendAutomatikPutTool extends FoodAlchemistTool implements ToolContract, T
             if (array_key_exists('ki_budget_eur', $arguments)) {
                 $b = $arguments['ki_budget_eur'];
                 $update['trend_ki_budget_eur'] = $b === null || $b === '' ? null : max(0, min(10000, (float) $b));
+            }
+            if (array_key_exists('ki_weg', $arguments)) {
+                if (! array_key_exists((string) $arguments['ki_weg'], TeamSettingsService::TREND_KI_WEGE)) {
+                    throw new \RuntimeException('ki_weg muss plattform oder extern sein.');
+                }
+                $update['trend_ki_weg'] = (string) $arguments['ki_weg'];
             }
             if ($update === []) {
                 return ToolResult::error('Nichts zu ändern.', 'VALIDATION_ERROR');

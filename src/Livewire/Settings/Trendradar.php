@@ -49,6 +49,9 @@ class Trendradar extends Component
 
     public string $kiBudget = '';
 
+    /** Spec 93: Weg der Trend-KI (plattform | extern). */
+    public string $kiWeg = 'plattform';
+
     public ?string $meldung = null;
 
     public function mount(): void
@@ -69,6 +72,7 @@ class Trendradar extends Component
         $this->automatikSchatten = $s->trendAutomatikSchatten($team);
         $this->regeln = array_map(fn ($v) => (string) $v, $s->trendAutomatikRegeln($team) ?? []);
         $this->kiBudget = ($b = $s->trendKiBudget($team)) !== null ? rtrim(rtrim(number_format($b, 2, '.', ''), '0'), '.') : '';
+        $this->kiWeg = $s->trendKiWeg($team);
     }
 
     public function speichern(): void
@@ -89,6 +93,7 @@ class Trendradar extends Component
             'trend_automatik_schatten' => $this->automatikSchatten,
             'trend_automatik_regeln' => TrendAutomatikRegeln::pruefen(array_filter($this->regeln, fn ($v) => trim((string) $v) !== ''), false) ?: null,
             'trend_ki_budget_eur' => trim($this->kiBudget) === '' ? null : max(0, min(10000, (float) str_replace(',', '.', $this->kiBudget))),
+            'trend_ki_weg' => array_key_exists($this->kiWeg, TeamSettingsService::TREND_KI_WEGE) ? $this->kiWeg : 'plattform',
         ]);
         $this->dfsBudget = rtrim(rtrim(number_format($budget, 2, '.', ''), '0'), '.');
         $this->meldung = $this->dfsAktiv
