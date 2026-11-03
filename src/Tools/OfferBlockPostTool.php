@@ -30,7 +30,8 @@ class OfferBlockPostTool extends FoodAlchemistTool implements ToolContract, Tool
         return 'Legt einen Block in einem Angebot-Kapitel an (Position ans Ende). '
             . 'concept_ref (concept_id = Konzept/Paket, via foodalchemist.concepts.SEARCH) oder '
             . 'recipe_ref (sales_recipe_id = echtes VK-Gericht, via foodalchemist.verkaufsrezepte.SEARCH). '
-            . 'Weitere Typen: header | header_preis | text | spacer. '
+            . 'Weitere Typen: header | header_preis | text | spacer | position (freie Position: label, quantity = Menge, unit_vocab_id = Einheit, '
+            . 'price_value = Satz VK je Einheit, ek_value = EK je Einheit, immer pauschal; Betrag = Menge × Satz). '
             . 'price_basis (nur header_preis): person | pauschal. Format-Kapitel tragen keine eigenen Blöcke.';
     }
 
@@ -47,9 +48,12 @@ class OfferBlockPostTool extends FoodAlchemistTool implements ToolContract, Tool
                 'interne_bemerkung' => ['type' => 'string'],
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept/Paket bei type=concept_ref.'],
                 'sales_recipe_id' => ['type' => 'integer', 'description' => 'Echtes VK-Gericht bei type=recipe_ref (keine Slot-Variante).'],
-                'quantity' => ['type' => 'number', 'description' => 'Mengenfaktor bei recipe_ref.'],
-                'price_value' => ['type' => 'number', 'description' => 'Preis bei type=header_preis.'],
-                'price_basis' => ['type' => 'string', 'enum' => FoodAlchemistOfferBlock::PRICE_BASES, 'description' => 'Basis für price_value (header_preis).'],
+                'quantity' => ['type' => 'number', 'description' => 'Mengenfaktor bei recipe_ref; Menge bei position.'],
+                'unit_vocab_id' => ['type' => 'integer', 'description' => 'Einheit bei position (foodalchemist.vocab Einheiten).'],
+                'price_value' => ['type' => 'number', 'description' => 'Preis bei type=header_preis; Satz je Einheit bei position.'],
+                'ek_value' => ['type' => 'number', 'description' => 'EK je Einheit bei type=position (nur intern).'],
+                'price_basis' => ['type' => 'string', 'enum' => array_values(array_unique(array_merge(FoodAlchemistOfferBlock::PRICE_BASES, FoodAlchemistOfferBlock::POSITION_BASES))),
+                    'description' => 'Basis für price_value: header_preis person|pauschal; position pauschal (in der Summe) | aufwand (zzgl. nach Aufwand, geschätzt, nicht in der Summe).'],
                 'visible' => ['type' => 'boolean', 'default' => true],
                 'level' => ['type' => 'integer', 'description' => 'Einrück-Ebene 0..2.'],
                 'height' => ['type' => 'integer', 'description' => 'Höhe bei type=spacer.'],
@@ -71,7 +75,7 @@ class OfferBlockPostTool extends FoodAlchemistTool implements ToolContract, Tool
 
         $daten = array_intersect_key($arguments, array_flip([
             'type', 'label', 'wording', 'customer_text', 'interne_bemerkung',
-            'concept_id', 'sales_recipe_id', 'quantity', 'price_value', 'price_basis', 'visible', 'level', 'height',
+            'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'ek_value', 'price_basis', 'visible', 'level', 'height',
         ]));
 
         try {

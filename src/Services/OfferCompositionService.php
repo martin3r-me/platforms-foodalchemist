@@ -261,7 +261,9 @@ class OfferCompositionService
         // Spec 50 · C-7: beide Spalten gibt es seit 2026_08_31_000033, sie fehlten nur hier —
         // uebergebene Werte wurden still verworfen (`header_source` = die Preset-Herkunft fuer
         // die KI-Lineage, `variant_group_id` = die Wahl-Gruppe).
-        'header_source', 'variant_group_id'];
+        'header_source', 'variant_group_id',
+        // Spec 94b: EK je Einheit des Blocktyps position
+        'ek_value'];
 
     /**
      * Spec 50 · A6 — das Angebot spricht ein anderes Header-Vokabular als das Foodbook.
@@ -353,12 +355,18 @@ class OfferCompositionService
         }
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
         $daten['type'] = self::aufloesenBlockTyp($in['type'] ?? '');
-        $this->pruefePreisBasis($daten['price_basis'] ?? null);
+        if ($daten['type'] !== 'position') {
+            $this->pruefePreisBasis($daten['price_basis'] ?? null);
+        }
         if ($daten['type'] === 'concept_ref') {
             $this->pruefeConceptRef($team, $daten['concept_id'] ?? null);
         }
         if ($daten['type'] === 'recipe_ref') {
             $this->pruefeRecipeRef($team, $daten['sales_recipe_id'] ?? null);
+        }
+        if ($daten['type'] === 'position') {   // Spec 94b: Menge × Satz, pauschal (in der Summe) oder aufwand (zzgl., nicht in der Summe)
+            $daten['price_basis'] = in_array($daten['price_basis'] ?? null, FoodAlchemistOfferBlock::POSITION_BASES, true) ? $daten['price_basis'] : 'pauschal';
+            $daten['quantity'] ??= 1;
         }
         $daten['team_id'] = $k->team_id;
         $daten['position'] = (int) $k->blocks()->max('position') + 1;
@@ -374,6 +382,14 @@ class OfferCompositionService
             $daten['type'] = self::aufloesenBlockTyp((string) $daten['type']);   // A6: auch beim Ändern
         }
         $effTyp = array_key_exists('type', $daten) ? $daten['type'] : $block->type;
+        foreach (['quantity', 'price_value', 'ek_value', 'unit_vocab_id'] as $f) {   // leere Formularfelder → NULL statt ''
+            if (array_key_exists($f, $daten) && ($daten[$f] === '' || $daten[$f] === null)) {
+                $daten[$f] = null;
+            }
+        }
+        if ($effTyp === 'position' && array_key_exists('price_basis', $daten)) {
+            $daten['price_basis'] = in_array($daten['price_basis'], FoodAlchemistOfferBlock::POSITION_BASES, true) ? $daten['price_basis'] : 'pauschal';
+        }
         if ($effTyp === 'recipe_ref' && array_key_exists('sales_recipe_id', $daten)) {
             $this->pruefeRecipeRef($team, $daten['sales_recipe_id']);
         }
@@ -561,6 +577,15 @@ class OfferCompositionService
 
             return ['vk_pp' => $vk, 'ek_pp' => $ek, 'pauschal' => 0.0, 'ek_vollstaendig' => $ekVoll, 'vk_fehlt' => $vkFehlt];
         }
+        if ($block->type === 'position') {   // Spec 94b: Menge × Satz, EK = Menge × EK je Einheit; Aufwand nur als zzgl. (nicht in der Summe)
+            $menge = (float) ($block->quantity ?? 0);
+            $vk = round($menge * (float) ($block->price_value ?? 0), 2);
+            $ek = round($menge * (float) ($block->ek_value ?? 0), 2);
+            $aufwand = $block->istAufwand();
+
+            return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $aufwand ? 0.0 : $vk, 'ek_pauschal' => $aufwand ? 0.0 : $ek,
+                'aufwand' => $aufwand ? $vk : 0.0, 'ek_aufwand' => $aufwand ? $ek : 0.0, 'ek_vollstaendig' => $block->ek_value !== null];
+        }
         if ($block->type === 'header_preis') {
             return $block->price_basis === 'pauschal'
                 ? ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->price_value ?? 0), 'ek_vollstaendig' => true]
@@ -626,6 +651,9 @@ class OfferCompositionService
         $vk = 0.0;
         $ek = 0.0;
         $pauschal = 0.0;
+        $ekPauschal = 0.0;   // Spec 94b: EK pauschaler Positionen
+        $aufwand = 0.0;      // Spec 94b: zzgl. nach Aufwand (nicht in der Summe)
+        $ekAufwand = 0.0;
         $ekVoll = true;
         $vkFehlt = false;
         foreach ($kapitel->blocks as $block) {
@@ -633,6 +661,9 @@ class OfferCompositionService
             $vk += $p['vk_pp'];
             $ek += $p['ek_pp'];
             $pauschal += $p['pauschal'];
+            $ekPauschal += $p['ek_pauschal'] ?? 0.0;
+            $aufwand += $p['aufwand'] ?? 0.0;
+            $ekAufwand += $p['ek_aufwand'] ?? 0.0;
             $ekVoll = $ekVoll && $p['ek_vollstaendig'];
             $vkFehlt = $vkFehlt || ($p['vk_fehlt'] ?? false);
         }
@@ -642,6 +673,9 @@ class OfferCompositionService
                 $vk += (float) ($kindAgg['vk_pro_person'] ?? 0);
                 $ek += $kindAgg['ek_pro_person'];
                 $pauschal += $kindAgg['pauschal'];
+                $ekPauschal += $kindAgg['ek_pauschal'] ?? 0.0;
+                $aufwand += $kindAgg['aufwand'] ?? 0.0;
+                $ekAufwand += $kindAgg['ek_aufwand'] ?? 0.0;
                 $ekVoll = $ekVoll && ($kindAgg['ek_vollstaendig'] ?? true);
                 $vkFehlt = $vkFehlt || ($kindAgg['vk_fehlt'] ?? false);
             }
@@ -653,7 +687,8 @@ class OfferCompositionService
         // Auflage 4: Food-Cost aus einer EK-Teilsumme wäre geschönt → bei unvollständigem EK keine Quote
         return ['vk_pro_person' => round($vk, 2), 'ek_pro_person' => round($ek, 2), 'pauschal' => round($pauschal, 2),
             'food_cost_percent' => ($vk > 0 && $ekVoll && ! $vkFehlt) ? round($ek / $vk * 100, 1) : null, 'preis_range' => null,
-            'ek_vollstaendig' => $ekVoll, 'vk_fehlt' => $vkFehlt];   // vk_fehlt: mind. ein Gericht ohne VK — Summe ist kein Angebotspreis
+            'ek_vollstaendig' => $ekVoll, 'vk_fehlt' => $vkFehlt, 'ek_pauschal' => round($ekPauschal, 2),
+            'aufwand' => round($aufwand, 2), 'ek_aufwand' => round($ekAufwand, 2)];   // vk_fehlt: mind. ein Gericht ohne VK — Summe ist kein Angebotspreis
     }
 
     // ── Read-Struktur (EINE Quelle für Editor-Menü-Ansicht + Kalkulation + Dokument) ──
@@ -687,8 +722,10 @@ class OfferCompositionService
         $summePauschal = 0.0;
         $summeGesamtVk = 0.0;
         $summeGesamtEk = 0.0;
+        $summeAufwand = 0.0;
+        $summeEkAufwand = 0.0;
 
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitel, &$summeVk, &$summeEk, &$summePauschal, &$summeGesamtVk, &$summeGesamtEk, $team, $outlet, $intern, $wording, $angebotPax) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitel, &$summeVk, &$summeEk, &$summePauschal, &$summeGesamtVk, &$summeGesamtEk, &$summeAufwand, &$summeEkAufwand, $team, $outlet, $intern, $wording, $angebotPax) {
             foreach ($byParent[$parentId] ?? [] as $k) {
                 // Der Walk besucht jedes Kapitel selbst. Kindkapitel hier nicht erneut
                 // rekursiv einrechnen: das vermeidet N+1-Queries und doppelte Summen.
@@ -756,7 +793,13 @@ class OfferCompositionService
                             'concept_id' => $b->concept_id !== null ? (int) $b->concept_id : null,
                             'preis_pp' => (float) $bp['vk_pp'],
                             'pauschal' => (float) $bp['pauschal'],
-                            'preis_einheit' => match ($b->type) { 'concept_ref' => 'gast', 'recipe_ref' => 'position', default => null },
+                            'preis_einheit' => match ($b->type) { 'concept_ref' => 'gast', 'recipe_ref' => 'position', 'position' => 'pauschal', default => null },
+                            // Spec 94b: Position zeigt Menge, Einheit und Satz (Kundensicht, ohne EK)
+                            'menge' => $b->type === 'position' ? (float) ($b->quantity ?? 0) : null,
+                            'einheit' => $b->type === 'position' ? $b->einheitText() : null,
+                            'satz' => $b->type === 'position' ? (float) ($b->price_value ?? 0) : null,
+                            'aufwand' => $b->istAufwand(),   // Spec 94b: zzgl. nach Aufwand, nicht in der Summe
+                            'aufwand_betrag' => (float) ($bp['aufwand'] ?? 0),
                             'einzelpreise' => $b->type === 'concept_ref' && $b->concept !== null && $b->concept->istEinzelpreis(),
                             'gerichte' => ($b->type === 'concept_ref' && $b->concept !== null) ? $wording->gerichtZeilen($b->concept, null) : [],
                             'height' => $b->height,
@@ -775,7 +818,9 @@ class OfferCompositionService
                 $summePauschal += $agg['pauschal'];
                 // Gesamt-Summe pax-korrekt (Q1): Σ Kapitel-Pax × €/P (+ Pauschale je Kapitel).
                 $summeGesamtVk += $kapGesamt;
-                $summeGesamtEk += (float) ($agg['ek_pro_person'] ?? 0) * $effPax;
+                $summeGesamtEk += (float) ($agg['ek_pro_person'] ?? 0) * $effPax + (float) ($agg['ek_pauschal'] ?? 0);
+                $summeAufwand += (float) ($agg['aufwand'] ?? 0);
+                $summeEkAufwand += (float) ($agg['ek_aufwand'] ?? 0);
 
                 $kapitel[] = $row;
                 $walk((int) $k->id, $depth + 1);
@@ -790,6 +835,8 @@ class OfferCompositionService
                 'pax' => $angebotPax,
                 'gesamt_vk' => round($summeGesamtVk, 2),   // Σ Kapitel-Pax × €/P + Pauschalen (pax-korrekt)
                 'gesamt_ek' => round($summeGesamtEk, 2),
+                // Spec 94b: zzgl. nach Aufwand — getrennt, nicht in gesamt_vk/gesamt_ek
+                'aufwand_vk' => round($summeAufwand, 2), 'aufwand_ek' => round($summeEkAufwand, 2),
             ],
         ];
     }
@@ -801,7 +848,7 @@ class OfferCompositionService
      */
     public function kundensicht(array $komposition): array
     {
-        unset($komposition['summe']['ek_pro_person'], $komposition['summe']['gesamt_ek']);
+        unset($komposition['summe']['ek_pro_person'], $komposition['summe']['gesamt_ek'], $komposition['summe']['aufwand_ek']);
         foreach (array_keys($komposition['kapitel'] ?? []) as $kapitelIndex) {
             $kapitel = &$komposition['kapitel'][$kapitelIndex];
             unset($kapitel['ek_pro_person'], $kapitel['food_cost_percent'], $kapitel['bild'], $kapitel['bilder']);
@@ -959,7 +1006,7 @@ class OfferCompositionService
                     $ekExtra += $bp['ek_pp'];
                     $flat += $bp['pauschal'];
                     $ekExtraVoll = $ekExtraVoll && $bp['ek_vollstaendig'];
-                } elseif ($b->type === 'header_preis') {
+                } elseif (in_array($b->type, ['header_preis', 'position'], true)) {
                     $bp = $this->blockPreis($b, $outlet, $team);
                     $vkExtra += $bp['vk_pp'];
                     $flat += $bp['pauschal'];
@@ -1019,7 +1066,7 @@ class OfferCompositionService
         return match ($block->type) {
             'concept_ref' => (string) ($block->wording ?: ($block->label ?: ($block->concept?->consumer_name ?: $block->concept?->name))),
             'recipe_ref' => (string) ($block->wording ?: ($block->label ?: $block->dish?->name)),
-            'header', 'header_preis' => (string) ($block->label ?? ''),
+            'header', 'header_preis', 'position' => (string) ($block->label ?? ''),
             'text' => (string) ($block->customer_text ?? $block->label ?? ''),
             default => $block->label,
         };
