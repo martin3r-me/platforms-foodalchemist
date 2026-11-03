@@ -583,6 +583,7 @@ EK/VK anlegen) → Pakete anlegen (oder `PAKETE_VORSCHLAGEN` und übernehmen) �
 | 3 | Präsentationstyp `konfigurator`; Einstellungsseite Präsentations-Designs erweitert (Ausgabeform, Konfigurator-Blöcke, eingebautes Design, Beispiel-Vorschau); Branding mit „übernehmen von“; Anfrage → Angebot, Mail, Signal | Design im Builder gestaltet und im Konfigurator gewählt, Branding aus einem Foodbook übernommen, Link live, Snapshot ohne EK (Test), Anfrage erzeugt Angebot, Mail und Signal |
 | 4 | MCP-Tools, Handbuch-Seite, DOEC als erster echter Fall | Diva.licious im Food Alchemist nachgebaut, Kevin Gerling bekommt den Link |
 | 5 (optional) | Vorlagen-Sets, Auswahl einer Anfrage als Kapitel ins Angebot übernehmen, weitere Sprachen | |
+| 7 | Planungsdetails, Einzelabrechnung, Zusammenfassung je Kategorie: eigene Spec [94b](94b_Konfigurator_Planungsdetails_Einzelabrechnung.md) (Entwurf) | nach Abnahme der 94b |
 
 Je Stufe läuft der Testkreis der Wächter mit: Spec84* (Sicht, Tool-Liste, Service-Eigentum), Spec77b, Policy,
 Dateigrößen (Editor-Komponenten nach Spec 84 aufteilen, z. B. ein Livewire-Teil je Reiter), BladeCompiles, UiRegeln,
