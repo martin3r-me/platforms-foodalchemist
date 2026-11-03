@@ -82,8 +82,13 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
 
 ## 5 · Alkohol und Allergene
 
-- **Alkohol:** Neu ist eine abgeleitete Kennzeichnung „enthält Alkohol“. Sie wird nach demselben Muster wie die Allergen-Aggregation
-  hochgereicht: Lieferantenartikel `is_alcohol`, dann Lead-LA des GP, dann Rezept, dann Concept. Es gibt keine Handpflege an jedem Getränk. Am Concept-Slot ist eine Überschreibung möglich, wenn ein Artikel fehlt.
+- **Alkohol** (umgesetzt in 8a): Die Kennzeichnung „enthält Alkohol“ wird abgeleitet, wie `spec_contains_pork` (Warn-Regel: ja, sobald eine
+  Zutat Alkohol enthält).
+  - Quelle ist der Lieferantenartikel (`is_alcohol`, gepflegt im Artikel-Modal). Das ist zugleich die einzige Stelle für eine Korrektur.
+  - GP: `GpAggregateService::enthaeltAlkohol` (sichtbare Artikel, wie die Zusatzstoffe).
+  - Rezept: `spec_contains_alcohol` im Recompute, auch über Sub-Rezepte.
+  - Concept: live aus seinen Gerichten, wie die Allergene. Es gibt keine Spalte am Concept und keine Überschreibung am Slot.
+  - Codes: „Alk.“ in `gerichtCodes` und in der Legende („enthält Alkohol“).
 - **Im Link:**
   - Gerichte mit Alkohol tragen ein Symbol bzw. den Code „Alk.“ in der Legende.
   - Ein Paket mit Alkohol zeigt den **Alkohol-Hinweis des Teams** (Entscheid 7). Das ist ein neues Feld in den Team-Einstellungen mit Standardtext
@@ -102,12 +107,14 @@ foodalchemist_konfigurator_konzepte   =  rolle: haupt | addon | getraenk (string
                                       +  verbrauch_deckel (decimal 10,2, null)
 foodalchemist_konfiguratoren          +  getraenke_pflicht (boolean, default false)
 foodalchemist_team_settings           +  alkohol_hinweis (text, null = Standardtext)
-foodalchemist_recipes                 +  enthaelt_alkohol (boolean, null = unbekannt; abgeleitet, Cache)
-foodalchemist_concepts                +  enthaelt_alkohol (boolean, null; abgeleitet, Cache)
-foodalchemist_concept_slots           +  alkohol_override (boolean, null)
+foodalchemist_recipes                 +  spec_contains_alcohol (boolean, null = unbekannt; abgeleitet im Recompute)   [8a]
 ```
 
-Alle Migrationen sind additiv. `enthaelt_alkohol` wird beim Recompute der Rezepte bzw. Concepts mitgerechnet, wie die Allergene.
+Alle Migrationen sind additiv. `spec_contains_alcohol` wird beim Recompute der Rezepte mitgerechnet. Den Bestand füllt erst ein Recompute-Lauf, nur mit Ansage.
+
+**Wo was gepflegt wird** (Dominique): Im Concepter steht nur der Inhalt des Getränkepakets (Positionen, Mengen je Gast, Wording, Bilder).
+Alles Kommerzielle hängt an der **Konfigurator-Konzept-Zeile** (`rolle = getraenk`) und wird im Reiter „Getränke“ eingestellt:
+Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Dinner-Zuordnung, Bindung. `getraenke_pflicht` steht am Konfigurator.
 
 ## Betroffene Services
 
@@ -117,7 +124,7 @@ Alle Migrationen sind additiv. `enthaelt_alkohol` wird beim Recompute der Rezept
 | `KonfiguratorSnapshot` | `getraenke` (Karten, Detail, Alkohol-Hinweis aus den Team-Einstellungen), Preistabelle `g{id}:t`, `zzgl` für Verbrauch, Gruppe „Getränke“ in der Aufteilung |
 | `_konfigurator_script` / Blöcke | neuer Block `konfig_getraenke`; `konfiguratorLayout` ergänzt ihn wie die anderen Pflichtblöcke |
 | `KonfiguratorAnfrageService` | Auswahl `getraenk`; Pauschale im Preis, Verbrauch als `position` (`aufwand`, `art = verbrauch`) |
-| Alkohol-Aggregation | Rezept- und Concept-Recompute; `ConcepterAggregateService::gerichtCodes` um „Alk.“ |
+| Alkohol (8a, umgesetzt) | `GpAggregateService::enthaeltAlkohol`, Recompute-Flag `spec_contains_alcohol`, `gerichtCodes` und Legende „Alk.“ |
 | Editor | Reiter „Getränke“ (eigenes Partial, Editor-Klasse unter der Dateigrößen-Grenze, ggf. eigenes Livewire-Kind) |
 | MCP | `konfigurator_konzepte.POST/PUT` mit `rolle = getraenk` und den neuen Feldern; Preis-Tool liefert `g…` |
 
@@ -139,7 +146,7 @@ Alle Migrationen sind additiv. `enthaelt_alkohol` wird beim Recompute der Rezept
 
 | Stufe | Inhalt |
 |:--|:--|
-| 8a | Alkohol-Aggregation (Rezept, Concept, Codes) |
+| 8a | Alkohol-Kennzeichnung (Artikel → GP → Rezept, Codes) — umgesetzt 03.11.2026 |
 | 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link |
 | 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot |
 

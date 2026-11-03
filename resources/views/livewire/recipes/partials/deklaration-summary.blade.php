@@ -14,6 +14,7 @@
     @if($rezept->spec_is_gluten_free === true)<x-fa::badge tone="info">glutenfrei</x-fa::badge>@endif
     @if($rezept->spec_is_lactose_free === true)<x-fa::badge tone="info">laktosefrei</x-fa::badge>@endif
     @if($rezept->spec_contains_pork === true)<x-fa::badge tone="warn">enthält Schwein</x-fa::badge>@endif
+    @if($rezept->spec_contains_alcohol === true)<x-fa::badge tone="warn" data-rezept-alkohol>enthält Alkohol</x-fa::badge>@endif
     @if($rezept->spec_contains_beef === true)<x-fa::badge tone="warn">enthält Rind</x-fa::badge>@endif
     @foreach($enthalten as $feld => $lbl)
         <x-fa::badge tone="crit" title="{{ $lbl }}: enthalten">{{ $kurz($lbl) }}</x-fa::badge>

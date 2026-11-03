@@ -95,8 +95,7 @@ class RecipeRecomputeService
             $recipe->load(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe']);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
             $this->recomputeTeam = Team::find($recipe->team_id);
-            $this->garverlustWgCache = [];
-            $this->putzverlustWgCache = [];
+            $this->garverlustWgCache = $this->putzverlustWgCache = [];
             $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
             $this->yieldUndZaehler($recipe, $zutaten);
@@ -854,7 +853,7 @@ class RecipeRecomputeService
     // spec_is_gluten_free bleibt normativ aus der Allergen-Kette (allergene()).
     private const SPEC_ASSURE = ['is_vegan', 'is_vegetarian', 'is_halal', 'is_lactose_free'];
 
-    private const SPEC_WARN = ['contains_pork', 'contains_beef'];
+    private const SPEC_WARN = ['contains_pork', 'contains_beef', 'contains_alcohol'];   // Spec 94c: Alkohol aus den Artikeln des GP
 
     private function specFlags(FoodAlchemistRecipe $recipe, Collection $zutaten): void
     {
@@ -872,7 +871,7 @@ class RecipeRecomputeService
             if ($z->gp_id !== null && $z->gp !== null) {
                 $nMapped++;
                 foreach ($felder as $f) {
-                    $werte[$f][] = $this->boolOrNull($z->gp->{"tag_{$f}"});
+                    $werte[$f][] = $this->boolOrNull($f === 'contains_alcohol' ? $this->gpAggregate->enthaeltAlkohol($z->gp) : $z->gp->{"tag_{$f}"});
                 }
             } elseif ($z->referencedRecipe !== null) {
                 $nMapped++;

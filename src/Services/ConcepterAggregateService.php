@@ -553,6 +553,9 @@ class ConcepterAggregateService
             $j++;
         }
 
+        // Spec 94c: „enthält Alkohol“ als Kennzeichnung in Codes und Legende (kein Zusatzstoff im Sinne der Deklaration)
+        $zus['alkohol'] = ['code' => 'Alk.', 'label' => 'enthält Alkohol'];
+
         return ['allergene' => $alg, 'zusatzstoffe' => $zus];
     }
 
@@ -579,6 +582,10 @@ class ConcepterAggregateService
                 $usedZus[$z['slug']] = true;
                 $codes[] = $katalog['zusatzstoffe'][$z['slug']]['code'];
             }
+        }
+        if ($gericht->spec_contains_alcohol === true) {   // Spec 94c
+            $usedZus['alkohol'] = true;
+            $codes[] = $katalog['zusatzstoffe']['alkohol']['code'];
         }
 
         return $codes;
@@ -672,7 +679,7 @@ class ConcepterAggregateService
         $cols = ['id', 'name', 'is_sales_recipe', 'sales_quantity_per_unit_g', 'nutri_kcal_per_100g',
             'nutri_confidence', 'allergens_confidence', 'spec_is_vegan', 'spec_is_vegetarian',
             'spec_is_halal', 'spec_is_gluten_free', 'spec_is_lactose_free', 'spec_contains_pork',
-            'spec_contains_beef', 'yield_kg', 'yield_pieces', 'sales_unit_count'];
+            'spec_contains_beef', 'spec_contains_alcohol', 'yield_kg', 'yield_pieces', 'sales_unit_count'];
         foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE) as $slug) {
             $cols[] = "allergen_{$slug}";
         }
