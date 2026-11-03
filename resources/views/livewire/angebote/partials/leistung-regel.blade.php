@@ -7,7 +7,7 @@
 @endphp
 <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3">
     <x-fa::field label="Bezeichnung" for="{{ $px }}-bez" required><x-fa::input id="{{ $px }}-bez" wire:model="{{ $m }}.bezeichnung" placeholder="z. B. Servicekraft" data-regel-bezeichnung /></x-fa::field>
-    <x-fa::field label="Kategorie" for="{{ $px }}-kat"><x-fa::select id="{{ $px }}-kat" wire:model="{{ $m }}.kategorie" :options="$kategorien" /></x-fa::field>
+    <x-fa::field label="Kategorie" for="{{ $px }}-kat"><x-fa::select id="{{ $px }}-kat" wire:model="{{ $m }}.kategorie" :options="$kategorien + (isset(($kategorieNamen ?? [])[$f['kategorie'] ?? '']) ? [$f['kategorie'] => $kategorieNamen[$f['kategorie']]] : [])" /></x-fa::field>
     <x-fa::field label="Häufigkeit" for="{{ $px }}-haeuf" hint="Je Tageszeit: fällt bei Day-into-Night für Lunch und Dinner getrennt an.">
         <x-fa::select id="{{ $px }}-haeuf" wire:model="{{ $m }}.haeufigkeit" :options="['je_event' => 'Je Event', 'je_tageszeit' => 'Je Tageszeit']" />
     </x-fa::field>

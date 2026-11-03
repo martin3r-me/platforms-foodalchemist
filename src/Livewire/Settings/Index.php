@@ -66,6 +66,8 @@ class Index extends Component
         'herstellkosten' => ['label' => 'Herstellkosten & Zuschläge', 'hint' => 'Zuschlagsschema, Fixkosten, Stundensatz und Marge bis zum Verkaufspreis'],
         // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten
         'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Faktoren auf den Basissatz für die Preisstufen'],
+        // Spec 94b: Kategorien der Leistungen (Konfigurator, Leistungs-Vorlagen) als Vokabular
+        'leistungskategorien' => ['label' => 'Leistungskategorien', 'hint' => 'Gruppen für Personal, Equipment, Logistik und eigene Leistungen im Konfigurator'],
 
         // — KI & Kreativ-Steuerung (speist die KI-Generierung) —
         // Test-Anker: der Hint nennt den Sprachbefehl wörtlich (EinstellungenSchirmTest).
@@ -141,7 +143,7 @@ class Index extends Component
         'team' => ['label' => 'Team & Zugriff', 'sektionen' => ['zugriffsrechte', 'unter-teams', 'plan-nutzung']],
         'kueche' => ['label' => 'Küche & Produktion', 'sektionen' => ['teamprofil', 'kueche', 'posten', 'rollen', 'behaelter', 'hausstandards']],
         'einkauf' => ['label' => 'Einkauf & Lager', 'sektionen' => ['einkauf']],
-        'kalkulation' => ['label' => 'Kalkulation & Preise', 'sektionen' => ['kalkulation', 'herstellkosten', 'aufschlagsklassen', 'betriebe']],
+        'kalkulation' => ['label' => 'Kalkulation & Preise', 'sektionen' => ['kalkulation', 'herstellkosten', 'aufschlagsklassen', 'leistungskategorien', 'betriebe']],
         'stil' => ['label' => 'Küchenstil & Ausgabe', 'sektionen' => ['food-dna', 'dna-felder', 'kunde-dna', 'schreibstile', 'brief-vorlagen', 'praesentations-designs', 'etiketten', 'speiseplan-chips', 'trendradar']],
         'kategorien' => ['label' => 'Kategorien', 'sektionen' => ['taxonomie', 'vk-taxonomie', 'concepter-dimensionen', 'wissenskategorien', 'einheiten', 'warengruppen']],
         'ki' => ['label' => 'KI', 'sektionen' => ['ki']],
@@ -230,6 +232,7 @@ class Index extends Component
         'kalkulation' => 'MwSt Mehrwertsteuer Rundung Garverlust Putzverlust',
         'herstellkosten' => 'Zuschlag Fixkosten Stundensatz Marge Gemeinkosten',
         'aufschlagsklassen' => 'Preisstufe Basissatz Faktor Aufschlag',
+        'leistungskategorien' => 'Personal Equipment Logistik Leistung Konfigurator Kategorie',
         'ki' => 'Notschalter Kill-Switch Kosten Verbrauch Modell Modellstufen Sprachbefehl Vorlesen Stimme',
         'teamprofil' => 'Ausstattung Geräte Flächen Gäste Convenience Kennzahlen',
         'kueche' => 'Küchentyp Farben Positionstyp',

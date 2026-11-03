@@ -305,6 +305,7 @@ return [
     \Platform\FoodAlchemist\Tools\LaGpAbgleichTool::class,
     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
     \Platform\FoodAlchemist\Tools\LeadSichtGetTool::class,   // Lead-Sicht 29.10.: Nachlauf-Vorschau read-only
+    \Platform\FoodAlchemist\Tools\LeistungskategorienGetTool::class,   // Spec 94b
     \Platform\FoodAlchemist\Tools\LeistungVorlagenDeleteTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\LeistungVorlagenGetTool::class,   // Spec 94
     \Platform\FoodAlchemist\Tools\LeistungVorlagenPostTool::class,   // Spec 94

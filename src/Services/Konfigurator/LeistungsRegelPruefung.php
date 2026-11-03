@@ -51,8 +51,11 @@ final class LeistungsRegelPruefung
         ];
 
         $fehler = fn (string $m) => throw new \InvalidArgumentException($m);
-        if (! array_key_exists($aus['kategorie'], FoodAlchemistLeistungVorlage::KATEGORIEN)) {
-            $fehler('Kategorie fehlt (Personal, Equipment, Logistik oder Sonstiges).');
+        // Spec 94b: Kategorien aus dem Vokabular. Eine bestehende, inzwischen ausgeschaltete Kategorie bleibt beim Ändern gültig.
+        $kategorien = app(LeistungsKategorieService::class);
+        $behalten = ($bisher['kategorie'] ?? null) === $aus['kategorie'] && isset($kategorien->namen($team)[$aus['kategorie']]);
+        if (! $behalten && ! isset($kategorien->auswahl($team)[$aus['kategorie']])) {
+            $fehler('Kategorie fehlt oder ist nicht wählbar (' . implode(', ', $kategorien->auswahl($team)) . ').');
         }
         if ($aus['bezeichnung'] === '') {
             $fehler('Bezeichnung ist Pflicht.');
