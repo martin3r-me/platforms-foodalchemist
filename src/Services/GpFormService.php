@@ -36,6 +36,13 @@ class GpFormService
     public const FALLBACK_SLUGS = ['stk', 'scheibe', 'wuerfel', 'streifen', 'blatt', 'ring', 'zehe', 'bund', 'zweig'];
 
     /**
+     * Löffel-Einheiten (Dominique 03.11.: „für die Löffel müsste man hinterlegen, wie viel Gramm das ist“): ein TL Zimt wiegt
+     * etwa 2,5 g, ein TL Salz etwa 6 g — das Vokabular rechnet sie als Volumen wie Wasser (5 ml = 5 g). Sie sind darum Formen
+     * des GP wie die Zähl-Einheiten, gleich welche Dimension das Vokabular ihnen gibt; ohne Form bleibt der Rückfall aufs Vokabular.
+     */
+    public const LOEFFEL_SLUGS = ['el', 'tl', 'msp', 'prise'];
+
+    /**
      * Erlaubte Form-Slugs = alle aktiven ZÄHL-Einheiten des Vokabulars minus Verpackung.
      *
      * Vorher eine handgepflegte Neuner-Liste — und die war von der Wirklichkeit abgekoppelt:
@@ -53,7 +60,7 @@ class GpFormService
             $slugs = FoodAlchemistVocabEinheit::query()
                 ->when($team, fn ($q) => $q->visibleToTeam($team))
                 ->where('is_inactive', false)
-                ->where('dimension', 'count')
+                ->where(fn ($q) => $q->where('dimension', 'count')->orWhereIn('slug', self::LOEFFEL_SLUGS))   // + Löffel (03.11.)
                 ->whereNotIn('slug', self::VERPACKUNGS_SLUGS)
                 ->orderBy('slug')
                 ->pluck('slug')
