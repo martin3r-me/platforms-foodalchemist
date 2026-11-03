@@ -578,6 +578,12 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
 .fa-zeilen-aktionen { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); display: flex; opacity: 0; pointer-events: none; transition: opacity .15s; }
 .group:hover > .fa-zeilen-aktionen, .fa-zeilen-aktionen:focus-within { opacity: 1; pointer-events: auto; }
 
+/* Einstellungen · Einzeltitel (Abnahme E-4, Dominique 24.10.): zeigt ein Unter-Reiter genau einen Abschnitt, dessen Titel die
+   Karten-Überschrift nur wiederholt (Index::EINZELTITEL), entfällt der innere h3 der obersten Ebene. Vorher als Tailwind-Variante
+   am Inhalt — die lag in `utilities.fa` und verlor gegen das Host-`.flex` des h3 (03.11. gemessen: KI, Trendradar doppelt).
+   Ungeschichtet schlägt sie jede Host-Ebene. `section section section` = verschachtelter Abschnitt, der behält seinen Titel. */
+[data-settings-einzeltitel] section.fa-surface:not(section section section) > header h3 { display: none; }
+
 /* Handy-Lesemodus (#1003): In Lese-Bereichen ([data-fa-handy-lesen], z. B. jede Detail-Leiste) sind auf der
    Handy-Oberfläche alle Ändern-Aktionen ([data-fa-aendern]) aus, dafür steht der Hinweis „Am Computer bearbeiten“.
    Handy-Oberfläche = <html data-fa-handy>, gesetzt von Support\HandyLesemodus::JS_MODUS (Touch-Gerät und schmal) —
