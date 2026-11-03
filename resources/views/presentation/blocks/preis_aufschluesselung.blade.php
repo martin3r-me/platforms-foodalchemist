@@ -43,6 +43,17 @@
                         <span style="flex:1;">inkl. {{ rtrim(rtrim(number_format((float) $pa['mwst_satz'], 1, ',', '.'), '0'), ',') }} % MwSt ({{ $nf($pa['mwst_betrag']) }} €)</span>
                     </div>
                 @endif
+                        @endif
+            @if(! empty($pa['zzgl']))
+                {{-- Spec 94b: zzgl. nach Aufwand (geschätzt, nicht im Gesamt) und voraussichtliche Gesamtsumme --}}
+                <div class="pt-zzgl" data-pt-zzgl>
+                    <div class="pt-zzgl-titel">Zzgl. nach Aufwand (geschätzt)</div>
+                    @foreach($pa['zzgl'] as $z)
+                        <div class="pt-zzgl-zeile"><span>{{ $z['titel'] }} · ca. {{ $z['menge'] }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} €</span><span>≈ {{ $nf($z['betrag']) }} €</span></div>
+                    @endforeach
+                    <div class="pt-zzgl-zeile pt-zzgl-summe" data-pt-voraussichtlich><span>Voraussichtlich gesamt inkl. Aufwand (netto)</span><span>ca. {{ $nf($pa['voraussichtlich_netto']) }} €</span></div>
+                    <div class="pt-zzgl-hinweis">Der Aufwand ist geschätzt und nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand.</div>
+                </div>
             @endif
         </div>
     </div>

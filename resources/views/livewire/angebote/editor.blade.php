@@ -451,6 +451,7 @@
                             @endif
                             <x-fa::button variant="ghost" size="sm" icon="heroicon-m-plus" wire:click="blockBasis('text')">Text</x-fa::button>
                             <x-fa::button variant="ghost" size="sm" icon="heroicon-m-plus" wire:click="blockBasis('spacer')">Leerzeile</x-fa::button>
+                            <x-fa::button variant="ghost" size="sm" icon="heroicon-m-plus" wire:click="blockBasis('position')" title="Freie Position mit Menge, Einheit und Satz, pauschal (z. B. Leistung nach Aufwand)" data-angebot-position-neu>Position</x-fa::button>
                             <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                 <x-fa::button size="sm" icon="heroicon-m-plus" icon-right="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Überschrift</x-fa::button>
                                 <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 max-h-80 overflow-y-auto fa-surface shadow-lg py-1">
@@ -527,6 +528,15 @@
                                                     @break
                                                 @case('spacer')
                                                     <span class="italic text-[var(--fa-ink-3)]">Leerzeile ({{ $block->height ?? 'mittel' }})</span>
+                                                    @break
+                                                @case('position')
+                                                    {{-- Spec 94b: Menge × Satz pauschal, EK nur intern --}}
+                                                    <x-fa::badge tone="info">Position</x-fa::badge>
+                                                    <span class="min-w-0 break-words text-[var(--fa-ink)]" data-angebot-position="{{ $block->id }}">{{ $block->label ?: 'Position ohne Bezeichnung' }}</span>
+                                                    <span class="{{ $hinweis }}">{{ rtrim(rtrim(number_format((float) $block->quantity, 2, ',', '.'), '0'), ',') }} {{ $block->einheitText() }} à <x-fa::money :value="$block->price_value" /></span>
+                                                    <x-fa::money :value="round((float) $block->quantity * (float) $block->price_value, 2)" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                    @if($block->ek_value !== null)<span class="{{ $hinweis }}">EK <x-fa::money :value="round((float) $block->quantity * (float) $block->ek_value, 2)" /></span>@endif
+                                                    @if($block->istAufwand())<x-fa::badge tone="warn" title="Geschätzt, nicht in der Angebotssumme" data-angebot-position-aufwand>zzgl. nach Aufwand</x-fa::badge>@endif
                                                     @break
                                                 @default
                                                     <span class="italic text-[var(--fa-ink-2)]">{{ \Illuminate\Support\Str::limit($block->customer_text ?? 'Text ohne Inhalt', 80) }}</span>
@@ -605,6 +615,20 @@
                                                         <option value="pauschal">pauschal</option>
                                                     </x-fa::select>
                                                     <x-fa::input type="number" step="0.01" numeric wire:model="blockForm.price_value" class="w-32" placeholder="0,00" aria-label="Preis in €" />
+                                                </div>
+                                            @endif
+                                            @if($block->type === 'position')
+                                                @php $positionsEinheiten = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam(auth()->user()->currentTeamRelation)->where('is_inactive', false)->orderBy('sort_order')->pluck('display_de', 'id')->all(); @endphp
+                                                <x-fa::input wire:model="blockForm.label" placeholder="Bezeichnung, z. B. Garderobe" aria-label="Bezeichnung der Position" data-angebot-position-label />
+                                                <div class="flex flex-wrap gap-2">
+                                                    <x-fa::input type="number" step="0.01" numeric wire:model="blockForm.quantity" class="w-24" placeholder="1" aria-label="Menge" />
+                                                    <x-fa::select wire:model="blockForm.unit_vocab_id" :options="$positionsEinheiten" placeholder="Einheit" class="w-40" aria-label="Einheit" />
+                                                    <x-fa::input type="number" step="0.01" numeric wire:model="blockForm.price_value" class="w-32" placeholder="Satz €" aria-label="Satz je Einheit in €" />
+                                                    <x-fa::input type="number" step="0.01" numeric wire:model="blockForm.ek_value" class="w-32" placeholder="EK €" aria-label="EK je Einheit in €" title="Einkauf je Einheit, nur intern" />
+                                                    <x-fa::select wire:model="blockForm.price_basis" class="w-56" aria-label="Abrechnung der Position" data-angebot-position-basis>
+                                                        <option value="pauschal">in der Angebotssumme</option>
+                                                        <option value="aufwand">zzgl. nach Aufwand (geschätzt)</option>
+                                                    </x-fa::select>
                                                 </div>
                                             @endif
                                             @if($block->type === 'concept_ref')
@@ -881,6 +905,19 @@
                                             <td class="num text-[var(--fa-ink-2)]">{{ $euro($kalkulation['vk_pro_person']) }}</td>
                                             <td class="num text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-accent)]" data-angebot-summe>{{ $euro($kalkulation['gesamt_vk']) }}</td>
                                         </tr>
+                                        @if(($kalkulation['aufwand']['vk'] ?? 0) > 0)
+                                            {{-- Spec 94b: zzgl. nach Aufwand — geschätzt, nicht in der Summe; EK und DB getrennt --}}
+                                            <tr data-angebot-aufwand>
+                                                <td class="text-[var(--fa-ink-2)]">zzgl. nach Aufwand (geschätzt)</td>
+                                                <td class="num {{ $hinweis }}" colspan="2">EK {{ $euro($kalkulation['aufwand']['ek']) }} · DB {{ $euro($kalkulation['aufwand']['db']) }}</td>
+                                                <td class="num text-[var(--fa-ink-2)]">{{ $euro($kalkulation['aufwand']['vk']) }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-[var(--fa-ink-2)]">Voraussichtlich gesamt inkl. Aufwand</td>
+                                                <td colspan="2"></td>
+                                                <td class="num font-medium text-[var(--fa-ink)]" data-angebot-voraussichtlich>ca. {{ $euro($kalkulation['gesamt_vk'] + $kalkulation['aufwand']['vk']) }}</td>
+                                            </tr>
+                                        @endif
                                     </tfoot>
                                 </table>
                             </div>

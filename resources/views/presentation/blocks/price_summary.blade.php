@@ -25,6 +25,9 @@
                     </span>
                 @endif
             @endif
+            @if(! empty($total['zzgl_summe']))
+                <span class="pt-zzgl-hinweis" data-pt-zzgl-hinweis>zzgl. nach Aufwand, geschätzt ca. {{ number_format((float) $total['zzgl_summe'], 2, ',', '.') }} € (nicht im Preis)</span>
+            @endif
         </div>
     </div>
 @endif

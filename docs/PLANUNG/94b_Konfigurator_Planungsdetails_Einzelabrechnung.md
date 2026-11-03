@@ -271,7 +271,7 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 |:--|:--|:--|
 | 7a | Kategorien als Vokabular + Zusammenfassung im Reiter Kalkulation + VK-Aufteilung im Kundenlink | Testfälle Vokabular und Zusammenfassung grün, Bestand unverändert gültig |
 | 7b | Einzelabrechnung (Preis, Kalkulation, Kundenlink mit Schätzung) — umgesetzt 03.11.2026; die Angebots-Position (`position`) folgt mit 7c | Aufwand nicht im Preis pro Person, im Link als „zzgl. nach Aufwand: ca. …“, Tests grün |
-| 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Blocktyp `position` + Aufwands-Positionen im Angebot | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
+| 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Blocktyp `position` + Aufwands-Positionen im Angebot — Teil 1 (Blocktyp `position`, Aufwands-Positionen aus der Anfrage) umgesetzt 03.11.2026, Teil 2 (Planungsdetails) folgt | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
 
 ## Entscheidungen (Dominique, 03.11.2026)
 

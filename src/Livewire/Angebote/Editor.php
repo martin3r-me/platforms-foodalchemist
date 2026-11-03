@@ -907,7 +907,7 @@ class Editor extends Component
             'label' => $block->label ?? '', 'wording' => $block->wording ?? '',
             'customer_text' => $block->customer_text ?? '',
             'price_value' => $block->price_value, 'price_basis' => $block->price_basis ?? 'person',
-            'height' => $block->height ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '',
+            'height' => $block->height ?? 'mittel', 'interne_bemerkung' => $block->interne_bemerkung ?? '', 'quantity' => $block->quantity, 'unit_vocab_id' => (string) ($block->unit_vocab_id ?? ''), 'ek_value' => $block->ek_value,
         ];
     }
 
