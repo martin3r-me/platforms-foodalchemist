@@ -11,8 +11,8 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Spec 94 · Eintrag im Konfigurator: Hauptkonzept (Lunch- und/oder Dinner-Concept aus dem Concepter),
- * Add-on (ein Concept, Abschnitt, Bindung, Tageszeit) oder Getränkepaket (Spec 94c: Lunch- und/oder Dinner-Concept, eines gilt für
- * beide; Pauschale je Event oder je Stunde, optional Staffel). Concepts werden verknüpft, nicht kopiert.
+ * Add-on (ein Concept, Abschnitt, Bindung, Tageszeit) oder Getränkepaket (Spec 94c: je Zeitfenster ein eigenes Concept — Lunch für
+ * tagsüber, Dinner für abends; Pauschale je Event oder je Stunde, optional Staffel). Concepts werden verknüpft, nicht kopiert.
  */
 class FoodAlchemistKonfiguratorKonzept extends Model
 {
@@ -55,10 +55,10 @@ class FoodAlchemistKonfiguratorKonzept extends Model
         return $this->belongsTo(FoodAlchemistConcept::class, 'dinner_concept_id');
     }
 
-    /** Spec 94c: Concept eines Getränkepakets zur Tageszeit — ist nur eines gesetzt, gilt es für beide. */
+    /** Spec 94c: Concept eines Getränkepakets zum Zeitfenster (Dominique 03.11.: je Zeitfenster ein eigenes Paket, kein Rückfall). */
     public function getraenkConceptId(string $t): ?int
     {
-        $id = $t === 'lunch' ? ($this->lunch_concept_id ?? $this->dinner_concept_id) : ($this->dinner_concept_id ?? $this->lunch_concept_id);
+        $id = $t === 'lunch' ? $this->lunch_concept_id : $this->dinner_concept_id;
 
         return $id !== null ? (int) $id : null;
     }

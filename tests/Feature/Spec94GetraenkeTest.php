@@ -18,7 +18,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * Spec 94c · Stufe 8b: Getränkepakete als `rolle = getraenk` (Concept aus dem Concepter, Kommerzielles an der Konfigurator-Zeile). Pauschale
- * je Event, je Stunde (Einsatzzeit) oder Staffel; eines für beide Tageszeiten oder eigenes Lunch-Concept; Kombi-Rabatt auf Tag und Abend;
+ * je Event, je Stunde (Einsatzzeit) oder Staffel; je Zeitfenster ein eigenes Paket (Lunch tagsüber, Dinner abends, Tag und Abend = beide Teile,
+ * Dominique 03.11.); Kombi-Rabatt auf Tag und Abend;
  * Preistabelle g{id}:lunch|dinner|dn, Gruppe „Getränke“; eigener Schritt im Link, Pflicht und Bindung; Reiter im Editor.
  */
 beforeEach(function () {
@@ -39,24 +40,32 @@ beforeEach(function () {
         ['typ' => 'getraenk', 'g' => $g->id, 't' => $t])['vk_pp'], 2);
 });
 
-it('Pauschale je Event: ein Concept für beide Tageszeiten, Tag und Abend = Tag + Abend mit Kombi-Rabatt; Gruppe „Getränke“', function () {
-    $g = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'kunden_titel' => 'Weinbegleitung']);
+it('Je Zeitfenster ein eigenes Paket: Tag + Abend = beide Teile mit Kombi-Rabatt; nur Abend-Concept = abends und Tag und Abend nur der Abend-Teil', function () {
+    $g = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => $this->wein->id, 'dinner_concept_id' => $this->wein->id,
+        'kunden_titel' => 'Weinbegleitung']);
     expect($g->getraenk_abrechnung)->toBe('pauschale')->and($g->getraenk_dauer)->toBe('event')
         ->and(($this->preis)($g, 'lunch'))->toBe(18.0)->and(($this->preis)($g, 'dinner'))->toBe(18.0)
-        ->and(($this->preis)($g, 'day_night'))->toBe(32.4);   // Getränke tagsüber und abends: 2 × 18, 10 % Kombi-Rabatt
+        ->and(($this->preis)($g, 'day_night'))->toBe(32.4);   // tagsüber + abends, 10 % Kombi-Rabatt
 
-    $fall = collect(app(KonfiguratorPricingService::class)->matrix($this->k->fresh())['pakete'][0]['faelle'])
-        ->first(fn ($f) => $f['fall']['typ'] === 'getraenk' && $f['fall']['t'] === 'dinner');
+    $abend = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id]);   // concept_id = abends
+    expect($abend->lunch_concept_id)->toBeNull()->and(($this->preis)($abend, 'day_night'))->toBe(16.2);
+    $faelle = collect(app(KonfiguratorPricingService::class)->matrix($this->k->fresh())['pakete'][0]['faelle']);
+    expect($faelle->filter(fn ($f) => $f['fall']['typ'] === 'getraenk' && $f['fall']['g'] === $abend->id)->pluck('fall.t')->values()->all())->toBe(['dinner', 'day_night']);
+
+    $fall = $faelle->first(fn ($f) => $f['fall']['typ'] === 'getraenk' && $f['fall']['g'] === $g->id && $f['fall']['t'] === 'dinner');
     expect(collect($fall['gruppen'])->pluck('name')->all())->toBe(['Getränke'])->and($fall['db_pp'])->toBe(12.0);
 });
 
 it('Pauschale je Stunde mit der Einsatzzeit; Staffel: 4 Std. Grundpreis 18 € + 3,50 € je Folgestunde = 25 € bei 6 Std.', function () {
-    $stunde = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => ($this->c)('Softdrinks', 4.5, 1)->id, 'getraenk_dauer' => 'stunde']);
-    expect(($this->preis)($stunde, 'lunch'))->toBe(18.0)->and(($this->preis)($stunde, 'dinner'))->toBe(27.0);
+    $soft = ($this->c)('Softdrinks', 4.5, 1);
+    $stunde = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => $soft->id, 'dinner_concept_id' => $soft->id, 'getraenk_dauer' => 'stunde']);
+    expect(($this->preis)($stunde, 'lunch'))->toBe(18.0)->and(($this->preis)($stunde, 'dinner'))->toBe(27.0)
+        ->and(($this->preis)($stunde, 'day_night'))->toBe(round(45 * 0.9, 2));
 
-    $staffel = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'grund_stunden' => 4, 'folgestunde_satz' => '3,50']);
+    $staffel = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => $this->wein->id, 'dinner_concept_id' => $this->wein->id,
+        'grund_stunden' => 4, 'folgestunde_satz' => '3,50']);
     expect(($this->preis)($staffel, 'dinner'))->toBe(25.0)->and(($this->preis)($staffel, 'lunch'))->toBe(18.0)   // 4 Std. ohne Folgestunde
-        ->and(($this->preis)($staffel, 'day_night'))->toBe(round((18 + 6 * 3.5) * 0.9, 2));
+        ->and(($this->preis)($staffel, 'day_night'))->toBe(round((18 + 25) * 0.9, 2));
 
     expect(fn () => $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'grund_stunden' => 4]))
         ->toThrow(InvalidArgumentException::class, 'gehören zusammen');
@@ -64,7 +73,7 @@ it('Pauschale je Stunde mit der Einsatzzeit; Staffel: 4 Std. Grundpreis 18 € +
         ->toThrow(InvalidArgumentException::class, '8c');
 });
 
-it('Eigenes Lunch-Concept gilt mittags; Tag und Abend = Tag-Teil + Abend-Teil mit Kombi-Rabatt', function () {
+it('Verschiedene Concepts je Zeitfenster: Tag und Abend = Tag-Teil + Abend-Teil mit Kombi-Rabatt', function () {
     $g = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => ($this->c)('Alkoholfrei', 8, 2)->id,
         'dinner_concept_id' => $this->wein->id]);
     expect(($this->preis)($g, 'lunch'))->toBe(8.0)->and(($this->preis)($g, 'dinner'))->toBe(18.0)
@@ -81,7 +90,8 @@ it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; An
     $link = app(PresentationService::class)->publish($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id,
         ['expires_at' => now()->addMonth()->toIso8601String(), 'design' => 'konfigurator', 'price_mode' => 'auto']);
     $body = $this->k->fresh()->presentation_snapshot_json['content'];
-    expect($body['preise'][0]["g{$g1->id}:dinner"])->toEqual(18)->and($body['preise'][0]["g{$g1->id}:dn"])->toEqual(32.4)
+    expect($body['preise'][0]["g{$g1->id}:dinner"])->toEqual(18)->and($body['preise'][0]["g{$g1->id}:dn"])->toEqual(16.2)
+        ->and($body['preise'][0])->not->toHaveKey("g{$g1->id}:lunch")   // nur Abend-Concept: tagsüber nicht wählbar
         ->and($body['getraenke_pflicht'])->toBeTrue()
         ->and(json_encode($body['getraenke']))->not->toContain('ek_')->not->toContain('Wein intern');
 

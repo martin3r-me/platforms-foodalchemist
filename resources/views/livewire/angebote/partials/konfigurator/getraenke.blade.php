@@ -1,6 +1,7 @@
 {{-- Spec 94c · Konfigurator-Editor, Reiter Getränke: Getränkepakete aus dem Concepter (Kategorie „Getränke“). Im Concept steht der Inhalt
      (Positionen, Mengen je Gast, Wording, Bilder), hier das Kommerzielle: Pauschale je Event oder je Stunde, optional Staffel
-     (Grundpreis für X Stunden + Satz je Folgestunde), Lunch-/Dinner-Concept (eines gilt für beide), Bindung, Pflicht. --}}
+     (Grundpreis für X Stunden + Satz je Folgestunde), je Zeitfenster ein eigenes Concept (Lunch tagsüber, Dinner abends; Tag und Abend =
+     beide Teile), Bindung, Pflicht. --}}
 @php
     $haupt = $k->konzepte->where('rolle', 'haupt')->values();
     $getraenke = $k->konzepte->where('rolle', 'getraenk')->values();
@@ -14,6 +15,7 @@
 <x-fa::section title="Getränkepaket hinzufügen" icon="heroicon-o-plus-circle" description="Concepts der Kategorie „Getränke“ (ohne diese Kategorie: Suche über alle Concepts). Der Preis läuft mit dem Concepter mit.">
     <div class="flex flex-wrap items-end gap-3">
         <x-fa::field label="Concept suchen" for="kf-gsuche" class="w-80 max-w-full"><x-fa::input id="kf-gsuche" type="search" wire:model.live.debounce.300ms="getraenkSuche" placeholder="z. B. Softdrinks, Wein" data-kf-getraenk-suche /></x-fa::field>
+        <x-fa::choice name="getraenkZiel" label="Für" :options="['dinner' => 'Abend (Dinner)', 'lunch' => 'Tag (Lunch)']" />
         <label class="inline-flex items-center gap-2 pb-2"><input type="checkbox" wire:model="form.getraenke_pflicht" class="accent-[var(--fa-accent)]" data-kf-getraenke-pflicht /> Getränke Pflicht im Link (sonst „ohne Getränke“ möglich, wirkt nach „Speichern“)</label>
     </div>
     @if($getraenkTreffer->isNotEmpty())
@@ -40,8 +42,8 @@
                     </x-fa::field>
                     <x-fa::field label="Staffel: Grundstunden" for="kfg-grund" optional hint="Concept-Preis gilt für so viele Stunden"><x-fa::input id="kfg-grund" wire:model="konzeptForm.grund_stunden" numeric data-kfg-grund /></x-fa::field>
                     <x-fa::field label="Staffel: je Folgestunde (€)" for="kfg-folge" optional hint="VK je Gast und weitere Stunde"><x-fa::input id="kfg-folge" wire:model="konzeptForm.folgestunde_satz" numeric data-kfg-folge /></x-fa::field>
-                    <x-fa::field label="Lunch-Concept (Id)" for="kfg-lunch" optional hint="leer = das Concept gilt für beide"><x-fa::input id="kfg-lunch" type="number" wire:model="konzeptForm.lunch_concept_id" /></x-fa::field>
-                    <x-fa::field label="Dinner-Concept (Id)" for="kfg-dinner" optional><x-fa::input id="kfg-dinner" type="number" wire:model="konzeptForm.dinner_concept_id" /></x-fa::field>
+                    <x-fa::field label="Tag: Lunch-Concept (Id)" for="kfg-lunch" optional hint="leer = tagsüber nicht wählbar"><x-fa::input id="kfg-lunch" type="number" wire:model="konzeptForm.lunch_concept_id" /></x-fa::field>
+                    <x-fa::field label="Abend: Dinner-Concept (Id)" for="kfg-dinner" optional hint="leer = abends nicht wählbar"><x-fa::input id="kfg-dinner" type="number" wire:model="konzeptForm.dinner_concept_id" /></x-fa::field>
                     <x-fa::field label="Nur bei Hauptkonzept" for="kfg-bind" optional>
                         <x-fa::select id="kfg-bind" wire:model="konzeptForm.gebunden_an_id" :options="$haupt->mapWithKeys(fn ($h) => [$h->id => $h->kunden_titel ?: 'Konzept ' . $h->id])->all()" placeholder="Bei allen" />
                     </x-fa::field>
@@ -56,7 +58,7 @@
                     <div class="flex flex-col gap-0.5">
                         <span class="font-medium">{{ $g->kunden_titel ?: $conceptName($g->dinnerConcept ?? $g->lunchConcept) }}@if($g->claim)<span class="{{ $leise }}"> · {{ $g->claim }}</span>@endif</span>
                         <span class="{{ $leise }}">Pauschale {{ $dauer($g) }}@if($g->gebunden_an_id) · nur bei {{ optional($haupt->firstWhere('id', $g->gebunden_an_id))->kunden_titel }}@endif</span>
-                        <span class="{{ $leise }}">@if($g->lunch_concept_id && $g->dinner_concept_id && $g->lunch_concept_id !== $g->dinner_concept_id)Lunch: {{ $conceptName($g->lunchConcept) }} · Dinner: {{ $conceptName($g->dinnerConcept) }}@else Concept: {{ $conceptName($g->dinnerConcept ?? $g->lunchConcept) }} (Tag und Abend)@endif</span>
+                        <span class="{{ $leise }}">Tag: {{ $conceptName($g->lunchConcept) ?? '—' }} · Abend: {{ $conceptName($g->dinnerConcept) ?? '—' }}</span>
                         <span class="{{ $leise }}" data-kfg-preise="{{ $g->id }}">
                             @foreach($vorschau($g) as $f)
                                 @if($f['fall']['typ'] === 'getraenk' && $f['fall']['g'] === $g->id){{ ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Tag und Abend'][$f['fall']['t']] }} {{ $euro($f['preis_pp']) }} (DB {{ $euro($f['db_pp']) }})@if(! $loop->last) · @endif @endif

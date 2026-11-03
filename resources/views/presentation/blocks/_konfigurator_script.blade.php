@@ -139,7 +139,8 @@
         z.addons = qa('[data-konfig-addon]').filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.value, 10); });
         qa('[data-konfig-getraenk-zeile]').forEach(function (zeile) {
             var id = parseInt(zeile.getAttribute('data-konfig-getraenk-zeile'), 10), geb = zeile.getAttribute('data-gebunden');
-            var sicht = !geb || (!!z.konzept && String(z.konzept) === geb);
+            // nur mit Preis zum Zeitfenster (je Zeitfenster ein eigenes Paket) und passender Bindung
+            var sicht = (!geb || (!!z.konzept && String(z.konzept) === geb)) && (!t || tab[gKey(id, t)] !== undefined);
             zeile.hidden = !sicht;
             var box = zeile.querySelector('[data-konfig-getraenk]');
             if (!sicht && box.checked) { box.checked = false; }

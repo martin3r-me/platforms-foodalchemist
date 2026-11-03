@@ -19,7 +19,7 @@ class KonfiguratorKonzeptePostTool extends KonfiguratorToolBasis
 
     protected function beschreibung(): string
     {
-        return 'Konzept verknüpfen: rolle=haupt mit lunch_concept_id und/oder dinner_concept_id, rolle=addon mit concept_id, abschnitt, addon_tageszeit, gebunden_an_id, oder rolle=getraenk (Getränkepaket) mit concept_id bzw. lunch_/dinner_concept_id, getraenk_dauer (event|stunde), optional grund_stunden + folgestunde_satz, gebunden_an_id.';
+        return 'Konzept verknüpfen: rolle=haupt mit lunch_concept_id und/oder dinner_concept_id, rolle=addon mit concept_id, abschnitt, addon_tageszeit, gebunden_an_id, oder rolle=getraenk (Getränkepaket, je Zeitfenster ein Concept: lunch_concept_id tagsüber, dinner_concept_id bzw. concept_id abends), getraenk_dauer (event|stunde), optional grund_stunden + folgestunde_satz, gebunden_an_id.';
     }
 
     protected function felder(): array

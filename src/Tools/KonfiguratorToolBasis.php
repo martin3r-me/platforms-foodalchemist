@@ -153,7 +153,7 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
     protected static function konzeptSchema(): array
     {
         return [
-            'rolle' => ['type' => 'string', 'enum' => ['haupt', 'addon', 'getraenk'], 'description' => 'getraenk = Getränkepaket (Spec 94c): Concept je Tageszeit, eines gilt für beide'],
+            'rolle' => ['type' => 'string', 'enum' => ['haupt', 'addon', 'getraenk'], 'description' => 'getraenk = Getränkepaket (Spec 94c): je Zeitfenster ein eigenes Concept (lunch_concept_id tagsüber, dinner_concept_id abends; concept_id = abends)'],
             'lunch_concept_id' => ['type' => 'integer'], 'dinner_concept_id' => ['type' => 'integer'],
             'concept_id' => ['type' => 'integer', 'description' => 'Add-on bzw. Getränkepaket: das Concept selbst'],
             'getraenk_abrechnung' => ['type' => 'string', 'enum' => ['pauschale'], 'description' => 'Getränkepaket: Pauschale (nach Verbrauch folgt mit 8c)'],

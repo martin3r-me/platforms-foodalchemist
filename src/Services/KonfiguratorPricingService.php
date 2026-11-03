@@ -274,9 +274,9 @@ class KonfiguratorPricingService
     /**
      * Spec 94c · Pauschale eines Getränkepakets pro Person zur Tageszeit (lunch, dinner, day_night), VK und EK; [null, null] ohne Concept-Preis.
      * Je Teil: Concept-VK (je Event), × Einsatzzeit (je Stunde) oder Staffel = Concept-VK als Grundpreis für grund_stunden + je weitere Stunde
-     * folgestunde_satz (EK im selben Verhältnis wie der VK). Tag und Abend (Dominique 03.11.: „Man braucht ja Tag Getränke und abends“):
-     * Pauschale je Event = Tag-Teil + Abend-Teil, auch bei einem Concept für beide (also zweimal); je Stunde bzw. Staffel bei einem Concept
-     * durchgehend mit der Day-into-Night-Einsatzzeit, bei eigenem Lunch- und Dinner-Concept Tag-Teil + Abend-Teil. Den Kombi-Rabatt setzt rechneFall.
+     * folgestunde_satz (EK im selben Verhältnis wie der VK). Je Zeitfenster ein eigenes Paket (Dominique 03.11.): tagsüber das Lunch-Concept,
+     * abends das Dinner-Concept; Tag und Abend = Tag-Teil + Abend-Teil mit ihren Einsatzzeiten, ein fehlender Teil zählt nicht. Ohne Concept
+     * zum Zeitfenster bzw. ohne Concept-Preis [null, null] (dann nicht wählbar). Den Kombi-Rabatt setzt rechneFall.
      *
      * @return array{0: ?float, 1: ?float}
      */
@@ -308,16 +308,24 @@ class KonfiguratorPricingService
         if ($t !== 'day_night') {
             return $teil($g->getraenkConceptId($t), $t);
         }
-        $tag = $g->getraenkConceptId('lunch');
-        $abend = $g->getraenkConceptId('dinner');
-        $proStunde = $g->getraenk_dauer === 'stunde' || $g->folgestunde_satz !== null;
-        if ($tag === $abend && $proStunde) {
-            return $teil($tag, 'day_night');
+        $vk = 0.0;
+        $ek = 0.0;
+        $teile = 0;
+        foreach (['lunch', 'dinner'] as $tz) {
+            $id = $g->getraenkConceptId($tz);
+            if ($id === null) {
+                continue;
+            }
+            [$v, $e] = $teil($id, $tz);
+            if ($v === null) {
+                return [null, null];
+            }
+            $vk += $v;
+            $ek += $e;
+            $teile++;
         }
-        [$v1, $e1] = $teil($tag, 'lunch');
-        [$v2, $e2] = $teil($abend, 'dinner');
 
-        return $v1 === null || $v2 === null ? [null, null] : [$v1 + $v2, $e1 + $e2];
+        return $teile > 0 ? [$vk, $ek] : [null, null];
     }
 
     /** Stunden einer Leistung zu einer Tageszeit: feste Stunden oder Einsatzzeit des Konfigurators plus Zuschlag. */
@@ -541,10 +549,11 @@ class KonfiguratorPricingService
         foreach ($s['addons'] as $a) {
             $faelle[] = ['typ' => 'addon', 'a' => (int) $a->id];
         }
-        foreach ($s['getraenke'] as $g) {   // Spec 94c: je Getränkepaket Tag, Abend und Tag und Abend
-            foreach (['lunch', 'dinner', 'day_night'] as $t) {
+        foreach ($s['getraenke'] as $g) {   // Spec 94c: je Zeitfenster mit Concept, dazu Tag und Abend
+            foreach (array_filter(['lunch' => $g->lunch_concept_id, 'dinner' => $g->dinner_concept_id]) as $t => $cid) {
                 $faelle[] = ['typ' => 'getraenk', 'g' => (int) $g->id, 't' => $t];
             }
+            $faelle[] = ['typ' => 'getraenk', 'g' => (int) $g->id, 't' => 'day_night'];
         }
 
         return $faelle;

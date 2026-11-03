@@ -44,6 +44,9 @@ class KonfiguratorEditor extends Component
     /** Spec 94c: Suche im Reiter Getränke (Concepts der Kategorie „Getränke“, sonst alle). */
     public string $getraenkSuche = '';
 
+    /** Spec 94c: Zeitfenster des neuen Getränkepakets (je Zeitfenster ein eigenes Concept): dinner | lunch */
+    public string $getraenkZiel = 'dinner';
+
     /** Schreibstil für „Speisen per KI betexten“ (Id als String, leer = keiner gewählt). */
     public string $wordingStil = '';
 
@@ -154,11 +157,12 @@ class KonfiguratorEditor extends Component
         }
     }
 
-    /** Spec 94c: Concept als Getränkepaket hinzufügen (ein Concept für beide Tageszeiten, Pauschale je Event). */
+    /** Spec 94c: Concept als Getränkepaket für ein Zeitfenster hinzufügen (Pauschale je Event); das andere Zeitfenster per Bearbeiten. */
     public function getraenkHinzu(int $conceptId, KonfiguratorService $svc): void
     {
         $c = FoodAlchemistConcept::visibleToTeam($this->team())->whereKey($conceptId)->first(['id', 'name', 'consumer_name']);
-        if ($this->tue(fn () => $svc->konzeptHinzu($this->team(), $this->selectedId, ['rolle' => 'getraenk', 'concept_id' => $conceptId,
+        $zeit = $this->getraenkZiel === 'lunch' ? 'lunch_concept_id' : 'dinner_concept_id';
+        if ($this->tue(fn () => $svc->konzeptHinzu($this->team(), $this->selectedId, ['rolle' => 'getraenk', $zeit => $conceptId,
             'getraenk_abrechnung' => 'pauschale', 'getraenk_dauer' => 'event', 'kunden_titel' => $c?->consumer_name ?: $c?->name]))) {
             $this->getraenkSuche = '';
         }
