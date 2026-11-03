@@ -221,7 +221,48 @@
         .pt-konfig-ok { padding: 16px; border-radius: 10px; border: 1px solid var(--pt-accent); }
         .pt-konfig-fehler { color: var(--pt-accent); font-weight: 600; }
         .pt-konfig-seite [hidden] { display: none; }
-        @media print { .pt-konfig-form, [data-konfig-teilen], .pt-konfig-kopfleiste, .pt-konfig-preisleiste, .pt-konfig-weiter { display: none; } .pt-konfig-seite [hidden] { display: block; } }
+        /* Druckfassung (Spec 94, Drucken / PDF): am Bildschirm aus; beim Drucken ersetzt sie mit Skript den Assistenten (nur die Auswahl).
+           Ohne Skript druckt der Assistent selbst, ohne Bedienelemente; Verborgenes bleibt verborgen. */
+        .pt-konfig-druck { display: none; color: var(--pt-text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .pt-konfig-druck [hidden] { display: none; }
+        .pt-druck-kopf { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: end; padding-bottom: 14px; border-bottom: 2px solid var(--pt-accent); }
+        .pt-druck-kopf h1 { font-family: var(--pt-heading-font); font-size: 2rem; line-height: 1.05; margin: 6px 0 4px; }
+        .pt-druck-logo { max-height: 48px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 14px; }
+        .pt-druck-betrieb { font-weight: 600; margin: 0 0 12px; }
+        .pt-druck-claim { color: var(--pt-muted); margin: 0; }
+        .pt-druck-titelbild { width: 200px; height: 120px; object-fit: cover; border-radius: 8px; }
+        .pt-druck-stand { color: var(--pt-muted); font-size: .8rem; text-align: right; margin: 0; }
+        .pt-druck-abschnitt { padding-top: 18px; }
+        .pt-druck-abschnitt > h2 { font-family: var(--pt-body-font); font-size: .72rem; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--pt-accent); margin: 0 0 10px; padding-bottom: 5px; border-bottom: 1px solid var(--pt-line); }
+        .pt-druck-fakten { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; margin: 0; padding: 12px 16px; background: var(--pt-surface); border: 1px solid var(--pt-line); border-left: 3px solid var(--pt-accent); border-radius: 8px; }
+        .pt-druck-fakten dt { color: var(--pt-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .12em; }
+        .pt-druck-fakten dd { margin: 2px 0 0; font-weight: 600; }
+        .pt-druck-konzept + .pt-druck-konzept { margin-top: 16px; }
+        .pt-druck-konzept h3 { font-family: var(--pt-heading-font); font-size: 1.3rem; margin: 0 0 2px; }
+        .pt-druck-zeit { color: var(--pt-muted); font-family: var(--pt-body-font); font-size: .9rem; font-weight: 400; }
+        .pt-konfig-druck .pt-block { margin-top: 0; }
+        .pt-konfig-druck .pt-block-header { font-size: 1rem; margin: 8px 0 2px; }
+        .pt-konfig-druck .pt-subheader { font-size: .78rem; letter-spacing: .12em; text-transform: uppercase; color: var(--pt-muted); margin: 14px 0 0; padding-top: 0; border-top: 0; }
+        .pt-konfig-druck .pt-line { padding: 5px 0; }
+        .pt-druck-preis-kasten { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px 28px; align-items: start; padding: 14px 16px; border: 1px solid var(--pt-line); border-top: 3px solid var(--pt-accent); border-radius: 8px; }
+        .pt-druck-preis-kasten .pt-konfig-aufteilung { max-width: none; margin: 0; }
+        .pt-druck-summe { text-align: right; }
+        .pt-druck-pp { font-family: var(--pt-heading-font); font-size: 1.9rem; line-height: 1.1; margin: 0; }
+        .pt-druck-pp small, .pt-druck-gesamt { color: var(--pt-muted); font-family: var(--pt-body-font); font-size: .85rem; }
+        .pt-druck-gesamt { margin: 4px 0 0; }
+        .pt-druck-gesamt strong { color: var(--pt-text); font-size: 1.05rem; }
+        .pt-druck-preis-kasten .pt-konfig-zzgl { grid-column: 1 / -1; max-width: none; margin: 0; padding-top: 10px; border-top: 1px dashed var(--pt-line); }
+        .pt-druck-fuss { color: var(--pt-muted); font-size: .78rem; border-top: 1px solid var(--pt-line); margin-top: 22px; padding-top: 10px; }
+        .pt-druck-fuss p { margin: 2px 0; }
+        @page konfig { size: A4; margin: 0; }
+        @media print {
+            .pt-konfig-form, [data-konfig-teilen], .pt-konfig-kopfleiste, .pt-konfig-preisleiste, .pt-konfig-weiter, .pt-konfig-gaeste, .pt-konfig-wahl, .pt-konfig-details { display: none; }
+            .pt-konfig-js .pt-konfig-seite, .pt-konfig-js .pt-footer, .pt-konfig-js .pt-konfig-detail { display: none; }
+            .pt-konfig-js .pt-konfig-druck { display: block; page: konfig; font-size: 10pt; padding: 14mm 15mm 16mm; }
+            .pt-konfig-js body, .pt-konfig-js .pt-wrap { padding: 0; margin: 0; }
+            .pt-druck-preis-kasten, .pt-konfig-druck .pt-item, .pt-konfig-druck .pt-konfig-legende, .pt-druck-kopf, .pt-druck-fakten { break-inside: avoid; }
+            .pt-konfig-druck h2, .pt-konfig-druck h3, .pt-konfig-druck .pt-subheader { break-after: avoid; }
+        }
         h1,h2,h3,h4 { font-family: var(--pt-heading-font); color: var(--pt-text); margin: 0; line-height: 1.08; font-weight: 600; letter-spacing: -0.01em; }
         /* Überlange Einzelwörter (z.B. „BROICHCATERING.EMPFANG") in Titeln umbrechen statt abschneiden.
            Greift nur, wenn ein Wort die Zeile sonst sprengen würde → Desktop mit breitem Container unberührt. */
