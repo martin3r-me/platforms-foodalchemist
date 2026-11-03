@@ -274,7 +274,7 @@ class KonfiguratorPricingService
     /**
      * Spec 94c · Pauschale eines Getränkepakets pro Person zur Tageszeit (lunch, dinner, day_night), VK und EK; [null, null] ohne Concept-Preis.
      * Je Teil: Concept-VK (je Event), × Einsatzzeit (je Stunde) oder Staffel = Concept-VK als Grundpreis für grund_stunden + je weitere Stunde
-     * folgestunde_satz (EK im selben Verhältnis wie der VK). Je Zeitfenster ein eigenes Paket (Dominique 03.11.): tagsüber das Lunch-Concept,
+     * folgestunde_satz; EK der Staffel nach Verbrauch: Grund-EK + je weitere Stunde Grund-EK / grund_stunden (Dominique 03.11.). Je Zeitfenster ein eigenes Paket (Dominique 03.11.): tagsüber das Lunch-Concept,
      * abends das Dinner-Concept; Tag und Abend = Tag-Teil + Abend-Teil mit ihren Einsatzzeiten, ein fehlender Teil zählt nicht. Ohne Concept
      * zum Zeitfenster bzw. ohne Concept-Preis [null, null] (dann nicht wählbar). Den Kombi-Rabatt setzt rechneFall.
      *
@@ -298,9 +298,10 @@ class KonfiguratorPricingService
                 default => 1.0,
             };
             if ($faktor === null) {
-                $vk = (float) $p['vk'] + max(0.0, $h - (float) $g->grund_stunden) * (float) $g->folgestunde_satz;
+                $folge = max(0.0, $h - (float) $g->grund_stunden);
+                $ekStunde = (float) $g->grund_stunden > 0 ? (float) ($p['ek'] ?? 0) / (float) $g->grund_stunden : 0.0;
 
-                return [$vk, (float) $p['vk'] > 0 ? (float) ($p['ek'] ?? 0) * $vk / (float) $p['vk'] : (float) ($p['ek'] ?? 0)];
+                return [(float) $p['vk'] + $folge * (float) $g->folgestunde_satz, (float) ($p['ek'] ?? 0) + $folge * $ekStunde];
             }
 
             return [(float) $p['vk'] * $faktor, (float) ($p['ek'] ?? 0) * $faktor];

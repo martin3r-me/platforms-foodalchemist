@@ -65,6 +65,8 @@ it('Pauschale je Stunde mit der Einsatzzeit; Staffel: 4 Std. Grundpreis 18 € +
     $staffel = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => $this->wein->id, 'dinner_concept_id' => $this->wein->id,
         'grund_stunden' => 4, 'folgestunde_satz' => '3,50']);
     expect(($this->preis)($staffel, 'dinner'))->toBe(25.0)->and(($this->preis)($staffel, 'lunch'))->toBe(18.0)   // 4 Std. ohne Folgestunde
+        // EK nach Verbrauch: 6 € für 4 Std. = 1,50 € je Stunde, 2 Folgestunden → 9 € (nicht 6 × 25/18 = 8,33 €)
+        ->and(round(app(KonfiguratorPricingService::class)->rechneFall($this->k->fresh(), $this->paket, ['typ' => 'getraenk', 'g' => $staffel->id, 't' => 'dinner'])['ek_pp'], 2))->toBe(9.0)
         ->and(($this->preis)($staffel, 'day_night'))->toBe(round((18 + 25) * 0.9, 2));
 
     expect(fn () => $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'grund_stunden' => 4]))

@@ -174,7 +174,8 @@ Keine.
   - Tag und Abend = Tag-Teil + Abend-Teil, jeweils mit seiner Einsatzzeit (je Event, je Stunde oder Staffel). Ein fehlender Teil zählt nicht.
   - Im Editor wählt man beim Hinzufügen „Für Abend / Tag“ (`concept_id` im MCP = abends), das andere Zeitfenster kommt über Bearbeiten.
   - Danach gilt der Kombi-Rabatt wie bei den Konzepten (auch auf die Zusatz-Leistungen des Pakets).
-- **Staffel-EK:** Der EK läuft im selben Verhältnis wie der VK (Grund-EK × Staffelpreis / Grundpreis), weil es für Folgestunden keinen eigenen EK gibt.
+- **Staffel-EK nach Verbrauch** (Dominique 03.11.2026): EK je Folgestunde = Grund-EK / Grundstunden, also Grund-EK + Folgestunden × Grund-EK / Grundstunden.
+  Beispiel: 6 € für 4 Std., 2 Folgestunden ergeben 9 € EK. Es gibt kein eigenes EK-Feld. Enthalten die Folgestunden anderes als das Grundpaket, wird dafür ein eigenes Paket gebaut.
 - **Verbrauch:** Er ist im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Die Prüfung meldet „folgt mit Stufe 8c“.
 - **Preistabelle und Aufteilung:**
   - Schlüssel `g{id}:lunch`, `g{id}:dinner`, `g{id}:dn`. Fehlt der Concept-Preis, fehlt der Schlüssel, und das Paket ist zu dieser Tageszeit nicht wählbar.
