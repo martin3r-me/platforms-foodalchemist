@@ -48,7 +48,8 @@ final class ZutatFreitext
     {
         // Stück-Angaben bleiben: „Zimt (2 Stück)“ meint die ganze Gewürzform (Kurator 28.10., stueckEinheit)
         $einheiten = implode('|', array_diff(explode('|', self::EINHEITEN), ['stk', 'st', 'stueck', 'stück']));
-        $menge = '(?:ca\.?\s*)?[\d.,\/½¼¾\s-]*\d[\d.,\/½¼¾\s-]*\s*(?:(?:' . $einheiten . ')\.?)?';
+        // Spec 95b (Neuabgleich 03.11.): auch „(½ TL)“ und Bereiche „(2–3 EL)“ — Halbgeviertstrich und Bruch allein sind Mengen
+        $menge = '(?:ca\.?\s*)?[\d.,\/½¼¾\s–-]*[\d½¼¾][\d.,\/½¼¾\s–-]*\s*(?:(?:' . $einheiten . ')\.?)?';
         $s = (string) preg_replace('/\s*\(\s*(?:' . $menge . '|(?:' . self::HINWEISE . ')(?:\s*,\s*(?:' . self::HINWEISE . '))*)\s*\)/iu', '', $text);
         do {
             $vorher = $s;

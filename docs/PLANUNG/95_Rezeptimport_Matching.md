@@ -76,21 +76,32 @@ Trifft der Draw, wird das Bestands-GP genommen statt eines neuen. Der Name eines
 - `mintFromLa` legt kein neues GP an, wenn der Draw ein Bestands-GP findet.
 - Alle bestehenden Matcher-Tests bleiben grün.
 
-## Stufe 2 (eigenes Paket, nicht hier)
+## Stufe 1b (Neuabgleich der 32 Pilot-Rezepte, 03.11.)
 
-- **EXTRACT mit Kandidaten:** der Import-Prompt bekommt wie GENERATE eine `gp_kandidaten`-Liste und darf eine `gp_id` je Zeile
-  vorschlagen (Text bleibt treu, die ID ist nur ein Vorschlag, validiert wie `validiereProposedGp`).
-- **Lead-Artikel beim Mint strenger (Doktrin LA-First, Dominique 02.11.: „die GP entstehen aus den Lieferantenartikeln“):**
-  Ein GP darf nur aus einem Artikel entstehen, der wirklich diese Ware ist. Passt keiner, entsteht **kein** GP, die Zeile bleibt
-  offen (Sourcing-Wunsch) — nie „ohne Lead anlegen“. `LaCandidateFinder::bestMitGrundwort` lässt heute jedes geteilte Produktwort
-  gelten (Pilot: Mondamin → „Grießbrei Mondamin“, Ingwerpüree → „WOK Ginger & Lime, Ingwerpüree mit Limettenblatt“,
-  Ei hartgekocht → „Gepocheerd Scharrel Ei“, Schweizer Hartkäse → „Schweizer Emmentaler“). Eine reine Wortstellungs-Regel
-  („Treffer muss das erste Produktwort sein“) fängt Mondamin und Ingwerpüree, bricht aber Großhandels-Bezeichnungen mit Marke vorn
-  („Buko Frischkäse Natur“, „Milram Körniger Frischkäse“) — darum nicht in Stufe 1. Regel mit dem Kurator festlegen
-  (Kandidaten: Markenwörter aus `artikel.MARKE` ausblenden, Zubereitungswörter im Artikel ohne Nennung im Text = kein Treffer,
-  Gattungs-Adjektiv „Schweizer“ zählt nicht).
-- **Anker als Folge-Job:** `minteFehlendeGps` → `ankerNachziehen` blockiert den Enrich-Lauf, bis `gp.anker` beantwortet ist.
-  Anker nach dem Commit als eigenen Job auslösen (Kurator 02.11.).
-- **Gemintete GPs vollständig:** Warengruppe, Zustand und Struktur setzen, Slug normalisieren.
+- `ohneHinweise` erkennt auch „(½ TL)“ und Bereiche „(2–3 EL)“ (Halbgeviertstrich, Bruch ohne Ziffer).
+- Gleichstand am Kopf-Boden 0,90: die Hauptzutat, die die Zutat wörtlich nennt, schlägt das Kompositum mit gleichem Anfang
+  („Mango“ → Mango, nicht „Mangold: Streifen“ — Fehler bestand schon vor Spec 95).
+
+## Stufe 2 (freigegeben Dominique 03.11., Regel festgelegt mit dem Kurator)
+
+1. **Doktrin LA-First** (Dominique: „die GP entstehen aus den Lieferantenartikeln“): ein GP entsteht nur aus einem WIRKLICH passenden
+   Artikel. Passt keiner, entsteht **kein** GP, die Zeile bleibt offen (Sourcing-Lücke) — nie raten, nie „ohne Lead anlegen“.
+2. **Passend** (`LaCandidateFinder::passtFuerMint`, genutzt von `bestMitGrundwort`): das Grundwort der Zutat ist das ERSTE
+   Produktwort der Bezeichnung nach Abzug von Marke/Hersteller (`MarkeAusArtikel`: Necta-Brand, Kürzel-Karte, Hersteller-Kurzname)
+   und Lieferantenname; Zahlen, Zustandswörter und Kürzel unter drei Buchstaben zählen nicht. „Buko Frischkäse Natur“ (Marke Buko)
+   trifft „Frischkäse“; „Grießbrei 2-3 P. Mondamin“ trifft „Mondamin“ nicht; „WOK Ginger & Lime, Ingwerpüree …“ trifft
+   „Ingwerpüree“ nicht.
+3. **Kein Widerspruch in der Struktur** (`strukturWiderspruch`, über die Merkmale des Artikels, nicht über die Bezeichnung):
+   Verarbeitung ist eine Zubereitung (`BasisVariante::ZUBEREITUNG` ohne „geschält“), die die Zutat nicht nennt — „Gepocheerd Scharrel
+   Ei“ (pochiert) ist kein „Ei“; die Zutat nennt einen Zustand und der Artikel hat einen anderen; der Artikel ist aromatisiert
+   (Geschmackszutat außer der Hauptzutat), was die Zutat nicht nennt. Ohne Struktur kein Widerspruch.
+4. **Anker als Folge-Job:** `minteFehlendeGps` zieht den Anker nicht mehr synchron (`ankerNachziehen` blockierte im externen KI-Modus
+   den ganzen Enrich-Lauf), sondern löst je GP `GpAromaNachholen::ausloesen` aus — Job nach dem Commit, je GP eindeutig, nie auf
+   einer sync-Queue. Ergebnis `anker = {nachgelagert: n}`.
+5. **EXTRACT mit Kandidaten:** `recipe.extract` bekommt `gp_kandidaten` (dieselbe Liste wie GENERATE, eigener Hinweis: Text bleibt
+   wörtlich) und darf je Zeile eine `gp_id` vorschlagen; der Generator prüft sie (`validiereProposedGp`) und fällt sonst auf den
+   Textabgleich zurück. Abschaltbar über `foodalchemist.import.gp_kandidaten`.
+
+Offen danach: gemintete GPs vollständig (Warengruppe, Zustand, Struktur, Slug); Mengen-Plausibilität (Kurkuma 3 g → gemahlen).
 
 Nicht Teil von Spec 95: Kaskaden-Runden, `onQueue`, Doppel-ENRICH, Lagerung (Kurator-Paket ENRICH).

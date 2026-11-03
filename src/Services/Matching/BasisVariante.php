@@ -59,7 +59,7 @@ final class BasisVariante
         'unterschale', 'nuss', 'schulter', 'nacken', 'bauch', 'seite', 'lende', 'haxe'];
 
     /** Zubereitungswörter der Zeile (MatchHeuristics::ZUBEREITUNG_MARKER-Verben + gegart/gekocht/geschält) — Küchenarbeit, nie genanntes Merkmal. */
-    private const ZUBEREITUNG = ['gegart', 'gekocht', 'geschaelt', 'ausgedaempft', 'sautiert', 'gebraten', 'gebacken', 'geschmort', 'gegrillt',
+    public const ZUBEREITUNG = ['gegart', 'gekocht', 'geschaelt', 'ausgedaempft', 'sautiert', 'gebraten', 'gebacken', 'geschmort', 'gegrillt',
         'frittiert', 'pochiert', 'glasiert', 'mariniert', 'paniert', 'gratiniert', 'blanchiert', 'gedaempft', 'geduenstet', 'karamellisiert', 'confiert'];
 
     /** Zukauf-Signal der aktuellen Zeile (§2 F2.1), je pruefe() gesetzt. */

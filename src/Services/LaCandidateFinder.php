@@ -189,7 +189,7 @@ class LaCandidateFinder
     public function bestMitGrundwort(Team $team, string $ingredientName, ?string $wgCode = null, int $k = 5, ?string $pflichtForm = null): ?FoodAlchemistSupplierItem
     {
         $passend = $this->find($team, $ingredientName, $wgCode, $k)
-            ->filter(fn ($la) => $this->grundwortPasst($ingredientName, (string) $la->designation)
+            ->filter(fn ($la) => $this->passtFuerMint($ingredientName, $la)
                 && ($pflichtForm === null || $this->traegtForm((string) $la->designation, $pflichtForm)))
             ->values();
 
@@ -229,6 +229,127 @@ class LaCandidateFinder
                         return true;
                     }
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Spec 95 Stufe 2 (Doktrin LA-First, Dominique 03.11.: „die GP entstehen aus den Lieferantenartikeln“): darf ein AUTOMATISCHER Mint aus diesem
+     * Artikel ein GP für die Zutat bilden? Nur, wenn der Artikel wirklich diese Ware ist — sonst kein GP, die Zeile bleibt offen (nie raten).
+     *  (1) Das Grundwort der Zutat ist das ERSTE Produktwort der Bezeichnung nach Abzug von Marke/Hersteller ({@see MarkeAusArtikel}, Necta-Brand)
+     *      und Lieferantenname — „Buko Frischkäse Natur“ ja, „Grießbrei 2-3 P. Mondamin“ für „Mondamin“ nein.
+     *  (2) Die Struktur des Artikels widerspricht der Zutat nicht ({@see strukturWiderspruch}).
+     */
+    public function passtFuerMint(string $text, FoodAlchemistSupplierItem $la): bool
+    {
+        return $this->kopfwortPasst($text, $la) && ! $this->strukturWiderspruch($text, $la);
+    }
+
+    private function kopfwortPasst(string $text, FoodAlchemistSupplierItem $la): bool
+    {
+        $produkt = trim((string) (preg_split('/[:,(]/u', $text, 2)[0] ?? $text));
+        $varianten = [$this->produktWoerter($produkt !== '' ? $produkt : $text)];
+        foreach ($this->terminology->aliasPhrasesFor($text) as $alias) {
+            $varianten[] = $this->produktWoerter((string) $alias);
+        }
+        // kurzes Gattungswort (Ei, Öl) wie in grundwortPasst: dasselbe Wort, kein Kompositum
+        $kurz = array_values(array_filter($this->engine->tokenize($produkt !== '' ? $produkt : $text),
+            fn ($t) => mb_strlen($t) >= 2 && mb_strlen($t) < 4 && ! $this->engine->istReinesMerkmal($t)));
+        if ($varianten[0] === [] && $kurz === []) {
+            return true;   // nur Zustandswörter — wie grundwortPasst
+        }
+        $kopf = $this->erstesProduktwort($la, $kurz);
+        if ($kopf === null) {
+            return false;
+        }
+        if (in_array($kopf, $kurz, true)) {
+            return true;
+        }
+        $stamm = $this->engine->stemGerman($kopf);
+        foreach ($varianten as $woerter) {
+            foreach ($woerter as $q) {
+                if (str_ends_with($q, $stamm) || str_ends_with($stamm, $q)) {
+                    return true;   // gleiches Grundwort bzw. Kompositum („Filet vom Rind“ zu „Rinderfilet“)
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Erstes Produktwort der Bezeichnung: ohne Mengen/Zahlen, Zustandswörter, Marke (Necta-Brand, Kürzel-Karte, Hersteller-Kurzname) und
+     * Lieferantenname. Wörter unter drei Buchstaben (Kürzel wie „SC“, „FC“) zählen nicht — außer sie sind das kurze Gattungswort der Zutat („Ei“).
+     *
+     * @param  list<string>  $kurz
+     */
+    private function erstesProduktwort(FoodAlchemistSupplierItem $la, array $kurz): ?string
+    {
+        $weg = [];
+        try {
+            $marke = app(Marken\MarkeAusArtikel::class)->fuer($la);
+            foreach ([$marke->marke ?? '', $marke->roh ?? ''] as $m) {
+                $weg = [...$weg, ...$this->engine->tokenize((string) $m)];
+            }
+        } catch (Throwable $e) {
+            // ohne Marken-Karte: nur Brand und Lieferant
+        }
+        foreach ([(string) $la->brand, (string) ($la->supplier?->name ?? ''), (string) ($la->supplier?->kurzname ?? '')] as $m) {
+            $weg = [...$weg, ...$this->engine->tokenize($m)];
+        }
+        foreach ($this->engine->tokenize((string) $la->designation) as $t) {
+            if (preg_match('/\d/u', $t) === 1 || in_array($t, $weg, true) || $this->engine->istReinesMerkmal($t)
+                || (mb_strlen($t) < 3 && ! in_array($t, $kurz, true))) {
+                continue;
+            }
+
+            return $t;
+        }
+
+        return null;
+    }
+
+    /**
+     * Widerspricht die Klassifikation des Artikels (Struktur) der Zutat? Über die Merkmale, nicht über die Bezeichnung (Kurator 03.11.):
+     *  - Verarbeitung ist eine Zubereitung ({@see Matching\BasisVariante::ZUBEREITUNG}: gegart, pochiert …), die die Zutat nicht nennt —
+     *    „Gepocheerd Scharrel Ei“ ist kein „Ei“;
+     *  - die Zutat nennt einen Zustand (frisch/TK/trocken/konserviert) und der Artikel hat einen anderen;
+     *  - der Artikel ist aromatisiert (Geschmackszutaten außer der Hauptzutat), die die Zutat nicht nennt — „WOK Ginger & Lime“ ist kein „Ingwerpüree“.
+     * Ohne Struktur (noch nicht klassifiziert) kein Widerspruch.
+     */
+    public function strukturWiderspruch(string $text, FoodAlchemistSupplierItem $la): bool
+    {
+        $s = $la->structure;
+        if ($s === null) {
+            return false;
+        }
+        $query = $this->engine->ingredientTokens($text);
+        // jedes tragende Wort des Merkmals steht in der Zutat (gleich, Wortanfang oder als Teil eines Kompositums: „Ingwer“ in „Ingwerpüree“)
+        $genannt = function (string $wert) use ($query): bool {
+            foreach (array_filter($this->engine->tokenize($wert), fn ($t) => mb_strlen($t) >= 3) as $t) {
+                if (array_filter($query, fn ($q) => $q === $t || (min(mb_strlen($q), mb_strlen($t)) >= 4
+                    && (str_starts_with($q, $t) || str_starts_with($t, $q) || str_contains($q, $t)))) === []) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+        // „geschält“ ist Rüstarbeit, keine Zubereitung — nur gegart/pochiert/gebraten … widersprechen der Rohware
+        $zubereitung = array_diff(Matching\BasisVariante::ZUBEREITUNG, ['geschaelt']);
+        if (array_intersect($this->engine->tokenize((string) $s->processing), $zubereitung) !== [] && ! $genannt((string) $s->processing)) {
+            return true;
+        }
+        $qZustand = $this->engine->produktForm($text)['zustand'];
+        if ($qZustand !== null && trim((string) $s->condition) !== '' && mb_strtolower((string) $s->condition) !== mb_strtolower($qZustand)) {
+            return true;
+        }
+        $haupt = (string) $s->main_ingredient_slug;
+        foreach ((array) (json_decode((string) $s->flavor_ingredient_slugs, true) ?: []) as $slug) {
+            if (is_string($slug) && $slug !== '' && $slug !== $haupt && ! $genannt(str_replace('_', ' ', $slug))) {
+                return true;
             }
         }
 
