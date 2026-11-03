@@ -66,6 +66,9 @@ class KonfiguratorEditor extends Component
     /** @var list<array>|null */
     public ?array $vorschlag = null;
 
+    /** Zuletzt an das Kind „Branding und Präsentation“ gemeldeter Sperr-Modus (es rendert sonst nicht neu). */
+    public string $sperrModusGemeldet = '';
+
     protected function sperrZiel(): ?array
     {
         return $this->selectedId !== null ? ['konfigurator', $this->selectedId] : null;
@@ -345,6 +348,12 @@ class KonfiguratorEditor extends Component
         $team = $this->team();
         $k = $this->konfigurator();
         $daten = ['k' => $k, 'sperr' => $this->sperrZustand()];
+        // Das Kind KonfiguratorPraesentation hält dieselbe Sperre, rendert aber nur bei eigenen Anfragen neu:
+        // Wechsel des Modus (Bearbeiten, Speichern, Abbrechen, Ablauf) melden, sonst bleiben seine Felder gesperrt.
+        if ($daten['sperr']['modus'] !== $this->sperrModusGemeldet) {
+            $this->sperrModusGemeldet = $daten['sperr']['modus'];
+            $this->dispatch('konfigurator-sperre')->to(KonfiguratorPraesentation::class);
+        }
         if ($k !== null) {
             $k->load(['konzepte.lunchConcept:id,name,consumer_name,price_per_person_cache,price_per_person_manual,price_mode,ek_per_person_cache,price_override_expires_at',
                 'konzepte.dinnerConcept:id,name,consumer_name,price_per_person_cache,price_per_person_manual,price_mode,ek_per_person_cache,price_override_expires_at',

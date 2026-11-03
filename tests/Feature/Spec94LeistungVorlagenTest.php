@@ -135,3 +135,13 @@ it('Navigation: kein eigener Eintrag Leistungs-Vorlagen, Zugang über die Konfig
         ->assertSeeHtml('data-lv-zurueck')
         ->assertSeeHtml('href="' . route('foodalchemist.angebote.konfiguratoren') . '"');
 });
+
+it('Regel-Anzeige: Singular bei Schlüssel 1 („1 je Gast“), sonst Plural', function () {
+    $text = fn (array $in) => LeistungVorlagen::regelText((object) ($in + ['mengen_regel' => 'schluessel', 'bezug' => 'gaeste', 'reserve_pct' => null,
+        'min' => null, 'max' => null, 'ab_pax' => null, 'bis_pax' => null]));
+    expect($text(['schluessel_n' => 1]))->toBe('1 je Gast')
+        ->and($text(['schluessel_n' => '1.00']))->toBe('1 je Gast')
+        ->and($text(['schluessel_n' => 30]))->toBe('1 je 30 Gäste')
+        ->and($text(['schluessel_n' => 1, 'bezug' => 'leistung', 'bezugLeistung' => (object) ['bezeichnung' => 'Servicekraft']]))->toBe('1 je „Servicekraft“')
+        ->and($text(['schluessel_n' => 8, 'bezug' => 'leistung', 'bezugLeistung' => (object) ['bezeichnung' => 'Servicekraft']]))->toBe('1 je 8 × „Servicekraft“');
+});
