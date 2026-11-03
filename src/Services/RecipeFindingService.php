@@ -77,8 +77,9 @@ class RecipeFindingService
         }
 
         // Nie-Geprüfte zuerst, danach die am längsten Ungeprüften. `IS NULL` als
-        // Sortier-Ausdruck funktioniert in MySQL und SQLite gleich (1/0).
-        return $q->orderByRaw($stempel . ' IS NULL DESC')->orderBy($stempel);
+        // Sortier-Ausdruck funktioniert in MySQL und SQLite gleich (1/0). `id` bricht den
+        // Gleichstand: der externe Lauf (#1002) muss bei jeder Wiederholung dieselbe Tranche ziehen.
+        return $q->orderByRaw($stempel . ' IS NULL DESC')->orderBy($stempel)->orderBy($q->getModel()->getQualifiedKeyName());
     }
 
     /**

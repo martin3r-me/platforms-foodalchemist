@@ -143,6 +143,45 @@ it('Vergleichstest speisekarte_wording.GENERATE: dieselben Positions-Texte, ein 
         ->and(($this->mcpFeatures)())->toBe(['foodbook.kundentext']);
 });
 
+it('Vergleichstest concepts.ENRICH: MCP-Aufruf legt Aufträge an statt den Provider zu rufen, nach ANTWORT dasselbe Konzept wie der Plattformweg', function () {
+    $concepts = app(ConceptService::class);
+    $bau = function (string $name) use ($concepts) {
+        $c = $concepts->create($this->rootTeam, ['name' => $name, 'status' => 'active']);
+        $slot = $concepts->addSlot($this->rootTeam, $c->id, ['role' => 'Hauptgang']);
+        $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->gericht->id]);
+
+        return $c;
+    };
+    $cp = $bau('Plattform');
+    $cm = $bau('MCP');
+    $stubCalls = fn () => DB::table('foodalchemist_ai_call_log')->where('model', 'stub-1')->count();
+    $form = fn (FoodAlchemistConcept $c) => [$c->fresh()->description, $c->fresh()->consumer_name, $c->fresh()->claim,
+        $c->fresh()->slots()->orderBy('sort')->pluck('wording')->all()];
+
+    $rp = $this->registry->get('foodalchemist.concepts.ENRICH')->execute(['concept_id' => $cp->id], $this->intern);
+    expect($rp->success)->toBeTrue($rp->error ?? '')->and($rp->data['fehler'])->toBeNull()
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
+    $callsPlattform = $stubCalls();
+    expect($callsPlattform)->toBeGreaterThan(0);
+
+    // erster MCP-Aufruf: Auftrag statt Provider-Call, nichts geschrieben (auch keine Lauf-Zeile)
+    $laeufeVorher = DB::table('foodalchemist_bulk_runs')->count();
+    $erst = $this->registry->get('foodalchemist.concepts.ENRICH')->execute(['concept_id' => $cm->id], $this->mcp);
+    expect($erst->data['status'] ?? null)->toBe('ki_auftrag_offen')
+        ->and($stubCalls())->toBe($callsPlattform, 'der Plattform-Provider wird per MCP nicht gerufen')
+        ->and(DB::table('foodalchemist_bulk_runs')->count())->toBe($laeufeVorher, 'Rollback nimmt die Lauf-Zeile mit')
+        ->and($cm->fresh()->description)->toBeNull();
+
+    [$rm, $runden] = ($this->loese)('foodalchemist.concepts.ENRICH', ['concept_id' => $cm->id]);
+
+    expect($rm->data['fehler'])->toBeNull()->and($runden)->toBe(2)
+        ->and($form($cm))->toBe($form($cp))->and($cm->fresh()->description)->not->toBeNull()
+        ->and($rm->data['schritte'])->toBe($rp->data['schritte'])
+        ->and(DB::table('foodalchemist_bulk_runs')->count())->toBe($laeufeVorher + 1)
+        ->and($stubCalls())->toBe($callsPlattform)
+        ->and(($this->mcpFeatures)())->toBe(['concept.wording']);
+});
+
 it('Wording-Tools ohne Schreibstil: kein KI-Aufruf, kein Auftrag (unverändert)', function () {
     $karten = app(SpeisekarteService::class);
     $karte = $karten->create($this->rootTeam, ['name' => 'Ohne Stil']);

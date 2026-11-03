@@ -83,6 +83,7 @@ class QualityRunService
         bool $nurVerkauf = false,
         string $pass = RecipeFindingService::PASS_COPILOT,
         ?int $userId = null,
+        bool $extern = false,   // #1002: per MCP → der Job legt KI-Aufträge an statt den Plattform-Provider zu rufen
     ): array {
         $limit = max(1, min(RecipeFindingsBatchService::MAX_LIMIT, $limit));
 
@@ -99,7 +100,7 @@ class QualityRunService
             umfangSteht: false,
         );
 
-        RecipeFindingsRunJob::dispatch((int) $run->id, (int) $team->id, $limit, $nurVerkauf, $pass, $userId);
+        RecipeFindingsRunJob::dispatch((int) $run->id, (int) $team->id, $limit, $nurVerkauf, $pass, $userId, $extern);
 
         return ['run_id' => (int) $run->id, 'limit' => $limit];
     }

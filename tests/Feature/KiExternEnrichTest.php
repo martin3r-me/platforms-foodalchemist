@@ -151,3 +151,28 @@ it('ein zweiter manueller Aufruf während der Lauf wartet legt keinen zweiten La
 
     expect(DB::table('foodalchemist_ki_auftraege')->count())->toBe($anzahl);
 });
+
+it('verkaufsrezepte.ENRICH per MCP: extern, Aufträge statt OpenAI (inkl. VK-Schritte), nach den Antworten ist das Gericht angereichert', function () {
+    $gericht = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'p2b-vk-'.bin2hex(random_bytes(4)),
+        'name' => 'Rinderfilet mit Rotweinjus', 'status' => 'draft', 'is_sales_recipe' => true]);
+    $mcp = new ToolContext($this->user, $this->rootTeam, ['team_source' => 'user_current']);
+    $r = app(ToolRegistry::class)->get('foodalchemist.verkaufsrezepte.ENRICH')->execute(['recipe_id' => $gericht->id, 'ki_bilder' => true], $mcp);
+
+    expect($r->success)->toBeTrue($r->error ?? '')->and($r->data['extern'])->toBeTrue()
+        ->and($this->stub->calls)->toBe(0)
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->count())->toBeGreaterThan(0)
+        ->and(DB::table('foodalchemist_ki_auftraege')->first()->lauf_key)->toBe("enrich-recipe:{$this->rootTeam->id}:{$gericht->id}");
+
+    $runden = 0;
+    while (DB::table('foodalchemist_ki_auftraege')->where('status', 'offen')->exists() && $runden++ < 12) {
+        ($this->antworteAlle)();
+    }
+    $features = DB::table('foodalchemist_ki_auftraege')->pluck('feature')->unique()->values()->all();
+    expect($this->stub->calls)->toBe(0, 'der Plattform-Provider wird im Extern-Weg nie gerufen')
+        ->and(DB::table('foodalchemist_ki_auftraege')->pluck('status')->unique()->all())->toBe(['verbraucht'])
+        ->and($features)->toContain('vk.wording', 'vk.plating', 'vk.servier_vehikel');
+    $frisch = $gericht->fresh();
+    expect($frisch->taste_direction)->toBe('herzhaft')
+        ->and($frisch->description)->toBe('Dunkle, sirupartige Saucenbasis.')
+        ->and($frisch->description_source)->toBe('ki');
+});

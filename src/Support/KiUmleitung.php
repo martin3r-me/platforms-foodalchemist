@@ -55,6 +55,7 @@ final class KiUmleitung
         'foodalchemist.recipes.EXTRACT' => 'Nur der Textweg (raw_text; das Tool nimmt weder Bild noch PDF): ein propose() (recipe.extract), danach DB-Schreiben des Entwurfs inkl. Sub-Basisrezepte. Folge-Jobs (StubAusrezeptierenJob für neue Hüllen) erben extern aus dem MCP-Aufruf und laufen erst nach dem Commit. dry_run schreibt nichts.',
         'foodalchemist.produktpass.RECHERCHE' => 'Websuche (Option der Websuche am Gateway): ein propose() (artikel.web_recherche) über ArtikelWebRecherche, danach DB-Schreiben des Vorschlags. Extern sucht der MCP-Client selbst; die Antwort muss quellen tragen (sonst abgelehnt), sie kommen als `sources` zurück. Keine Queue-Jobs.',
         'foodalchemist.signale.FIX' => 'Nur der Assist-Plan ruft ein propose() (je Signal-Typ signal.* / price.plausi) und liefert einen Entwurf ohne Schreiben und ohne Schließen. Deterministische Pläne, Weg-Absagen und dry_run rufen keine KI und laufen unverändert (SignalFixJob ist rein deterministisch).',
+        'foodalchemist.concepts.ENRICH' => 'Synchron (ConceptOneShotService::anreichern): deterministischer Kopf aus dem Gerüst, Lauf-Zeile (laufAnlegen), ein propose() (concept.wording über ConceptService::generateWording, nur_luecken), danach laufZaehlen bzw. markiereGescheitert — alles DB in der Tool-Transaktion, keine Queue/Cache/Storage/Events. Wartet der Lauf, rollt auch die Lauf-Zeile zurück.',
         'foodalchemist.recipes.GENERATE' => 'Synchron: Rezept, Zutaten und Matching entstehen im Tool-Aufruf (Transaktion ⇒ der Rollback nimmt den Entwurf zurück, jede Wiederholung startet vom selben Stand). Mehrere KI-Glieder = mehrere Runden. Nebenwirkungen außerhalb der DB meldet die Wache (KiUmleitungTest/KiExternGenerateTest).',
     ];
 
@@ -85,14 +86,35 @@ final class KiUmleitung
     }
 
     /**
-     * Tools, deren KI-Aufruf im Queue-Worker läuft (Lauf-Flag statt Hülle): Der externe MCP-Aufruf setzt `extern` am Lauf, der Worker
-     * legt dann KI-Aufträge an. Die Hülle (Transaktion/Rollback) greift hier nicht, der Tool-Aufruf selbst schreibt nur die Lauf-Zeile.
+     * Tools, deren KI-Aufruf im Queue-Worker läuft (Lauf-Flag statt Hülle): Der externe MCP-Aufruf setzt `extern` am Lauf
+     * ({@see externFuerLauf}) oder der Job erbt es beim Dispatch aus dem MCP-Aufruf ({@see KiExternModus::fuerDispatch}); der Worker legt
+     * dann KI-Aufträge an. Die Hülle (Transaktion/Rollback) greift hier nicht, der Tool-Aufruf selbst schreibt nur die Lauf-Zeile.
+     * Dokumentation + Wächter (KiWegVollstaendigWaechterTest), kein Schalter: der Weg steht im Tool bzw. Job.
      *
      * @var array<string, string>
      */
     public const LAUF_FLAG = [
         'foodalchemist.gps.ENRICH' => 'BulkEnrichService::starteGp(extern) → BulkEnrichGpJob setzt KiExternModus im Worker; verarbeiteGp legt bei „ausstehend“ keinen Leer-Vorschlag an.',
         'foodalchemist.recipes.ENRICH' => 'PlanningCascadeService::enrichBestehendesRezept(extern) → EnrichRecipeJob (KiExternWiederholbar, P2b): Sammel-Transaktion im Job, ANTWORT startet den Lauf neu.',
+        'foodalchemist.verkaufsrezepte.ENRICH' => 'Wie recipes.ENRICH (gleiche Tool-Klasse, Gericht): enrichBestehendesRezept(extern) → EnrichRecipeJob (KiExternWiederholbar), inkl. VK-Schritte vk.wording/vk.plating/vk.servier_vehikel; KI-Bilder entfallen extern. KiExternEnrichTest.',
+        'foodalchemist.gp_aroma_backfill.RUN' => 'GpAromaBackfillService::lauf(extern: externFuerLauf) — KI-Aufträge je Lücke (gp.anker/gp.sensorik), Aufruf nach ANTWORT wiederholen (#630).',
+        'foodalchemist.recipe_findings_run.POST' => 'QualityRunService::starteBefundeLauf(extern: externFuerLauf) → RecipeFindingsRunJob (KiExternWiederholbar, `recipe-findings:{team}:{run}`): der ganze Batch in der Sammel-Transaktion, je fälligem Rezept ein Auftrag (recipe.review/vk.review bzw. recipe.bauart), ANTWORT startet den Lauf neu. KiExternFindingsRunTest.',
+        'foodalchemist.speiseplan.PLAN_FROM_BRIEF' => 'Kein Gerüst-Aufruf im Tool; die KI läuft nur in MaterializeSpeiseplanCellJob (KiExternWiederholbar, erbeExtern aus dem MCP-Aufruf, Dispatch nach dem Commit).',
+        'foodalchemist.trends.ABLEITUNG' => 'Das Tool ruft keine KI; TrendAbleitungService::anstossen liest fuerDispatch → TrendAbleitungJob (KiExternWiederholbar, `trend-ableitung:{team}:{trend}`), Dispatch afterCommit. Spec93DAbleitungTest.',
+        'foodalchemist.trend_eingang.ERSCHLIESSEN' => 'Das Tool ruft keine KI; erschliessenDispatchen liest fuerDispatch → TrendEingangErschliessenJob (KiExternWiederholbar, `trend-erschliessen:{team}:{eingang}`), Dispatch afterCommit. Spec93BErschliessenBuendelnTest.',
+    ];
+
+    /**
+     * KI-Tools (cost_class `llm`/`ai_call`, dazu Bild-Wege), die bewusst weder umgeleitet werden noch ein Lauf-Flag tragen → Grund.
+     * Der Wächter (KiWegVollstaendigWaechterTest) verlangt für jedes KI-Tool einen Eintrag in TOOLS, LAUF_FLAG oder hier.
+     * Präfix „ABGENOMMEN:“ = Entscheidung Dominique; „AUSGENOMMEN:“ = in der Pflichtliste (90) als ausgenommen geführt;
+     * „OFFEN, Folgepaket:“ = Lücke, die noch geschlossen werden soll.
+     *
+     * @var array<string, string>
+     */
+    public const KI_AUSNAHMEN = [
+        'foodalchemist.recipe_images.GENERATE' => 'ABGENOMMEN: Bildgenerierung (RecipeImageService, Core-Bilddienst) bleibt Plattform — Claude erzeugt keine Bilder (Dominique 03.11.: „Bilder bleiben so“). Pflichtliste Nr. 84.',
+        'foodalchemist.produktpass.POST' => 'AUSGENOMMEN: Datei-Lesen (PDF/Bild) über ProduktpassLesenJob → ProduktpassLeser (produktpass.extract) mit Anhang; Anhänge gehen nur über den OpenAI-Weg der Plattform (pruefeBildWeg), ein KI-Auftrag trägt keine Datei. Pflichtliste Nr. 58 (Entscheidung Punkt 5) / F2 „Bild-/PDF-Anhänge: ausgenommen“.',
     ];
 
     /** Soll ein Lauf, den dieser Aufruf startet, extern laufen? (nur Aufruf über den externen MCP-Server, Schalter an) */

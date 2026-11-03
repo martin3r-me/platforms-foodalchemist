@@ -67,7 +67,7 @@ class RecipeFeedbackDevelopTool extends FoodAlchemistTool implements ToolContrac
             'category' => 'action',
             'tags' => ['foodalchemist', 'recipe', 'feedback', 'weiterentwicklung', 'write'],
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm',
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates'],
             'related_tools' => ['foodalchemist.recipe_feedback.POST', 'foodalchemist.recipe_feedback.DELETE'],
             'examples' => ['Entwickle Rezept aus Feedback 55 weiter.'],

@@ -107,7 +107,7 @@ class RecipesReviewTool extends FoodAlchemistTool implements ToolContract, ToolM
             'requires_auth' => true,
             'requires_team' => true,
             'side_effects' => [],
-            'cost_class' => 'llm_call',
+            'cost_class' => 'llm',
             'related_tools' => ['foodalchemist.recipe_ingredients.PUT', 'foodalchemist.recipes.GET', 'foodalchemist.gps.MATCH', 'foodalchemist.recipes.GENERATE'],
             'examples' => [
                 'Prüfe Rezept 412 auf Plausibilität und zeig mir die Befunde',

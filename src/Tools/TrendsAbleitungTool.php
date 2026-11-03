@@ -55,7 +55,7 @@ class TrendsAbleitungTool extends FoodAlchemistTool implements ToolContract, Too
         return [
             'category' => 'action', 'tags' => ['foodalchemist', 'trendradar', 'trends', 'ki', 'write'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm_call', 'side_effects' => ['updates'],
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm', 'side_effects' => ['updates'],
             'related_tools' => ['foodalchemist.trends.GET', 'foodalchemist.trends.PUT', 'foodalchemist.ki_auftraege.GET'],
             'examples' => ['Was heißt der Trend „Fermentation“ für uns? Erzeug die Ableitung.'],
         ];

@@ -131,7 +131,7 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
             'tags' => ['foodalchemist', 'basisrezept', 'anreicherung', 'enrich', 'ki'],
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
-            'side_effects' => ['updates'], 'cost_class' => 'llm_call',
+            'side_effects' => ['updates'], 'cost_class' => 'llm',
             'related_tools' => [
                 'foodalchemist.recipes.REIFE', 'foodalchemist.planung_kaskade.GET',
                 'foodalchemist.recipes.POST', 'foodalchemist.recipe_ingredients.PUT',
