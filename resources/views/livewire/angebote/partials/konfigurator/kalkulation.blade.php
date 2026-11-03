@@ -46,6 +46,20 @@
                                 </td>
                             @endforeach
                         </tr>
+                        @if(! empty($f['einzel']))
+                            {{-- Spec 94b §4: Einzelabrechnung nach Aufwand, getrennt vom All-in --}}
+                            <tr wire:key="kfmx-{{ $p['paket_id'] }}-{{ $i }}-einzel" data-kf-einzel="{{ $p['paket_id'] }}-{{ $i }}">
+                                <td colspan="8">
+                                    <p class="{{ $leise }}">Zzgl. nach Aufwand, geschätzt bei {{ $p['referenz_pax'] }} Gästen, nicht im Preis pro Person:</p>
+                                    <ul class="flex flex-col gap-0.5">
+                                        @foreach($f['einzel'] as $e)
+                                            <li>ca. {{ rtrim(rtrim(number_format($e['menge'], 2, ',', '.'), '0'), ',') }} {{ $e['einheit'] }} {{ $e['bezeichnung'] }} à {{ $euro($e['satz']) }}
+                                                ≈ {{ $euro($e['betrag']) }} <span class="{{ $leise }}">· EK {{ $euro($e['ek_betrag']) }} · DB {{ $euro($e['betrag'] - $e['ek_betrag']) }}</span></li>
+                                        @endforeach
+                                    </ul>
+                                </td>
+                            </tr>
+                        @endif
                         @if(! empty($f['gruppen']))
                             {{-- Spec 94b §5: Zusammenfassung je Gruppe (Speisen Tag/Abend/Extras, je vorkommender Kategorie), gesamt = × Referenz-Pax --}}
                             <tr wire:key="kfmx-{{ $p['paket_id'] }}-{{ $i }}-gruppen">

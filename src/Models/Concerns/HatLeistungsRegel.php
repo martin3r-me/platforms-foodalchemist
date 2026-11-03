@@ -22,11 +22,14 @@ trait HatLeistungsRegel
 
     public const VK_MODI = ['auto', 'fixed'];
 
+    /** Spec 94b: im All-in-Preis oder Einzelabrechnung nach Aufwand (nicht im Preis pro Person, im Link „zzgl. nach Aufwand“). */
+    public const ABRECHNUNGEN = ['all_in', 'aufwand'];
+
     /** Felder, die beim Übernehmen aus der Vorlage kopiert werden (Rechnen und Preis). */
     public const REGEL_FELDER = [
         'kategorie', 'bezeichnung', 'notiz', 'mengen_regel', 'anzahl', 'bezug', 'bezug_leistung_id', 'schluessel_n', 'min', 'max',
         'ab_pax', 'bis_pax', 'stufen_json', 'reserve_pct', 'preis_je', 'stunden_quelle', 'stunden', 'stunden_zuschlag', 'haeufigkeit',
-        'ek_satz', 'markup_class_id', 'vk_satz', 'vk_modus', 'vk_begruendung',
+        'ek_satz', 'markup_class_id', 'vk_satz', 'vk_modus', 'vk_begruendung', 'abrechnung', 'abrechnung_einheit_vocab_id',
     ];
 
     public function initializeHatLeistungsRegel(): void
@@ -45,6 +48,7 @@ trait HatLeistungsRegel
             'ek_satz' => 'decimal:2',
             'vk_satz' => 'decimal:2',
             'position' => 'integer',
+            'abrechnung_einheit_vocab_id' => 'integer',
         ]);
     }
 }

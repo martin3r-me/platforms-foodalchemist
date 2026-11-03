@@ -48,6 +48,8 @@ final class LeistungsRegelPruefung
             'vk_satz' => $zahl('vk_satz'),
             'vk_modus' => (string) ($w['vk_modus'] ?? 'auto'),
             'vk_begruendung' => trim((string) ($w['vk_begruendung'] ?? '')) ?: null,
+            'abrechnung' => (string) ($w['abrechnung'] ?? 'all_in') ?: 'all_in',
+            'abrechnung_einheit_vocab_id' => $ganz('abrechnung_einheit_vocab_id'),
         ];
 
         $fehler = fn (string $m) => throw new \InvalidArgumentException($m);
@@ -119,6 +121,15 @@ final class LeistungsRegelPruefung
         if ($aus['markup_class_id'] !== null
             && ! FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('leistung')->whereKey($aus['markup_class_id'])->where('is_inactive', false)->exists()) {
             $fehler('Die Aufschlagsklasse ist keine aktive Leistungsklasse dieses Teams.');
+        }
+        if (! in_array($aus['abrechnung'], FoodAlchemistLeistungVorlage::ABRECHNUNGEN, true)) {
+            $fehler('Abrechnung im All-in oder nach Aufwand.');
+        }
+        if ($aus['abrechnung'] !== 'aufwand') {
+            $aus['abrechnung_einheit_vocab_id'] = null;
+        } elseif ($aus['abrechnung_einheit_vocab_id'] !== null
+            && ! \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->whereKey($aus['abrechnung_einheit_vocab_id'])->exists()) {
+            $fehler('Die Einheit der Abrechnung gibt es nicht oder sie ist für dieses Team nicht sichtbar.');
         }
         if (! in_array($aus['vk_modus'], FoodAlchemistLeistungVorlage::VK_MODI, true)) {
             $fehler('VK-Modus automatisch oder fest.');

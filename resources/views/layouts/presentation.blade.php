@@ -192,6 +192,10 @@
         .pt-konfig-aufteilung { list-style: none; margin: 4px 0 14px; padding: 0; max-width: 420px; }
         .pt-konfig-aufteilung li { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-bottom: 1px solid var(--pt-line); color: var(--pt-muted); font-size: .92rem; }
         .pt-konfig-aufteilung li span:last-child { color: var(--pt-text); font-variant-numeric: tabular-nums; }
+        .pt-konfig-zzgl { margin: 4px 0 16px; max-width: 560px; }
+        .pt-konfig-zzgl ul { list-style: none; margin: 4px 0; padding: 0; }
+        .pt-konfig-zzgl li { padding: 4px 0; border-bottom: 1px solid var(--pt-line); font-size: .92rem; }
+        @media (max-width: 420px) { .pt-konfig-zzgl-leiste { display: none; } }
         .pt-konfig-haken { position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; accent-color: var(--pt-accent); }
         .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
         .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }

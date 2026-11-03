@@ -386,6 +386,7 @@ class KonfiguratorEditor extends Component
                 'vorlagen' => $vorlagen->liste($team, null, null, true),
                 'kategorien' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($team),
                 'kategorieNamen' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->namen($team),
+                'einheiten' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->pluck('display_de', 'id')->all(),
                 'klassen' => FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('leistung')->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
                 'conceptTreffer' => mb_strlen($q) >= 2
                     ? FoodAlchemistConcept::visibleToTeam($team)->where(fn ($w) => $w->where('name', 'like', "%{$q}%")->orWhere('consumer_name', 'like', "%{$q}%"))

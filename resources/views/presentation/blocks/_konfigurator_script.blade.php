@@ -6,6 +6,7 @@
         'pakete' => $content['pakete'] ?? [],
         'preise' => $content['preise'] ?? [],
         'aufteilung' => $content['aufteilung'] ?? [],
+        'zzgl' => $content['zzgl'] ?? [],
         'konzepte' => $content['konzepte'] ?? [],
         'addons' => $content['addons'] ?? [],
         'tageszeit_aktiv' => (bool) ($content['tageszeit_aktiv'] ?? false),
@@ -160,6 +161,26 @@
             zeilenA.forEach(function (g) { var li = document.createElement('li'); var n = document.createElement('span'); n.textContent = g.name; var v = document.createElement('span'); v.textContent = euro(g.vk); li.appendChild(n); li.appendChild(v); teile.appendChild(li); });
             teile.hidden = zeilenA.length < 2;
         }
+        // Spec 94b §4: zzgl. nach Aufwand (Konzept und gewählte Extras), Schätzung je Paket, nicht im Preis
+        var zz = [];
+        if (k && i !== null) {
+            zz = ((d.zzgl[i] || {})[schluessel(k, t)] || []).slice();
+            z.addons.forEach(function (a) { zz = zz.concat((d.zzgl[i] || {})['a' + a] || []); });
+        }
+        var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
+        if (zzBox && zzListe) {
+            zzListe.innerHTML = '';
+            zz.forEach(function (e) {
+                var li = document.createElement('li');
+                var menge = e.menge.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+                li.textContent = 'ca. ' + menge + ' ' + e.einheit + ' ' + e.titel + ' ≈ ' + euro(e.betrag) + ' (' + euro(e.satz) + ' je ' + e.einheit + ')';
+                zzListe.appendChild(li);
+            });
+            zzBox.hidden = zz.length === 0;
+        }
+        var zzSumme = zz.reduce(function (s, e) { return s + e.betrag; }, 0);
+        qa('[data-konfig-zzgl-leiste]').forEach(function (e) { e.hidden = zz.length === 0; });
+        setze('[data-konfig-zzgl-summe]', zz.length ? '≈ ' + euro(zzSumme) : '');
         var liste = q('[data-konfig-auswahl]');
         if (liste) {
             var zeilen = [];

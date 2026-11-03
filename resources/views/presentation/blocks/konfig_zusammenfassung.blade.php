@@ -12,6 +12,12 @@
         {{-- Spec 94b §5: Aufteilung des Preises pro Person nach Gruppen (Speisen Tag/Abend, Kategorien, Extras), ohne EK --}}
         <ul class="pt-konfig-aufteilung" data-konfig-aufteilung hidden aria-label="Aufteilung pro Person"></ul>
         @if($style['show_gesamt'] ?? true)<p class="pt-konfig-gesamt">Gesamt <strong data-konfig-gesamt>—</strong> netto</p>@endif
+        {{-- Spec 94b §4: Leistungen nach Aufwand — klar als Schätzung, nicht im Preis pro Person und nicht im Gesamtpreis --}}
+        <div class="pt-konfig-zzgl" data-konfig-zzgl hidden>
+            <p class="pt-kicker">zzgl. nach Aufwand</p>
+            <ul data-konfig-zzgl-liste></ul>
+            <p class="pt-konfig-legende">Geschätzt aus der Planung für diese Gästezahl, abgerechnet wird nach tatsächlichem Aufwand.</p>
+        </div>
         <p class="pt-section-text" data-konfig-indikativ hidden>Der Preis ist indikativ und wird im Angebot bestätigt.</p>
         <p class="pt-section-text" data-konfig-hinweis>Bitte ein Konzept wählen.</p>
         <div class="pt-konfig-wahl">

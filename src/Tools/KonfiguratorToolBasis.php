@@ -128,6 +128,8 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
             'vk_modus' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::VK_MODI],
             'vk_satz' => ['type' => 'number', 'description' => 'nur bei vk_modus=fixed'],
             'vk_begruendung' => ['type' => 'string', 'description' => 'Pflicht bei vk_modus=fixed'],
+            'abrechnung' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::ABRECHNUNGEN, 'description' => 'all_in (Standard) oder aufwand: Einzelabrechnung, nicht im Preis pro Person; im Kundenlink „zzgl. nach Aufwand“ mit Schätzung'],
+            'abrechnung_einheit_vocab_id' => ['type' => 'integer', 'description' => 'nur bei aufwand: Einheit aus dem Einheiten-Vokabular; leer = Stunde bzw. Stück aus preis_je'],
         ];
     }
 

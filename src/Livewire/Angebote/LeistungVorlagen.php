@@ -119,6 +119,7 @@ class LeistungVorlagen extends Component
             'gesamt' => $liste->count(),
             'kategorien' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($team),
             'kategorieNamen' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->namen($team),
+            'einheiten' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->pluck('display_de', 'id')->all(),
             'klassen' => FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('leistung')->where('is_inactive', false)
                 ->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
             'bezugOptionen' => $liste->reject(fn ($v) => $v->id === $this->editId)->mapWithKeys(fn ($v) => [$v->id => $v->bezeichnung])->all(),
@@ -179,7 +180,7 @@ class LeistungVorlagen extends Component
         return ['bezeichnung' => '', 'notiz' => '', 'mengen_regel' => 'fest', 'anzahl' => '1', 'bezug' => 'gaeste', 'bezug_leistung_id' => '',
             'schluessel_n' => '', 'min' => '', 'max' => '', 'ab_pax' => '', 'bis_pax' => '', 'reserve_pct' => '', 'preis_je' => 'stueck',
             'stunden_quelle' => 'einsatzzeit', 'stunden' => '', 'stunden_zuschlag' => '', 'haeufigkeit' => 'je_event', 'ek_satz' => '',
-            'markup_class_id' => '', 'vk_satz' => '', 'vk_modus' => 'auto', 'vk_begruendung' => '', 'aktiv' => true];
+            'markup_class_id' => '', 'vk_satz' => '', 'vk_modus' => 'auto', 'vk_begruendung' => '', 'abrechnung' => 'all_in', 'abrechnung_einheit_vocab_id' => '', 'aktiv' => true];
     }
 
     private function team(): Team
