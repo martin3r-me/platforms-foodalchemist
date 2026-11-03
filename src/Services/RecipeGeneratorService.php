@@ -1230,7 +1230,7 @@ class RecipeGeneratorService
         // das Tool meldete `none`, wo diese Methode gezogen hätte. Die PRÜFUNG bleibt hier: nur
         // der Generator kennt das Eltern-Rezept und damit den Zyklus-Schutz.
         $wantKind = $istBasisrezept ? 'sub' : 'gp';
-        foreach ($this->matcher->drawKandidaten($shortlist, $wantKind, $bestand) as $c) {
+        foreach ($this->matcher->drawKandidaten($shortlist, $wantKind, $bestand, $team, $text) as $c) {
             if ($wantKind === 'gp') {
                 if ($this->validiereProposedGp($team, $c['id']) !== null) {
                     return ['target' => 'gp', 'id' => $c['id'], 'score' => $c['score']];

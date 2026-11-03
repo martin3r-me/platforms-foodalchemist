@@ -42,7 +42,9 @@ beforeEach(function () {
      * sonst nur `origin: lexical` liefert, was der Draw korrekt verwirft.
      */
     $this->matcherMit = function (array $shortlist) {
-        $mock = Mockery::mock(IngredientMatchService::class)->makePartial();
+        // Spec 95: mit Konstruktor — der Draw prüft seit Spec 95 Hauptzutat und Variante über die echte TokenEngine
+        $mock = Mockery::mock(IngredientMatchService::class, [app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class),
+            app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)])->makePartial();
         $mock->shouldReceive('matchIngredient')->andReturn([
             'target' => 'none', 'status' => 'no_match', 'gp_id' => null, 'gp_name' => null,
             'recipe_id' => null, 'recipe_name' => null, 'score' => 0.4,

@@ -137,7 +137,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         $abgelehnt = [];
         if (($match['target'] ?? null) === 'none') {
             $wantKind = ($mode === 'sub_recipe_first' || $basisrezeptZeile) ? 'sub' : 'gp';
-            foreach ($svc->drawKandidaten($kandidaten, $wantKind, $bestand) as $c) {
+            foreach ($svc->drawKandidaten($kandidaten, $wantKind, $bestand, $team, $zutat) as $c) {
                 $gezogen = $wantKind === 'gp'
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->visibleToTeam($team)
                         ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)

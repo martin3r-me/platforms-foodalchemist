@@ -85,6 +85,8 @@ class IngredientMatchService
         ?string $einheit = null,            // 28.10.: Einheit der Zeile (Stück → ganze Gewürzform)
         ?string $zubereitung = null,        // 29.10.: eigen | zukauf | ohne aus den Leitplanken (MatchLeitplanken::zubereitung)
     ): array {
+        // Spec 95: Hinweis-Zusätze aus dem Rezepttext („(1 EL)“, „, Raumtemperatur“, „(optional)“) tragen keine Ware — vor jedem Abgleich weg
+        $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);
         // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
         if (preg_match('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', $ingredientName) === 1 && preg_match('/fl(?:ü|ue)ssig|pasteuris/iu', $ingredientName) !== 1) {
             $ingredientName = (string) preg_replace('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', 'Eier', $ingredientName);
@@ -546,6 +548,7 @@ class IngredientMatchService
      */
     public function candidatesFor(Team $team, string $ingredientName, ?string $hauptzutatSlug = null, int $k = 5): array
     {
+        $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);   // Spec 95, wie matchIngredient
         $this->tiebreakMemo = [];
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
@@ -1149,12 +1152,13 @@ class IngredientMatchService
      * @param  'gp'|'sub'  $wantKind
      * @return list<array{kind: string, id: int, score: float}>
      */
-    public function drawKandidaten(array $shortlist, string $wantKind, string $bestand): array
+    public function drawKandidaten(array $shortlist, string $wantKind, string $bestand, ?Team $team = null, string $zutat = ''): array
     {
         $floor = $this->drawFloor($bestand);
         if ($floor === null) {
             return [];   // komplett_neu zieht NIE
         }
+        $zutat = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($zutat);
         $out = [];
         foreach ($shortlist as $c) {
             if (($c['kind'] ?? null) !== $wantKind) {
@@ -1170,12 +1174,34 @@ class IngredientMatchService
                 break;   // desc-sortiert: ab hier liegt alles unter dem Boden
             }
             $id = (int) ($c['id'] ?? 0);
-            if ($id > 0) {
+            if ($id > 0 && ($wantKind !== 'gp' || $team === null || trim($zutat) === '' || $this->drawZulaessig($team, $zutat, $id))) {
                 $out[] = ['kind' => (string) $c['kind'], 'id' => $id, 'score' => (float) $c['score']];
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Spec 95 (Pilot 02.11.: „Parmesan“ → „Hippe: Parmesan“, „Frischkäse“ → „Frischkäse: Grillpaprika“, „Weißwein“ → Weißwein-Creme
+     * Dr. Oetker): der Draw zieht nur, was auch die Entscheidung zuließe — dieselbe Hauptzutat ({@see hauptzutatPasst}) und kein ungenannter
+     * Geschmack, keine ungenannte Marke ({@see Matching\BasisVariante::ungenannt}). Zustand, Zuschnitt, Pflichtangabe dürfen offen sein.
+     */
+    private function drawZulaessig(Team $team, string $zutat, int $gpId): bool
+    {
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
+        if ($gp === null) {
+            return false;
+        }
+        $this->currentIngredientName = $zutat;
+        $this->tiebreakQuery = $this->engine->ingredientTokens($zutat);
+        $this->aliasTokens = null;
+        if (! $this->hauptzutatPasst($gp)) {
+            return false;
+        }
+        $offen = app(Matching\BasisVariante::class)->ungenannt($gp, $this->tiebreakQuery);
+
+        return array_filter($offen, fn (string $e) => str_starts_with($e, 'Geschmack:') || str_starts_with($e, 'Marke:')) === [];
     }
 
     /**
