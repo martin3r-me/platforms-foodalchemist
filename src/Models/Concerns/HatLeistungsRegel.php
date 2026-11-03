@@ -8,7 +8,7 @@ namespace Platform\FoodAlchemist\Models\Concerns;
  */
 trait HatLeistungsRegel
 {
-    public const KATEGORIEN = ['personal' => 'Personal', 'equipment' => 'Equipment', 'logistik' => 'Logistik', 'sonstiges' => 'Sonstiges'];
+    // Spec 94b: die Kategorien sind ein Vokabular (FoodAlchemistVocabLeistungskategorie, LeistungsKategorieService), keine Konstante mehr.
 
     public const MENGEN_REGELN = ['fest', 'schluessel', 'stufen'];
 

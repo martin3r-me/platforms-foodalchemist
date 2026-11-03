@@ -109,7 +109,7 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
         $zahl = ['type' => 'number'];
 
         return [
-            'kategorie' => ['type' => 'string', 'enum' => array_keys(FoodAlchemistLeistungVorlage::KATEGORIEN)],
+            'kategorie' => ['type' => 'string', 'description' => 'Slug einer wählbaren Leistungskategorie (foodalchemist.leistungskategorien.GET), z. B. personal'],
             'bezeichnung' => ['type' => 'string'],
             'notiz' => ['type' => 'string'],
             'mengen_regel' => ['type' => 'string', 'enum' => FoodAlchemistLeistungVorlage::MENGEN_REGELN, 'description' => 'fest: anzahl · schluessel: 1 je schluessel_n (bezug gaeste|leistung) mit min/max/reserve_pct · stufen: stufen_json'],

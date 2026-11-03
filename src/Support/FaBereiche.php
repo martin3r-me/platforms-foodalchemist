@@ -108,7 +108,7 @@ final class FaBereiche
         ['speisekarte', 'speisekarte'], ['speiseplan', 'speiseplan'], ['speiseplaene', 'speiseplan'],
         ['foodbook', 'foodbook'], ['kapitel_', 'foodbook'],
         ['angebot', 'angebote'], ['offer', 'angebote'],
-        ['konfigurator', 'angebote'], ['leistung_vorlagen', 'angebote'],   // Spec 94: Konfiguratoren und Leistungs-Vorlagen
+        ['konfigurator', 'angebote'], ['leistung_vorlagen', 'angebote'], ['leistungskategorien', 'angebote'],   // Spec 94: Konfiguratoren, Leistungs-Vorlagen, Kategorien (94b)
         // Concepter & Formate
         ['concept', 'concepter'], ['composer', 'concepter'], ['format', 'concepter'], ['paket', 'concepter'], ['baustein', 'concepter'],
         ['zielgruppen', 'concepter'], ['portfolio', 'concepter'], ['proportion', 'concepter'],

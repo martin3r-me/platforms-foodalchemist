@@ -189,6 +189,9 @@
         .pt-konfig-ab { color: var(--pt-accent); font-weight: 600; font-size: .95rem; margin-top: auto; padding-top: 8px; }
         .pt-konfig-ab small { color: var(--pt-muted); font-weight: 400; }
         .pt-konfig-kombi:not([hidden]) { display: block; font-size: .8rem; }
+        .pt-konfig-aufteilung { list-style: none; margin: 4px 0 14px; padding: 0; max-width: 420px; }
+        .pt-konfig-aufteilung li { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-bottom: 1px solid var(--pt-line); color: var(--pt-muted); font-size: .92rem; }
+        .pt-konfig-aufteilung li span:last-child { color: var(--pt-text); font-variant-numeric: tabular-nums; }
         .pt-konfig-haken { position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; accent-color: var(--pt-accent); }
         .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
         .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }

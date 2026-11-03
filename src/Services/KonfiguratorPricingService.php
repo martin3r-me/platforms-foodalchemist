@@ -146,7 +146,10 @@ class KonfiguratorPricingService
      * nach Regel für genau diese Gästezahl (Handwerte gelten weiter), geteilt durch `$pax` — für Rand und Vorschlag.
      *
      * @param  array{typ:string, k?:int, t?:string, k1?:int, k2?:int, a?:int}  $fall
-     * @return array{speisen_vk:float, speisen_ek:float, leistungen_vk:float, leistungen_ek:float, teiler:int, vk_pp:float, ek_pp:float, speisen_fehlen:bool, ungeschnuert:bool}
+     * `gruppen` (Spec 94b): VK und EK pro Person je Speisen-Teil (speisen_tag | speisen_abend | speisen_extras) und je
+     * Leistungskategorie (art kategorie, slug); Summe = vk_pp bzw. ek_pp. Der Kombi-Rabatt geht anteilig auf alle Gruppen.
+     *
+     * @return array{speisen_vk:float, speisen_ek:float, leistungen_vk:float, leistungen_ek:float, teiler:int, vk_pp:float, ek_pp:float, speisen_fehlen:bool, ungeschnuert:bool, gruppen:list<array{art:string, slug:?string, vk_pp:float, ek_pp:float}>}
      */
     public function rechneFall(FoodAlchemistKonfigurator $konfigurator, ?FoodAlchemistKonfiguratorPaket $paket, array $fall, ?int $pax = null, ?array $stand = null): array
     {
@@ -176,24 +179,28 @@ class KonfiguratorPricingService
         $speisenVk = 0.0;
         $speisenEk = 0.0;
         $speisenFehlen = false;
-        $speise = function (?int $conceptId) use ($s, &$speisenVk, &$speisenEk, &$speisenFehlen): void {
+        $gruppen = [];   // Schlüssel → [art, slug, vk, ek] (Speisen je Person, Leistungen gesamt — unten durch den Teiler)
+        $speise = function (?int $conceptId, string $art) use ($s, &$speisenVk, &$speisenEk, &$speisenFehlen, &$gruppen): void {
             $p = $conceptId !== null ? ($s['speisen'][$conceptId] ?? null) : null;
             $speisenFehlen = $speisenFehlen || $p === null || $p['vk'] === null;
             $speisenVk += (float) ($p['vk'] ?? 0);
             $speisenEk += (float) ($p['ek'] ?? 0);
+            $gruppen[$art] ??= [$art, null, 0.0, 0.0];
+            $gruppen[$art][2] += (float) ($p['vk'] ?? 0);
+            $gruppen[$art][3] += (float) ($p['ek'] ?? 0);
         };
 
         if ($fall['typ'] === 'addon') {
             $a = $s['konzepte'][$fall['a']];
-            $speise($a->dinner_concept_id ?? $a->lunch_concept_id);
+            $speise($a->dinner_concept_id ?? $a->lunch_concept_id, 'speisen_extras');
             foreach ($mengen($a, null) as $id => $n) {
                 $posten[] = [$id, $n, $a->addon_tageszeit === 'lunch' ? 'lunch' : 'dinner'];
             }
         } elseif ($fall['typ'] === 'day_night') {
             $k1 = $s['konzepte'][$fall['k1']];
             $k2 = $s['konzepte'][$fall['k2']];
-            $speise($k1->lunch_concept_id);
-            $speise($k2->dinner_concept_id);
+            $speise($k1->lunch_concept_id, 'speisen_tag');
+            $speise($k2->dinner_concept_id, 'speisen_abend');
             $lunch = $mengen($k1, 'lunch');
             $dinner = $mengen($k2, 'dinner');
             foreach (array_unique(array_merge(array_keys($lunch), array_keys($dinner))) as $id) {
@@ -210,7 +217,7 @@ class KonfiguratorPricingService
             }
         } else {
             $k = $s['konzepte'][$fall['k']];
-            $speise($fall['t'] === 'lunch' ? $k->lunch_concept_id : $k->dinner_concept_id);
+            $speise($fall['t'] === 'lunch' ? $k->lunch_concept_id : $k->dinner_concept_id, $fall['t'] === 'lunch' ? 'speisen_tag' : 'speisen_abend');
             foreach ($mengen($k, $fall['t']) as $id => $n) {
                 $posten[] = [$id, $n, $fall['t']];
             }
@@ -223,16 +230,20 @@ class KonfiguratorPricingService
             $menge = $l->preis_je === 'stunde' ? $n * $this->stunden($s['k'], $l, $t) : $n;
             $lVk += $menge * (float) ($l->vk_satz ?? 0);
             $lEk += $menge * (float) $l->ek_satz;
+            $g = 'k:' . $l->kategorie;
+            $gruppen[$g] ??= ['kategorie', (string) $l->kategorie, 0.0, 0.0];
+            $gruppen[$g][2] += $teiler > 0 ? $menge * (float) ($l->vk_satz ?? 0) / $teiler : 0.0;
+            $gruppen[$g][3] += $teiler > 0 ? $menge * (float) $l->ek_satz / $teiler : 0.0;
         }
 
         $vkPp = $teiler > 0 ? $speisenVk + $lVk / $teiler : 0.0;
         $ekPp = $teiler > 0 ? $speisenEk + $lEk / $teiler : 0.0;
-        if ($fall['typ'] === 'day_night') {
-            $vkPp *= 1 - (float) $s['k']->kombi_rabatt_pct / 100;   // Kombi-Rabatt nur auf den Konzeptanteil, EK bleibt
-        }
+        $rabatt = $fall['typ'] === 'day_night' ? 1 - (float) $s['k']->kombi_rabatt_pct / 100 : 1.0;
+        $vkPp *= $rabatt;   // Kombi-Rabatt auf den ganzen Konzeptanteil (Speisen + Leistungen, nicht Add-ons), EK bleibt
 
         return ['speisen_vk' => round($speisenVk, 4), 'speisen_ek' => round($speisenEk, 4), 'leistungen_vk' => round($lVk, 4), 'leistungen_ek' => round($lEk, 4),
-            'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert];
+            'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert,
+            'gruppen' => array_values(array_map(fn ($g) => ['art' => $g[0], 'slug' => $g[1], 'vk_pp' => $teiler > 0 ? $g[2] * $rabatt : 0.0, 'ek_pp' => $teiler > 0 ? $g[3] : 0.0], $gruppen))];
     }
 
     /** Stunden einer Leistung zu einer Tageszeit: feste Stunden oder Einsatzzeit des Konfigurators plus Zuschlag. */
@@ -283,6 +294,7 @@ class KonfiguratorPricingService
             }
         }
 
+        $namen = app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->namen(\Platform\Core\Models\Team::findOrFail($s['k']->team_id));
         $pakete = [];
         foreach ($s['pakete'] as $paket) {
             $faelle = [];
@@ -310,7 +322,10 @@ class KonfiguratorPricingService
                 }
                 $faelle[] = ['fall' => $fall, 'name' => $this->fallName($s, $fall), 'preis_pp' => $preis, 'ek_pp' => round($kern['ek_pp'], 2),
                     'db_pp' => round($preis - $kern['ek_pp'], 2), 'speisen_vk' => $kern['speisen_vk'], 'leistungen_vk_pp' => $kern['teiler'] > 0 ? round($kern['leistungen_vk'] / $kern['teiler'], 2) : 0.0,
-                    'rand' => $rand];
+                    'rand' => $rand,
+                    // Spec 94b §5: Zusammenfassung je Gruppe (Speisen Tag/Abend/Extras, je Kategorie), Summe = preis_pp
+                    'gruppen' => array_map(fn ($g) => $g + ['db_pp' => round($g['vk_pp'] - $g['ek_pp'], 2)],
+                        \Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen))];
             }
             $pakete[] = ['paket_id' => (int) $paket->id, 'name' => $paket->anzeigeName(), 'von_pax' => (int) $paket->von_pax, 'bis_pax' => (int) $paket->bis_pax,
                 'referenz_pax' => (int) $paket->referenz_pax, 'faelle' => $faelle];

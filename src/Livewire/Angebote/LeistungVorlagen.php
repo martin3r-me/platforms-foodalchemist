@@ -37,7 +37,8 @@ class LeistungVorlagen extends Component
     {
         $this->reset('fehler', 'hinweis', 'stufenText');
         $this->editId = 0;
-        $this->form = self::leereRegel() + ['kategorie' => array_key_exists($kategorie, FoodAlchemistLeistungVorlage::KATEGORIEN) ? $kategorie : 'personal'];
+        $auswahl = app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($this->team());
+        $this->form = self::leereRegel() + ['kategorie' => isset($auswahl[$kategorie]) ? $kategorie : (string) array_key_first($auswahl)];
     }
 
     public function bearbeiten(int $id, LeistungVorlageService $svc): void
@@ -116,7 +117,8 @@ class LeistungVorlagen extends Component
             'team' => $team,
             'gruppen' => $liste->groupBy('kategorie'),
             'gesamt' => $liste->count(),
-            'kategorien' => FoodAlchemistLeistungVorlage::KATEGORIEN,
+            'kategorien' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($team),
+            'kategorieNamen' => app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->namen($team),
             'klassen' => FoodAlchemistMarkupClass::visibleToTeam($team)->bereich('leistung')->where('is_inactive', false)
                 ->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
             'bezugOptionen' => $liste->reject(fn ($v) => $v->id === $this->editId)->mapWithKeys(fn ($v) => [$v->id => $v->bezeichnung])->all(),
