@@ -523,6 +523,23 @@ Ablauf wie im DOEC-Vorbild:
 3. Add-ons nach Abschnitten, gefiltert nach Bindung und Tageszeit.
 4. Zusammenfassung: Pax-Regler (Bereich aus den Paketen, Anzeige des Pakets, z. B. „100–199 Gäste“), Preis pro Person und gesamt, Indikativ-Hinweise, Drucken/PDF, Konfiguration teilen (URL-Hash), **Anfrage senden**.
 
+**Drucken / PDF** (03.11.2026, nach Test am Handy): Gedruckt wird nicht der Assistent, sondern eine eigene Druckfassung
+(`_konfigurator_druck`), die beim Drucken den Assistenten ersetzt, über den Knopf und über das Druckmenü des Browsers.
+Der Server rendert alle Bausteine verborgen. Das Skript zeigt nur die aktuelle Auswahl und füllt Auswahl und Preis aus derselben Preistabelle.
+- **Reihenfolge:**
+  1. Kopf mit Logo (sonst Betrieb), Titel, Claim und Titelbild
+  2. Eure Auswahl (Konzept, Zeitfenster, Gäste, Preisstufe, Extras)
+  3. Speisen je gewähltem Konzept und Tageszeit über `_block_body` wie im Foodbook, mit Codes und Legende, ohne Gericht-Fotos
+  4. Gewählte Extras mit ihren Gerichten
+  5. Preis pro Person und gesamt mit Aufteilung, darunter „zzgl. nach Aufwand“ mit „Voraussichtlich gesamt ca.“
+  6. Hinweise: indikativ, gültig bis, Kontakt = „Anfragen gehen an“
+- **Snapshot:** Neu sind `meta.betrieb` und `meta.kontakt` (nur Name und E-Mail).
+- **Was nicht gedruckt wird:** Bedienelemente, nicht gewählte Optionen und Leer-Hinweise.
+- **Seite:** A4 über `@page konfig`, Seitenumbrüche nie mitten in einer Zeile.
+- **Ursache der Befunde:** Die alte Druck-Regel `.pt-konfig-seite [hidden] { display: block }` machte alles Verborgene sichtbar.
+  Daher kamen die falsche Reihenfolge, die Leer-Hinweise, die nicht gewählten Optionen und der leere zzgl-Block ohne Zeilen.
+- **Server-PDF (DomPDF):** vorerst nicht. Der Browser-Druck nutzt dieselben Tokens und Schriften, und das Handy erzeugt daraus ein PDF.
+
 **Kein Leak:** Der Snapshot enthält **keine** EK-Werte, Aufschlagsklassen, Mengen oder einzelnen Leistungszeilen. Er enthält
 eine serverseitig vorberechnete **Preistabelle**: je Pax-Paket (von / bis) und je Hauptkonzept, Tageszeit und Add-on
 der VK pro Person, für Day-into-Night je Paar aus Lunch- und Dinner-Konzept. Der Browser sucht das Paket zur

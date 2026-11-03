@@ -171,16 +171,16 @@
         var indi = q('[data-konfig-indikativ]');
         if (indi) { indi.hidden = !(k && ((t === 'lunch' && k.indikativ_lunch) || (t === 'dinner' && k.indikativ_dinner) || (t === 'day_night' && (k.indikativ_lunch || k.indikativ_dinner)))); }
         // Spec 94b §5: Aufteilung des Preises pro Person (Gruppen aus dem Snapshot, Extras als eigene Zeile), Summe = Preis
-        var teile = q('[data-konfig-aufteilung]');
-        if (teile) {
-            var zeilenA = k && i !== null ? ((d.aufteilung[i] || {})[schluessel(k, t)] || []).slice() : [];
-            var extras = 0; z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { extras += tab['a' + a]; } });
-            if (zeilenA.length && getraenkePp > 0) { zeilenA.push({ name: 'Getränke', vk: getraenkePp }); }
-            if (zeilenA.length && extras > 0) { zeilenA.push({ name: 'Extras', vk: extras }); }
+        var zeilenA = k && i !== null ? ((d.aufteilung[i] || {})[schluessel(k, t)] || []).slice() : [];
+        var extras = 0; z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { extras += tab['a' + a]; } });
+        if (zeilenA.length && getraenkePp > 0) { zeilenA.push({ name: 'Getränke', vk: getraenkePp }); }
+        if (zeilenA.length && extras > 0) { zeilenA.push({ name: 'Extras', vk: extras }); }
+        var teileFuellen = function (teile) {
             teile.innerHTML = '';
             zeilenA.forEach(function (g) { var li = document.createElement('li'); var n = document.createElement('span'); n.textContent = g.name; var v = document.createElement('span'); v.textContent = euro(g.vk); li.appendChild(n); li.appendChild(v); teile.appendChild(li); });
             teile.hidden = zeilenA.length < 2;
-        }
+        };
+        var teile = q('[data-konfig-aufteilung]'); if (teile) { teileFuellen(teile); }
         // Spec 94b §4: zzgl. nach Aufwand (Konzept und gewählte Extras), Schätzung je Paket, nicht im Preis
         var zz = [];
         if (k && i !== null) {
@@ -188,8 +188,7 @@
             z.addons.forEach(function (a) { zz = zz.concat((d.zzgl[i] || {})['a' + a] || []); });
             z.getraenke.forEach(function (g) { zz = zz.concat((d.zzgl[i] || {})[gKey(g, t)] || []); });
         }
-        var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
-        if (zzBox && zzListe) {
+        var zzFuellen = function (zzBox, zzListe) {
             zzListe.innerHTML = '';
             zz.forEach(function (e) {
                 var li = document.createElement('li');
@@ -197,8 +196,10 @@
                 li.textContent = 'ca. ' + menge + ' ' + e.einheit + ' ' + e.titel + ' ≈ ' + euro(e.betrag) + ' (' + euro(e.satz) + ' je ' + e.einheit + ')';
                 zzListe.appendChild(li);
             });
-            zzBox.hidden = zz.length === 0;
-        }
+            zzBox.hidden = zz.length === 0;   // ohne Zeilen kein Block (auch im Druck)
+        };
+        var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
+        if (zzBox && zzListe) { zzFuellen(zzBox, zzListe); }
         var zzSumme = zz.reduce(function (s, e) { return s + e.betrag; }, 0);
         qa('[data-konfig-zzgl-leiste]').forEach(function (e) { e.hidden = zz.length === 0; });
         setze('[data-konfig-zzgl-summe]', zz.length ? '≈ ' + euro(zzSumme) : '');
@@ -211,6 +212,40 @@
             zeilen.push(z.pax + ' Gäste');
             liste.innerHTML = '';
             zeilen.forEach(function (text) { var li = document.createElement('li'); li.textContent = text; liste.appendChild(li); });
+        }
+        // Druckfassung: nur die aktuelle Auswahl (Konzept je Tageszeit, gewählte Extras), Preis wie oben
+        var dr = q('[data-konfig-druck]');
+        if (dr) {
+            var zeitText = { lunch: 'Tag', dinner: 'Abend', day_night: 'Tag und Abend' };
+            var feldD = function (n, text) { var f = dr.querySelector('[data-druck-feld="' + n + '"]'); if (f) { f.hidden = !text; setzeIn(f, '[data-druck-wert]', text || ''); } };
+            var abendK = t === 'day_night' ? (konzept(z.abend || (k && k.id)) || k) : null;
+            feldD('konzept', k ? k.titel + (abendK && abendK.id !== k.id ? ' (Abend: ' + abendK.titel + ')' : '') : '');
+            feldD('tageszeit', k && d.tageszeit_aktiv ? zeitText[t] : '');
+            feldD('pax', z.pax + ' Gäste');
+            feldD('stufe', i !== null ? d.pakete[i].name : '');
+            feldD('getraenke', z.getraenke.map(function (g) { return (getraenk(g) || {}).titel; }).filter(Boolean).join(', '));
+            feldD('extras', z.addons.map(function (a) { return (d.addons.filter(function (y) { return y.id === a; })[0] || {}).titel; }).filter(Boolean).join(', '));
+            var zeigen = k ? (t === 'day_night' ? [k.id + ':lunch', abendK.id + ':dinner'] : [k.id + ':' + t]) : [];
+            var n = 0;
+            dr.querySelectorAll('[data-druck-speisen]').forEach(function (b) { var an = zeigen.indexOf(b.getAttribute('data-druck-speisen')) >= 0; b.hidden = !an; if (an) { n++; } var zl = b.querySelector('[data-druck-zeit-label]'); if (zl) { zl.hidden = !d.tageszeit_aktiv && t !== 'day_night'; } });
+            var sb = dr.querySelector('[data-druck-speisen-block]'); if (sb) { sb.hidden = n === 0; }
+            var gn = 0;
+            dr.querySelectorAll('[data-druck-getraenk]').forEach(function (b) {
+                var an = z.getraenke.indexOf(parseInt(b.getAttribute('data-druck-getraenk'), 10)) >= 0; b.hidden = !an; if (an) { gn++; }
+                b.querySelectorAll('[data-druck-getraenk-zeit]').forEach(function (zt) { var w = zt.getAttribute('data-druck-getraenk-zeit'); zt.hidden = !(t === 'day_night' || w === t); });
+            });
+            var gb = dr.querySelector('[data-druck-getraenke-block]'); if (gb) { gb.hidden = gn === 0; }
+            var m = 0;
+            dr.querySelectorAll('[data-druck-addon]').forEach(function (b) { var an = z.addons.indexOf(parseInt(b.getAttribute('data-druck-addon'), 10)) >= 0; b.hidden = !an; if (an) { m++; } });
+            var eb = dr.querySelector('[data-druck-extras-block]'); if (eb) { eb.hidden = m === 0; }
+            var preisDa = !!k && pp !== null && !ab;
+            var pb = dr.querySelector('[data-druck-preis-block]'); if (pb) { pb.hidden = !preisDa; }
+            setzeIn(dr, '[data-druck-pp]', preisDa ? euro(pp) : '');
+            setzeIn(dr, '[data-druck-gesamt]', preisDa ? euro(pp * z.pax) : '');
+            var dt = dr.querySelector('[data-druck-aufteilung]'); if (dt) { teileFuellen(dt); }
+            var dz = dr.querySelector('[data-druck-zzgl]'), dzl = dr.querySelector('[data-druck-zzgl-liste]'); if (dz && dzl) { zzFuellen(dz, dzl); }
+            setzeIn(dr, '[data-druck-gesamt-inkl]', preisDa && zz.length ? euro(pp * z.pax + zzSumme) : '');
+            setzeIn(dr, '[data-druck-stand]', 'Stand ' + new Date().toLocaleDateString('de-DE'));
         }
         qa('[data-konfig-weiter]').forEach(function (b) { var sec = b.closest('[data-konfig-gruppe]'); b.disabled = !erfuellt(sec ? sec.getAttribute('data-konfig-gruppe') : 'konzepte'); });
 

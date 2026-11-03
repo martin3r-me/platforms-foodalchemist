@@ -486,22 +486,22 @@ class GpAggregateService
     }
 
     /**
-     * Spec 94c · „enthält Alkohol“ eines GP aus seinen Artikeln (is_alcohol, Warn-Regel): true, sobald ein sichtbarer Artikel
-     * Alkohol enthält; false, wenn alle Artikel ihn ausschließen; null ohne Angabe. Gepflegt wird am Artikel (Artikel-Modal).
+     * Spec 94c · „enthält Alkohol“ eines GP (Warn-Regel, Kita): der feste Wert `gps.alkohol` hat Vorrang (gepflegt bzw. vorbelegt).
+     * Ohne ihn zählt nur ein sichtbarer Artikel mit is_alcohol = 1 als ja. is_alcohol = 0 heißt bei Necta „keine Angabe“ und gilt als NULL,
+     * aus den Artikeln wird nie ein nein — „unbekannt“ darf nie als alkoholfrei erscheinen.
      */
     public function enthaeltAlkohol(FoodAlchemistGp $gp): ?bool
     {
-        $row = DB::table('foodalchemist_supplier_item_structures AS s')
-            ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 's.supplier_item_id')
-            ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
-            ->tap(fn ($q) => $this->nurSichtbare($q, 's.supplier_item_id', $this->besitzerSicht($gp)))
-            ->selectRaw('MAX(CASE WHEN si.is_alcohol = 1 THEN 1 ELSE 0 END) AS ja, SUM(CASE WHEN si.is_alcohol IS NULL THEN 1 ELSE 0 END) AS offen, COUNT(*) AS n')
-            ->first();
-        if ($row === null || (int) $row->n === 0) {
-            return null;
+        if ($gp->alkohol !== null) {
+            return (bool) $gp->alkohol;
         }
+        $ja = DB::table('foodalchemist_supplier_item_structures AS s')
+            ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 's.supplier_item_id')
+            ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')->where('si.is_alcohol', 1)
+            ->tap(fn ($q) => $this->nurSichtbare($q, 's.supplier_item_id', $this->besitzerSicht($gp)))
+            ->exists();
 
-        return (int) $row->ja === 1 ? true : ((int) $row->offen > 0 ? null : false);
+        return $ja ? true : null;
     }
 
     /**

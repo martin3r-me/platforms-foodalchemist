@@ -62,6 +62,8 @@
     @endforeach
     @if($istKonfigurator)</div>@endif
     @if(($snapshot['type'] ?? null) === 'konfigurator')
+        {{-- Druckfassung (ersetzt beim Drucken den Assistenten, zeigt nur die Auswahl) --}}
+        @include('foodalchemist::presentation.blocks._konfigurator_druck', ['content' => $content, 'snapshot' => $snapshot])
         @include('foodalchemist::presentation.blocks._konfigurator_script', ['content' => $content])
     @endif
 @endsection

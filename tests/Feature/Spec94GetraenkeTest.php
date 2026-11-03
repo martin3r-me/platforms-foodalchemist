@@ -105,6 +105,12 @@ it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; An
     expect($html)->toContain('data-konfig-zu="getraenke"')->toContain('data-konfig-getraenk-zeile="' . $g1->id . '"')->toContain('Weinbegleitung')
         ->and(strpos($html, 'data-konfig-zu="getraenke"'))->toBeLessThan(strpos($html, 'data-konfig-zu="anfrage"'))
         ->and(strpos($html, 'id="konfig-getraenke"'))->toBeGreaterThan(strpos($html, 'id="konfig-konzepte"'));
+    // Druckfassung: Getränke-Abschnitt zwischen Speisen und Extras bzw. Preis, Pakete verborgen bis zur Auswahl
+    $druck = \Illuminate\Support\Str::between($html, 'data-konfig-druck', '</article>');
+    expect($druck)->toContain('data-druck-getraenk="' . $g1->id . '" hidden')->toContain('data-druck-feld="getraenke" hidden')
+        ->and(strpos($druck, 'data-druck-abschnitt="getraenke"'))->toBeGreaterThan(strpos($druck, 'data-druck-abschnitt="speisen"'))
+        ->and(strpos($druck, 'data-druck-abschnitt="getraenke"'))->toBeLessThan(strpos($druck, 'data-druck-abschnitt="preis"'))
+        ->and($druck)->not->toContain('Wein intern');
 
     $token = $this->k->fresh()->presentation_token;
     $basis = ['name' => 'Kevin', 'email' => 'kevin@example.org', 'datenschutz' => '1', 'konzept' => (string) $this->haupt->id, 'tageszeit' => 'dinner',

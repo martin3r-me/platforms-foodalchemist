@@ -24,6 +24,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
         'name', 'hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id', 'bio', 'vegan', 'glutenfrei', 'laktosefrei',
         'rezepturware',   // §5 Ausnahme 3; marke_offen ist abgeleitet und nie Eingabe
+        'alkohol',        // Spec 94c: ja | nein | offen
     ];
 
     public function getName(): string
@@ -58,6 +59,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'vegan' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Vegan)“ (Feld namens_vegan, getrennt vom Artikel-Tag).'],
                 'glutenfrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Glutenfrei)“ (Feld namens_glutenfrei).'],
                 'laktosefrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Laktosefrei)“ (Feld namens_laktosefrei).'],
+                'alkohol' => ['type' => 'string', 'enum' => ['ja', 'nein', 'offen'], 'description' => 'Enthält das Produkt Alkohol (Getränk ab 0,5 vol-%, Kochwein, Mirin, Rum-Aroma …)? Fester Wert mit Vorrang vor den Artikeldaten, wird bis ins Rezept hochgereicht (Kennzeichnung „Alk.“). Gilt als manuell gepflegt; offen = keine Aussage.'],
                 'commodity_group_code' => ['type' => 'string', 'description' => 'Warengruppen-Code (§3).'],
                 'sub_category' => ['type' => 'string', 'description' => 'Sub-Kategorie.'],
                 'is_derivat' => ['type' => 'boolean', 'description' => 'Nebenprodukt-Derivat (§11.2) — requires_la wird dann 0.'],
