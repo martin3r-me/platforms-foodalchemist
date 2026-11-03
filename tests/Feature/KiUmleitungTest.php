@@ -65,6 +65,10 @@ beforeEach(function () {
     $rubrik = $karten->addRubrik($this->rootTeam, $this->karteId);
     $karten->addPosition($this->rootTeam, $rubrik->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $gericht->id]);
     \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::whereKey($this->karteId)->update(['writing_style_id' => $stil->id]);
+    // Konfigurator-Konzept mit demselben Menü (Spec 94 KI-Wording)
+    $kf = app(\Platform\FoodAlchemist\Services\KonfiguratorService::class);
+    $this->kfKonzeptId = $kf->konzeptHinzu($this->rootTeam, $kf->anlegen($this->rootTeam, ['name' => 'Gala'])->id, ['rolle' => 'haupt', 'dinner_concept_id' => $menue->id])->id;
+    $this->stilId = $stil->id;
     $this->ohneProviderCall = fn () => DB::table('foodalchemist_ai_call_log')->whereNull('error')->count() === 0;
 });
 
@@ -90,6 +94,7 @@ dataset('umgeleitete_tools', function () {
         'concepts.ENRICH' => ['foodalchemist.concepts.ENRICH', fn ($t) => ['concept_id' => $t->conceptId], 'concept.wording'],
         'concepts.GENERATE' => ['foodalchemist.concepts.GENERATE', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], 'concept.brief_geruest'],
         'foodbook_kapitel.WORDING_GENERATE' => ['foodalchemist.foodbook_kapitel.WORDING_GENERATE', fn ($t) => ['kapitel_id' => $t->kapitelId], 'concept.wording'],
+        'konfigurator_konzepte.WORDING_GENERATE' => ['foodalchemist.konfigurator_konzepte.WORDING_GENERATE', fn ($t) => ['konzept_id' => $t->kfKonzeptId, 'writing_style_id' => $t->stilId], 'concept.wording'],
         'speisekarte_wording.GENERATE' => ['foodalchemist.speisekarte_wording.GENERATE', fn ($t) => ['speisekarte_id' => $t->karteId], 'foodbook.kundentext'],
         'foodbook.PLAN_FROM_BRIEF' => ['foodalchemist.foodbook.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
         'angebot.PLAN_FROM_BRIEF' => ['foodalchemist.angebot.PLAN_FROM_BRIEF', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], '*'],
@@ -110,7 +115,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'], ['foodalchemist.recipes.EXTRACT'], ['foodalchemist.produktpass.RECHERCHE'],
-            ['foodalchemist.concepts.GENERATE'], ['foodalchemist.concepts.ENRICH'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
+            ['foodalchemist.concepts.GENERATE'], ['foodalchemist.concepts.ENRICH'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.konfigurator_konzepte.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
             ['foodalchemist.foodbook.PLAN_FROM_BRIEF'], ['foodalchemist.angebot.PLAN_FROM_BRIEF'], ['foodalchemist.format.PLAN_FROM_BRIEF'], ['foodalchemist.speisekarte.PLAN_FROM_BRIEF'],
         ];
     })());

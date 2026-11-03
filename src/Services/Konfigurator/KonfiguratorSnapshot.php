@@ -43,10 +43,13 @@ final class KonfiguratorSnapshot
         }
         $addons = [];
         foreach ($s['addons'] as $a) {
+            $detail = $this->detail($a);   // dieselbe Speisen-Detailansicht wie bei den Hauptkonzepten
             $addons[] = [
                 'id' => (int) $a->id,
                 'titel' => (string) ($a->kunden_titel ?: 'Add-on'),
                 'claim' => $a->claim,
+                'bild' => $detail['bilder'][0] ?? null,
+                'detail' => $detail,
                 'abschnitt' => $a->abschnitt ?: 'Extras',
                 'tageszeit' => $a->addon_tageszeit ?: 'beide',
                 'gebunden_an' => $a->gebunden_an_id !== null ? (int) $a->gebunden_an_id : null,
@@ -106,7 +109,7 @@ final class KonfiguratorSnapshot
     }
 
     /**
-     * Stufe 5b · Kundensicht eines Hauptkonzepts für die Detailansicht — wie im Foodbook: Gericht-Zeilen über die
+     * Stufe 5b · Kundensicht eines Haupt- oder Add-on-Konzepts für die Detailansicht — wie im Foodbook: Gericht-Zeilen über die
      * Wording-Kette (Konfigurator-Überschreibung → Concept-Slot-Wording → Kundenname, WordingResolver::gerichtZeilen),
      * Gericht-Fotos am Gericht, Bilder: Überschreib-Bild am Konfigurator-Konzept, sonst Concept-Titelbild + Galerie.
      * Allergen-/Zusatzstoff-Codes je Gericht wie im Foodbook (ConcepterAggregateService). ALLOWLIST: nur Texte, Codes,

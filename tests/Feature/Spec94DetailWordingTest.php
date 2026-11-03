@@ -97,6 +97,37 @@ it('Kartenpreis live: Karte trägt den Preis-Haken, die Preistabelle hat den Ein
     }
 });
 
+it('Speisen-Detail wie im Foodbook-Link: Gang-Überschrift, Wording, Foto, Codes; Tag und Abend nebeneinander; Extras mit Bild und Details', function () {
+    \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::create(['team_id' => $this->rootTeam->id, 'concept_id' => $this->concept->id, 'position' => 0, 'type' => 'header', 'title' => 'Hauptgang']);
+    $tag = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Lunch intern', 'kind' => 'concept', 'status' => 'active',
+        'image_path' => 'concepts/lunch.jpg', 'price_per_person_cache' => 30, 'ek_per_person_cache' => 9]);
+    FoodAlchemistConceptSlot::create(['team_id' => $this->rootTeam->id, 'concept_id' => $tag->id, 'position' => 1, 'type' => 'gericht',
+        'sales_recipe_id' => $this->gericht->id, 'wording' => 'Rinderfilet am Mittag']);
+    $this->kz->update(['lunch_concept_id' => $tag->id]);
+    $dessert = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Dessert intern', 'kind' => 'concept', 'status' => 'active',
+        'image_path' => 'concepts/dessert.jpg', 'price_per_person_cache' => 8, 'ek_per_person_cache' => 2]);
+    FoodAlchemistConceptSlot::create(['team_id' => $this->rootTeam->id, 'concept_id' => $dessert->id, 'position' => 1, 'type' => 'gericht',
+        'sales_recipe_id' => $this->gericht->id, 'wording' => 'Schokoladen-Tarte']);
+    $addon = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'addon', 'dinner_concept_id' => $dessert->id, 'kunden_titel' => 'Dessert-Buffet', 'addon_tageszeit' => 'beide']);
+
+    $link = ($this->publish)();
+    auth()->logout();
+    $html = $this->get($link['url'])->assertOk()->getContent();
+    $detail = \Illuminate\Support\Str::between($html, 'data-konfig-detail="' . $this->kz->id . '"', '</dialog>');
+    expect($detail)->toContain('pt-konfig-detail-zeiten--zwei')            // Tag und Abend nebeneinander
+        ->toContain('class="pt-subheader')->toContain('Hauptgang')           // Gang aus dem Header-Slot, wie im Foodbook
+        ->toContain('class="pt-line pt-item')->toContain('Rinderfilet vom Grill')->toContain('Rinderfilet am Mittag')
+        ->toContain('class="pt-item-foto')->toContain('gerichte/rind.jpg')
+        ->toContain('pt-konfig-detail-titelbild')->not->toContain('Rind|Filet');
+    $extra = \Illuminate\Support\Str::between($html, 'data-konfig-addon-zeile="' . $addon->id . '"', '</div>');
+    expect($extra)->toContain('class="pt-konfig-bild"')->toContain('concepts/dessert.jpg');
+    expect($html)->toContain('data-konfig-details="' . $addon->id . '"')->toContain('data-konfig-addon-waehlen="' . $addon->id . '"')
+        ->toContain('Schokoladen-Tarte')->not->toContain('Dessert intern');
+    if (getenv('FA_KONFIG_HTML_SHEET')) {
+        file_put_contents(getenv('FA_KONFIG_HTML_SHEET'), $html);
+    }
+});
+
 it('Überschreibung wirkt nur im Konfigurator, Zurücksetzen führt aufs Concept-Wording; Concept-Änderung wirkt nach erneutem Veröffentlichen', function () {
     $this->svc->wordingSetzen($this->rootTeam, $this->kz->id, $this->slot->id, 'Dry Aged Filet am Feuer');
     ($this->publish)();
@@ -139,4 +170,41 @@ it('Reihenfolge: Standard Zeitfenster zuerst, einstellbar auf Konzept zuerst (au
     $html = $this->get($link['url'])->getContent();
     expect(strpos($html, 'data-konfig-zu="konzepte"'))->toBeLessThan(strpos($html, 'data-konfig-zu="tageszeit"'));
     expect(fn () => $this->svc->aendern($this->rootTeam, $this->k->id, ['reihenfolge' => 'quer']))->toThrow(InvalidArgumentException::class);
+});
+
+it('KI-Wording wie im Foodbook-Kapitel: Schreibstil Pflicht, Texte nur im Konfigurator, im Snapshot eingefroren; MCP-Gegenstück', function () {
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create(['team_id' => $this->rootTeam->id, 'slug' => 'kf-stil', 'name' => 'Verspielt', 'sprach_duktus' => 'locker.']);
+    $kontext = null;
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) use (&$kontext) {
+        $mock->shouldReceive('propose')->andReturnUsing(function (string $key, array $k) use (&$kontext) {
+            $kontext = ['key' => $key] + $k;
+
+            return new \Platform\FoodAlchemist\Services\Ai\AiProposal(werte: ['slots' => [$this->slot->id => 'Rinderfilet, über Buchenholz gegrillt']], confidence: 0.8);
+        });
+    });
+
+    // Editor: ohne Schreibstil kein KI-Aufruf
+    $editor = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Angebote\KonfiguratorEditor::class)->call('oeffnen', $this->k->id)
+        ->assertSeeHtml('data-kf-ki-wording="' . $this->kz->id . '"')
+        ->call('wordingGenerieren', $this->kz->id)->assertSet('fehler', 'Bitte zuerst einen Schreibstil wählen.');
+    expect($kontext)->toBeNull();
+
+    $editor->set('wordingStil', (string) $stil->id)->call('wordingGenerieren', $this->kz->id)
+        ->assertSet('fehler', null)->assertSet('hinweis', '1 Gericht(e) im gewählten Stil betextet.');
+    expect($kontext['key'])->toBe('concept.wording')->and($kontext['schreibstil'])->toBe('Verspielt')
+        ->and(collect($kontext['positionen'])->pluck('slot_id')->all())->toBe([$this->slot->id])
+        ->and($this->kz->fresh()->payload_json['wording_overrides'][(string) $this->slot->id])->toBe('Rinderfilet, über Buchenholz gegrillt')
+        ->and($this->slot->fresh()->wording)->toBe('Rinderfilet vom Grill');   // Concept unverändert
+
+    ($this->publish)();
+    expect(detail94($this->k)['zeiten']['dinner'][0]['label'])->toBe('Rinderfilet, über Buchenholz gegrillt');
+
+    // MCP: gleicher Weg, fremder Schreibstil abgewiesen
+    $tool = app(\Platform\Core\Tools\ToolRegistry::class)->get('foodalchemist.konfigurator_konzepte.WORDING_GENERATE');
+    $ctx = new \Platform\Core\Contracts\ToolContext($this->user, $this->rootTeam);
+    $r = $tool->execute(['konzept_id' => $this->kz->id, 'writing_style_id' => $stil->id], $ctx);
+    expect($r->success)->toBeTrue($r->error ?? '')->and($r->data['gesetzt'])->toBe(1)
+        ->and($tool->getMetadata()['cost_class'])->toBe('llm');
+    $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create(['team_id' => $this->childB->id, 'slug' => 'fremd', 'name' => 'Fremd', 'sprach_duktus' => 'x']);
+    expect($tool->execute(['konzept_id' => $this->kz->id, 'writing_style_id' => $fremd->id], $ctx)->error)->toContain('Schreibstil');
 });
