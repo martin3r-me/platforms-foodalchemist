@@ -168,9 +168,10 @@ Keine.
 
 ## Umsetzungsnotizen 8b (03.11.2026)
 
-- **Tag und Abend:**
-  - Ein Concept für beide Tageszeiten gilt **einmal** mit der Day-into-Night-Einsatzzeit: je Event der Concept-Preis, je Stunde × Stunden Tag und Abend, Staffel mit diesen Stunden.
-  - Eigenes Lunch- und Dinner-Concept: Tag-Teil + Abend-Teil, jeweils mit ihrer Einsatzzeit.
+- **Tag und Abend** (Dominique 03.11.2026: „Man braucht ja Tag Getränke und abends“):
+  - Pauschale je Event: Tag-Teil + Abend-Teil, auch bei einem Concept für beide (also zweimal der Concept-Preis).
+  - Je Stunde bzw. Staffel mit einem Concept: durchgehend mit der Day-into-Night-Einsatzzeit, weil die Stunden beide Teile abdecken.
+  - Eigenes Lunch- und Dinner-Concept: immer Tag-Teil + Abend-Teil, jeweils mit ihrer Einsatzzeit.
   - Danach gilt der Kombi-Rabatt wie bei den Konzepten (auch auf die Zusatz-Leistungen des Pakets).
 - **Staffel-EK:** Der EK läuft im selben Verhältnis wie der VK (Grund-EK × Staffelpreis / Grundpreis), weil es für Folgestunden keinen eigenen EK gibt.
 - **Verbrauch:** Er ist im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Die Prüfung meldet „folgt mit Stufe 8c“.

@@ -39,11 +39,11 @@ beforeEach(function () {
         ['typ' => 'getraenk', 'g' => $g->id, 't' => $t])['vk_pp'], 2);
 });
 
-it('Pauschale je Event: ein Concept für beide Tageszeiten, Tag und Abend einmal mit Kombi-Rabatt; Gruppe „Getränke“', function () {
+it('Pauschale je Event: ein Concept für beide Tageszeiten, Tag und Abend = Tag + Abend mit Kombi-Rabatt; Gruppe „Getränke“', function () {
     $g = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'kunden_titel' => 'Weinbegleitung']);
     expect($g->getraenk_abrechnung)->toBe('pauschale')->and($g->getraenk_dauer)->toBe('event')
         ->and(($this->preis)($g, 'lunch'))->toBe(18.0)->and(($this->preis)($g, 'dinner'))->toBe(18.0)
-        ->and(($this->preis)($g, 'day_night'))->toBe(16.2);   // ein Teil fürs ganze Event, 10 % Kombi-Rabatt
+        ->and(($this->preis)($g, 'day_night'))->toBe(32.4);   // Getränke tagsüber und abends: 2 × 18, 10 % Kombi-Rabatt
 
     $fall = collect(app(KonfiguratorPricingService::class)->matrix($this->k->fresh())['pakete'][0]['faelle'])
         ->first(fn ($f) => $f['fall']['typ'] === 'getraenk' && $f['fall']['t'] === 'dinner');
@@ -81,7 +81,7 @@ it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; An
     $link = app(PresentationService::class)->publish($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id,
         ['expires_at' => now()->addMonth()->toIso8601String(), 'design' => 'konfigurator', 'price_mode' => 'auto']);
     $body = $this->k->fresh()->presentation_snapshot_json['content'];
-    expect($body['preise'][0]["g{$g1->id}:dinner"])->toEqual(18)->and($body['preise'][0]["g{$g1->id}:dn"])->toEqual(16.2)
+    expect($body['preise'][0]["g{$g1->id}:dinner"])->toEqual(18)->and($body['preise'][0]["g{$g1->id}:dn"])->toEqual(32.4)
         ->and($body['getraenke_pflicht'])->toBeTrue()
         ->and(json_encode($body['getraenke']))->not->toContain('ek_')->not->toContain('Wein intern');
 
