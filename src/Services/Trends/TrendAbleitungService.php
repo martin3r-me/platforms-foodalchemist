@@ -54,7 +54,9 @@ class TrendAbleitungService
         if ($t->ableitung_quelle === 'manuell') {
             return false;
         }
-        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        // MCP-Aufruf oder Team-Einstellung „extern“ (Spec 93): KI-Auftrag statt Plattform-Provider
+        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch()
+            || app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->trendKiWeg($team) === 'extern';
         $id = (int) $t->id;
         $teamId = (int) $team->id;
         DB::afterCommit(fn () => TrendAbleitungJob::dispatch($id, $teamId, $extern));

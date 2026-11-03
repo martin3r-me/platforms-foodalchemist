@@ -366,10 +366,14 @@ class TrendEingangService
         return $e->refresh();
     }
 
-    /** Job anstoßen (nach dem Commit). Extern, wenn ein MCP-Aufruf dahintersteht — das Flag wird JETZT gelesen, nicht im Callback. */
+    /**
+     * Job anstoßen (nach dem Commit). Extern, wenn ein MCP-Aufruf dahintersteht oder das Team die Trend-KI auf „extern“ gestellt hat
+     * (dann auch Scheduler-Abruf und Klick) — das Flag wird JETZT gelesen, nicht im Callback.
+     */
     private function erschliessenDispatchen(FoodAlchemistTrendEingang $e): void
     {
-        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch();
+        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch()
+            || $this->settings->trendKiWeg(Team::findOrFail($e->team_id)) === 'extern';
         $id = (int) $e->id;
         $team = (int) $e->team_id;
         DB::afterCommit(fn () => TrendEingangErschliessenJob::dispatch($id, $team, $extern));
