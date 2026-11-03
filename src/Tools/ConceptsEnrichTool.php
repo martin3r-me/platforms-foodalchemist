@@ -89,7 +89,7 @@ class ConceptsEnrichTool extends FoodAlchemistTool implements ToolContract, Tool
             'tags' => ['foodalchemist', 'konzept', 'menue', 'buffet', 'anreicherung', 'enrich', 'wording', 'ki'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
-            'side_effects' => ['updates'], 'cost_class' => 'llm_call',
+            'side_effects' => ['updates'], 'cost_class' => 'llm',
             'related_tools' => [
                 'foodalchemist.concepts.GET', 'foodalchemist.concepts.POST', 'foodalchemist.concept_slots.PUT',
                 'foodalchemist.concept_wording.GENERATE', 'foodalchemist.runs.GET',

@@ -56,7 +56,7 @@ class TrendEingangErschliessenTool extends FoodAlchemistTool implements ToolCont
         return [
             'category' => 'action', 'tags' => ['foodalchemist', 'trendradar', 'eingang', 'ki', 'write'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm_call', 'side_effects' => ['updates'],
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm', 'side_effects' => ['updates'],
             'related_tools' => ['foodalchemist.trend_eingang.GET', 'foodalchemist.ki_auftraege.GET', 'foodalchemist.ki_auftraege.ANTWORT'],
             'examples' => ['Erschließ alle neuen Artikel im Trend-Eingang.'],
         ];

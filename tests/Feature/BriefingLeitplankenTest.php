@@ -211,5 +211,5 @@ it('deklariert sich als schreibendes Tool — der Voice-Loop darf es nur als Pro
     // lesende Tools automatisch zu — dieses hier braucht eine bewusste Freigabe.
     expect($meta['read_only'])->toBeFalse()
         ->and($meta['requires_team'])->toBeTrue()
-        ->and($meta['cost_class'])->toBe('llm_call');
+        ->and($meta['cost_class'])->toBe('llm');
 });

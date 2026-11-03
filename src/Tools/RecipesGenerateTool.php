@@ -324,7 +324,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             'requires_auth' => true,
             'requires_team' => true,
             'side_effects' => ['creates'],
-            'cost_class' => 'llm_call',
+            'cost_class' => 'llm',
             'related_tools' => ['foodalchemist.recipes.POST', 'foodalchemist.gps.MATCH', 'foodalchemist.recipe_ingredients.PUT', 'foodalchemist.concepts.GENERATE'],
             'examples' => [
                 'Generiere ein Basisrezept für eine dunkle Rotwein-Schalotten-Reduktion, from scratch',

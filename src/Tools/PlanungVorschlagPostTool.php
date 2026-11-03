@@ -95,7 +95,7 @@ class PlanungVorschlagPostTool extends FoodAlchemistTool implements ToolContract
             'category' => 'utility',
             'tags' => ['foodalchemist', 'planung', 'voice', 'proposal', 'gl-07'],
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'safe',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm_call',
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm',
             'side_effects' => [],
             'related_tools' => ['foodalchemist.planung_session.POST', 'foodalchemist.planung_kaskade.LETZTE'],
             'examples' => ['Erstelle ein Basisrezept für Tomatensuppe', 'Baue mir ein Gericht mit Rinderfilet, Kartoffelpüree und Jus'],

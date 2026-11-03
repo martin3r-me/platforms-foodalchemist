@@ -1,6 +1,6 @@
 # 90 – KI dualisieren (#1002): Pflichtliste aller KI-Aufrufe
 
-Stand: 2026-10-29, Basis origin/main e595ae03. Der Wächter-Test `Spec90KiPflichtlisteTest` liest Tabelle A: Spalte 2 = `Datei::Methode`, Spalte 3 = Prompt-Keys, Spalte 4 = Anzahl der `propose()` in dieser Methode.
+Stand: 2026-10-29, Basis origin/main e595ae03 (Nachtrag 2026-11-03: Lücken findings_run, concepts.ENRICH, verkaufsrezepte.ENRICH, Wächter KI-Weg vollständig). Der Wächter-Test `Spec90KiPflichtlisteTest` liest Tabelle A: Spalte 2 = `Datei::Methode`, Spalte 3 = Prompt-Keys, Spalte 4 = Anzahl der `propose()` in dieser Methode.
 
 ## Zählung (gemessen)
 
@@ -46,7 +46,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 21 | `src/Livewire/Recipes/RecipeModal.php::kiDichteklasse` | recipe.dichteklasse | 1 | a | P2 | recipes.ENRICH (Schritt) | offen |  |
 | 22 | `src/Livewire/Recipes/StepEditor.php::kiSchritte` | dyn. $prompt (recipe.steps / recipe.ruestschritt) | 1 | a | P2 | recipes.ENRICH (steps) | offen |  |
 | 23 | `src/Livewire/Verkauf/DetailPanel.php::kiEignung` | dyn. $prompt (recipe.sektor / recipe.level) | 1 | a | P2 | kein Tool (nur UI) | offen |  |
-| 24 | `src/Livewire/Verkauf/VkModal.php::ki` | vk.wording, vk.plating, vk.servier_vehikel | 3 | b | P2 | verkaufsrezepte.ENRICH | offen | 3 propose nacheinander: Antwort-Folge je Lauf |
+| 24 | `src/Livewire/Verkauf/VkModal.php::ki` | vk.wording, vk.plating, vk.servier_vehikel | 3 | b | P2 | verkaufsrezepte.ENRICH | angeschlossen | 03.11.: dieselben drei Prompts laufen per MCP extern über verkaufsrezepte.ENRICH → EnrichRecipeJob → `BulkEnrichService::proposeFeld` (VK-Schritte wording/plating/servier_vehikel; `KiUmleitung::LAUF_FLAG`, KiExternEnrichTest). Der UI-Weg VkModal (Klick) bleibt Plattform-KI. |
 | 25 | `src/Livewire/Verkauf/VkModal.php::uebernehmeEinordnung` | recipe.geschmack, recipe.production_depth | 2 | b | P2 | verkaufsrezepte.ENRICH | offen |  |
 | 26 | `src/Livewire/Verkauf/VkModal.php::kiBehaelter` | recipe.dichteklasse | 1 | a | P2 | verkaufsrezepte.ENRICH | offen |  |
 | 27 | `src/Livewire/Verkauf/VkModal.php::uebernehmeEigenschaften` | recipe.eigenschaften, recipe.geschmack | 2 | b | P2 | verkaufsrezepte.ENRICH | offen |  |
@@ -80,8 +80,8 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 55 | `src/Services/OfferCompositionService.php::kapitelWordingRegenerieren` | concept.wording | 1 | b | P2 | kein Tool (nur UI: Angebote-Editor) | offen | Geprüft 30.10.: kein MCP-Tool ruft diese Methode (per grep), nur `Angebote/Editor.php`. Bleibt Plattform-KI (UI). |
 | 56 | `src/Services/Pairing/AnkerWissenAuslese.php::lese` | anker.wissen_auslese | 1 | a | P1 | Artisan AnkerWissenCommand | offen | Anker-Pfad |
 | 57 | `src/Services/PresentationDesignService.php::generateCss` | praesentation.design_css | 1 | a | P2 | PresentationDesignsGenerateCssTool | angeschlossen | MCP-Umleitung (Tabelle D). |
-| 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | offen | ANHANG (PDF/Bild): Entscheidung Punkt 5 |
-| 59 | `src/Services/RecipeBauartService.php::pruefe` | recipe.bauart | 1 | a | P2 | im Generator | offen |  |
+| 58 | `src/Services/Produktpass/ProduktpassLeser.php::liefere` | produktpass.extract | 1 | b | P2 | kein Tool (nur UI) | Ausnahme | ANHANG (PDF/Bild): ABGENOMMEN (Dominique 03.11.2026), bleibt Plattform |
+| 59 | `src/Services/RecipeBauartService.php::pruefe` | recipe.bauart | 1 | a | P2 | recipe_findings_run.POST (pass=bauart), Cockpit-Knopf, Befehl recipe-findings | angeschlossen | 03.11.: einziger Aufrufer ist der Befunde-Batch (`RecipeFindingService::pruefeUndAblegen`), nicht der Generator. MCP: `RecipeFindingsRunJob` ist `KiExternWiederholbar` (`recipe-findings:{team}:{run}`, `KiUmleitung::LAUF_FLAG`), KiExternFindingsRunTest. Cockpit-Knopf und Befehl bleiben Plattform-KI. |
 | 60 | `src/Services/RecipeExtractService.php::extrahiere` | recipe.extract | 1 | b | P2 | RecipesExtractTool | angeschlossen | Textweg: Tool-Umleitung recipes.EXTRACT (Tabelle D, KiExternExtractTest Vergleich Plattform/MCP, dry_run und Anlage). Bild/PDF bleiben Plattform (Dateien, Entscheidung Punkt 5); das Tool nimmt nur raw_text, Bilder liest der MCP-Client selbst ab. |
 | 61 | `src/Services/RecipeGeneratorService.php::generiereImLaufKern` | dyn. (vk.generator / recipe.generator) | 1 | c | P2 | RecipesGenerateTool, StubAusrezeptierenJob (Import-Hülle, 29.10.) | angeschlossen | Kaskade, mehrere propose + Schreiben Tool-Weg: recipes.GENERATE extern (Tabelle D, KiExternGenerateTest). Job-Weg (GenerateRecipeJob/Planung) folgt in 2c-2. |
 | 62 | `src/Services/RecipeKomponentenPlanService.php::plane` | recipe.komponenten_plan | 1 | a | P2 | im Generator | angeschlossen | GenerateRecipePlanJob (KiExternWiederholbar, `recipe-plan:{team}:{step}`); `recipe.komponenten_plan` als Auftrag im Job-Weg. |
@@ -91,7 +91,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 66 | `src/Services/RecipeOneShotService.php::stationVorschlag` | recipe.posten | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | offen | Glied einer Kette |
 | 67 | `src/Services/RecipeOneShotService.php::stepGlied` | recipe.steps | 1 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | Glied einer Kette Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
 | 68 | `src/Services/RecipeOneShotService.php::eignungsGlied` | recipe.sektor, recipe.level | 2 | c | P2 | RecipesGenerateTool (One-Shot-Kette) | angeschlossen | 2 propose in einer Methode Extern über recipes.ENRICH/EnrichRecipeJob (Tabelle D, KiExternEnrichTest). |
-| 69 | `src/Services/RecipeReviewService.php::pruefeImLauf` | dyn. $feature (recipe.review / vk.review) | 1 | b | P2 | RecipesReviewTool | angeschlossen | MCP-Umleitung recipes.REVIEW (Tabelle D, KiUmleitungTest). |
+| 69 | `src/Services/RecipeReviewService.php::pruefeImLauf` | dyn. $feature (recipe.review / vk.review) | 1 | b | P2 | RecipesReviewTool, recipe_findings_run.POST | angeschlossen | MCP-Umleitung recipes.REVIEW (Tabelle D, KiUmleitungTest). 03.11.: auch der Befunde-Batch (recipe_findings_run.POST, pass=copilot) läuft per MCP extern (`RecipeFindingsRunJob`, KiExternFindingsRunTest). |
 | 70 | `src/Services/RecipeReviseService.php::freitextVorschlag` | recipe.ueberarbeiten | 1 | a | P2 | RecipesReviseTool | angeschlossen | MCP-Umleitung recipes.REVISE (Tabelle D, KiUmleitungTest). |
 | 71 | `src/Services/RecipeReviseService.php::vkFreitextVorschlag` | vk.ueberarbeiten | 1 | a | P2 | VerkaufsrezepteReviseTool | angeschlossen | MCP-Umleitung verkaufsrezepte.REVISE (Tabelle D, KiUmleitungTest). |
 | 72 | `src/Services/ReplacementSuggestionService.php::forGp` | component.replacement_suggest | 1 | a | P2 | kein Tool (nur UI) | offen |  |
@@ -113,7 +113,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | Nr | Stelle | Weg | Einst. | Phase | MCP-Einstieg | Status | Hinweis |
 |---|---|---|---|---|---|---|---|
 | 83 | `src/Services/VoiceCommandService.php` → `AiGatewayService::callWithTools` | Voice-Agent (Tier-D-Tool-Loop) | c | P2 | — | Ausnahme (Vorschlag) | AGENTISCHER LOOP: Claude ist selbst der Loop, ruft MCP-Tools direkt. Ausnahme-Vorschlag. Dominique 29.10.: der Voice-Agent ist nur ein Gadget, Ausnahme unkritisch |
-| 84 | `src/Services/RecipeImageService.php::generateAndStore` | Bildgenerierung (Core ImageGenerationService) | c | P2 | RecipeImageGenerateTool | Ausnahme (Vorschlag) | Ausnahme-Vorschlag: Claude erzeugt keine Bilder, bleibt Plattform |
+| 84 | `src/Services/RecipeImageService.php::generateAndStore` | Bildgenerierung (Core ImageGenerationService) | c | P2 | RecipeImageGenerateTool | Ausnahme | ABGENOMMEN (Dominique 03.11.: „Bilder bleiben so“): Claude erzeugt keine Bilder, bleibt Plattform. `recipe_images.GENERATE` steht in `KiUmleitung::KI_AUSNAHMEN` |
 | 85 | `src/Services/Ai/SemanticRetrievalService.php`, `PoolEmbeddingService.php`, `KnowledgeEmbeddingService.php`, `src/Console/TrendThemenAehnlichkeitCommand.php` (Spec 93 B, Messung der Themen-Ähnlichkeit eines Teams, schreibt nichts) | Embeddings (text-embedding-3-large) | — | — | — | Ausnahme (Vorschlag) | AUSNAHME (Entscheidung Dominique): bleibt OpenAI |
 | 86 | `src/Services/Websuche/CoreWebSucheTransport.php` (`include_web_search`, Eintrag auch in Tabelle A; die externe Seite: `KiAuftragService` prüft die Quellen beim Beantworten, `KiAuftraegeGetTool` kennzeichnet den Auftrag) | Websuche über den Plattform-Provider | b | P2 | — | angeschlossen | Entscheidung Punkt 5 umgesetzt (2d-2): extern sucht der MCP-Client selbst, Quellenpflicht beim Beantworten; UI bleibt Plattform |
 
@@ -121,7 +121,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 
 - Methoden nach Einstufung: a = 53, b = 20, c = 9.
 - Phase P1 (gp.sensorik, gp.anker, BulkEnrich-GP-Schritte, Anker-Auslese): 6 Methoden. Phase P2: 76.
-- Angeschlossen: 1 Methode (`GpAromaService::schaetze` über Backfill `--anbieter=extern`, #611). Alle anderen offen.
+- Angeschlossen: Stand je Zeile in Tabelle A, Spalte Status (die frühere Angabe „1 Methode, alle anderen offen“ war der Stand vom 29.10.). Welche MCP-Tools wie extern laufen, steht in Tabelle D und im Code (`KiUmleitung::TOOLS`, `LAUF_FLAG`, `KI_AUSNAHMEN`), gehalten vom Wächter `KiWegVollstaendigWaechterTest`.
 - Methoden ohne MCP-Einstieg (12): per MCP nicht erreichbar. Entweder wird ein Einstieg gebaut (Tool oder Artisan) oder Dominique erklärt die Zeile zur Ausnahme (UI-Knopf ohne Gegenstück).
 
 ## C · Prompt-Keys ohne eigene `propose()`-Stelle in Tabelle A (13)
@@ -160,7 +160,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.gps.ENRICH` | Lauf-Flag (`KiUmleitung::LAUF_FLAG`) | Queue: `propose()` läuft im Worker. Der externe MCP-Aufruf setzt `extern` am Lauf (`starteGp`) und am Job; der Worker legt KI-Aufträge an (ohne Leer-Vorschlag), nach ANTWORT den Aufruf wiederholen. Ohne MCP-Herkunft Plattformweg |
 | `foodalchemist.recipes.ENRICH` | Job-Mechanik (P2a/P2b) | `EnrichRecipeJob` ist `KiExternWiederholbar`: Rumpf in Sammel-Transaktion, Rollback bis zur Antwort, `ki_auftraege.ANTWORT` startet den Lauf neu, ein Lauf je Rezept (`enrich-recipe:{team}:{rezept}`). Inventur der Nicht-DB-Nebenwirkungen: Wartezustand/Fortschritt nur DB; Cache nur im Modal-Pfad ohne Step (nicht MCP); KI-Bilder und Produktfoto bleiben Plattform (im Extern-Weg aus); die Wache (`KiExternLauf::$nebenwirkungen`) meldet Queue-Dispatch/Cache/Mail im Test und im Log |
 | `foodalchemist.gp_aroma_backfill.RUN` | Service-Weg (#630) | startet `GpAromaBackfillService` (derselbe wie der Befehl); per MCP immer extern (`KiUmleitung::externFuerLauf`), KI-Aufträge je Lücke, Aufruf nach ANTWORT wiederholen; Trockenlauf Standard, Scope: eigenes Team (Master zusätzlich globale Stamm-GPs) |
-| `foodalchemist.recipes.GENERATE` | ausgenommen (Klasse c) | Generator-Kaskade |
+| `foodalchemist.recipes.GENERATE` | umgeleitet (Tool-Hülle) | Generator-Kaskade, synchron im Aufruf, mehrere Runden; siehe Nachtrag P2c-1 (`KiExternGenerateTest`) |
 | `foodalchemist.concepts.GENERATE` | umgeleitet (mehrere Runden) | Brief-Pfad: `concept.brief_geruest`, danach Gerüst-Befüllung und Wording-Pass (`concept.wording`, fail-soft); Rollback bis alles beantwortet, nur DB-Schreiben, keine Queue-Jobs |
 | `foodalchemist.foodbook_kapitel.WORDING_GENERATE` | umgeleitet | je Konzept-Block ein `propose()` (`concept.wording`), danach Overrides am Block; ohne Kapitel-Schreibstil kein KI-Aufruf |
 | `foodalchemist.speisekarte_wording.GENERATE` | umgeleitet | je Position ein `propose()` (`foodbook.kundentext`), fail-soft je Position; ohne Schreibstil der Karte kein KI-Aufruf |
@@ -174,7 +174,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | `foodalchemist.trends.ABLEITUNG` | Job-Weg (MCP-Herkunft) | Spec 93 D: das Tool ruft keine KI; es stößt `TrendAbleitungJob` an, der per MCP mit `extern=true` läuft (KI-Auftrag `trend.ableitung`, Rollback bis zur Antwort). Eine von Hand bearbeitete Ableitung bleibt |
 | `foodalchemist.trend_eingang.POST` / `.ERSCHLIESSEN` | Job-Weg (MCP-Herkunft) | Spec 93 B: die Tools rufen keine KI; sie stoßen je Artikel `TrendEingangErschliessenJob` an, der per MCP mit `extern=true` läuft (KI-Auftrag `trend.eingang_erschliessen`, Rollback bis zur Antwort). Höchstens 20 neue je Quelle und Abruf, `ERSCHLIESSEN` höchstens 50 je Aufruf |
 | Folge-Aufträge sichtbar | `KiUmleitung::mitFolgeHinweis`, `SignalDetektorService::kiAuftraegeOffen` (`SignalTyp::KiAuftraegeOffen`) | Tool-Ergebnis meldet `folgeauftraege.jobs_angestossen` (Hinweis auf `ki_auftraege.GET`, 24-h-Ablauf). Cockpit-Signal je Team und Feature (nicht je Auftrag): offen > 2 h = Info, abgelaufen in 7 Tagen = Warnung; schließt sich selbst. Abgelaufene Aufträge werden nicht verworfen und lösen keinen Plattform-Fallback aus: die Lücke bleibt in den Daten, der nächste Nachhol-Lauf findet sie wieder (Test) |
-| alle übrigen KI-Tools (Kundentext, Wording, Revise, Extract, Review, Planung, Signale, …) | noch nicht bewertet | Nebenwirkungen außerhalb der DB je Tool prüfen, dann in `KiUmleitung::TOOLS` aufnehmen (Phase 2) |
+| alle KI-Tools (cost_class `llm`/`ai_call`) | Wächter `KiWegVollstaendigWaechterTest` (03.11.) | jedes steht in `KiUmleitung::TOOLS` (Hülle), `LAUF_FLAG` (Job-Weg) oder `KI_AUSNAHMEN` (mit Grund: ABGENOMMEN / AUSGENOMMEN / OFFEN, Folgepaket); umgekehrt trägt jedes Tool in TOOLS/LAUF_FLAG eine KI-cost_class. Siehe Nachtrag 03.11. |
 
 
 ## E · Fingerabdruck und Zähler (externer Weg)
@@ -215,7 +215,20 @@ Tabelle D, Nachtrag P2c-3 (erste Charge, alle über die Tool-Hülle, je Tool ein
 | `foodalchemist.concept_wording.GENERATE` | umgeleitet | `propose()` je Slot/Kopf, danach DB-Schreiben |
 
 
-Tabelle D, Nachtrag P2c-3b (Kundentexte, über die Tool-Hülle, je Tool ein Test): `foodbook.KUNDENTEXT_GENERATE`, `foodbook_kapitel.KUNDENTEXT_GENERATE`, `angebot.KUNDENTEXT_GENERATE` umgeleitet (ein `propose()` `foodbook.kundentext`, liefern nur einen Vorschlag, schreiben nichts). Noch NICHT belegt, deshalb in `KiUmleitung::AUSGENOMMEN`: `foodbook_kapitel.WORDING_GENERATE` und `speisekarte_wording.GENERATE` — bei leerem Kapitel/leerer Karte entsteht kein KI-Aufruf, der Test braucht Fixtures mit belegten Slots/Positionen. Die Services haben kein dispatch/Cache/Storage.
+Tabelle D, Nachtrag P2c-3b (Kundentexte, über die Tool-Hülle, je Tool ein Test): `foodbook.KUNDENTEXT_GENERATE`, `foodbook_kapitel.KUNDENTEXT_GENERATE`, `angebot.KUNDENTEXT_GENERATE` umgeleitet (ein `propose()` `foodbook.kundentext`, liefern nur einen Vorschlag, schreiben nichts). Noch NICHT belegt, deshalb in `KiUmleitung::AUSGENOMMEN`: `foodbook_kapitel.WORDING_GENERATE` und `speisekarte_wording.GENERATE` — bei leerem Kapitel/leerer Karte entsteht kein KI-Aufruf, der Test braucht Fixtures mit belegten Slots/Positionen. Die Services haben kein dispatch/Cache/Storage. *(Überholt: beide seit Paket Konzepte in `KiUmleitung::TOOLS` mit Fixtures in KiUmleitungTest/KiExternKonzepteTest; `AUSGENOMMEN` ist leer.)*
+
+Tabelle D, Nachtrag 03.11. (Lücken aus der Lese-Prüfung, Wächter `KiWegVollstaendigWaechterTest`):
+
+| Tool | Status | Begründung |
+|---|---|---|
+| `foodalchemist.concepts.ENRICH` | umgeleitet (Tool-Hülle) | `ConceptOneShotService::anreichern` synchron: deterministischer Kopf, Lauf-Zeile, ein `propose()` (`concept.wording`, nur Lücken), danach `laufZaehlen` — alles DB in der Tool-Transaktion; wartet der Lauf, rollt auch die Lauf-Zeile zurück. KiUmleitungTest + Vergleichstest KiExternKonzepteTest |
+| `foodalchemist.recipe_findings_run.POST` | Job-Weg (`LAUF_FLAG`) | `externFuerLauf` → `RecipeFindingsRunJob` (`KiExternWiederholbar`, `recipe-findings:{team}:{run}`): der ganze Batch in der Sammel-Transaktion, je fälligem Rezept ein Auftrag (`recipe.review`/`vk.review` bzw. `recipe.bauart`), keine Befunde und kein Prüf-Stempel bis zur Antwort, der Lauf steht sichtbar auf `wartet_auf: ki_auftraege`; ANTWORT startet ihn neu. Arbeitsmenge mit `id` als Gleichstands-Brecher (stabile Tranche je Wiederholung). KiExternFindingsRunTest (Vergleich Plattform = MCP, Bauart-Pass, interner Weg) |
+| `foodalchemist.verkaufsrezepte.ENRICH` | Job-Weg (`LAUF_FLAG`) | gleiche Tool-Klasse wie `recipes.ENRICH` (`EnrichRecipeJob`), inkl. VK-Schritte `vk.wording`/`vk.plating`/`vk.servier_vehikel`; bisher ohne Test, jetzt KiExternEnrichTest |
+| `gp_aroma_backfill.RUN`, `speiseplan.PLAN_FROM_BRIEF`, `trends.ABLEITUNG`, `trend_eingang.ERSCHLIESSEN` | `LAUF_FLAG` (nur Eintrag) | waren schon extern (Service-Weg bzw. Job erbt `extern`), standen aber nur in Doku/Kommentar; jetzt in der Liste, die der Wächter prüft |
+| `foodalchemist.recipe_images.GENERATE` | `KI_AUSNAHMEN` (ABGENOMMEN) | Bildgenerierung bleibt Plattform (Dominique 03.11.) |
+| `foodalchemist.produktpass.POST` | `KI_AUSNAHMEN` (ABGENOMMEN 03.11.) | Datei-Lesen (PDF/Bild) über `ProduktpassLesenJob`; Anhänge nur über den OpenAI-Weg (Nr. 58, F2) |
+
+cost_class bereinigt (03.11.): `llm_call` → `llm` (eine KI-Klasse); `recipe_klasse.POST` `external_api_paid` → `llm`; `recipe_findings_run.POST` `external_api_paid` → `llm`; `recipe_feedback.DEVELOP` `llm` → `local_db` (kopiert nur ein Rezept, keine KI); `signale.FIX`, `foodbook_kapitel.WORDING_GENERATE`, `speisekarte_wording.GENERATE` `local_db` → `llm` (umgeleitete KI-Tools). Der Core nutzt `cost_class` nur als Such-Filter (`ToolRegistryService`, Gleichheit), kein Verhalten hängt daran.
 
 ### E-Nachtrag · Mitwartende, Herkunft der Läufe, nach Deploy beobachten (Paket Kaskade, 30.10.)
 
@@ -237,7 +250,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `recipe.ueberarbeiten` | 124 | 10019 | 1.242.373 | RecipesReviseTool | angeschlossen | 2d (übrige) |
 | `foodbook.kapitel_ideen` | 43 | 18734 | 805.576 | kein Tool (Kaskade) | angeschlossen | Kaskade |
 | `concept.plan` | 31 | 20770 | 643.869 | GenerateConceptJob; planAusBrief (Planung UI) | angeschlossen | Kaskade |
-| `recipe.review` | 82 | 5440 | 446.046 | RecipesReviewTool | angeschlossen | 2d (übrige) |
+| `recipe.review` | 82 | 5440 | 446.046 | RecipesReviewTool; recipe_findings_run.POST (RecipeFindingsRunJob) | angeschlossen | 2d (übrige); Batch 03.11. |
 | `recipe.eigenschaften` | 87 | 4139 | 360.056 | RecipesGenerateTool (One-Shot-Kette); recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.sensorik` | 70 | 3732 | 261.262 | RecipeSensorikPostTool | angeschlossen | 2d (übrige) |
 | `recipe.category` | 54 | 4537 | 245.015 | recipes.ENRICH (Schritt) | Plattform | 2d (übrige) |
@@ -249,26 +262,26 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `gp.zaehl_einheiten` | 133 | 867 | 115.350 | GpFormsEstimateTool | angeschlossen | Paket LA-Wege (vorgezogen) |
 | `recipe.komponenten_plan` | 56 | 1695 | 94.943 | GenerateRecipePlanJob; im Generator | teilweise | Kaskade angeschlossen; Generator-Weg 2d (übrige) |
 | `recipe.verpackungsmasse` | 126 | 725 | 91.390 | Artisan-Befehl | Plattform | 2d (übrige) |
-| `vk.plating` | 36 | 2145 | 77.223 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `vk.plating` | 36 | 2145 | 77.223 | verkaufsrezepte.ENRICH; VkModal::ki (UI) | MCP: angeschlossen (verkaufsrezepte.ENRICH), UI VkModal: Plattform | erledigt 03.11. |
 | `concept.wording` | 26 | 2736 | 71.146 | ConceptWordingGenerateTool; FoodbookKapitelWordingTool; – (offer_chapter/offer_block, nur UI) | teilweise | Konzepte angeschlossen; Angebote-Editor (UI) bleibt Plattform |
 | `gp.suggest` | 44 | 1606 | 70.671 | GpModal::einordnungKiVorschlagen; GpModal::kiVorschlagNaming; GpModal::nameAusLeadLa; Job nach LA-Import; LaGpAbgleichTool | teilweise (LaGpAbgleichTool, Job nach LA-Import); UI-Knöpfe Plattform | LA-Wege (UI bleibt) |
 | `recipe.dichteklasse` | 26 | 2655 | 69.038 | recipes.ENRICH; recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | teilweise | 2d (übrige) |
 | `recipe.geschmack` | 24 | 2499 | 59.978 | recipes.ENRICH (Schritt); verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
 | `planung.leitplanken` | 22 | 2471 | 54.352 | planung_leitplanken.EXTRACT. planung_kaskade.START. planung_vorschlag.POST | angeschlossen | 2c-3c/d (Konzepte. Kaskade) |
-| `vk.wording` | 32 | 1542 | 49.332 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `vk.wording` | 32 | 1542 | 49.332 | verkaufsrezepte.ENRICH; VkModal::ki (UI) | MCP: angeschlossen (verkaufsrezepte.ENRICH), UI VkModal: Plattform | erledigt 03.11. |
 | `vk.kohaerenz` | 32 | 1534 | 49.095 | recipe_coherence.POST | angeschlossen | 2d (übrige) |
 | `format.grundgeruest` | 3 | 14236 | 42.708 | 4 *_plan_from_brief-Tools | Plattform | 2c-3c/d (Konzepte. Kaskade) |
 | `recipe.extract` | 7 | 5659 | 39.616 | RecipesExtractTool | angeschlossen | 2d-1 (Textweg angeschlossen). Bild/PDF Plattform |
 | `vk.speisen_klasse` | 33 | 1181 | 38.968 | RecipeKlassePostTool | angeschlossen | 2d (übrige) |
 | `foodbook.kundentext` | 10 | 3141 | 31.411 | AngebotKundentextTool; FoodbookKapitelKundentextTool; FoodbookKundentextTool; SpeisekarteWordingTool; SpeiseplanService::kiWordingVorschlag | teilweise | 2c-3c/d (Konzepte. Kaskade) |
-| `vk.review` | 18 | 1445 | 26.001 | RecipesReviewTool | angeschlossen | 2d (übrige) |
+| `vk.review` | 18 | 1445 | 26.001 | RecipesReviewTool; recipe_findings_run.POST (RecipeFindingsRunJob) | angeschlossen | 2d (übrige); Batch 03.11. |
 | `recipe.name_putzen` | 15 | 1707 | 25.610 | RecipeModal::namePutzen | Plattform | 2d (übrige) |
 | `vk.ueberarbeiten` | 3 | 6535 | 19.604 | VerkaufsrezepteReviseTool | angeschlossen | 2d (übrige) |
 | `gp.conformance_revise` | 11 | 1668 | 18.349 | – | Plattform | Konformität: Job angeschlossen (2c-2), Tool-Einstieg offen (2d) |
 | `foodbook.grundgeruest` | 6 | 2495 | 14.968 | 4 *_plan_from_brief-Tools | Plattform | 2c-3c/d (Konzepte. Kaskade) |
 | `component.replacement_suggest` | 4 | 3714 | 14.854 | ReplacementSuggestionService::forGp | Plattform | 2d (übrige) |
 | `praesentation.design_css` | 2 | 3303 | 6.606 | PresentationDesignsGenerateCssTool | angeschlossen | angeschlossen (Hülle) |
-| `vk.servier_vehikel` | 10 | 639 | 6.393 | verkaufsrezepte.ENRICH | Plattform | 2d (übrige) |
+| `vk.servier_vehikel` | 10 | 639 | 6.393 | verkaufsrezepte.ENRICH; VkModal::ki (UI) | MCP: angeschlossen (verkaufsrezepte.ENRICH), UI VkModal: Plattform | erledigt 03.11. |
 | `recipe.regeneration` | 5 | 1192 | 5.962 | recipes.ENRICH | angeschlossen | 2d (übrige) |
 | `vk.regeneration` | 4 | 1293 | 5.170 | verkaufsrezepte.REVISE | Plattform | 2d (übrige) |
 | `recipe.titel_vorschlag` | 3 | 1715 | 5.146 | TitelVorschlagService::titelVorschlag | Plattform | 2d (übrige) |
@@ -296,7 +309,7 @@ Quellen: die 77 Prompt-Keys aus `config/foodalchemist.php`, Tabellen A–D diese
 | `gp.la_suggest` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
 | `gp.la_abgleich` | 0 | – | 0 | LaGpAbgleichTool | angeschlossen | LA-Wege |
 | `gp.term_la_rank` | 0 | – | 0 | – | tot | tot / Test (nicht löschen in diesem Paket) |
-| `recipe.bauart` | 0 | – | 0 | im Generator | Plattform | 2d (übrige) |
+| `recipe.bauart` | 0 | – | 0 | recipe_findings_run.POST (pass=bauart); Cockpit-Knopf/Befehl (UI) | MCP: angeschlossen, UI: Plattform | erledigt 03.11. |
 | `produktpass.extract` | 0 | – | 0 | ProduktpassLeser::liefere | Plattform | ausgenommen (Anhang/Storage) |
 | `vk.marketing` | 0 | – | 0 | AngebotKundentextTool; FoodbookKundentextTool | Plattform | 2d (übrige) |
 | `price.plausi` | 0 | – | 0 | SignaleFixTool | angeschlossen | Signale |
@@ -315,7 +328,7 @@ Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 30
 |---|---|---|---|
 | Websuche (`include_web_search`, `artikel.web_recherche`, `CoreWebSucheTransport`) | Artikel-Recherche: UI-Panel (Job) und MCP-Tool `produktpass.RECHERCHE` | MCP: angeschlossen, UI: Plattform | `ANTWORT.quellen` → `sources`; eine Antwort OHNE Quellen bei einem Websuche-Auftrag wird abgelehnt (`ki_auftraege.GET` zeigt `web_suche=true`); der Gateway prüft im externen Modus den Plattform-Provider nicht |
 | Voice-Agent (`AiGatewayService::callWithTools`) | `VoiceCommandService` (UI) | Plattform | ausgenommen (Gadget, Claude ist selbst der Loop) |
-| Bildgenerierung (`RecipeImageService` → Core `ImageGenerationService`) | `recipe_images.GENERATE`, `EnrichRecipeJob` (KI-Bilder) | Plattform | ausgenommen (Claude erzeugt keine Bilder); im Extern-Lauf aus |
+| Bildgenerierung (`RecipeImageService` → Core `ImageGenerationService`) | `recipe_images.GENERATE`, `EnrichRecipeJob` (KI-Bilder) | Plattform | ausgenommen, ABGENOMMEN (Dominique 03.11.: „Bilder bleiben so“); im Extern-Lauf aus |
 | Embeddings (Qdrant, `text-embedding-3-large`) | semantische Suche, Wissens-/Pool-Index | Plattform | ausgenommen (Entscheid Dominique); nicht im `ki_verbrauch` erfasst |
 | Bild-/PDF-Anhänge (`recipe.extract` mit Bild, `produktpass.extract`) | Rezept-Import, Produktpass | Plattform | ausgenommen (siehe 2d-1: Text-Pfad anschließen, Bild liest Claude selbst) |
 
@@ -338,7 +351,8 @@ Summe lokal: 2.612 Aufrufe. 28.218.296 Token. Top-3 lokal: `recipe.generator` 30
 | `BuildZukaufRecipeJob` | `RecipeDependencyWorkflowService` | recipe.ruestschritt, recipe.generator | angeschlossen (KiExternWiederholbar, `build-zukauf:{team}:{step}`) | Kaskade |
 | `GenerateConceptJob`, `FanoutConceptJob`, `GenerateDishProposalJob`, `GenerateRecipePlanJob`, `ReviseDishProposalJob`, `MaterializeConceptIdeaJob`, `MaterializeSpeisekartePositionJob`, `MaterializeSpeiseplanCellJob` | `PlanningCascadeService` (Kaskade) | concept.*, planung.*, planning.*, foodbook.* | angeschlossen (alle KiExternWiederholbar, Wächter KiExternKaskadeTest) | Kaskade |
 | `BulkEnrichJob` | UI-Bulk-Läufe Rezepte | recipe.* | Plattform | 2d |
-| `RecipeFindingsRunJob`, `QualityRunJob` | `QualityRunService` (UI) | recipe.review/vk.review (zu prüfen) | prüfen | 2d |
+| `RecipeFindingsRunJob` | `QualityRunService` (UI-Knopf, `recipe_findings_run.POST`), Befehl recipe-findings | recipe.review, vk.review, recipe.bauart | angeschlossen (MCP: `KiExternWiederholbar`, `recipe-findings:{team}:{run}`); UI-Knopf und Befehl Plattform | 03.11. |
+| `QualityRunJob` | `QualityRunService` (Ampel-Lauf) | – (`SignalDetektorService::laufen`, deterministisch) | keine KI | – |
 | `RezeptFolgeJob`, `BausteinFolgeJob` | Folge-Services (afterCommit) | – (kein KI-Dienst gefunden) | prüfen | – |
 | `ProduktpassLesenJob`, `ProduktpassRechercheJob` | Produktpass (UI) | produktpass.extract, Web | Plattform | ausgenommen |
 | `AnkerWissenCommand`, `RecipePackagingUnitsCommand`, `GeneratorEvalCommand`, `GpSensorikReferenzCommand` | manuell (Artisan) | anker.wissen_auslese, recipe.verpackungsmasse; Eval-/Referenz-Werkzeuge | Plattform | 2d (Befehle `--anbieter=extern`) |

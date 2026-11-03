@@ -110,7 +110,7 @@ class ConceptsGenerateTool extends FoodAlchemistTool implements ToolContract, To
             'tags' => ['foodalchemist', 'concepter', 'generator', 'brief', 'kohaesion', 'r6'],
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
-            'side_effects' => ['creates'], 'cost_class' => 'llm_call',
+            'side_effects' => ['creates'], 'cost_class' => 'llm',
             'related_tools' => ['foodalchemist.planning.GET', 'foodalchemist.planning.PUT', 'foodalchemist.coverage.GET', 'foodalchemist.concepts.GET'],
             'examples' => ['Baue ein Konzept aus diesem Kunden-Brief: …', 'Generiere ein Konzept aus dem Gerüst von Foodbook 12'],
         ];

@@ -144,7 +144,7 @@ class SignaleFixTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'tags' => ['foodalchemist', 'signal', 'fix', 'ki', 'assist', 'datenqualitaet'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
-            'side_effects' => ['updates'], 'cost_class' => 'local_db',
+            'side_effects' => ['updates'], 'cost_class' => 'llm',
             'related_tools' => ['foodalchemist.signale.SEARCH', 'foodalchemist.signale.PUT'],
             'examples' => ['Behebe Signal 12 automatisch', 'Erzeuge den KI-Entwurf für Signal 7',
                 'Zeig mir die Fix-Vorschau für Signal 12 (dry_run)', 'Behebe an Signal 12 nur die Rezepte 44 und 51'],

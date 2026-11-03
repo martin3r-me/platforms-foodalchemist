@@ -123,7 +123,7 @@ class PlanungLeitplankenExtractTool extends FoodAlchemistTool implements ToolCon
             'risk_level' => 'safe',
             'requires_auth' => true,
             'requires_team' => true,
-            'cost_class' => 'llm_call',
+            'cost_class' => 'llm',
             'tags' => ['foodalchemist', 'planung', 'leitplanken', 'briefing', 'voice', 'ki'],
             'examples' => ['Leitplanken aus »Sommerfest für 80, Fingerfood, regional, 35 € p. P.« ableiten'],
         ];

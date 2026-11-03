@@ -87,6 +87,7 @@ dataset('umgeleitete_tools', function () {
         'recipes.REVISE' => ['foodalchemist.recipes.REVISE', fn ($t) => ['recipe_id' => $t->basisId, 'anweisung' => 'Etwas weniger süß'], 'recipe.ueberarbeiten'],
         'verkaufsrezepte.REVISE' => ['foodalchemist.verkaufsrezepte.REVISE', fn ($t) => ['recipe_id' => $t->vkId, 'anweisung' => 'Etwas leichter'], 'vk.ueberarbeiten'],
         'la.GP_ABGLEICH' => ['foodalchemist.la.GP_ABGLEICH', fn ($t) => ['artikel_id' => $t->laId], 'gp.suggest'],
+        'concepts.ENRICH' => ['foodalchemist.concepts.ENRICH', fn ($t) => ['concept_id' => $t->conceptId], 'concept.wording'],
         'concepts.GENERATE' => ['foodalchemist.concepts.GENERATE', fn ($t) => ['brief' => 'Sommerfest, 60 Gäste, vegetarisch, regional, 45 EUR p. P.'], 'concept.brief_geruest'],
         'foodbook_kapitel.WORDING_GENERATE' => ['foodalchemist.foodbook_kapitel.WORDING_GENERATE', fn ($t) => ['kapitel_id' => $t->kapitelId], 'concept.wording'],
         'speisekarte_wording.GENERATE' => ['foodalchemist.speisekarte_wording.GENERATE', fn ($t) => ['speisekarte_id' => $t->karteId], 'foodbook.kundentext'],
@@ -109,7 +110,7 @@ it('der Test deckt genau die umgeleiteten Tools ab', function () {
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],
             ['foodalchemist.planung_vorschlag.POST'], ['foodalchemist.recipes.REVIEW'], ['foodalchemist.recipes.REVISE'], ['foodalchemist.verkaufsrezepte.REVISE'], ['foodalchemist.signale.FIX'], ['foodalchemist.recipes.EXTRACT'], ['foodalchemist.produktpass.RECHERCHE'],
-            ['foodalchemist.concepts.GENERATE'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
+            ['foodalchemist.concepts.GENERATE'], ['foodalchemist.concepts.ENRICH'], ['foodalchemist.foodbook_kapitel.WORDING_GENERATE'], ['foodalchemist.speisekarte_wording.GENERATE'],
             ['foodalchemist.foodbook.PLAN_FROM_BRIEF'], ['foodalchemist.angebot.PLAN_FROM_BRIEF'], ['foodalchemist.format.PLAN_FROM_BRIEF'], ['foodalchemist.speisekarte.PLAN_FROM_BRIEF'],
         ];
     })());

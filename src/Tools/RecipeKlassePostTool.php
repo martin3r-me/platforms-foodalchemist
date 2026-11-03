@@ -78,7 +78,7 @@ class RecipeKlassePostTool extends FoodAlchemistTool implements ToolContract, To
             'requires_auth' => true,
             'requires_team' => true,
             'side_effects' => ['updates'],
-            'cost_class' => 'external_api_paid',
+            'cost_class' => 'llm',
             'confirmation_required' => false,
             'examples' => ['Welche Speisen-Klasse passt zu Rezept 456?', 'Klassifiziere Rezept 456 und übernimm den Vorschlag'],
         ];

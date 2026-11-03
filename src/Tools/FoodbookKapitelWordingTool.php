@@ -56,7 +56,7 @@ class FoodbookKapitelWordingTool extends FoodAlchemistTool implements ToolContra
             'category' => 'action',
             'tags' => ['foodalchemist', 'foodbook', 'kapitel', 'wording', 'write'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm',
             'side_effects' => ['updates'],
             'related_tools' => ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'],
             'examples' => ['Regeneriere das Wording von Kapitel 12.'],

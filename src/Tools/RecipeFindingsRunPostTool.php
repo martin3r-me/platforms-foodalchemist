@@ -91,6 +91,7 @@ class RecipeFindingsRunPostTool extends FoodAlchemistTool implements ToolContrac
         }
 
         $userId = $context->user?->id !== null ? (int) $context->user->id : null;
+        $extern = \Platform\FoodAlchemist\Support\KiUmleitung::externFuerLauf($context);   // #1002: per MCP → KI-Aufträge statt Provider-Calls
 
         ['run_id' => $runId, 'limit' => $limit] = app(QualityRunService::class)->starteBefundeLauf(
             $team,
@@ -98,13 +99,17 @@ class RecipeFindingsRunPostTool extends FoodAlchemistTool implements ToolContrac
             (bool) ($arguments['nur_verkauf'] ?? false),
             $pass,
             $userId,
+            $extern,
         );
 
         return ToolResult::success([
             'run_id' => $runId,
             'limit' => $limit,
             'pass' => $pass,
-            'hinweis' => "Befunde-Lauf eingereiht (Lauf {$runId}), höchstens {$limit} fällige Rezepte. "
+            'extern' => $extern,
+            'hinweis' => ($extern ? 'EXTERN: der Lauf legt je fälligem Rezept einen KI-Auftrag an (ki_auftraege.GET → ANTWORT); '
+                    . 'sind alle beantwortet, startet das System den Lauf selbst neu und legt die Befunde ab. ' : '')
+                . "Befunde-Lauf eingereiht (Lauf {$runId}), höchstens {$limit} fällige Rezepte. "
                 . 'Stand über foodalchemist.runs.GET; die Befunde danach über foodalchemist.recipe_findings.SEARCH. '
                 . 'Der Lauf wendet nichts an — jede Übernahme bleibt eine menschliche Entscheidung.',
         ]);
@@ -122,7 +127,7 @@ class RecipeFindingsRunPostTool extends FoodAlchemistTool implements ToolContrac
             'risk_level' => 'caution',
             'requires_auth' => true,
             'requires_team' => true,
-            'cost_class' => 'external_api_paid',
+            'cost_class' => 'llm',
             'tags' => ['foodalchemist', 'recipe_findings', 'copilot', 'befund', 'ki', 'batch', 'lauf', 'rezept'],
             'related_tools' => [
                 'foodalchemist.runs.GET',
