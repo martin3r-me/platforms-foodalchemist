@@ -43,7 +43,10 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
   Ist nur eines gesetzt, gilt es für beide Tageszeiten, z. B. ein eigenes Lunch-Paket ohne Alkohol.
 - Je Getränkepaket wird festgelegt:
   - `getraenk_abrechnung`: `pauschale` oder `verbrauch`
-  - `getraenk_dauer`: `event` (je Gast fürs ganze Event) oder `stunde` (je Gast und Stunde, Stunden aus der Einsatzzeit) — je Paket wählbar, ohne Staffel (Entscheid 1)
+  - `getraenk_dauer`: `event` (je Gast fürs ganze Event) oder `stunde` (je Gast und Stunde, Stunden aus der Einsatzzeit) — je Paket wählbar (Entscheid 1)
+  - **optional Staffel:** `grund_stunden` und `folgestunde_satz` (VK je Gast und weitere Stunde). Der Concept-Preis gilt dann als Grundpreis für
+    `grund_stunden`, jede weitere Stunde der Einsatzzeit kostet `folgestunde_satz` (z. B. 4 Std. 18 €, jede weitere 3,50 €).
+    Ohne `folgestunde_satz` gilt `getraenk_dauer` wie oben.
   - `verbrauch_deckel` (nur bei Verbrauch, optional): Höchstbetrag für das Event (Entscheid 6)
   - Bindung an ein Hauptkonzept wie bei Add-ons (`gebunden_an_id`)
 - Am Konfigurator steht `getraenke_pflicht`: mindestens ein Paket muss gewählt werden, sonst ist „ohne Getränke“ erlaubt.
@@ -95,6 +98,7 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
 foodalchemist_konfigurator_konzepte   =  rolle: haupt | addon | getraenk (string 8, bleibt)
                                       +  getraenk_abrechnung (string 12, null): pauschale | verbrauch
                                       +  getraenk_dauer (string 8, null): event | stunde
+                                      +  grund_stunden (decimal 5,2, null), folgestunde_satz (decimal 10,2, null)
                                       +  verbrauch_deckel (decimal 10,2, null)
 foodalchemist_konfiguratoren          +  getraenke_pflicht (boolean, default false)
 foodalchemist_team_settings           +  alkohol_hinweis (text, null = Standardtext)
@@ -121,6 +125,7 @@ Alle Migrationen sind additiv. `enthaelt_alkohol` wird beim Recompute der Rezept
 
 - Ein Getränkepaket als Pauschale (event bzw. stunde) erhöht den Preis pro Person um den Concept-VK (× Stunden). Die Aufteilung zeigt „Getränke“.
 - Verbrauch: kein Preis pro Person. Die Schätzung = Menge je Gast × Gäste × VK steht als `zzgl` im Link und als `aufwand`-Position im Angebot.
+- Staffel: 4 Std. Grundpreis 18 € plus 3,50 € je Folgestunde ergibt bei 6 Std. Einsatzzeit 25 € pro Person. Ohne Folgestunden-Satz gilt der Concept-Preis bzw. Preis × Stunden.
 - Mehrere Pakete sind kombinierbar, die Preise addieren sich. „Ohne Getränke“ geht nur ohne `getraenke_pflicht`. Die Bindung an ein Hauptkonzept greift.
 - Ein eigenes Lunch-Concept gilt mittags, sonst gilt das eine Concept für beide Tageszeiten.
 - Bei Tag und Abend gilt der Kombi-Rabatt auch auf die Getränke-Pauschale (anteilig).
@@ -140,7 +145,8 @@ Alle Migrationen sind additiv. `enthaelt_alkohol` wird beim Recompute der Rezept
 
 ## Entscheidungen (Dominique, 03.11.2026)
 
-1. **Pauschale:** je Paket wählbar, fürs ganze Event pro Gast oder pro Gast und Stunde (Einsatzzeit). Keine Staffel nach Dauer.
+1. **Pauschale:** je Paket wählbar, fürs ganze Event pro Gast oder pro Gast und Stunde (Einsatzzeit). Dazu **optional** eine Staffel:
+   Grundpreis für X Stunden plus Satz je Folgestunde (Antwort an den Kurator, „Grundpreis + Folgestunde“). Ohne Folgestunden-Satz gilt die einfache Pauschale.
 2. **Pakete:** mehrere kombinierbar, z. B. Softdrinks + Wein + Bier.
 3. **Erkennung:** über die Concept-Kategorie „Getränke“ (team-pflegbar). Der Reiter filtert danach.
 4. **Tageszeit:** optional ein eigenes Lunch-Concept am Paket, sonst eines für beide.
