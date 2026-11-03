@@ -11,6 +11,7 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <div><x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-left" :href="route('foodalchemist.angebote.konfiguratoren')" data-lv-zurueck>Konfiguratoren</x-fa::button></div>
         <x-fa::page-header title="Leistungs-Vorlagen"
             subtitle="Personal, Equipment, Logistik und Sonstiges einmal mit Mengenregel, EK und VK pflegen. Konfiguratoren übernehmen die Vorlagen als Kopie; der VK kommt aus der Leistungs-Aufschlagsklasse oder wird mit Begründung fest gesetzt." />
 

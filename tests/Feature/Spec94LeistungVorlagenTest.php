@@ -119,3 +119,19 @@ it('Oberfläche: Vorlage anlegen, Liste zeigt sie, geerbte Vorlage ist nicht bea
         ->assertSet('editId', null)
         ->assertSee('geerbt');
 });
+
+it('Navigation: kein eigener Eintrag Leistungs-Vorlagen, Zugang über die Konfiguratoren-Seite, dort links aktiv', function () {
+    $items = collect(config('foodalchemist.sidebar'))->flatMap(fn ($g) => $g['items'] ?? []);
+    expect($items->pluck('route')->all())->not->toContain('foodalchemist.angebote.leistung_vorlagen')
+        ->and($items->pluck('label')->all())->not->toContain('Leistungs-Vorlagen')
+        ->and($items->firstWhere('route', 'foodalchemist.angebote.konfiguratoren')['aktiv_bei'] ?? [])
+        ->toContain('foodalchemist.angebote.leistung_vorlagen');
+
+    // Route bleibt, Knopf auf der Konfiguratoren-Seite verlinkt sie, Rückweg auf der Vorlagen-Seite
+    expect(route('foodalchemist.angebote.leistung_vorlagen'))->toEndWith('/angebote/leistung-vorlagen');
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Angebote\Konfiguratoren::class)
+        ->assertSeeHtml('href="' . route('foodalchemist.angebote.leistung_vorlagen') . '"');
+    Livewire::test(LeistungVorlagen::class)
+        ->assertSeeHtml('data-lv-zurueck')
+        ->assertSeeHtml('href="' . route('foodalchemist.angebote.konfiguratoren') . '"');
+});
