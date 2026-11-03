@@ -45,7 +45,7 @@
     </div>
 
     <table class="meta">
-        @if($kunde)<tr><td class="k">Kunde</td><td>{{ $kunde }}@if($kontakt && $kontakt !== $kunde) · {{ $kontakt }}@endif</td></tr>@endif
+        @if($customer)<tr><td class="k">Kunde</td><td>{{ $customer }}@if($kontakt && $kontakt !== $customer) · {{ $kontakt }}@endif</td></tr>@endif
         @if($angebot->occasion)<tr><td class="k">Anlass</td><td>{{ $angebot->occasion }}</td></tr>@endif
         @if($angebot->event_date)<tr><td class="k">Datum</td><td>{{ $angebot->event_date->format('d.m.Y') }}</td></tr>@endif
         @if($angebot->location)<tr><td class="k">Location</td><td>{{ $angebot->location }}</td></tr>@endif
@@ -66,6 +66,16 @@
     @empty
         <p style="color:#9ca3af">Noch kein Menü zusammengestellt.</p>
     @endforelse
+
+    @if(! empty($positionen))
+        {{-- Spec 94b: Positionen Menge × Satz (pauschal), im Gesamt enthalten --}}
+        <div class="menue">
+            <h2>Weitere Positionen</h2>
+            @foreach($positionen as $p)
+                <div class="pos">{{ $p['label'] }} · {{ rtrim(rtrim(number_format($p['menge'], 2, ',', '.'), '0'), ',') }} {{ $p['einheit'] }} à {{ number_format($p['satz'], 2, ',', '.') }} € = {{ number_format($p['betrag'], 2, ',', '.') }} €</div>
+            @endforeach
+        </div>
+    @endif
 
     <div class="preis">
         <table>

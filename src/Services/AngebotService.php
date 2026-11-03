@@ -420,6 +420,11 @@ class AngebotService
             'menues' => $menues,
             'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
             'kontakt' => $angebot->crmContact?->display_name,
+            // Spec 94b: Positionen (Menge × Satz, pauschal) — ohne EK
+            'positionen' => \Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::visibleToTeam($team)->where('type', 'position')->where('visible', true)
+                ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))->with('unit')->orderBy('position')->get()
+                ->map(fn ($b) => ['label' => (string) $b->label, 'menge' => (float) $b->quantity, 'einheit' => $b->einheitText(),
+                    'satz' => (float) $b->price_value, 'betrag' => round((float) $b->quantity * (float) $b->price_value, 2)])->all(),
         ];
     }
 

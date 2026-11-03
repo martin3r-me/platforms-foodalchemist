@@ -822,6 +822,14 @@ class PresentationService
 
                         continue;
                     }
+                    if (($b['type'] ?? '') === 'position') {   // Spec 94b: „Menge Einheit à Satz“ als Untertitel, Betrag pauschal (ohne EK)
+                        $menge = rtrim(rtrim(number_format((float) $b['menge'], 2, ',', '.'), '0'), ',');
+                        $blocks[] = ['kind' => 'position', 'label' => (string) ($b['label'] ?? ''), 'is_header' => false, 'per_item_price' => false,
+                            'subtitle' => trim($menge . ' ' . ($b['einheit'] ?? '')) . ' à ' . number_format((float) $b['satz'], 2, ',', '.') . ' €',
+                            'price' => $showPrice ? ['pp' => (float) ($b['pauschal'] ?? 0), 'pauschal' => 0.0, 'unit' => null] : null, 'codes' => [], 'items' => []];
+
+                        continue;
+                    }
                     $einzel = (bool) ($b['einzelpreise'] ?? false);
                     $blocks[] = [
                         'kind' => (string) ($b['type'] ?? ''), 'label' => (string) ($b['label'] ?? ''), 'subtitle' => null,

@@ -81,6 +81,8 @@ class KonfiguratorAnfrageService
             throw ValidationException::withMessages(['konzept' => 'Für diese Auswahl und Gästezahl gibt es keinen Preis.']);
         }
 
+        // Spec 94b §4: Leistungen nach Aufwand, geschätzt bei der Gästezahl der Anfrage (Mengenregel, nicht im Preis)
+        $aufwand = $this->aufwand($k, $d);
         $titel = fn (int $id, array $liste) => collect($liste)->firstWhere('id', $id)['titel'] ?? ('#' . $id);
         $konzeptTitel = $titel((int) $d['konzept'], $body['konzepte']);
         $tageszeit = ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Day into Night'][$d['tageszeit']];
@@ -94,6 +96,7 @@ class KonfiguratorAnfrageService
             $addons !== [] ? 'Add-ons: ' . implode(', ', $addons) : null,
             'Gäste: ' . $d['pax'] . ' (Paket ' . $preis['paket_name'] . ')',
             'Preis: ' . $euro($preis['pro_person']) . ' pro Person, gesamt ' . $euro($preis['gesamt']) . ' netto (Stand des Links)',
+            $aufwand !== [] ? 'zzgl. nach Aufwand (geschätzt): ' . implode('; ', array_map(fn ($e) => 'ca. ' . $this->zahl($e['menge']) . ' ' . $e['einheit'] . ' ' . $e['bezeichnung'] . ' ≈ ' . $euro($e['betrag']), $aufwand)) : null,
             '',
             'Kontakt: ' . $d['name'] . (($d['firma'] ?? '') !== '' ? ', ' . $d['firma'] : ''),
             'E-Mail: ' . $d['email'] . (($d['telefon'] ?? '') !== '' ? ' · Telefon: ' . $d['telefon'] : ''),
@@ -101,7 +104,7 @@ class KonfiguratorAnfrageService
             ($d['nachricht'] ?? '') !== '' ? "\nNachricht:\n" . $d['nachricht'] : null,
         ], fn ($z) => $z !== null));
 
-        $angebot = DB::transaction(fn () => FoodAlchemistAngebot::create([
+        $angebot = DB::transaction(fn () => $this->mitPositionen(FoodAlchemistAngebot::create([
             'team_id' => $k->team_id,
             'name' => mb_substr('Anfrage ' . $d['name'] . ' · ' . $konzeptTitel, 0, 190),
             'status' => AngebotStatus::Anfrage->value,
@@ -118,8 +121,9 @@ class KonfiguratorAnfrageService
                 'pro_person' => $preis['pro_person'], 'gesamt' => $preis['gesamt'],
                 'preisstand' => $k->presentation_published_at?->toIso8601String(),
                 'kontakt' => array_intersect_key($d, array_flip(['name', 'firma', 'email', 'telefon'])),
+                'zzgl' => array_map(fn ($e) => array_intersect_key($e, array_flip(['bezeichnung', 'menge', 'einheit', 'satz', 'betrag'])), $aufwand),
             ],
-        ]));
+        ]), $aufwand));
 
         $team = Team::find($k->team_id);
         if ($team !== null) {
@@ -134,6 +138,65 @@ class KonfiguratorAnfrageService
         $this->mail($k, $angebot, $text, (string) $d['email']);
 
         return $angebot;
+    }
+
+    /**
+     * Leistungen nach Aufwand der gewählten Auswahl bei genau dieser Gästezahl (Paket der Gästezahl, Mengen nach Regel,
+     * Handwerte gelten weiter) — je Leistung summiert über Konzept und gewählte Extras. Leer, wenn es kein Paket gibt.
+     *
+     * @return list<array{leistung_id:int, bezeichnung:string, einheit:string, satz:float, ek_satz:float, menge:float, betrag:float, ek_betrag:float, einheit_vocab_id:?int}>
+     */
+    private function aufwand(FoodAlchemistKonfigurator $k, array $d): array
+    {
+        $pricing = app(\Platform\FoodAlchemist\Services\KonfiguratorPricingService::class);
+        $s = $pricing->stand($k);
+        $pax = (int) $d['pax'];
+        $paket = collect($s['pakete'])->first(fn ($p) => $pax >= (int) $p->von_pax && $pax <= (int) $p->bis_pax);
+        if ($paket === null) {
+            return [];
+        }
+        $faelle = [$d['tageszeit'] === 'day_night'
+            ? ['typ' => 'day_night', 'k1' => (int) $d['konzept'], 'k2' => (int) ($d['abend_konzept'] ?? $d['konzept'])]
+            : ['typ' => 'einzel', 'k' => (int) $d['konzept'], 't' => $d['tageszeit']]];
+        foreach ($d['addons'] ?? [] as $a) {
+            $faelle[] = ['typ' => 'addon', 'a' => (int) $a];
+        }
+        $summe = [];
+        foreach ($faelle as $fall) {
+            foreach ($pricing->rechneFall($k, $paket, $fall, $pax, $s)['einzel'] as $e) {
+                $id = $e['leistung_id'];
+                $summe[$id] ??= array_merge($e, ['menge' => 0.0, 'betrag' => 0.0, 'ek_betrag' => 0.0,
+                    'einheit_vocab_id' => $s['leistungen'][$id]->abrechnung_einheit_vocab_id !== null ? (int) $s['leistungen'][$id]->abrechnung_einheit_vocab_id : null]);
+                $summe[$id]['menge'] = round($summe[$id]['menge'] + $e['menge'], 2);
+                $summe[$id]['betrag'] = round($summe[$id]['betrag'] + $e['betrag'], 2);
+                $summe[$id]['ek_betrag'] = round($summe[$id]['ek_betrag'] + $e['ek_betrag'], 2);
+            }
+        }
+
+        return array_values(array_filter($summe, fn ($e) => $e['menge'] > 0));
+    }
+
+    /** Kapitel „Nach Aufwand“ mit je einer Position (Blocktyp position, pauschal, Menge × VK-Satz, EK je Einheit). */
+    private function mitPositionen(FoodAlchemistAngebot $angebot, array $aufwand): FoodAlchemistAngebot
+    {
+        if ($aufwand === []) {
+            return $angebot;
+        }
+        $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter::create(['team_id' => $angebot->team_id, 'offer_id' => $angebot->id,
+            'title' => 'Nach Aufwand', 'consumer_title' => 'Zzgl. nach Aufwand', 'price_mode' => 'auto', 'position' => 1]);
+        foreach (array_values($aufwand) as $i => $e) {
+            $kapitel->blocks()->create(['team_id' => $angebot->team_id, 'type' => 'position', 'label' => $e['bezeichnung'], 'quantity' => $e['menge'],
+                'unit_vocab_id' => $e['einheit_vocab_id'], 'price_value' => $e['satz'], 'ek_value' => $e['ek_satz'], 'price_basis' => 'pauschal',
+                'customer_text' => 'Geschätzt, abgerechnet nach tatsächlichem Aufwand.', 'position' => $i + 1,
+                'payload_json' => ['einheit_text' => $e['einheit'], 'quelle' => 'konfigurator_aufwand', 'leistung_id' => $e['leistung_id']]]);
+        }
+
+        return $angebot;
+    }
+
+    private function zahl(float $w): string
+    {
+        return rtrim(rtrim(number_format($w, 2, ',', '.'), '0'), ',');
     }
 
     /** Signal schließen, sobald das Angebot den Status anfrage verlässt (AngebotService::setStatus). */

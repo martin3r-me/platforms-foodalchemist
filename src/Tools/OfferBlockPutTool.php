@@ -19,7 +19,7 @@ class OfferBlockPutTool extends FoodAlchemistTool implements ToolContract, ToolM
 {
     /** Allow-List (Teilmenge von OfferCompositionService::BLOCK_FELDER; der Service intersect't final). */
     private const FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
-        'concept_id', 'sales_recipe_id', 'quantity', 'price_value', 'price_basis', 'height'];
+        'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'ek_value', 'price_basis', 'height'];
 
     public function getName(): string
     {
@@ -29,7 +29,7 @@ class OfferBlockPutTool extends FoodAlchemistTool implements ToolContract, ToolM
     public function getDescription(): string
     {
         return 'Bearbeitet einen Block eines team-eigenen Angebots (felder: label, wording, customer_text, quantity, '
-            . 'price_value, price_basis, visible, level, sales_recipe_id). Nur bekannte Felder werden übernommen.';
+            . 'price_value, price_basis, visible, level, sales_recipe_id; bei position zusätzlich unit_vocab_id und ek_value). Nur bekannte Felder werden übernommen.';
     }
 
     public function getSchema(): array

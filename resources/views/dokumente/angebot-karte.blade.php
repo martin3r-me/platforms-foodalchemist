@@ -115,6 +115,9 @@
                         @endforeach
                     @elseif($b['type'] === 'text')
                         @if(($b['label'] ?? '') !== '')<div class="free-text">{{ $b['label'] }}</div>@endif
+                    @elseif($b['type'] === 'position')
+                        {{-- Spec 94b: Position Menge × Satz, pauschal (ohne EK) --}}
+                        <div class="edition-title">{{ $b['label'] }}<span class="kp">{{ rtrim(rtrim(number_format((float) $b['menge'], 2, ',', '.'), '0'), ',') }} {{ $b['einheit'] }} à {{ $nf($b['satz']) }} € = {{ $nf($b['pauschal']) }} €</span></div>
                     @endif
                 @endforeach
             @endif
