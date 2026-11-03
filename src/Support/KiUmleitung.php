@@ -114,7 +114,7 @@ final class KiUmleitung
      */
     public const KI_AUSNAHMEN = [
         'foodalchemist.recipe_images.GENERATE' => 'ABGENOMMEN: Bildgenerierung (RecipeImageService, Core-Bilddienst) bleibt Plattform — Claude erzeugt keine Bilder (Dominique 03.11.: „Bilder bleiben so“). Pflichtliste Nr. 84.',
-        'foodalchemist.produktpass.POST' => 'AUSGENOMMEN: Datei-Lesen (PDF/Bild) über ProduktpassLesenJob → ProduktpassLeser (produktpass.extract) mit Anhang; Anhänge gehen nur über den OpenAI-Weg der Plattform (pruefeBildWeg), ein KI-Auftrag trägt keine Datei. Pflichtliste Nr. 58 (Entscheidung Punkt 5) / F2 „Bild-/PDF-Anhänge: ausgenommen“.',
+        'foodalchemist.produktpass.POST' => 'ABGENOMMEN: Dominique 03.11.2026, bleibt Plattform. Datei-Lesen (PDF/Bild) über ProduktpassLesenJob → ProduktpassLeser (produktpass.extract) mit Anhang; Anhänge gehen nur über den OpenAI-Weg der Plattform (pruefeBildWeg), ein KI-Auftrag trägt keine Datei. Pflichtliste Nr. 58 (Entscheidung Punkt 5) / F2 „Bild-/PDF-Anhänge: ausgenommen“.',
     ];
 
     /** Soll ein Lauf, den dieser Aufruf startet, extern laufen? (nur Aufruf über den externen MCP-Server, Schalter an) */
