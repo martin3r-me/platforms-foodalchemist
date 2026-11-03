@@ -29,7 +29,7 @@ class SpeiseplanEintraegeDeleteTool extends FoodAlchemistTool implements ToolCon
                 'eintrag_id' => ['type' => 'integer', 'description' => 'Eintrag-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['eintrag_id', 'confirm'],
+            'required' => ['eintrag_id'],
         ];
     }
 

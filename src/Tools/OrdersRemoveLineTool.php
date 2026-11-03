@@ -29,7 +29,7 @@ class OrdersRemoveLineTool extends FoodAlchemistTool implements ToolContract, To
                 'line_id' => ['type' => 'integer', 'description' => 'Bestellzeilen-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['line_id', 'confirm'],
+            'required' => ['line_id'],
         ];
     }
 

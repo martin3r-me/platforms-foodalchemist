@@ -34,7 +34,7 @@ class PaketeDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

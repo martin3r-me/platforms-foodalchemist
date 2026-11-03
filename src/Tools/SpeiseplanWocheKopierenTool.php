@@ -37,7 +37,7 @@ class SpeiseplanWocheKopierenTool extends FoodAlchemistTool implements ToolContr
                 'mahlzeit' => ['type' => 'string', 'enum' => ['fruehstueck', 'mittag', 'abend', 'snack']],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (Massen-Insert).'],
             ],
-            'required' => ['plan_id', 'von_montag', 'nach_montag', 'confirm'],
+            'required' => ['plan_id', 'von_montag', 'nach_montag'],
         ];
     }
 

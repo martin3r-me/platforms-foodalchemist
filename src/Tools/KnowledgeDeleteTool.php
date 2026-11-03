@@ -33,7 +33,7 @@ class KnowledgeDeleteTool extends FoodAlchemistTool implements ToolContract, Too
                 'slug' => ['type' => 'string', 'description' => 'Slug des Wissensdokuments.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['slug', 'confirm'],
+            'required' => ['slug'],
         ];
     }
 

@@ -34,7 +34,7 @@ class OfferBlockDeleteTool extends FoodAlchemistTool implements ToolContract, To
                 'block_id' => ['type' => 'integer', 'description' => 'Block-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['block_id', 'confirm'],
+            'required' => ['block_id'],
         ];
     }
 

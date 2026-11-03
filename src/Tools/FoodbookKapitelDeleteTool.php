@@ -32,7 +32,7 @@ class FoodbookKapitelDeleteTool extends FoodAlchemistTool implements ToolContrac
                 'kapitel_id' => ['type' => 'integer', 'description' => 'Kapitel-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['kapitel_id', 'confirm'],
+            'required' => ['kapitel_id'],
         ];
     }
 

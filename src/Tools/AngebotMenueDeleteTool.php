@@ -30,7 +30,7 @@ class AngebotMenueDeleteTool extends FoodAlchemistTool implements ToolContract, 
                 'concept_id' => ['type' => 'integer', 'description' => 'Menü-Concept-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['concept_id', 'confirm'],
+            'required' => ['concept_id'],
         ];
     }
 

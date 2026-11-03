@@ -33,7 +33,7 @@ class ConceptCategoriesDeleteTool extends FoodAlchemistTool implements ToolContr
                 'id' => ['type' => 'integer', 'description' => 'Kategorie-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

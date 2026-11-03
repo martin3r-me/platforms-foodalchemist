@@ -39,7 +39,7 @@ class GpsReplaceTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'to_id' => ['type' => 'integer', 'description' => 'Ziel-GP (sichtbar).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (reichweitenstarke Aktion).'],
             ],
-            'required' => ['from_id', 'to_id', 'confirm'],
+            'required' => ['from_id', 'to_id'],
         ];
     }
 

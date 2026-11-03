@@ -34,7 +34,7 @@ class OrdersDispatchTool extends FoodAlchemistTool implements ToolContract, Tool
                 'order_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Zu versendende Bestell-Ids.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (echter Lieferanten-Versand).'],
             ],
-            'required' => ['order_ids', 'confirm'],
+            'required' => ['order_ids'],
         ];
     }
 

@@ -33,7 +33,7 @@ class AngeboteDeleteTool extends FoodAlchemistTool implements ToolContract, Tool
                 'id' => ['type' => 'integer', 'description' => 'Angebot-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 
