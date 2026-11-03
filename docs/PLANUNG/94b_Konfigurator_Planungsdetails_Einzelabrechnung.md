@@ -1,6 +1,6 @@
 # Spec 94b · Konfigurator Stufe 7: Planungsdetails, Einzelabrechnung, Zusammenfassung
 
-Stand 03.11.2026 · **Entwurf, wartet auf Dominiques Abnahme**. Gebaut wird erst danach.
+Stand 03.11.2026 · **Entwurf, wartet auf Dominiques Abnahme** (Frage 1 entschieden: Planung später in OLIVIA). Gebaut wird erst danach.
 Baut auf [Spec 94](94_Konfigurator_AllIn_Preise.md) auf (Stufen 1–6 und 5b live).
 
 **Leitregel (Dominique): Nichts wird fest codiert.** Was eine Leistung ausmacht, ergibt sich aus dem, was an der Vorlage
@@ -64,6 +64,7 @@ Frei pflegbar, ohne feste Feldliste. Neues JSON-Feld `planung_json` an `foodalch
 
 ```json
 {
+  "version": 1,
   "komponenten": [
     {"bezeichnung": "Stehtisch", "menge": 1, "je": "einheit", "gp_id": 812},
     {"bezeichnung": "Hussen weiß", "menge": 1, "je": "einheit", "gp_id": null},
@@ -87,24 +88,44 @@ Frei pflegbar, ohne feste Feldliste. Neues JSON-Feld `planung_json` an `foodalch
 - **Interne Notiz:** erscheint nie im Kundenlink, nicht im Snapshot und nicht in Kunden-PDFs.
 - Prüfung in `LeistungsRegelPruefung` (eine Stelle für Oberfläche und MCP), wie schon bei `stufen_json`:
   Liste bereinigen, `gp_id` muss ein sichtbares Non-Food-GP sein, `container_vocab_id` ein sichtbarer Behälter.
+- `version` hält die Struktur stabil für die spätere Übergabe an OLIVIA (siehe unten). Ändert sich das Schema, steigt die
+  Version, und alte Stände bleiben lesbar.
 - Das Feld wird beim Übernehmen aus der Vorlage mitkopiert und ist Teil des Abgleichs „Vorlage geändert“.
   Es kommt **nicht** in die Snapshot-Allowlist. Ein Test sichert das ab, wie bei EK und Mengen.
 
 ### Wer die Planungsdetails liest
 
-Sobald aus einer Anfrage ein Angebot wird, rechnet ein neuer `KonfiguratorPlanungService::bedarf($konfigurator, $auswahl, $pax)`
-den Bedarf aus. Er nutzt die vorhandene Mengenlogik (`KonfiguratorMengenRechner` bzw. die Paket-Mengen) und multipliziert mit
-den Komponenten:
+**Entscheid Dominique (03.11.2026): Die Event-Planung übernimmt später OLIVIA, das eigene Event-Modul (Venture OLIVIA).**
+Der Food Alchemist baut deshalb keine eigene Planungsoberfläche und keine Packliste. Er pflegt `planung_json` als saubere,
+stabile Übergabe-Struktur. Am Angebot genügt vorerst eine schlichte Lese-Ansicht.
 
-| Bedarf | Quelle | Andocken |
-|:--|:--|:--|
-| Speisen-Behälter | Rezepte der gewählten Concepts | **unverändert** über `BehaelterBedarfService` in der Produktion (je Rezept und kg) |
-| Equipment und Geschirr | Komponenten der Leistungen × Anzahl der Leistung | neu: Liste je GP bzw. Behälter, summiert über alle Leistungen. Bestand abgleichbar mit `team_profile_equipment` |
-| Personal | Anzahl der Leistung × Stunden (Einsatzzeit) und Attribute Rolle/Schicht | neu: Liste je Rolle und Schicht |
-| Logistik | Anzahl und Komponenten (z. B. LKW, Fahrer) | neu: Liste wie Equipment |
+- Sobald aus einer Anfrage ein Angebot wird, rechnet `KonfiguratorPlanungService::bedarf($konfigurator, $auswahl, $pax)`
+  den Bedarf aus der vorhandenen Mengenlogik (`KonfiguratorMengenRechner` bzw. Paket-Mengen) mal den Komponenten. Das Ergebnis
+  wird am Angebot eingefroren, in `konfiguration_json.planung`, im Format der Übergabe (siehe unten).
+- **Lese-Ansicht am Angebot:** eine schlichte Liste je Leistung (Anzahl, Komponenten mit Menge, Attribute, interne Notiz),
+  ohne Bearbeitung, ohne Summen über Leistungen hinweg, ohne Abgleich mit dem Bestand und ohne Druck.
+- Die Speisen-Behälter bleiben **unverändert** in der Produktion (`BehaelterBedarfService`, je Rezept und kg). Sie sind
+  nicht Teil von `planung_json`.
 
-Die Ausgabe ist eine **Planungsliste am Angebot** (siehe offene Frage 1). Die Produktion bleibt bei den Speisen, ein zweites
-Planungswerkzeug entsteht nicht.
+## Schnittstelle zu OLIVIA (später)
+
+Nur als Rahmen festgehalten, **ohne Code in dieser Stufe**. Sie dient dazu, dass `planung_json` heute so gebaut wird, dass
+OLIVIA es später ohne Umbau übernehmen kann.
+
+- **Richtung:** FA liefert, OLIVIA plant. FA bleibt die Quelle für Leistungen, Mengenregeln, Preise und Komponenten,
+  OLIVIA für Personal-Einsatz, Equipment-Disposition und Logistik am konkreten Event.
+- **Einheit der Übergabe:** ein Angebot (aus einer Konfigurator-Anfrage) mit seinem eingefrorenen Bedarf, nicht der Konfigurator
+  selbst. Damit ist es der Stand, den der Kunde angefragt hat.
+- **Inhalt je Leistung:** stabile ID (`uuid` der Konfigurator-Leistung), `vorlage_uuid` (falls aus Vorlage), Kategorie-Slug,
+  Bezeichnung, Anzahl nach Regel bzw. Hand, Stunden (bei Preis je Stunde), Abrechnungsart, dazu `planung_json` unverändert
+  (`version`, `komponenten`, `attribute`, `notiz_intern`).
+- **Verweise:** Komponenten verweisen über `uuid` der Non-Food-GPs bzw. Behälter, nicht über interne Zahl-IDs. FA gibt
+  dafür beim Einfrieren die `uuid` mit aus.
+- **Kopf:** Angebot-`uuid`, Team, Datum, Ort, Gäste, gewählte Konzepte (Concept-`uuid`) und Tageszeit.
+- **Weg:** offen. Möglich wären MCP-Tool, Webhook oder Abruf durch OLIVIA. Das entscheidet sich mit OLIVIA, FA legt sich
+  hier nicht fest.
+- **Was FA nicht tut:** keinen Event-Kalender, keine Personal-Disposition, keinen Equipment-Bestand je Event, keine
+  Rückmeldung von OLIVIA verarbeiten. Alles das bleibt in OLIVIA.
 
 ## 4 · Einzelabrechnung
 
@@ -165,8 +186,8 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 | `KonfiguratorPricingService` | `rechneFall`: Aufwand heraus, `einzel` und Gruppen je Kategorie; `matrix()` gibt sie aus |
 | `KonfiguratorSnapshot` | Allowlist + `zzgl`; `planung_json` ausdrücklich nicht |
 | `KonfiguratorService` / `LeistungVorlageService` | Kopie und Abgleich der neuen Felder |
-| neu `Konfigurator/KonfiguratorPlanungService` | Bedarf aus Auswahl × Mengen × Komponenten |
-| `KonfiguratorAnfrageService::anfragen` | Angebot mit Positionen (Aufwand) und Planungsliste |
+| neu `Konfigurator/KonfiguratorPlanungService` | Bedarf aus Auswahl × Mengen × Komponenten, im Übergabe-Format für OLIVIA |
+| `KonfiguratorAnfrageService::anfragen` | Angebot mit Positionen (Aufwand), Bedarf eingefroren in `konfiguration_json.planung` |
 | `OfferCompositionService` (Angebot) | neue Position mit Menge und EK, falls freigegeben |
 | Oberfläche | Leistungs-Formular (`partials/leistung-regel`): Abschnitte Planung und Abrechnung; Reiter Kalkulation: Zusammenfassung; Kundenlink: `zzgl.`-Zeilen in Zusammenfassung bzw. Anfrage |
 | MCP | `regelSchema()` um `planung_json` und `abrechnung` erweitert; neu `leistungskategorien.GET`; `konfiguratoren.MATRIX` liefert Gruppen und Einzelabrechnung |
@@ -180,7 +201,8 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 - Planung:
   - `planung_json` wird geprüft (fremdes GP abgewiesen) und beim Übernehmen kopiert, ein geänderter Stand erscheint im Abgleich.
   - Die interne Notiz und die Komponenten stehen nie im Snapshot (Allowlist-Test).
-  - `KonfiguratorPlanungService::bedarf` bei 150 Gästen ergibt Anzahl × Komponenten, summiert je GP.
+  - `KonfiguratorPlanungService::bedarf` bei 150 Gästen ergibt je Leistung Anzahl und Komponenten, mit `uuid`-Verweisen.
+  - Die Anfrage friert den Bedarf am Angebot ein, und das Angebot zeigt ihn als Lese-Ansicht.
 - Einzelabrechnung:
   - Eine Aufwands-Leistung ändert `vk_pp` nicht und steht in `einzel`.
   - Der Kundenlink zeigt „zzgl. nach Aufwand“ mit Satz, aber ohne Menge und EK.
@@ -197,13 +219,12 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 |:--|:--|:--|
 | 7a | Kategorien als Vokabular + Zusammenfassung im Reiter Kalkulation | Testfälle Vokabular und Zusammenfassung grün, Bestand unverändert gültig |
 | 7b | Einzelabrechnung (Preis, Kalkulation, Kundenlink) | Aufwand nicht im Preis pro Person, im Link als „zzgl.“, Tests grün |
-| 7c | Planungsdetails + Planungsliste + Übernahme ins Angebot | Bedarf aus einer Anfrage am Angebot sichtbar, Aufwands-Positionen im Angebot |
+| 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Aufwands-Positionen im Angebot | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
 
 ## Offene Fragen an Dominique
 
-1. **Wo liest „die Planung“ die Planungsdetails?** Eine Event-Planung gibt es nicht, die Produktion plant nur Speisen.
-   Vorschlag: eine Planungsliste (Equipment, Geschirr, Personal je Rolle/Schicht, Logistik) am Angebot, das aus der
-   Anfrage entsteht, mit Druck bzw. PDF als Packliste. Die Produktion bleibt unverändert. Passt das, oder soll sie in die Produktion?
+1. ~~Wo liest „die Planung“ die Planungsdetails?~~ **Entschieden 03.11.2026:** später OLIVIA. In FA gibt es nur die Übergabe-Struktur
+   und eine Lese-Ansicht am Angebot (siehe „Schnittstelle zu OLIVIA“).
 2. **Geschirr- und Equipment-Bezug:** Komponenten verweisen auf Non-Food-GPs (WG 16) bzw. auf das Behälter-Vokabular, weil der
    Geschirr-Katalog zurückgebaut ist. Freitext ist erlaubt, wo nichts passt. Einverstanden?
 3. **Satz der Einzelabrechnung:** Gleich der VK-Satz der Leistung (mit Aufschlagsklasse wie bisher) oder ein eigener Satz nur für die Abrechnung?
