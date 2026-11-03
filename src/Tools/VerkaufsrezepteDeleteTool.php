@@ -34,7 +34,7 @@ class VerkaufsrezepteDeleteTool extends FoodAlchemistTool implements ToolContrac
                 'id' => ['type' => 'integer', 'description' => 'Gericht-Id (team-eigen).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

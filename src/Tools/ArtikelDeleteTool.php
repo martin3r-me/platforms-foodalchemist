@@ -31,7 +31,7 @@ class ArtikelDeleteTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'id' => ['type' => 'integer', 'description' => 'Artikel-Id (team-eigen).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktiv).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

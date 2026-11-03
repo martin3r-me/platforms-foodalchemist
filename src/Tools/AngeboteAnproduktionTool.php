@@ -33,7 +33,7 @@ class AngeboteAnproduktionTool extends FoodAlchemistTool implements ToolContract
                 'id' => ['type' => 'integer', 'description' => 'Angebot-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (erzeugt Produktionsaufträge).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

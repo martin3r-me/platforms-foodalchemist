@@ -37,7 +37,7 @@ class SpeiseplanAnproduktionTool extends FoodAlchemistTool implements ToolContra
                 'montag' => ['type' => 'string', 'description' => 'Wochen-Montag YYYY-MM-DD.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (erzeugt Produktionsaufträge).'],
             ],
-            'required' => ['plan_id', 'mahlzeit', 'montag', 'confirm'],
+            'required' => ['plan_id', 'mahlzeit', 'montag'],
         ];
     }
 

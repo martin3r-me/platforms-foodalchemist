@@ -32,7 +32,7 @@ class SpeiseplanLinienDeleteTool extends FoodAlchemistTool implements ToolContra
                 'linie_id' => ['type' => 'integer', 'description' => 'Linien-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['linie_id', 'confirm'],
+            'required' => ['linie_id'],
         ];
     }
 

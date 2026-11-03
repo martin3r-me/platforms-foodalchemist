@@ -23,7 +23,7 @@ class TrendBelegeDeleteTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getSchema(): array
     {
-        return ['type' => 'object', 'properties' => ['beleg_id' => ['type' => 'integer'], 'confirm' => ['type' => 'boolean']], 'required' => ['beleg_id', 'confirm']];
+        return ['type' => 'object', 'properties' => ['beleg_id' => ['type' => 'integer'], 'confirm' => ['type' => 'boolean']], 'required' => ['beleg_id']];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult

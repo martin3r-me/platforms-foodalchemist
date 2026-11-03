@@ -36,7 +36,7 @@ class GpsDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'id' => ['type' => 'integer', 'description' => 'GP-Id (team-eigen).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

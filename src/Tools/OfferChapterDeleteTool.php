@@ -35,7 +35,7 @@ class OfferChapterDeleteTool extends FoodAlchemistTool implements ToolContract, 
                 'chapter_id' => ['type' => 'integer', 'description' => 'Kapitel-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['chapter_id', 'confirm'],
+            'required' => ['chapter_id'],
         ];
     }
 

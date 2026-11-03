@@ -39,7 +39,7 @@ class RecipesDeleteTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'id' => ['type' => 'integer', 'description' => 'Basisrezept-Id (team-eigen).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['id', 'confirm'],
+            'required' => ['id'],
         ];
     }
 

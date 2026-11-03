@@ -44,7 +44,7 @@ class RecipesReplaceTool extends FoodAlchemistTool implements ToolContract, Tool
                 'to_id' => ['type' => 'integer', 'description' => 'Ziel-Rezept (sichtbar, nicht „deprecated").'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (reichweitenstarke Aktion).'],
             ],
-            'required' => ['from_id', 'to_id', 'confirm'],
+            'required' => ['from_id', 'to_id'],
         ];
     }
 

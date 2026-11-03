@@ -32,7 +32,7 @@ class FormatImagesClearTool extends FoodAlchemistTool implements ToolContract, T
                 'image_id' => ['type' => 'integer', 'description' => 'Bild-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['image_id', 'confirm'],
+            'required' => ['image_id'],
         ];
     }
 

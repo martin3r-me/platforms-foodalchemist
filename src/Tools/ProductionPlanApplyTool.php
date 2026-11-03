@@ -35,7 +35,7 @@ class ProductionPlanApplyTool extends FoodAlchemistTool implements ToolContract,
                 'nur_linien' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Optionale Teilmenge der Linien-Keys aus SUGGEST.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (erzeugt Produktionsaufträge).'],
             ],
-            'required' => ['von', 'bis', 'confirm'],
+            'required' => ['von', 'bis'],
         ];
     }
 

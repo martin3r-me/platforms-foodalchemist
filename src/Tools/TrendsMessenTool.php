@@ -25,7 +25,7 @@ class TrendsMessenTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getSchema(): array
     {
-        return ['type' => 'object', 'properties' => ['trend_id' => ['type' => 'integer'], 'confirm' => ['type' => 'boolean']], 'required' => ['trend_id', 'confirm']];
+        return ['type' => 'object', 'properties' => ['trend_id' => ['type' => 'integer'], 'confirm' => ['type' => 'boolean']], 'required' => ['trend_id']];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult

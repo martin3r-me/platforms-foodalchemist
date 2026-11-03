@@ -27,7 +27,7 @@ function spec91_gleichstand(): array
                 'includeInactive' => ['foodalchemist.suppliers.SEARCH', 'include_inactive'],
                 'einstufen' => ['foodalchemist.suppliers.SEARCH', 'einstufen'],
             ],
-            'ausnahmen' => [],
+            'ausnahmen' => ['handyArtikelId' => 'Auswahl eines Artikels für die Handy-Lesekarte (#1003), kein Listenfilter'],
         ],
         \Platform\FoodAlchemist\Livewire\Gps\Browser::class => [
             'filter' => [

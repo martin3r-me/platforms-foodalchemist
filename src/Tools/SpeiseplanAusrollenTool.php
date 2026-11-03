@@ -37,7 +37,7 @@ class SpeiseplanAusrollenTool extends FoodAlchemistTool implements ToolContract,
                 'belegte_ersetzen' => ['type' => 'boolean', 'description' => 'true = belegte Zellen der Folgewochen durch die Vorlage ersetzen (Standard false).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (Massen-Insert).'],
             ],
-            'required' => ['plan_id', 'bis_datum', 'confirm'],
+            'required' => ['plan_id', 'bis_datum'],
         ];
     }
 

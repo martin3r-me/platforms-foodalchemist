@@ -32,7 +32,7 @@ class SpeisekarteRubrikDeleteTool extends FoodAlchemistTool implements ToolContr
                 'rubrik_id' => ['type' => 'integer', 'description' => 'Rubrik-Id.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (destruktive Aktion).'],
             ],
-            'required' => ['rubrik_id', 'confirm'],
+            'required' => ['rubrik_id'],
         ];
     }
 
