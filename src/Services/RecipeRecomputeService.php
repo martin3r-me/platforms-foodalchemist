@@ -1143,7 +1143,10 @@ class RecipeRecomputeService
         // Möhren. Genau der Fall, für den es das Feature gibt („halber Bund, ohne zu wissen
         // was der wiegt"). Für Masse/Volumen ändert das nichts — dort greift dieser Block
         // wegen dimension !== 'count' gar nicht und das globale Gewicht bleibt die Wahrheit.
-        if ($unit?->dimension === 'count' && $z->gp_id !== null) {
+        // Löffel (Dominique 03.11.): EL/TL/Msp/Prise sind GP-Formen wie die Zähl-Einheiten — „1 TL Zimt“ wiegt die hinterlegte
+        // Form (2,5 g), nicht 5 ml Wasser. Ohne Form fällt die Zeile unten aufs Vokabular zurück (unverändert).
+        $loeffel = in_array($unit?->slug, GpFormService::LOEFFEL_SLUGS, true);
+        if (($unit?->dimension === 'count' || $loeffel) && $z->gp_id !== null) {
             // #9-Formen (gp_forms) sind die LEBENDE Quelle: der Formen-Editor am GP und die
             // KI-Schätzung schreiben ausschliesslich hierhin, und der Modell-Docblock nennt
             // form_slug ausdrücklich „für die EK-Umrechnung nutzbar". Gelesen wurde die Tabelle

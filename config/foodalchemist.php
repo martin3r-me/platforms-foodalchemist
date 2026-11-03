@@ -1864,7 +1864,12 @@ return [
             // unsichere Form weglassen (GL-07/keine Halluzination).
             'task' => 'Liste die natuerlichen Stueck-/Zaehl-FORMEN des Grundprodukts mit dem '
                 . 'Durchschnittsgewicht je EINER Einheit in Gramm — NUR real anwendbare Formen '
-                . '(z. B. Zwiebel: stk/wuerfel/scheibe/ring; Oel/Bruehe/Mehl: KEINE => leere Liste). '
+                . '(z. B. Zwiebel: stk/wuerfel/scheibe/ring; Oel/Bruehe/Mehl: KEINE Stueck-Form). '
+                // Dominique 03.11.: Löffel je GP in Gramm — sonst rechnet das Vokabular sie wie Wasser (1 TL = 5 g).
+                . 'LOEFFEL (el, tl, msp, prise — nur wenn im Set): Gewicht EINES gestrichenen Loeffels bzw. einer Messerspitze/Prise '
+                . 'in Gramm, NUR fuer Ware, die man in der Kueche loeffelt (Gewuerze, Salz, Zucker, Mehl, Staerke, Pulver, '
+                . 'Pasten, Oel, Essig, Honig, Senf …; z. B. tl Zimt gemahlen 2.5, tl Salz 6, el Mehl 10, el Oel 13), NIE fuer '
+                . 'Stueckware (Fleisch, ganzes Gemuese, Obst). '
                 . 'unit MUSS aus dem mitgegebenen Set erlaubte_einheiten stammen (B/2026-09-04: '
                 . 'kommt aus dem Einheiten-Vokabular des Teams, damit Prompt und Katalog nicht '
                 . 'auseinanderlaufen — vorher stand hier eine feste Neuner-Liste, die real '

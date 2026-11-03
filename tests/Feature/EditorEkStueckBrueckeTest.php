@@ -59,6 +59,11 @@ beforeEach(function () {
         ['team_id' => $this->rootTeam->id, 'slug' => 'bund'],
         ['display_de' => 'Bund', 'dimension' => 'count', 'default_in_g' => 30],
     );
+    // Löffel (Dominique 03.11.): Volumen-Einheit wie im Vokabular — ohne GP-Form 5 ml wie Wasser
+    $this->tl = FoodAlchemistVocabEinheit::firstOrCreate(
+        ['team_id' => $this->rootTeam->id, 'slug' => 'tl'],
+        ['display_de' => 'Teelöffel', 'dimension' => 'volume', 'default_in_ml' => 5],
+    );
     $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs Culinar']);
     $this->supplier = $supplier;
 
@@ -135,8 +140,8 @@ beforeEach(function () {
         if (($z['formen_g'][$z['unit_vocab_id']] ?? null) !== null) {
             return (float) $z['formen_g'][$z['unit_vocab_id']];    // 3 produktspezifisch
         }
-        if ($e?->default_in_g !== null) {
-            return (float) $e->default_in_g;                       // 4a global
+        if (($e?->default_in_g ?? $e?->default_in_ml) !== null) {
+            return (float) ($e->default_in_g ?? $e->default_in_ml);   // 4a global (zutaten-kern: g = default_in_g ?? default_in_ml)
         }
         if ($e?->slug === 'stk' && ($z['stueck_gewicht'] ?? null) !== null) {
             return (float) $z['stueck_gewicht'];                   // 4b Stückgewicht
@@ -282,9 +287,18 @@ it('hält Anzeige und Buchung über alle Einheiten-Arten und Preisquellen deckun
             'gp' => [], 'stueck' => null, 'formen' => []],
         'stk · Stk-LA ohne Stückgewicht' => ['einheit' => 'stk', 'menge' => '3',
             'gp' => [[2.24, 'Stk', 2.0]], 'stueck' => null, 'formen' => []],
+        // Löffel (03.11.): „1 TL Zimt" wiegt die GP-Form (2,5 g), nicht 5 ml Wasser
+        'tl · Löffel-Form schlägt Volumen' => ['einheit' => 'tl', 'menge' => '2',
+            'gp' => [[10.0, 'kg', 1.0]], 'stueck' => null, 'formen' => ['tl' => 2.5]],
+        // ohne Form bleibt der Rückfall aufs Vokabular (5 ml = 5 g)
+        'tl · ohne Form → Volumen wie bisher' => ['einheit' => 'tl', 'menge' => '2',
+            'gp' => [[10.0, 'kg', 1.0]], 'stueck' => null, 'formen' => []],
+        // eine Löffel-Form ändert nichts an einer g-Zeile desselben GP
+        'g · GP mit tl-Form bleibt g' => ['einheit' => 'g', 'menge' => '250',
+            'gp' => [[10.0, 'kg', 1.0]], 'stueck' => null, 'formen' => ['tl' => 2.5]],
     ];
     $unitIds = ['g' => $this->g->id, 'stk' => $this->stk->id,
-        'scheibe' => $this->scheibe->id, 'bund' => $this->bund->id];
+        'scheibe' => $this->scheibe->id, 'bund' => $this->bund->id, 'tl' => $this->tl->id];
 
     foreach ($faelle as $label => $f) {
         $gp = ($this->mkGpFlex)('Wächter '.$label, $f['gp'], $f['stueck'], $f['formen']);
