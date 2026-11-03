@@ -63,6 +63,17 @@ class LaFirstGpService
                 }
                 $bestandMoeglich = true;   // FuzzyLow: Wiederverwendung über gemappte LA/EAN-Brücke unten bleibt, nur KEIN Neu-Anlegen
             }
+            // Spec 95 (Pilot 02.11.: „Brauner Zucker (optional)“ → neues GP neben „Rohrzucker: trocken, braun“): vor dem Anlegen auch den
+            // Post-Match-Draw fragen — derselbe Zug wie Generator und gps.MATCH (hybrid, Boden 0,70, Hauptzutat-/Varianten-Schutz).
+            if (! $bestandMoeglich) {
+                $matcher = app(IngredientMatchService::class);
+                foreach ($matcher->drawKandidaten($matcher->candidatesFor($team, $text, null, 5), 'gp', 'hybrid', $team, $text) as $c) {
+                    $gezogen = FoodAlchemistGp::visibleToTeam($team)->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)->find($c['id']);
+                    if ($gezogen !== null) {
+                        return $gezogen;
+                    }
+                }
+            }
 
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
             // searchGlobal->items()[0]. Ohne WG-Hint + Einzeltreffer verhaltensgleich.
@@ -254,9 +265,11 @@ class LaFirstGpService
         return null;
     }
 
-    /** „500 ml brauner Kalbsfond" → Hauptzutat-Name ohne Mengen-Präfix. */
+    /** „500 ml brauner Kalbsfond" → Hauptzutat-Name ohne Mengen-Präfix; Spec 95: ohne Hinweis-Zusätze („Crème fraîche (1 EL)“ → „Crème fraîche“). */
     private function hauptzutatAusText(string $text): string
     {
+        $text = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($text);
+
         return trim((string) preg_replace('/^[\d.,\/\s]+(g|kg|ml|l|el|tl|stk|stück|prise[n]?)?\s+/iu', '', $text)) ?: $text;
     }
 }

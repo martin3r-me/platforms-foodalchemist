@@ -36,6 +36,29 @@ final class ZutatFreitext
         return trim((string) preg_replace('/^\s*(?:ca\.?\s*)?[\d.,\/½¼¾\s-]+\s*(?:(?:' . self::EINHEITEN . ')\.?(?![\p{L}]))?\s*/iu', '', trim($text)));   // „2 EL “, „500 g “
     }
 
+    /** Spec 95: Hinweise im Rezepttext, die keine Ware beschreiben („optional“, „Raumtemperatur“) — nur als ganzes Segment. */
+    private const HINWEISE = 'optional|nach belieben|nach geschmack|bei bedarf|raumtemperatur|raumtemperiert|zimmerwarm|zimmertemperatur|zum garnieren|zum bestreuen|zum servieren|zum anrichten|zum dekorieren';
+
+    /**
+     * Spec 95 (Rezeptimport, Pilot 02.11.): Klammer- und Komma-Zusätze ohne Warenbezug weg — „Crème fraîche (1 EL)“ → „Crème fraîche“,
+     * „Butter, Raumtemperatur“ → „Butter“, „Brauner Zucker (optional)“ → „Brauner Zucker“. Nur ganze Segmente (Kurator-Lehre: nie Teilstrings,
+     * sonst kippen Komposita wie Frischkäse); Prozent-, Type- und Bestimmungswort-Klammern bleiben („Milch (1,5 %)“, „Öl (Raps)“).
+     */
+    public static function ohneHinweise(string $text): string
+    {
+        // Stück-Angaben bleiben: „Zimt (2 Stück)“ meint die ganze Gewürzform (Kurator 28.10., stueckEinheit)
+        $einheiten = implode('|', array_diff(explode('|', self::EINHEITEN), ['stk', 'st', 'stueck', 'stück']));
+        $menge = '(?:ca\.?\s*)?[\d.,\/½¼¾\s-]*\d[\d.,\/½¼¾\s-]*\s*(?:(?:' . $einheiten . ')\.?)?';
+        $s = (string) preg_replace('/\s*\(\s*(?:' . $menge . '|(?:' . self::HINWEISE . ')(?:\s*,\s*(?:' . self::HINWEISE . '))*)\s*\)/iu', '', $text);
+        do {
+            $vorher = $s;
+            $s = (string) preg_replace('/\s*,\s*(?:' . self::HINWEISE . ')\s*$/iu', '', $s);
+        } while ($s !== $vorher);
+        $s = trim((string) preg_replace('/\s+/u', ' ', $s));
+
+        return $s !== '' ? $s : trim($text);
+    }
+
     /**
      * Prozent- und Type-Werte eines Texts, normalisiert („Milch (1,5 %)“ → ['1.5%'], „Type 550“ → ['type550']).
      *

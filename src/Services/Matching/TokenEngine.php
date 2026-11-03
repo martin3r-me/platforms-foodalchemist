@@ -41,11 +41,15 @@ class TokenEngine
         'gepoek', 'geraeuch', 'luftgetrock',   // Regelwerk GP v3.6.0 §9 (Tokens sind ae/oe/ue-normalisiert)
     ];
 
-    /** rs:181–200 — Tokens als MENGE (dedupe), nur Länge ≥ 2; Akzente bleiben (A-5!). */
+    /** Spec 95 = GL-04 A-5/W-1 (nach der Paritäts-Suite vorgesehen): frz./span. Akzente falten — „Crème fraîche“ trifft „Creme Fraiche“. */
+    private const AKZENTE = ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'à' => 'a', 'â' => 'a', 'á' => 'a', 'î' => 'i', 'ï' => 'i', 'í' => 'i',
+        'ô' => 'o', 'ó' => 'o', 'û' => 'u', 'ù' => 'u', 'ú' => 'u', 'ç' => 'c', 'ñ' => 'n'];
+
+    /** rs:181–200 — Tokens als MENGE (dedupe), nur Länge ≥ 2; Akzente seit Spec 95 gefaltet (GL-04 A-5/W-1). */
     public function tokenize(string $s): array
     {
         $s = mb_strtolower($s);
-        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss'] + self::AKZENTE);
         $s = strtr($s, ['-' => ' ', '_' => ' ', ',' => ' ', '.' => ' ', '(' => ' ', ')' => ' ', ':' => ' ', ';' => ' ', '/' => ' ', '\\' => ' ']);
         $s = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s);
 
@@ -195,7 +199,7 @@ class TokenEngine
     public function normalizeSlug(string $s): string
     {
         $s = mb_strtolower($s);
-        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', '-' => '_']);
+        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', '-' => '_'] + self::AKZENTE);
 
         return (string) preg_replace('/[^\p{L}\p{N}_]+/u', '', $s);
     }

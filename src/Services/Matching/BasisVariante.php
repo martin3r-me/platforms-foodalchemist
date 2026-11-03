@@ -380,13 +380,23 @@ final class BasisVariante
         foreach (['Marke' => $zusatz, 'Geschmack' => $f['flavor'] ?? '', 'Verarbeitung' => $f['processing'], 'Zuschnitt' => $f['form'],
             'Portion' => $f['portion'], 'Pflichtangabe' => $f['pflichtangabe']] as $art => $wert) {
             $wert = trim((string) $wert);
-            if ($wert === '' || ($art === 'Zuschnitt' && mb_strtolower($wert) === 'ganz') || $this->genannt($wert, $query)) {
+            if ($wert === '' || ($art === 'Zuschnitt' && mb_strtolower($wert) === 'ganz') || $this->genannt($wert, $query) || $this->neutral($art, $wert)) {
                 continue;
             }
             $offen[] = $art . ': ' . $wert;
         }
 
         return $offen;
+    }
+
+    /** Spec 95: „Natur“, „neutral“, „pur“ sind die Grundform, keine Variante („Frischkäse: frisch, Natur“ ist die Basis zu „Frischkäse“). */
+    private const NEUTRAL = ['natur', 'naturell', 'neutral', 'pur'];
+
+    private function neutral(string $art, string $wert): bool
+    {
+        $tokens = $this->engine->tokenize($wert);
+
+        return in_array($art, ['Geschmack', 'Verarbeitung', 'Pflichtangabe'], true) && $tokens !== [] && array_diff($tokens, self::NEUTRAL) === [];
     }
 
     /**

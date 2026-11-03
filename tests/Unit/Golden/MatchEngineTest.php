@@ -15,15 +15,15 @@ beforeEach(function () {
     $this->e = new TokenEngine;
 });
 
-it('§3.1 tokenize: Umlaute → ae/oe/ue/ss, Separatoren, Länge ≥ 2, MENGE (dedupe), Akzente bleiben (A-5)', function () {
+it('§3.1 tokenize: Umlaute → ae/oe/ue/ss, Separatoren, Länge ≥ 2, MENGE (dedupe), Akzente gefaltet (A-5/W-1, Spec 95)', function () {
     expect($this->e->tokenize('Süße Säfte, süße'))->toBe(['suesse', 'saefte'])
         ->and($this->e->tokenize('Zander-Filet (400g): TK/roh'))->toBe(['zander', 'filet', '400g', 'tk', 'roh'])
         ->and($this->e->tokenize('Ei à 30%'))->toBe(['ei', '30'])              // '%' raus, 'à' (Länge 1) raus
-        ->and($this->e->tokenize('Crème fraîche'))->toBe(['crème', 'fraîche']); // Akzente NICHT gefoldet (A-5)
+        ->and($this->e->tokenize('Crème fraîche'))->toBe(['creme', 'fraiche']); // GL-04 W-1 (Spec 95): Akzente gefaltet, trifft „Creme Fraiche“
 });
 
 it('§3.1 normalize_slug: "-"→"_", Rest ersatzlos (auch Spaces)', function () {
-    expect($this->e->normalizeSlug('Crème-Fraîche 30%'))->toBe('crème_fraîche30')
+    expect($this->e->normalizeSlug('Crème-Fraîche 30%'))->toBe('creme_fraiche30')   // GL-04 W-1 (Spec 95)
         ->and($this->e->normalizeSlug('Rinder-Gulasch'))->toBe('rinder_gulasch')
         ->and($this->e->normalizeSlug('Süßkartoffel'))->toBe('suesskartoffel');
 });
