@@ -27,6 +27,8 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             . 'Array-Reihenfolge, fehlende Zeilen werden gelöscht). Pro Zeile: name + quantity + unit '
             . '(Slug wie g/kg/ml/stk) + gp_id ODER referenced_recipe_id (XOR; via foodalchemist.gps.MATCH erden). '
             . 'Bestehende Zeilen mit id aus recipes.GET senden: ausgelassene optionale Felder (z.B. cooking_loss_pct) bleiben erhalten. '
+            . 'Offene Zeilen bleiben offen: eine bestehende Zeile (mit id) ohne gp_id/referenced_recipe_id wird NIE still neu geerdet; '
+            . 'eine NEUE Zeile ohne Zuordnung erdet der Resolver automatisch, außer offen_halten = true. '
             . 'Aggregate (Yield/Allergene/EK) werden automatisch neu gerechnet und in Eltern-Rezepte propagiert.';
     }
 
@@ -52,6 +54,8 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'trimming_loss_pct' => ['type' => 'number'],
                             'cooking_loss_pct' => ['minimum' => 0, 'maximum' => 100, 'description' => 'Zahl 0–100 oder null (null hebt auf)'],
                             'is_optional' => ['type' => 'boolean'],
+                            'offen_halten' => ['type' => 'boolean', 'description' => 'Nur für NEUE Zeilen ohne gp_id/referenced_recipe_id: true = '
+                                . 'nicht automatisch erden, die Zeile bleibt offen. Bestehende offene Zeilen bleiben ohnehin offen.'],
                             'note' => ['type' => 'string'],
                             'role' => ['type' => 'string'],
                             'role_source' => ['type' => 'string', 'enum' => ['manuell'], 'description' => 'Optional: manuell nur bei '
@@ -123,7 +127,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             $recipe = $hatVerluste
                 ? app(RecipeService::class)->updateCookingLosses($team, $recipe->id, $arguments['garverluste'])
                 : app(RecipeService::class)->syncIngredients(
-                    $team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']), preserveMissing: true,
+                    $team, $recipe->id, $this->ohneStilleErdung($arguments['zutaten'], $this->normalisiereZutatZeilen($team, $arguments['zutaten'])), preserveMissing: true,
                 );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
@@ -136,6 +140,26 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                 'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],
         ], $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
+    }
+
+    /**
+     * Kurator/Dominique 03.11. (Korrektur der Pilot-Rezepte): ein Voll-Sync einer einzigen Zeile erdete jede andere offene Zeile still mit
+     * („Gelbes Paprikapulver“ → „Paprikapulver: scharf“) — eine offene Zeile ließ sich so weder offen halten noch zurücksetzen. Darum
+     * erdet der Resolver nur noch NEUE Zeilen und auch die nur ohne offen_halten; bestehende Zeilen behalten ihren Stand.
+     *
+     * @param  list<array>  $roh  die Zeilen, wie sie gesendet wurden
+     * @param  list<array>  $zeilen  dieselben Zeilen normalisiert (gleiche Reihenfolge)
+     * @return list<array>
+     */
+    private function ohneStilleErdung(array $roh, array $zeilen): array
+    {
+        foreach (array_values($roh) as $i => $z) {
+            if (! empty($z['id']) || ! empty($z['offen_halten'])) {
+                $zeilen[$i]['auto_ground'] = false;
+            }
+        }
+
+        return $zeilen;
     }
 
     public function getMetadata(): array
