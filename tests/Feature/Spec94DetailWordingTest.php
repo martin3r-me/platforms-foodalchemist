@@ -56,6 +56,47 @@ it('Detail zeigt Kunden-Wording und Fotos aus Concept und Gericht, nie den inter
     }
 });
 
+it('Fotos im Kundenlink: Concept-Titelbild auf der Karte, Gericht-Foto im Detail (ohne eigene Pflege am Konfigurator)', function () {
+    $link = ($this->publish)();
+    auth()->logout();
+    $html = $this->get($link['url'])->assertOk()->getContent();
+    $karte = \Illuminate\Support\Str::between($html, 'data-konfig-karte="' . $this->kz->id . '"', 'data-konfig-details=');
+    $detail = \Illuminate\Support\Str::between($html, 'data-konfig-detail="' . $this->kz->id . '"', '</dialog>');
+    expect($karte)->toContain('class="pt-konfig-bild"')->toContain('concepts/fire.jpg')
+        ->and($detail)->toContain('gerichte/rind.jpg')->toContain('concepts/fire.jpg');
+});
+
+it('Gäste stehen nur einmal: Zahl in der Preisleiste, darunter ein kompakter Regler mit Preisstufe, keine große Zahl', function () {
+    $link = ($this->publish)();
+    auth()->logout();
+    $html = $this->get($link['url'])->assertOk()->getContent();
+    $gaeste = \Illuminate\Support\Str::between($html, 'data-konfig-gaeste>', '</section>');
+    expect($html)->not->toContain('pt-konfig-gaeste-zahl')
+        ->and(substr_count($html, 'class="pt-konfig-regler"'))->toBe(1)
+        ->and($gaeste)->toContain('data-konfig-stufe')->not->toContain('data-konfig-pax-anzeige');
+});
+
+it('Kartenpreis live: Karte trägt den Preis-Haken, die Preistabelle hat den Einzelpreis, den auch die Leiste nimmt', function () {
+    $tag = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Lunch intern', 'kind' => 'concept', 'status' => 'active',
+        'price_per_person_cache' => 30, 'ek_per_person_cache' => 9]);
+    $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'haupt', 'lunch_concept_id' => $tag->id, 'dinner_concept_id' => $this->concept->id, 'kunden_titel' => 'Ganztag']);
+    $this->svc->paketAnlegen($this->rootTeam, $this->k->id, ['von_pax' => 200, 'bis_pax' => 299]);
+    $link = ($this->publish)();
+    $c = $this->k->fresh()->presentation_snapshot_json['content'];
+    // Leiste bei einer Tageszeit ohne Extras = tab['k{id}:{t}']; dieselbe Zelle liest die Karte je Paket
+    foreach ($c['preise'] as $tab) {
+        expect($tab)->toHaveKey('k' . $this->kz->id . ':dinner');
+    }
+
+    auth()->logout();
+    $html = $this->get($link['url'])->assertOk()->getContent();
+    expect(substr_count($html, 'class="pt-konfig-ab" data-konfig-karte-preis-feld'))->toBe(2)
+        ->and($html)->toContain('data-konfig-karte-kombi')->toContain("tab['k' + kk.id + ':' + kt]");
+    if (getenv('FA_KONFIG_HTML_KARTE')) {   // Sichtprüfung im Browser
+        file_put_contents(getenv('FA_KONFIG_HTML_KARTE'), $html);
+    }
+});
+
 it('Überschreibung wirkt nur im Konfigurator, Zurücksetzen führt aufs Concept-Wording; Concept-Änderung wirkt nach erneutem Veröffentlichen', function () {
     $this->svc->wordingSetzen($this->rootTeam, $this->kz->id, $this->slot->id, 'Dry Aged Filet am Feuer');
     ($this->publish)();

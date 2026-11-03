@@ -80,7 +80,7 @@ class KonfiguratorService
 
     // ── Branding (wie Angebot) ───────────────────────────────────────────────────
 
-    /** Farben und Footer setzen (Hex-Farben, leere Bandfarbe = aus der Primärfarbe abgeleitet). */
+    /** Farben, Footer, Design und Betrieb (Logo-Rückfall) setzen (Hex-Farben, leere Bandfarbe = aus der Primärfarbe abgeleitet). */
     public function branding(Team $team, int $id, array $in): FoodAlchemistKonfigurator
     {
         $k = $this->eigener($team, $id);
@@ -108,9 +108,80 @@ class KonfiguratorService
         if (array_key_exists('presentation_design', $in)) {
             $daten['presentation_design'] = (string) $in['presentation_design'];
         }
+        if (array_key_exists('outlet_id', $in)) {
+            $oid = ($in['outlet_id'] ?? '') !== '' && $in['outlet_id'] !== null ? (int) $in['outlet_id'] : null;
+            if ($oid !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::visibleToTeam($team)->whereKey($oid)->exists()) {
+                throw new \InvalidArgumentException('Den Betrieb gibt es nicht oder er ist für dieses Team nicht sichtbar.');
+            }
+            $daten['outlet_id'] = $oid;
+        }
         $k->update($daten);
 
         return $k->fresh();
+    }
+
+    /** Logo bzw. Titelbild hochladen (wie FoodbookService::storeLogo/storeCover), ersetzt ein vorhandenes. */
+    public function bildSpeichern(Team $team, int $id, string $art, \Illuminate\Http\UploadedFile $datei): FoodAlchemistKonfigurator
+    {
+        $k = $this->eigener($team, $id);
+        [$spalte, $contextSpalte] = $this->bildSpalten($art);
+        $this->bildFreigeben($team, $k, $spalte, $contextSpalte);
+        $media = app(FoodAlchemistMediaService::class)->storeImage($datei, $team, 'foodalchemist.konfigurator', $k->id, "foodalchemist/branding/konfigurator-{$k->id}");
+        $k->update([$spalte => $media['path'], $contextSpalte => $media['context_file_id']]);
+
+        return $k->fresh();
+    }
+
+    public function bildEntfernen(Team $team, int $id, string $art): FoodAlchemistKonfigurator
+    {
+        $k = $this->eigener($team, $id);
+        [$spalte, $contextSpalte] = $this->bildSpalten($art);
+        $this->bildFreigeben($team, $k, $spalte, $contextSpalte);
+        $k->update([$spalte => null, $contextSpalte => null]);
+
+        return $k->fresh();
+    }
+
+    /** @return array{0:string, 1:string} */
+    private function bildSpalten(string $art): array
+    {
+        return match ($art) {
+            'logo' => ['logo_path', 'logo_context_file_id'],
+            'cover' => ['cover_image_path', 'cover_context_file_id'],
+            default => throw new \InvalidArgumentException('Bild: logo oder cover.'),
+        };
+    }
+
+    /**
+     * Altes Bild löschen — aber nur, wenn es niemand sonst nutzt: „Branding übernehmen“ kopiert den Verweis auf die Datei
+     * eines Foodbooks, Angebots oder Betriebs, die darf beim Ersetzen am Konfigurator nicht mit verschwinden.
+     */
+    private function bildFreigeben(Team $team, FoodAlchemistKonfigurator $k, string $spalte, string $contextSpalte): void
+    {
+        $pfad = (string) $k->{$spalte};
+        if ($pfad === '') {
+            return;
+        }
+        $nutzer = [
+            [FoodAlchemistKonfigurator::class, ['logo_path', 'cover_image_path']],
+            [\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class, ['logo_path', 'cover_image_path']],
+            [\Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class, ['logo_path', 'cover_image_path']],
+            [\Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class, ['logo_path']],
+        ];
+        foreach ($nutzer as [$klasse, $spalten]) {
+            $q = $klasse::withTrashed()->where(function ($w) use ($spalten, $pfad) {
+                foreach ($spalten as $sp) {
+                    $w->orWhere($sp, $pfad);
+                }
+            });
+            if ($klasse === FoodAlchemistKonfigurator::class) {
+                $q->whereKeyNot($k->id);
+            }
+            if ($q->exists()) {
+                return;
+            }
+        }
+        app(FoodAlchemistMediaService::class)->delete($k->{$contextSpalte}, $pfad, $team);
     }
 
     /**
