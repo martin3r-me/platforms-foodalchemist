@@ -78,6 +78,7 @@ class FoodAlchemistRecipe extends Model
         'spec_is_vegetarian' => 'boolean',
         'spec_is_halal' => 'boolean',
         'spec_contains_pork' => 'boolean',
+        'spec_contains_alcohol' => 'boolean',
         'spec_contains_beef' => 'boolean',
         'spec_is_gluten_free' => 'boolean',
         'spec_is_lactose_free' => 'boolean',

@@ -486,6 +486,25 @@ class GpAggregateService
     }
 
     /**
+     * Spec 94c · „enthält Alkohol“ eines GP aus seinen Artikeln (is_alcohol, Warn-Regel): true, sobald ein sichtbarer Artikel
+     * Alkohol enthält; false, wenn alle Artikel ihn ausschließen; null ohne Angabe. Gepflegt wird am Artikel (Artikel-Modal).
+     */
+    public function enthaeltAlkohol(FoodAlchemistGp $gp): ?bool
+    {
+        $row = DB::table('foodalchemist_supplier_item_structures AS s')
+            ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 's.supplier_item_id')
+            ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
+            ->tap(fn ($q) => $this->nurSichtbare($q, 's.supplier_item_id', $this->besitzerSicht($gp)))
+            ->selectRaw('MAX(CASE WHEN si.is_alcohol = 1 THEN 1 ELSE 0 END) AS ja, SUM(CASE WHEN si.is_alcohol IS NULL THEN 1 ELSE 0 END) AS offen, COUNT(*) AS n')
+            ->first();
+        if ($row === null || (int) $row->n === 0) {
+            return null;
+        }
+
+        return (int) $row->ja === 1 ? true : ((int) $row->offen > 0 ? null : false);
+    }
+
+    /**
      * Lead-Sicht (Dominique 29.10.2026): Allergene und Zusatzstoffe eines TEAM-EIGENEN GP zählen nur die Artikel, die das Besitzer-Team sieht. Globale
      * Stamm-GPs und GPs der Master-Kette bleiben bewusst ALL-MAX über alle Artikel (gleiche Allergene je GP sichert der Guard, Abweichung = Datenfehler).
      */
