@@ -234,6 +234,8 @@ class RecipeExtractService
         );
         $result['sub_recipes'] = $subInfo;
         $result['stubs'] = $stubs;
+        // Löffel (Dominique 03.11.): „1 TL Zimt“ ohne TL-Gewicht am GP → KI schätzt es im Hintergrund, danach wird neu gerechnet
+        \Platform\FoodAlchemist\Support\LoeffelGewichtNachholen::ausloesen($team, $result['recipe']);
         // Neue Hüllen im Hintergrund ausrezeptieren (nur oberste Ebene; Obergrenze je Import, der Rest bleibt für den Knopf). 0 = aus.
         [$result['ausrezeptiert'], $result['ausrezeptieren_offen']] = $tiefe === 0
             ? $this->ausrezeptieren($team, $stubs, (int) $result['recipe']->id, $parameter)
