@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FaRolle;
@@ -39,6 +40,16 @@ class Beobachten extends Component
     {
         $this->reset('form', 'quelleId', 'vorschau', 'meldung', 'fehler');
         $this->resetValidation();
+        $this->dispatch('modal.open', name: 'suchthema-editor');
+    }
+
+    #[On('modal.closed')]
+    public function editorGeschlossen(string $name = ''): void
+    {
+        if ($name === 'suchthema-editor') {
+            $this->reset('form', 'quelleId', 'vorschau', 'fehler');
+            $this->resetValidation();
+        }
     }
 
     public function bearbeiten(int $id): void
@@ -96,6 +107,7 @@ class Beobachten extends Component
                 $q->update(['feed_url' => $url]);
                 $this->quelleId = $q->id;
             });
+            $this->dispatch('modal.close', name: 'suchthema-editor');
             $this->meldung = 'Beobachtung gespeichert. Treffer werden nach dem Quellen-Zeitplan in den Eingang übernommen.';
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();

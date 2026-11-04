@@ -32,6 +32,23 @@ class GoogleNewsSuche
         ], '', '&', PHP_QUERY_RFC3986);
     }
 
+    /** Nur Darstellung: Suchlogik und gespeicherte URLs bleiben unverändert. */
+    public static function anzeige(array $suche): array
+    {
+        if ($suche['begriffe'] !== '') {
+            return ['begriffe' => self::begriffe($suche['begriffe']), 'kontext' => []];
+        }
+        $atom = '(?:"[^"()]+"|[\\p{L}\\p{N}_-]+)';
+        $gruppe = $atom.'(?: OR '.$atom.')*';
+        if (preg_match('/^\\(('.$gruppe.')\\)(?:\\s+\\(('.$gruppe.')\\))?$/u', $suche['ausdruck'], $m)) {
+            $split = fn ($v) => array_map(fn ($t) => trim($t, '" '), explode(' OR ', $v));
+
+            return ['begriffe' => $split($m[1]), 'kontext' => isset($m[2]) ? $split($m[2]) : []];
+        }
+
+        return ['begriffe' => [], 'kontext' => []];
+    }
+
     public static function lesen(string $url): ?array
     {
         $parts = parse_url($url);
