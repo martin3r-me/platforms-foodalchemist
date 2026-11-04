@@ -137,16 +137,20 @@
             @endif
         @else
             <h1 class="text-[length:var(--fa-text-2xl)] font-semibold text-[var(--fa-ink)]">Trendradar</h1>
-            <div role="tablist" aria-label="Ansicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-fa-handy-reiter>
-                @foreach(['trends' => 'Trends', 'themen' => 'Themen', 'pinnwand' => 'Pinnwand'] as $rk => $rt)
+            <div role="tablist" aria-label="Ansicht" class="flex overflow-x-auto p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-fa-handy-reiter>
+                @foreach(['trends' => 'Trends', 'themen' => 'Entwicklungen', 'pinnwand' => 'Pinnwand', 'beobachten' => 'Suchthemen', 'quellen' => 'Quellen', 'eingang' => 'Eingang', 'automatik' => 'Auswertung'] as $rk => $rt)
                     <button type="button" role="tab" wire:click="$set('handyReiter', '{{ $rk }}')" aria-selected="{{ $reiter === $rk ? 'true' : 'false' }}"
-                            class="flex-1 min-h-11 rounded-[5px] text-[length:var(--fa-text-md)] font-medium {{ $reiter === $rk ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)]' }}">{{ $rt }}</button>
+                            class="shrink-0 px-3 min-h-11 rounded-[5px] text-[length:var(--fa-text-md)] font-medium {{ $reiter === $rk ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)]' }}">{{ $rt }}</button>
                 @endforeach
             </div>
-            <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ ['pinnwand' => 'Fundstück suchen', 'themen' => 'Thema suchen'][$reiter] ?? 'Trend suchen' }}" aria-label="Suchen"
+            @if($reiter !== 'automatik')
+            <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ ['pinnwand' => 'Fundstück suchen', 'themen' => 'Entwicklung suchen', 'beobachten' => 'Suchthema suchen', 'quellen' => 'Quelle suchen', 'eingang' => 'Artikel suchen'][$reiter] ?? 'Trend suchen' }}" aria-label="Suchen"
                    class="fa-control h-12 text-[length:var(--fa-text-base)]" data-fa-handy-suche>
+            @endif
 
-            @if($reiter === 'pinnwand')
+            @if(in_array($reiter, ['beobachten', 'quellen', 'eingang', 'automatik'], true))
+                @include('foodalchemist::livewire.handy.trend-recherche')
+            @elseif($reiter === 'pinnwand')
                 @include('foodalchemist::livewire.handy.trend-pinnwand')
             @elseif($reiter === 'themen')
                 <ul class="{{ $liste }}" data-fa-handy-themen>

@@ -69,7 +69,7 @@ it('Quellen anderer Teams sind gegen Bearbeiten und Pausieren geschützt', funct
 it('Themen-Reiter rendert die neue Maske im Trendradar', function () {
     Livewire::test(Index::class)
         ->call('ansichtSetzen', 'beobachten')->assertSet('ansicht', 'beobachten')
-        ->assertSee('Was möchtest du beobachten?')->assertSee('Treffer ansehen');
+        ->assertSee('Deine Suchthemen')->assertSee('Treffer ansehen');
 });
 
 it('Ungültige Suchen werden vor Netzaufruf oder Speicherung abgewiesen', function () {
@@ -82,4 +82,26 @@ it('Ungültige Suchen werden vor Netzaufruf oder Speicherung abgewiesen', functi
         ->call('speichern')->assertHasErrors('form.markt');
     expect(FoodAlchemistTrendQuelle::count())->toBe(0);
     expect(GoogleNewsSuche::lesen('https://news.google.com/rss/search?q=Test&gl[]=DE'))->toBeNull();
+});
+
+it('Karten zerlegen bekannte Suchgruppen nur zur Anzeige und behalten beliebige Ausdrücke', function () {
+    $a = ['begriffe' => '', 'ausdruck' => '(Fermentation OR fermentiert OR Koji) (Gastronomie OR Küche OR Lebensmittel)'];
+    expect(GoogleNewsSuche::anzeige($a))->toBe(['begriffe' => ['Fermentation', 'fermentiert', 'Koji'], 'kontext' => ['Gastronomie', 'Küche', 'Lebensmittel']]);
+    expect(GoogleNewsSuche::anzeige(['begriffe' => '', 'ausdruck' => 'site:example.org (Food OR Küche)']))->toBe(['begriffe' => [], 'kontext' => []]);
+});
+
+it('Editor öffnet gezielt und verwirft ungespeicherten Zustand beim Schließen', function () {
+    Livewire::test(Beobachten::class)->call('neu')->assertDispatched('modal.open', name: 'suchthema-editor')
+        ->set('form.name', 'Nicht gespeichert')->set('form.begriffe', 'Mochi')
+        ->call('editorGeschlossen', 'anderer-dialog')->assertSet('form.name', 'Nicht gespeichert')
+        ->call('editorGeschlossen', 'suchthema-editor')->assertSet('form.name', '')->assertSet('form.begriffe', '');
+    expect(FoodAlchemistTrendQuelle::count())->toBe(0);
+});
+
+it('Kompakte Themenansicht rendert Schlagwörter und Suchdetails', function () {
+    FoodAlchemistTrendQuelle::create(['team_id' => $this->rootTeam->id, 'name' => 'Google News: Fermentation (DE)', 'url' => 'https://news.google.com/rss/search?q='.rawurlencode('(Fermentation OR Koji) (Gastronomie OR Küche) when:30d').'&hl=de&gl=DE', 'art' => 'presse', 'feed_typ' => 'rss', 'abruf_weg' => 'plattform', 'rhythmus' => 'woechentlich', 'aktiv' => true]);
+    $ui = Livewire::test(Beobachten::class)->assertSee('Fermentation')->assertSee('Im Kontext: Gastronomie · Küche')->assertSee('Thema hinzufügen')->assertSee('Details zur Suche');
+    if ($path = getenv('FA_UI_PREVIEW_PATH')) {
+        file_put_contents($path, $ui->html());
+    }
 });
