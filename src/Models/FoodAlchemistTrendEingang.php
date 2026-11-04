@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+use Platform\FoodAlchemist\Support\TrendUrl;
 
 /**
  * @ai.description Eintrag im Eingang des Trendradars (Spec 93): ein Artikel aus einer Quelle oder per MCP eingereicht —
@@ -16,7 +17,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistTrendEingang extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use BelongsToTeamHierarchy, HasUuidV7, LogsActivity, SoftDeletes;
 
     protected $table = 'foodalchemist_trend_eingang';
 
@@ -24,13 +25,13 @@ class FoodAlchemistTrendEingang extends Model
 
     protected $casts = [
         'uuid' => 'string', 'veroeffentlicht_am' => 'datetime', 'zuletzt_gesehen_at' => 'datetime', 'erschlossen_at' => 'datetime',
-        'sparten' => 'array', 'relevant' => 'boolean',
+        'sparten' => 'array', 'relevant' => 'boolean', 'observatorium' => 'array',
     ];
 
     /** Spec 93 E: Link zum Anzeigen — ohne das interne Fragment `#signal=…` eines Einzelsignals (das bleibt nur im gespeicherten url). */
     public function link(): string
     {
-        return \Platform\FoodAlchemist\Support\TrendUrl::ohneSignal($this->url);
+        return TrendUrl::ohneSignal($this->url);
     }
 
     public function quelle(): BelongsTo

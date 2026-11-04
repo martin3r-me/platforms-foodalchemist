@@ -10,8 +10,11 @@ use Illuminate\Queue\SerializesModels;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendEingang;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KiExternLauf;
+use Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar;
 use Platform\FoodAlchemist\Services\TrendEingangService;
 use Platform\FoodAlchemist\Services\TrendThemenService;
+use Platform\FoodAlchemist\Support\ObservatoriumInhalt;
 
 /**
  * Spec 93 B · Erschließt einen Artikel im Trend-Eingang: ein `propose()` (`trend.eingang_erschliessen`) liefert Merkmale —
@@ -22,9 +25,9 @@ use Platform\FoodAlchemist\Services\TrendThemenService;
  * trend_eingang.ERSCHLIESSEN) dispatcht mit `extern` → KI-Auftrag statt Provider, Rollback bis zur Antwort,
  * `ki_auftraege.ANTWORT` startet den Job neu. Der Prompt ist stabil sortiert (Themen, Trends), damit der Fingerabdruck hält.
  */
-class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
+class TrendEingangErschliessenJob implements KiExternWiederholbar, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \Platform\FoodAlchemist\Support\MitKiVerursacher;
+    use Dispatchable, InteractsWithQueue, \Platform\FoodAlchemist\Support\MitKiVerursacher, Queueable, SerializesModels;
 
     public int $timeout = 120;
 
@@ -33,8 +36,7 @@ class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemis
         public int $teamId,
         public bool $extern = false,
         public int $versuch = 0,
-    ) {
-    }
+    ) {}
 
     // ── #1002 · KiExternWiederholbar ──
     public function externAktiv(): bool
@@ -69,7 +71,7 @@ class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemis
 
     public function handle(AiGatewayService $ki): void
     {
-        app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($ki));
+        app(KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($ki));
     }
 
     /** Der Job-Rumpf — im Plattformweg unverändert, im externen Weg in der Sammel-Transaktion (KiExternLauf). */
@@ -89,10 +91,13 @@ class TrendEingangErschliessenJob implements ShouldQueue, \Platform\FoodAlchemis
                 'schwerpunkte' => array_values(array_merge($e->quelle->schwerpunkt_kategorien ?? [], $e->quelle->schwerpunkt_sparten ?? []))]) : null,
             'themen' => app(TrendThemenService::class)->themenNamen($this->teamId),
             'trends' => $trends,
+            'observatorium_branchen' => ObservatoriumInhalt::BRANCHEN,
+            'veroeffentlicht_am' => $e->veroeffentlicht_am?->toDateString(),
+            'herausgeber' => $e->herausgeber,
         ];
 
         // Spec 93 C: eigenes Trend-KI-Budget (null = kein eigener Deckel). Nur der Plattformweg zählt; der MCP-Weg kostet keine Plattform-KI.
-        if (! $this->extern && app(\Platform\FoodAlchemist\Services\TrendEingangService::class)->budgetErreicht($this->teamId)) {
+        if (! $this->extern && app(TrendEingangService::class)->budgetErreicht($this->teamId)) {
             app(TrendEingangService::class)->erschliessungFehlgeschlagen($e, 'Trend-KI-Budget erreicht');
 
             return;

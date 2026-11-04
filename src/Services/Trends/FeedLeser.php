@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services\Trends;
 
 use Illuminate\Support\Carbon;
+use Platform\FoodAlchemist\Support\ObservatoriumInhalt;
 
 /**
  * Spec 93 A · Liest Quellen deterministisch, ohne KI und ohne Netz (den Abruf macht SichererAbruf):
@@ -67,8 +68,13 @@ class FeedLeser
                     continue;
                 }
                 $dc = $item->children('http://purl.org/dc/elements/1.1/');
-                $eintraege[] = $this->eintrag((string) $item->title, trim((string) $item->link) ?: trim((string) $item->guid),
+                $zeile = $this->eintrag((string) $item->title, trim((string) $item->link) ?: trim((string) $item->guid),
                     (string) ($item->pubDate ?: $dc->date), (string) $item->description, $basisUrl);
+                if ($zeile !== null && trim((string) $item->source) !== '') {
+                    $zeile['herausgeber'] = mb_substr($this->saeubern((string) $item->source), 0, 255);
+                    $zeile['herausgeber_url'] = ObservatoriumInhalt::herausgeberUrl((string) $item->source['url']);
+                }
+                $eintraege[] = $zeile;
             }
         } elseif ($name === 'feed') {
             foreach ($doc->entry ?? [] as $entry) {

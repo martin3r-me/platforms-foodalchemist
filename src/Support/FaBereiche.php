@@ -2,6 +2,10 @@
 
 namespace Platform\FoodAlchemist\Support;
 
+use Platform\Core\Models\User;
+use Platform\FoodAlchemist\Models\FoodAlchemistUserBereichSperre;
+use Platform\FoodAlchemist\Services\FaRechte;
+
 /**
  * Spec 77b · Katalog der FA-Bereiche, die je Team freigeschaltet (Plattform-Admin) und je User
  * eingeschränkt (Team-Admin) werden. Jede FA-Route, jedes FA-MCP-Tool und jede FA-Livewire-Komponente
@@ -53,7 +57,7 @@ final class FaBereiche
         'produktion' => 'produktion', 'etiketten' => 'produktion',
         'orders' => 'einkauf', 'wareneingang' => 'einkauf', 'bestellvorlagen' => 'einkauf', 'preislisten' => 'einkauf',
         'lager' => 'lager',
-        'knowledge' => 'wissen', 'trendradar' => 'wissen',
+        'knowledge' => 'wissen', 'trendradar' => 'wissen', 'observatorium' => 'wissen',
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
         'standortprofil' => 'einstellungen',   // Spec 82 §9: Eigene Standorte + Kunden-Standorte (nur Master)
         'projekte' => 'projekte',   // Spec 82 §9: Projekt-Liste und -Detail (nur im Master-Team)
@@ -143,7 +147,7 @@ final class FaBereiche
         'Produktion' => 'produktion', 'Etiketten' => 'produktion',
         'Orders' => 'einkauf', 'Wareneingang' => 'einkauf', 'Bestellvorlagen' => 'einkauf', 'Preislisten' => 'einkauf',
         'Lager' => 'lager',
-        'Knowledge' => 'wissen', 'Trendradar' => 'wissen',
+        'Knowledge' => 'wissen', 'Trendradar' => 'wissen', 'Observatorium' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',
         'Projekte' => 'projekte', 'Standortprofil' => 'einstellungen', 'Abos' => 'abos',
     ];
@@ -206,24 +210,24 @@ final class FaBereiche
     public static function sichtbareNavigation(array $gruppen, mixed $user): array
     {
         $team = $user?->currentTeamRelation ?? null;
-        if (! $user instanceof \Platform\Core\Models\User || $team === null) {
+        if (! $user instanceof User || $team === null) {
             return $gruppen;
         }
         // Spec 82 §9: Master-only-Bereiche stehen außerhalb des Master-Teams in keiner Navigation, auch nicht für Plattform-Admins
-        if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+        if (! MasterTeam::istMaster($team)) {
             $gruppen = array_values(array_filter(array_map(function (array $g) {
                 $g['items'] = array_values(array_filter($g['items'] ?? [], fn (array $item) => ! in_array(self::fuerRoute($item['route'] ?? null), self::NUR_MASTER, true)));
 
                 return $g;
             }, $gruppen), fn (array $g) => ($g['items'] ?? []) !== []));
         }
-        $rechte = app(\Platform\FoodAlchemist\Services\FaRechte::class);
+        $rechte = app(FaRechte::class);
         if (! $user->isAiUser() && $rechte->istPlattformAdmin($user)) {
             return $gruppen;
         }
         // einmal je Aufbau laden statt je Eintrag
         $teamAn = $rechte->teamBereiche($team);
-        $userAus = \Platform\FoodAlchemist\Models\FoodAlchemistUserBereichSperre::whereIn('team_id', $rechte->teamKette($team))
+        $userAus = FoodAlchemistUserBereichSperre::whereIn('team_id', $rechte->teamKette($team))
             ->where('user_id', $user->id)->pluck('bereich')->all();
         $darf = fn (?string $b) => $b === null || (($teamAn[$b] ?? true) && ! in_array($b, $userAus, true));
 

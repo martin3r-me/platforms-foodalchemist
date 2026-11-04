@@ -18,7 +18,7 @@
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-foodalchemist::shell.page-navbar title="Trendradar" icon="heroicon-o-sparkles" />
+        <x-foodalchemist::shell.page-navbar title="Trend Research" icon="heroicon-o-sparkles" />
     </x-slot:navbar>
 
     {{-- LINKS: Erfassen, Filter --}}
@@ -62,7 +62,8 @@
 
     {{-- MITTE --}}
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
-        <x-fa::page-header title="Trendradar" subtitle="Inspiration · Hype · Trend — nach Sarah Spork, BHG Trend Radar 2026" />
+        <x-fa::page-header title="Trend Research" subtitle="Quellen, Suchthemen und Bewertung für das Gastronomie-Observatorium" />
+        <a href="{{ route('foodalchemist.observatorium.index') }}" wire:navigate class="text-[var(--fa-accent)] text-sm">Zum Gastronomie-Observatorium →</a>
 
         @if($meldung)<x-fa::notice tone="ok" data-trend-meldung>{{ $meldung }}</x-fa::notice>@endif
         @if($fehler && ! $gewaehlt)<x-fa::notice tone="crit" data-trend-fehler>{{ $fehler }}</x-fa::notice>@endif

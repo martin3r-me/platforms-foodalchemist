@@ -395,7 +395,12 @@ return [
                     'icon'  => 'heroicon-o-swatch',
                 ],
                 [
-                    'label' => 'Trendradar',
+                    'label' => 'Gastronomie-Observatorium',
+                    'route' => 'foodalchemist.observatorium.index',
+                    'icon'  => 'heroicon-o-globe-alt',
+                ],
+                [
+                    'label' => 'Trend Research',
                     'route' => 'foodalchemist.trendradar.index',
                     'icon'  => 'heroicon-o-sparkles',
                 ],
@@ -1428,7 +1433,7 @@ return [
         // trifft später eine deterministische Regel (Abschnitt C); die KI liefert nur Merkmale.
         'trend.eingang_erschliessen' => [
             'klasse' => 'leicht',
-            'max_tokens' => 900,
+            'max_tokens' => 1200,
             'temperature' => 0,
             'task' => 'Erschließe einen Artikel für den Trendradar eines Caterers (Food & Beverage, Catering, Gastronomie). '
                 . 'Eingabe: titel, teaser, quelle (name, art, schwerpunkte), themen (vorhandene Themennamen des Teams), trends (id, name). '
@@ -1438,7 +1443,15 @@ return [
                 . '„Foodtrends“ oder „Ausblick“ — nennt der Artikel mehrere Trends, nimm den ersten konkreten, '
                 . 'kategorie: food|getraenke|deko|format, sparten: Liste aus event_bankett|betriebsgastronomie|care|bildung|restaurant_hotel|delivery (leer = alle), '
                 . 'tiefe: beduerfnis (gesellschaftliches Bedürfnis, Dauer) | oberflaeche (medial, kurzlebig) | unklar, tiefe_begruendung: ein Satz, '
-                . 'passt_zu_trend_id: id NUR aus `trends`, sonst null, begruendung: ein Satz}. '
+                . 'passt_zu_trend_id: id NUR aus `trends`, sonst null, begruendung: ein Satz, '
+                . 'observatorium: {verwendungen: Liste aus news|idee|markt|chance, branchen: Liste NUR aus `observatorium_branchen`, '
+                . 'einordnung: höchstens 250 Zeichen, impuls: konkreter eigener Anwendungsvorschlag höchstens 250 Zeichen oder null}}. '
+                . 'relevant betrifft ausschließlich die Eignung als konkretes Trend-Signal. Das Observatorium wird UNABHÄNGIG bewertet: '
+                . 'Eine Betreiberübernahme, Eröffnung, Personalie oder Branchenzahl kann als news/markt erhalten bleiben, auch bei relevant=false. '
+                . 'Bei einer Observatorium-Verwendung auch die zusammenfassung in eigenen Worten füllen. '
+                . 'idee steht für eine konkrete kulinarische oder betriebliche Inspiration, chance nur für einen ausdrücklich belegten Bedarf oder eine Ausschreibung. '
+                . 'Irrelevante Sport-, Polizei-, Börsenanalyse- und rein medizinische Diagnostikmeldungen bekommen keine Verwendungen. '
+                . 'Keine Firmen, Regionen, Fristen oder Nachfrage erfinden. Einen impuls klar als eigenen Vorschlag behandeln; ohne tragfähige Grundlage null. '
                 . 'Nicht relevant (z. B. Personalie, Insolvenz, Stellenanzeige, Technik ohne Food-Bezug): relevant=false mit begruendung, '
                 . 'die übrigen Felder dürfen leer sein. Erfinde nichts, was nicht in Titel oder Teaser steht.',
         ],

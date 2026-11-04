@@ -38,6 +38,7 @@ final class HandyNavigation
         'foodalchemist.foodbooks.index',
         'foodalchemist.angebote.konfiguratoren',   // Spec 94 Stufe 6
         'foodalchemist.trendradar.index',
+        'foodalchemist.observatorium.index',
         'foodalchemist.knowledge.index',
     ];
 

@@ -2,9 +2,40 @@
 
 namespace Platform\FoodAlchemist\Support;
 
+use Illuminate\Support\Carbon;
+
 /** Reversible Suchaufträge in normalen Quellen-URLs; keine zusätzliche Datenhaltung. */
 class GoogleNewsSuche
 {
+    /** Google liefert trotz when: alte Artikel. Vor Preview und KI lokal dieselbe Grenze durchsetzen. */
+    public static function datumsGrund(string $url, mixed $datum): ?string
+    {
+        if (strtolower((string) parse_url($url, PHP_URL_HOST)) !== 'news.google.com'
+            || parse_url($url, PHP_URL_PATH) !== '/rss/search') {
+            return null;
+        }
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $p);
+        if (! is_string($p['q'] ?? null) || ! preg_match('/(?:^|\s)when:(1|7|30|90)d(?:\s|$)/', $p['q'], $m)) {
+            return null;
+        }
+        try {
+            if ($datum === null || $datum === '') {
+                return 'Google-News-Artikel ohne belastbares Veröffentlichungsdatum';
+            }
+            $d = Carbon::parse($datum);
+        } catch (\Throwable) {
+            return 'Google-News-Artikel mit ungültigem Veröffentlichungsdatum';
+        }
+        if ($d->greaterThan(now()->addDay())) {
+            return 'Veröffentlichungsdatum liegt in der Zukunft';
+        }
+        if ($d->lessThan(now()->subDays((int) $m[1])->startOfDay())) {
+            return 'Älter als der gewählte Suchzeitraum ('.$m[1].' Tage)';
+        }
+
+        return null;
+    }
+
     public const MAERKTE = ['DE' => 'Deutschland · Deutsch', 'AT' => 'Österreich · Deutsch', 'CH' => 'Schweiz · Deutsch'];
 
     public const ZEITRAEUME = ['1d' => 'Letzter Tag', '7d' => 'Letzte 7 Tage', '30d' => 'Letzte 30 Tage', '90d' => 'Letzte 90 Tage'];

@@ -143,6 +143,9 @@ Route::get('/standortprofil', \Platform\FoodAlchemist\Livewire\Standortprofil\In
     ->name('foodalchemist.standortprofil.index');
 
 // Trendradar (Spec 79): Inspiration · Hype · Trend nach Sarah Spork — Radar, Liste, Pinnwand.
+Route::get('/observatorium', \Platform\FoodAlchemist\Livewire\Observatorium\Index::class)
+    ->name('foodalchemist.observatorium.index');
+
 Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
     ->name('foodalchemist.trendradar.index');
 

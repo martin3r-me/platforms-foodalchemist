@@ -5,13 +5,18 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Jobs\TrendEingangErschliessenJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendEingang;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
+use Platform\FoodAlchemist\Services\Ai\KiExternModus;
 use Platform\FoodAlchemist\Services\Trends\QuellenAbruf;
+use Platform\FoodAlchemist\Support\GoogleNewsSuche;
+use Platform\FoodAlchemist\Support\ObservatoriumInhalt;
 use Platform\FoodAlchemist\Support\StichwortFilter;
+use Platform\FoodAlchemist\Support\TrendSammelthema;
 use Platform\FoodAlchemist\Support\TrendUrl;
 use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
@@ -85,6 +90,7 @@ class TrendEingangService
             'eingereicht_von' => $e->eingereicht_von, 'inspiration_id' => $e->inspiration_id !== null ? (int) $e->inspiration_id : null,
             'zuletzt_gesehen_at' => $e->zuletzt_gesehen_at?->toIso8601String(), 'angelegt_am' => $e->created_at?->toIso8601String(),
             'eigenes_team' => $team === null || (int) $e->team_id === (int) $team->id,
+            'observatorium' => $e->observatorium, 'herausgeber' => $e->herausgeber, 'herausgeber_url' => $e->herausgeber_url,
         ];
     }
 
@@ -99,7 +105,7 @@ class TrendEingangService
      *
      * @param  array{url:string, titel:string, veroeffentlicht_am?:?string, teaser?:?string, quelle_id?:?int}  $daten
      * @return array{ergebnis:string, eintrag:?FoodAlchemistTrendEingang, grund:?string}
-     *                                                                                ergebnis: neu | dublette | gefiltert
+     *                                                                                   ergebnis: neu | dublette | gefiltert
      */
     public function einreichen(Team $team, array $daten, string $von = 'mcp', ?int $userId = null, ?string $signal = null): array
     {
@@ -124,6 +130,14 @@ class TrendEingangService
             ? FoodAlchemistTrendQuelle::where('team_id', $team->id)->findOrFail((int) $daten['quelle_id'])
             : null;
 
+        if ($quelle !== null && ($grund = GoogleNewsSuche::datumsGrund((string) ($quelle->feed_url ?: $quelle->url), $daten['veroeffentlicht_am'] ?? null)) !== null) {
+            if ($von !== 'abruf') {
+                $this->mcpBesuch($quelle, 1);
+            }
+
+            return ['ergebnis' => 'gefiltert', 'eintrag' => null, 'grund' => $grund];
+        }
+
         // 1. Stichwort-Filter
         $woerter = $quelle !== null ? $this->quellen->stichworte($quelle) : $this->settings->trendStichworte($team);
         $filter = StichwortFilter::pruefen($titel.' '.($teaser ?? ''), $woerter['ein'], $woerter['aus']);
@@ -141,7 +155,14 @@ class TrendEingangService
             ->where('url_hash', $hash)->orderByRaw('team_id = ? desc', [$team->id])->first();
         if ($vorhanden !== null) {
             if ((int) $vorhanden->team_id === (int) $team->id) {
-                $vorhanden->update(['zuletzt_gesehen_at' => now()]);
+                $mehr = ['zuletzt_gesehen_at' => now()];
+                // Alte Google-News-Einträge erhalten beim Wiedersehen ihre RSS-Herkunft, ohne erneuten KI-Call.
+                if (! $vorhanden->herausgeber && is_string($daten['herausgeber'] ?? null)) {
+                    $mehr['herausgeber'] = $this->kurz($daten['herausgeber'], 255);
+                    $mehr['herausgeber_url'] = ObservatoriumInhalt::herausgeberUrl($daten['herausgeber_url'] ?? null);
+                    $mehr['inhalt_hash'] = ObservatoriumInhalt::inhaltHash($vorhanden->titel, $vorhanden->url, $mehr['herausgeber']);
+                }
+                $vorhanden->update($mehr);
                 $grund = 'Dublette (eigener Eingang, ID '.$vorhanden->id.')';
             } else {
                 $grund = 'Dublette (Team '.(Team::find($vorhanden->team_id)?->name ?? $vorhanden->team_id).')';
@@ -167,6 +188,10 @@ class TrendEingangService
             'eingereicht_von' => $von,
             'zuletzt_gesehen_at' => now(),
             'created_by' => $userId,
+            'observatorium' => ObservatoriumInhalt::einordnen(['titel' => $titel, 'teaser' => $teaser]),
+            'herausgeber' => $this->kurz($daten['herausgeber'] ?? null, 255),
+            'herausgeber_url' => ObservatoriumInhalt::herausgeberUrl($daten['herausgeber_url'] ?? null),
+            'inhalt_hash' => ObservatoriumInhalt::inhaltHash($titel, $url, $this->kurz($daten['herausgeber'] ?? null, 255)),
         ]);
         if ($quelle !== null && $von !== 'abruf') {
             $this->mcpBesuch($quelle, 0);
@@ -293,8 +318,13 @@ class TrendEingangService
             return $this->erschliessungFehlgeschlagen($e, 'KI-Antwort ohne gültiges Feld relevant');
         }
         $begruendung = $this->kurz($w['begruendung'] ?? null, 1000);
+        $e->update(['observatorium' => ObservatoriumInhalt::einordnen(
+            ['titel' => $e->titel, 'teaser' => $e->teaser, 'sparten' => $w['sparten'] ?? $e->sparten],
+            is_array($w['observatorium'] ?? null) ? $w['observatorium'] : null,
+        )]);
         if ($w['relevant'] === false) {
-            $e->update(['relevant' => false, 'status' => 'verworfen', 'begruendung' => $begruendung ?? 'Nicht relevant (KI)', 'erschlossen_at' => now()]);
+            $e->update(['relevant' => false, 'status' => 'verworfen', 'begruendung' => $begruendung ?? 'Nicht relevant (KI)',
+                'zusammenfassung' => $this->kurz($w['zusammenfassung'] ?? null, 400), 'erschlossen_at' => now()]);
 
             return $e->refresh();
         }
@@ -304,7 +334,7 @@ class TrendEingangService
         }
         // Spec 93 E: Sammelthemen („Trendprognose 2027“) bündeln ganze Studien und zählen kein Signal — ablehnen statt bündeln.
         // Ein von Hand gesetztes Thema gilt immer.
-        if ($e->thema_quelle !== 'manuell' && \Platform\FoodAlchemist\Support\TrendSammelthema::ist($thema)) {
+        if ($e->thema_quelle !== 'manuell' && TrendSammelthema::ist($thema)) {
             return $this->erschliessungFehlgeschlagen($e, 'Sammelthema „'.$thema.'“ abgelehnt: Beitrag mit Einzelsignalen (signale) neu einreichen oder das Thema von Hand setzen.');
         }
         $tiefe = (string) ($w['tiefe'] ?? 'unklar');
@@ -350,7 +380,7 @@ class TrendEingangService
     /** Plattform-KI-Kosten des Trendradars (Erschließen + Ableitung) im laufenden Monat, in € (ohne Kosten = MCP-Antworten zählen nicht). */
     public function trendKiVerbrauch(int $teamId): float
     {
-        if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'usd_eur')) {
+        if (! Schema::hasColumn('foodalchemist_ai_call_log', 'usd_eur')) {
             return 0.0;
         }
 
@@ -372,7 +402,7 @@ class TrendEingangService
      */
     private function erschliessenDispatchen(FoodAlchemistTrendEingang $e): void
     {
-        $extern = app(\Platform\FoodAlchemist\Services\Ai\KiExternModus::class)->fuerDispatch()
+        $extern = app(KiExternModus::class)->fuerDispatch()
             || $this->settings->trendKiWeg(Team::findOrFail($e->team_id)) === 'extern';
         $id = (int) $e->id;
         $team = (int) $e->team_id;

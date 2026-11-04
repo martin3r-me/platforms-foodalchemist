@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -32,6 +33,7 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
         $artikel = ['type' => 'object', 'properties' => [
             'url' => ['type' => 'string'], 'titel' => ['type' => 'string'],
             'veroeffentlicht_am' => ['type' => 'string'], 'teaser' => ['type' => 'string'],
+            'herausgeber' => ['type' => 'string'], 'herausgeber_url' => ['type' => 'string'],
             'signale' => ['type' => 'array', 'description' => 'Einzelsignale des Beitrags (Studie/Trendliste), je {titel, teaser}; max. 12.',
                 'items' => ['type' => 'object', 'properties' => ['titel' => ['type' => 'string'], 'teaser' => ['type' => 'string']]]],
         ]];
@@ -66,7 +68,7 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
                         $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'signal' => $r['signal'], 'ergebnis' => $r['ergebnis'],
                             'grund' => $r['grund'], 'id' => $r['eintrag'] !== null ? (int) $r['eintrag']->id : null];
                     }
-                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                } catch (ModelNotFoundException) {
                     return ToolResult::error('Quelle nicht gefunden oder gehört einem anderen Team.', 'NOT_FOUND');
                 } catch (\RuntimeException $e) {
                     $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'ergebnis' => 'fehler', 'grund' => $e->getMessage(), 'id' => null];
@@ -78,7 +80,7 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
                 $r = $svc->einreichen($team, $a, 'mcp', $context->user?->id);
                 $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'ergebnis' => $r['ergebnis'], 'grund' => $r['grund'],
                     'id' => $r['eintrag'] !== null ? (int) $r['eintrag']->id : null];
-            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            } catch (ModelNotFoundException) {
                 return ToolResult::error('Quelle nicht gefunden oder gehört einem anderen Team.', 'NOT_FOUND');
             } catch (\RuntimeException $e) {
                 $ergebnisse[] = ['nr' => $i, 'url' => $a['url'] ?? null, 'ergebnis' => 'fehler', 'grund' => $e->getMessage(), 'id' => null];
