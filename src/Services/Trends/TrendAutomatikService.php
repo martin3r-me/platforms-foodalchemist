@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TrendService;
 use Platform\FoodAlchemist\Services\TrendThemenService;
 use Platform\FoodAlchemist\Support\TrendAutomatikRegeln;
+use Platform\FoodAlchemist\Support\TrendUrl;
 use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
 /**
@@ -35,7 +36,7 @@ class TrendAutomatikService
     /** Belege, die einen Trend in Fachkreisen verankern (Trend-Regel: mindestens einer davon). */
     public const HARTE_ARTEN = ['presse', 'branchenquelle', 'literatur'];
 
-    /** @var array<int, \Illuminate\Support\Collection<int, FoodAlchemistTrendInspiration>>|null Spec 93 D (Befund 1 aus C): manuelle Inspirationen je Team, nur während eines Laufs (null = kein Lauf, immer frisch lesen) */
+    /** @var array<int, Collection<int, FoodAlchemistTrendInspiration>>|null Spec 93 D (Befund 1 aus C): manuelle Inspirationen je Team, nur während eines Laufs (null = kein Lauf, immer frisch lesen) */
     private ?array $pinnwand = null;
 
     public function __construct(
@@ -72,10 +73,20 @@ class TrendAutomatikService
         $jetzt ??= now();
         $schluessel = (string) ($thema->thema_schluessel ?: TrendThemenService::schluessel((string) $thema->titel));
         $sichtungen = [];
+        $artikel = FoodAlchemistTrendEingang::where('thema_inspiration_id', $thema->id)->where('status', '!=', 'verworfen')->orderBy('id')->get();
+        $urspruenge = $artikel->keyBy('url');
+        $meldungen = [];
         // Spec 93 E: Einzelsignale eines Beitrags tragen dieselbe URL (Fragment #signal=… fällt beim Normalisieren weg). Im
         // selben Thema zählt ein Beitrag nur einmal — sonst hebt eine einzige Studie ein Thema über Sichtungs- und Quellen-Schwelle.
         $beitraege = [];
         foreach (FoodAlchemistTrendBeleg::where('inspiration_id', $thema->id)->orderBy('id')->get() as $b) {
+            $ursprung = $urspruenge->get($b->url);
+            if ($ursprung?->inhalt_hash && isset($meldungen[$ursprung->inhalt_hash])) {
+                continue;
+            }
+            if ($ursprung?->inhalt_hash) {
+                $meldungen[$ursprung->inhalt_hash] = true;
+            }
             $beitrag = $this->beitragSchluessel($b);
             if ($beitrag !== null && isset($beitraege[$beitrag])) {
                 continue;
@@ -83,7 +94,7 @@ class TrendAutomatikService
             if ($beitrag !== null) {
                 $beitraege[$beitrag] = true;
             }
-            $sichtungen[] = $this->sichtung($b, false);
+            $sichtungen[] = $this->sichtung($b, false, $ursprung);
         }
         // Regel 2: Pinnwand-Fundstücke mit gleichem Schlüssel (Titel oder Schlagwort) zählen als Sichtung, die Karte bleibt unverändert
         foreach ($this->passendePinnwand($team, $schluessel) as $insp) {
@@ -91,7 +102,6 @@ class TrendAutomatikService
                 $sichtungen[] = $this->sichtung($b, true);
             }
         }
-        $artikel = FoodAlchemistTrendEingang::where('thema_inspiration_id', $thema->id)->where('status', '!=', 'verworfen')->orderBy('id')->get();
 
         $fenster = $jetzt->copy()->subDays((int) $regeln['kandidat_tage']);
         $tage30 = $jetzt->copy()->subDays(30);
@@ -402,16 +412,17 @@ class TrendAutomatikService
             return null;
         }
         try {
-            return \Platform\FoodAlchemist\Support\TrendUrl::normalisieren((string) $b->url);
+            return TrendUrl::normalisieren((string) $b->url);
         } catch (\RuntimeException) {
             return null;
         }
     }
 
     /** @return array{datum: Carbon, art: string, quelle: string, pinnwand: bool} */
-    private function sichtung(FoodAlchemistTrendBeleg $b, bool $pinnwand): array
+    private function sichtung(FoodAlchemistTrendBeleg $b, bool $pinnwand, ?FoodAlchemistTrendEingang $ursprung = null): array
     {
-        $host = $b->url ? strtolower((string) parse_url((string) $b->url, PHP_URL_HOST)) : '';
+        $url = $ursprung?->herausgeber_url ?: $b->url;
+        $host = $url ? strtolower((string) parse_url((string) $url, PHP_URL_HOST)) : '';
         $host = str_starts_with($host, 'www.') ? substr($host, 4) : $host;
 
         return [
