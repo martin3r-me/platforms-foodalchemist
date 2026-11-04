@@ -8,6 +8,15 @@
     $konfTon = ['hoch' => 'ok', 'mittel' => 'info', 'niedrig' => 'warn'];
     $konfWert = ['hoch' => 1, 'mittel' => 0.62, 'niedrig' => 0.3];
     $statusTon = ['gesichtet' => 'warn', 'geprueft' => 'info', 'auf_radar' => 'accent', 'in_umsetzung' => 'ok', 'archiviert' => 'neutral', 'verworfen' => 'neutral'];
+    $researchBereiche = [
+        'liste' => ['Trendverwaltung', 'heroicon-o-clipboard-document-check', 'Einordnen, belegen und freigeben'],
+        'inspiration' => ['Pinnwand', 'heroicon-o-light-bulb', 'Fundstücke sammeln und gemeinsam weiterdenken'],
+        'eingang' => ['Eingang', 'heroicon-o-inbox-arrow-down', 'Neue Meldungen sichten und Auswertung nachvollziehen'],
+        'beobachten' => ['Suchthemen', 'heroicon-o-magnifying-glass', 'Themen und Suchbegriffe verwalten'],
+        'quellen' => ['Quellen', 'heroicon-o-rss', 'RSS-Feeds und manuelle Quellen pflegen'],
+        'automatik' => ['Automatik', 'heroicon-o-cpu-chip', 'Abläufe, Budget und Prüfregeln kontrollieren'],
+    ];
+    $aktuell = $researchBereiche[$ansicht] ?? ['Radar', 'heroicon-o-signal', 'Die freigegebene Ansicht findest du im Gastronomie-Observatorium'];
     $ebenenReihe = array_keys(V::EBENEN);
 
     // Radar-Geometrie wie Click Dummy 3: viewBox 640, Mitte 320/320, Außenradius 268
@@ -23,19 +32,32 @@
 
     {{-- LINKS: Erfassen, Filter --}}
     <x-slot name="sidebar">
-        <x-foodalchemist::page-sidebar title="Trends" width="w-80">
+        <x-foodalchemist::page-sidebar title="Trend Research" width="w-72" :minWidth="240" :maxWidth="360">
+            <nav class="fa-research-nav" aria-label="Research-Bereiche" data-research-navigation>
+                <div class="fa-research-label">Recherche &amp; Redaktion</div>
+                @foreach($researchBereiche as $key => [$name, $icon, $beschreibung])
+                    <button type="button" wire:click="ansichtSetzen('{{ $key }}')" x-on:click="if (handy) setOpen(false)" @if($ansicht === $key) aria-current="page" @endif data-research-bereich="{{ $key }}" data-tab-{{ $key }}>
+                        @svg($icon, '', ['width' => 18, 'height' => 18])<span>{{ $name }}</span>
+                        @if($key === 'inspiration' && $offeneFundstuecke)<span class="fa-research-count">{{ $offeneFundstuecke }}</span>@endif
+                        @if($key === 'liste' && $zaehler['zu_pruefen'])<span class="fa-research-count">{{ $zaehler['zu_pruefen'] }}</span>@endif
+                    </button>
+                @endforeach
+                <a href="{{ route('foodalchemist.observatorium.index', ['blick' => 'radar']) }}" wire:navigate>@svg('heroicon-o-signal', '', ['width' => 18, 'height' => 18])<span>Veröffentlichtes Radar</span></a>
+            </nav>
             <div class="p-3 flex flex-col gap-4" data-trend-filter>
                 <x-fa::button variant="primary" icon="heroicon-m-camera" wire:click="fundstueckOeffnen" data-fundstueck-ablegen>Fundstück ablegen</x-fa::button>
                 @if($darfKuratieren)
                     <x-fa::button variant="secondary" icon="heroicon-m-plus" wire:click="erfassenOeffnen" data-trend-anlegen-knopf>Trend anlegen</x-fa::button>
                 @endif
 
+                @if(in_array($ansicht, ['liste', 'radar', 'inspiration'], true))
                 <div class="relative">
                     <label for="trend-suche" class="sr-only">Trends durchsuchen</label>
                     @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
                     <x-fa::input id="trend-suche" type="search" wire:model.live.debounce.300ms="suche" class="pl-8" placeholder="Name oder Definition" />
                 </div>
 
+                @if(in_array($ansicht, ['liste', 'radar'], true))
                 <x-fa::choice name="kategorien" label="Kategorie" idPrefix="tr" :multiple="true" :options="V::KATEGORIEN" />
                 <x-fa::choice name="sparten" label="Sparte" idPrefix="tr" :multiple="true" :options="V::SPARTEN" data-trend-sparten-filter />
                 <x-fa::choice name="typen" label="Trend oder Hype" idPrefix="tr" :multiple="true" :options="V::TYPEN" />
@@ -45,16 +67,16 @@
                     <input type="checkbox" wire:model.live="nurBefragung" class="accent-[var(--fa-accent)]" /> Nur von der Befragung bestätigt
                 </label>
 
+                @endif
                 @if($filterAktiv)
                     <div><x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="resetFilter">Filter zurücksetzen</x-fa::button></div>
                 @endif
 
+                @endif
                 <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-1.5 {{ $leise }}">
-                    <p class="font-medium text-[var(--fa-ink-2)]">Inspiration → Hype → Trend</p>
-                    <p>Was du siehst (Instagram, Restaurant, Messe), legst du als Fundstück in die Pinnwand. Häufen sich Fundstücke zu einem Thema, wird daraus ein Hype oder Trend und kommt mit Belegen aufs Radar.</p>
-                    <p class="pt-1 font-medium text-[var(--fa-ink-2)]">So liest man das Radar</p>
-                    <p>Innen kurzlebig (Mode), außen langfristig (Metatrend). Links Food, rechts Getränke, Ambiente & Deko sowie Service & Format. Die Sparte (für wen) filtert links, Trends ohne Sparte gelten für alle.</p>
-                    <p>Gefüllter Punkt = Trend, gestrichelter Kreis = Hype, Goldring = von der Mitarbeiterbefragung bestätigt. Je blasser, desto unsicherer die Belege.</p>
+                    <p class="font-medium text-[var(--fa-ink-2)]">Von der Recherche zur Veröffentlichung</p>
+                    <p>Die Pinnwand sammelt Fundstücke des Teams. Der Eingang enthält abgerufene Meldungen. In der Trendverwaltung prüfst du Einordnung und Belege und gibst Entwicklungen fürs Radar frei.</p>
+                    <p>Die Merkliste im Observatorium bleibt deine persönliche Auswahl. Sie ist von der gemeinsamen Pinnwand getrennt.</p>
                 </div>
             </div>
         </x-foodalchemist::page-sidebar>
@@ -62,33 +84,21 @@
 
     {{-- MITTE --}}
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
-        <x-fa::page-header title="Trend Research" subtitle="Quellen, Suchthemen und Bewertung für das Gastronomie-Observatorium" />
+        @include('foodalchemist::livewire.trendradar.research-styles')
+        <x-fa::page-header :title="$aktuell[0]" :subtitle="$aktuell[2]" />
         <a href="{{ route('foodalchemist.observatorium.index') }}" wire:navigate class="text-[var(--fa-accent)] text-sm">Zum Gastronomie-Observatorium →</a>
 
         @if($meldung)<x-fa::notice tone="ok" data-trend-meldung>{{ $meldung }}</x-fa::notice>@endif
         @if($fehler && ! $gewaehlt)<x-fa::notice tone="crit" data-trend-fehler>{{ $fehler }}</x-fa::notice>@endif
 
+        @if(in_array($ansicht, ['liste', 'radar'], true))
         <x-fa::kpis :items="[
             ['label' => 'Auf dem Radar', 'value' => (string) $zaehler['radar'], 'primary' => true, 'kpi' => 'radar'],
             ['label' => 'Davon Hypes', 'value' => (string) $zaehler['hypes'], 'kpi' => 'hypes'],
             ['label' => 'Von der Befragung bestätigt', 'value' => (string) $zaehler['befragung'], 'kpi' => 'befragung'],
             ['label' => 'Zu prüfen', 'value' => (string) $zaehler['zu_pruefen'], 'tone' => $zaehler['zu_pruefen'] > 0 ? 'warn' : null, 'kpi' => 'zu-pruefen'],
         ]" />
-
-        <div class="flex items-center gap-1.5" role="tablist">
-            <x-fa::button size="sm" :variant="$ansicht === 'radar' ? 'primary' : 'ghost'" icon="heroicon-m-signal" wire:click="ansichtSetzen('radar')" role="tab">Radar</x-fa::button>
-            <x-fa::button size="sm" :variant="$ansicht === 'liste' ? 'primary' : 'ghost'" icon="heroicon-m-list-bullet" wire:click="ansichtSetzen('liste')" role="tab">
-                Liste @if($zaehler['zu_pruefen'] > 0)<span class="ml-1 tabular-nums">· {{ $zaehler['zu_pruefen'] }} zu prüfen</span>@endif
-            </x-fa::button>
-            <x-fa::button size="sm" :variant="$ansicht === 'inspiration' ? 'primary' : 'ghost'" icon="heroicon-m-light-bulb" wire:click="ansichtSetzen('inspiration')" role="tab" data-tab-inspiration>
-                Inspiration @if($offeneFundstuecke > 0)<span class="ml-1 tabular-nums">· {{ $offeneFundstuecke }} offen</span>@endif
-            </x-fa::button>
-            {{-- Spec 93: systematische Erfassung, getrennt von der Pinnwand --}}
-            <x-fa::button size="sm" :variant="$ansicht === 'eingang' ? 'primary' : 'ghost'" icon="heroicon-m-inbox-arrow-down" wire:click="ansichtSetzen('eingang')" role="tab" data-tab-eingang>Eingang</x-fa::button>
-            <x-fa::button size="sm" :variant="$ansicht === 'beobachten' ? 'primary' : 'ghost'" icon="heroicon-m-magnifying-glass" wire:click="ansichtSetzen('beobachten')" role="tab" data-tab-beobachten>Themen beobachten</x-fa::button>
-            <x-fa::button size="sm" :variant="$ansicht === 'quellen' ? 'primary' : 'ghost'" icon="heroicon-m-rss" wire:click="ansichtSetzen('quellen')" role="tab" data-tab-quellen>Quellen</x-fa::button>
-            <x-fa::button size="sm" :variant="$ansicht === 'automatik' ? 'primary' : 'ghost'" icon="heroicon-m-cpu-chip" wire:click="ansichtSetzen('automatik')" role="tab" data-tab-automatik>Automatik</x-fa::button>
-        </div>
+        @endif
 
         @if($ansicht === 'radar')
             <div class="fa-surface p-4" data-trend-radar>
@@ -100,7 +110,7 @@
                         @endif
                     </x-fa::empty>
                 @endif
-                <svg viewBox="0 0 640 680" class="w-full max-w-[720px] mx-auto block" role="img" aria-label="Trendradar: {{ $radar->count() }} Trends">
+                <svg viewBox="0 0 640 680" class="w-full max-w-[720px] mx-auto block" style="display:block;width:100%;max-width:720px;height:auto;margin-inline:auto" role="img" aria-label="Trendradar: {{ $radar->count() }} Trends">
                     {{-- Ringbänder + Ringe (innen Mode → außen Metatrend) --}}
                     @foreach(array_reverse($ebenenReihe) as $i => $eb)
                         <circle cx="{{ $cx }}" cy="{{ $cy }}" r="{{ $ringe[$eb][1] * $maxR + 6 }}" class="{{ $i % 2 === 0 ? 'tr-ring-band' : '' }}" fill="{{ $i % 2 === 0 ? '' : 'var(--fa-surface)' }}" />
@@ -337,7 +347,8 @@
 
     {{-- RECHTS: Detail --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Trend" width="w-96" :maxWidth="760" scope="activity_trendradar" side="right">
+        @if($gewaehlt)
+        <x-foodalchemist::detail-sidebar title="Trend" width="w-96" :maxWidth="760" scope="activity_trendradar" side="right" :aufziehen="$gewaehlt !== null">
             @if($gewaehlt)
                 @php
                     $kf = $gewaehlt->wirksameKonfidenz();
@@ -541,6 +552,7 @@
                 </div>
             @endif
         </x-foodalchemist::detail-sidebar>
+        @endif
     </x-slot>
 
     {{-- Fundstück-Dialog: Inspiration in Sekunden ablegen, für alle im Team --}}

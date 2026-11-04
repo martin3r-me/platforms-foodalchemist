@@ -2,17 +2,22 @@
 
 namespace Platform\FoodAlchemist\Livewire\Trendradar;
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FaRolle;
+use Platform\FoodAlchemist\Livewire\Concerns\HandyTrendsLesen;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
+use Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration;
 use Platform\FoodAlchemist\Services\FaRechte;
+use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TrendService;
 use Platform\FoodAlchemist\Services\TrendSignalService;
+use Platform\FoodAlchemist\Support\FaShell;
 use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
 /**
@@ -24,11 +29,11 @@ use Platform\FoodAlchemist\Support\TrendVokabular as V;
  */
 class Index extends Component
 {
-    use WithFileUploads;
-    use \Platform\FoodAlchemist\Livewire\Concerns\HandyTrendsLesen;   // #1003 Teil 8: am Handy Trends nur lesen
+    use HandyTrendsLesen;
+    use WithFileUploads;   // #1003 Teil 8: am Handy Trends nur lesen
 
     #[Url(as: 'ansicht')]
-    public string $ansicht = 'radar';
+    public string $ansicht = 'liste';
 
     #[Url(as: 'q')]
     public string $suche = '';
@@ -103,6 +108,12 @@ class Index extends Component
         $this->neuLeeren();
         $this->belegLeeren();
         $this->fundLeeren();
+        // Direkte Links aus dem Observatorium öffnen am Handy denselben Arbeitsbereich.
+        $this->handyReiter = match ($this->ansicht) {
+            'inspiration' => 'pinnwand',
+            'eingang', 'beobachten', 'quellen', 'automatik' => $this->ansicht,
+            default => 'trends',
+        };
     }
 
     public function select(int $id): void
@@ -122,7 +133,9 @@ class Index extends Component
 
     public function ansichtSetzen(string $ansicht): void
     {
-        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik'], true) ? $ansicht : 'radar';
+        $this->selectedId = null;
+        $this->einordnenOffen = false;
+        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik'], true) ? $ansicht : 'liste';
     }
 
     public function resetFilter(): void
@@ -209,7 +222,7 @@ class Index extends Component
     /** „Trend daraus machen": Dialog mit dem Titel der Inspiration vorbelegt, alle Quellen gehen beim Anlegen mit. */
     public function trendAusInspiration(int $inspirationId): void
     {
-        $i = \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $this->team()->id)->with('quellen')->find($inspirationId);
+        $i = FoodAlchemistTrendInspiration::where('team_id', $this->team()->id)->with('quellen')->find($inspirationId);
         if ($i === null) {
             return;
         }
@@ -358,7 +371,7 @@ class Index extends Component
     {
         $trendId ??= $inspirationId === null ? $this->selectedId : null;
         try {
-            $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar(
+            $session = app(PlanningSessionService::class)->ausTrendradar(
                 $this->team(), $trendId !== null ? [$trendId] : [], $inspirationId !== null ? [$inspirationId] : []);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -414,17 +427,17 @@ class Index extends Component
                 ->map(fn ($i) => ['i' => $i, 'bild' => ($t = $svc->titelbild($i)) ? $svc->dateiUrl($t) : null,
                     'quellen' => $i->quellen->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)])]) : collect(),
             // Ablegen-Dialog: offene Inspirationen des eigenen Teams als Ziel für eine weitere Quelle
-            'eigeneInspirationen' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $team->id)
+            'eigeneInspirationen' => FoodAlchemistTrendInspiration::where('team_id', $team->id)
                 ->where('herkunft', 'manuell')->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all(),
             'haeufungen' => $svc->haeufungen($team),
-            'teamNamen' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->pluck('name', 'id')->all(),
+            'teamNamen' => Team::whereIn('id', $svc->fundstueckFamilie($team))->pluck('name', 'id')->all(),
             // Moderation: Teams der Familie, in denen der Benutzer FA-Admin ist (darf dort Fundstücke löschen)
-            'adminTeams' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->get()
+            'adminTeams' => Team::whereIn('id', $svc->fundstueckFamilie($team))->get()
                 ->filter(fn ($t) => $rechte->darf($user, $t, FaRolle::Admin))->pluck('id')->map(fn ($id) => (int) $id)->all(),
-            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::whereIn('team_id', $svc->fundstueckFamilie($team))->where('herkunft', 'manuell')->whereNull('trend_id')->count(),
+            'offeneFundstuecke' => FoodAlchemistTrendInspiration::whereIn('team_id', $svc->fundstueckFamilie($team))->where('herkunft', 'manuell')->whereNull('trend_id')->count(),
             'trendOptionen' => $alle->where('team_id', $team->id)->whereNotIn('status', ['verworfen', 'archiviert'])->pluck('name', 'id')->all(),
             'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
-        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
+        ])->layout(FaShell::layout());
     }
 
     // ── intern ─────────────────────────────────────────────────────────────
@@ -444,7 +457,7 @@ class Index extends Component
         $this->meldung = null;
         try {
             $fn();
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             $this->fehler = 'Nicht gefunden oder gehört einem anderen Team.';
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();

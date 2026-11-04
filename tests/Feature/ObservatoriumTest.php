@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Services\TrendEingangService;
 use Platform\FoodAlchemist\Services\TrendQuellenService;
 use Platform\FoodAlchemist\Services\Trends\FeedLeser;
 use Platform\FoodAlchemist\Services\Trends\TrendAutomatikService;
+use Platform\FoodAlchemist\Services\TrendService;
 use Platform\FoodAlchemist\Support\FaBereiche;
 use Platform\FoodAlchemist\Support\GoogleNewsSuche;
 use Platform\FoodAlchemist\Support\HandyLesemodus;
@@ -176,4 +177,32 @@ it('blättert Meldungen serverseitig und beginnt nach einer Filteränderung wied
         ->call('nextPage')->assertSee('Seite 2 von 2')->assertSee('TEST Restaurant Nachricht 01')
         ->assertDontSee('TEST Restaurant Nachricht 15')->set('suche', 'Nachricht 15')
         ->assertSee('TEST Restaurant Nachricht 15')->assertDontSee('TEST Restaurant Nachricht 01');
+});
+
+it('filtert nur freigegebene Trends im Observatorium mit den bestehenden Radarregeln', function () {
+    $svc = app(TrendService::class);
+    foreach ([['TEST Fermentation', 'food', 'hype', ['bildung']], ['TEST Getränke', 'getraenke', 'trend', []]] as [$name, $kategorie, $typ, $sparten]) {
+        $t = $svc->anlegen($this->rootTeam, ['name' => $name, 'typ' => $typ, 'ebene' => 'mode', 'kategorie' => $kategorie, 'sparten' => $sparten,
+            'beleg' => ['quelle' => 'branchenquelle', 'titel' => 'TEST Fachquelle']]);
+        $svc->statusSetzen($this->rootTeam, $t->id, 'auf_radar', $this->owner->id);
+    }
+    $svc->anlegen($this->rootTeam, ['name' => 'TEST Nicht freigegeben', 'kategorie' => 'food']);
+    $ui = Livewire::test(Index::class)->call('ansichtSetzen', 'radar')
+        ->assertSeeHtml('data-observatorium-radar-filter')->assertSee('TEST Fermentation')->assertSee('TEST Getränke')->assertDontSee('TEST Nicht freigegeben');
+    $ui->set('kategorien', ['food'])->assertSee('TEST Fermentation')->assertDontSee('TEST Getränke')
+        ->set('typen', ['trend'])->assertSee('Keine Entwicklungen für diese Filter')
+        ->call('radarFilterZuruecksetzen')->assertSee('TEST Getränke')
+        ->set('sparten', ['care'])->assertDontSee('TEST Fermentation')->assertSee('TEST Getränke')
+        ->set('nurBefragung', true)->assertSee('Keine Entwicklungen für diese Filter')
+        ->call('radarFilterZuruecksetzen')->set('radarSuche', 'Fermentation')->assertSee('TEST Fermentation')->assertDontSee('TEST Getränke')
+        ->set('ebenen', ['mega'])->assertSee('Keine Entwicklungen für diese Filter');
+});
+
+it('ordnet Research in der mittleren Spalte und hält die gemeinsame Pinnwand erreichbar', function () {
+    $ui = Livewire::test(Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
+        ->assertSet('ansicht', 'liste')->assertSeeHtml('data-research-navigation')->assertSee('Trendverwaltung')->assertSee('Veröffentlichtes Radar');
+    $ui->call('ansichtSetzen', 'inspiration')->assertSee('Pinnwand')->assertSeeHtml('data-pinnwand-filter');
+    $ui->call('ansichtSetzen', 'liste')->assertSeeHtml('data-trend-sparten-filter');
+    Livewire::withQueryParams(['ansicht' => 'inspiration'])->withCookie(HandyLesemodus::COOKIE, '1')
+        ->test(Platform\FoodAlchemist\Livewire\Trendradar\Index::class)->assertSet('handyReiter', 'pinnwand');
 });
