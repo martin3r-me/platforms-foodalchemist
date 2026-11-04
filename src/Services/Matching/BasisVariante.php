@@ -68,6 +68,28 @@ final class BasisVariante
     /** „gemahlen“ ist beim gerade geprüften GP Zukauf (je ungenannt() gesetzt). */
     private bool $gemahlenZukauf = false;
 
+    /** Spec 95c: Menge der Zeile ist eine Gewürzmenge (je pruefe() gesetzt). */
+    private bool $gewuerzmenge = false;
+
+    /**
+     * Spec 95c (Dominique 03.11.): bis 15 g/ml, bis 3 TL, 1 EL, Msp./Prise — so viel nimmt man von einem Gewürz oder Kraut, nicht von
+     * Frischware. Ohne Menge (Matcher-Aufruf ohne Zeile) keine Gewürzmenge — dann gilt wie bisher die Rohform.
+     */
+    public static function istGewuerzmenge(?float $menge, ?string $einheit): bool
+    {
+        if ($menge === null || $menge <= 0) {
+            return false;
+        }
+
+        return match (mb_strtolower(trim((string) $einheit), 'UTF-8')) {
+            'g', 'gr', 'gramm', 'ml' => $menge <= 15,
+            'tl', 'teelöffel', 'teeloeffel' => $menge <= 3,
+            'el', 'esslöffel', 'essloeffel' => $menge <= 1,
+            'msp', 'prise', 'prisen' => true,
+            default => false,
+        };
+    }
+
     public function __construct(private TokenEngine $engine, private GpNamingService $naming)
     {
     }
@@ -76,8 +98,9 @@ final class BasisVariante
      * @param  array  $treffer  Ergebnis von matchIngredient (target/status/gp_id/gp_name/score …)
      * @return array  derselbe Treffer, ggf. auf die Basisvariante umgehängt oder auf FuzzyLow herabgestuft (+ 'variante_offen')
      */
-    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional', ?string $einheit = null): array
+    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional', ?string $einheit = null, ?float $menge = null): array
     {
+        $this->gewuerzmenge = self::istGewuerzmenge($menge, $einheit);
         $band = $treffer['status'] ?? null;
         $band = is_string($band) ? MatchBand::tryFrom($band) : $band;
         if (($treffer['target'] ?? null) !== 'gp' || ! in_array($band, [MatchBand::Exact, MatchBand::FuzzyHigh], true) || empty($treffer['gp_id'])) {
@@ -107,6 +130,13 @@ final class BasisVariante
             'preserved_first' => ['konserviert', ...array_map('mb_strtolower', GpNamingService::BEHANDLUNG)],
             default => ['frisch'],
         };
+        // Spec 95c (Pilot: „Kurkuma 3 g“ → frische Wurzel, „Oregano (2 TL)“ → frisch): in Gewürzmenge ist die getrocknete Ware gemeint, sofern
+        // es sie gibt — die Rohform-Regel („frisch vor trocken“) gilt hier nicht; ein im Text genannter Zustand entscheidet weiter selbst.
+        $gewuerz = $this->gewuerzmenge && $qZustand === null
+            && $geschwister->contains(fn ($g) => mb_strtolower((string) $g->condition) === 'trocken');
+        if ($gewuerz) {
+            $wunsch = ['trocken'];
+        }
         // Nüsse/Saaten „geröstet“ (Dominique 27.10.): roh UND geröstet im Bestand → Review; nur eine Form → die nehmen
         if (in_array('geroestet', $query, true) && $this->istSub($gewaehlt, '12.3') && $this->hatGeroestet($gewaehlt)) {
             $roh = $geschwister->first(fn ($g) => $g->id !== $gewaehlt->id && ! $this->hatGeroestet($g) && $this->ungenannt($g, $query, $bioGewollt) === []);
@@ -166,7 +196,8 @@ final class BasisVariante
 
             return $bioGewollt && $bioBasis->isNotEmpty() ? $bioBasis : $basis;
         };
-        $basis = $waehle(fn ($g) => $this->ungenannt($g, $query, $bioGewollt));
+        // Gewürzmenge: gemahlen/gerebelt ist dort die Naturform — gleich über die weiche Prüfung (die strenge kennt nur die ganze Frischware)
+        $basis = $gewuerz ? collect() : $waehle(fn ($g) => $this->ungenannt($g, $query, $bioGewollt));
         // (a) keine Basis ohne jedes Merkmal: Naturform (Pulver, gemahlen, grob …) und §8-Pflichtangabe (Mehl-Type, Fettstufe, Kakao-%)
         // zählen beim EINZIGEN Kandidaten nicht als Variante; mehrere solche Kandidaten → Review (der §5-Default lief vorher)
         if ($basis->isEmpty()) {
@@ -227,7 +258,11 @@ final class BasisVariante
         }));
     }
 
-    /** §8.11 Mehl-Type, §8.1 Fettstufe, §8.10 Kakaoanteil, §8.2 Eiergröße; Zucker-Angabe nur bei Milchprodukten (Kondensmilch „extra süß“). */
+    /**
+     * Weiche Pflichtangabe — beim EINZIGEN Kandidaten keine offene Variante, mehrere → Review: §8.11 Mehl-Type, §8.1 Fettstufe, §8.10
+     * Kakaoanteil, §8.2 Eiergröße, Zucker-Angabe bei Milchprodukten; Spec 95c (Dominique 03.11.): dazu die Verwendung („Weißwein: zum
+     * Kochen“). Sorte und Herkunft (Spätburgunder, Neuseeland) bleiben hart (Dominique 27.10. b) — wie die Haltungsform bei Eiern.
+     */
     private function pflichtangabeWeich(FoodAlchemistGp $gp, string $wert): bool
     {
         $w = mb_strtolower(trim($wert));
@@ -236,8 +271,7 @@ final class BasisVariante
             return false;
         }
 
-        // §8.2 Eiergröße wie Mehl-Type/Fettstufe; die Haltungsform (Bodenhaltung, Freiland) bleibt ein hartes Merkmal
-        return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$|^größe\s*(s|m|l|xl)$/u', $w)
+        return (bool) preg_match('/^(type|tipo)\s*\w+$|^\d+([,.]\d+)?\s*%\s*(fett|kakao)$|^größe\s*(s|m|l|xl)$|^(zum|zur|für)\s+\p{L}+$/u', $w)
             || ((string) $gp->commodity_group_code === '06' && in_array($w, ['extra süß', 'gezuckert', 'gesüßt'], true));
     }
 
@@ -247,6 +281,9 @@ final class BasisVariante
         $tokens = $this->engine->tokenize($wert);
         $haupt = $this->hauptzutat($gp);
         foreach ($tokens as $t) {
+            if ($this->gewuerzmenge && in_array($t, self::ZERKLEINERT, true)) {
+                continue;   // Spec 95c: in Gewürzmenge ist gemahlen/gerebelt die Naturform
+            }
             if (! array_key_exists($t, self::NATURFORM)) {
                 return false;
             }

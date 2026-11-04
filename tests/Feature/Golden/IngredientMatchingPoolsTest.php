@@ -220,8 +220,10 @@ it('candidates_for_returns_both_pools_ranked', function () {
 it('candidates_for_recalls_compound_noun (Fix-C-Beleg)', function () {
     ($this->mkGp)('Rinderhackfleisch: frisch', 'rinderhackfleisch');
 
+    // Spec 95c (Dominique 03.11.: „der Treffer ist nie schlechter als Kandidat 1“): der Pool-Scan verfehlt das Kompositum weiter, die
+    // Entscheidung übernimmt aber Kandidat 1, weil die Zutat dessen ganze Hauptzutat abdeckt (Rind + Hackfleisch). Vorher: 'none'.
     $strict = ($this->match)('Hackfleisch vom Rind');
-    expect($strict['target'])->toBe('none');                              // strikter Matcher verfehlt
+    expect($strict['target'])->toBe('gp')->and($strict['gp_name'])->toBe('Rinderhackfleisch: frisch');
 
     $cands = $this->svc->candidatesFor($this->rootTeam, 'Hackfleisch vom Rind', null, 8);
     expect(collect($cands)->contains(fn ($c) => $c['kind'] === 'gp' && $c['name'] === 'Rinderhackfleisch: frisch'))->toBeTrue();

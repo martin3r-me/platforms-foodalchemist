@@ -172,6 +172,25 @@ final class ZutatFreitext
         return false;
     }
 
+    /**
+     * Spec 95c: deckt die Zutat die GANZE Hauptzutat einer Alternative ab — jedes tragende Wort (gleich, Lemma, Kompositum)? Strenger als
+     * {@see hauptzutatPasst} (dort reicht das Kopfwort): „Cheddar“ deckt „Cheddarkäse“, „Geflügel“ deckt „Geflügel Grillwurst“ nicht.
+     *
+     * @param  list<string>  $zutatTokens
+     * @param  list<list<string>>  $alternativen
+     */
+    public static function hauptzutatGedeckt(array $zutatTokens, array $alternativen): bool
+    {
+        foreach ($alternativen as $alt) {
+            $w = array_values(array_filter($alt, fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::NEBENWOERTER, true) && ! in_array($t, self::BINDEWOERTER, true)));
+            if ($w !== [] && array_filter($w, fn ($t) => array_filter($zutatTokens, fn ($q) => self::wortPasst($t, $q)) === []) === []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private const BINDEWOERTER = ['in', 'im', 'mit', 'und', 'aus', 'auf', 'an', 'am', 'von', 'vom', 'nach'];
 
     /** Füll- und Farbwörter in Hauptzutaten („ohne Knochen und Haut“, „Bohnen weiß“, „Schwarze Olive“) — kein Kopfwort. */
