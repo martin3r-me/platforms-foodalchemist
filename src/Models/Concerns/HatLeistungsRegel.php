@@ -30,7 +30,11 @@ trait HatLeistungsRegel
         'kategorie', 'bezeichnung', 'notiz', 'mengen_regel', 'anzahl', 'bezug', 'bezug_leistung_id', 'schluessel_n', 'min', 'max',
         'ab_pax', 'bis_pax', 'stufen_json', 'reserve_pct', 'preis_je', 'stunden_quelle', 'stunden', 'stunden_zuschlag', 'haeufigkeit',
         'ek_satz', 'markup_class_id', 'vk_satz', 'vk_modus', 'vk_begruendung', 'abrechnung', 'abrechnung_einheit_vocab_id',
+        'planung_json',   // Spec 94b §3: Planungsdetails (Komponenten, Attribute, interne Notiz), nie im Kundenlink
     ];
+
+    /** Spec 94b §3: Komponente je Einheit der Leistung, je Gast oder je Stunde. */
+    public const PLANUNG_JE = ['einheit', 'gast', 'stunde'];
 
     public function initializeHatLeistungsRegel(): void
     {
@@ -42,6 +46,7 @@ trait HatLeistungsRegel
             'ab_pax' => 'integer',
             'bis_pax' => 'integer',
             'stufen_json' => 'array',
+            'planung_json' => 'array',
             'reserve_pct' => 'decimal:2',
             'stunden' => 'decimal:2',
             'stunden_zuschlag' => 'decimal:2',

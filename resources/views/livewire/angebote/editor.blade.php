@@ -290,6 +290,7 @@
                             <x-fa::textarea id="ang-briefing" rows="4" wire:model="form.brief" />
                         </x-fa::field>
                     </x-fa::section>
+                    @if(! empty($angebot->konfiguration_json['planung']))@include('foodalchemist::livewire.angebote.partials.planung-bedarf', ['planung' => $angebot->konfiguration_json['planung']])@endif
                 </div>
 
                 {{-- ═══ Reiter: ÜBERSICHT — Kapitel-Baum (Fortschritt + Inhalt + Preis je Kapitel), aufklappbar zu Positionen ═══ --}}

@@ -26,7 +26,7 @@
         @if($editId !== null)
             <x-fa::section :title="$editId === 0 ? 'Neue Vorlage' : 'Vorlage bearbeiten'" icon="heroicon-o-pencil-square" data-lv-formular>
                 <form wire:submit="speichern" class="flex flex-col gap-4">
-                    @include('foodalchemist::livewire.angebote.partials.leistung-regel', ['f' => $f, 'm' => 'form', 'sm' => 'stufenText', 'px' => 'lv'])
+                    @include('foodalchemist::livewire.angebote.partials.leistung-regel', ['f' => $f, 'm' => 'form', 'sm' => 'stufenText', 'pm' => 'planungText', 'px' => 'lv'])
 
                     <x-fa::field label="Notiz" for="lv-notiz" optional><x-fa::textarea id="lv-notiz" wire:model="form.notiz" rows="2" /></x-fa::field>
 

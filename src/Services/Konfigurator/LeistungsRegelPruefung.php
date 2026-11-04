@@ -50,6 +50,7 @@ final class LeistungsRegelPruefung
             'vk_begruendung' => trim((string) ($w['vk_begruendung'] ?? '')) ?: null,
             'abrechnung' => (string) ($w['abrechnung'] ?? 'all_in') ?: 'all_in',
             'abrechnung_einheit_vocab_id' => $ganz('abrechnung_einheit_vocab_id'),
+            'planung_json' => $this->planung($team, $w['planung_json'] ?? null),
         ];
 
         $fehler = fn (string $m) => throw new \InvalidArgumentException($m);
@@ -146,6 +147,71 @@ final class LeistungsRegelPruefung
         }
 
         return $aus;
+    }
+
+    /**
+     * Spec 94b §3 · Planungsdetails bereinigen (Version 1): Komponenten mit Menge > 0 je Einheit, Gast oder Stunde, Bezug auf ein sichtbares
+     * Non-Food-GP (WG 16) oder einen sichtbaren Behälter, sonst Freitext; Attribute als Schlüssel-Wert-Paare; interne Notiz. Leer = null.
+     *
+     * @return array{version:int, komponenten:list<array>, attribute:list<array>, notiz_intern:?string}|null
+     */
+    private function planung(Team $team, mixed $roh): ?array
+    {
+        $roh = is_string($roh) ? json_decode($roh, true) : $roh;
+        if (! is_array($roh)) {
+            return null;
+        }
+        $komponenten = [];
+        foreach (is_array($roh['komponenten'] ?? null) ? $roh['komponenten'] : [] as $k) {
+            if (! is_array($k)) {
+                continue;
+            }
+            $menge = is_numeric(str_replace(',', '.', (string) ($k['menge'] ?? ''))) ? (float) str_replace(',', '.', (string) $k['menge']) : null;
+            $je = (string) ($k['je'] ?? 'einheit') ?: 'einheit';
+            $gp = isset($k['gp_id']) && $k['gp_id'] !== '' && $k['gp_id'] !== null ? (int) $k['gp_id'] : null;
+            $behaelter = isset($k['container_vocab_id']) && $k['container_vocab_id'] !== '' && $k['container_vocab_id'] !== null ? (int) $k['container_vocab_id'] : null;
+            $bez = trim((string) ($k['bezeichnung'] ?? ''));
+            if ($menge === null || $menge <= 0) {
+                throw new \InvalidArgumentException('Planung: Jede Komponente braucht eine Menge größer 0' . ($bez !== '' ? " („{$bez}“)" : '') . '.');
+            }
+            if (! in_array($je, FoodAlchemistLeistungVorlage::PLANUNG_JE, true)) {
+                throw new \InvalidArgumentException('Planung: Menge je Einheit, je Gast oder je Stunde.');
+            }
+            if ($gp !== null) {
+                $name = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereKey($gp)->where('commodity_group_code', '16')->value('name');
+                if ($name === null) {
+                    throw new \InvalidArgumentException("Planung: GP {$gp} ist kein sichtbares Non-Food-Grundprodukt (WG 16).");
+                }
+                $bez = $bez !== '' ? $bez : (string) $name;
+            }
+            if ($behaelter !== null) {
+                $name = \Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::visibleToTeam($team)->whereKey($behaelter)->value('name');
+                if ($name === null) {
+                    throw new \InvalidArgumentException("Planung: Behälter {$behaelter} gibt es nicht oder er ist für dieses Team nicht sichtbar.");
+                }
+                $bez = $bez !== '' ? $bez : (string) $name;
+            }
+            if ($bez === '') {
+                throw new \InvalidArgumentException('Planung: Jede Komponente braucht eine Bezeichnung oder einen Bezug (GP, Behälter).');
+            }
+            $komponenten[] = array_filter(['bezeichnung' => mb_substr($bez, 0, 160), 'menge' => $menge, 'je' => $je, 'gp_id' => $gp, 'container_vocab_id' => $behaelter],
+                fn ($v) => $v !== null);
+        }
+        $attribute = [];
+        foreach (is_array($roh['attribute'] ?? null) ? $roh['attribute'] : [] as $a) {
+            $schluessel = is_array($a) ? trim((string) ($a['schluessel'] ?? '')) : '';
+            if ($schluessel === '') {
+                continue;
+            }
+            $attribute[] = array_filter(['schluessel' => mb_substr($schluessel, 0, 60), 'wert' => mb_substr(trim((string) ($a['wert'] ?? '')), 0, 160),
+                'einheit' => trim((string) ($a['einheit'] ?? '')) ?: null], fn ($v) => $v !== null);
+        }
+        $notiz = trim((string) ($roh['notiz_intern'] ?? '')) ?: null;
+        if ($komponenten === [] && $attribute === [] && $notiz === null) {
+            return null;
+        }
+
+        return ['version' => 1, 'komponenten' => $komponenten, 'attribute' => $attribute, 'notiz_intern' => $notiz !== null ? mb_substr($notiz, 0, 2000) : null];
     }
 
     /** @return list<array{bis_pax:?int, anzahl:float}> */
