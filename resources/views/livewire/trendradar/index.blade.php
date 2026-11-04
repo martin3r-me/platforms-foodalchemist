@@ -84,6 +84,7 @@
             </x-fa::button>
             {{-- Spec 93: systematische Erfassung, getrennt von der Pinnwand --}}
             <x-fa::button size="sm" :variant="$ansicht === 'eingang' ? 'primary' : 'ghost'" icon="heroicon-m-inbox-arrow-down" wire:click="ansichtSetzen('eingang')" role="tab" data-tab-eingang>Eingang</x-fa::button>
+            <x-fa::button size="sm" :variant="$ansicht === 'beobachten' ? 'primary' : 'ghost'" icon="heroicon-m-magnifying-glass" wire:click="ansichtSetzen('beobachten')" role="tab" data-tab-beobachten>Themen beobachten</x-fa::button>
             <x-fa::button size="sm" :variant="$ansicht === 'quellen' ? 'primary' : 'ghost'" icon="heroicon-m-rss" wire:click="ansichtSetzen('quellen')" role="tab" data-tab-quellen>Quellen</x-fa::button>
             <x-fa::button size="sm" :variant="$ansicht === 'automatik' ? 'primary' : 'ghost'" icon="heroicon-m-cpu-chip" wire:click="ansichtSetzen('automatik')" role="tab" data-tab-automatik>Automatik</x-fa::button>
         </div>
@@ -160,6 +161,8 @@
             </div>
         @elseif($ansicht === 'eingang')
             <livewire:foodalchemist.trendradar.eingang key="trendradar-eingang" />
+        @elseif($ansicht === 'beobachten')
+            <livewire:foodalchemist.trendradar.beobachten key="trendradar-beobachten" />
         @elseif($ansicht === 'quellen')
             <livewire:foodalchemist.trendradar.quellen key="trendradar-quellen" />
         @elseif($ansicht === 'automatik')
