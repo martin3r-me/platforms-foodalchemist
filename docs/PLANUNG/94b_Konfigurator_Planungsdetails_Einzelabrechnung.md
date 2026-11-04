@@ -306,7 +306,7 @@ Keine.
   - Je Komponente: Bedarf = Menge × Anzahl bzw. × Gäste bzw. × Stunden.
   - Verweise laufen über uuid (Leistung, Vorlage, GP, Behälter, Concepts). Der Kopf enthält Gäste, Tageszeit, Paket, Datum, Ort und `angebot_uuid`.
 - **Anfrage:** Sie friert den Bedarf in `konfiguration_json.planung` ein.
-  - Die Getränkepakete aus 8b kommen dazu, sobald beide Stufen auf main sind.
+  - Gewählte Getränkepakete (8b) zählen mit ihren Zusatz-Leistungen zur Tageszeit. Im Kopf stehen ihre uuid und das Concept des Zeitfensters.
 - **Lese-Ansicht:** im Angebot, Reiter „Anfrage“ (`partials/planung-bedarf`). Sie zeigt je Leistung Anzahl, Stunden und Einsätze, Komponenten mit Bedarf, Attribute und Notiz. Keine Bearbeitung, keine Summen, kein Druck.
 - **Kundenlink:** Er enthält nichts davon. Der Allowlist-Test prüft, dass Notiz, Komponenten und `planung` im Snapshot fehlen.
 

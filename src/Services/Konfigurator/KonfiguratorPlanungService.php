@@ -25,7 +25,7 @@ final class KonfiguratorPlanungService
     }
 
     /**
-     * @param  array{konzept:int, tageszeit:string, abend_konzept?:?int, addons?:list<int>}  $auswahl
+     * @param  array{konzept:int, tageszeit:string, abend_konzept?:?int, addons?:list<int>, getraenke?:list<int>}  $auswahl
      * @return array{version:int, kopf:array, leistungen:list<array>}
      */
     public function bedarf(FoodAlchemistKonfigurator $k, array $auswahl, int $pax, array $kopf = []): array
@@ -37,6 +37,9 @@ final class KonfiguratorPlanungService
             : ['typ' => 'einzel', 'k' => (int) $auswahl['konzept'], 't' => $auswahl['tageszeit']]];
         foreach ($auswahl['addons'] ?? [] as $a) {
             $faelle[] = ['typ' => 'addon', 'a' => (int) $a];
+        }
+        foreach ($auswahl['getraenke'] ?? [] as $g) {   // Spec 94c: Zusatz-Leistungen der Getränkepakete (Barkeeper, Gläser) zur Tageszeit
+            $faelle[] = ['typ' => 'getraenk', 'g' => (int) $g, 't' => $auswahl['tageszeit']];
         }
 
         $einsaetze = [];
@@ -71,13 +74,18 @@ final class KonfiguratorPlanungService
 
         $konzeptIds = array_filter([(int) $auswahl['konzept'], (int) ($auswahl['abend_konzept'] ?? 0), ...array_map('intval', $auswahl['addons'] ?? [])]);
         $conceptIds = collect($konzeptIds)->map(fn ($id) => $s['konzepte'][$id] ?? null)->filter()
-            ->flatMap(fn ($kz) => [$kz->lunch_concept_id, $kz->dinner_concept_id])->filter()->unique()->values()->all();
+            ->flatMap(fn ($kz) => [$kz->lunch_concept_id, $kz->dinner_concept_id])
+            // Getränkepakete: nur das Concept des gewählten Zeitfensters (je Zeitfenster ein eigenes Paket), bei Tag und Abend beide
+            ->merge(collect($auswahl['getraenke'] ?? [])->map(fn ($id) => $s['konzepte'][(int) $id] ?? null)->filter()
+                ->flatMap(fn ($g) => $auswahl['tageszeit'] === 'day_night' ? [$g->lunch_concept_id, $g->dinner_concept_id] : [$g->getraenkConceptId($auswahl['tageszeit'])]))
+            ->filter()->unique()->values()->all();
 
         return [
             'version' => self::VERSION,
             'kopf' => $kopf + [
                 'gaeste' => $pax,
                 'tageszeit' => $auswahl['tageszeit'],
+                'getraenke' => collect($auswahl['getraenke'] ?? [])->map(fn ($id) => ($s['konzepte'][(int) $id] ?? null)?->uuid)->filter()->values()->all(),
                 'paket' => $paket?->anzeigeName(),
                 'concepts' => FoodAlchemistConcept::query()->ohneTeamSicht('verweis')->whereIn('id', $conceptIds)->pluck('uuid')->filter()->values()->all(),
             ],

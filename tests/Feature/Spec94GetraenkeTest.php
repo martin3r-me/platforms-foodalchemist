@@ -141,3 +141,18 @@ it('Editor: Reiter Getränke zeigt Concepts der Kategorie „Getränke“ ohne S
     $lw->call('konzeptBearbeiten', $g->id)->set('konzeptForm.grund_stunden', '4')->set('konzeptForm.folgestunde_satz', '3,5')->call('konzeptSpeichern');
     expect((float) $g->fresh()->folgestunde_satz)->toBe(3.5)->and($lw->html())->toContain('Grundpreis für 4 Std.');
 });
+
+it('Planungs-Bedarf: Zusatz-Leistung des gewählten Getränkepakets zählt mit, Concept des Zeitfensters im Kopf', function () {
+    $g = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'kunden_titel' => 'Weinbegleitung']);
+    $this->svc->leistungHinzu($this->rootTeam, $this->k->id, ['kategorie' => 'personal', 'bezeichnung' => 'Barkeeper', 'mengen_regel' => 'schluessel', 'bezug' => 'gaeste',
+        'schluessel_n' => 75, 'preis_je' => 'stueck', 'haeufigkeit' => 'je_event', 'ek_satz' => 150, 'vk_modus' => 'fixed', 'vk_satz' => 250, 'vk_begruendung' => 'Test',
+        'konfigurator_konzept_id' => $g->id, 'planung_json' => ['komponenten' => [['bezeichnung' => 'Shaker', 'menge' => 1, 'je' => 'einheit']]]]);
+    $planung = app(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorPlanungService::class);
+    $mit = $planung->bedarf($this->k->fresh(), ['konzept' => $this->haupt->id, 'tageszeit' => 'dinner', 'getraenke' => [$g->id]], 150);
+    $ohne = $planung->bedarf($this->k->fresh(), ['konzept' => $this->haupt->id, 'tageszeit' => 'dinner'], 150);
+    $bar = collect($mit['leistungen'])->firstWhere('bezeichnung', 'Barkeeper');
+    expect($bar['anzahl'])->toEqual(2)->and($bar['planung']['komponenten'][0]['bedarf'])->toEqual(2)
+        ->and($mit['kopf']['getraenke'])->toBe([$g->uuid])->and($mit['kopf']['concepts'])->toContain($this->wein->uuid)
+        ->and(collect($ohne['leistungen'])->pluck('bezeichnung')->all())->not->toContain('Barkeeper');
+});
+
