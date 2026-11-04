@@ -354,7 +354,7 @@ it('UI: Radar zeigt eingeordnete Trends, Fundstück mit Screenshot landet in der
     $this->svc->statusSetzen($this->rootTeam, $t->id, 'auf_radar');
     $this->actingAs($this->mitarbeiter);
 
-    Livewire::test(TrendradarIndex::class)
+    Livewire::test(TrendradarIndex::class)->call('ansichtSetzen', 'radar')
         ->assertSee('Alkoholfreie Weine')
         ->assertSeeHtml('data-trend-punkt="'.$t->id.'"')
         ->call('fundstueckOeffnen')
@@ -404,6 +404,7 @@ it('UI: Lesen sieht keinen Einordnen-Knopf; Kuratieren ordnet ein und setzt aufs
         ->assertSet('fehler', null)
         ->call('statusSetzen', 'auf_radar')
         ->assertSet('fehler', null)
+        ->call('ansichtSetzen', 'radar')
         ->assertSeeHtml('data-trend-punkt="'.$t->id.'"');
     expect($t->refresh()->food_cluster)->toBe('genuss_gesundheit');
 });

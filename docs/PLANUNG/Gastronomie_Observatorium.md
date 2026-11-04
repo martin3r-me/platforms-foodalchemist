@@ -28,3 +28,11 @@ Google-News-Suchfeeds mit `when:1d/7d/30d/90d` werden bereits vor der KI gegen V
 91 einschlägige Feature- und Regressionstests wurden in isolierter SQLite-In-Memory-Datenbank erfolgreich geprüft (712 Assertions). Darunter Rechte/Teamtrennung, persönliche Merker, direkte ID-Manipulation, Handy-Sperre, Migration vorwärts/rückwärts, Filter/Pagination, RSS-Datumsprüfung und bestehende Trendautomatik. Desktop und Handy wurden zusätzlich am gerenderten lokalen Komponentenlayout geprüft; die lokale Browservorschau verwendet Testdaten und ist keine Live-Verbindung.
 
 Deployment erst nach ausdrücklichem Go über das bestehende `food-alchemist.de/update.sh`, ausschließlich Foodalchemist. Anschließend additive Migration und Funktionskontrolle mit echten Daten. Keine Änderungen an anderen Plattformmodulen.
+
+## Radar und Research-Navigation
+
+Das Observatorium-Radar besitzt eigene URL-gebundene Filter für Name/Definition, Kategorie, Sparte, Trend/Hype, Hierarchie und Befragungsbestätigung. Grafik und Entwicklungsliste verwenden denselben gefilterten Bestand aus TrendService und ausschließlich freigegebene Status. Die Meldungsfilter bleiben davon unabhängig. Ein leeres Filterergebnis wird vom noch leeren Radar unterschieden. Symbolgrößen sind von der responsiven Grafik getrennt.
+
+Research startet mit der Trendverwaltung. Pinnwand, Eingang, Suchthemen, Quellen und Automatik stehen in der vorhandenen einklappbaren Bereichsspalte. Kontextfremde Trendfilter und Kennzahlen entfallen in den Quellen-/Suchthemen-/Automatikansichten. Details öffnen erst nach Auswahl; direkte Links aus dem Radar öffnen die Einordnung. Die bisherige explizite Radar-URL bleibt für bestehende Links erreichbar, ist jedoch kein zweiter Navigationseintrag. „Veröffentlichtes Radar“ verweist ins Observatorium.
+
+Die Pinnwand bleibt die gemeinsame Sammlung mit bisherigen Rechten und Zuordnungsaktionen. Die persönliche Merkliste bleibt getrennt. Direkte Bereichslinks aus dem Observatorium werden auch am Handy auf den passenden Research-Reiter abgebildet. Keine Migration und keine Änderungen an Auswertungsregeln oder gespeicherten Freigaben erforderlich.

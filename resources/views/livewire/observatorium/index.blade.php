@@ -32,9 +32,23 @@
                         @svg($icon)<span>{{ $name }}</span>@if($key === 'merkliste' && $merkerAnzahl)<span style="margin-left:auto">{{ $merkerAnzahl }}</span>@endif
                     </button>
                 @endforeach
+                @if($ansicht === 'radar')
+                    <section class="fa-obs-radar-filters" aria-label="Radar filtern" data-observatorium-radar-filter>
+                        <h2>Radar filtern</h2>
+                        <label for="obs-radar-suche">Name oder Definition</label>
+                        <input id="obs-radar-suche" type="search" wire:model.live.debounce.300ms="radarSuche" placeholder="Trend suchen" maxlength="200">
+                        <x-fa::choice name="kategorien" label="Kategorie" idPrefix="obs-radar" :multiple="true" :options="V::KATEGORIEN" />
+                        <x-fa::choice name="sparten" label="Sparte" idPrefix="obs-radar" :multiple="true" :options="V::SPARTEN" />
+                        <x-fa::choice name="typen" label="Trend oder Hype" idPrefix="obs-radar" :multiple="true" :options="V::TYPEN" />
+                        <x-fa::choice name="ebenen" label="Trendhierarchie" idPrefix="obs-radar" :multiple="true" :options="V::EBENEN" />
+                        <label class="fa-obs-radar-check"><input type="checkbox" wire:model.live="nurBefragung"> Nur von der Befragung bestätigt</label>
+                        @if($radarFilterAktiv)<button type="button" class="fa-obs-filter-reset" wire:click="radarFilterZuruecksetzen">Radarfilter zurücksetzen</button>@endif
+                    </section>
+                @endif
                 <div class="fa-obs-nav-foot">
                     <div class="fa-obs-nav-label">Die Recherche dahinter</div>
                     <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'beobachten']) }}" wire:navigate>@svg('heroicon-o-magnifying-glass-circle')<span>Trend Research</span>@svg('heroicon-o-arrow-up-right')</a>
+                    <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>@svg('heroicon-o-light-bulb')<span>Recherche-Pinnwand</span></a>
                     <p class="fa-obs-subtitle" style="padding:0 10px">{{ $quellenAnzahl }} Quellen · {{ $themenAnzahl }} Suchthemen</p>
                 </div>
             </nav>
