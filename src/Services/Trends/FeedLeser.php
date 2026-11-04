@@ -2,6 +2,8 @@
 
 namespace Platform\FoodAlchemist\Services\Trends;
 
+use Illuminate\Support\Carbon;
+
 /**
  * Spec 93 A · Liest Quellen deterministisch, ohne KI und ohne Netz (den Abruf macht SichererAbruf):
  *
@@ -58,6 +60,12 @@ class FeedLeser
         if ($name === 'rss' || $name === 'rdf') {
             $items = $name === 'rss' ? ($doc->channel->item ?? []) : ($doc->item ?? []);
             foreach ($items as $item) {
+                if (strtolower((string) parse_url($basisUrl, PHP_URL_HOST)) === 'trends.google.com'
+                    && parse_url($basisUrl, PHP_URL_PATH) === '/trending/rss') {
+                    $eintraege[] = $this->googleTrend($item, $basisUrl);
+
+                    continue;
+                }
                 $dc = $item->children('http://purl.org/dc/elements/1.1/');
                 $eintraege[] = $this->eintrag((string) $item->title, trim((string) $item->link) ?: trim((string) $item->guid),
                     (string) ($item->pubDate ?: $dc->date), (string) $item->description, $basisUrl);
@@ -79,6 +87,44 @@ class FeedLeser
         }
 
         return array_values(array_filter($eintraege));
+    }
+
+    /** Google-Trends-RSS enthält Suchsignale und Nachrichtentitel im ht-Namespace. */
+    private function googleTrend(\SimpleXMLElement $item, string $basisUrl): ?array
+    {
+        $titel = $this->saeubern((string) $item->title);
+        if ($titel === '') {
+            return null;
+        }
+        $ht = $item->children('https://trends.google.com/trending/rss');
+        parse_str((string) parse_url($basisUrl, PHP_URL_QUERY), $parameter);
+        $geo = is_string($parameter['geo'] ?? null) && preg_match('/^[A-Z]{2}(?:-[A-Z0-9]+)?$/', $parameter['geo'])
+            ? $parameter['geo'] : 'DE';
+        $datum = $this->datum((string) $item->pubDate);
+        $query = ['geo' => $geo, 'q' => $titel];
+        // Ein Suchbegriff am selben Starttag zählt nur einmal; eine spätere Suchspitze darf neu eingehen.
+        if ($datum !== null) {
+            $start = new \DateTimeImmutable($datum);
+            $query['date'] = $start->format('Y-m-d').' '.$start->modify('+1 day')->format('Y-m-d');
+        }
+        $kontext = [];
+        foreach ($ht->news_item as $news) {
+            $text = $this->saeubern((string) $news->news_item_title);
+            if ($text !== '') {
+                $kontext[] = $text;
+            }
+        }
+        $teaser = 'Suchsignal von Google Trends, keine bestätigte Entwicklung.';
+        $traffic = $this->saeubern((string) $ht->approx_traffic);
+        if ($traffic !== '') {
+            $teaser .= ' Ungefähres Suchvolumen laut Feed: '.$traffic.'.';
+        }
+        if ($kontext !== []) {
+            $teaser .= ' Nachrichtenkontext: '.implode(' · ', array_slice($kontext, 0, 3));
+        }
+
+        return $this->eintrag($titel, 'https://trends.google.com/trends/explore?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986),
+            (string) $item->pubDate, $teaser, $basisUrl);
     }
 
     /** @return list<array{url:string, typ:string}> Feed-Links aus <link rel="alternate">, absolut */
@@ -265,7 +311,7 @@ class FeedLeser
             return null;
         }
         try {
-            return \Illuminate\Support\Carbon::parse($roh)->toIso8601String();
+            return Carbon::parse($roh)->toIso8601String();
         } catch (\Throwable) {
             return null;
         }
@@ -273,7 +319,7 @@ class FeedLeser
 
     private function dom(string $html): \DOMDocument
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         $vorher = libxml_use_internal_errors(true);
         $dom->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR);
         libxml_clear_errors();
