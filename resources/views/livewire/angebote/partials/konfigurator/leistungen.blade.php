@@ -32,7 +32,7 @@
 @if($leistungEditId !== null)
     <x-fa::section :title="$leistungEditId === 0 ? 'Neue Leistung' : 'Leistung bearbeiten'" icon="heroicon-o-pencil-square" data-kf-leistung-formular>
         <div class="flex flex-col gap-4">
-            @include('foodalchemist::livewire.angebote.partials.leistung-regel', ['f' => $lf, 'm' => 'leistungForm', 'sm' => 'leistungStufen', 'px' => 'kfl',
+            @include('foodalchemist::livewire.angebote.partials.leistung-regel', ['f' => $lf, 'm' => 'leistungForm', 'sm' => 'leistungStufen', 'pm' => 'leistungPlanung', 'px' => 'kfl',
                 'bezugOptionen' => $k->leistungen->reject(fn ($l) => $l->id === $leistungEditId)->mapWithKeys(fn ($l) => [$l->id => $l->bezeichnung])->all(), 'vorschau' => $vkVorschau])
             <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3">
                 <x-fa::field label="Gilt für" for="kfl-konzept"><x-fa::select id="kfl-konzept" wire:model.live="leistungForm.konfigurator_konzept_id" :options="$konzeptOptionen" placeholder="Grundausstattung (alle)" /></x-fa::field>

@@ -131,8 +131,13 @@ class KonfiguratorAnfrageService
                 'preisstand' => $k->presentation_published_at?->toIso8601String(),
                 'kontakt' => array_intersect_key($d, array_flip(['name', 'firma', 'email', 'telefon'])),
                 'zzgl' => array_map(fn ($e) => array_intersect_key($e, array_flip(['bezeichnung', 'menge', 'einheit', 'satz', 'betrag'])), $aufwand),
+                // Spec 94b §3: Bedarf für die Event-Planung (Übergabe an OLIVIA), eingefroren, am Angebot nur zu lesen
+                'planung' => app(KonfiguratorPlanungService::class)->bedarf($k, $d, (int) $d['pax'], ['datum' => $d['datum'] ?? null, 'ort' => $k->ort]),
             ],
         ]), $aufwand));
+        $json = $angebot->konfiguration_json;
+        $json['planung']['kopf']['angebot_uuid'] = $angebot->uuid;
+        $angebot->update(['konfiguration_json' => $json]);
 
         $team = Team::find($k->team_id);
         if ($team !== null) {

@@ -239,9 +239,12 @@ class KonfiguratorPricingService
         $lVk = 0.0;
         $lEk = 0.0;
         $einzel = [];   // Spec 94b: Einzelabrechnung nach Aufwand — nicht im Preis pro Person, Menge geschätzt nach Regel
+        $einsaetze = [];   // Spec 94b §3: je Leistung und Tageszeit Anzahl und Stunden (für den Planungs-Bedarf)
         foreach ($posten as [$id, $n, $t]) {
             $l = $s['leistungen'][$id];
             $menge = $l->preis_je === 'stunde' ? $n * $this->stunden($s['k'], $l, $t) : $n;
+            $einsaetze[(int) $id][] = ['tageszeit' => $t, 'anzahl' => round((float) $n, 2),
+                'stunden' => $l->preis_je === 'stunde' ? round($this->stunden($s['k'], $l, $t), 2) : null];
             if ($l->abrechnung === 'aufwand') {
                 $einzel[$id] ??= ['leistung_id' => (int) $id, 'bezeichnung' => (string) $l->bezeichnung, 'kategorie' => (string) $l->kategorie,
                     'einheit' => $s['einheiten'][(int) $l->abrechnung_einheit_vocab_id] ?? ($l->preis_je === 'stunde' ? 'Std.' : 'Stück'),
@@ -266,6 +269,7 @@ class KonfiguratorPricingService
 
         return ['speisen_vk' => round($speisenVk, 4), 'speisen_ek' => round($speisenEk, 4), 'leistungen_vk' => round($lVk, 4), 'leistungen_ek' => round($lEk, 4),
             'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert,
+            'einsaetze' => $einsaetze,
             'einzel' => array_values(array_map(fn ($e) => $e + ['menge' => round($e['menge'], 2), 'betrag' => round($e['menge'] * $e['satz'], 2),
                 'ek_betrag' => round($e['menge'] * $e['ek_satz'], 2)], $einzel)),
             'gruppen' => array_values(array_map(fn ($g) => ['art' => $g[0], 'slug' => $g[1], 'vk_pp' => $teiler > 0 ? $g[2] * $rabatt : 0.0, 'ek_pp' => $teiler > 0 ? $g[3] : 0.0], $gruppen))];

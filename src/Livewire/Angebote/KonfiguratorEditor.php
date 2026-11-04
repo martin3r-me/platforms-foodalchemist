@@ -60,6 +60,9 @@ class KonfiguratorEditor extends Component
 
     public string $leistungStufen = '';
 
+    /** Spec 94b §3: Planungsdetails der Leistung als Text (LeistungPlanungText). */
+    public array $leistungPlanung = ['komponenten' => '', 'attribute' => '', 'notiz' => ''];
+
     /** @var list<int|string> */
     public array $vorlageAuswahl = [];
 
@@ -102,7 +105,7 @@ class KonfiguratorEditor extends Component
     protected function nachAbbrechen(): void
     {
         $this->ladeForm();
-        $this->reset('konzeptEditId', 'konzeptForm', 'leistungEditId', 'leistungForm', 'leistungStufen', 'vorschlag', 'fehler');
+        $this->reset('konzeptEditId', 'konzeptForm', 'leistungEditId', 'leistungForm', 'leistungStufen', 'leistungPlanung', 'vorschlag', 'fehler');
     }
 
     #[On('konfigurator-editor.oeffnen')]
@@ -112,7 +115,7 @@ class KonfiguratorEditor extends Component
             $this->bearbeitenBeenden();
         }
         $this->selectedId = $id;
-        $this->reset('konzeptEditId', 'konzeptForm', 'leistungEditId', 'leistungForm', 'leistungStufen', 'vorschlag', 'fehler', 'hinweis', 'vorlageAuswahl', 'conceptSuche');
+        $this->reset('konzeptEditId', 'konzeptForm', 'leistungEditId', 'leistungForm', 'leistungStufen', 'leistungPlanung', 'vorschlag', 'fehler', 'hinweis', 'vorlageAuswahl', 'conceptSuche');
         $this->ladeForm();
         if ($this->selectedId !== null) {
             $this->dispatch('modal.open', name: 'konfigurator-editor');
@@ -243,6 +246,7 @@ class KonfiguratorEditor extends Component
     {
         $this->leistungEditId = 0;
         $this->leistungStufen = '';
+        $this->reset('leistungPlanung');
         $this->leistungForm = LeistungVorlagen::leereRegel() + ['kategorie' => (string) array_key_first(app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($this->team())), 'konfigurator_konzept_id' => $konzeptId, 'gilt_fuer' => '', 'ersetzt_leistung_id' => ''];
     }
 
@@ -255,16 +259,17 @@ class KonfiguratorEditor extends Component
         $this->leistungEditId = $id;
         $this->leistungForm = LeistungVorlagen::alsFormular($l) + array_map(fn ($w) => $w === null ? '' : (string) $w, $l->only(['konfigurator_konzept_id', 'gilt_fuer', 'ersetzt_leistung_id']));
         $this->leistungStufen = LeistungVorlagen::stufenAlsText($l->stufen_json);
+        $this->leistungPlanung = \Platform\FoodAlchemist\Support\LeistungPlanungText::alsText($l->planung_json);
     }
 
     public function leistungAbbrechen(): void
     {
-        $this->reset('leistungEditId', 'leistungForm', 'leistungStufen');
+        $this->reset('leistungEditId', 'leistungForm', 'leistungStufen', 'leistungPlanung');
     }
 
     public function leistungSpeichern(KonfiguratorService $svc): void
     {
-        $in = $this->leistungForm + ['stufen_json' => LeistungVorlagen::stufenAusText($this->leistungStufen)];
+        $in = ['stufen_json' => LeistungVorlagen::stufenAusText($this->leistungStufen), 'planung_json' => \Platform\FoodAlchemist\Support\LeistungPlanungText::ausText($this->leistungPlanung)] + $this->leistungForm;
         $ok = $this->tue(fn () => $this->leistungEditId
             ? $svc->leistungAendern($this->team(), (int) $this->leistungEditId, $in)
             : $svc->leistungHinzu($this->team(), $this->selectedId, $in));

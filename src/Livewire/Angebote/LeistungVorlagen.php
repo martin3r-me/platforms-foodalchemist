@@ -29,13 +29,16 @@ class LeistungVorlagen extends Component
     /** Stufen als Text: je Zeile „bis Gäste; Anzahl“, leeres „bis“ = offen. */
     public string $stufenText = '';
 
+    /** Spec 94b §3: Planungsdetails als Text (Komponenten, Attribute, interne Notiz), siehe LeistungPlanungText. */
+    public array $planungText = ['komponenten' => '', 'attribute' => '', 'notiz' => ''];
+
     public ?string $fehler = null;
 
     public ?string $hinweis = null;
 
     public function neu(string $kategorie = ''): void
     {
-        $this->reset('fehler', 'hinweis', 'stufenText');
+        $this->reset('fehler', 'hinweis', 'stufenText', 'planungText');
         $this->editId = 0;
         $auswahl = app(\Platform\FoodAlchemist\Services\Konfigurator\LeistungsKategorieService::class)->auswahl($this->team());
         $this->form = self::leereRegel() + ['kategorie' => isset($auswahl[$kategorie]) ? $kategorie : (string) array_key_first($auswahl)];
@@ -53,11 +56,12 @@ class LeistungVorlagen extends Component
         $this->editId = $v->id;
         $this->form = self::alsFormular($v) + ['aktiv' => (bool) $v->aktiv];
         $this->stufenText = self::stufenAlsText($v->stufen_json);
+        $this->planungText = \Platform\FoodAlchemist\Support\LeistungPlanungText::alsText($v->planung_json);
     }
 
     public function abbrechen(): void
     {
-        $this->reset('editId', 'form', 'stufenText', 'fehler');
+        $this->reset('editId', 'form', 'stufenText', 'planungText', 'fehler');
     }
 
     public function speichern(LeistungVorlageService $svc): void
@@ -65,6 +69,7 @@ class LeistungVorlagen extends Component
         $this->fehler = null;
         $eingabe = $this->form;
         $eingabe['stufen_json'] = self::stufenAusText($this->stufenText);
+        $eingabe['planung_json'] = \Platform\FoodAlchemist\Support\LeistungPlanungText::ausText($this->planungText);
         try {
             $v = $this->editId ? $svc->aendern($this->team(), $this->editId, $eingabe) : $svc->anlegen($this->team(), $eingabe);
         } catch (\RuntimeException|\InvalidArgumentException $e) {
@@ -73,7 +78,7 @@ class LeistungVorlagen extends Component
             return;
         }
         $this->hinweis = "„{$v->bezeichnung}“ gespeichert.";
-        $this->reset('editId', 'form', 'stufenText');
+        $this->reset('editId', 'form', 'stufenText', 'planungText');
     }
 
     public function aktivUmschalten(int $id, LeistungVorlageService $svc): void

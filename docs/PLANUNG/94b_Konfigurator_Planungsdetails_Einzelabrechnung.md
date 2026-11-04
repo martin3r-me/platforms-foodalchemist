@@ -271,7 +271,7 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 |:--|:--|:--|
 | 7a | Kategorien als Vokabular + Zusammenfassung im Reiter Kalkulation + VK-Aufteilung im Kundenlink | Testfälle Vokabular und Zusammenfassung grün, Bestand unverändert gültig |
 | 7b | Einzelabrechnung (Preis, Kalkulation, Kundenlink mit Schätzung) — umgesetzt 03.11.2026; die Angebots-Position (`position`) folgt mit 7c | Aufwand nicht im Preis pro Person, im Link als „zzgl. nach Aufwand: ca. …“, Tests grün |
-| 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Blocktyp `position` + Aufwands-Positionen im Angebot — Teil 1 (Blocktyp `position`, Aufwands-Positionen aus der Anfrage) umgesetzt 03.11.2026, Teil 2 (Planungsdetails) folgt | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
+| 7c | Planungsdetails (`planung_json` als Übergabe-Struktur) + Lese-Ansicht am Angebot + Blocktyp `position` + Aufwands-Positionen im Angebot — Teil 1 (Blocktyp `position`, Aufwands-Positionen aus der Anfrage) umgesetzt 03.11.2026, Teil 2 (Planungsdetails) umgesetzt 03.11.2026 (Notizen unten) | Bedarf aus einer Anfrage am Angebot eingefroren und lesbar, Aufwands-Positionen im Angebot; keine Planungsoberfläche (OLIVIA) |
 
 ## Entscheidungen (Dominique, 03.11.2026)
 
@@ -289,3 +289,24 @@ Alle Migrationen sind additiv, mit `hasColumn`/`hasTable`-Guards. Der MySQL-Smok
 ## Offene Fragen
 
 Keine.
+
+## Umsetzungsnotizen 7c Teil 2 (03.11.2026)
+
+- **Pflege:** `planung_json` liegt an Vorlage und Konfigurator-Leistung (in `REGEL_FELDER`, also mitkopiert und im Abgleich „Vorlage geändert“).
+  - Im Formular steht es als Text wie die Stufen (`Support/LeistungPlanungText`).
+  - Komponenten: je Zeile „Menge; je Einheit | Gast | Stunde; Bezeichnung; GP 812 oder Behälter 14“.
+  - Attribute: je Zeile „Schlüssel; Wert; Einheit“. Dazu kommt eine interne Notiz.
+  - Über MCP läuft es als Objekt in `regelSchema()`.
+- **Prüfung** (`LeistungsRegelPruefung::planung`, eine Stelle für Oberfläche und MCP):
+  - Menge > 0, `je` aus `PLANUNG_JE`.
+  - `gp_id` muss ein sichtbares Non-Food-GP (WG 16) sein, `container_vocab_id` ein sichtbarer Behälter. Ohne Bezeichnung gilt der Name des Bezugs.
+  - Leere Attribute fallen weg. Ist alles leer, wird es `null`.
+- **Bedarf** (`KonfiguratorPlanungService::bedarf`):
+  - Die Anzahl je Leistung kommt aus `rechneFall` mit genau der Gästezahl der Anfrage. `einsaetze` liefert sie je Tageszeit, die Handwerte gelten.
+  - Je Komponente: Bedarf = Menge × Anzahl bzw. × Gäste bzw. × Stunden.
+  - Verweise laufen über uuid (Leistung, Vorlage, GP, Behälter, Concepts). Der Kopf enthält Gäste, Tageszeit, Paket, Datum, Ort und `angebot_uuid`.
+- **Anfrage:** Sie friert den Bedarf in `konfiguration_json.planung` ein.
+  - Die Getränkepakete aus 8b kommen dazu, sobald beide Stufen auf main sind.
+- **Lese-Ansicht:** im Angebot, Reiter „Anfrage“ (`partials/planung-bedarf`). Sie zeigt je Leistung Anzahl, Stunden und Einsätze, Komponenten mit Bedarf, Attribute und Notiz. Keine Bearbeitung, keine Summen, kein Druck.
+- **Kundenlink:** Er enthält nichts davon. Der Allowlist-Test prüft, dass Notiz, Komponenten und `planung` im Snapshot fehlen.
+
