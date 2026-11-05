@@ -380,3 +380,24 @@ it('Abruf Übersicht: Artikel-Kopf bleibt — Titel aus der Überschrift, nicht 
         expect($t['titel'])->not->toContain('mehr erfahren')->and($t['url'])->not->toContain('-ist-kein-artikel');
     }
 });
+
+it('Titel nachziehen: Probelauf schreibt nichts, --apply korrigiert nur „mehr erfahren“-Titel dieser Quelle, die noch auf der Seite stehen', function () {
+    Http::fake(['https://www.bzfe.test/*' => Http::response(spec93Fixture('uebersicht_artikelkopf.html'))]);
+    $q = spec93Quelle($this->rootTeam, ['name' => 'TEST-93 BZfE', 'url' => 'https://www.bzfe.test/presse/aktuell', 'feed_typ' => 'uebersicht']);
+    $andere = spec93Quelle($this->rootTeam, ['name' => 'TEST-93 andere', 'url' => 'https://andere.beispiel.test/rubrik/', 'feed_typ' => 'uebersicht']);
+    $alt = 'Erfundene Dachzeile für Suppe und Ofengemüse Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe. mehr erfahren';
+    $kaputt = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/kochen-mit-pastinaken#teaser', 'titel' => $alt, 'teaser' => 'Erfundene Dachzeile für Suppe und Ofengemüse', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    $weg = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/nicht-mehr-da#teaser', 'titel' => 'Erfundener alter Teaser über Kürbis im Herbst. mehr erfahren', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    $fremd = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://andere.beispiel.test/kochen-mit-pastinaken', 'titel' => 'Erfundener fremder Teaser über Pastinaken. mehr erfahren', 'quelle_id' => $andere->id], 'abruf')['eintrag'];
+
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id])
+        ->expectsOutputToContain('→ Kochen mit Pastinaken')->expectsOutputToContain('2 Kandidaten mit „mehr erfahren“-Titel, 1 korrigierbar, 1 nicht mehr auf der Seite')
+        ->expectsOutputToContain('Probelauf: nichts geschrieben')->assertSuccessful();
+    expect($kaputt->refresh()->titel)->toBe($alt);
+
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id, '--apply' => true])->expectsOutputToContain('1 Einträge korrigiert.')->assertSuccessful();
+    expect($kaputt->refresh()->titel)->toBe('Kochen mit Pastinaken')
+        ->and($kaputt->teaser)->toBe('Erfundene Dachzeile für Suppe und Ofengemüse – Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe.')
+        ->and($weg->refresh()->titel)->toEndWith('mehr erfahren')->and($fremd->refresh()->titel)->toEndWith('mehr erfahren');
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $andere->id + 999])->assertFailed();
+});

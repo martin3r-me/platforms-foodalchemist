@@ -30,7 +30,7 @@ class FeedLeser
     private const NUR_AUSSERHALB_ARTIKEL = ['header', 'footer'];
 
     /** Link-Beschriftungen am Ende eines Teaser-Links; gehören nie zum Titel. */
-    private const MEHR_LINK = '/\s*(?:mehr erfahren|mehr lesen|weiterlesen|weiter lesen|zum artikel|read more)\s*[»›→>.…]*\s*$/iu';
+    public const MEHR_LINK = '/\s*(?:mehr erfahren|mehr lesen|weiterlesen|weiter lesen|zum artikel|read more)\s*[»›→>.…]*\s*$/iu';
 
     /** Titel kürzer als das sind „Mehr“, „Weiterlesen“, Pfeile — keine Artikeltitel. */
     private const TITEL_MIN = 12;
