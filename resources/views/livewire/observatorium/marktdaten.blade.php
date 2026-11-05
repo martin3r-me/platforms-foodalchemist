@@ -1,10 +1,10 @@
 <section class="fa-obs-briefing fa-obs-marktdaten" data-observatorium-marktdaten aria-label="Amtliche Marktdaten">
     <h2>Markt in Zahlen <span class="fa-obs-pill">Destatis · Deutschland</span></h2>
-    <p class="fa-obs-subtitle fa-obs-marktdaten-hinweis">{{ $marktdaten['hinweis'] }} Diese deutschlandweiten Reihen sind unabhängig von den Meldungsfiltern.</p>
     @if($marktdaten['aussage'])
         <p class="fa-obs-marktdaten-aussage" data-marktdaten-aussage>{{ $marktdaten['aussage']['text'] }}</p>
         <p class="fa-obs-subtitle">Bezugsmonat {{ $marktdaten['aussage']['monat'] }} · Verbraucherpreisindex, Basis {{ $marktdaten['aussage']['basis'] }} · Restaurantpreise = Gaststättendienstleistungen, Lebensmittel = Nahrungsmittel &amp; alkoholfreie Getränke.</p>
     @endif
+    <p class="fa-obs-subtitle fa-obs-marktdaten-hinweis">{{ $marktdaten['hinweis'] }} Diese deutschlandweiten Reihen sind unabhängig von den Meldungsfiltern.</p>
     @unless($marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch nicht verbunden: Der kostenlose GENESIS-Zugang muss eingerichtet werden.</p>@endunless
     <div class="fa-obs-wett-profile">
     @foreach($marktdaten['reihen'] as $reihe)
