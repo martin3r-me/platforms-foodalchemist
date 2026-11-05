@@ -208,6 +208,24 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //    die Zeile trägt opted_in_at/opted_in_by.
             continue;
         }
+        if (in_array(class_basename($klasse), ['FoodAlchemistMarktdaten', 'FoodAlchemistWettbewerber', 'FoodAlchemistWettbewerbFund', 'FoodAlchemistObservatoriumMerker'], true)) {
+            // Observatorium (#741–#745): Zeilen mit fachlichem Unique-Schlüssel, die per firstOrCreate/updateOrCreate gepflegt werden.
+            //  - kein SoftDeletes: Marktdaten unique(team, serie) als Abruf-Cache, Wettbewerber unique(team, name_schluessel),
+            //    Fund unique(wettbewerber, eingang), Merker unique(team, user, eingang) — eine trashed Zeile wäre für
+            //    firstOrCreate/updateOrCreate unsichtbar und kollidierte am Unique (dieselbe Falle wie StorageBinItem).
+            //  - kein HasUuidV7: adressiert über Id bzw. den fachlichen Schlüssel, keine externe ID.
+            //  - Merker ohne BelongsToTeamHierarchy: persönliche Merkliste je (Team, Nutzer), gelesen strikt über
+            //    where team_id + user_id (ObservatoriumService); Vererbung wäre eine Sichtbarkeits-Ausweitung.
+            //  - LogsActivity: Pflicht für alle vier; Team-Kette Pflicht für die drei Team-Daten.
+            $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
+            $pflichten = class_basename($klasse) === 'FoodAlchemistObservatoriumMerker' ? ['LogsActivity'] : ['LogsActivity', 'BelongsToTeamHierarchy'];
+            foreach ($pflichten as $pflicht) {
+                if (! $traits->contains($pflicht)) {
+                    $fehlend[] = class_basename($klasse) . " ohne {$pflicht}";
+                }
+            }
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistAbo') {
             // Spec 82 §12 A1: Abo = Sammlung des Master-Teams an einen Mandanten. Trägt LogsActivity + HasUuidV7.
             //  - kein BelongsToTeamHierarchy: die Zeile gehört ZWEI Teams (master_team_id, mandant_team_id), es gibt

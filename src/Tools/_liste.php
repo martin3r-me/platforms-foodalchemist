@@ -12,8 +12,6 @@
  */
 
 return [
-    \Platform\FoodAlchemist\Tools\MarktdatenGetTool::class,
-    \Platform\FoodAlchemist\Tools\MarktdatenAbrufTool::class,
     \Platform\FoodAlchemist\Tools\AblaufGetTool::class,
     \Platform\FoodAlchemist\Tools\AbosDeleteTool::class,   // Spec 82 §12 D: Kündigung mit tiefer Kopie
     \Platform\FoodAlchemist\Tools\AbosGetTool::class,
@@ -330,6 +328,8 @@ return [
     \Platform\FoodAlchemist\Tools\MarkeOffenGetTool::class,        // Plan GP-Stamm 3g: Marken-Nachlauf
     \Platform\FoodAlchemist\Tools\MarkeOffenSperrenTool::class,    // Marken-Nachlauf: Kein Kürzel
     \Platform\FoodAlchemist\Tools\MarkeOffenZuordnenTool::class,  // Plan GP-Stamm 3g: Marken-Nachlauf
+    \Platform\FoodAlchemist\Tools\MarktdatenAbrufTool::class,
+    \Platform\FoodAlchemist\Tools\MarktdatenGetTool::class,
     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,
     \Platform\FoodAlchemist\Tools\MatchProposalsPutTool::class,

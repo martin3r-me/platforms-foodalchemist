@@ -3,11 +3,12 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 
 class FoodAlchemistMarktdaten extends Model
 {
-    use BelongsToTeamHierarchy;
+    use BelongsToTeamHierarchy, LogsActivity;
 
     protected $table = 'foodalchemist_marktdaten';
 
