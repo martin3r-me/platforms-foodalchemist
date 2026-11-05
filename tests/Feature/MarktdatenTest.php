@@ -249,11 +249,15 @@ it('nimmt den Großhandel statt des VPI Lebensmittel, sobald er Werte hat, mit U
 it('formuliert Umsatz-, Vorlauf- und Energie-Aussagen nur bei Werten im selben Monat', function () {
     $r = fn (string $serie, ?float $vj, string $monat = '2026-09') => ['serie' => $serie, 'tabelle' => MarktdatenService::REIHEN[$serie]['tabelle'], 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => $monat, 'einheit' => '2015=100']];
     $text = fn (array $reihen) => array_column(MarktdatenService::aussagen($reihen), 'text', 'schluessel');
-    expect($text([$r('gastgewerbe_umsatz_nominal', 2.4), $r('gastgewerbe_umsatz_real', -1.1)])['umsatz'])
-        ->toBe('Gastgewerbe-Umsatz nominal +2,4 %, real -1,1 % zum Vorjahresmonat: Das Plus kommt aus höheren Preisen, nicht aus mehr Gästen oder Absatz.')
-        ->and($text([$r('gastgewerbe_umsatz_nominal', 3.0), $r('gastgewerbe_umsatz_real', 0.8)])['umsatz'])->toContain('Auch preisbereinigt wird mehr umgesetzt.')
-        ->and($text([$r('gastgewerbe_umsatz_nominal', -0.5), $r('gastgewerbe_umsatz_real', -2.0)])['umsatz'])->toContain('Die Branche setzt auch in Euro weniger um.')
-        ->and($text([$r('gastgewerbe_umsatz_nominal', 3.0), $r('gastgewerbe_umsatz_real', 0.8, '2026-08')]))->not->toHaveKey('umsatz')
+    expect($text([$r('gastro_umsatz_nominal', 2.4), $r('gastro_umsatz_real', -1.1)])['umsatz'])
+        ->toBe('Gastronomie-Umsatz nominal +2,4 %, real -1,1 % zum Vorjahresmonat: Das Plus kommt aus höheren Preisen, nicht aus mehr Gästen oder Absatz.')
+        ->and($text([$r('gastro_umsatz_nominal', 3.0), $r('gastro_umsatz_real', 0.8)])['umsatz'])->toContain('Auch preisbereinigt wird mehr umgesetzt.')
+        ->and($text([$r('gastro_umsatz_nominal', -0.5), $r('gastro_umsatz_real', -2.0)])['umsatz'])->toContain('Die Branche setzt auch in Euro weniger um.')
+        ->and($text([$r('gastro_umsatz_nominal', 3.0), $r('gastro_umsatz_real', 0.8), $r('caterer_umsatz_nominal', 4.1), $r('caterer_umsatz_real', 1.2)])['umsatz'])
+            ->toBe('Umsatz Caterer nominal +4,1 %, real +1,2 % zum Vorjahresmonat: Auch preisbereinigt wird mehr umgesetzt.')
+        ->and($text([$r('gastro_umsatz_nominal', 3.0), $r('gastro_umsatz_real', 0.8), $r('caterer_umsatz_nominal', 4.1), $r('caterer_umsatz_real', null)])['umsatz'])
+            ->toStartWith('Gastronomie-Umsatz nominal +3,0 %')
+        ->and($text([$r('gastro_umsatz_nominal', 3.0), $r('gastro_umsatz_real', 0.8, '2026-08')]))->not->toHaveKey('umsatz')
         ->and($text([$r('erzeugerpreise_nahrungsmittel', 4.0), $r('grosshandel_nahrungsmittel', 1.5)])['vorlauf'])
             ->toContain('Bei den Herstellern steigen die Preise stärker als im Großhandel (Abstand 2,5 Prozentpunkte) – Druck auf künftige Einkaufspreise möglich.')
         ->and($text([$r('erzeugerpreise_nahrungsmittel', 0.5), $r('grosshandel_nahrungsmittel', 2.0)])['vorlauf'])->toContain('Im Großhandel steigen die Preise stärker als bei den Herstellern')
@@ -271,7 +275,8 @@ it('ruft jede Reihe mit ihren Codes ab, Erkunden schlägt nur nach und schreibt 
     $r = $this->svc->abrufen($this->rootTeam);
     expect(array_column($r['ergebnisse'], 'serie'))->toBe(array_keys(MarktdatenService::REIHEN))->and($r['noch_nicht_abrufbar'])->toBe([]);
     Http::assertSentCount(count(MarktdatenService::REIHEN));
-    Http::assertSent(fn ($q) => $q->url() === GenesisClient::ENDPOINT && $q['name'] === '45213-0005' && $q['classifyingvariable1'] === 'WZ08W9' && $q['classifyingkey1'] === 'WZ08-55-01');
+    Http::assertSent(fn ($q) => $q->url() === GenesisClient::ENDPOINT && $q['name'] === '45213-0005' && $q['classifyingvariable1'] === 'WZ08W9' && $q['classifyingkey1'] === 'WZ08-56');
+    Http::assertSent(fn ($q) => $q->url() === GenesisClient::ENDPOINT && $q['name'] === '45213-0005' && $q['classifyingkey1'] === 'WZ08-562');
 
     $aufbau = $this->svc->erkunden($this->rootTeam, '61281-0004');
     $werte = $this->svc->erkunden($this->rootTeam, '61281-0004', 'TESTWZ', 'fleisch');
@@ -306,15 +311,15 @@ it('liest je Reihe nur die passende Wertvariable und die Pflicht-Schlüssel', fu
 it('liest Reihen mit Wertvariable per Code (PRE011, UMS103) und Pflicht-Schlüsseln (REAL/NOMINAL, Originalwert)', function () {
     $kopf = "time;1_variable_attribute_code;2_variable_attribute_code;3_variable_attribute_code;4_variable_attribute_code;value;value_unit;value_variable_code;value_variable_label\n";
     $csv = $kopf
-        ."2026;MONAT09;WZ08-55-01;NOMINAL;WERTORG;104,0;2015=100;UMS103;Umsatzindex TEST\n"
-        ."2026;MONAT09;WZ08-55-01;REAL;WERTORG;97,0;2015=100;UMS103;Umsatzindex TEST\n"
-        ."2026;MONAT09;WZ08-55-01;REAL;X13JDKSB;96,5;2015=100;UMS103;Umsatzindex TEST\n"
-        ."2026;MONAT09;WZ08-55-01;REAL;WERTORG;1,2;Prozent;CH0005;Veränderung TEST\n";
+        ."2026;MONAT09;WZ08-56;NOMINAL;WERTORG;104,0;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-56;REAL;WERTORG;97,0;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-56;REAL;X13JDKSB;96,5;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-56;REAL;WERTORG;1,2;Prozent;CH0005;Veränderung TEST\n";
     $leser = app(GenesisCsvLeser::class);
-    $real = MarktdatenService::REIHEN['gastgewerbe_umsatz_real'];
+    $real = MarktdatenService::REIHEN['gastro_umsatz_real'];
     expect(array_column($leser->lesen($csv, $real['schluessel'], '', $real['zusatz'], $real['wert_code']), 'wert'))->toEqual([97.0])
-        ->and(array_column($leser->lesen($csv, 'WZ08-55-01', '', ['NOMINAL', 'WERTORG'], 'UMS103'), 'wert'))->toEqual([104.0])
-        ->and(fn () => $leser->lesen($csv, 'WZ08-55-01', '', ['REAL'], 'UMS103'))->toThrow(RuntimeException::class, 'Mehrere GENESIS-Werte');
+        ->and(array_column($leser->lesen($csv, 'WZ08-56', '', ['NOMINAL', 'WERTORG'], 'UMS103'), 'wert'))->toEqual([104.0])
+        ->and(fn () => $leser->lesen($csv, 'WZ08-56', '', ['REAL'], 'UMS103'))->toThrow(RuntimeException::class, 'Mehrere GENESIS-Werte');
     foreach (MarktdatenService::REIHEN as $serie => $meta) {
         expect(MarktdatenService::abrufbar($meta))->toBeTrue("{$serie} ohne Codes")
             ->and(isset($meta['wert']) || isset($meta['wert_code']))->toBeTrue("{$serie} ohne Wertvariable")

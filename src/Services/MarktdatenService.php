@@ -35,10 +35,19 @@ class MarktdatenService
             'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-111', 'wert' => 'verbraucherpreisindex'],
         // 45213-0005: Wertvariable UMS103; Preisbasis (WERTE4: REAL/NOMINAL) und Bereinigung (WERT01: WERTORG = Originalwert)
         // stehen als weitere Merkmale in der Zeile — Pflicht-Schlüssel, damit je Monat genau ein Wert bleibt.
-        'gastgewerbe_umsatz_nominal' => ['name' => 'Gastgewerbe-Umsatz nominal', 'lang' => 'Umsatz im Gastgewerbe (WZ 55–56), in jeweiligen Preisen, Originalwert',
-            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-55-01', 'wert_code' => 'UMS103', 'zusatz' => ['NOMINAL', 'WERTORG']],
-        'gastgewerbe_umsatz_real' => ['name' => 'Gastgewerbe-Umsatz real', 'lang' => 'Umsatz im Gastgewerbe (WZ 55–56), preisbereinigt, Originalwert',
-            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-55-01', 'wert_code' => 'UMS103', 'zusatz' => ['REAL', 'WERTORG']],
+        // Hauptreihe Gastronomie (WZ 56) statt Gastgewerbe (55–56); Unterzeilen Caterer (56.2) und Event-Caterer (56.21).
+        'gastro_umsatz_nominal' => ['name' => 'Gastronomie-Umsatz nominal', 'lang' => 'Umsatz in der Gastronomie (WZ 56), in jeweiligen Preisen, Originalwert',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-56', 'wert_code' => 'UMS103', 'zusatz' => ['NOMINAL', 'WERTORG']],
+        'caterer_umsatz_nominal' => ['name' => 'Caterer und Verpflegungsdienste', 'lang' => 'Umsatz Caterer und sonstige Verpflegungsdienstleistungen (WZ 56.2), nominal', 'gruppe' => 'gastro_umsatz_nominal',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-562', 'wert_code' => 'UMS103', 'zusatz' => ['NOMINAL', 'WERTORG']],
+        'eventcaterer_umsatz_nominal' => ['name' => 'Event-Caterer', 'lang' => 'Umsatz Event-Caterer (WZ 56.21), nominal', 'gruppe' => 'gastro_umsatz_nominal',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-5621', 'wert_code' => 'UMS103', 'zusatz' => ['NOMINAL', 'WERTORG']],
+        'gastro_umsatz_real' => ['name' => 'Gastronomie-Umsatz real', 'lang' => 'Umsatz in der Gastronomie (WZ 56), preisbereinigt, Originalwert',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-56', 'wert_code' => 'UMS103', 'zusatz' => ['REAL', 'WERTORG']],
+        'caterer_umsatz_real' => ['name' => 'Caterer und Verpflegungsdienste', 'lang' => 'Umsatz Caterer und sonstige Verpflegungsdienstleistungen (WZ 56.2), real', 'gruppe' => 'gastro_umsatz_real',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-562', 'wert_code' => 'UMS103', 'zusatz' => ['REAL', 'WERTORG']],
+        'eventcaterer_umsatz_real' => ['name' => 'Event-Caterer', 'lang' => 'Umsatz Event-Caterer (WZ 56.21), real', 'gruppe' => 'gastro_umsatz_real',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-5621', 'wert_code' => 'UMS103', 'zusatz' => ['REAL', 'WERTORG']],
         // 61241-0004: Merkmal GP19M2 (nur 2-Steller), Wertvariable PRE001. GP19-10 umfasst auch Futtermittel.
         'erzeugerpreise_nahrungsmittel' => ['name' => 'Erzeugerpreise Nahrungsmittel', 'lang' => 'Erzeugerpreise gewerblicher Produkte: Nahrungs- und Futtermittel (GP 10)',
             'tabelle' => '61241-0004', 'merkmal' => 'GP19M2', 'schluessel' => 'GP19-10', 'wert_code' => 'PRE001'],
@@ -140,7 +149,11 @@ class MarktdatenService
                 'Restaurantpreise '.self::pct($g).', Lebensmittel '.self::pct($l).' zum Vorjahresmonat: '
                 .self::richtung($g, $l, 'Die Restaurantpreise', 'die Lebensmittelpreise im Handel', '.', '.'));
         }
-        if ($a = self::paar($r->get('gastgewerbe_umsatz_nominal'), $r->get('gastgewerbe_umsatz_real'))) {
+        // Umsatz: zuerst die Caterer-Zeile (BHG-Kerngeschäft), sonst Gastronomie gesamt.
+        foreach (['caterer' => 'Umsatz Caterer', 'gastro' => 'Gastronomie-Umsatz'] as $pref => $etikett) {
+            if (! ($a = self::paar($r->get($pref.'_umsatz_nominal'), $r->get($pref.'_umsatz_real')))) {
+                continue;
+            }
             [$n, $re] = $a;
             $folge = match (true) {
                 $n > 0 && $re <= 0 => 'Das Plus kommt aus höheren Preisen, nicht aus mehr Gästen oder Absatz.',
@@ -148,8 +161,9 @@ class MarktdatenService
                 $n <= 0 && $re <= 0 => 'Die Branche setzt auch in Euro weniger um.',
                 default => 'Preisbereinigt wird mehr umgesetzt, in Euro nicht.',
             };
-            $out[] = self::satz('umsatz', [$r['gastgewerbe_umsatz_nominal'], $r['gastgewerbe_umsatz_real']],
-                'Gastgewerbe-Umsatz nominal '.self::pct($n).', real '.self::pct($re).' zum Vorjahresmonat: '.$folge);
+            $out[] = self::satz('umsatz', [$r[$pref.'_umsatz_nominal'], $r[$pref.'_umsatz_real']],
+                $etikett.' nominal '.self::pct($n).', real '.self::pct($re).' zum Vorjahresmonat: '.$folge);
+            break;
         }
         if ($a = self::paar($r->get('erzeugerpreise_nahrungsmittel'), $r->get('grosshandel_nahrungsmittel'))) {
             [$h, $gh] = $a;
