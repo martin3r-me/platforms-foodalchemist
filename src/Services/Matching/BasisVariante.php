@@ -71,6 +71,23 @@ final class BasisVariante
     /** Spec 95c: Menge der Zeile ist eine Gewürzmenge (je pruefe() gesetzt). */
     private bool $gewuerzmenge = false;
 
+    /** Leitplanke Eigenleistung der aktuellen Prüfung: teil_convenience | voll_convenience, sonst null (= §2 Rohform). */
+    private ?string $convenience = null;
+
+    /**
+     * Zeile in der Sprache der GP-Namen, wenn die Leitplanke Fertigware zulässt — „gekocht“ steht im GP als „gegart“ (teil/voll),
+     * „gewürfelt“ als Zuschnitt „Würfel“ (nur voll). Ohne Leitplanke bleibt der Text, wie er ist (§2 Rohform).
+     */
+    public static function fertigwareText(string $zutat, ?string $convenience): string
+    {
+        if (! in_array($convenience, ['teil_convenience', 'voll_convenience'], true)) {
+            return $zutat;
+        }
+        $zutat = (string) preg_replace('/(?<![\p{L}])gekocht(?![\p{L}])/iu', 'gegart', $zutat);
+
+        return $convenience === 'voll_convenience' ? (string) preg_replace('/(?<![\p{L}])gew(?:ü|ue)rfelt(?![\p{L}])/iu', 'Würfel', $zutat) : $zutat;
+    }
+
     /**
      * Spec 95c (Dominique 03.11.): bis 15 g/ml, bis 3 TL, 1 EL, Msp./Prise — so viel nimmt man von einem Gewürz oder Kraut, nicht von
      * Frischware. Ohne Menge (Matcher-Aufruf ohne Zeile) keine Gewürzmenge — dann gilt wie bisher die Rohform.
@@ -98,9 +115,13 @@ final class BasisVariante
      * @param  array  $treffer  Ergebnis von matchIngredient (target/status/gp_id/gp_name/score …)
      * @return array  derselbe Treffer, ggf. auf die Basisvariante umgehängt oder auf FuzzyLow herabgestuft (+ 'variante_offen')
      */
-    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional', ?string $einheit = null, ?float $menge = null): array
+    public function pruefe(Team $team, string $zutat, array $treffer, string $pref = 'fresh_first', string $bio = 'conventional', ?string $einheit = null, ?float $menge = null, ?string $convenience = null): array
     {
         $this->gewuerzmenge = self::istGewuerzmenge($menge, $einheit);
+        // Leitplanke Eigenleistung (Dominique 05.11.: „kommt auf die Leitplanke an“): ohne Wahl und bei from_scratch gilt §2 (Rohform) wie bisher;
+        // teil_convenience nimmt eine vorhandene Fertigware bei Zubereitung (gegart/gekocht), voll_convenience zusätzlich bei Schnittformen.
+        $this->convenience = in_array($convenience, ['teil_convenience', 'voll_convenience'], true) ? $convenience : null;
+        $zutat = self::fertigwareText($zutat, $convenience);
         $band = $treffer['status'] ?? null;
         $band = is_string($band) ? MatchBand::tryFrom($band) : $band;
         if (($treffer['target'] ?? null) !== 'gp' || ! in_array($band, [MatchBand::Exact, MatchBand::FuzzyHigh], true) || empty($treffer['gp_id'])) {
@@ -116,7 +137,8 @@ final class BasisVariante
         $query = $this->engine->ingredientTokens($zutat);
         $qZustand = $this->engine->produktForm($zutat)['zustand'];
         // §2 F2.1: ohne Zukauf-Signal ist ein Zuschnitt in der Zeile Küchenarbeit — er wählt keine Schnittware (Kurator 27.10.)
-        $this->zukauf = in_array($qZustand, ['TK', 'konserviert'], true) || array_intersect($query, self::PARA2_ZUKAUF) !== [];
+        $this->zukauf = in_array($qZustand, ['TK', 'konserviert'], true) || array_intersect($query, self::PARA2_ZUKAUF) !== []
+            || $this->convenience === 'voll_convenience';   // volle Convenience: der Zuschnitt ist gekaufte Schnittware
         $geschwister = (string) $gewaehlt->main_ingredient_slug === '' ? collect([$gewaehlt])
             : FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
                 ->where('main_ingredient_slug', $gewaehlt->main_ingredient_slug)->orderBy('id')->get($spalten)
@@ -230,6 +252,8 @@ final class BasisVariante
         // Text nennt den Zustand, Leitplanke wünscht genau diesen (frische=tk → TK-Gemüse), frisch, ohne Zustand oder keine Frischware → bleibt
         if ($qZustand !== null || $zustand === '' || $zustand === 'frisch' || in_array($zustand, $wunsch, true)
             || ! in_array((string) $gp->commodity_group_code, self::FRISCHWARE_WG, true)
+            // Leitplanke Convenience: die Zeile nennt die Zubereitung, die das GP trägt („gegart“) — die haltbare Fertigware ist gemeint
+            || ($this->convenience !== null && array_intersect($this->engine->tokenize((string) $gp->name), $query, self::ZUBEREITUNG) !== [])
             // zugekauftes Püree/Mus/Mark (§8.17, Basisrezepte §3) ist ein eigenes Produkt, keine haltbare Variante frischer Ware
             || preg_match('/(?:pueree|puree|mus|mark)(?:\s|$)/', $this->hauptzutat($gp)) === 1) {
             return $treffer;
@@ -317,7 +341,8 @@ final class BasisVariante
         $merkmal = [];
         foreach ($geschwister as $g) {
             $f = $this->naming->felderAusName((string) $g->name, true);
-            foreach (['flavor', 'processing', 'pflichtangabe'] as $feld) {
+            // volle Convenience: der Zuschnitt („Würfel 5 mm“) ist ein Einkaufsmerkmal wie Geschmack/Verarbeitung
+            foreach (['flavor', 'processing', 'pflichtangabe', ...($this->convenience === 'voll_convenience' ? ['form'] : [])] as $feld) {
                 foreach ($this->engine->tokenize((string) ($f[$feld] ?? '')) as $t) {
                     $merkmal[$t] = true;
                 }
@@ -328,7 +353,9 @@ final class BasisVariante
         $out = [];
         foreach ($text as $t) {
             // Zubereitung in der Zeile („im Meersalz gegart“, „geschält, gekocht“) ist Küchenarbeit, kein Einkaufsmerkmal (§2)
-            if (! isset($merkmal[$t]) || in_array($t, [...self::PARA2_SUFFIXE, ...self::ZUBEREITUNG], true) || array_key_exists($t, self::NATURFORM)
+            // Leitplanke Convenience: Zubereitung (teil/voll) bzw. auch der Zuschnitt (voll) ist dann ein Einkaufsmerkmal, wenn ein GP es trägt
+            $kuechenarbeit = [...($this->convenience === 'voll_convenience' ? [] : self::PARA2_SUFFIXE), ...($this->convenience === null ? self::ZUBEREITUNG : [])];
+            if (! isset($merkmal[$t]) || in_array($t, $kuechenarbeit, true) || array_key_exists($t, self::NATURFORM)
                 || (mb_strlen($t) < 3 && ! is_numeric($t))) {
                 continue;
             }
@@ -417,7 +444,9 @@ final class BasisVariante
         foreach (['Marke' => $zusatz, 'Geschmack' => $f['flavor'] ?? '', 'Verarbeitung' => $f['processing'], 'Zuschnitt' => $f['form'],
             'Portion' => $f['portion'], 'Pflichtangabe' => $f['pflichtangabe']] as $art => $wert) {
             $wert = trim((string) $wert);
-            if ($wert === '' || ($art === 'Zuschnitt' && mb_strtolower($wert) === 'ganz') || $this->genannt($wert, $query) || $this->neutral($art, $wert)) {
+            // volle Convenience: „Zwiebel, gewürfelt“ nennt den Zuschnitt „Würfel 5 mm“ — das Maß muss die Zeile nicht nennen
+            $vergleich = $art === 'Zuschnitt' && $this->convenience === 'voll_convenience' ? trim((string) preg_replace('/\d+(?:[.,]\d+)?\s*(?:mm|cm)?/iu', '', $wert)) : $wert;
+            if ($wert === '' || ($art === 'Zuschnitt' && mb_strtolower($wert) === 'ganz') || $this->genannt($vergleich !== '' ? $vergleich : $wert, $query) || $this->neutral($art, $wert)) {
                 continue;
             }
             $offen[] = $art . ': ' . $wert;
