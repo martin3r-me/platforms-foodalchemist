@@ -36,3 +36,13 @@ Das Observatorium-Radar besitzt eigene URL-gebundene Filter für Name/Definition
 Research startet mit der Trendverwaltung. Pinnwand, Eingang, Suchthemen, Quellen und Automatik stehen in der vorhandenen einklappbaren Bereichsspalte. Kontextfremde Trendfilter und Kennzahlen entfallen in den Quellen-/Suchthemen-/Automatikansichten. Details öffnen erst nach Auswahl; direkte Links aus dem Radar öffnen die Einordnung. Die bisherige explizite Radar-URL bleibt für bestehende Links erreichbar, ist jedoch kein zweiter Navigationseintrag. „Veröffentlichtes Radar“ verweist ins Observatorium.
 
 Die Pinnwand bleibt die gemeinsame Sammlung mit bisherigen Rechten und Zuordnungsaktionen. Die persönliche Merkliste bleibt getrennt. Direkte Bereichslinks aus dem Observatorium werden auch am Handy auf den passenden Research-Reiter abgebildet. Keine Migration und keine Änderungen an Auswertungsregeln oder gespeicherten Freigaben erforderlich.
+
+## Eigene Handyansicht
+
+Die vorhandene Geräteentscheidung über `HandyLesemodus` wählt die mobile Observatorium-Ausgabe. Sie verwendet die gesamte Inhaltsbreite ohne eingeklappte Desktop-Seitenleiste. Ein Bereichswähler und ein Filterknopf ersetzen die Bereichsspalte. Filter sind zunächst geschlossen, zeigen aktive Einschränkungen und bleiben über denselben Livewire-Zustand mit derselben serverseitigen Abfrage verbunden. Der Filterbereich öffnet inline und lässt sich mit „Ergebnisse ansehen“ oder Escape schließen.
+
+Mobil erscheinen freigegebene Radarentwicklungen als Karten mit Kategorie, Einordnung, Konfidenz und Link zu den Belegen; die Ringgrafik bleibt am Computer. Dekorative Illustrationen entfallen auf dem Handy, damit Inhalte unmittelbar sichtbar werden. Persönliche Merkfunktionen, Research-/Pinnwand-Verweise, Detailansichten und Pagination bleiben erhalten. Die mobile Modulwahl unter „Mehr“ enthält das Observatorium bereits.
+
+Keine Migration, keine Änderungen an Quellen, Freigaben, KI-Auswertung oder anderen Modulen. Der Handy-Test prüft Navigation ohne Seitenleiste, Meldungs-/Radarfilter, persönliche Merker, Detailwechsel und die weiterhin vorhandene Desktopgrafik. Layoutkontrolle mit 390 Pixeln Breite und geschlossenem/geöffnetem Filterbereich.
+
+Radarfilter liegen ausschließlich im Inhaltsbereich der Radarseite, auf allen Geräten hinter „Radar filtern“ beziehungsweise dem mobilen Filterknopf. Die mittlere Observatorium-Spalte enthält nur Bereichsnavigation und Rechercheverweise. Auf anderen Observatorium-Seiten werden keine Radarfilter gerendert.
