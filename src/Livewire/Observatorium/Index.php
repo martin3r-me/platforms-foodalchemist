@@ -148,6 +148,18 @@ class Index extends Component
         $this->meldung = $m->trend_pruefen ? 'In deiner persönlichen Trend-Prüfliste vorgemerkt. Noch kein Trendbeleg.' : 'Aus deiner Trend-Prüfliste entfernt.';
     }
 
+    /** Vertiefung anstoßen (Kuratieren, eigenes Team): Kernaussagen mit Beleg aus der verlinkten Seite. Plattform-KI im Hintergrund. */
+    public function vertiefen(int $id): void
+    {
+        abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
+        try {
+            $ids = app(\Platform\FoodAlchemist\Services\TrendVertiefungService::class)->anstossen($this->team(), [$id], (int) Auth::id(), true);
+            $this->meldung = $ids === [] ? 'Die Vertiefung läuft bereits.' : 'Vertiefung gestartet: Die Quelle wird gelesen, die Kernaussagen erscheinen hier in Kürze.';
+        } catch (\RuntimeException $e) {
+            $this->meldung = $e->getMessage();
+        }
+    }
+
     public function aufPinnwand(int $id): void
     {
         abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);

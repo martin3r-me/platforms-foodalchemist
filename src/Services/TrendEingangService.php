@@ -92,6 +92,9 @@ class TrendEingangService
             'zuletzt_gesehen_at' => $e->zuletzt_gesehen_at?->toIso8601String(), 'angelegt_am' => $e->created_at?->toIso8601String(),
             'eigenes_team' => $team === null || (int) $e->team_id === (int) $team->id,
             'observatorium' => $e->observatorium, 'herausgeber' => $e->herausgeber, 'herausgeber_url' => $e->herausgeber_url,
+            'vertiefung_status' => $e->vertiefung_status,
+            'vertiefung_label' => $e->vertiefung_status !== null ? (\Platform\FoodAlchemist\Services\TrendVertiefungService::STATUS[$e->vertiefung_status] ?? null) : null,
+            'vertiefung' => $e->vertiefung, 'vertieft_am' => $e->vertieft_at?->toIso8601String(),
         ];
     }
 

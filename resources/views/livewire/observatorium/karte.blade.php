@@ -14,7 +14,11 @@
         <div class="fa-obs-meta"><span class="fa-obs-pill {{ $ton }}">{{ $label }}</span><span>{{ $e->veroeffentlicht_am?->format('d.m.Y') ?? 'Datum offen' }}</span></div>
         <h3><button type="button" wire:click="oeffnen({{ $e->id }})">{{ $e->titel }}</button></h3>
         <div class="fa-obs-source">{{ $e->herausgeber ?: ($e->quelle?->name ?: 'Eigene Recherche') }}</div>
-        @if($e->zusammenfassung || $e->teaser)<p>{{ \Illuminate\Support\Str::limit($e->zusammenfassung ?: $e->teaser, 190) }}</p>@endif
+        @php $kern = array_slice((array) ($e->vertiefung['kernaussagen'] ?? []), 0, 2); @endphp
+        @if($e->vertiefung_status === 'bezahl')<div class="fa-obs-source fa-obs-bezahl" data-observatorium-bezahl>Bezahlinhalt – nur Inhaltsangabe</div>@endif
+        @if($e->vertiefung_status === 'fertig' && $kern !== [])
+            <ul class="fa-obs-kern-kurz" data-observatorium-kern>@foreach($kern as $k)<li>{{ \Illuminate\Support\Str::limit($k['aussage'], 150) }}</li>@endforeach</ul>
+        @elseif($e->zusammenfassung || $e->teaser)<p>{{ \Illuminate\Support\Str::limit($e->zusammenfassung ?: $e->teaser, 190) }}</p>@endif
         <div class="fa-obs-story-foot">
             <button type="button" class="fa-obs-link" wire:click="oeffnen({{ $e->id }})">Entdecken @svg('heroicon-o-arrow-up-right')</button>
             <button type="button" class="fa-obs-save" wire:click="merken({{ $e->id }})" wire:loading.attr="disabled" wire:target="merken({{ $e->id }})" aria-pressed="{{ $merkerEintrag?->gemerkt ? 'true' : 'false' }}" aria-label="{{ $merkerEintrag?->gemerkt ? 'Nicht mehr merken' : 'Beitrag merken' }}: {{ $e->titel }}">

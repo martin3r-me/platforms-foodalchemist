@@ -10,6 +10,7 @@
     <div class="fa-obs-meta"><span>{{ $gewaehlt->herausgeber ?: ($gewaehlt->quelle?->name ?: 'Eigene Recherche') }}</span><span>{{ $gewaehlt->veroeffentlicht_am?->format('d.m.Y') ?? 'Veröffentlichungsdatum offen' }}</span></div>
     <h2>{{ $gewaehlt->titel }}</h2>
     <p class="lead">{{ $gewaehlt->zusammenfassung ?: $gewaehlt->teaser }}</p>
+    @include('foodalchemist::livewire.observatorium.vertiefung', ['e' => $gewaehlt])
     <div class="fa-obs-tags">@foreach($info['verwendungen'] ?? [] as $v)<span class="fa-obs-pill {{ $v === 'idee' ? 'idea' : '' }}">{{ O::VERWENDUNGEN[$v] ?? $v }}</span>@endforeach @foreach($info['branchen'] ?? [] as $b)<span class="fa-obs-pill">{{ O::BRANCHEN[$b] ?? $b }}</span>@endforeach</div>
     @if(! empty($info['einordnung']))<div class="fa-obs-kicker">Warum das interessant sein könnte</div><p>{{ $info['einordnung'] }}</p>@endif
     @if(! empty($info['impuls']))<div class="fa-obs-kicker">Ein Impuls für die Praxis · KI-Vorschlag</div><p>{{ $info['impuls'] }}</p>@endif
@@ -20,6 +21,7 @@
         <button class="fa-obs-button primary" type="button" wire:click="merken({{ $gewaehlt->id }})" wire:loading.attr="disabled">@svg($m?->gemerkt ? 'heroicon-s-bookmark' : 'heroicon-o-bookmark'){{ $m?->gemerkt ? 'Gemerkt' : 'Beitrag merken' }}</button>
         <button class="fa-obs-button" type="button" wire:click="trendPruefen({{ $gewaehlt->id }})" wire:loading.attr="disabled">@svg('heroicon-o-signal'){{ $m?->trend_pruefen ? 'Aus Prüfliste entfernen' : 'Für Trendprüfung merken' }}</button>
         @if($darfKuratieren && (int) $gewaehlt->team_id === (int) $teamId)
+            @if($gewaehlt->vertiefung_status !== 'laeuft')<button class="fa-obs-button" type="button" wire:click="vertiefen({{ $gewaehlt->id }})" wire:loading.attr="disabled" data-observatorium-vertiefen {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('observatorium.vertiefen') }}>@svg('heroicon-o-document-magnifying-glass'){{ $gewaehlt->vertiefung_status === null ? 'Vertiefen' : 'Neu vertiefen' }}</button>@endif
             @if($gewaehlt->inspiration_id)<a class="fa-obs-button" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>Auf der Pinnwand ansehen</a>
             @else<button class="fa-obs-button" type="button" wire:click="aufPinnwand({{ $gewaehlt->id }})" wire:loading.attr="disabled" {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('observatorium.pinnwand') }}>@svg('heroicon-o-light-bulb')Auf die Pinnwand</button>@endif
         @endif
