@@ -5,6 +5,9 @@ namespace Platform\FoodAlchemist\Services\Trends;
 /** GENESIS Flat-File-CSV; unbekannte Strukturen werden abgelehnt, nie geraten. */
 class GenesisCsvLeser
 {
+    /** Indexbasis „2021=100“ (auch mit Leerzeichen). Alles andere (%, Veränderungsraten) ist kein Indexstand. */
+    public const INDEX_BASIS = '/^\d{4}\s*=\s*100$/';
+
     /**
      * @param  string  $wertLabel  Teil des value_variable_label in Kleinbuchstaben (z. B. „verbraucherpreisindex“, „real“)
      * @param  list<string>  $zusatz  weitere Schlüssel, die in der Zeile stehen müssen (z. B. Originalwert statt bereinigt)
@@ -45,6 +48,11 @@ class GenesisCsvLeser
                             $monat = $r['time'].'-'.$m[1];
                         }
                     }
+                }
+                // 61281-0004 (05.11. auf io): je Monat drei Zeilen mit demselben PRE011 — zwei Veränderungsraten (value_unit „%“,
+                // Label abgeschnitten „in“) und der Index („2021=100“). Nur Indexstände zählen; das Vorjahr rechnen wir selbst.
+                if (trim($r['value_unit']) !== '' && ! preg_match(self::INDEX_BASIS, trim($r['value_unit']))) {
+                    continue;
                 }
                 if ($monat === null || trim($r['value_unit']) === '') {
                     throw new \RuntimeException('GENESIS-Monat oder Indexbasis nicht eindeutig. Keine Werte übernommen.');

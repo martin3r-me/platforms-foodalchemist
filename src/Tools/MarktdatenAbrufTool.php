@@ -17,13 +17,14 @@ class MarktdatenAbrufTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Ruft die festen monatlichen Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Reihen ohne Codes stehen in noch_nicht_abrufbar. Nachschlagen statt raten: erkunden_tabelle (nur konfigurierte Tabellen) liefert den Tabellenaufbau; mit erkunden_merkmal (+ suche) die Schlüssel eines Merkmals. Erkunden schreibt nie. Keine KI-Aufträge, Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
+        return 'Ruft die festen monatlichen Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Reihen ohne Codes stehen in noch_nicht_abrufbar. reihen = Liste von Schlüsseln für einen Teil-Abruf (24 Reihen am Stück können in einen Client-Timeout laufen). Nachschlagen statt raten: erkunden_tabelle (nur konfigurierte Tabellen) liefert den Tabellenaufbau; mit erkunden_merkmal (+ suche) die Schlüssel eines Merkmals. Erkunden schreibt nie. Keine KI-Aufträge, Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
     }
 
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
             'apply' => ['type' => 'boolean', 'default' => false],
+            'reihen' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => array_keys(MarktdatenService::REIHEN)], 'description' => 'Nur diese Reihen abrufen (Teil-Abruf gegen Client-Timeouts). Ohne: alle.'],
             'erkunden_tabelle' => ['type' => 'string', 'enum' => MarktdatenService::TABELLEN, 'description' => 'Nur nachschlagen: Aufbau dieser Tabelle (Merkmale).'],
             'erkunden_merkmal' => ['type' => 'string', 'description' => 'Mit erkunden_tabelle: Schlüssel dieses Merkmals (GENESIS-Code).'],
             'suche' => ['type' => 'string', 'description' => 'Filter für erkunden_merkmal (Code oder Text, z. B. „fleisch“).'],
@@ -47,7 +48,12 @@ class MarktdatenAbrufTool extends FoodAlchemistTool implements ToolContract, Too
             }
         }
 
-        return ToolResult::success($svc->abrufen($team, ($arguments['apply'] ?? false) === true));
+        try {
+            return ToolResult::success($svc->abrufen($team, ($arguments['apply'] ?? false) === true,
+                isset($arguments['reihen']) ? array_values(array_map('strval', (array) $arguments['reihen'])) : null));
+        } catch (\RuntimeException $e) {
+            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+        }
     }
 
     public function getMetadata(): array
