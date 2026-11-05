@@ -44,3 +44,5 @@ Die vorhandene Geräteentscheidung über `HandyLesemodus` wählt die mobile Obse
 Mobil erscheinen freigegebene Radarentwicklungen als Karten mit Kategorie, Einordnung, Konfidenz und Link zu den Belegen; die Ringgrafik bleibt am Computer. Dekorative Illustrationen entfallen auf dem Handy, damit Inhalte unmittelbar sichtbar werden. Persönliche Merkfunktionen, Research-/Pinnwand-Verweise, Detailansichten und Pagination bleiben erhalten. Die mobile Modulwahl unter „Mehr“ enthält das Observatorium bereits.
 
 Keine Migration, keine Änderungen an Quellen, Freigaben, KI-Auswertung oder anderen Modulen. Der Handy-Test prüft Navigation ohne Seitenleiste, Meldungs-/Radarfilter, persönliche Merker, Detailwechsel und die weiterhin vorhandene Desktopgrafik. Layoutkontrolle mit 390 Pixeln Breite und geschlossenem/geöffnetem Filterbereich.
+
+Radarfilter liegen ausschließlich im Inhaltsbereich der Radarseite, auf allen Geräten hinter „Radar filtern“ beziehungsweise dem mobilen Filterknopf. Die mittlere Observatorium-Spalte enthält nur Bereichsnavigation und Rechercheverweise. Auf anderen Observatorium-Seiten werden keine Radarfilter gerendert.

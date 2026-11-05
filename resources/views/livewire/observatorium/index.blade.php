@@ -33,9 +33,6 @@
                         @svg($icon)<span>{{ $name }}</span>@if($key === 'merkliste' && $merkerAnzahl)<span style="margin-left:auto">{{ $merkerAnzahl }}</span>@endif
                     </button>
                 @endforeach
-                @if($ansicht === 'radar')
-                    @include('foodalchemist::livewire.observatorium.radar-filter')
-                @endif
                 <div class="fa-obs-nav-foot">
                     <div class="fa-obs-nav-label">Die Recherche dahinter</div>
                     <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'beobachten']) }}" wire:navigate>@svg('heroicon-o-magnifying-glass-circle')<span>Trend Research</span>@svg('heroicon-o-arrow-up-right')</a>
@@ -61,12 +58,13 @@
         @if($gewaehlt)
             @include('foodalchemist::livewire.observatorium.detail')
         @elseif($ansicht === 'radar')
-            @if($istHandy)
-                <div id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-handy-filterpanel" @keydown.escape.window="filterOffen = false">
-                    @include('foodalchemist::livewire.observatorium.radar-filter')
-                    <button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>
-                </div>
-            @endif
+            @unless($istHandy)
+                <div class="fa-obs-filters"><button type="button" class="fa-obs-button" x-on:click="filterOffen = !filterOffen" :aria-expanded="filterOffen.toString()" aria-controls="obs-handy-filter">@svg('heroicon-o-adjustments-horizontal') Radar filtern @if($radarFilterAktiv)<span class="fa-obs-pill">Aktiv</span>@endif</button></div>
+            @endunless
+            <div id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-radar-filterpanel {{ $istHandy ? 'fa-obs-handy-filterpanel' : '' }}" @keydown.escape.window="filterOffen = false">
+                @include('foodalchemist::livewire.observatorium.radar-filter')
+                <button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>
+            </div>
             @include('foodalchemist::livewire.observatorium.radar')
         @else
             <div @if($istHandy) id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-handy-filterpanel" @keydown.escape.window="filterOffen = false" @endif>

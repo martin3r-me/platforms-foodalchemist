@@ -189,6 +189,8 @@ it('filtert nur freigegebene Trends im Observatorium mit den bestehenden Radarre
     $svc->anlegen($this->rootTeam, ['name' => 'TEST Nicht freigegeben', 'kategorie' => 'food']);
     $ui = Livewire::test(Index::class)->call('ansichtSetzen', 'radar')
         ->assertSeeHtml('data-observatorium-radar-filter')->assertSee('TEST Fermentation')->assertSee('TEST Getränke')->assertDontSee('TEST Nicht freigegeben');
+    expect(strpos($ui->html(), 'data-observatorium-radar-filter'))->toBeGreaterThan(strpos($ui->html(), '<main'));
+    $ui->call('ansichtSetzen', 'news')->assertDontSeeHtml('data-observatorium-radar-filter')->call('ansichtSetzen', 'radar');
     $ui->set('kategorien', ['food'])->assertSee('TEST Fermentation')->assertDontSee('TEST Getränke')
         ->set('typen', ['trend'])->assertSee('Keine Entwicklungen für diese Filter')
         ->call('radarFilterZuruecksetzen')->assertSee('TEST Getränke')
