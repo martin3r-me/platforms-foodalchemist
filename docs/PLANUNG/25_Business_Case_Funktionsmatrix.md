@@ -408,3 +408,10 @@ gesamte Business-Szenario ab:
   1.000-Gerichte-Benchmark von BC-11 ist spätestens vor G2 Pflicht.
 - Ein vorhandener automatisierter Test ohne Browser- oder Realnachweis bleibt
   ausdrücklich `gebaut`, nicht `real validiert`.
+
+### Ergänzung TR-01: Quellenqualität und Marktvergleich
+
+Destatis-Preisindex-Pilot und enger fachfremder Vorfilter: [Spec](Marktdaten_Destatis.md).
+Prüfung: `MarktdatenTest` (Nullwerte, Revisionen, Probelauf, Rechte, Fehler und
+Vorschau/Import-Gleichstand). Kein Nachweis einer automatischen Trendbestätigung;
+API-Live-Abnahme bis zum GENESIS-Zugang offen.

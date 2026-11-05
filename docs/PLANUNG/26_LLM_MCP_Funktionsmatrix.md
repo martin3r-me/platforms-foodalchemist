@@ -729,3 +729,11 @@ Eine Business-Funktion mit Web-, LLM- oder MCP-Zugang ist erst fertig, wenn:
   Download-Link oder optional als Base64-PDF; kein Web-Login erforderlich.
 
 Vertrag und Tests: [MCP-Rezept-Anreicherung](56_MCP_Rezept_Anreicherung.md).
+
+## Observatorium: Destatis-Pilot (05.11.2026)
+
+`foodalchemist.marktdaten.GET` liest gespeicherte Monatsreihen ohne Netzwerk/KI.
+`foodalchemist.marktdaten.ABRUF` nutzt den kostenlosen GENESIS-Zugang, standardmäßig
+als Probelauf; `apply=true` übernimmt nur im aktuellen Team, ab Kuratieren.
+Zugangsdaten sind keine Toolparameter. [Spec und Live-Grenze](Marktdaten_Destatis.md),
+Nachweis: `tests/Feature/MarktdatenTest.php`; API-Live-Abnahme mangels Zugang offen.

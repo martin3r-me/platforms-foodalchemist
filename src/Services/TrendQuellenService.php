@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
 use Platform\FoodAlchemist\Models\FoodAlchemistWettbewerber;
 use Platform\FoodAlchemist\Services\Trends\QuellenAbruf;
 use Platform\FoodAlchemist\Support\GoogleNewsSuche;
+use Platform\FoodAlchemist\Support\RechercheRelevanz;
 use Platform\FoodAlchemist\Support\StichwortFilter;
 use Platform\FoodAlchemist\Support\TrendUrl;
 use Platform\FoodAlchemist\Support\TrendVokabular as V;
@@ -210,6 +211,9 @@ class TrendQuellenService
         foreach ($eintraege as $e) {
             $f = StichwortFilter::pruefen($e['titel'].' '.($e['teaser'] ?? ''), $w['ein'], $w['aus']);
             if (($grund = GoogleNewsSuche::datumsGrund((string) ($quelle->feed_url ?: $quelle->url), $e['veroeffentlicht_am'] ?? null)) !== null) {
+                $f = ['durch' => false, 'grund' => $grund];
+            }
+            if (($grund = RechercheRelevanz::grund($e['titel'], $e['teaser'] ?? null)) !== null) {
                 $f = ['durch' => false, 'grund' => $grund];
             }
             $zeile = ['titel' => $e['titel'], 'url' => $e['url'], 'grund' => $f['grund']];

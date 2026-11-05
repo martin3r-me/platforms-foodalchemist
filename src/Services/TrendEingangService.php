@@ -15,6 +15,7 @@ use Platform\FoodAlchemist\Services\Ai\KiExternModus;
 use Platform\FoodAlchemist\Services\Trends\QuellenAbruf;
 use Platform\FoodAlchemist\Support\GoogleNewsSuche;
 use Platform\FoodAlchemist\Support\ObservatoriumInhalt;
+use Platform\FoodAlchemist\Support\RechercheRelevanz;
 use Platform\FoodAlchemist\Support\StichwortFilter;
 use Platform\FoodAlchemist\Support\TrendSammelthema;
 use Platform\FoodAlchemist\Support\TrendUrl;
@@ -132,6 +133,14 @@ class TrendEingangService
 
         if ($quelle !== null && ($grund = GoogleNewsSuche::datumsGrund((string) ($quelle->feed_url ?: $quelle->url), $daten['veroeffentlicht_am'] ?? null)) !== null) {
             if ($von !== 'abruf') {
+                $this->mcpBesuch($quelle, 1);
+            }
+
+            return ['ergebnis' => 'gefiltert', 'eintrag' => null, 'grund' => $grund];
+        }
+
+        if (($grund = RechercheRelevanz::grund($titel, $teaser)) !== null) {
+            if ($quelle !== null && $von !== 'abruf') {
                 $this->mcpBesuch($quelle, 1);
             }
 

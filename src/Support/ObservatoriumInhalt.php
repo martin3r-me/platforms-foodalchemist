@@ -66,7 +66,8 @@ final class ObservatoriumInhalt
             }
         }
         // Hohe Präzision vor Reichweite: eine Food-Messe macht eine Polizeimeldung nicht zu Gastronomie-News.
-        $stoerung = preg_match('/\b(original.research|kursziel|aktienanalyse|aktienkurs|taschendieb|festnahme|polizeieinsatz|aufstellungen|bundesliga.ergebnisse|leberuntersuchung|gewebeentnahme|stellenanzeige|bewerbertag)\w*/u', $text) === 1;
+        $stoerung = RechercheRelevanz::grund((string) ($artikel['titel'] ?? ''), $artikel['teaser'] ?? null) !== null
+            || preg_match('/\b(leberuntersuchung|gewebeentnahme|stellenanzeige|bewerbertag)\w*/u', $text) === 1;
         $food = $branchen !== [] || preg_match('/\b(food|gastronom|lebensmittel|speise|getraenk|ernaehr|rezept|zutat|kueche|cuisine|cocktail|ferment|vegan|protein|kulinar|coffee|beverage|menu|chef)\w*/u', $text) === 1;
         $idee = $food && preg_match('/\b(rezept|gericht|menue|zutat|geschmack|aroma|plating|pairing|dessert|cocktail|fermentation|fermentiert|gourmet|speisekonzept|speiseplan|kochverfahren|signature dish|kulinarisch|pflanzenbasiert)\w*/u', $text) === 1;
         $markt = $food && preg_match('/\b(uebernimmt|uebernehmen|uebernahme|betreiber|beauftragt|expansion|eroeffn|neuer standort|preise|kosten|umsatz|marktgroesse|partnerschaft|kooperation|insolvenz|personal|fachkraeft|auftrag)\w*/u', $text) === 1;

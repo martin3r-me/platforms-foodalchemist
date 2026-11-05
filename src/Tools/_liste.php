@@ -12,6 +12,8 @@
  */
 
 return [
+    \Platform\FoodAlchemist\Tools\MarktdatenGetTool::class,
+    \Platform\FoodAlchemist\Tools\MarktdatenAbrufTool::class,
     \Platform\FoodAlchemist\Tools\AblaufGetTool::class,
     \Platform\FoodAlchemist\Tools\AbosDeleteTool::class,   // Spec 82 §12 D: Kündigung mit tiefer Kopie
     \Platform\FoodAlchemist\Tools\AbosGetTool::class,

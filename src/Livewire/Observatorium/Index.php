@@ -174,6 +174,7 @@ class Index extends Component
             'typ' => $this->typen, 'ebene' => $this->ebenen, 'nur_befragung' => $this->nurBefragung]);
 
         return view('foodalchemist::livewire.observatorium.index', [
+            'marktdaten' => $this->ansicht === 'markt' ? app(\Platform\FoodAlchemist\Services\MarktdatenService::class)->lesen($team) : null,
             'istHandy' => HandyLesemodus::anfrageVomHandy(),
             'eintraege' => $eintraege, 'gewaehlt' => $gewaehlt,
             'weitereQuellen' => $gewaehlt ? $svc->weitereQuellen($team, $gewaehlt) : collect(),

@@ -435,6 +435,9 @@ return [
     | Google Trends über DataForSEO: Live-Explore kostet je Suchbegriff ~0,009 $.
     | Das Budget ist der Default je Team und Monat; in den Einstellungen änderbar.
     */
+    // Kostenloser GENESIS-Token ausschließlich serverseitig; kein automatischer Abruf im Pilot.
+    'marktdaten' => ['genesis_token' => env('FOODALCHEMIST_GENESIS_TOKEN', '')],
+
     'trends' => [
         'dataforseo_kosten_je_abfrage' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_KOSTEN', 0.009),
         'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
