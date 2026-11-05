@@ -27,13 +27,13 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Testdaten „TEST-VT“.
  */
 const VT_SEITE = <<<'HTML'
-<html><body><nav><a href="/">Start</a> 999 Menüpunkte</nav><header><h1>Kopf der Website</h1></header>
+<html><body><nav><ul><li><a href="/">Start</a></li><li>999 Menüpunkte</li></ul></nav><header><h1>Kopf der Website</h1></header>
 <main><article><h1>TEST-VT Küchenbarometer 2026</h1>
 <p>Online-Befragung im Auftrag eines TEST-Herstellers, durchgeführt im vierten Quartal 2025 unter insgesamt 240 Küchenleitungen in vier Ländern.</p>
 <h2>Kosten</h2><p>In Deutschland berichten 64 % der Befragten von deutlich gestiegenen Energiekosten in den vergangenen zwölf Monaten; über alle Länder sind es 51 %.</p>
 <h2>Personal</h2><p>Als größte Herausforderung nennen 58 % den Mangel an Fachkräften. Eine Modernisierung der Küchentechnik planen 81 %.</p>
 <p>Die Ergebnisse beruhen auf Selbstauskünften und sind nicht repräsentativ für die gesamte Branche.</p></article></main>
-<footer>Impressum 12345 Musterstadt</footer></body></html>
+<footer><p>Impressum 12345 Musterstadt</p></footer></body></html>
 HTML;
 
 function vtEintrag(int $teamId, array $daten = []): FoodAlchemistTrendEingang
