@@ -10,6 +10,7 @@
     @endif
     <p class="fa-obs-subtitle fa-obs-marktdaten-hinweis">{{ $marktdaten['hinweis'] }} Diese deutschlandweiten Reihen sind unabhängig von den Meldungsfiltern.</p>
     @unless($marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch nicht verbunden: Der kostenlose GENESIS-Zugang muss eingerichtet werden.</p>@endunless
+    @if($marktdaten['reihen'] === [] && $marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch keine Marktdaten abgerufen.</p>@endif
     <div class="fa-obs-wett-profile">
     @foreach($marktdaten['reihen'] as $reihe)
         <article>
@@ -19,9 +20,20 @@
                 <p><strong>{{ $reihe['vorjahr_prozent'] === null ? 'Kein belastbarer Vorjahresvergleich' : sprintf('%s%s %% zum Vorjahresmonat', $reihe['vorjahr_prozent'] > 0 ? '+' : '', number_format($reihe['vorjahr_prozent'], 1, ',', '.')) }}</strong></p>
                 <p class="fa-obs-subtitle">Stand {{ $reihe['aktuell']['wert'] === null ? 'nicht verfügbar' : number_format($reihe['aktuell']['wert'], 1, ',', '.') }} ({{ $reihe['aktuell']['einheit'] }}) · Bezugsmonat {{ $reihe['aktuell']['monat'] }} · {{ $reihe['veraltet'] ? 'Älterer Datenstand' : 'Letzter verfügbarer Wert' }}</p>
                 @if($reihe['unterreihen'])
-                    <ul class="fa-obs-marktdaten-unterreihen" data-marktdaten-unterreihen>
-                    @foreach($reihe['unterreihen'] as $unter)<li><span>{{ $unter['name'] }}</span> <strong>{{ $unter['vorjahr_prozent'] === null ? 'kein Vergleich' : sprintf('%s%s %%', $unter['vorjahr_prozent'] > 0 ? '+' : '', number_format($unter['vorjahr_prozent'], 1, ',', '.')) }}</strong></li>@endforeach
-                    </ul>
+                    @php
+                        $pct = fn ($v) => $v === null ? 'kein Vergleich' : sprintf('%s%s %%', $v > 0 ? '+' : '', number_format($v, 1, ',', '.'));
+                        $abschnitte = collect($reihe['unterreihen'])->groupBy(fn ($u) => $u['abschnitt'] ?? 'gleich');
+                        $st = $reihe['staerkste_unterreihe'];
+                    @endphp
+                    <details class="fa-obs-marktdaten-details" data-marktdaten-unterreihen>
+                        <summary>{{ count($reihe['unterreihen']) }} Detailzeilen @if($st)· stärkste Bewegung: {{ $st['name'] }} {{ $pct($st['vorjahr_prozent']) }}@endif</summary>
+                        @foreach($abschnitte as $abschnitt => $zeilen)
+                            @if($abschnitt === 'verbraucher')<p class="fa-obs-subtitle fa-obs-marktdaten-abschnitt">Verbraucherpreise im Laden (zum Vergleich)</p>@endif
+                            <ul class="fa-obs-marktdaten-unterreihen">
+                            @foreach($zeilen as $unter)<li><span>{{ $unter['name'] }}</span> <strong>{{ $pct($unter['vorjahr_prozent']) }}</strong></li>@endforeach
+                            </ul>
+                        @endforeach
+                    </details>
                 @endif
                 @if($reihe['neuere_monate_ohne_wert'])<p class="fa-obs-subtitle">Für neuere Monate liegen noch keine Werte vor.</p>@endif
                 <p class="fa-obs-subtitle">Abgerufen {{ \Illuminate\Support\Carbon::parse($reihe['abgerufen_am'])->format('d.m.Y H:i') }}</p>
