@@ -12,7 +12,8 @@ use Platform\FoodAlchemist\Services\KonfiguratorPricingService;
  * Hauptkonzept/Tageszeit, Day-into-Night-Paar und Add-on. Kein EK, keine Aufschlagsklassen, keine Mengen, keine
  * Leistungszeilen (Leak-Test Spec94KundenlinkTest). Spec 94b §5: je Preis die VK-Aufteilung nach Gruppen (`aufteilung`, nur
  * Gruppenname und VK pro Person, Summe = Preis) und `zzgl` (Leistungen nach Aufwand: Titel, Satz, Einheit, geschätzte
- * Menge und Betrag je Paket — Schätzung an der Referenz-Pax, nie im Paketpreis; keine Regel, kein EK). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
+ * Menge und Betrag je Paket — Schätzung an der Referenz-Pax, nie im Paketpreis; keine Regel, kein EK). Spec 94c 8c: Getränke nach
+ * Verbrauch dort mit `art = verbrauch` und `deckel` (Satz = Preis je Gast, keine Mengen je Gast). Der Browser sucht nur das Paket zur Gästezahl und liest ab.
  */
 final class KonfiguratorSnapshot
 {
@@ -70,6 +71,7 @@ final class KonfiguratorSnapshot
                 'detail' => $detail,
                 'gebunden_an' => $g->gebunden_an_id !== null ? (int) $g->gebunden_an_id : null,
                 'je_stunde' => $g->getraenk_dauer === 'stunde' || $g->folgestunde_satz !== null,
+                'verbrauch' => $g->getraenk_abrechnung === 'verbrauch',   // 8c: Karte zeigt „nach Verbrauch, ca. …“ statt Preis pro Person
                 'stunden' => ['lunch' => (float) $k->stunden_lunch, 'dinner' => (float) $k->stunden_dinner, 'day_night' => (float) $k->stunden_day_night],
             ];
         }
@@ -83,8 +85,9 @@ final class KonfiguratorSnapshot
                 array_values(array_filter(KonfiguratorAufteilung::aufteilen($kern['gruppen'], $preis, $namen), fn ($g) => abs($g['vk_pp']) >= 0.005)));
         };
         $zzgl = [];   // Spec 94b §4: je Paket und Preisschlüssel „zzgl. nach Aufwand“ — Titel, Satz, Einheit, geschätzte Menge und Betrag
+        // Spec 94c 8c: Getränke nach Verbrauch als Zeile `art = verbrauch` (Satz je Gast, Deckel) — das Skript rechnet sie mit der Gästezahl
         $aufwand = fn (array $kern): array => array_map(fn ($e) => ['titel' => $e['bezeichnung'], 'satz' => round($e['satz'], 2), 'einheit' => $e['einheit'],
-            'menge' => $e['menge'], 'betrag' => $e['betrag']], $kern['einzel']);
+            'menge' => $e['menge'], 'betrag' => $e['betrag']] + ($e['art'] === 'verbrauch' ? ['art' => 'verbrauch', 'deckel' => $e['deckel']] : []), $kern['einzel']);
         foreach ($s['pakete'] as $i => $p) {
             $pakete[] = ['von' => (int) $p->von_pax, 'bis' => (int) $p->bis_pax, 'name' => $p->anzeigeName()];
             $tabelle = [];

@@ -98,10 +98,10 @@
             <p class="pt-druck-gesamt">Gesamt <strong data-druck-gesamt></strong> netto, all-in</p>
         </div>
         <div class="pt-konfig-zzgl" data-druck-zzgl hidden>
-            <p class="pt-kicker">zzgl. nach Aufwand</p>
+            <p class="pt-kicker" data-konfig-zzgl-titel>zzgl. nach Aufwand</p>
             <ul data-druck-zzgl-liste></ul>
             <p class="pt-druck-gesamt">Voraussichtlich gesamt ca. <strong data-druck-gesamt-inkl></strong> netto</p>
-            <p class="pt-konfig-legende">Geschätzt aus der Planung für diese Gästezahl, abgerechnet wird nach tatsächlichem Aufwand.</p>
+            <p class="pt-konfig-legende">Geschätzt für diese Gästezahl, abgerechnet wird nach tatsächlichem Aufwand bzw. Verbrauch.</p>
         </div>
         </div>
     </section>

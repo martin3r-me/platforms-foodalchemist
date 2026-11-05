@@ -827,7 +827,8 @@ class PresentationService
                         $menge = rtrim(rtrim(number_format((float) $b['menge'], 2, ',', '.'), '0'), ',');
                         if ($b['aufwand'] ?? false) {   // zzgl. nach Aufwand: nicht im Kapitel, sondern unter der Summe
                             $zzgl[] = ['titel' => (string) ($b['label'] ?? ''), 'menge' => $menge, 'einheit' => (string) ($b['einheit'] ?? ''),
-                                'satz' => (float) $b['satz'], 'betrag' => (float) ($b['aufwand_betrag'] ?? 0)];
+                                'satz' => (float) $b['satz'], 'betrag' => (float) ($b['aufwand_betrag'] ?? 0)]
+                                + (($b['verbrauch'] ?? false) ? ['verbrauch' => true, 'deckel' => $b['deckel'] ?? null] : []);   // Spec 94c 8c
 
                             continue;
                         }

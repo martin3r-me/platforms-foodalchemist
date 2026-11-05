@@ -179,7 +179,7 @@ class KonfiguratorEditor extends Component
         }
         $this->konzeptEditId = $id;
         $this->konzeptForm = array_map(fn ($w) => $w === null ? '' : $w, $k->only(['lunch_concept_id', 'dinner_concept_id', 'kunden_titel', 'claim', 'abschnitt',
-            'addon_tageszeit', 'gebunden_an_id', 'indikativ_lunch', 'indikativ_dinner', 'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz']));
+            'addon_tageszeit', 'gebunden_an_id', 'indikativ_lunch', 'indikativ_dinner', 'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz', 'verbrauch_deckel']));
     }
 
     public function konzeptBearbeitenAbbrechen(): void

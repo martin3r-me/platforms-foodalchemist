@@ -579,8 +579,9 @@ class OfferCompositionService
         }
         if ($block->type === 'position') {   // Spec 94b: Menge × Satz, EK = Menge × EK je Einheit; Aufwand nur als zzgl. (nicht in der Summe)
             $menge = (float) ($block->quantity ?? 0);
-            $vk = round($menge * (float) ($block->price_value ?? 0), 2);
-            $ek = round($menge * (float) ($block->ek_value ?? 0), 2);
+            $vk = $block->positionBetrag();   // Spec 94c 8c: Verbrauch mit Deckel höchstens der Deckel
+            $voll = round($menge * (float) ($block->price_value ?? 0), 2);
+            $ek = round($menge * (float) ($block->ek_value ?? 0) * ($voll > 0 ? $vk / $voll : 1.0), 2);
             $aufwand = $block->istAufwand();
 
             return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $aufwand ? 0.0 : $vk, 'ek_pauschal' => $aufwand ? 0.0 : $ek,
@@ -800,6 +801,7 @@ class OfferCompositionService
                             'satz' => $b->type === 'position' ? (float) ($b->price_value ?? 0) : null,
                             'aufwand' => $b->istAufwand(),   // Spec 94b: zzgl. nach Aufwand, nicht in der Summe
                             'aufwand_betrag' => (float) ($bp['aufwand'] ?? 0),
+                            'verbrauch' => $b->istVerbrauch(), 'deckel' => $b->deckel(),   // Spec 94c 8c: „nach Verbrauch“, höchstens Deckel
                             'einzelpreise' => $b->type === 'concept_ref' && $b->concept !== null && $b->concept->istEinzelpreis(),
                             'gerichte' => ($b->type === 'concept_ref' && $b->concept !== null) ? $wording->gerichtZeilen($b->concept, null) : [],
                             'height' => $b->height,

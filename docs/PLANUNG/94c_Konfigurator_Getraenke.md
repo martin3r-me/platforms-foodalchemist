@@ -154,7 +154,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 |:--|:--|
 | 8a | Alkohol-Kennzeichnung Artikel → GP → Rezept, Codes — umgesetzt 03.11.2026; Quelle korrigiert: fester GP-Wert mit Vorrang, Vorbelegung als Probelauf |
 | 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link — umgesetzt 03.11.2026 (Umsetzungsnotizen unten) |
-| 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot |
+| 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot — umgesetzt 05.11.2026 (Umsetzungsnotizen unten) |
 
 ## Entscheidungen (Dominique, 03.11.2026)
 
@@ -181,7 +181,7 @@ Keine.
   - Danach gilt der Kombi-Rabatt wie bei den Konzepten (auch auf die Zusatz-Leistungen des Pakets).
 - **Staffel-EK nach Verbrauch** (Dominique 03.11.2026): EK je Folgestunde = Grund-EK / Grundstunden, also Grund-EK + Folgestunden × Grund-EK / Grundstunden.
   Beispiel: 6 € für 4 Std., 2 Folgestunden ergeben 9 € EK. Es gibt kein eigenes EK-Feld. Enthalten die Folgestunden anderes als das Grundpaket, wird dafür ein eigenes Paket gebaut.
-- **Verbrauch:** Er ist im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Die Prüfung meldet „folgt mit Stufe 8c“.
+- **Verbrauch:** Er war im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Seit 8c ist er frei (Notizen unten).
 - **Preistabelle und Aufteilung:**
   - Schlüssel `g{id}:lunch`, `g{id}:dinner`, `g{id}:dn`. Fehlt der Concept-Preis, fehlt der Schlüssel, und das Paket ist zu dieser Tageszeit nicht wählbar.
   - Die Aufteilung bekommt die Zeile „Getränke“, die Kalkulation die Fälle „Getränke … Lunch / Dinner / Day-into-Night“.
@@ -191,3 +191,21 @@ Keine.
   - „Getränke Pflicht“ steht im Reiter.
 - **Druckfassung:** In „Eure Auswahl“ stehen die gewählten Pakete, dazu kommt ein eigener Abschnitt „Getränke“ zwischen Speisen und Extras. Je Paket zeigt er die Getränke des gewählten Zeitfensters, bei Tag und Abend beide.
 
+## Umsetzungsnotizen 8c (05.11.2026)
+
+- **Schätzung ohne neuen Rechenweg:** Der Satz je Gast ist die Pauschale des Pakets (`getraenkPauschale`: Concept-Preis je Event, × Einsatzzeit oder Staffel,
+  bei Tag und Abend beide Teile). Der Concept-Preis je Person ist schon die Summe aus Menge je Gast × VK der Positionen. Die Schätzung ist Satz × Gäste.
+  - In `rechneFall` steht sie als Zeile der Einzelabrechnung mit `art = verbrauch` (`getraenk_id`, Einheit „Gäste“, Satz, Menge = Gäste, `deckel`). Sie zählt nicht in den Preis pro Person und bekommt keinen Kombi-Rabatt (wie Aufwand). Zusatz-Leistungen des Pakets bleiben wie bei der Pauschale.
+  - **Deckel:** Der Betrag ist min(Satz × Gäste, Deckel). Der EK geht anteilig mit (begrenzter Betrag = entsprechend weniger Verbrauch).
+- **Prüfung:** `verbrauch_deckel` > 0, nur bei Verbrauch. Ein Wechsel auf Pauschale räumt den Deckel.
+- **Kundenlink:**
+  - Der Preisschlüssel `g{id}:t` bleibt (er trägt nur die Zusatz-Leistungen, meist 0), damit das Paket wählbar ist.
+  - Die zzgl.-Zeile im Snapshot trägt `art = verbrauch`, den Satz je Gast und den Deckel. Mengen je Gast und EK stehen nicht drin.
+  - Das Skript rechnet Verbrauch mit der eingegebenen Gästezahl (Satz × Gäste, höchstens Deckel), wie die Anfrage. Aufwand bleibt die Schätzung der Preisstufe.
+  - Karte: „nach Verbrauch, ca. … € bei … Gästen, höchstens … €“. Die Überschrift über „zzgl.“ lautet „nach Aufwand“, „nach Verbrauch“ oder „nach Aufwand und Verbrauch“, im Druck genauso.
+- **Anfrage → Angebot:**
+  - Je Paket eine Position mit `price_basis = aufwand`: Menge = Gäste, Satz = Preis je Gast, `payload_json` = `art: verbrauch`, `deckel`, `getraenk_id`, `quelle: konfigurator_verbrauch`.
+  - Das Kapitel heißt „Nach Verbrauch“ bzw. „Nach Aufwand und Verbrauch“.
+  - `FoodAlchemistOfferBlock::positionBetrag()` begrenzt den Betrag auf den Deckel. Dieser Betrag zählt für Kalkulation, Editor, Präsentation und Dokumente. Dort steht „nach Verbrauch“ und „höchstens … €“.
+- **Editor:** Im Reiter „Getränke“ gibt es je Paket Abrechnung (Pauschale | nach Verbrauch) und den Höchstbetrag. Die Vorschau zeigt bei Verbrauch „ca. … € bei … Gästen“ an der Referenz-Pax, die Kalkulation die Zeile in der Einzelabrechnung.
+- **MCP:** `getraenk_abrechnung` = pauschale | verbrauch, `verbrauch_deckel` (null = ohne Deckel).

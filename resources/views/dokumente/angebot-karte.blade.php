@@ -139,8 +139,8 @@
                 <tr><td class="total">Gesamt brutto</td><td class="right total">{{ $nf($brutto_gesamt) }} €</td></tr>
             </table>
             @if($zzglKarte->isNotEmpty())
-                <div class="alt">Zzgl. nach Aufwand (geschätzt, nicht im Gesamtpreis):
-                    @foreach($zzglKarte as $z){{ $z['label'] }} ca. {{ rtrim(rtrim(number_format((float) $z['menge'], 2, ',', '.'), '0'), ',') }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} € ≈ {{ $nf($z['aufwand_betrag']) }} €@if(! $loop->last) · @endif @endforeach
+                <div class="alt">Zzgl. nach Aufwand bzw. Verbrauch (geschätzt, nicht im Gesamtpreis):
+                    @foreach($zzglKarte as $z)@if($z['verbrauch'] ?? false){{ $z['label'] }} nach Verbrauch, ca. {{ rtrim(rtrim(number_format((float) $z['menge'], 2, ',', '.'), '0'), ',') }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} € ≈ {{ $nf($z['aufwand_betrag']) }} €@if(! empty($z['deckel'])), höchstens {{ $nf($z['deckel']) }} €@endif @else{{ $z['label'] }} ca. {{ rtrim(rtrim(number_format((float) $z['menge'], 2, ',', '.'), '0'), ',') }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} € ≈ {{ $nf($z['aufwand_betrag']) }} €@endif @if(! $loop->last) · @endif @endforeach
                     · voraussichtlich gesamt ca. {{ $nf($netto_gesamt + $zzglKarte->sum('aufwand_betrag')) }} € netto
                 </div>
             @endif

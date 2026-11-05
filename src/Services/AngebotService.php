@@ -428,7 +428,8 @@ class AngebotService
                 ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))->with('unit')->orderBy('position')->get())
                 ->groupBy(fn ($b) => $b->istAufwand() ? 'zzgl' : 'positionen')
                 ->map(fn ($g) => $g->map(fn ($b) => ['label' => (string) $b->label, 'menge' => (float) $b->quantity, 'einheit' => $b->einheitText(),
-                    'satz' => (float) $b->price_value, 'betrag' => round((float) $b->quantity * (float) $b->price_value, 2)])->values()->all())
+                    'satz' => (float) $b->price_value, 'betrag' => $b->positionBetrag()]
+                    + ($b->istVerbrauch() ? ['verbrauch' => true, 'deckel' => $b->deckel()] : []))->values()->all())   // Spec 94c 8c: nach Verbrauch, höchstens Deckel
                 ->union(['positionen' => [], 'zzgl' => []])->all(),
         ];
     }

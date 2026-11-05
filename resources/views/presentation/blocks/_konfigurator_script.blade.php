@@ -10,7 +10,7 @@
         'konzepte' => $content['konzepte'] ?? [],
         'addons' => $content['addons'] ?? [],
         // Spec 94c: Getränkepakete (nur Id, Titel, Bindung, Stunden-Hinweis; Preise stehen in der Preistabelle g{id}:lunch|dinner|dn)
-        'getraenke' => array_map(fn ($g) => array_intersect_key($g, array_flip(['id', 'titel', 'gebunden_an', 'je_stunde', 'stunden'])), $content['getraenke'] ?? []),
+        'getraenke' => array_map(fn ($g) => array_intersect_key($g, array_flip(['id', 'titel', 'gebunden_an', 'je_stunde', 'stunden', 'verbrauch'])), $content['getraenke'] ?? []),
         'getraenke_pflicht' => (bool) ($content['getraenke_pflicht'] ?? false),
         'tageszeit_aktiv' => (bool) ($content['tageszeit_aktiv'] ?? false),
     ];
@@ -42,6 +42,9 @@
     // Spec 94c: Preisschlüssel eines Getränkepakets zur Tageszeit
     var gKey = function (id, t) { return 'g' + id + ':' + (t === 'day_night' ? 'dn' : t); };
     var getraenk = function (id) { return d.getraenke.filter(function (g) { return g.id === id; })[0] || null; };
+    // Spec 94c 8c: Verbrauch rechnet mit der Gästezahl (Satz je Gast × Gäste), höchstens der Deckel; Aufwand bleibt die Schätzung der Preisstufe
+    var zzBetrag = function (e) { return e.art === 'verbrauch' ? Math.min(e.satz * z.pax, e.deckel || Infinity) : e.betrag; };
+    var verbrauchZeile = function (i, id, t) { return (((d.zzgl[i] || {})[gKey(id, t)]) || []).filter(function (e) { return e.art === 'verbrauch'; })[0] || null; };
     // Konzept zur Tageszeit verfügbar? (Tag = Lunch-Concept, Abend = Dinner-Concept, Tag und Abend = Lunch-Concept)
     var passt = function (k, t) { return !t || (t === 'dinner' ? k.dinner : k.lunch); };
     qa('[data-konfig-gruppe]').forEach(function (sec) {
@@ -145,7 +148,9 @@
             var box = zeile.querySelector('[data-konfig-getraenk]');
             if (!sicht && box.checked) { box.checked = false; }
             var pe = zeile.querySelector('[data-konfig-getraenk-preis]'), g = getraenk(id), v = t ? tab[gKey(id, t)] : undefined;
-            if (pe) { pe.textContent = v !== undefined ? '+ ' + euro(v) + ' pro Person' + (g && g.je_stunde && g.stunden[t] ? ' (' + String(g.stunden[t]).replace('.', ',') + ' Std.)' : '') : ''; }
+            var vz = g && g.verbrauch && t && i !== null ? verbrauchZeile(i, id, t) : null;
+            if (pe && vz) { pe.textContent = 'nach Verbrauch, ca. ' + euro(zzBetrag(vz)) + ' bei ' + z.pax + ' Gästen' + (vz.deckel ? ', höchstens ' + euro(vz.deckel) : ''); }
+            else if (pe) { pe.textContent = v !== undefined ? '+ ' + euro(v) + ' pro Person' + (g && g.je_stunde && g.stunden[t] ? ' (' + String(g.stunden[t]).replace('.', ',') + ' Std.)' : '') : ''; }
         });
         z.getraenke = qa('[data-konfig-getraenk]').filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.value, 10); });
         var getraenkePp = 0; z.getraenke.forEach(function (g) { var v = tab[gKey(g, t)]; if (v !== undefined) { getraenkePp += v; } });
@@ -193,14 +198,18 @@
             zz.forEach(function (e) {
                 var li = document.createElement('li');
                 var menge = e.menge.toLocaleString('de-DE', { maximumFractionDigits: 2 });
-                li.textContent = 'ca. ' + menge + ' ' + e.einheit + ' ' + e.titel + ' ≈ ' + euro(e.betrag) + ' (' + euro(e.satz) + ' je ' + e.einheit + ')';
+                li.textContent = e.art === 'verbrauch'
+                    ? e.titel + ' nach Verbrauch ≈ ' + euro(zzBetrag(e)) + ' (ca. ' + euro(e.satz) + ' je Gast' + (e.deckel ? ', höchstens ' + euro(e.deckel) : '') + ')'
+                    : 'ca. ' + menge + ' ' + e.einheit + ' ' + e.titel + ' ≈ ' + euro(e.betrag) + ' (' + euro(e.satz) + ' je ' + e.einheit + ')';
                 zzListe.appendChild(li);
             });
+            var tit = zzBox.querySelector('[data-konfig-zzgl-titel]'), mitV = zz.some(function (e) { return e.art === 'verbrauch'; }), mitA = zz.some(function (e) { return e.art !== 'verbrauch'; });
+            if (tit) { tit.textContent = 'zzgl. nach ' + (mitA && mitV ? 'Aufwand und Verbrauch' : (mitV ? 'Verbrauch' : 'Aufwand')); }
             zzBox.hidden = zz.length === 0;   // ohne Zeilen kein Block (auch im Druck)
         };
         var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
         if (zzBox && zzListe) { zzFuellen(zzBox, zzListe); }
-        var zzSumme = zz.reduce(function (s, e) { return s + e.betrag; }, 0);
+        var zzSumme = zz.reduce(function (s, e) { return s + zzBetrag(e); }, 0);
         qa('[data-konfig-zzgl-leiste]').forEach(function (e) { e.hidden = zz.length === 0; });
         setze('[data-konfig-zzgl-summe]', zz.length ? '≈ ' + euro(zzSumme) : '');
         var liste = q('[data-konfig-auswahl]');

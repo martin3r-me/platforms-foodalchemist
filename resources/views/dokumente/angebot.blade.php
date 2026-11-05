@@ -88,11 +88,11 @@
     @if(! empty($zzgl))
         {{-- Spec 94b: zzgl. nach Aufwand — geschätzt, nicht im Gesamt --}}
         <div class="menue">
-            <h2>Zzgl. nach Aufwand (geschätzt)</h2>
+            <h2>Zzgl. nach Aufwand{{ collect($zzgl)->contains(fn ($p) => $p['verbrauch'] ?? false) ? ' bzw. Verbrauch' : '' }} (geschätzt)</h2>
             @foreach($zzgl as $p)
-                <div class="pos">{{ $p['label'] }} · ca. {{ rtrim(rtrim(number_format($p['menge'], 2, ',', '.'), '0'), ',') }} {{ $p['einheit'] }} à {{ number_format($p['satz'], 2, ',', '.') }} € ≈ {{ number_format($p['betrag'], 2, ',', '.') }} €</div>
+                <div class="pos">{{ $p['label'] }}@if($p['verbrauch'] ?? false) nach Verbrauch @endif · ca. {{ rtrim(rtrim(number_format($p['menge'], 2, ',', '.'), '0'), ',') }} {{ $p['einheit'] }} à {{ number_format($p['satz'], 2, ',', '.') }} € ≈ {{ number_format($p['betrag'], 2, ',', '.') }} €@if(! empty($p['deckel'])) · höchstens {{ number_format($p['deckel'], 2, ',', '.') }} €@endif</div>
             @endforeach
-            <div class="pos sub">Nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand.</div>
+            <div class="pos sub">Nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand bzw. Verbrauch, höchstens bis zum genannten Höchstbetrag.</div>
         </div>
     @endif
 

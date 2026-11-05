@@ -105,7 +105,9 @@ class KonfiguratorAnfrageService
             $addons !== [] ? 'Add-ons: ' . implode(', ', $addons) : null,
             'Gäste: ' . $d['pax'] . ' (Paket ' . $preis['paket_name'] . ')',
             'Preis: ' . $euro($preis['pro_person']) . ' pro Person, gesamt ' . $euro($preis['gesamt']) . ' netto (Stand des Links)',
-            $aufwand !== [] ? 'zzgl. nach Aufwand (geschätzt): ' . implode('; ', array_map(fn ($e) => 'ca. ' . $this->zahl($e['menge']) . ' ' . $e['einheit'] . ' ' . $e['bezeichnung'] . ' ≈ ' . $euro($e['betrag']), $aufwand)) : null,
+            $aufwand !== [] ? 'zzgl. nach ' . $this->wie($aufwand) . ' (geschätzt): ' . implode('; ', array_map(fn ($e) => $e['art'] === 'verbrauch'
+                ? $e['bezeichnung'] . ' nach Verbrauch ≈ ' . $euro($e['betrag']) . ($e['deckel'] !== null ? ' (höchstens ' . $euro($e['deckel']) . ')' : '')
+                : 'ca. ' . $this->zahl($e['menge']) . ' ' . $e['einheit'] . ' ' . $e['bezeichnung'] . ' ≈ ' . $euro($e['betrag']), $aufwand)) : null,
             '',
             'Kontakt: ' . $d['name'] . (($d['firma'] ?? '') !== '' ? ', ' . $d['firma'] : ''),
             'E-Mail: ' . $d['email'] . (($d['telefon'] ?? '') !== '' ? ' · Telefon: ' . $d['telefon'] : ''),
@@ -130,7 +132,7 @@ class KonfiguratorAnfrageService
                 'pro_person' => $preis['pro_person'], 'gesamt' => $preis['gesamt'],
                 'preisstand' => $k->presentation_published_at?->toIso8601String(),
                 'kontakt' => array_intersect_key($d, array_flip(['name', 'firma', 'email', 'telefon'])),
-                'zzgl' => array_map(fn ($e) => array_intersect_key($e, array_flip(['bezeichnung', 'menge', 'einheit', 'satz', 'betrag'])), $aufwand),
+                'zzgl' => array_map(fn ($e) => array_intersect_key($e, array_flip(['bezeichnung', 'art', 'menge', 'einheit', 'satz', 'betrag', 'deckel'])), $aufwand),
                 // Spec 94b §3: Bedarf für die Event-Planung (Übergabe an OLIVIA), eingefroren, am Angebot nur zu lesen
                 'planung' => app(KonfiguratorPlanungService::class)->bedarf($k, $d, (int) $d['pax'], ['datum' => $d['datum'] ?? null, 'ort' => $k->ort]),
             ],
@@ -158,7 +160,9 @@ class KonfiguratorAnfrageService
      * Leistungen nach Aufwand der gewählten Auswahl bei genau dieser Gästezahl (Paket der Gästezahl, Mengen nach Regel,
      * Handwerte gelten weiter) — je Leistung summiert über Konzept und gewählte Extras. Leer, wenn es kein Paket gibt.
      *
-     * @return list<array{leistung_id:int, bezeichnung:string, einheit:string, satz:float, ek_satz:float, menge:float, betrag:float, ek_betrag:float, einheit_vocab_id:?int}>
+     * Spec 94c 8c: gewählte Getränkepakete nach Verbrauch kommen als Zeile `art = verbrauch` dazu (Gäste × Satz je Gast, Betrag höchstens Deckel).
+     *
+     * @return list<array{leistung_id:?int, art:string, bezeichnung:string, einheit:string, satz:float, ek_satz:float, menge:float, betrag:float, ek_betrag:float, deckel:?float, einheit_vocab_id:?int}>
      */
     private function aufwand(FoodAlchemistKonfigurator $k, array $d): array
     {
@@ -181,8 +185,13 @@ class KonfiguratorAnfrageService
         $summe = [];
         foreach ($faelle as $fall) {
             foreach ($pricing->rechneFall($k, $paket, $fall, $pax, $s)['einzel'] as $e) {
+                if ($e['art'] === 'verbrauch') {   // Spec 94c 8c: Getränke nach Verbrauch — je Paket eine Zeile, Deckel schon im Betrag
+                    $summe['g' . $e['getraenk_id']] = $e + ['einheit_vocab_id' => null];
+
+                    continue;
+                }
                 $id = $e['leistung_id'];
-                $summe[$id] ??= array_merge($e, ['menge' => 0.0, 'betrag' => 0.0, 'ek_betrag' => 0.0,
+                $summe[$id] ??= array_merge($e, ['menge' => 0.0, 'betrag' => 0.0, 'ek_betrag' => 0.0, 'deckel' => null,
                     'einheit_vocab_id' => $s['leistungen'][$id]->abrechnung_einheit_vocab_id !== null ? (int) $s['leistungen'][$id]->abrechnung_einheit_vocab_id : null]);
                 $summe[$id]['menge'] = round($summe[$id]['menge'] + $e['menge'], 2);
                 $summe[$id]['betrag'] = round($summe[$id]['betrag'] + $e['betrag'], 2);
@@ -193,22 +202,39 @@ class KonfiguratorAnfrageService
         return array_values(array_filter($summe, fn ($e) => $e['menge'] > 0));
     }
 
-    /** Kapitel „Nach Aufwand“ mit je einer Position (Blocktyp position, Preis-Basis aufwand: zzgl., nicht in der Summe). */
+    /**
+     * Kapitel „Nach Aufwand“ mit je einer Position (Blocktyp position, Preis-Basis aufwand: zzgl., nicht in der Summe). Spec 94c 8c: Getränke nach
+     * Verbrauch als Position Gäste × Satz je Gast mit `payload_json.art = verbrauch` und `deckel` — kein neuer Rechenweg, der Deckel begrenzt den Betrag.
+     */
     private function mitPositionen(FoodAlchemistAngebot $angebot, array $aufwand): FoodAlchemistAngebot
     {
         if ($aufwand === []) {
             return $angebot;
         }
+        $wie = $this->wie($aufwand);
         $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter::create(['team_id' => $angebot->team_id, 'offer_id' => $angebot->id,
-            'title' => 'Nach Aufwand', 'consumer_title' => 'Zzgl. nach Aufwand', 'price_mode' => 'auto', 'position' => 1]);
+            'title' => 'Nach ' . $wie, 'consumer_title' => 'Zzgl. nach ' . $wie, 'price_mode' => 'auto', 'position' => 1]);
         foreach (array_values($aufwand) as $i => $e) {
+            $verbrauch = $e['art'] === 'verbrauch';
             $kapitel->blocks()->create(['team_id' => $angebot->team_id, 'type' => 'position', 'label' => $e['bezeichnung'], 'quantity' => $e['menge'],
                 'unit_vocab_id' => $e['einheit_vocab_id'], 'price_value' => $e['satz'], 'ek_value' => $e['ek_satz'], 'price_basis' => 'aufwand',
-                'customer_text' => 'Geschätzt, abgerechnet nach tatsächlichem Aufwand.', 'position' => $i + 1,
-                'payload_json' => ['einheit_text' => $e['einheit'], 'quelle' => 'konfigurator_aufwand', 'leistung_id' => $e['leistung_id']]]);
+                'customer_text' => $verbrauch
+                    ? 'Geschätzt, abgerechnet nach tatsächlichem Verbrauch' . ($e['deckel'] !== null ? ', höchstens ' . number_format($e['deckel'], 2, ',', '.') . ' €.' : '.')
+                    : 'Geschätzt, abgerechnet nach tatsächlichem Aufwand.', 'position' => $i + 1,
+                'payload_json' => $verbrauch
+                    ? array_filter(['einheit_text' => $e['einheit'], 'quelle' => 'konfigurator_verbrauch', 'art' => 'verbrauch', 'getraenk_id' => $e['getraenk_id'], 'deckel' => $e['deckel']], fn ($v) => $v !== null)
+                    : ['einheit_text' => $e['einheit'], 'quelle' => 'konfigurator_aufwand', 'leistung_id' => $e['leistung_id']]]);
         }
 
         return $angebot;
+    }
+
+    /** „Aufwand“, „Verbrauch“ oder „Aufwand und Verbrauch“ je nach den Zeilen der Einzelabrechnung. */
+    private function wie(array $aufwand): string
+    {
+        $arten = array_values(array_unique(array_column($aufwand, 'art')));
+
+        return count($arten) > 1 ? 'Aufwand und Verbrauch' : ($arten === ['verbrauch'] ? 'Verbrauch' : 'Aufwand');
     }
 
     private function zahl(float $w): string

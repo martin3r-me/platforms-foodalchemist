@@ -149,7 +149,8 @@ class KonfiguratorPricingService
      * `gruppen` (Spec 94b): VK und EK pro Person je Speisen-Teil (speisen_tag | speisen_abend | speisen_extras) und je
      * Leistungskategorie (art kategorie, slug); Summe = vk_pp bzw. ek_pp. Der Kombi-Rabatt geht anteilig auf alle Gruppen.
      * `einzel` (Spec 94b §4): Leistungen nach Aufwand — außerhalb von vk_pp/ek_pp, ohne Rabatt, je Leistung Menge (nach Regel,
-     * bei Preis je Stunde × Stunden), Satz (VK-Satz), Einheit und Betrag für das ganze Event.
+     * bei Preis je Stunde × Stunden), Satz (VK-Satz), Einheit und Betrag für das ganze Event. Spec 94c 8c: ein Getränkepaket nach Verbrauch
+     * steht dort als Zeile `art = verbrauch` (getraenk_id, Satz = Pauschale je Gast, Menge = Gäste, Betrag höchstens `deckel`).
      *
      * @return array{speisen_vk:float, speisen_ek:float, leistungen_vk:float, leistungen_ek:float, teiler:int, vk_pp:float, ek_pp:float, speisen_fehlen:bool, ungeschnuert:bool, gruppen:list<array{art:string, slug:?string, vk_pp:float, ek_pp:float}>}
      */
@@ -203,9 +204,16 @@ class KonfiguratorPricingService
             $g = $s['konzepte'][$fall['g']];
             [$gVk, $gEk] = $this->getraenkPauschale($s, $g, $fall['t']);
             $speisenFehlen = $speisenFehlen || $gVk === null;
-            $speisenVk += (float) $gVk;
-            $speisenEk += (float) $gEk;
-            $gruppen['getraenke'] = ['getraenke', null, (float) $gVk, (float) $gEk];
+            if ($g->getraenk_abrechnung === 'verbrauch') {
+                // Spec 94c 8c: nach Verbrauch — dieselbe Rechnung als Satz je Gast, × Gäste in die Einzelabrechnung (zzgl.), nie im Preis pro Person
+                $verbrauch = ['leistung_id' => null, 'getraenk_id' => (int) $g->id, 'art' => 'verbrauch', 'bezeichnung' => (string) ($g->kunden_titel ?: 'Getränke'),
+                    'kategorie' => 'getraenke', 'einheit' => 'Gäste', 'satz' => (float) $gVk, 'ek_satz' => (float) $gEk, 'menge' => (float) $teiler,
+                    'deckel' => $g->verbrauch_deckel !== null ? (float) $g->verbrauch_deckel : null];
+            } else {
+                $speisenVk += (float) $gVk;
+                $speisenEk += (float) $gEk;
+                $gruppen['getraenke'] = ['getraenke', null, (float) $gVk, (float) $gEk];
+            }
             foreach ($mengen($g, null) as $id => $n) {
                 $posten[] = [$id, $n, $fall['t']];
             }
@@ -238,6 +246,7 @@ class KonfiguratorPricingService
 
         $lVk = 0.0;
         $lEk = 0.0;
+        $verbrauch ??= null;
         $einzel = [];   // Spec 94b: Einzelabrechnung nach Aufwand — nicht im Preis pro Person, Menge geschätzt nach Regel
         $einsaetze = [];   // Spec 94b §3: je Leistung und Tageszeit Anzahl und Stunden (für den Planungs-Bedarf)
         foreach ($posten as [$id, $n, $t]) {
@@ -246,7 +255,7 @@ class KonfiguratorPricingService
             $einsaetze[(int) $id][] = ['tageszeit' => $t, 'anzahl' => round((float) $n, 2),
                 'stunden' => $l->preis_je === 'stunde' ? round($this->stunden($s['k'], $l, $t), 2) : null];
             if ($l->abrechnung === 'aufwand') {
-                $einzel[$id] ??= ['leistung_id' => (int) $id, 'bezeichnung' => (string) $l->bezeichnung, 'kategorie' => (string) $l->kategorie,
+                $einzel[$id] ??= ['leistung_id' => (int) $id, 'art' => 'aufwand', 'bezeichnung' => (string) $l->bezeichnung, 'kategorie' => (string) $l->kategorie,
                     'einheit' => $s['einheiten'][(int) $l->abrechnung_einheit_vocab_id] ?? ($l->preis_je === 'stunde' ? 'Std.' : 'Stück'),
                     'satz' => (float) ($l->vk_satz ?? 0), 'ek_satz' => (float) $l->ek_satz, 'menge' => 0.0];
                 $einzel[$id]['menge'] += $menge;
@@ -270,9 +279,21 @@ class KonfiguratorPricingService
         return ['speisen_vk' => round($speisenVk, 4), 'speisen_ek' => round($speisenEk, 4), 'leistungen_vk' => round($lVk, 4), 'leistungen_ek' => round($lEk, 4),
             'teiler' => $teiler, 'vk_pp' => $vkPp, 'ek_pp' => $ekPp, 'speisen_fehlen' => $speisenFehlen, 'ungeschnuert' => $ungeschnuert,
             'einsaetze' => $einsaetze,
-            'einzel' => array_values(array_map(fn ($e) => $e + ['menge' => round($e['menge'], 2), 'betrag' => round($e['menge'] * $e['satz'], 2),
-                'ek_betrag' => round($e['menge'] * $e['ek_satz'], 2)], $einzel)),
+            'einzel' => array_map([$this, 'einzelBetrag'], array_values($verbrauch !== null ? $einzel + ['g' . $verbrauch['getraenk_id'] => $verbrauch] : $einzel)),
             'gruppen' => array_values(array_map(fn ($g) => ['art' => $g[0], 'slug' => $g[1], 'vk_pp' => $teiler > 0 ? $g[2] * $rabatt : 0.0, 'ek_pp' => $teiler > 0 ? $g[3] : 0.0], $gruppen))];
+    }
+
+    /**
+     * Betrag einer Zeile der Einzelabrechnung: Menge × Satz, bei Verbrauch mit Deckel höchstens der Deckel (Spec 94c 8c). Der EK geht
+     * dann anteilig mit (begrenzter Betrag = entsprechend weniger Verbrauch).
+     */
+    private function einzelBetrag(array $e): array
+    {
+        $voll = $e['menge'] * $e['satz'];
+        $betrag = isset($e['deckel']) && $e['deckel'] !== null ? min($voll, (float) $e['deckel']) : $voll;
+        $ek = $e['menge'] * $e['ek_satz'] * ($voll > 0 ? $betrag / $voll : 1.0);
+
+        return ['menge' => round($e['menge'], 2), 'betrag' => round($betrag, 2), 'ek_betrag' => round($ek, 2)] + $e;
     }
 
     /**
