@@ -36,7 +36,7 @@
             <x-foodalchemist::kpi-tiles marker="konfigurator-kpis" :tiles="[
                 ['kpi' => 'ab', 'label' => 'All-in ab', 'tone' => 'accent', 'value' => $kz['ab'] !== null ? $euro($kz['ab']) : 'Noch kein Preis',
                  'title' => 'Günstigstes Konzept im größten Paket, pro Person'],
-                ['kpi' => 'konzepte', 'label' => 'Konzepte', 'value' => $kz['haupt'] . ($kz['addons'] ? ' + ' . $kz['addons'] . ' Add-ons' : '')],
+                ['kpi' => 'konzepte', 'label' => 'Konzepte', 'value' => $kz['haupt'] . ($kz['addons'] ? ' + ' . $kz['addons'] . ' Add-ons' : '') . ($kz['getraenke'] ? ' + ' . $kz['getraenke'] . ' Getränke' : '')],
                 ['kpi' => 'pakete', 'label' => 'Pax-Pakete', 'value' => (string) $kz['pakete']],
                 ['kpi' => 'db', 'label' => 'Schwächster DB', 'tone' => $kz['schwach'] !== null && $kz['schwach']['db'] < 0 ? 'bad' : null,
                  'value' => $kz['schwach'] !== null ? $euro($kz['schwach']['db']) : '–', 'title' => $kz['schwach']['wo'] ?? null],
@@ -58,6 +58,7 @@
                 :tabs="[
                     'uebersicht' => 'Übersicht',
                     'konzepte' => 'Konzepte',
+                    'getraenke' => 'Getränke',
                     'leistungen' => 'Leistungen',
                     'pakete' => 'Pax-Pakete',
                     'kalkulation' => 'Kalkulation',
@@ -68,6 +69,9 @@
                 </div>
                 <div x-show="tab === 'konzepte'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="konzepte">
                     @include('foodalchemist::livewire.angebote.partials.konfigurator.konzepte')
+                </div>
+                <div x-show="tab === 'getraenke'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="getraenke">
+                    @include('foodalchemist::livewire.angebote.partials.konfigurator.getraenke')
                 </div>
                 <div x-show="tab === 'leistungen'" x-cloak class="pt-4 flex flex-col gap-4" data-konfigurator-panel="leistungen">
                     @include('foodalchemist::livewire.angebote.partials.konfigurator.leistungen')

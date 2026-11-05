@@ -1,7 +1,7 @@
 {{-- Spec 94 · Konfigurator-Editor, Reiter Leistungen: Grundausstattung und Zusatz-Leistungen je Konzept, einfügen aus
      Vorlagen (Kopie) oder frei. Formular-Felder aus partials/leistung-regel (wie bei den Vorlagen). --}}
 @php
-    $konzeptOptionen = $k->konzepte->mapWithKeys(fn ($x) => [$x->id => ($x->rolle === 'addon' ? 'Add-on: ' : '') . ($x->kunden_titel ?: 'Konzept ' . $x->id)])->all();
+    $konzeptOptionen = $k->konzepte->mapWithKeys(fn ($x) => [$x->id => (['addon' => 'Add-on: ', 'getraenk' => 'Getränke: '][$x->rolle] ?? '') . ($x->kunden_titel ?: 'Konzept ' . $x->id)])->all();
     $gruppen = $k->leistungen->groupBy(fn ($l) => $l->konfigurator_konzept_id ?? 0);
     $grund = $k->leistungen->whereNull('konfigurator_konzept_id');
     $lf = $leistungForm;

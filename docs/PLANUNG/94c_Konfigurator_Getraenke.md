@@ -39,8 +39,9 @@ Damit bleiben Concepter, Wording, Bilder, Allergene, Detail-Sheet und Kalkulatio
 ## 2 · Getränke im Konfigurator
 
 - Neue `rolle = getraenk` an `foodalchemist_konfigurator_konzepte`. Es gibt keine neue Tabelle, weil die Rolle-Spalte das schon trägt.
-  Das Concept steht wie bei Hauptkonzepten **je Tageszeit** in `lunch_concept_id` bzw. `dinner_concept_id` (Entscheid 4: optional).
-  Ist nur eines gesetzt, gilt es für beide Tageszeiten, z. B. ein eigenes Lunch-Paket.
+  Das Concept steht wie bei Hauptkonzepten **je Zeitfenster** in `lunch_concept_id` (tagsüber) bzw. `dinner_concept_id` (abends).
+  **Je Zeitfenster ein eigenes Paket** (Dominique 03.11.2026, korrigiert Entscheid 4): Ein Paket mit nur einem Concept gilt nur in seinem Zeitfenster,
+  bei „Tag und Abend“ zählen Tag-Teil + Abend-Teil.
 - Je Getränkepaket wird festgelegt:
   - `getraenk_abrechnung`: `pauschale` oder `verbrauch`
   - `getraenk_dauer`: `event` (je Gast fürs ganze Event) oder `stunde` (je Gast und Stunde, Stunden aus der Einsatzzeit) — je Paket wählbar (Entscheid 1)
@@ -140,7 +141,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 - Verbrauch: kein Preis pro Person. Die Schätzung = Menge je Gast × Gäste × VK steht als `zzgl` im Link und als `aufwand`-Position im Angebot.
 - Staffel: 4 Std. Grundpreis 18 € plus 3,50 € je Folgestunde ergibt bei 6 Std. Einsatzzeit 25 € pro Person. Ohne Folgestunden-Satz gilt der Concept-Preis bzw. Preis × Stunden.
 - Mehrere Pakete sind kombinierbar, die Preise addieren sich. „Ohne Getränke“ geht nur ohne `getraenke_pflicht`. Die Bindung an ein Hauptkonzept greift.
-- Ein eigenes Lunch-Concept gilt mittags, sonst gilt das eine Concept für beide Tageszeiten.
+- Je Zeitfenster ein eigenes Paket: Das Lunch-Concept gilt tagsüber, das Dinner-Concept abends, Tag und Abend = beide Teile. Ohne Concept zum Zeitfenster ist das Paket dort nicht wählbar.
 - Bei Tag und Abend gilt der Kombi-Rabatt auch auf die Getränke-Pauschale (anteilig).
 - Deckel: Die Schätzung über dem Deckel wird auf den Deckel begrenzt, und „höchstens … €“ steht im Link und an der Angebots-Position.
 - Alkohol (8a): GP-Wert schlägt Artikel, `is_alcohol = 0` = NULL; Rezept nein nur bei echtem nein aller Zutaten. Vorbelegung: Coca-Cola (15.7) nein, Kochwein (15.1) ja, alkoholfreies Bier 0,0 vol-% (15.2) nein, Bier ohne vol-% offen, außerhalb WG 15 nie geschrieben (nur Vorschlag); manuell bleibt.
@@ -152,7 +153,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 | Stufe | Inhalt |
 |:--|:--|
 | 8a | Alkohol-Kennzeichnung Artikel → GP → Rezept, Codes — umgesetzt 03.11.2026; Quelle korrigiert: fester GP-Wert mit Vorrang, Vorbelegung als Probelauf |
-| 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link |
+| 8b | `rolle = getraenk`, Preis (Pauschale), Reiter „Getränke“, Schritt im Link — umgesetzt 03.11.2026 (Umsetzungsnotizen unten) |
 | 8c | Verbrauch auf dem Aufwands-Mechanismus, Anfrage → Angebot |
 
 ## Entscheidungen (Dominique, 03.11.2026)
@@ -161,7 +162,7 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
    Grundpreis für X Stunden plus Satz je Folgestunde (Antwort an den Kurator, „Grundpreis + Folgestunde“). Ohne Folgestunden-Satz gilt die einfache Pauschale.
 2. **Pakete:** mehrere kombinierbar, z. B. Softdrinks + Wein + Bier.
 3. **Erkennung:** über die Concept-Kategorie „Getränke“ (team-pflegbar). Der Reiter filtert danach.
-4. **Tageszeit:** optional ein eigenes Lunch-Concept am Paket, sonst eines für beide.
+4. **Tageszeit:** je Zeitfenster ein eigenes Paket (korrigiert 03.11.2026: kein „eines für beide“). Tag und Abend = Tag-Paket + Abend-Paket.
 5. **Kombi-Rabatt:** gilt auch für die Getränke-Pauschale.
 6. **Verbrauch:** mit optionalem Höchstbetrag (Deckel) je Paket, angezeigt im Link und im Angebot.
 7. ~~Alkohol-Hinweis~~ — gestrichen (Dominique 03.11.2026: Getränke im Konfigurator ohne Alkohol-Teil).
@@ -170,3 +171,23 @@ Abrechnung, Dauer, Grundstunden und Folgestunde, Verbrauchsdeckel, Lunch- und Di
 ## Offene Fragen
 
 Keine.
+
+## Umsetzungsnotizen 8b (03.11.2026)
+
+- **Je Zeitfenster ein eigenes Paket** (Dominique 03.11.2026, per Auswahl):
+  - Das Lunch-Concept gilt tagsüber, das Dinner-Concept abends. Es gibt keinen Rückfall auf das andere Zeitfenster. Ein Paket nur mit Dinner-Concept ist tagsüber nicht wählbar.
+  - Tag und Abend = Tag-Teil + Abend-Teil, jeweils mit seiner Einsatzzeit (je Event, je Stunde oder Staffel). Ein fehlender Teil zählt nicht.
+  - Im Editor wählt man beim Hinzufügen „Für Abend / Tag“ (`concept_id` im MCP = abends), das andere Zeitfenster kommt über Bearbeiten.
+  - Danach gilt der Kombi-Rabatt wie bei den Konzepten (auch auf die Zusatz-Leistungen des Pakets).
+- **Staffel-EK nach Verbrauch** (Dominique 03.11.2026): EK je Folgestunde = Grund-EK / Grundstunden, also Grund-EK + Folgestunden × Grund-EK / Grundstunden.
+  Beispiel: 6 € für 4 Std., 2 Folgestunden ergeben 9 € EK. Es gibt kein eigenes EK-Feld. Enthalten die Folgestunden anderes als das Grundpaket, wird dafür ein eigenes Paket gebaut.
+- **Verbrauch:** Er ist im Datenmodell vorgesehen (`getraenk_abrechnung`), aber bis 8c gesperrt. Die Prüfung meldet „folgt mit Stufe 8c“.
+- **Preistabelle und Aufteilung:**
+  - Schlüssel `g{id}:lunch`, `g{id}:dinner`, `g{id}:dn`. Fehlt der Concept-Preis, fehlt der Schlüssel, und das Paket ist zu dieser Tageszeit nicht wählbar.
+  - Die Aufteilung bekommt die Zeile „Getränke“, die Kalkulation die Fälle „Getränke … Lunch / Dinner / Day-into-Night“.
+- **Layout:** Ein eigenes Design ohne `konfig_getraenke` bekommt den Block vor den Extras (`konfiguratorLayout` setzt neue Blöcke vor den nächsten vorhandenen).
+- **Editor:**
+  - Der Reiter „Getränke“ zeigt die Concepts der Kategorie „Getränke“ samt Unterkategorien auch ohne Suche. Ohne diese Kategorie sucht er ab 2 Zeichen über alle Concepts.
+  - „Getränke Pflicht“ steht im Reiter.
+- **Druckfassung:** In „Eure Auswahl“ stehen die gewählten Pakete, dazu kommt ein eigener Abschnitt „Getränke“ zwischen Speisen und Extras. Je Paket zeigt er die Getränke des gewählten Zeitfensters, bei Tag und Abend beide.
+

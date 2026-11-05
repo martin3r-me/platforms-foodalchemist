@@ -58,6 +58,22 @@ final class KonfiguratorSnapshot
             ];
         }
 
+        // Spec 94c: Getränkepakete — Karten wie Extras, Speisen-Detail mit den Getränken; Dauer und Einsatzzeit nur für den Hinweis an der Karte
+        $getraenke = [];
+        foreach ($s['getraenke'] as $g) {
+            $detail = $this->detail($g);
+            $getraenke[] = [
+                'id' => (int) $g->id,
+                'titel' => (string) ($g->kunden_titel ?: 'Getränke'),
+                'claim' => $g->claim,
+                'bild' => $detail['bilder'][0] ?? null,
+                'detail' => $detail,
+                'gebunden_an' => $g->gebunden_an_id !== null ? (int) $g->gebunden_an_id : null,
+                'je_stunde' => $g->getraenk_dauer === 'stunde' || $g->folgestunde_satz !== null,
+                'stunden' => ['lunch' => (float) $k->stunden_lunch, 'dinner' => (float) $k->stunden_dinner, 'day_night' => (float) $k->stunden_day_night],
+            ];
+        }
+
         $pakete = [];
         $preise = [];
         $aufteilung = [];   // Spec 94b §5: je Paket und Preisschlüssel die VK-Aufteilung — nur Name und VK pro Person
@@ -99,6 +115,15 @@ final class KonfiguratorSnapshot
                 $tabelle["a{$a->id}"] = $runde($kern['vk_pp']);
                 $zusatz["a{$a->id}"] = $aufwand($kern);
             }
+            foreach ($s['getraenke'] as $g) {   // Spec 94c: g{id}:lunch | dinner | dn
+                foreach (['lunch' => 'lunch', 'dinner' => 'dinner', 'day_night' => 'dn'] as $t => $kurz) {
+                    $kern = $this->pricing->rechneFall($k, $p, ['typ' => 'getraenk', 'g' => (int) $g->id, 't' => $t], null, $s);
+                    if (! $kern['speisen_fehlen']) {
+                        $tabelle["g{$g->id}:{$kurz}"] = $runde($kern['vk_pp']);
+                        $zusatz["g{$g->id}:{$kurz}"] = $aufwand($kern);
+                    }
+                }
+            }
             $preise[$i] = $tabelle;
             $aufteilung[$i] = $teilung;
             $zzgl[$i] = array_filter($zusatz);
@@ -122,6 +147,8 @@ final class KonfiguratorSnapshot
                 'intro' => $k->intro,
                 'konzepte' => $konzepte,
                 'addons' => $addons,
+                'getraenke' => $getraenke,
+                'getraenke_pflicht' => (bool) $k->getraenke_pflicht,
                 'pakete' => $pakete,
                 'preise' => $preise,
                 'aufteilung' => $aufteilung,
@@ -212,7 +239,7 @@ final class KonfiguratorSnapshot
     /**
      * Preis einer Auswahl aus der eingefrorenen Preistabelle (für die Anfrage — nie ein Preis aus dem Formular).
      *
-     * @param  array{konzept:int, tageszeit:string, abend_konzept?:?int, addons?:list<int>, pax:int}  $auswahl
+     * @param  array{konzept:int, tageszeit:string, abend_konzept?:?int, addons?:list<int>, getraenke?:list<int>, pax:int}  $auswahl
      * @return array{paket:int, paket_name:string, pro_person:float, gesamt:float}|null
      */
     public static function preisFuer(array $body, array $auswahl): ?array
@@ -244,6 +271,13 @@ final class KonfiguratorSnapshot
                 return null;
             }
             $pp += (float) $tabelle["a{$a}"];
+        }
+        $kurz = ['lunch' => 'lunch', 'dinner' => 'dinner', 'day_night' => 'dn'][$auswahl['tageszeit']] ?? 'dinner';
+        foreach (array_unique(array_map('intval', $auswahl['getraenke'] ?? [])) as $g) {   // Spec 94c: Pauschale zur Tageszeit
+            if (! isset($tabelle["g{$g}:{$kurz}"])) {
+                return null;
+            }
+            $pp += (float) $tabelle["g{$g}:{$kurz}"];
         }
 
         return ['paket' => $index, 'paket_name' => (string) ($body['pakete'][$index]['name'] ?? ''), 'pro_person' => round($pp, 2), 'gesamt' => round($pp * $pax, 2)];

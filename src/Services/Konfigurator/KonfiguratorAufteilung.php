@@ -12,7 +12,7 @@ namespace Platform\FoodAlchemist\Services\Konfigurator;
  */
 final class KonfiguratorAufteilung
 {
-    public const SPEISEN = ['speisen_tag' => 'Speisen Tag', 'speisen_abend' => 'Speisen Abend', 'speisen_extras' => 'Speisen Extras'];
+    public const SPEISEN = ['speisen_tag' => 'Speisen Tag', 'speisen_abend' => 'Speisen Abend', 'speisen_extras' => 'Speisen Extras', 'getraenke' => 'Getränke'];
 
     /**
      * @param  list<array{art:string, slug:?string, vk_pp:float, ek_pp:float}>  $gruppen  aus KonfiguratorPricingService::rechneFall

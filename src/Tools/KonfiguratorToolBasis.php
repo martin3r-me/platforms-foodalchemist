@@ -155,15 +155,20 @@ abstract class KonfiguratorToolBasis extends FoodAlchemistTool implements ToolCo
             'kombi_rabatt_pct' => $zahl, 'paket_toleranz_pct' => $zahl, 'rundung' => ['type' => 'number', 'enum' => [0.01, 0.1, 0.5, 1.0]],
             'gueltig_bis' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
             'reihenfolge' => ['type' => 'string', 'enum' => \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, 'description' => 'Schritte im Link: Zeitfenster zuerst (Standard) oder Konzept zuerst'],
+            'getraenke_pflicht' => ['type' => 'boolean', 'description' => 'Spec 94c: im Link mindestens ein Getränkepaket wählen'],
         ];
     }
 
     protected static function konzeptSchema(): array
     {
         return [
-            'rolle' => ['type' => 'string', 'enum' => ['haupt', 'addon']],
+            'rolle' => ['type' => 'string', 'enum' => ['haupt', 'addon', 'getraenk'], 'description' => 'getraenk = Getränkepaket (Spec 94c): je Zeitfenster ein eigenes Concept (lunch_concept_id tagsüber, dinner_concept_id abends; concept_id = abends)'],
             'lunch_concept_id' => ['type' => 'integer'], 'dinner_concept_id' => ['type' => 'integer'],
-            'concept_id' => ['type' => 'integer', 'description' => 'Add-on: das Concept selbst'],
+            'concept_id' => ['type' => 'integer', 'description' => 'Add-on bzw. Getränkepaket: das Concept selbst'],
+            'getraenk_abrechnung' => ['type' => 'string', 'enum' => ['pauschale'], 'description' => 'Getränkepaket: Pauschale (nach Verbrauch folgt mit 8c)'],
+            'getraenk_dauer' => ['type' => 'string', 'enum' => ['event', 'stunde'], 'description' => 'Getränkepaket: je Gast fürs Event oder je Gast und Stunde (Einsatzzeit)'],
+            'grund_stunden' => ['type' => 'number', 'description' => 'Getränkepaket, Staffel: Concept-Preis gilt für so viele Stunden (mit folgestunde_satz)'],
+            'folgestunde_satz' => ['type' => 'number', 'description' => 'Getränkepaket, Staffel: VK je Gast und weitere Stunde'],
             'kunden_titel' => ['type' => 'string'], 'claim' => ['type' => 'string'], 'abschnitt' => ['type' => 'string'],
             'addon_tageszeit' => ['type' => 'string', 'enum' => ['lunch', 'dinner', 'beide']], 'gebunden_an_id' => ['type' => 'integer'],
             'indikativ_lunch' => ['type' => 'boolean'], 'indikativ_dinner' => ['type' => 'boolean'], 'position' => ['type' => 'integer'],

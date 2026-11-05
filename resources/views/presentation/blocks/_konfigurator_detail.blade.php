@@ -16,7 +16,7 @@
     <div class="pt-konfig-detail-kopf {{ $kopfBild ? 'pt-konfig-detail-kopf--bild' : '' }}">
         @if($kopfBild)<img src="{{ $kopfBild }}" alt="" class="pt-konfig-detail-titelbild">@endif
         <div class="pt-konfig-detail-titel">
-            <p class="pt-kicker">{{ $art === 'addon' ? 'Extra' : 'Konzept' }}</p>
+            <p class="pt-kicker">{{ ['addon' => 'Extra', 'getraenk' => 'Getränke'][$art] ?? 'Konzept' }}</p>
             <h3>{{ $kz['titel'] }}</h3>
             @if(! empty($kz['claim']))<p class="pt-konfig-claim">{{ $kz['claim'] }}</p>@endif
         </div>
@@ -56,6 +56,8 @@
     <div class="pt-konfig-weiter">
         @if($art === 'addon')
             <button type="button" class="pt-cta-btn" data-konfig-addon-waehlen="{{ $kz['id'] }}">Dazunehmen</button>
+        @elseif($art === 'getraenk')
+            <button type="button" class="pt-cta-btn" data-konfig-getraenk-waehlen="{{ $kz['id'] }}">Dazunehmen</button>
         @else
             <button type="button" class="pt-cta-btn" data-konfig-waehlen="{{ $kz['id'] }}">Konzept wählen</button>
         @endif

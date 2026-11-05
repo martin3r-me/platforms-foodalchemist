@@ -36,6 +36,7 @@
             <div data-druck-feld="tageszeit" hidden><dt>Zeitfenster</dt><dd data-druck-wert></dd></div>
             <div data-druck-feld="pax"><dt>Gäste</dt><dd data-druck-wert></dd></div>
             <div data-druck-feld="stufe" hidden><dt>Preisstufe</dt><dd data-druck-wert></dd></div>
+            <div data-druck-feld="getraenke" hidden><dt>Getränke</dt><dd data-druck-wert></dd></div>
             <div data-druck-feld="extras" hidden><dt>Extras</dt><dd data-druck-wert></dd></div>
         </dl>
     </section>
@@ -52,6 +53,25 @@
             @endforeach
         @endforeach
     </section>
+
+    @if(! empty($content['getraenke']))
+        {{-- Spec 94c: gewählte Getränkepakete, je Zeitfenster das eigene Concept (Tag, Abend bzw. beide bei Tag und Abend) --}}
+        <section class="pt-druck-abschnitt" data-druck-abschnitt="getraenke" data-druck-getraenke-block hidden>
+            <h2>Getränke</h2>
+            @foreach($content['getraenke'] as $g)
+                <div class="pt-druck-konzept" data-druck-getraenk="{{ $g['id'] }}" hidden>
+                    <h3>{{ $g['titel'] }}</h3>
+                    @if(! empty($g['claim']))<p class="pt-druck-claim">{{ $g['claim'] }}</p>@endif
+                    @foreach($g['detail']['zeiten'] ?? [] as $t => $zeilen)
+                        <div data-druck-getraenk-zeit="{{ $t }}">
+                            @include('foodalchemist::presentation.blocks._block_body', ['b' => $speisen($zeilen, $zeitName[$t] ?? $t), 'style' => $stil])
+                        </div>
+                    @endforeach
+                    @if($legende($g['detail']) !== '')<p class="pt-konfig-legende">{{ $legende($g['detail']) }} · * Spuren</p>@endif
+                </div>
+            @endforeach
+        </section>
+    @endif
 
     @if(! empty($content['addons']))
         <section class="pt-druck-abschnitt" data-druck-abschnitt="extras" data-druck-extras-block hidden>
