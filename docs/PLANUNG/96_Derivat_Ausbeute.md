@@ -21,23 +21,40 @@ Heute geht das nicht sauber:
 | Matcher | ✘ `MatchHeuristics::NEBENPRODUKT_MARKER` kennt Schale/Zeste/Knochen/Parüren …, „saft“ bewusst nicht (mehrdeutig) — „Limette (Saft)“ geht heute auf gekauften „Limettensaft: konserviert“ |
 | Bestand Team 1 | kein Saft-Derivat für Limette/Zitrone/Orange; Mutter „Zitrone: frisch“ fehlt (nur „Amalfi-Zitrone“ 8534); Limette frisch 8431, Blutorange 8739 |
 
+## Zwei Arten von Derivat (Dominique 05.11.)
+
+| | (a) Nebenprodukt | (b) Zweckverarbeitung |
+|---|---|---|
+| Beispiele | Fleischabschnitte, Parüren, Knochen, Karkassen, Gemüseschalen | Zitronen-/Limettensaft, Abrieb, Zeste |
+| Mutter wird … | ohnehin für ein anderes Produkt eingekauft — das Derivat fällt **übrig** | **gezielt** für das Derivat eingekauft |
+| EK | **offen (Frage 5)**: 0 € oder anteilig | Mutter-Preis ÷ Ausbeute |
+| Bedarf/Bestellung | **kein** Fallback auf die Mutter (sonst doppelt bestellt) | Mutter-Menge = Derivat-Menge ÷ Ausbeute |
+
+Unterscheidung am Derivat: neues Feld `derivat_art` = `nebenprodukt` | `zweck`. Vorschlag für den Default: aus dem §11.2-Marker abgeleitet
+(Abschnitte, Parüren, Knochen, Karkasse, Stiele → `nebenprodukt`; Saft, Abrieb, Zeste, Schale bei Obst → `zweck`), von Hand überschreibbar.
+Alle Punkte unten gelten für `zweck`; für `nebenprodukt` nur Ausbeute (Information) und Reife-Hinweis.
+
+**Nebenprodukt reicht nicht** (Rezept braucht mehr, als anfällt — Frage 6): ohne Gegenbuchung im Planungslauf merkt es heute niemand.
+Vorschlag: im Planungsblatt (Spec Produktion) Bedarf des Nebenprodukts gegen den Anfall aus den Mutter-Mengen desselben Laufs rechnen
+(Anfall = Mutter-Menge × Ausbeute); Unterdeckung als Hinweis „Parüren reichen nicht — Zukauf oder Mutter erhöhen“, nie still bestellen.
+
 ## Umfang
 
 ### 1. Ausbeute am Derivat (Migration)
-- Neue Spalten an `foodalchemist_gps`: `derivat_ausbeute_wert` (decimal) und `derivat_ausbeute_basis` (`g_je_stueck` | `prozent`),
+- Neue Spalten an `foodalchemist_gps`: `derivat_art` (`nebenprodukt` | `zweck`), `derivat_ausbeute_wert` (decimal) und `derivat_ausbeute_basis` (`g_je_stueck` | `prozent`),
   `derivat_ausbeute_quelle` (`manual` | `ki` | `regelwerk`). Nur bei `is_derivat = 1` gesetzt.
 - Bedeutung: `g_je_stueck` = Gramm Derivat aus einem Stück Mutter (Limette ≈ 30 g Saft); `prozent` = Anteil der Mutter-Masse
   (Parüren 15 %). Ohne Wert gilt das Derivat als unbepreist und unbestellbar (heutiger Stand, ehrlich sichtbar).
 - Pflege im GP-Dialog (Derivat-Bereich) und per MCP (`gps.PUT`); KI-Schätzung optional über den bestehenden KI-Weg mit Herkunft `ki`.
 
-### 2. EK-Fallback über die Mutter (eigene Klasse)
+### 2. EK-Fallback über die Mutter (nur `zweck`, eigene Klasse)
 - `Support\DerivatPreis` (eigene Klasse — `RecipeRecomputeService` steht unter dem Größen-Wächter, Spec 85 §4):
   Preis/g Derivat = Preis/g Mutter ÷ Ausbeute-Anteil (bei `g_je_stueck`: Preis je Stück Mutter ÷ g je Stück).
 - Eingehängt in `preisProGrammMitBasis` / `preisProStueckMitBasis` und den Team-Kosten-Pfad (`kostenFuerTeam`) als Rückfall, wenn das GP
   ein Derivat ohne eigenen LA ist. Basis/Herkunft des EK erbt die Mutter (`EkPriceBasis`), plus Kennzeichen „über Mutter“.
 - Einheit Stück an einer Derivat-Zeile („Limette (Saft), 1 Stück“) = g je Stück aus der Ausbeute.
 
-### 3. Bedarf und Bestellung auf die Mutter
+### 3. Bedarf und Bestellung auf die Mutter (nur `zweck`)
 - Vor der Lead-Suche: Derivat-Bedarf → Mutter-GP, Menge Mutter = Menge Derivat ÷ Ausbeute (Stück aufgerundet).
   Stellen: `PlanungsblattService::gruppiereNachLieferant`, `OrderService` (Auflösung der Positionen), Bestellliste.
 - Die Produktion zeigt beides: Mutter zum Einkauf, Derivat als Arbeitsschritt („Limetten auspressen“).
@@ -66,3 +83,9 @@ Heute geht das nicht sauber:
 3. **Gekaufter Saft vs. Derivat:** Wenn ein Rezept „Limettensaft, 100 ml“ sagt — gekaufter Saft (heute) oder auch Derivat (frisch
    gepresst)? Entscheidet das die Leitplanke Eigenleistung (from_scratch → Derivat, Convenience → gekauft)?
 4. **Mehrere Derivate einer Mutter** (Saft + Abrieb derselben Limette im selben Rezept): Bedarf aus dem größeren Anteil oder addiert?
+5. **EK eines Nebenprodukts (a):** 0 € (fällt ohnehin an, die Mutter trägt die Kosten) oder anteilig (Mutter-Preis × Anteil, damit
+   das Rezept mit Parüren nicht künstlich billig wirkt)? Bei „anteilig“: wird die Mutter-Kalkulation dann um denselben Betrag entlastet?
+6. **Nebenprodukt reicht nicht (a):** Hinweis im Planungslauf (Vorschlag oben) — und dann? Zukauf eines Ersatz-GP (z. B. Kalbsknochen
+   als LA), Mutter-Menge erhöhen oder nur melden?
+7. **Default der Art:** Passt die Ableitung aus dem Marker (Abschnitte/Parüren/Knochen/Karkasse/Stiele = Nebenprodukt; Saft/Abrieb/Zeste
+   bei Obst = Zweck)? Grenzfälle: Gemüseschalen (Fond) eher Nebenprodukt, Zitronenschale für Abrieb Zweck.
