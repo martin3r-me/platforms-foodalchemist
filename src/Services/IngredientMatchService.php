@@ -90,6 +90,8 @@ class IngredientMatchService
         $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);
         // Spec 95c: die Zählform ist Einheit, nicht Ware („Knoblauchzehen“ sucht „Knoblauch“; die Zeile bekommt die Zehe als Einheit)
         $ingredientName = \Platform\FoodAlchemist\Support\Zaehlform::ohneForm($ingredientName);
+        // Leitplanke Eigenleistung (05.11.): mit Convenience spricht die Zeile die Sprache der Fertigware („gekocht“ → „gegart“)
+        $ingredientName = Matching\BasisVariante::fertigwareText($ingredientName, $convenience);
         // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
         if (preg_match('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', $ingredientName) === 1 && preg_match('/fl(?:ü|ue)ssig|pasteuris/iu', $ingredientName) !== 1) {
             $ingredientName = (string) preg_replace('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', 'Eier', $ingredientName);
@@ -115,7 +117,7 @@ class IngredientMatchService
         $this->tiebreakQuery = $this->engine->ingredientTokens($ingredientName);
         $this->aliasTokens = null;
         if ($weg === 'zukauf' && $this->zukaufTreffer !== null) {   // 29.10.: Leitplanken wählen das Zukauf-GP, das die Prüfung gefunden hat (auch „Fond: Geflügel“ → „Geflügelfond“)
-            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit, $menge);
+            return app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $this->zukaufTreffer, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $einheit, $menge, $convenience);
         }
         $this->basisKomponente = $weg === 'basis';
         $zukaufHinweis = $this->basisKomponente ? $this->zukaufHinweis : null;
@@ -252,7 +254,7 @@ class IngredientMatchService
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
-            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit, $this->menge) : $final);
+            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit, $this->menge, $convenience) : $final);
     }
 
     /**
@@ -1258,7 +1260,13 @@ class IngredientMatchService
         $this->currentIngredientName = $zutat;
         $this->tiebreakQuery = $this->engine->ingredientTokens($zutat);
         $this->aliasTokens = null;
-        if (! $this->hauptzutatPasst($gp)) {
+        // Spec 95d (Neuabgleich 05.11.: „Essig“ → „Essig-Essenz 25 %“): die GANZE Hauptzutat muss gedeckt sein, nicht nur das Kopfwort
+        if (! $this->hauptzutatPasst($gp, [], true)) {
+            return false;
+        }
+        // Spec 95d („Getrocknete Tomaten in Öl“ → „Tomate: trocken, ohne Öl“): nennt die Zutat, was das GP ausdrücklich ausschließt — anderes Produkt
+        if (preg_match_all('/(?<![\p{L}])ohne\s+(\p{L}+)/iu', (string) $gp->name, $m) > 0 && ! in_array('ohne', $this->tiebreakQuery, true)
+            && array_intersect($this->engine->tokenize(implode(' ', $m[1])), $this->tiebreakQuery) !== []) {
             return false;
         }
         $offen = app(Matching\BasisVariante::class)->ungenannt($gp, $this->tiebreakQuery);

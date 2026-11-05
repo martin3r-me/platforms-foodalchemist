@@ -8,8 +8,9 @@ class GenesisCsvLeser
     /**
      * @param  string  $wertLabel  Teil des value_variable_label in Kleinbuchstaben (z. B. „verbraucherpreisindex“, „real“)
      * @param  list<string>  $zusatz  weitere Schlüssel, die in der Zeile stehen müssen (z. B. Originalwert statt bereinigt)
+     * @param  string|null  $wertCode  value_variable_code (z. B. PRE011); gesetzt ⇒ ersetzt den Label-Filter
      */
-    public function lesen(string $csv, string $code, string $wertLabel = 'verbraucherpreisindex', array $zusatz = []): array
+    public function lesen(string $csv, string $code, string $wertLabel = 'verbraucherpreisindex', array $zusatz = [], ?string $wertCode = null): array
     {
         $f = fopen('php://temp', 'r+');
         fwrite($f, preg_replace('/^\xEF\xBB\xBF/', '', $csv));
@@ -32,7 +33,7 @@ class GenesisCsvLeser
                 if (! in_array($code, $codes, true) || array_diff($zusatz, $codes) !== []) {
                     continue;
                 }
-                if (! str_contains(mb_strtolower($r['value_variable_label']), mb_strtolower($wertLabel))) {
+                if ($wertCode !== null ? ($r['value_variable_code'] ?? null) !== $wertCode : ! str_contains(mb_strtolower($r['value_variable_label']), mb_strtolower($wertLabel))) {
                     continue;
                 }
                 $monat = null;
