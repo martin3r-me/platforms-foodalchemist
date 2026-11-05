@@ -37,7 +37,7 @@ class KostenCacheService
     {
         // Aufrufer laden oft nur Teil-Spalten (z. B. Angebot: id, sales_net, ek_total_eur) — ohne team_id/ist_fassung
         // wäre die Besitzer-Entscheidung falsch. Dann einmal vollständig nachladen.
-        foreach (['team_id', 'ist_fassung', 'ek_total_eur', 'ek_per_kg_eur', 'ek_n_ingredients_total', 'ek_n_ingredients_priced', 'ek_price_basis'] as $spalte) {
+        foreach (['team_id', 'ist_fassung', 'ek_total_eur', 'ek_per_kg_eur', 'ek_n_ingredients_total', 'ek_n_ingredients_priced', 'ek_price_basis', 'n_ingredients_unmapped'] as $spalte) {
             if (! array_key_exists($spalte, $recipe->getAttributes())) {
                 // Spec 84 B3: dieselbe id, die der Aufrufer schon hat — nur fehlende Spalten nachladen, unabhängig vom Kontext
                 $recipe = FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('nachladen')->findOrFail($recipe->id);
@@ -45,17 +45,21 @@ class KostenCacheService
             }
         }
         if (! $recipe->ist_fassung && (int) $recipe->team_id === (int) $team->id) {
-            $n = (int) $recipe->ek_n_ingredients_total;
+            // Neuabgleich der Pilot-Rezepte (05.11.): die EK-Zähler kennen nur zugeordnete Zeilen — eine OFFENE Zeile (kein GP, kein Unterrezept)
+            // ist ebenfalls ein fehlender Preis, sonst steht „vollständig“ über einem Rezept mit Lücke. Zähler aus dem Recompute (n_ingredients_unmapped).
+            // nur wenn der Zähler etwas meldet, genau nachzählen (er zählt auch optionale Zeilen) — der Normalfall kostet keine Abfrage
+            $offen = (int) ($recipe->n_ingredients_unmapped ?? 0) > 0 ? count(Reife\RecipeReifeAdapter::offeneZutaten($recipe)) : 0;
+            $n = (int) $recipe->ek_n_ingredients_total + $offen;
             $p = (int) $recipe->ek_n_ingredients_priced;
             // Ohne Zähler (Altstand, nie neu gerechnet) gilt ein vorhandener EK als vollständig; mit Zählern zählt priced == total
-            $voll = $recipe->ek_n_ingredients_total === null ? $recipe->ek_total_eur !== null : ($n > 0 && $p === $n);
+            $voll = $recipe->ek_n_ingredients_total === null ? $recipe->ek_total_eur !== null && $offen === 0 : ($n > 0 && $p === $n);
 
             return [
                 'quelle' => 'rezept', 'ek_summe' => $recipe->ek_total_eur !== null ? (float) $recipe->ek_total_eur : null,
                 'ek_per_kg' => $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur : null,
                 'n_priced' => $p, 'n_total' => $n,
                 'anteil_fehlend_anzahl' => $n > 0 ? round(($n - $p) / $n, 4) : null, 'anteil_fehlend_masse' => null,
-                'vollstaendig' => $voll, 'grund' => $voll ? null : 'zutaten_ohne_preis',
+                'vollstaendig' => $voll, 'grund' => $voll ? null : ($offen > 0 ? 'zutaten_offen' : 'zutaten_ohne_preis'),
                 'fehlende' => [], 'berechnet_at' => null, 'basis' => $recipe->ek_price_basis?->value,
             ];
         }
