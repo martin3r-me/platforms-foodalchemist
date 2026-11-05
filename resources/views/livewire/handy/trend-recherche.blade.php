@@ -14,7 +14,7 @@
                     <x-fa::badge :tone="$q->aktiv && $q->rhythmus !== 'aus' ? 'ok' : 'neutral'">{{ $q->aktiv && $q->rhythmus !== 'aus' ? 'Aktiv' : 'Pausiert' }}</x-fa::badge>
                 </div>
                 @if($begriffe)
-                    <div class="flex flex-wrap gap-1.5">@foreach($begriffe['begriffe'] as $wort)<x-fa::badge class="max-w-full !whitespace-normal !h-auto">{{ $wort }}</x-fa::badge>@endforeach</div>
+                    <div class="flex flex-wrap gap-1.5">@foreach($begriffe['begriffe'] as $wort)<x-fa::badge umbruch class="max-w-full">{{ $wort }}</x-fa::badge>@endforeach</div>
                     @if($begriffe['kontext'])<p class="{{ $leise }}">Kontext: {{ implode(' · ', $begriffe['kontext']) }}</p>@endif
                 @endif
                 <p class="{{ $leise }}">{{ V::QUELLEN[$q->art] ?? $q->art }} · {{ V::RHYTHMEN[$q->rhythmus] ?? $q->rhythmus }} · {{ $q->abruf_weg === 'mcp' ? 'MCP-Sichtung erforderlich' : 'Automatischer Plattform-Abruf' }}</p>

@@ -37,4 +37,16 @@ final class FaShell
 
         return '/_platform/fa-assets/foodalchemist.css?v='.substr(md5((string) filemtime($datei)), 0, 8);
     }
+
+    /**
+     * URL einer Zusatz-Datei aus resources/dist (z. B. foodalchemist-observatorium.css), mit Cache-Schlüssel.
+     * Anders als cssUrl() in BEIDEN Hüllen nutzbar: die Datei kommt vom Modul, kein Host-Build nötig.
+     */
+    public static function assetUrl(string $datei): string
+    {
+        $pfad = dirname(__DIR__, 2).'/resources/dist/'.basename($datei);
+        $v = is_file($pfad) ? substr(md5((string) filemtime($pfad)), 0, 8) : '0';
+
+        return '/_platform/fa-assets/'.basename($datei).'?v='.$v;
+    }
 }

@@ -116,4 +116,8 @@ teile.push(`@scope (${BEREICH}) to (${GRENZE}){${scoped.join('')}}`);
 const css = teile.join('');
 mkdirSync(dirname(ausgang), { recursive: true });
 writeFileSync(ausgang, `/* foodalchemist.css — generiert von build-css.mjs, nicht von Hand ändern */\n${css}`);
+// Zusatz-Dateien: unverändert nach dist kopiert, ausgeliefert über _platform/fa-assets (beide Hüllen, ohne Host-Build).
+for (const zusatz of ['foodalchemist-observatorium.css']) {
+  writeFileSync(resolve(root, 'resources/dist', zusatz), readFileSync(resolve(root, 'resources/css', zusatz), 'utf8'));
+}
 console.log(`foodalchemist.css: ${kandidaten.length} Klassen, ${(css.length / 1024).toFixed(0)} KB, ${scoped.length} Regeln nur im FA-Bereich`);
