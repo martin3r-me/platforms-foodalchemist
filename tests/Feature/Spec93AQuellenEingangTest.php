@@ -388,6 +388,8 @@ it('Titel nachziehen: Probelauf schreibt nichts, --apply korrigiert nur „mehr 
     $alt = 'Erfundene Dachzeile für Suppe und Ofengemüse Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe. mehr erfahren';
     $kaputt = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/kochen-mit-pastinaken#teaser', 'titel' => $alt, 'teaser' => 'Erfundene Dachzeile für Suppe und Ofengemüse', 'quelle_id' => $q->id], 'abruf')['eintrag'];
     $weg = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/nicht-mehr-da#teaser', 'titel' => 'Erfundener alter Teaser über Kürbis im Herbst. mehr erfahren', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    // Sauberer Titel (z. B. von Hand gesetzt), URL steht auf der Seite: bleibt unangetastet
+    $sauber = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/ohne-ueberschrift#teaser', 'titel' => 'Von Hand gesetzter Titel TEST-93', 'quelle_id' => $q->id], 'abruf')['eintrag'];
     $fremd = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://andere.beispiel.test/kochen-mit-pastinaken', 'titel' => 'Erfundener fremder Teaser über Pastinaken. mehr erfahren', 'quelle_id' => $andere->id], 'abruf')['eintrag'];
 
     $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id])
@@ -398,6 +400,7 @@ it('Titel nachziehen: Probelauf schreibt nichts, --apply korrigiert nur „mehr 
     $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id, '--apply' => true])->expectsOutputToContain('1 Einträge korrigiert.')->assertSuccessful();
     expect($kaputt->refresh()->titel)->toBe('Kochen mit Pastinaken')
         ->and($kaputt->teaser)->toBe('Erfundene Dachzeile für Suppe und Ofengemüse – Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe.')
-        ->and($weg->refresh()->titel)->toEndWith('mehr erfahren')->and($fremd->refresh()->titel)->toEndWith('mehr erfahren');
+        ->and($weg->refresh()->titel)->toEndWith('mehr erfahren')->and($fremd->refresh()->titel)->toEndWith('mehr erfahren')
+        ->and($sauber->refresh()->titel)->toBe('Von Hand gesetzter Titel TEST-93');
     $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $andere->id + 999])->assertFailed();
 });
