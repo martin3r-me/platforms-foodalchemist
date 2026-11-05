@@ -1,6 +1,7 @@
 {{-- x-fa::badge — kleines Etikett. tone: neutral · accent · ok · warn · crit · info. icon optional.
-     Höhe/Padding über --fa-badge-h/--fa-badge-px (Standard 22px/0.5rem) — kompakte Listen (.fa-table am Laptop) setzen sie kleiner. --}}
-@props(['tone' => 'neutral', 'icon' => null])
+     Höhe/Padding über --fa-badge-h/--fa-badge-px (Standard 22px/0.5rem) — kompakte Listen (.fa-table am Laptop) setzen sie kleiner.
+     umbruch: langer Text bricht um (Höhe wächst mit) statt einzeilig — z. B. Suchbegriffe im Trend Research. --}}
+@props(['tone' => 'neutral', 'icon' => null, 'umbruch' => false])
 @php
     $farbe = match ($tone) {
         'accent' => 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]',
@@ -10,7 +11,9 @@
         'info' => 'bg-[var(--fa-info-soft)] text-[var(--fa-info)]',
         default => 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]',
     };
+    // umbruch: ohne feste Höhe und nowrap gelten height:auto + white-space:normal — keine Extra-Klasse, die erst ein Build liefern müsste.
+    $zeile = $umbruch ? '' : 'h-[var(--fa-badge-h,22px)] whitespace-nowrap';
 @endphp
-<span {{ $attributes->merge(['class' => "inline-flex items-center gap-1 h-[var(--fa-badge-h,22px)] px-[var(--fa-badge-px,0.5rem)] rounded-full text-[length:var(--fa-text-sm)] font-medium whitespace-nowrap $farbe"]) }}>
+<span {{ $attributes->merge(['class' => "inline-flex items-center gap-1 $zeile px-[var(--fa-badge-px,0.5rem)] rounded-full text-[length:var(--fa-text-sm)] font-medium $farbe"]) }}>
     @if($icon)@svg($icon, 'w-3.5 h-3.5 shrink-0 -ml-0.5')@endif{{ $slot }}
 </span>

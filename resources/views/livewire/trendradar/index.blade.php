@@ -85,7 +85,7 @@
 
     {{-- MITTE --}}
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
-        @include('foodalchemist::livewire.trendradar.research-styles')
+        @include('foodalchemist::livewire.observatorium.styles')
         <x-fa::page-header :title="$aktuell[0]" :subtitle="$aktuell[2]" />
         <a href="{{ route('foodalchemist.observatorium.index') }}" wire:navigate class="text-[var(--fa-accent)] text-sm">Zum Gastronomie-Observatorium →</a>
 
@@ -111,7 +111,7 @@
                         @endif
                     </x-fa::empty>
                 @endif
-                <svg viewBox="0 0 640 680" class="w-full max-w-[720px] mx-auto block" style="display:block;width:100%;max-width:720px;height:auto;margin-inline:auto" role="img" aria-label="Trendradar: {{ $radar->count() }} Trends">
+                <svg viewBox="0 0 640 680" class="fa-radar-svg w-full max-w-[720px] mx-auto block" role="img" aria-label="Trendradar: {{ $radar->count() }} Trends">
                     {{-- Ringbänder + Ringe (innen Mode → außen Metatrend) --}}
                     @foreach(array_reverse($ebenenReihe) as $i => $eb)
                         <circle cx="{{ $cx }}" cy="{{ $cy }}" r="{{ $ringe[$eb][1] * $maxR + 6 }}" class="{{ $i % 2 === 0 ? 'tr-ring-band' : '' }}" fill="{{ $i % 2 === 0 ? '' : 'var(--fa-surface)' }}" />

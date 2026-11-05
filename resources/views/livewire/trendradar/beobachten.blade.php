@@ -30,7 +30,7 @@
             </div>
             <div class="flex flex-wrap gap-1.5" aria-label="Suchbegriffe">
                 @forelse($anzeige['begriffe'] as $begriff)
-                    <x-fa::badge class="max-w-full !h-auto !whitespace-normal break-words">{{ $begriff }}</x-fa::badge>
+                    <x-fa::badge umbruch class="max-w-full break-words">{{ $begriff }}</x-fa::badge>
                 @empty<span class="{{ $leise }}">Individuelle Suche · Ausdruck unter Details</span>@endforelse
             </div>
             @if($anzeige['kontext'] !== [])<p class="{{ $leise }}">Im Kontext: {{ implode(' · ', $anzeige['kontext']) }}</p>@endif

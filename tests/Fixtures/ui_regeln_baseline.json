@@ -136,23 +136,6 @@
         "mini_schrift": 5,
         "style_statisch": 2
     },
-    "livewire/handy/trend-recherche.blade.php": {
-        "important": 2
-    },
-    "livewire/observatorium/index.blade.php": {
-        "style_statisch": 5
-    },
-    "livewire/observatorium/karte.blade.php": {
-        "style_statisch": 1
-    },
-    "livewire/observatorium/marktdaten.blade.php": {
-        "style_statisch": 4
-    },
-    "livewire/observatorium/styles.blade.php": {
-        "hex_farbe": 19,
-        "important": 2,
-        "style_block": 1
-    },
     "livewire/planung/index.blade.php": {
         "hex_farbe": 13,
         "important": 1,
@@ -176,19 +159,6 @@
     },
     "livewire/speisekarte/praesentation.blade.php": {
         "hex_farbe": 2
-    },
-    "livewire/trendradar/beobachten.blade.php": {
-        "important": 2
-    },
-    "livewire/trendradar/index.blade.php": {
-        "style_statisch": 1
-    },
-    "livewire/trendradar/research-styles.blade.php": {
-        "style_block": 1
-    },
-    "livewire/trendradar/wettbewerber-styles.blade.php": {
-        "important": 1,
-        "style_block": 1
     },
     "partials/editor-dark.blade.php": {
         "important": 7,

@@ -3,7 +3,7 @@
     use Platform\FoodAlchemist\Services\WettbewerbService as W;
 @endphp
 <div class="fa-wett" data-wettbewerber-research>
-    @include('foodalchemist::livewire.trendradar.wettbewerber-styles')
+    @include('foodalchemist::livewire.observatorium.styles')
     <div class="fa-wett-toolbar"><p>Profile pflegen, Firmenbezug prüfen und bestätigte Meldungen veröffentlichen.</p>@if($darf && ! $istHandy)<button type="button" class="fa-btn" wire:click="neu">+ Wettbewerber anlegen</button>@endif<a href="{{ route('foodalchemist.observatorium.index', ['blick' => 'wettbewerb']) }}" wire:navigate>Wettbewerb im Observatorium →</a></div>
     @if($meldung)<p role="status" class="fa-wett-notice">{{ $meldung }}</p>@endif
     @if($errors->any())<ul role="alert">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>@endif

@@ -21,6 +21,6 @@
                 @svg($merkerEintrag?->gemerkt ? 'heroicon-s-bookmark' : 'heroicon-o-bookmark')
             </button>
         </div>
-        @if($merkerEintrag?->trend_pruefen)<div class="fa-obs-source" style="margin:10px 0 0">Zur persönlichen Trendprüfung vorgemerkt</div>@endif
+        @if($merkerEintrag?->trend_pruefen)<div class="fa-obs-source fa-obs-vorgemerkt">Zur persönlichen Trendprüfung vorgemerkt</div>@endif
     </div>
 </article>
