@@ -91,10 +91,13 @@ it('liest den Haupttext ohne Navigation/Kopf/Fuß und erkennt Bezahlschranke, Bo
         'https://gesperrt.beispiel.test/*' => Http::response('Forbidden', 403),
         'https://login.beispiel.test/*' => Http::response('<html><body><main><h1>Dossier TEST-VT</h1><p>Bitte anmelden.</p><form><input type="password"></form></main></body></html>'),
         'https://leer.beispiel.test/*' => Http::response('<html><body><p>Kurz.</p></body></html>'),
+        // ohne <main>/<article>: dann zählt der ganze body — Navigation und Fuß müssen trotzdem raus
+        'https://ohnemain.beispiel.test/*' => Http::response(str_replace(['<main>', '</main>', '<article>', '</article>'], '', VT_SEITE)),
     ]);
     $frei = $this->svc->quelleLesen('https://studie.beispiel.test/barometer');
     expect($frei['zugang'])->toBe('frei')->and($frei['art'])->toBe('html')
         ->and($frei['text'])->toContain('64 % der Befragten')->not->toContain('999 Menüpunkte')->not->toContain('12345 Musterstadt')->not->toContain('Kopf der Website')
+        ->and($this->svc->quelleLesen('https://ohnemain.beispiel.test/x')['text'])->toContain('64 % der Befragten')->not->toContain('999 Menüpunkte')->not->toContain('12345 Musterstadt')
         ->and($this->svc->quelleLesen('https://bezahl.beispiel.test/x')['zugang'])->toBe('bezahl')
         ->and($this->svc->quelleLesen('https://gesperrt.beispiel.test/x')['zugang'])->toBe('gesperrt')
         ->and($this->svc->quelleLesen('https://login.beispiel.test/x')['zugang'])->toBe('bezahl')
