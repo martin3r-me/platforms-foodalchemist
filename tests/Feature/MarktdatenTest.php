@@ -89,7 +89,7 @@ it('verweigert mehrdeutige ZIP-Inhalte und begrenzt die entpackte Größe', func
     foreach ([['a.csv' => marktCsv(), 'b.csv' => marktCsv()], ['datei.txt' => marktCsv()], ['gross.csv' => str_repeat('x', 2 * 1024 * 1024 + 1)]] as $dateien) {
         Http::swap(new Factory);
         Http::fake([GenesisClient::ENDPOINT => Http::response(marktZip($dateien), 200)]);
-        expect(fn () => app(GenesisClient::class)->laden('CC13-01'))->toThrow(RuntimeException::class);
+        expect(fn () => app(GenesisClient::class)->laden('61111-0004', 'CC13A5', 'CC13-01'))->toThrow(RuntimeException::class);
     }
     expect(Daten::count())->toBe(0);
 });
@@ -201,19 +201,104 @@ it('formuliert die Klartext-Aussage nur aus den abgerufenen Werten und blendet M
     $this->svc->abrufen($this->rootTeam, true);
     $m = $this->svc->lesen($this->rootTeam);
     expect($m['aussage']['text'])->toBe('Restaurantpreise +3,1 %, Lebensmittel +0,3 % zum Vorjahresmonat: Die Restaurantpreise steigen stärker als die Lebensmittelpreise im Handel (Abstand 2,8 Prozentpunkte).')
-        ->and($m['aussage']['monat'])->toBe('2026-09')->and($m['aussage']['basis'])->toBe('2020=100')
-        ->and(array_column($m['reihen'][0]['tabelle'], 'monat'))->toBe(['2026-09', '2025-09'])
-        ->and($m['reihen'][0]['tabelle'][0])->not->toHaveKey('original');
+        ->and($m['aussage']['monat'])->toBe('2026-09')->and($m['aussage']['quellen'])->toBe(['61111-0004'])
+        ->and(array_column($m['reihen'][0]['tabelle_werte'], 'monat'))->toBe(['2026-09', '2025-09'])
+        ->and($m['reihen'][0]['tabelle_werte'][0])->not->toHaveKey('original');
     Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-aussage')
         ->assertSee('Die Restaurantpreise steigen stärker')->assertDontSee('unbekannt')->assertSeeHtml('fa-obs-marktdaten-tabelle');
 });
 
 it('trifft keine Aussage bei fehlendem Vergleich, verschiedener Indexbasis oder Bezugsmonat und sagt „etwa gleich“ unter der Schwelle', function () {
-    $reihe = fn (string $serie, ?float $vj, string $monat = '2026-09', string $basis = '2020=100') => ['serie' => $serie, 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => $monat, 'einheit' => $basis]];
+    // Beide Reihen aus derselben Tabelle 61111-0004: dort muss auch die Indexbasis gleich sein.
+    $reihe = fn (string $serie, ?float $vj, string $monat = '2026-09', string $basis = '2020=100') => ['serie' => $serie, 'tabelle' => '61111-0004', 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => $monat, 'einheit' => $basis]];
     expect(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', null)]))->toBeNull()
         ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', 0.3, '2026-08')]))->toBeNull()
         ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', 0.3, '2026-09', '2025=100')]))->toBeNull()
         ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 2.0), $reihe('lebensmittelpreise', 1.7)])['text'])->toContain('Beide entwickeln sich etwa gleich (Abstand 0,3 Prozentpunkte)')
         ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', -0.4), $reihe('lebensmittelpreise', -2.0)])['text'])->toContain('Die Restaurantpreise sinken weniger stark als die Lebensmittelpreise im Handel')
         ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 1.0), $reihe('lebensmittelpreise', 4.0)])['text'])->toContain('Die Lebensmittelpreise im Handel steigen stärker als die Restaurantpreise');
+});
+
+/** Gespeicherte Reihe ohne Netz: Werte erfunden, nur Form wie der CSV-Leser sie ablegt. */
+function marktReihe(int $teamId, string $serie, float $vorjahr, float $jetzt, string $basis = '2021=100'): void
+{
+    Daten::create(['team_id' => $teamId, 'serie' => $serie, 'abgerufen_at' => now(), 'versucht_at' => now(), 'punkte' => [
+        ['monat' => '2025-09', 'wert' => $vorjahr, 'einheit' => $basis, 'original' => []],
+        ['monat' => '2026-09', 'wert' => $jetzt, 'einheit' => $basis, 'original' => []],
+    ]]);
+}
+
+it('nimmt den Großhandel statt des VPI Lebensmittel, sobald er Werte hat, mit Unterzeilen und Kalkulations-Aussage über Tabellen hinweg', function () {
+    $t = $this->rootTeam->id;
+    marktReihe($t, 'lebensmittelpreise', 100.0, 100.3, '2020=100');
+    marktReihe($t, 'gaststaettenpreise', 100.0, 103.1, '2020=100');
+    expect(array_column($this->svc->lesen($this->rootTeam)['reihen'], 'serie'))->toBe(['lebensmittelpreise', 'gaststaettenpreise']);
+
+    marktReihe($t, 'grosshandel_nahrungsmittel', 100.0, 105.0);
+    marktReihe($t, 'grosshandel_fleisch', 100.0, 108.2);
+    $m = $this->svc->lesen($this->rootTeam);
+    expect(array_column($m['reihen'], 'serie'))->toBe(['grosshandel_nahrungsmittel', 'gaststaettenpreise'])
+        ->and(array_column($m['reihen'][0]['unterreihen'], 'serie'))->toBe(['grosshandel_fleisch'])
+        ->and($m['aussagen'][0]['text'])->toBe('Großhandel Nahrungsmittel +5,0 %, Restaurantpreise +3,1 % zum Vorjahresmonat: Die Großhandelspreise steigen stärker als die Restaurantpreise (Abstand 1,9 Prozentpunkte) – der Einkauf verteuert sich schneller, die Kalkulation gerät unter Druck.')
+        ->and($m['aussagen'][0]['quellen'])->toBe(['61281-0004', '61111-0004']);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-unterreihen')->assertSee('+8,2 %')
+        ->assertSee('Originaltabelle 61281-0004 ansehen')->assertDontSee('Nahrungsmittel & alkoholfreie Getränke (Verbraucherpreisindex)');
+});
+
+it('formuliert Umsatz-, Vorlauf- und Energie-Aussagen nur bei Werten im selben Monat', function () {
+    $r = fn (string $serie, ?float $vj, string $monat = '2026-09') => ['serie' => $serie, 'tabelle' => MarktdatenService::REIHEN[$serie]['tabelle'], 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => $monat, 'einheit' => '2015=100']];
+    $text = fn (array $reihen) => array_column(MarktdatenService::aussagen($reihen), 'text', 'schluessel');
+    expect($text([$r('gastgewerbe_umsatz_nominal', 2.4), $r('gastgewerbe_umsatz_real', -1.1)])['umsatz'])
+        ->toBe('Gastgewerbe-Umsatz nominal +2,4 %, real -1,1 % zum Vorjahresmonat: Das Plus kommt aus höheren Preisen, nicht aus mehr Gästen oder Absatz.')
+        ->and($text([$r('gastgewerbe_umsatz_nominal', 3.0), $r('gastgewerbe_umsatz_real', 0.8)])['umsatz'])->toContain('Auch preisbereinigt wird mehr umgesetzt.')
+        ->and($text([$r('gastgewerbe_umsatz_nominal', -0.5), $r('gastgewerbe_umsatz_real', -2.0)])['umsatz'])->toContain('Die Branche setzt auch in Euro weniger um.')
+        ->and($text([$r('gastgewerbe_umsatz_nominal', 3.0), $r('gastgewerbe_umsatz_real', 0.8, '2026-08')]))->not->toHaveKey('umsatz')
+        ->and($text([$r('erzeugerpreise_nahrungsmittel', 4.0), $r('grosshandel_nahrungsmittel', 1.5)])['vorlauf'])
+            ->toContain('Bei den Herstellern steigen die Preise stärker als im Großhandel (Abstand 2,5 Prozentpunkte) – Druck auf künftige Einkaufspreise möglich.')
+        ->and($text([$r('erzeugerpreise_nahrungsmittel', 0.5), $r('grosshandel_nahrungsmittel', 2.0)])['vorlauf'])->toContain('Im Großhandel steigen die Preise stärker als bei den Herstellern')
+        ->and($text([$r('strom_gewerbe', 6.3)])['energie'])->toBe('Strom für Gewerbe +6,3 % zum Vorjahresmonat: Energie wird teurer – Garprozesse und Kühlung kosten mehr.')
+        ->and($text([$r('strom_gewerbe', null)]))->toBe([]);
+});
+
+it('ruft Reihen ohne Codes nie ab und meldet sie, Erkunden schlägt nur nach und schreibt nichts', function () {
+    Http::fake([
+        GenesisClient::ENDPOINT => fn ($r) => Http::response(marktCsv($r['classifyingkey1']), 200),
+        GenesisClient::METADATEN_TABELLE => Http::response(['Status' => ['Code' => 0, 'Content' => 'erfolgreich', 'Type' => 'Information'],
+            'Object' => ['Code' => '61281-0004', 'Content' => 'Index der Großhandelsverkaufspreise (TEST)', 'Time' => ['From' => '2005'], 'Structure' => ['Columns' => [['Code' => 'TESTWZ', 'Content' => 'TEST-Wirtschaftszweige']]]]]),
+        GenesisClient::MERKMAL_WERTE => Http::response(['Status' => ['Code' => 0, 'Type' => 'Information'], 'List' => [
+            ['Code' => 'TEST-4632', 'Content' => 'Großhandel mit Fleisch (TEST)'], ['Code' => 'TEST-4633', 'Content' => 'Großhandel mit Milch (TEST)']]]),
+    ]);
+    $r = $this->svc->abrufen($this->rootTeam);
+    expect(array_column($r['ergebnisse'], 'serie'))->toBe(['lebensmittelpreise', 'gaststaettenpreise'])
+        ->and(array_column($r['noch_nicht_abrufbar'], 'serie'))->toContain('grosshandel_nahrungsmittel', 'strom_gewerbe');
+    Http::assertSentCount(2);
+
+    $aufbau = $this->svc->erkunden($this->rootTeam, '61281-0004');
+    $werte = $this->svc->erkunden($this->rootTeam, '61281-0004', 'TESTWZ', 'fleisch');
+    expect($aufbau['aufbau']['struktur']['Columns'][0]['Code'])->toBe('TESTWZ')
+        ->and($werte['werte'])->toBe([['code' => 'TEST-4632', 'inhalt' => 'Großhandel mit Fleisch (TEST)']])
+        ->and(fn () => $this->svc->erkunden($this->rootTeam, '99999-0001'))->toThrow(RuntimeException::class, 'Nur konfigurierte Tabellen')
+        ->and(fn () => $this->svc->erkunden($this->rootTeam, '61281-0004', 'x; drop'))->toThrow(RuntimeException::class, 'GENESIS-Code')
+        ->and(Daten::count())->toBe(0);
+
+    $tool = app(ToolRegistry::class)->get('foodalchemist.marktdaten.ABRUF');
+    expect($tool->execute(['erkunden_tabelle' => '61281-0004', 'erkunden_merkmal' => 'TESTWZ', 'suche' => 'milch'], new ToolContext($this->owner, $this->rootTeam))->data['werte'][0]['code'])->toBe('TEST-4633')
+        ->and($tool->execute(['erkunden_tabelle' => '61281-0004'], new ToolContext($this->viewer, $this->rootTeam))->success)->toBeFalse()
+        ->and(Daten::count())->toBe(0);
+
+    Http::swap(new Factory);
+    Http::fake([GenesisClient::METADATEN_TABELLE => Http::response(['Status' => ['Code' => 15, 'Content' => 'Nicht berechtigt', 'Type' => 'ERROR']])]);
+    expect(fn () => $this->svc->erkunden($this->rootTeam, '61281-0004'))->toThrow(RuntimeException::class, 'GENESIS-Fehler: Nicht berechtigt');
+});
+
+it('liest je Reihe nur die passende Wertvariable und die Pflicht-Schlüssel', function () {
+    $csv = "time;1_variable_attribute_code;2_variable_attribute_code;value;value_unit;value_variable_label;value_q\n"
+        ."2026;MONAT09;TESTWZ-56;104,0;2015=100;Umsatz in jeweiligen Preisen (nominal);\n"
+        ."2026;MONAT09;TESTWZ-56;97,0;2015=100;Umsatz in konstanten Preisen (real);\n"
+        ."2026;MONAT08;TESTWZ-56;103,0;2015=100;Umsatz in jeweiligen Preisen (nominal);\n";
+    $leser = app(GenesisCsvLeser::class);
+    expect(array_column($leser->lesen($csv, 'TESTWZ-56', 'real'), 'wert'))->toEqual([97.0])
+        ->and(array_column($leser->lesen($csv, 'TESTWZ-56', 'nominal'), 'wert'))->toEqual([103.0, 104.0])
+        ->and(fn () => $leser->lesen($csv, 'TESTWZ-56', 'umsatz'))->toThrow(RuntimeException::class, 'Mehrere GENESIS-Werte')
+        ->and(fn () => $leser->lesen($csv, 'TESTWZ-56', 'nominal', ['MONAT12']))->toThrow(RuntimeException::class, 'Keine passenden');
 });
