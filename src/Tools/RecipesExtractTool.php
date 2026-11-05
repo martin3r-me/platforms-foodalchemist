@@ -52,6 +52,10 @@ class RecipesExtractTool extends FoodAlchemistTool implements ToolContract, Tool
                 'raw_text' => ['type' => 'string', 'description' => 'Der vollständige Rohtext der Rezeptur (Zutaten + Zubereitung; bei Fotos: der abgelesene Text). Sektionen wie "Für die Sauce: …" werden als eigene Komponenten erkannt.'],
                 'vk' => ['type' => 'boolean', 'default' => false, 'description' => 'true = als VK-Gericht anlegen (überschreibt den erkannten Typ). Weglassen = Typ aus dem Text (gericht|basisrezept).'],
                 'dry_run' => ['type' => 'boolean', 'default' => false, 'description' => 'true = nur extrahieren + geparste Struktur zurückgeben, NICHTS anlegen.'],
+                'convenience' => ['type' => 'string', 'enum' => ['from_scratch', 'teil_convenience', 'voll_convenience'],
+                    'description' => 'Leitplanke Eigenleistung wie im Import-Dialog. Weglassen = Eigenleistung (Rohform nach Regelwerk §2). '
+                        . 'teil_convenience: vorhandene Fertigware bei Zubereitung („gekochte Rote Bete“ → Rote Bete gegart); '
+                        . 'voll_convenience: zusätzlich bei Schnittformen („Zwiebel gewürfelt“ → Zwiebelwürfel).'],
             ],
             'required' => ['raw_text'],
         ];
@@ -97,7 +101,9 @@ class RecipesExtractTool extends FoodAlchemistTool implements ToolContract, Tool
         }
 
         try {
-            $resultat = $svc->legeAn($team, $extrakt, $vkOverride);
+            $leitplanken = in_array($arguments['convenience'] ?? null, ['from_scratch', 'teil_convenience', 'voll_convenience'], true)
+                ? ['convenience' => (string) $arguments['convenience']] : [];
+            $resultat = $svc->legeAn($team, $extrakt, $vkOverride, 0, $leitplanken);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

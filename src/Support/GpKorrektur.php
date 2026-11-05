@@ -48,8 +48,11 @@ final class GpKorrektur
             }
         }
 
-        if (($parameter['convenience'] ?? null) !== 'voll_convenience' && self::istFrisch($gp)
-            && ($suffix = self::verarbeitungIn($gp)) !== null) {
+        // Leitplanke Eigenleistung (Dominique 05.11.): voll_convenience lässt jede Fertigware stehen; teil_convenience die Zubereitung
+        // (gegart, gekocht …), nicht den Zuschnitt; ohne Wahl / from_scratch → §2 Rohform wie bisher
+        $conv = $parameter['convenience'] ?? null;
+        if ($conv !== 'voll_convenience' && self::istFrisch($gp) && ($suffix = self::verarbeitungIn($gp)) !== null
+            && ! ($conv === 'teil_convenience' && in_array(strtr(mb_strtolower(trim($suffix)), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue']), \Platform\FoodAlchemist\Services\Matching\BasisVariante::ZUBEREITUNG, true))) {
             $ersatz = self::gegenstueck($team, $gp, fn (FoodAlchemistGp $k) => self::istFrisch($k)
                 && self::istBio($k) === self::istBio($gp) && self::verarbeitungIn($k) === null);
             if ($ersatz !== null) {
