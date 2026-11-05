@@ -27,7 +27,7 @@ Heute geht das nicht sauber:
 |---|---|---|
 | Beispiele | Fleischabschnitte, Parüren, Knochen, Karkassen, Gemüseschalen | Zitronen-/Limettensaft, Abrieb, Zeste |
 | Mutter wird … | ohnehin für ein anderes Produkt eingekauft — das Derivat fällt **übrig** | **gezielt** für das Derivat eingekauft |
-| EK | **offen (Frage 5)**: 0 € oder anteilig | Mutter-Preis ÷ Ausbeute |
+| EK | **0 €** (Dominique 05.11.: „bei Abschnitten ohne Preis“) — zählt als bepreist, nicht als Lücke | Mutter-Preis ÷ Ausbeute (Dominique 05.11.: „bei Saft nehmen wir den Preis der Mutter“) |
 | Bedarf/Bestellung | **kein** Fallback auf die Mutter (sonst doppelt bestellt) | Mutter-Menge = Derivat-Menge ÷ Ausbeute |
 
 Unterscheidung am Derivat: neues Feld `derivat_art` = `nebenprodukt` | `zweck`. Vorschlag für den Default: aus dem §11.2-Marker abgeleitet
@@ -83,8 +83,8 @@ Vorschlag: im Planungsblatt (Spec Produktion) Bedarf des Nebenprodukts gegen den
 3. **Gekaufter Saft vs. Derivat:** Wenn ein Rezept „Limettensaft, 100 ml“ sagt — gekaufter Saft (heute) oder auch Derivat (frisch
    gepresst)? Entscheidet das die Leitplanke Eigenleistung (from_scratch → Derivat, Convenience → gekauft)?
 4. **Mehrere Derivate einer Mutter** (Saft + Abrieb derselben Limette im selben Rezept): Bedarf aus dem größeren Anteil oder addiert?
-5. **EK eines Nebenprodukts (a):** 0 € (fällt ohnehin an, die Mutter trägt die Kosten) oder anteilig (Mutter-Preis × Anteil, damit
-   das Rezept mit Parüren nicht künstlich billig wirkt)? Bei „anteilig“: wird die Mutter-Kalkulation dann um denselben Betrag entlastet?
+5. ~~EK eines Nebenprodukts (a)~~ — **entschieden (Dominique 05.11.): „Bei Saft nehmen wir den Preis der Mutter, bei Abschnitten ohne
+   Preis.“** Nebenprodukt = 0 € (bewusst, nicht „unbepreist“: die Zeile zählt als bepreist, Kennzeichen „Nebenprodukt, ohne Preis“).
 6. **Nebenprodukt reicht nicht (a):** Hinweis im Planungslauf (Vorschlag oben) — und dann? Zukauf eines Ersatz-GP (z. B. Kalbsknochen
    als LA), Mutter-Menge erhöhen oder nur melden?
 7. **Default der Art:** Passt die Ableitung aus dem Marker (Abschnitte/Parüren/Knochen/Karkasse/Stiele = Nebenprodukt; Saft/Abrieb/Zeste
