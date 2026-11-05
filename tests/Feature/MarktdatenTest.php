@@ -49,6 +49,51 @@ function marktHttp(string $wert = '110,0', string $einheit = '2020=100'): void
     Http::fake([GenesisClient::ENDPOINT => fn ($r) => Http::response(marktCsv($r['classifyingkey1'], $wert, $einheit), 200)]);
 }
 
+function marktZip(array $dateien): string
+{
+    $tmp = tmpfile();
+    $pfad = stream_get_meta_data($tmp)['uri'];
+    $zip = new ZipArchive;
+    $zip->open($pfad, ZipArchive::OVERWRITE);
+    foreach ($dateien as $name => $inhalt) {
+        $zip->addFromString($name, $inhalt);
+    }
+    $zip->close();
+    // libzip ersetzt beim Schreiben die Datei; der alte tmpfile-Handle zeigt noch auf den alten Inode.
+    $inhalt = file_get_contents($pfad);
+    fclose($tmp);
+
+    return $inhalt;
+}
+
+it('liest echte GENESIS-CSV-Strukturen aus begrenzten ZIP-Antworten und erhält unbekannte Monate', function () {
+    Http::fake([GenesisClient::ENDPOINT => function ($r) {
+        $serie = $r['classifyingkey1'] === 'CC13-01' ? 'lebensmittelpreise' : 'gaststaettenpreise';
+        $csv = file_get_contents(dirname(__DIR__).'/Fixtures/destatis/'.$serie.'.csv');
+
+        return Http::response(marktZip(['61111-0004.csv' => $csv]), 200, ['Content-Type' => 'application/zip']);
+    }]);
+    $ergebnis = $this->svc->abrufen($this->rootTeam, true);
+    expect(array_column($ergebnis['ergebnisse'], 'fehler'))->toBe([null, null])
+        ->and($ergebnis['ergebnisse'][0]['letzter_wert_monat'])->toBe('2026-09')
+        ->and($ergebnis['ergebnisse'][0]['monate_mit_wert'])->toBe(2);
+    $reihen = $this->svc->lesen($this->rootTeam)['reihen'];
+    expect($reihen[0]['aktuell']['monat'])->toBe('2026-09')->and($reihen[0]['aktuell']['wert'])->toEqual(137.2)
+        ->and($reihen[1]['aktuell']['wert'])->toEqual(137.8)->and($reihen[0]['neuere_monate_ohne_wert'])->toBe(1)
+        ->and($reihen[0]['punkte'])->toHaveCount(3)->and($reihen[0]['punkte'][2]['wert'])->toBeNull();
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('137,2')
+        ->assertSee('2026-09')->assertSee('Für neuere Monate liegen noch keine Werte vor.');
+});
+
+it('verweigert mehrdeutige ZIP-Inhalte und begrenzt die entpackte Größe', function () {
+    foreach ([['a.csv' => marktCsv(), 'b.csv' => marktCsv()], ['datei.txt' => marktCsv()], ['gross.csv' => str_repeat('x', 2 * 1024 * 1024 + 1)]] as $dateien) {
+        Http::swap(new Factory);
+        Http::fake([GenesisClient::ENDPOINT => Http::response(marktZip($dateien), 200)]);
+        expect(fn () => app(GenesisClient::class)->laden('CC13-01'))->toThrow(RuntimeException::class);
+    }
+    expect(Daten::count())->toBe(0);
+});
+
 it('zeigt fehlenden Zugang ohne Netzwerk, Zahlen oder Erfolg zu erfinden', function () {
     config(['foodalchemist.marktdaten.genesis_token' => '']);
     $r = $this->svc->abrufen($this->rootTeam);
@@ -90,7 +135,9 @@ it('erhält ältere Daten bei Fehlern und verrät keine Zugangsdaten', function 
 it('behandelt fehlende Zahlen und unterschiedliche Indexbasen nicht als Wachstum', function () {
     marktHttp('.');
     $this->svc->abrufen($this->rootTeam, true);
-    expect($this->svc->lesen($this->rootTeam)['reihen'][0]['aktuell']['wert'])->toBeNull()
+    expect($this->svc->lesen($this->rootTeam)['reihen'][0]['aktuell']['monat'])->toBe('2025-09')
+        ->and($this->svc->lesen($this->rootTeam)['reihen'][0]['punkte'][1]['wert'])->toBeNull()
+        ->and($this->svc->lesen($this->rootTeam)['reihen'][0]['neuere_monate_ohne_wert'])->toBe(1)
         ->and($this->svc->lesen($this->rootTeam)['reihen'][0]['vorjahr_prozent'])->toBeNull();
     marktHttp('110,0', '2025=100');
     $this->svc->abrufen($this->rootTeam, true);

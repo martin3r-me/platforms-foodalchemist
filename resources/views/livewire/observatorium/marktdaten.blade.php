@@ -8,7 +8,8 @@
             <h3>{{ $reihe['name'] }}</h3>
             @if($reihe['aktuell'])
                 <p><strong>{{ $reihe['aktuell']['wert'] === null ? 'Wert nicht verfügbar' : number_format($reihe['aktuell']['wert'], 1, ',', '.') }}</strong> · {{ $reihe['aktuell']['einheit'] }}</p>
-                <p class="fa-obs-subtitle">Bezugsmonat {{ $reihe['aktuell']['monat'] }} · {{ $reihe['veraltet'] ? 'Älterer Datenstand' : 'Letzter geladener Monat' }}</p>
+                <p class="fa-obs-subtitle">Bezugsmonat {{ $reihe['aktuell']['monat'] }} · {{ $reihe['veraltet'] ? 'Älterer Datenstand' : 'Letzter verfügbarer Wert' }}</p>
+                @if($reihe['neuere_monate_ohne_wert'])<p class="fa-obs-subtitle">Für neuere Monate liegen noch keine Werte vor.</p>@endif
                 <p>{{ $reihe['vorjahr_prozent'] === null ? 'Kein belastbarer Vorjahresvergleich' : sprintf('%s%s %% zum Vorjahresmonat', $reihe['vorjahr_prozent'] > 0 ? '+' : '', number_format($reihe['vorjahr_prozent'], 1, ',', '.')) }}</p>
                 <p class="fa-obs-subtitle">Abgerufen {{ \Illuminate\Support\Carbon::parse($reihe['abgerufen_am'])->format('d.m.Y H:i') }}</p>
                 <details><summary>Monatswerte &amp; Original-Kennzeichnungen</summary>

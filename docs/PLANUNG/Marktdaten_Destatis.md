@@ -25,7 +25,9 @@ FOODALCHEMIST_GENESIS_TOKEN, nie in MCP, Browser, Quell-URL oder Logs.
 MCP `marktdaten.ABRUF` startet als Probelauf. `apply=true` speichert explizit;
 kein automatischer Scheduler im Pilot.
 Fehlender Zugang ist ein sichtbarer Zustand, keine leere Erfolgsmeldung.
-Der Nutzer hat am 05.11.2026 bestätigt, noch keinen Zugang zu besitzen.
+Der Nutzer hat am 05.11.2026 einen GENESIS-Token lokal bereitgestellt. Ein
+authentifizierter Probelauf mit dem echten Foodalchemist-Client ist erfolgreich;
+der Token wurde dabei nur im Prozessspeicher verwendet und nicht veröffentlicht.
 
 ## RSS
 
@@ -38,7 +40,7 @@ Keine rückwirkende Löschung oder pauschale Quellen-/Themenaktivierung.
 
 Parser/Fehlerfälle, fehlender Token ohne HTTP-Aufruf, Probelauf ohne Writes,
 Idempotenz, Revision, Nullwerte, Einheit, Tenant-/Leserechte, MCP und mobile Ansicht
-testen. API-Live-Abnahme mit echten Werten bleibt bis zum GENESIS-Zugang offen.
+testen. API-Probelauf mit echten Antworten erfolgreich, produktive Aktivierung noch offen.
 Deployment über food-alchemist.de/update.sh nach gesonderter Freigabe.
 
 Offizielle Referenz: https://github.com/StatistischesBundesamt/GENESIS-Online
@@ -54,5 +56,25 @@ Bildschirmprüfung bei 390 und 1365 Pixeln ohne horizontalen Überlauf, fehlende
 Zugang und fiktive Monatswerte geprüft. Keine echten Marktdaten importiert.
 
 MySQL-Smoke wurde versucht, der lokale MySQL-Server war nicht erreichbar; keine
-bestehende Datenbank verändert. MySQL-Abnahme, vollständige Modulsuite vor Release
-und authentifizierter API-Live-Pilot bleiben ausdrücklich offen. Kein Deployment.
+bestehende Datenbank verändert. MySQL-Abnahme und vollständige Modulsuite vor Release bleiben ausdrücklich offen.
+Kein Deployment und keine produktive Datenübernahme.
+
+## Authentifizierter Pilot und Antwortformat
+
+05.11.2026: Beide offiziellen API-Anfragen HTTP 200, jeweils 36 CSV-Monatszeilen
+2024–2026. ZIP-Antwort auch bei `compress=false`: genau eine CSV, höchstens 2 MiB
+entpackt, keine Dateipfad-Extraktion; temporäres ZIP wird zuverlässig entfernt.
+Im realen PHP-Client zusätzlich erfolgreicher Dry-Run in isolierter SQLite-DB
+(1 Test, 4 Assertions), keine gespeicherten Snapshots und keine KI-Aufträge.
+Originalschema in kurzen, öffentlichen CSV-Fixtures festgehalten, keine Tokens.
+
+Monatsreihen enthalten bereits Platzhalter für noch nicht vorliegende Werte.
+Die Übersicht verwendet den letzten Zahlenwert (beide September 2026), erhält
+Nullwerte im Verlauf und weist auf noch fehlende neuere Monate hin. Dezember
+2026 wird am Testdatum als Zukunft ausgeschlossen. API-Ergebnis unterscheidet
+heruntergeladene Monate und letzten Monat mit Zahlenwert.
+
+Abschluss nach Pilotkorrekturen: 10 Marktdaten-Featuretests grün (71 Assertions),
+zusätzlich 15 bestehende Observatoriumtests im begleitenden Lauf grün.
+ZIP-Grenzen, echte Antwortstruktur, letzter verfügbarer Wert und Hinweis auf
+noch unbekannte Folgemonate sind abgedeckt.

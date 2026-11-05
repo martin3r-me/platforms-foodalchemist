@@ -29,12 +29,14 @@ class MarktdatenService
             $d = $daten->first(fn ($d) => $d->serie === $serie && (int) $d->team_id === (int) $team->id)
                 ?? $daten->firstWhere('serie', $serie);
             $punkte = $d?->punkte ?? [];
-            $aktuell = $punkte === [] ? null : $punkte[array_key_last($punkte)];
+            $bekannte = array_values(array_filter($punkte, fn ($p) => $p['wert'] !== null));
+            $aktuell = $bekannte !== [] ? $bekannte[array_key_last($bekannte)] : ($punkte === [] ? null : $punkte[array_key_last($punkte)]);
+            $offeneMonate = $aktuell === null ? 0 : count(array_filter($punkte, fn ($p) => $p['monat'] > $aktuell['monat'] && $p['wert'] === null));
             $vorjahr = $aktuell ? collect($punkte)->firstWhere('monat', ((int) substr($aktuell['monat'], 0, 4) - 1).substr($aktuell['monat'], 4)) : null;
             $vergleich = $aktuell !== null && $vorjahr !== null && $aktuell['wert'] !== null && $vorjahr['wert'] > 0
                 && $aktuell['einheit'] === $vorjahr['einheit']
                 ? round(($aktuell['wert'] / $vorjahr['wert'] - 1) * 100, 1) : null;
-            $out[] = $meta + ['serie' => $serie, 'aktuell' => $aktuell, 'vorjahr_prozent' => $vergleich, 'punkte' => $punkte,
+            $out[] = $meta + ['serie' => $serie, 'aktuell' => $aktuell, 'neuere_monate_ohne_wert' => $offeneMonate, 'vorjahr_prozent' => $vergleich, 'punkte' => $punkte,
                 'abgerufen_am' => $d?->abgerufen_at?->toIso8601String(), 'versucht_am' => $d?->versucht_at?->toIso8601String(),
                 'fehler' => $d?->letzter_fehler, 'quelle' => self::QUELLE, 'team_id' => $d?->team_id,
                 'veraltet' => $aktuell !== null && $aktuell['monat'] < now()->subMonthsNoOverflow(3)->format('Y-m')];
@@ -57,7 +59,10 @@ class MarktdatenService
                         'punkte' => $punkte, 'abgerufen_at' => now(), 'versucht_at' => now(), 'letzter_fehler' => null,
                     ]);
                 }
-                $out[] = ['serie' => $serie, 'monate' => count($punkte), 'letzter_monat' => $punkte[array_key_last($punkte)]['monat'], 'fehler' => null];
+                $bekannte = array_values(array_filter($punkte, fn ($p) => $p['wert'] !== null));
+                $out[] = ['serie' => $serie, 'monate' => count($punkte), 'monate_mit_wert' => count($bekannte),
+                    'letzter_monat' => $punkte[array_key_last($punkte)]['monat'],
+                    'letzter_wert_monat' => $bekannte === [] ? null : $bekannte[array_key_last($bekannte)]['monat'], 'fehler' => null];
             } catch (\RuntimeException $e) {
                 if ($apply) {
                     Daten::updateOrCreate(['team_id' => $team->id, 'serie' => $serie], [
