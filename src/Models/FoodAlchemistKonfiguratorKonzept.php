@@ -20,8 +20,8 @@ class FoodAlchemistKonfiguratorKonzept extends Model
 
     public const ROLLEN = ['haupt', 'addon', 'getraenk'];
 
-    /** Spec 94c: Getränkepaket — Abrechnung (8b: pauschale; verbrauch folgt mit 8c) und Dauer der Pauschale. */
-    public const GETRAENK_ABRECHNUNG = ['pauschale'];
+    /** Spec 94c: Getränkepaket — Abrechnung (pauschale im Preis pro Person, verbrauch als zzgl. mit optionalem Deckel) und Dauer. */
+    public const GETRAENK_ABRECHNUNG = ['pauschale', 'verbrauch'];
 
     public const GETRAENK_DAUER = ['event', 'stunde'];
 
@@ -37,6 +37,7 @@ class FoodAlchemistKonfiguratorKonzept extends Model
         'position' => 'integer',
         'grund_stunden' => 'decimal:2',
         'folgestunde_satz' => 'decimal:2',
+        'verbrauch_deckel' => 'decimal:2',
         'payload_json' => 'array',   // Stufe 5b: wording_overrides je Concept-Slot-Id (wie Foodbook-Block)
     ];
 

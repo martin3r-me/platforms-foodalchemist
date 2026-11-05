@@ -28,7 +28,7 @@ class KonfiguratorService
 
     private const KONZEPT_FELDER = ['lunch_concept_id', 'dinner_concept_id', 'abschnitt', 'addon_tageszeit', 'gebunden_an_id',
         'indikativ_lunch', 'indikativ_dinner', 'kunden_titel', 'claim', 'position',
-        'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz'];   // Spec 94c: Getränkepaket
+        'getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz', 'verbrauch_deckel'];   // Spec 94c: Getränkepaket
 
     public function __construct(
         private KonfiguratorPricingService $pricing,
@@ -676,7 +676,7 @@ class KonfiguratorService
         if ($rolle === 'getraenk') {
             return $this->getraenkWerte($k, $w, $ziel);
         }
-        foreach (['getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz'] as $f) {
+        foreach (['getraenk_abrechnung', 'getraenk_dauer', 'grund_stunden', 'folgestunde_satz', 'verbrauch_deckel'] as $f) {
             unset($w[$f]);
         }
         if ($rolle === 'addon') {
@@ -701,8 +701,9 @@ class KonfiguratorService
     }
 
     /**
-     * Spec 94c · Kommerzielles eines Getränkepakets: Abrechnung (8b: Pauschale), Dauer event | stunde, optional Staffel (Grundpreis für
-     * grund_stunden, je weitere Stunde folgestunde_satz; beides oder keines), Bindung an ein Hauptkonzept wie bei Add-ons.
+     * Spec 94c · Kommerzielles eines Getränkepakets: Abrechnung Pauschale oder nach Verbrauch (8c, mit optionalem Deckel für das Event, > 0),
+     * Dauer event | stunde, optional Staffel (Grundpreis für grund_stunden, je weitere Stunde folgestunde_satz; beides oder keines), Bindung an
+     * ein Hauptkonzept wie bei Add-ons. Ein Deckel ohne Verbrauch wird verworfen (Wechsel auf Pauschale räumt ihn).
      */
     private function getraenkWerte(FoodAlchemistKonfigurator $k, array $w, array $ziel): array
     {
@@ -711,7 +712,12 @@ class KonfiguratorService
         $w['getraenk_abrechnung'] = $ziel['getraenk_abrechnung'] ?? null ?: 'pauschale';
         $w['getraenk_dauer'] = $ziel['getraenk_dauer'] ?? null ?: 'event';
         if (! in_array($w['getraenk_abrechnung'], FoodAlchemistKonfiguratorKonzept::GETRAENK_ABRECHNUNG, true)) {
-            throw new \InvalidArgumentException('Abrechnung des Getränkepakets: Pauschale (nach Verbrauch folgt mit Stufe 8c).');
+            throw new \InvalidArgumentException('Abrechnung des Getränkepakets: pauschale oder verbrauch.');
+        }
+        $deckel = $ziel['verbrauch_deckel'] ?? null;
+        $w['verbrauch_deckel'] = $w['getraenk_abrechnung'] === 'verbrauch' && $deckel !== null && $deckel !== '' ? (float) str_replace(',', '.', (string) $deckel) : null;
+        if ($w['verbrauch_deckel'] !== null && $w['verbrauch_deckel'] <= 0) {
+            throw new \InvalidArgumentException('Der Höchstbetrag (Deckel) muss größer 0 sein, oder leer für keinen Deckel.');
         }
         if (! in_array($w['getraenk_dauer'], FoodAlchemistKonfiguratorKonzept::GETRAENK_DAUER, true)) {
             throw new \InvalidArgumentException('Dauer der Pauschale: event (je Gast fürs ganze Event) oder stunde (je Gast und Stunde).');

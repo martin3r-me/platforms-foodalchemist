@@ -71,8 +71,8 @@ it('Pauschale je Stunde mit der Einsatzzeit; Staffel: 4 Std. Grundpreis 18 € +
 
     expect(fn () => $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'grund_stunden' => 4]))
         ->toThrow(InvalidArgumentException::class, 'gehören zusammen');
-    expect(fn () => $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'getraenk_abrechnung' => 'verbrauch']))
-        ->toThrow(InvalidArgumentException::class, '8c');
+    expect(fn () => $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'getraenk_abrechnung' => 'kiste']))
+        ->toThrow(InvalidArgumentException::class, 'pauschale oder verbrauch');
 });
 
 it('Verschiedene Concepts je Zeitfenster: Tag und Abend = Tag-Teil + Abend-Teil mit Kombi-Rabatt', function () {

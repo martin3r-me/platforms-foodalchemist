@@ -1,5 +1,6 @@
 {{-- Spec 94c · Konfigurator-Editor, Reiter Getränke: Getränkepakete aus dem Concepter (Kategorie „Getränke“). Im Concept steht der Inhalt
-     (Positionen, Mengen je Gast, Wording, Bilder), hier das Kommerzielle: Pauschale je Event oder je Stunde, optional Staffel
+     (Positionen, Mengen je Gast, Wording, Bilder), hier das Kommerzielle: Pauschale oder nach Verbrauch (8c: zzgl., optional Höchstbetrag),
+     je Event oder je Stunde, optional Staffel
      (Grundpreis für X Stunden + Satz je Folgestunde), je Zeitfenster ein eigenes Concept (Lunch tagsüber, Dinner abends; Tag und Abend =
      beide Teile), Bindung, Pflicht. --}}
 @php
@@ -37,7 +38,11 @@
                 <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-3">
                     <x-fa::field label="Titel für den Kunden" for="kfg-titel"><x-fa::input id="kfg-titel" wire:model="konzeptForm.kunden_titel" /></x-fa::field>
                     <x-fa::field label="Claim" for="kfg-claim" optional><x-fa::input id="kfg-claim" wire:model="konzeptForm.claim" /></x-fa::field>
-                    <x-fa::field label="Pauschale" for="kfg-dauer" hint="je Stunde: Einsatzzeit aus der Kalkulation">
+                    <x-fa::field label="Abrechnung" for="kfg-abrechnung" hint="Verbrauch: zzgl., nicht im Preis pro Person">
+                        <x-fa::select id="kfg-abrechnung" wire:model="konzeptForm.getraenk_abrechnung" :options="['pauschale' => 'Pauschale im Preis pro Person', 'verbrauch' => 'Nach Verbrauch (zzgl.)']" data-kfg-abrechnung />
+                    </x-fa::field>
+                    <x-fa::field label="Höchstbetrag (€, nur Verbrauch)" for="kfg-deckel" optional hint="für das ganze Event, leer = ohne Deckel"><x-fa::input id="kfg-deckel" wire:model="konzeptForm.verbrauch_deckel" numeric data-kfg-deckel /></x-fa::field>
+                    <x-fa::field label="Dauer" for="kfg-dauer" hint="je Stunde: Einsatzzeit aus der Kalkulation">
                         <x-fa::select id="kfg-dauer" wire:model="konzeptForm.getraenk_dauer" :options="['event' => 'Je Gast fürs ganze Event', 'stunde' => 'Je Gast und Stunde']" data-kfg-dauer />
                     </x-fa::field>
                     <x-fa::field label="Staffel: Grundstunden" for="kfg-grund" optional hint="Concept-Preis gilt für so viele Stunden"><x-fa::input id="kfg-grund" wire:model="konzeptForm.grund_stunden" numeric data-kfg-grund /></x-fa::field>
@@ -57,11 +62,16 @@
                 <div class="flex flex-wrap items-start justify-between gap-2">
                     <div class="flex flex-col gap-0.5">
                         <span class="font-medium">{{ $g->kunden_titel ?: $conceptName($g->dinnerConcept ?? $g->lunchConcept) }}@if($g->claim)<span class="{{ $leise }}"> · {{ $g->claim }}</span>@endif</span>
-                        <span class="{{ $leise }}">Pauschale {{ $dauer($g) }}@if($g->gebunden_an_id) · nur bei {{ optional($haupt->firstWhere('id', $g->gebunden_an_id))->kunden_titel }}@endif</span>
+                        <span class="{{ $leise }}" data-kfg-abrechnung-text="{{ $g->id }}">{{ $g->getraenk_abrechnung === 'verbrauch' ? 'Nach Verbrauch' . ($g->verbrauch_deckel !== null ? ', höchstens ' . $euro($g->verbrauch_deckel) : '') . ', Satz' : 'Pauschale' }} {{ $dauer($g) }}@if($g->gebunden_an_id) · nur bei {{ optional($haupt->firstWhere('id', $g->gebunden_an_id))->kunden_titel }}@endif</span>
                         <span class="{{ $leise }}">Tag: {{ $conceptName($g->lunchConcept) ?? '—' }} · Abend: {{ $conceptName($g->dinnerConcept) ?? '—' }}</span>
                         <span class="{{ $leise }}" data-kfg-preise="{{ $g->id }}">
                             @foreach($vorschau($g) as $f)
-                                @if($f['fall']['typ'] === 'getraenk' && $f['fall']['g'] === $g->id){{ ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Tag und Abend'][$f['fall']['t']] }} {{ $euro($f['preis_pp']) }} (DB {{ $euro($f['db_pp']) }})@if(! $loop->last) · @endif @endif
+                                @if($f['fall']['typ'] === 'getraenk' && $f['fall']['g'] === $g->id)
+                                    @php($vz = collect($f['einzel'])->firstWhere('art', 'verbrauch'))
+                                    {{ ['lunch' => 'Lunch', 'dinner' => 'Dinner', 'day_night' => 'Tag und Abend'][$f['fall']['t']] }}
+                                    @if($vz)ca. {{ $euro($vz['betrag']) }} bei {{ (int) $vz['menge'] }} Gästen (DB {{ $euro($vz['betrag'] - $vz['ek_betrag']) }})@else{{ $euro($f['preis_pp']) }} (DB {{ $euro($f['db_pp']) }})@endif
+                                    @if(! $loop->last) · @endif
+                                @endif
                             @endforeach
                         </span>
                     </div>

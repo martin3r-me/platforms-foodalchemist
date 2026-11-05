@@ -79,6 +79,28 @@ class FoodAlchemistOfferBlock extends Model
         return $this->type === 'position' && $this->price_basis === 'aufwand';
     }
 
+    /** Spec 94c 8c: Position „nach Verbrauch“ (Getränke aus dem Konfigurator) — rechnet wie Aufwand, heißt nur anders. */
+    public function istVerbrauch(): bool
+    {
+        return $this->istAufwand() && ($this->payload_json['art'] ?? null) === 'verbrauch';
+    }
+
+    /** Spec 94c 8c: Höchstbetrag einer Verbrauchs-Position (`payload_json.deckel`), sonst null. */
+    public function deckel(): ?float
+    {
+        $d = $this->payload_json['deckel'] ?? null;
+
+        return $this->istVerbrauch() && is_numeric($d) && (float) $d > 0 ? (float) $d : null;
+    }
+
+    /** Betrag einer Position: Menge × Satz, bei Verbrauch mit Deckel höchstens der Deckel (abgerechnet min(tatsächlich, Deckel)). */
+    public function positionBetrag(): float
+    {
+        $voll = round((float) ($this->quantity ?? 0) * (float) ($this->price_value ?? 0), 2);
+
+        return $this->deckel() !== null ? min($voll, $this->deckel()) : $voll;
+    }
+
     /** Spec 94b: Einheit einer Position als Text — Vokabular, sonst der mitgegebene Text (z. B. „Std.“ aus dem Konfigurator). */
     public function einheitText(): string
     {

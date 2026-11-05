@@ -535,9 +535,10 @@
                                                     <x-fa::badge tone="info">Position</x-fa::badge>
                                                     <span class="min-w-0 break-words text-[var(--fa-ink)]" data-angebot-position="{{ $block->id }}">{{ $block->label ?: 'Position ohne Bezeichnung' }}</span>
                                                     <span class="{{ $hinweis }}">{{ rtrim(rtrim(number_format((float) $block->quantity, 2, ',', '.'), '0'), ',') }} {{ $block->einheitText() }} à <x-fa::money :value="$block->price_value" /></span>
-                                                    <x-fa::money :value="round((float) $block->quantity * (float) $block->price_value, 2)" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                    <x-fa::money :value="$block->positionBetrag()" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                    @if($block->deckel() !== null)<span class="{{ $hinweis }}" data-angebot-position-deckel>höchstens <x-fa::money :value="$block->deckel()" /></span>@endif
                                                     @if($block->ek_value !== null)<span class="{{ $hinweis }}">EK <x-fa::money :value="round((float) $block->quantity * (float) $block->ek_value, 2)" /></span>@endif
-                                                    @if($block->istAufwand())<x-fa::badge tone="warn" title="Geschätzt, nicht in der Angebotssumme" data-angebot-position-aufwand>zzgl. nach Aufwand</x-fa::badge>@endif
+                                                    @if($block->istAufwand())<x-fa::badge tone="warn" title="Geschätzt, nicht in der Angebotssumme" data-angebot-position-aufwand>zzgl. nach {{ $block->istVerbrauch() ? 'Verbrauch' : 'Aufwand' }}</x-fa::badge>@endif
                                                     @break
                                                 @default
                                                     <span class="italic text-[var(--fa-ink-2)]">{{ \Illuminate\Support\Str::limit($block->customer_text ?? 'Text ohne Inhalt', 80) }}</span>

@@ -47,12 +47,12 @@
             @if(! empty($pa['zzgl']))
                 {{-- Spec 94b: zzgl. nach Aufwand (geschätzt, nicht im Gesamt) und voraussichtliche Gesamtsumme --}}
                 <div class="pt-zzgl" data-pt-zzgl>
-                    <div class="pt-zzgl-titel">Zzgl. nach Aufwand (geschätzt)</div>
+                    <div class="pt-zzgl-titel">Zzgl. nach Aufwand{{ collect($pa['zzgl'])->contains(fn ($z) => $z['verbrauch'] ?? false) ? ' bzw. Verbrauch' : '' }} (geschätzt)</div>
                     @foreach($pa['zzgl'] as $z)
-                        <div class="pt-zzgl-zeile"><span>{{ $z['titel'] }} · ca. {{ $z['menge'] }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} €</span><span>≈ {{ $nf($z['betrag']) }} €</span></div>
+                        <div class="pt-zzgl-zeile"><span>{{ $z['titel'] }}@if($z['verbrauch'] ?? false) nach Verbrauch @endif · ca. {{ $z['menge'] }} {{ $z['einheit'] }} à {{ $nf($z['satz']) }} €@if(! empty($z['deckel'])) · höchstens {{ $nf($z['deckel']) }} €@endif</span><span>≈ {{ $nf($z['betrag']) }} €</span></div>
                     @endforeach
                     <div class="pt-zzgl-zeile pt-zzgl-summe" data-pt-voraussichtlich><span>Voraussichtlich gesamt inkl. Aufwand (netto)</span><span>ca. {{ $nf($pa['voraussichtlich_netto']) }} €</span></div>
-                    <div class="pt-zzgl-hinweis">Der Aufwand ist geschätzt und nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand.</div>
+                    <div class="pt-zzgl-hinweis">Der Aufwand ist geschätzt und nicht im Gesamtpreis enthalten. Abgerechnet wird nach tatsächlichem Aufwand bzw. Verbrauch, höchstens bis zum genannten Höchstbetrag.</div>
                 </div>
             @endif
         </div>
