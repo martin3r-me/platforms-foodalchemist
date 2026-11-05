@@ -260,13 +260,24 @@ class MarktdatenService
             'quellen' => array_values(array_unique(array_map(fn ($r) => $r['tabelle'], $reihen)))];
     }
 
-    /** Nur feste, abrufbare Reihen, aktuelles Team; kein Hintergrundabruf aus einem Render-/GET-Pfad. */
-    public function abrufen(Team $team, bool $apply = false): array
+    /**
+     * Nur feste, abrufbare Reihen, aktuelles Team; kein Hintergrundabruf aus einem Render-/GET-Pfad.
+     * $reihen: nur diese Schlüssel (Teil-Abruf, damit ein MCP-Aufruf nicht in den Client-Timeout läuft); unbekannte → Fehler.
+     *
+     * @param  list<string>|null  $reihen
+     */
+    public function abrufen(Team $team, bool $apply = false, ?array $reihen = null): array
     {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Kuratieren, 'Marktdaten abrufen');
+        if ($reihen !== null && ($unbekannt = array_diff($reihen, array_keys(self::REIHEN))) !== []) {
+            throw new \RuntimeException('Unbekannte Reihen: '.implode(', ', $unbekannt).'. Erlaubt: '.implode(', ', array_keys(self::REIHEN)).'.');
+        }
         $out = [];
         $offen = [];
         foreach (self::REIHEN as $serie => $meta) {
+            if ($reihen !== null && ! in_array($serie, $reihen, true)) {
+                continue;
+            }
             if (! self::abrufbar($meta)) {
                 $offen[] = ['serie' => $serie, 'tabelle' => $meta['tabelle'], 'grund' => 'Merkmal und Schlüssel fehlen – erst per erkunden_tabelle nachschlagen.'];
 

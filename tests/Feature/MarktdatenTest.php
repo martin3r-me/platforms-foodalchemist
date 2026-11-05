@@ -350,3 +350,31 @@ it('Kantinen-Aussage gegen den Großhandel (sonst gegen Restaurants), Detailzeil
     Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('3 Detailzeilen')->assertSee('stärkste Bewegung: Getränke -6,5 %')
         ->assertSee('Verbraucherpreise im Laden (zum Vergleich)')->assertSee('Rind- und Kalbfleisch')->assertSee('Kantinen und Mensen');
 });
+
+it('Teil-Abruf: reihen begrenzt Abruf und Schreiben auf die genannten Reihen, unbekannte werden abgelehnt', function () {
+    marktHttp();
+    $r = $this->svc->abrufen($this->rootTeam, true, ['gaststaettenpreise', 'kantinenpreise']);
+    expect(array_column($r['ergebnisse'], 'serie'))->toBe(['gaststaettenpreise', 'kantinenpreise'])
+        ->and(Daten::pluck('serie')->sort()->values()->all())->toBe(['gaststaettenpreise', 'kantinenpreise']);
+    Http::assertSentCount(2);
+    expect(fn () => $this->svc->abrufen($this->rootTeam, false, ['gibt_es_nicht']))->toThrow(RuntimeException::class, 'Unbekannte Reihen: gibt_es_nicht');
+    $tool = app(ToolRegistry::class)->get('foodalchemist.marktdaten.ABRUF');
+    $t = $tool->execute(['reihen' => ['lebensmittelpreise']], new ToolContext($this->owner, $this->rootTeam));
+    expect($t->success)->toBeTrue()->and(array_column($t->data['ergebnisse'], 'serie'))->toBe(['lebensmittelpreise'])
+        ->and($tool->execute(['reihen' => ['x']], new ToolContext($this->owner, $this->rootTeam))->success)->toBeFalse();
+});
+
+it('Großhandel 61281-0004: je Monat zählt nur die Indexzeile (2021=100), die beiden %-Veränderungsraten mit gleichem PRE011 fallen raus', function () {
+    // Aufbau wie der echte Kopf auf io (05.11.), Werte erfunden
+    $csv = file_get_contents(dirname(__DIR__).'/Fixtures/destatis/grosshandel_61281.csv');
+    $gh = MarktdatenService::REIHEN['grosshandel_nahrungsmittel'];
+    $punkte = app(GenesisCsvLeser::class)->lesen($csv, $gh['schluessel'], $gh['wert'] ?? '', $gh['zusatz'] ?? [], $gh['wert_code'] ?? null);
+    expect(array_column($punkte, 'monat'))->toBe(['2025-05', '2026-05', '2026-06'])
+        ->and(array_column($punkte, 'wert'))->toEqual([124.0, 130.2, null])
+        ->and(array_unique(array_column($punkte, 'einheit')))->toBe(['2021=100']);
+
+    Http::fake([GenesisClient::ENDPOINT => Http::response($csv, 200)]);
+    $r = $this->svc->abrufen($this->rootTeam, true, ['grosshandel_nahrungsmittel']);
+    expect($r['ergebnisse'][0]['fehler'])->toBeNull()->and($r['ergebnisse'][0]['einheit'])->toBe('2021=100');
+    expect(collect($this->svc->lesen($this->rootTeam)['reihen'])->firstWhere('serie', 'grosshandel_nahrungsmittel')['vorjahr_prozent'])->toBe(5.0);
+});
