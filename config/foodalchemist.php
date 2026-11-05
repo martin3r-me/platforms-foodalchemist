@@ -439,6 +439,12 @@ return [
     'marktdaten' => ['genesis_token' => env('FOODALCHEMIST_GENESIS_TOKEN', '')],
 
     'trends' => [
+        // Vertiefung im Trend-Eingang: Tageslauf höchstens auto_je_tag je Team, nur Einträge der letzten auto_tage, Abruf bis max_bytes.
+        'vertiefung' => [
+            'auto_je_tag' => (int) env('FOODALCHEMIST_TREND_VERTIEFUNG_JE_TAG', 10),
+            'auto_tage' => 30,
+            'max_bytes' => 8 * 1024 * 1024,
+        ],
         'dataforseo_kosten_je_abfrage' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_KOSTEN', 0.009),
         'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
         // Spec 93 A · Quellen-Abruf. Die Zahlen sind Startwerte, nicht belegt (im Schatten-/Probelauf kalibrieren).
@@ -530,6 +536,9 @@ return [
         // Spec 93 C: täglicher Automatik-Lauf NACH dem Abruf (05:50) und dem Erschließen (Queue). Standard AUS.
         'trend_automatik_enabled' => env('FOODALCHEMIST_TREND_AUTOMATIK', false),
         'trend_automatik_zeit' => env('FOODALCHEMIST_TREND_AUTOMATIK_ZEIT', '06:40'),
+        // Vertiefung: täglich nach Abruf (05:50), Erschließen (Queue) und Automatik (06:40). Standard AUS, bis Dominique einschaltet.
+        'trend_vertiefung_enabled' => env('FOODALCHEMIST_TREND_VERTIEFUNG', false),
+        'trend_vertiefung_zeit' => env('FOODALCHEMIST_TREND_VERTIEFUNG_ZEIT', '07:10'),
         // Spec 52/Paket 3: Team, dessen Kanon-Sicherung wöchentlich geprüft wird.
         // **0 schaltet den Lauf ab.** Der Kanon ist team-gebunden und es gibt keinen sinnvollen
         // Default über Installationen hinweg — eine frische Instanz ohne Team 6 soll deshalb
@@ -1457,6 +1466,26 @@ return [
                 . 'Keine Firmen, Regionen, Fristen oder Nachfrage erfinden. Einen impuls klar als eigenen Vorschlag behandeln; ohne tragfähige Grundlage null. '
                 . 'Nicht relevant (z. B. Personalie, Insolvenz, Stellenanzeige, Technik ohne Food-Bezug): relevant=false mit begruendung, '
                 . 'die übrigen Felder dürfen leer sein. Erfinde nichts, was nicht in Titel oder Teaser steht.',
+        ],
+        // Vertiefung im Trend-Eingang: Kernaussagen mit Zahl, Bezug und Fundstelle aus dem Text der verlinkten Seite bzw. des PDFs.
+        // Der Server behält nur Aussagen, deren Zahlen im Text stehen (TrendVertiefungService::zahlenBelegt).
+        'trend.eingang_vertiefen' => [
+            'klasse' => 'leicht',
+            'max_tokens' => 1600,
+            'temperature' => 0,
+            'task' => 'Vertiefe einen Beitrag für das Markt-Observatorium eines Caterers (Food & Beverage, Catering, Gastronomie). '
+                . 'Eingabe: titel, herausgeber, url, art (html|pdf), text (Haupttext der verlinkten Seite, gekürzt). '
+                . 'werte = {zugang: frei | nur_inhaltsangabe (der Text beschreibt nur einen kostenpflichtigen Report, ein Dossier oder einen Katalogeintrag, die Ergebnisse selbst stehen nicht darin), '
+                . 'kernaussagen: höchstens 6, die wichtigsten zuerst, je {aussage: höchstens 240 Zeichen in EIGENEN Worten (kein wörtliches Zitat), '
+                . 'zahl: die zentrale Kennzahl genau wie im Text (z. B. „70 %“, „250 Befragte“) oder null, '
+                . 'bezug: wofür die Zahl gilt (Land, Gruppe, Zeitraum) höchstens 160 Zeichen, fundstelle: Abschnitt, Überschrift oder Seite im Text, höchstens 120 Zeichen}, '
+                . 'methodik: {stichprobe, zeitraum, auftraggeber, methode} je höchstens 160 Zeichen oder null, '
+                . 'hinweis: Einschränkung in einem Satz (z. B. Auftragsstudie eines Herstellers, kleine Stichprobe, Selbstauskunft) oder null}. '
+                . 'Jede Zahl muss GENAU so im Text stehen — nichts runden, umrechnen, addieren oder schätzen; Aussagen ohne Beleg im Text weglassen. '
+                . 'Länderwerte und Gesamtwerte nicht vermischen; den Bezug immer nennen. Vorrang haben Aussagen zu Kosten, Preisen, Nachfrage, Personal, '
+                . 'Energie, Konsumverhalten und Ausstattung in Gastronomie und Gemeinschaftsverpflegung. '
+                . 'Bei zugang = nur_inhaltsangabe nur das nennen, was die Seite selbst belegt (Umfang, Themen, Ausgabe); keine Ergebnisse vermuten. '
+                . 'Erfinde nichts, was nicht im Text steht.',
         ],
         // Spec 93 D: „Was heißt das für uns“ an einem Trend — Bedeutung je Sparte und 3–5 Gericht-/Konzept-Impulse für die Planung.
         'trend.ableitung' => [

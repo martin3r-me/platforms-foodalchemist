@@ -26,6 +26,7 @@ class FoodAlchemistTrendEingang extends Model
     protected $casts = [
         'uuid' => 'string', 'veroeffentlicht_am' => 'datetime', 'zuletzt_gesehen_at' => 'datetime', 'erschlossen_at' => 'datetime',
         'sparten' => 'array', 'relevant' => 'boolean', 'observatorium' => 'array',
+        'vertiefung' => 'array', 'vertieft_at' => 'datetime',
     ];
 
     /** Spec 93 E: Link zum Anzeigen — ohne das interne Fragment `#signal=…` eines Einzelsignals (das bleibt nur im gespeicherten url). */

@@ -22,7 +22,9 @@ class KiAuftragService
     /** Features, deren Antwort für dasselbe Ziel auch bei geändertem Kontext gilt ({@see zumZiel()}); die Antwort prüft der Aufrufer wie immer. */
     // trend.eingang_erschliessen (02.11.): jedes neue Thema ändert `themen` im Kontext aller offenen Einträge — ohne Ziel kam je
     // ANTWORT-Runde nur ein Eintrag durch. Ziel = Eingangs-Eintrag; das Bündeln gleicht das Thema ohnehin gegen den Bestand ab.
-    public const ZIEL_GILT = ['gp.anker', 'gp.sensorik', 'trend.eingang_erschliessen'];
+    // trend.eingang_vertiefen: der Neustart nach ANTWORT liest die Seite erneut; eine kleine Änderung (Datum, Werbung) darf die Antwort
+    // nicht verwerfen — der Zahlen-Riegel prüft ohnehin gegen den neuen Stand.
+    public const ZIEL_GILT = ['gp.anker', 'gp.sensorik', 'trend.eingang_erschliessen', 'trend.eingang_vertiefen'];
 
     /** @param array<int, array<string, mixed>> $messages @param array<string, mixed> $optionen */
     public function antwortOderAuftrag(string $feature, array $messages, array $optionen, array $audit = []): array

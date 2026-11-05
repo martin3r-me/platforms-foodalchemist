@@ -669,6 +669,7 @@ return [
     \Platform\FoodAlchemist\Tools\TrendEingangErschliessenTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangPostTool::class,
+    \Platform\FoodAlchemist\Tools\TrendEingangVertiefenTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenDeleteTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenPostTool::class,

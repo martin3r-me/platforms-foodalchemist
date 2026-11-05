@@ -189,6 +189,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class, // Spec 93 A
                 \Platform\FoodAlchemist\Console\TrendEingangTitelNachziehenCommand::class, // Einmal-Reparatur Übersichts-Titel (BZfE)
+                \Platform\FoodAlchemist\Console\TrendEingangVertiefenCommand::class, // Vertiefung: Tageslauf
                 \Platform\FoodAlchemist\Console\TrendThemenAehnlichkeitCommand::class, // Spec 93 B (Messung, schreibt nichts)
                 \Platform\FoodAlchemist\Console\TrendAutomatikCommand::class, // Spec 93 C
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
@@ -371,6 +372,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->onOneServer()
                     ->runInBackground()
                     ->description('FoodAlchemist: Trendradar → Themen einordnen, Trends anlegen (Automatik)');
+            }
+
+            // Vertiefung: Marktbewegungen und harte Quellen, höchstens trends.vertiefung.auto_je_tag je Team. Standard AUS.
+            if (config('foodalchemist.scheduler.trend_vertiefung_enabled', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendEingangVertiefenCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.trend_vertiefung_zeit', '07:10'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → Marktbewegungen vertiefen (Kernaussagen mit Beleg)');
             }
         });
     }

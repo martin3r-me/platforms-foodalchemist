@@ -102,6 +102,7 @@ final class KiUmleitung
         'foodalchemist.recipe_findings_run.POST' => 'QualityRunService::starteBefundeLauf(extern: externFuerLauf) → RecipeFindingsRunJob (KiExternWiederholbar, `recipe-findings:{team}:{run}`): der ganze Batch in der Sammel-Transaktion, je fälligem Rezept ein Auftrag (recipe.review/vk.review bzw. recipe.bauart), ANTWORT startet den Lauf neu. KiExternFindingsRunTest.',
         'foodalchemist.speiseplan.PLAN_FROM_BRIEF' => 'Kein Gerüst-Aufruf im Tool; die KI läuft nur in MaterializeSpeiseplanCellJob (KiExternWiederholbar, erbeExtern aus dem MCP-Aufruf, Dispatch nach dem Commit).',
         'foodalchemist.trends.ABLEITUNG' => 'Das Tool ruft keine KI; TrendAbleitungService::anstossen liest fuerDispatch → TrendAbleitungJob (KiExternWiederholbar, `trend-ableitung:{team}:{trend}`), Dispatch afterCommit. Spec93DAbleitungTest.',
+        'foodalchemist.trend_eingang.VERTIEFEN' => 'Das Tool ruft keine KI; TrendVertiefungService::anstossen liest fuerDispatch → TrendEingangVertiefenJob (KiExternWiederholbar, `trend-vertiefen:{team}:{eingang}`), Dispatch afterCommit. Der Neustart nach ANTWORT liest die Seite erneut (ZIEL_GILT). TrendVertiefungTest.',
         'foodalchemist.trend_eingang.ERSCHLIESSEN' => 'Das Tool ruft keine KI; erschliessenDispatchen liest fuerDispatch → TrendEingangErschliessenJob (KiExternWiederholbar, `trend-erschliessen:{team}:{eingang}`), Dispatch afterCommit. Spec93BErschliessenBuendelnTest.',
     ];
 
