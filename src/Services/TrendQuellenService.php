@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
+use Platform\FoodAlchemist\Models\FoodAlchemistWettbewerber;
 use Platform\FoodAlchemist\Services\Trends\QuellenAbruf;
 use Platform\FoodAlchemist\Support\GoogleNewsSuche;
 use Platform\FoodAlchemist\Support\StichwortFilter;
@@ -87,8 +88,13 @@ class TrendQuellenService
         $ein = StichwortFilter::liste($q->stichworte_ein ?? []);
         $aus = StichwortFilter::liste($q->stichworte_aus ?? []);
 
-        return ['ein' => $ein !== [] ? $ein : $standard['ein'], 'aus' => $aus !== [] ? $aus : $standard['aus'],
-            'ein_quelle' => $ein !== [] ? 'quelle' : 'team', 'aus_quelle' => $aus !== [] ? 'quelle' : 'team'];
+        // Unternehmensmeldungen sind nicht zwingend Food-Trends. Nur ausdrücklich am Profil angelegte
+        // Such-/Pressefeeds erhalten bei leerem Quellfilter diesen getrennten Eingang; Aus-Filter bleiben bestehen.
+        $wettbewerb = FoodAlchemistWettbewerber::where('team_id', $q->team_id)
+            ->where(fn ($w) => $w->where('google_quelle_id', $q->id)->orWhere('presse_quelle_id', $q->id))->exists();
+
+        return ['ein' => $ein !== [] ? $ein : ($wettbewerb ? [] : $standard['ein']), 'aus' => $aus !== [] ? $aus : $standard['aus'],
+            'ein_quelle' => $ein !== [] ? 'quelle' : ($wettbewerb ? 'wettbewerber' : 'team'), 'aus_quelle' => $aus !== [] ? 'quelle' : 'team'];
     }
 
     public function alsArray(FoodAlchemistTrendQuelle $q, ?Team $team = null): array

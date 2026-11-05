@@ -196,6 +196,7 @@ class TrendEingangService
         if ($quelle !== null && $von !== 'abruf') {
             $this->mcpBesuch($quelle, 0);
         }
+        app(WettbewerbService::class)->vorschlagen($eintrag);
         $this->erschliessenDispatchen($eintrag);
 
         return ['ergebnis' => 'neu', 'eintrag' => $eintrag->refresh(), 'grund' => $filter['grund']];

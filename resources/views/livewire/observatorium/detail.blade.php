@@ -13,6 +13,7 @@
     <div class="fa-obs-tags">@foreach($info['verwendungen'] ?? [] as $v)<span class="fa-obs-pill {{ $v === 'idee' ? 'idea' : '' }}">{{ O::VERWENDUNGEN[$v] ?? $v }}</span>@endforeach @foreach($info['branchen'] ?? [] as $b)<span class="fa-obs-pill">{{ O::BRANCHEN[$b] ?? $b }}</span>@endforeach</div>
     @if(! empty($info['einordnung']))<div class="fa-obs-kicker">Warum das interessant sein könnte</div><p>{{ $info['einordnung'] }}</p>@endif
     @if(! empty($info['impuls']))<div class="fa-obs-kicker">Ein Impuls für die Praxis · KI-Vorschlag</div><p>{{ $info['impuls'] }}</p>@endif
+    @foreach($gewaehlt->wettbewerbFunde as $fund)<div class="fa-obs-kicker">Firmenbezug bestätigt · {{ $fund->wettbewerber->name }}</div><p>{{ \Platform\FoodAlchemist\Services\WettbewerbService::BEWEGUNGEN[$fund->bewegung] ?? 'Unternehmensmeldung' }}</p>@if($fund->einordnung)<p><strong>Eigene Bewertung:</strong> {{ $fund->einordnung }}</p>@endif @endforeach
     <div class="fa-obs-kicker">Trendbewertung</div><p>{{ $gewaehlt->begruendung ?: 'Noch nicht als Trendbeleg bewertet.' }}</p>
     @if($gewaehlt->thema)<p class="fa-obs-subtitle">Thema: {{ $gewaehlt->thema }} · {{ V::EINGANG_STATUS[$gewaehlt->status] ?? $gewaehlt->status }}</p>@endif
     <div class="fa-obs-actions">
