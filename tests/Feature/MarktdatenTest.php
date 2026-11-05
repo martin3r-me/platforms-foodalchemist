@@ -326,3 +326,27 @@ it('liest Reihen mit Wertvariable per Code (PRE011, UMS103) und Pflicht-Schlüss
             ->and(MarktdatenService::TABELLEN)->toContain($meta['tabelle']);
     }
 });
+
+it('Kantinen-Aussage gegen den Großhandel (sonst gegen Restaurants), Detailzeilen klappbar mit stärkster Bewegung und Ladenpreisen getrennt', function () {
+    $r = fn (string $serie, ?float $vj) => ['serie' => $serie, 'tabelle' => MarktdatenService::REIHEN[$serie]['tabelle'], 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => '2026-09', 'einheit' => '2020=100']];
+    $text = fn (array $reihen) => array_column(MarktdatenService::aussagen($reihen), 'text', 'schluessel');
+    expect($text([$r('grosshandel_nahrungsmittel', 4.0), $r('kantinenpreise', 2.5)])['kantine'])
+        ->toBe('Großhandel Nahrungsmittel +4,0 %, Kantinen und Mensen +2,5 % zum Vorjahresmonat: Die Großhandelspreise steigen stärker als die Kantinenpreise (Abstand 1,5 Prozentpunkte) – in der Gemeinschaftsverpflegung wird die Kalkulation enger.')
+        ->and($text([$r('kantinenpreise', 2.5), $r('gaststaettenpreise', 3.1)])['kantine'])->toContain('Die Restaurantpreise steigen stärker als die Kantinenpreise')
+        ->and($text([$r('kantinenpreise', null), $r('gaststaettenpreise', 3.1)]))->not->toHaveKey('kantine');
+
+    $t = $this->rootTeam->id;
+    marktReihe($t, 'grosshandel_nahrungsmittel', 100.0, 104.0);
+    marktReihe($t, 'grosshandel_fleisch', 100.0, 103.0);
+    marktReihe($t, 'grosshandel_getraenke', 100.0, 93.5);
+    marktReihe($t, 'vpi_rind', 100.0, 106.1, '2020=100');
+    marktReihe($t, 'kantinenpreise', 100.0, 102.5, '2020=100');
+    $m = $this->svc->lesen($this->rootTeam);
+    $gh = collect($m['reihen'])->firstWhere('serie', 'grosshandel_nahrungsmittel');
+    expect(array_column($gh['unterreihen'], 'serie'))->toBe(['grosshandel_fleisch', 'grosshandel_getraenke', 'vpi_rind'])
+        ->and($gh['staerkste_unterreihe']['serie'])->toBe('grosshandel_getraenke')
+        ->and(array_column($m['reihen'], 'serie'))->toContain('kantinenpreise')->not->toContain('vpi_rind')
+        ->and(array_column($m['aussagen'], 'schluessel'))->toContain('kantine');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('3 Detailzeilen')->assertSee('stärkste Bewegung: Getränke -6,5 %')
+        ->assertSee('Verbraucherpreise im Laden (zum Vergleich)')->assertSee('Rind- und Kalbfleisch')->assertSee('Kantinen und Mensen');
+});

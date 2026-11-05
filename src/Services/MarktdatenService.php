@@ -29,10 +29,33 @@ class MarktdatenService
             'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4633', 'wert_code' => 'PRE011'],
         'grosshandel_obst_gemuese' => ['name' => 'Obst, Gemüse, Kartoffeln', 'lang' => 'Großhandelsverkaufspreise: Obst, Gemüse und Kartoffeln (WZ 46.31)', 'gruppe' => 'grosshandel_nahrungsmittel',
             'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4631', 'wert_code' => 'PRE011'],
+        'grosshandel_fisch' => ['name' => 'Fisch, Fischerzeugnisse', 'lang' => 'Großhandelsverkaufspreise: Fisch und Fischerzeugnisse (WZ 46.381)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-46381', 'wert_code' => 'PRE011'],
+        'grosshandel_getreide' => ['name' => 'Mehl, Getreideprodukte', 'lang' => 'Großhandelsverkaufspreise: Mehl und Getreideprodukte (WZ 46.382)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-46382', 'wert_code' => 'PRE011'],
+        'grosshandel_zucker_backwaren' => ['name' => 'Zucker, Süß- und Backwaren', 'lang' => 'Großhandelsverkaufspreise: Zucker, Süßwaren und Backwaren (WZ 46.36)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4636', 'wert_code' => 'PRE011'],
+        'grosshandel_kaffee_gewuerze' => ['name' => 'Kaffee, Tee, Kakao, Gewürze', 'lang' => 'Großhandelsverkaufspreise: Kaffee, Tee, Kakao und Gewürze (WZ 46.37)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4637', 'wert_code' => 'PRE011'],
+        'grosshandel_getraenke' => ['name' => 'Getränke', 'lang' => 'Großhandelsverkaufspreise: Getränke (WZ 46.34)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4634', 'wert_code' => 'PRE011'],
+        'grosshandel_tk' => ['name' => 'TK-Nahrungsmittel', 'lang' => 'Großhandelsverkaufspreise: Tiefgefrorene Nahrungsmittel (WZ 46.391)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-46391', 'wert_code' => 'PRE011'],
+        // Verbraucherpreise Fleisch (61111-0004, COICOP-5-Steller): klappbare Detailzeilen in der Großhandel-Karte, klar als Ladenpreise beschriftet.
+        'vpi_rind' => ['name' => 'Rind- und Kalbfleisch', 'lang' => 'Verbraucherpreisindex: Rind- und Kalbfleisch', 'gruppe' => 'grosshandel_nahrungsmittel', 'abschnitt' => 'verbraucher',
+            'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01121', 'wert_code' => 'PREIS1'],
+        'vpi_schwein' => ['name' => 'Schweinefleisch', 'lang' => 'Verbraucherpreisindex: Schweinefleisch', 'gruppe' => 'grosshandel_nahrungsmittel', 'abschnitt' => 'verbraucher',
+            'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01122', 'wert_code' => 'PREIS1'],
+        'vpi_gefluegel' => ['name' => 'Geflügelfleisch', 'lang' => 'Verbraucherpreisindex: Geflügelfleisch', 'gruppe' => 'grosshandel_nahrungsmittel', 'abschnitt' => 'verbraucher',
+            'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01124', 'wert_code' => 'PREIS1'],
+        'vpi_fleischwaren' => ['name' => 'Fleisch- und Wurstwaren', 'lang' => 'Verbraucherpreisindex: Fleisch- und Wurstwaren', 'gruppe' => 'grosshandel_nahrungsmittel', 'abschnitt' => 'verbraucher',
+            'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01127', 'wert_code' => 'PREIS1'],
         'lebensmittelpreise' => ['name' => 'Lebensmittel', 'lang' => 'Nahrungsmittel & alkoholfreie Getränke (Verbraucherpreisindex)', 'ersetzt_durch' => 'grosshandel_nahrungsmittel',
             'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01', 'wert' => 'verbraucherpreisindex'],
         'gaststaettenpreise' => ['name' => 'Restaurantpreise', 'lang' => 'Gaststättendienstleistungen (Verbraucherpreisindex)',
             'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-111', 'wert' => 'verbraucherpreisindex'],
+        'kantinenpreise' => ['name' => 'Kantinen und Mensen', 'lang' => 'Bewirtungsleistungen von Kantinen und Mensen (Verbraucherpreisindex)',
+            'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-11120', 'wert_code' => 'PREIS1'],
         // 45213-0005: Wertvariable UMS103; Preisbasis (WERTE4: REAL/NOMINAL) und Bereinigung (WERT01: WERTORG = Originalwert)
         // stehen als weitere Merkmale in der Zeile — Pflicht-Schlüssel, damit je Monat genau ein Wert bleibt.
         // Hauptreihe Gastronomie (WZ 56) statt Gastgewerbe (55–56); Unterzeilen Caterer (56.2) und Event-Caterer (56.21).
@@ -94,6 +117,9 @@ class MarktdatenService
                 continue;
             }
             $r['unterreihen'] = array_values(array_filter($alle, fn ($u) => ($u['gruppe'] ?? null) === $serie && $u['aktuell'] !== null));
+            $mitVergleich = array_filter($r['unterreihen'], fn ($u) => $u['vorjahr_prozent'] !== null);
+            usort($mitVergleich, fn ($x, $y) => abs($y['vorjahr_prozent']) <=> abs($x['vorjahr_prozent']));
+            $r['staerkste_unterreihe'] = $mitVergleich[0] ?? null;
             $sichtbar[] = $r;
         }
         $aussagen = self::aussagen($alle);
@@ -148,6 +174,19 @@ class MarktdatenService
             $out[] = self::satz('kalkulation', [$r['gaststaettenpreise'], $r['lebensmittelpreise']],
                 'Restaurantpreise '.self::pct($g).', Lebensmittel '.self::pct($l).' zum Vorjahresmonat: '
                 .self::richtung($g, $l, 'Die Restaurantpreise', 'die Lebensmittelpreise im Handel', '.', '.'));
+        }
+        // Gemeinschaftsverpflegung: Kantinenpreise gegen den Großhandel (Einkauf), sonst gegen die Restaurantpreise.
+        if ($a = self::paar($r->get('grosshandel_nahrungsmittel'), $r->get('kantinenpreise'))) {
+            [$e, $k] = $a;
+            $out[] = self::satz('kantine', [$r['grosshandel_nahrungsmittel'], $r['kantinenpreise']],
+                'Großhandel Nahrungsmittel '.self::pct($e).', Kantinen und Mensen '.self::pct($k).' zum Vorjahresmonat: '
+                .self::richtung($e, $k, 'Die Großhandelspreise', 'die Kantinenpreise',
+                    ' – in der Gemeinschaftsverpflegung wird die Kalkulation enger.', ' – die Kantinenpreise ziehen dem Einkauf voraus.'));
+        } elseif ($a = self::paar($r->get('kantinenpreise'), $r->get('gaststaettenpreise'))) {
+            [$k, $g] = $a;
+            $out[] = self::satz('kantine', [$r['kantinenpreise'], $r['gaststaettenpreise']],
+                'Kantinen und Mensen '.self::pct($k).', Restaurantpreise '.self::pct($g).' zum Vorjahresmonat: '
+                .self::richtung($k, $g, 'Die Kantinenpreise', 'die Restaurantpreise', '.', '.'));
         }
         // Umsatz: zuerst die Caterer-Zeile (BHG-Kerngeschäft), sonst Gastronomie gesamt.
         foreach (['caterer' => 'Umsatz Caterer', 'gastro' => 'Gastronomie-Umsatz'] as $pref => $etikett) {
