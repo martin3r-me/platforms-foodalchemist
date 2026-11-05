@@ -316,3 +316,11 @@ Die Entscheidung enthält Problem, Optionen, gewählte Lösung, Konsequenzen,
 Migration und Rückweg. Bis ein eigener ADR-Ordner etabliert ist, wird sie in der
 zugehörigen aktiven Spezifikation unter `PLANUNG/` festgehalten und von hier
 verlinkt.
+
+### Observatorium: amtliche Marktdaten
+
+Der [Destatis-Pilot](PLANUNG/Marktdaten_Destatis.md) speichert ausschließlich
+teamgebundene API-Snapshots für feste Preisindexreihen. Er schreibt weder Artikel
+noch Belege oder Trendfreigaben. Lesen folgt Teamvererbung, Aktualisieren nur dem
+eigenen Team. Token ausschließlich über Serverkonfiguration, kein API-Aufruf im
+Renderpfad. Fehlende Werte und gescheiterte Aktualisierungen bleiben sichtbar.

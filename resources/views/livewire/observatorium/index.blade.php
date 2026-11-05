@@ -86,6 +86,8 @@
             @if($istHandy)<button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>@endif
             </div>
 
+            @if($ansicht === 'markt')@include('foodalchemist::livewire.observatorium.marktdaten')@endif
+
             @if($ansicht === 'wettbewerb')
                 <div class="fa-obs-briefing" data-observatorium-wettbewerb>
                     <h2>{{ $wettbewerberProfile->count() }} beobachtete Unternehmen</h2>

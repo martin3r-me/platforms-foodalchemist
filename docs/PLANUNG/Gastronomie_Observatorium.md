@@ -46,3 +46,14 @@ Mobil erscheinen freigegebene Radarentwicklungen als Karten mit Kategorie, Einor
 Keine Migration, keine Änderungen an Quellen, Freigaben, KI-Auswertung oder anderen Modulen. Der Handy-Test prüft Navigation ohne Seitenleiste, Meldungs-/Radarfilter, persönliche Merker, Detailwechsel und die weiterhin vorhandene Desktopgrafik. Layoutkontrolle mit 390 Pixeln Breite und geschlossenem/geöffnetem Filterbereich.
 
 Radarfilter liegen ausschließlich im Inhaltsbereich der Radarseite, auf allen Geräten hinter „Radar filtern“ beziehungsweise dem mobilen Filterknopf. Die mittlere Observatorium-Spalte enthält nur Bereichsnavigation und Rechercheverweise. Auf anderen Observatorium-Seiten werden keine Radarfilter gerendert.
+
+## Amtliche Marktdaten (Pilot)
+
+Unter „Markt & Chancen“ ergänzen zwei monatliche Destatis-Verbraucherpreisindizes
+die Meldungen. Monatswerte, Indexbasis, Original-Kennzeichnungen und Abrufdatum
+bleiben nachvollziehbar; ein Vergleich fehlt bei unbekannten oder nicht
+vergleichbaren Werten. Diese deutschlandweiten Reihen gelten unabhängig von
+Meldungsfiltern und sind keine Einkaufs- oder Betriebskosten. Der API-Zugang ist
+kostenlos, benötigt aber einen serverseitigen GENESIS-Token. Bis dahin zeigt die
+Oberfläche den fehlenden Zugang. Kein automatischer Abruf, keine zusätzliche KI
+und keine Radarfreigabe. Details und Abnahmestand: [Destatis-Pilot](Marktdaten_Destatis.md).
