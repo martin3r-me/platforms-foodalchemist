@@ -1467,6 +1467,20 @@ return [
                 . 'Nicht relevant (z. B. Personalie, Insolvenz, Stellenanzeige, Technik ohne Food-Bezug): relevant=false mit begruendung, '
                 . 'die übrigen Felder dürfen leer sein. Erfinde nichts, was nicht in Titel oder Teaser steht.',
         ],
+        // Markt in Zahlen: KI-Einordnung nach dem Abruf. Der Server verwirft Sätze mit unbelegten Zahlen oder Prognose/Empfehlung.
+        'markt.einordnung' => [
+            'klasse' => 'leicht',
+            'max_tokens' => 900,
+            'temperature' => 0,
+            'task' => 'Ordne amtliche Marktzahlen (Destatis) für Caterer und Gastronomie ein. '
+                . 'Eingabe: kennzahlen (je Reihe name, monat, vorjahr_prozent = Veränderung zum Vorjahresmonat in Prozent, quelle) und regelsaetze '
+                . '(bereits geprüfte Vergleiche). werte = {saetze: 3 bis 5 Sätze, je höchstens 240 Zeichen, deutsch, sachlich}. '
+                . 'Beschreibe, was die Zahlen für Einkauf, Kalkulation und Nachfrage von Caterern und Gastronomen bedeuten: welche Kosten '
+                . 'schneller steigen als die eigenen Verkaufspreise, wo die Spanne enger oder weiter wird, ob Umsatzplus aus Preisen oder Menge kommt. '
+                . 'Jede Zahl muss GENAU so in kennzahlen stehen (gleiche Schreibweise mit Komma); nichts runden, addieren oder umrechnen. '
+                . 'Unterschiedliche Bezugsmonate benennen, wenn du Reihen vergleichst. KEINE Prognose (nichts über künftige Entwicklungen), '
+                . 'KEINE Empfehlung (kein „sollte“, „empfehlen“, „muss“, „lohnt sich“), keine Ursachen erfinden, die nicht in den Daten stehen.',
+        ],
         // Vertiefung im Trend-Eingang: Kernaussagen mit Zahl, Bezug und Fundstelle aus dem Text der verlinkten Seite bzw. des PDFs.
         // Der Server behält nur Aussagen, deren Zahlen im Text stehen (TrendVertiefungService::zahlenBelegt).
         'trend.eingang_vertiefen' => [

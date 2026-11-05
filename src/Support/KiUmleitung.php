@@ -103,6 +103,7 @@ final class KiUmleitung
         'foodalchemist.speiseplan.PLAN_FROM_BRIEF' => 'Kein Gerüst-Aufruf im Tool; die KI läuft nur in MaterializeSpeiseplanCellJob (KiExternWiederholbar, erbeExtern aus dem MCP-Aufruf, Dispatch nach dem Commit).',
         'foodalchemist.trends.ABLEITUNG' => 'Das Tool ruft keine KI; TrendAbleitungService::anstossen liest fuerDispatch → TrendAbleitungJob (KiExternWiederholbar, `trend-ableitung:{team}:{trend}`), Dispatch afterCommit. Spec93DAbleitungTest.',
         'foodalchemist.trend_eingang.VERTIEFEN' => 'Das Tool ruft keine KI; TrendVertiefungService::anstossen liest fuerDispatch → TrendEingangVertiefenJob (KiExternWiederholbar, `trend-vertiefen:{team}:{eingang}`), Dispatch afterCommit. Der Neustart nach ANTWORT liest die Seite erneut (ZIEL_GILT). TrendVertiefungTest.',
+        'foodalchemist.marktdaten.ABRUF' => 'Ruft selbst keine KI: abrufen(apply) stößt MarktEinordnungService::nachAbruf an, das liest fuerDispatch → MarktEinordnungJob (KiExternWiederholbar, `markt-einordnung:{team}:{einordnung}`), Dispatch afterCommit. Probelauf und Erkunden ohne KI. MarktEinordnungTest.',
         'foodalchemist.trend_eingang.ERSCHLIESSEN' => 'Das Tool ruft keine KI; erschliessenDispatchen liest fuerDispatch → TrendEingangErschliessenJob (KiExternWiederholbar, `trend-erschliessen:{team}:{eingang}`), Dispatch afterCommit. Spec93BErschliessenBuendelnTest.',
     ];
 
