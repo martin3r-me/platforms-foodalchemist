@@ -20,26 +20,29 @@ class MarktdatenService
      * `gruppe`: Unterzeile einer anderen Reihe (eigene Karte entfällt).
      */
     public const REIHEN = [
-        'grosshandel_nahrungsmittel' => ['name' => 'Großhandel Nahrungsmittel', 'lang' => 'Großhandelsverkaufspreise Nahrungs- und Genussmittel',
-            'tabelle' => '61281-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'großhandelsverkaufspreise'],
-        'grosshandel_fleisch' => ['name' => 'Fleisch', 'lang' => 'Großhandelsverkaufspreise Fleisch und Fleischwaren', 'gruppe' => 'grosshandel_nahrungsmittel',
-            'tabelle' => '61281-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'großhandelsverkaufspreise'],
-        'grosshandel_milch' => ['name' => 'Milch, Milcherzeugnisse', 'lang' => 'Großhandelsverkaufspreise Milch, Milcherzeugnisse, Eier', 'gruppe' => 'grosshandel_nahrungsmittel',
-            'tabelle' => '61281-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'großhandelsverkaufspreise'],
-        'grosshandel_obst_gemuese' => ['name' => 'Obst & Gemüse', 'lang' => 'Großhandelsverkaufspreise Obst, Gemüse, Kartoffeln', 'gruppe' => 'grosshandel_nahrungsmittel',
-            'tabelle' => '61281-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'großhandelsverkaufspreise'],
+        // Codes aus dem Erkunden auf io (05.11.): 61281-0004 Merkmal WZ08P9, Wertvariable PRE011.
+        'grosshandel_nahrungsmittel' => ['name' => 'Großhandel Nahrungs- und Genussmittel', 'lang' => 'Großhandelsverkaufspreise: Nahrungs- und Genussmittel, Getränke, Tabakwaren (WZ 46.3)',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-463', 'wert_code' => 'PRE011'],
+        'grosshandel_fleisch' => ['name' => 'Fleisch und Fleischwaren', 'lang' => 'Großhandelsverkaufspreise: Fleisch und Fleischwaren (WZ 46.32)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4632', 'wert_code' => 'PRE011'],
+        'grosshandel_milch' => ['name' => 'Milch, Eier, Speisefette', 'lang' => 'Großhandelsverkaufspreise: Milcherzeugnisse, Eier, Speiseöle und -fette (WZ 46.33)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4633', 'wert_code' => 'PRE011'],
+        'grosshandel_obst_gemuese' => ['name' => 'Obst, Gemüse, Kartoffeln', 'lang' => 'Großhandelsverkaufspreise: Obst, Gemüse und Kartoffeln (WZ 46.31)', 'gruppe' => 'grosshandel_nahrungsmittel',
+            'tabelle' => '61281-0004', 'merkmal' => 'WZ08P9', 'schluessel' => 'WZ08-4631', 'wert_code' => 'PRE011'],
         'lebensmittelpreise' => ['name' => 'Lebensmittel', 'lang' => 'Nahrungsmittel & alkoholfreie Getränke (Verbraucherpreisindex)', 'ersetzt_durch' => 'grosshandel_nahrungsmittel',
             'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-01', 'wert' => 'verbraucherpreisindex'],
         'gaststaettenpreise' => ['name' => 'Restaurantpreise', 'lang' => 'Gaststättendienstleistungen (Verbraucherpreisindex)',
             'tabelle' => '61111-0004', 'merkmal' => 'CC13A5', 'schluessel' => 'CC13-111', 'wert' => 'verbraucherpreisindex'],
-        'gastgewerbe_umsatz_nominal' => ['name' => 'Gastgewerbe-Umsatz nominal', 'lang' => 'Umsatz im Gastgewerbe, in jeweiligen Preisen',
-            'tabelle' => '45213-0005', 'merkmal' => null, 'schluessel' => null, 'wert' => 'nominal'],
-        'gastgewerbe_umsatz_real' => ['name' => 'Gastgewerbe-Umsatz real', 'lang' => 'Umsatz im Gastgewerbe, preisbereinigt',
-            'tabelle' => '45213-0005', 'merkmal' => null, 'schluessel' => null, 'wert' => 'real'],
-        'erzeugerpreise_nahrungsmittel' => ['name' => 'Erzeugerpreise Nahrungsmittel', 'lang' => 'Erzeugerpreise gewerblicher Produkte: Nahrungsmittel',
-            'tabelle' => '61241-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'erzeugerpreis'],
-        'strom_gewerbe' => ['name' => 'Strom Gewerbe', 'lang' => 'Erzeugerpreise: Strom bei Abgabe an gewerbliche Anlagen',
-            'tabelle' => '61241-0004', 'merkmal' => null, 'schluessel' => null, 'wert' => 'erzeugerpreis'],
+        // 45213-0005: Wertvariable UMS103; Preisbasis (WERTE4: REAL/NOMINAL) und Bereinigung (WERT01: WERTORG = Originalwert)
+        // stehen als weitere Merkmale in der Zeile — Pflicht-Schlüssel, damit je Monat genau ein Wert bleibt.
+        'gastgewerbe_umsatz_nominal' => ['name' => 'Gastgewerbe-Umsatz nominal', 'lang' => 'Umsatz im Gastgewerbe (WZ 55–56), in jeweiligen Preisen, Originalwert',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-55-01', 'wert_code' => 'UMS103', 'zusatz' => ['NOMINAL', 'WERTORG']],
+        'gastgewerbe_umsatz_real' => ['name' => 'Gastgewerbe-Umsatz real', 'lang' => 'Umsatz im Gastgewerbe (WZ 55–56), preisbereinigt, Originalwert',
+            'tabelle' => '45213-0005', 'merkmal' => 'WZ08W9', 'schluessel' => 'WZ08-55-01', 'wert_code' => 'UMS103', 'zusatz' => ['REAL', 'WERTORG']],
+        // 61241-0004: Merkmal GP19M2 (nur 2-Steller), Wertvariable PRE001. GP19-10 umfasst auch Futtermittel.
+        'erzeugerpreise_nahrungsmittel' => ['name' => 'Erzeugerpreise Nahrungsmittel', 'lang' => 'Erzeugerpreise gewerblicher Produkte: Nahrungs- und Futtermittel (GP 10)',
+            'tabelle' => '61241-0004', 'merkmal' => 'GP19M2', 'schluessel' => 'GP19-10', 'wert_code' => 'PRE001'],
+        // Strom Gewerbe: in 61241-0004 gibt es nur GP19-35 „Energieversorgung“ (enthält Gas) — bewusst NICHT als Strom geführt.
     ];
 
     /** Tabellen, die `erkunden()` nachschlagen darf: nur die konfigurierten, nie eine freie Eingabe. */
@@ -77,8 +80,8 @@ class MarktdatenService
             if (isset($r['gruppe']) || ($nachfolger !== null && ($alle[$nachfolger]['aktuell']['wert'] ?? null) !== null)) {
                 continue;
             }
-            // Noch nicht abrufbare Reihen ohne Daten erscheinen nicht als leere Karte.
-            if (! $r['abrufbar'] && $r['aktuell'] === null) {
+            // Reihen ohne Daten erscheinen nicht als leere Karte (Abruffehler stehen im ABRUF-Ergebnis).
+            if ($r['aktuell'] === null) {
                 continue;
             }
             $r['unterreihen'] = array_values(array_filter($alle, fn ($u) => ($u['gruppe'] ?? null) === $serie && $u['aktuell'] !== null));
@@ -154,13 +157,6 @@ class MarktdatenService
                 'Erzeugerpreise Nahrungsmittel '.self::pct($h).', Großhandel '.self::pct($gh).' zum Vorjahresmonat: '
                 .self::richtung($h, $gh, 'Bei den Herstellern', 'im Großhandel', ' – Druck auf künftige Einkaufspreise möglich.', '.', true));
         }
-        $strom = $r->get('strom_gewerbe');
-        if ($strom && $strom['vorjahr_prozent'] !== null) {
-            $s = (float) $strom['vorjahr_prozent'];
-            $out[] = self::satz('energie', [$strom], 'Strom für Gewerbe '.self::pct($s).' zum Vorjahresmonat: '
-                .(abs($s) < self::AUSSAGE_SCHWELLE_PP ? 'Die Energiekosten bleiben etwa gleich.' : ($s > 0 ? 'Energie wird teurer – Garprozesse und Kühlung kosten mehr.' : 'Energie wird günstiger.')));
-        }
-
         return $out;
     }
 
@@ -225,7 +221,7 @@ class MarktdatenService
             }
             try {
                 $punkte = $this->leser->lesen($this->client->laden($meta['tabelle'], $meta['merkmal'], $meta['schluessel']),
-                    $meta['schluessel'], $meta['wert'], $meta['zusatz'] ?? []);
+                    $meta['schluessel'], $meta['wert'] ?? '', $meta['zusatz'] ?? [], $meta['wert_code'] ?? null);
                 if ($apply) {
                     Daten::updateOrCreate(['team_id' => $team->id, 'serie' => $serie], [
                         'punkte' => $punkte, 'abgerufen_at' => now(), 'versucht_at' => now(), 'letzter_fehler' => null,

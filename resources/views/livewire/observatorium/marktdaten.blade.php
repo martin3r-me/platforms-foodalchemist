@@ -10,6 +10,7 @@
     @endif
     <p class="fa-obs-subtitle fa-obs-marktdaten-hinweis">{{ $marktdaten['hinweis'] }} Diese deutschlandweiten Reihen sind unabhängig von den Meldungsfiltern.</p>
     @unless($marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch nicht verbunden: Der kostenlose GENESIS-Zugang muss eingerichtet werden.</p>@endunless
+    @if($marktdaten['reihen'] === [] && $marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch keine Marktdaten abgerufen.</p>@endif
     <div class="fa-obs-wett-profile">
     @foreach($marktdaten['reihen'] as $reihe)
         <article>

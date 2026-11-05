@@ -74,9 +74,10 @@ it('liest echte GENESIS-CSV-Strukturen aus begrenzten ZIP-Antworten und erhält 
         return Http::response(marktZip(['61111-0004.csv' => $csv]), 200, ['Content-Type' => 'application/zip']);
     }]);
     $ergebnis = $this->svc->abrufen($this->rootTeam, true);
-    expect(array_column($ergebnis['ergebnisse'], 'fehler'))->toBe([null, null])
-        ->and($ergebnis['ergebnisse'][0]['letzter_wert_monat'])->toBe('2026-09')
-        ->and($ergebnis['ergebnisse'][0]['monate_mit_wert'])->toBe(2);
+    $vpi = collect($ergebnis['ergebnisse'])->whereIn('serie', ['lebensmittelpreise', 'gaststaettenpreise'])->values()->all();
+    expect(array_column($vpi, 'fehler'))->toBe([null, null])
+        ->and($vpi[0]['letzter_wert_monat'])->toBe('2026-09')
+        ->and($vpi[0]['monate_mit_wert'])->toBe(2);
     $reihen = $this->svc->lesen($this->rootTeam)['reihen'];
     expect($reihen[0]['aktuell']['monat'])->toBe('2026-09')->and($reihen[0]['aktuell']['wert'])->toEqual(137.2)
         ->and($reihen[1]['aktuell']['wert'])->toEqual(137.8)->and($reihen[0]['neuere_monate_ohne_wert'])->toBe(1)
@@ -106,29 +107,29 @@ it('zeigt fehlenden Zugang ohne Netzwerk, Zahlen oder Erfolg zu erfinden', funct
 
 it('importiert per POST idempotent ohne KI und übernimmt Revisionen mit Quelle und Monatsbasis', function () {
     marktHttp();
-    expect($this->svc->abrufen($this->rootTeam)['ergebnisse'][0]['monate'])->toBe(2)->and(Daten::count())->toBe(0);
+    expect(collect($this->svc->abrufen($this->rootTeam)['ergebnisse'])->firstWhere('serie', 'lebensmittelpreise')['monate'])->toBe(2)->and(Daten::count())->toBe(0);
     $this->svc->abrufen($this->rootTeam, true);
     $this->svc->abrufen($this->rootTeam, true);
     $r = $this->svc->lesen($this->rootTeam)['reihen'][0];
-    expect(Daten::count())->toBe(2)->and($r['aktuell']['wert'])->toEqual(110.0)->and($r['aktuell']['original']['value_q'])->toBe('p')
+    expect(Daten::whereNotNull('abgerufen_at')->count())->toBe(2)->and($r['aktuell']['wert'])->toEqual(110.0)->and($r['aktuell']['original']['value_q'])->toBe('p')
         ->and($r['vorjahr_prozent'])->toBe(10.0)->and($r['aktuell']['monat'])->toBe('2026-09')->and($r['quelle'])->toContain('61111-0004');
     Http::assertSent(fn ($r) => $r->method() === 'POST' && $r->hasHeader('username', 'TEST-KEIN-ECHTER-TOKEN') && $r['compress'] === 'false');
     marktHttp('115,0');
     $this->svc->abrufen($this->rootTeam, true);
-    expect($this->svc->lesen($this->rootTeam)['reihen'][0]['vorjahr_prozent'])->toBe(15.0)->and(Daten::count())->toBe(2);
+    expect($this->svc->lesen($this->rootTeam)['reihen'][0]['vorjahr_prozent'])->toBe(15.0)->and(Daten::whereNotNull('abgerufen_at')->count())->toBe(2);
     Queue::assertNothingPushed();
 });
 
 it('erhält ältere Daten bei Fehlern und verrät keine Zugangsdaten', function () {
     marktHttp();
     $this->svc->abrufen($this->rootTeam, true);
-    $stand = Daten::first()->abgerufen_at->toIso8601String();
+    $stand = Daten::where('serie', 'lebensmittelpreise')->first()->abgerufen_at->toIso8601String();
     $this->travel(2)->days();
     Http::swap(new Factory);
     Http::fake([GenesisClient::ENDPOINT => Http::response('TEST-KEIN-ECHTER-TOKEN', 401)]);
     $this->svc->abrufen($this->rootTeam, true);
-    expect(Daten::first()->abgerufen_at->toIso8601String())->toBe($stand)
-        ->and(Daten::first()->letzter_fehler)->toContain('HTTP 401')->not->toContain('TEST-KEIN-ECHTER-TOKEN')
+    expect(Daten::where('serie', 'lebensmittelpreise')->first()->abgerufen_at->toIso8601String())->toBe($stand)
+        ->and(Daten::where('serie', 'lebensmittelpreise')->first()->letzter_fehler)->toContain('HTTP 401')->not->toContain('TEST-KEIN-ECHTER-TOKEN')
         ->and($this->svc->lesen($this->rootTeam)['reihen'][0]['aktuell']['wert'])->toEqual(110.0);
 });
 
@@ -159,7 +160,7 @@ it('isoliert Marktdaten und verhindert Abrufe durch Leser auch per MCP', functio
     $this->actingAs($this->makeUser($this->childB, 'TEST anderes Team'));
     expect($this->svc->lesen($this->childB)['reihen'][0]['team_id'])->toBe($this->rootTeam->id);
     $this->svc->abrufen($this->childB, true);
-    expect(Daten::where('team_id', $this->rootTeam->id)->first()->punkte)->toBe($eltern)->and(Daten::count())->toBe(6);
+    expect(Daten::where('team_id', $this->rootTeam->id)->first()->punkte)->toBe($eltern)->and(Daten::whereNotNull('abgerufen_at')->count())->toBe(6);
     $this->actingAs($this->viewer);
     expect(fn () => $this->svc->abrufen($this->rootTeam, true))->toThrow(RuntimeException::class);
     $reg = app(ToolRegistry::class);
@@ -256,11 +257,10 @@ it('formuliert Umsatz-, Vorlauf- und Energie-Aussagen nur bei Werten im selben M
         ->and($text([$r('erzeugerpreise_nahrungsmittel', 4.0), $r('grosshandel_nahrungsmittel', 1.5)])['vorlauf'])
             ->toContain('Bei den Herstellern steigen die Preise stärker als im Großhandel (Abstand 2,5 Prozentpunkte) – Druck auf künftige Einkaufspreise möglich.')
         ->and($text([$r('erzeugerpreise_nahrungsmittel', 0.5), $r('grosshandel_nahrungsmittel', 2.0)])['vorlauf'])->toContain('Im Großhandel steigen die Preise stärker als bei den Herstellern')
-        ->and($text([$r('strom_gewerbe', 6.3)])['energie'])->toBe('Strom für Gewerbe +6,3 % zum Vorjahresmonat: Energie wird teurer – Garprozesse und Kühlung kosten mehr.')
-        ->and($text([$r('strom_gewerbe', null)]))->toBe([]);
+        ->and(MarktdatenService::REIHEN)->not->toHaveKey('strom_gewerbe');   // GP19-35 enthält Gas — kein „Strom“-Etikett
 });
 
-it('ruft Reihen ohne Codes nie ab und meldet sie, Erkunden schlägt nur nach und schreibt nichts', function () {
+it('ruft jede Reihe mit ihren Codes ab, Erkunden schlägt nur nach und schreibt nichts', function () {
     Http::fake([
         GenesisClient::ENDPOINT => fn ($r) => Http::response(marktCsv($r['classifyingkey1']), 200),
         GenesisClient::METADATEN_TABELLE => Http::response(['Status' => ['Code' => 0, 'Content' => 'erfolgreich', 'Type' => 'Information'],
@@ -269,9 +269,9 @@ it('ruft Reihen ohne Codes nie ab und meldet sie, Erkunden schlägt nur nach und
             ['Code' => 'TEST-4632', 'Content' => 'Großhandel mit Fleisch (TEST)'], ['Code' => 'TEST-4633', 'Content' => 'Großhandel mit Milch (TEST)']]]),
     ]);
     $r = $this->svc->abrufen($this->rootTeam);
-    expect(array_column($r['ergebnisse'], 'serie'))->toBe(['lebensmittelpreise', 'gaststaettenpreise'])
-        ->and(array_column($r['noch_nicht_abrufbar'], 'serie'))->toContain('grosshandel_nahrungsmittel', 'strom_gewerbe');
-    Http::assertSentCount(2);
+    expect(array_column($r['ergebnisse'], 'serie'))->toBe(array_keys(MarktdatenService::REIHEN))->and($r['noch_nicht_abrufbar'])->toBe([]);
+    Http::assertSentCount(count(MarktdatenService::REIHEN));
+    Http::assertSent(fn ($q) => $q->url() === GenesisClient::ENDPOINT && $q['name'] === '45213-0005' && $q['classifyingvariable1'] === 'WZ08W9' && $q['classifyingkey1'] === 'WZ08-55-01');
 
     $aufbau = $this->svc->erkunden($this->rootTeam, '61281-0004');
     $werte = $this->svc->erkunden($this->rootTeam, '61281-0004', 'TESTWZ', 'fleisch');
@@ -301,4 +301,23 @@ it('liest je Reihe nur die passende Wertvariable und die Pflicht-Schlüssel', fu
         ->and(array_column($leser->lesen($csv, 'TESTWZ-56', 'nominal'), 'wert'))->toEqual([103.0, 104.0])
         ->and(fn () => $leser->lesen($csv, 'TESTWZ-56', 'umsatz'))->toThrow(RuntimeException::class, 'Mehrere GENESIS-Werte')
         ->and(fn () => $leser->lesen($csv, 'TESTWZ-56', 'nominal', ['MONAT12']))->toThrow(RuntimeException::class, 'Keine passenden');
+});
+
+it('liest Reihen mit Wertvariable per Code (PRE011, UMS103) und Pflicht-Schlüsseln (REAL/NOMINAL, Originalwert)', function () {
+    $kopf = "time;1_variable_attribute_code;2_variable_attribute_code;3_variable_attribute_code;4_variable_attribute_code;value;value_unit;value_variable_code;value_variable_label\n";
+    $csv = $kopf
+        ."2026;MONAT09;WZ08-55-01;NOMINAL;WERTORG;104,0;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-55-01;REAL;WERTORG;97,0;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-55-01;REAL;X13JDKSB;96,5;2015=100;UMS103;Umsatzindex TEST\n"
+        ."2026;MONAT09;WZ08-55-01;REAL;WERTORG;1,2;Prozent;CH0005;Veränderung TEST\n";
+    $leser = app(GenesisCsvLeser::class);
+    $real = MarktdatenService::REIHEN['gastgewerbe_umsatz_real'];
+    expect(array_column($leser->lesen($csv, $real['schluessel'], '', $real['zusatz'], $real['wert_code']), 'wert'))->toEqual([97.0])
+        ->and(array_column($leser->lesen($csv, 'WZ08-55-01', '', ['NOMINAL', 'WERTORG'], 'UMS103'), 'wert'))->toEqual([104.0])
+        ->and(fn () => $leser->lesen($csv, 'WZ08-55-01', '', ['REAL'], 'UMS103'))->toThrow(RuntimeException::class, 'Mehrere GENESIS-Werte');
+    foreach (MarktdatenService::REIHEN as $serie => $meta) {
+        expect(MarktdatenService::abrufbar($meta))->toBeTrue("{$serie} ohne Codes")
+            ->and(isset($meta['wert']) || isset($meta['wert_code']))->toBeTrue("{$serie} ohne Wertvariable")
+            ->and(MarktdatenService::TABELLEN)->toContain($meta['tabelle']);
+    }
 });
