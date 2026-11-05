@@ -93,3 +93,18 @@ it('(5) der Treffer ist nie schlechter als Kandidat 1 — „Cheddar, gerieben�
     expect($t['gp_id'])->not->toBe($sauce->id)
         ->and($t['gp_id'])->toBe($kaese->id);
 });
+
+it('95d: der Draw zieht nur mit ganzer Hauptzutat und nie, was das GP ausdrücklich ausschließt — Gegenproben bleiben', function () {
+    $essenz = ($this->gp)('Essig-Essenz: konserviert, 25 Vol%', '11', 'konserviert', 'essig_essenz');
+    $essig = ($this->gp)('Branntweinessig: konserviert', '11', 'konserviert', 'branntweinessig');
+    $ohneOel = ($this->gp)('Tomate: trocken, ohne Öl', '01', 'trocken', 'tomate');
+    $inOel = ($this->gp)('Tomate: getrocknet, konserviert, in Öl', '01', 'konserviert', 'tomate');
+    $svc = app(IngredientMatchService::class);
+    $liste = fn (FoodAlchemistGp ...$gps) => array_map(fn ($g) => ['kind' => 'gp', 'id' => $g->id, 'score' => 0.8, 'origin' => 'semantic'], $gps);
+    $gezogen = fn (string $zutat, FoodAlchemistGp ...$gps) => array_column($svc->drawKandidaten($liste(...$gps), 'gp', 'hybrid', $this->rootTeam, $zutat), 'id');
+
+    expect($gezogen('Essig', $essenz))->toBe([])
+        ->and($gezogen('Essig-Essenz', $essenz))->toBe([$essenz->id])                          // genannt → darf
+        ->and($gezogen('Getrocknete Tomaten in Öl', $ohneOel, $inOel))->toBe([$inOel->id])
+        ->and($gezogen('Getrocknete Tomaten', $ohneOel))->toBe([$ohneOel->id]);              // „Öl“ nicht genannt → darf
+});
