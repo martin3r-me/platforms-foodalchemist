@@ -23,6 +23,7 @@
 
 <x-ui-page>
     <x-slot:navbar><x-foodalchemist::shell.page-navbar title="Gastronomie-Observatorium" icon="heroicon-o-globe-alt" /></x-slot:navbar>
+    @unless($istHandy)
     <x-slot:sidebar>
         <x-foodalchemist::page-sidebar title="Observatorium" width="w-64" :minWidth="220" :maxWidth="340" data-observatorium-navigation>
             <nav class="fa-obs-nav" aria-label="Observatorium-Bereiche">
@@ -33,17 +34,7 @@
                     </button>
                 @endforeach
                 @if($ansicht === 'radar')
-                    <section class="fa-obs-radar-filters" aria-label="Radar filtern" data-observatorium-radar-filter>
-                        <h2>Radar filtern</h2>
-                        <label for="obs-radar-suche">Name oder Definition</label>
-                        <input id="obs-radar-suche" type="search" wire:model.live.debounce.300ms="radarSuche" placeholder="Trend suchen" maxlength="200">
-                        <x-fa::choice name="kategorien" label="Kategorie" idPrefix="obs-radar" :multiple="true" :options="V::KATEGORIEN" />
-                        <x-fa::choice name="sparten" label="Sparte" idPrefix="obs-radar" :multiple="true" :options="V::SPARTEN" />
-                        <x-fa::choice name="typen" label="Trend oder Hype" idPrefix="obs-radar" :multiple="true" :options="V::TYPEN" />
-                        <x-fa::choice name="ebenen" label="Trendhierarchie" idPrefix="obs-radar" :multiple="true" :options="V::EBENEN" />
-                        <label class="fa-obs-radar-check"><input type="checkbox" wire:model.live="nurBefragung"> Nur von der Befragung bestätigt</label>
-                        @if($radarFilterAktiv)<button type="button" class="fa-obs-filter-reset" wire:click="radarFilterZuruecksetzen">Radarfilter zurücksetzen</button>@endif
-                    </section>
+                    @include('foodalchemist::livewire.observatorium.radar-filter')
                 @endif
                 <div class="fa-obs-nav-foot">
                     <div class="fa-obs-nav-label">Die Recherche dahinter</div>
@@ -54,20 +45,31 @@
             </nav>
         </x-foodalchemist::page-sidebar>
     </x-slot:sidebar>
+    @endunless
 
-    <main class="fa-obs fa-obs-main" data-observatorium-ansicht="{{ $ansicht }}">
+    <main class="fa-obs fa-obs-main {{ $istHandy ? 'fa-obs-is-handy' : '' }}" x-data="{ filterOffen: false }" data-observatorium-ansicht="{{ $ansicht }}" @if($istHandy) data-observatorium-handy @endif>
         @include('foodalchemist::livewire.observatorium.styles')
         <header class="fa-obs-heading">
-            <div><div class="fa-obs-eyebrow">Gastronomie-Observatorium</div><h1>{{ $titel }}</h1><p class="fa-obs-subtitle">{{ $untertitel }}</p></div>
+            <div><div class="fa-obs-eyebrow">Gastronomie-Observatorium</div><h1>{{ $istHandy ? (O::ANSICHTEN[$ansicht][0] ?? 'Mein Briefing') : $titel }}</h1>@unless($istHandy)<p class="fa-obs-subtitle">{{ $untertitel }}</p>@endunless</div>
             @if($ansicht !== 'radar')<button class="fa-obs-button" type="button" wire:click="ansichtSetzen('{{ $ansicht === 'briefing' ? 'entdecken' : 'briefing' }}')">@svg('heroicon-o-sparkles'){{ $ansicht === 'briefing' ? 'Zur Übersicht' : 'Mein Briefing' }}</button>@endif
         </header>
+        @if($istHandy)
+            @include('foodalchemist::livewire.observatorium.handy-navigation')
+        @endif
         @if($meldung)<div class="fa-obs-status" role="status">{{ $meldung }}</div>@endif
 
         @if($gewaehlt)
             @include('foodalchemist::livewire.observatorium.detail')
         @elseif($ansicht === 'radar')
+            @if($istHandy)
+                <div id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-handy-filterpanel" @keydown.escape.window="filterOffen = false">
+                    @include('foodalchemist::livewire.observatorium.radar-filter')
+                    <button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>
+                </div>
+            @endif
             @include('foodalchemist::livewire.observatorium.radar')
         @else
+            <div @if($istHandy) id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-handy-filterpanel" @keydown.escape.window="filterOffen = false" @endif>
             <div class="fa-obs-filters" role="search" aria-label="Recherche filtern">
                 <label class="fa-obs-field search">@svg('heroicon-o-magnifying-glass')<input type="search" wire:model.live.debounce.300ms="suche" aria-label="Thema oder Idee suchen" placeholder="Thema oder Idee suchen" maxlength="200"></label>
                 <label class="fa-obs-field branch"><select wire:model.live="branche" aria-label="Branche filtern"><option value="">Alle Branchen</option>@foreach(O::BRANCHEN as $key => $name)<option value="{{ $key }}">{{ $name }}</option>@endforeach</select></label>
@@ -77,6 +79,9 @@
             </div>
             @if($ansicht === 'markt')<div class="fa-obs-filters"><label class="fa-obs-field small"><select wire:model.live="markt" aria-label="Marktansicht"><option value="">Alle Marktbewegungen</option><option value="chance">Chancen prüfen</option></select></label><span class="fa-obs-subtitle">Hinweise aus Quellen – noch keine bestätigten Geschäftschancen.</span></div>@endif
             @if($ansicht === 'merkliste')<label class="fa-obs-subtitle" style="display:flex;gap:9px;align-items:center;margin-bottom:20px"><input type="checkbox" wire:model.live="pruefen">Nur für die Trendprüfung vorgemerkte Beiträge</label>@endif
+
+            @if($istHandy)<button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>@endif
+            </div>
 
             @if($hero)
                 <article class="fa-obs-hero" data-observatorium-fokus>
@@ -104,6 +109,7 @@
                 @endif
             @endif
         @endif
+        @if($istHandy)<div class="fa-obs-actions"><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste']) }}" wire:navigate>Trend Research @svg('heroicon-o-arrow-up-right')</a><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>Recherche-Pinnwand @svg('heroicon-o-arrow-up-right')</a></div>@endif
         <footer class="fa-obs-footnote"><span>Gastronomie-Observatorium</span><span>Titel & Kurzbeschreibungen · Originalquellen prüfen · keine automatische Radar-Freigabe</span></footer>
     </main>
 </x-ui-page>

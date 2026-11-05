@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\ObservatoriumService;
 use Platform\FoodAlchemist\Services\TrendService;
 use Platform\FoodAlchemist\Support\FaShell;
+use Platform\FoodAlchemist\Support\HandyLesemodus;
 use Platform\FoodAlchemist\Support\ObservatoriumInhalt as Inhalt;
 
 class Index extends Component
@@ -160,6 +161,7 @@ class Index extends Component
             'typ' => $this->typen, 'ebene' => $this->ebenen, 'nur_befragung' => $this->nurBefragung]);
 
         return view('foodalchemist::livewire.observatorium.index', [
+            'istHandy' => HandyLesemodus::anfrageVomHandy(),
             'eintraege' => $eintraege, 'gewaehlt' => $gewaehlt,
             'weitereQuellen' => $gewaehlt ? $svc->weitereQuellen($team, $gewaehlt) : collect(),
             'merker' => $alleMerker->keyBy('eingang_id'), 'merkerAnzahl' => $alleMerker->count(),

@@ -206,3 +206,24 @@ it('ordnet Research in der mittleren Spalte und hält die gemeinsame Pinnwand er
     Livewire::withQueryParams(['ansicht' => 'inspiration'])->withCookie(HandyLesemodus::COOKIE, '1')
         ->test(Platform\FoodAlchemist\Livewire\Trendradar\Index::class)->assertSet('handyReiter', 'pinnwand');
 });
+
+it('nutzt am Handy die volle Breite und zeigt freigegebene Entwicklungen als Karten statt Miniaturgrafik', function () {
+    $e = obsArtikel($this->rootTeam, 'TEST Restaurant: Neues Gemüsemenü');
+    $svc = app(TrendService::class);
+    $t = $svc->anlegen($this->rootTeam, ['name' => 'TEST Fermentation mobil', 'typ' => 'trend', 'ebene' => 'konsum', 'kategorie' => 'food',
+        'beleg' => ['quelle' => 'branchenquelle', 'titel' => 'TEST Quelle']]);
+    $svc->statusSetzen($this->rootTeam, $t->id, 'auf_radar', $this->owner->id);
+    $ui = Livewire::withCookie(HandyLesemodus::COOKIE, '1')->test(Index::class)
+        ->assertSeeHtml('data-observatorium-handy-navigation')->assertDontSeeHtml('data-fa-page-sidebar')
+        ->assertSeeHtml('data-observatorium-handy-filterknopf')->assertSee($e->titel)
+        ->set('branche', 'kita')->assertSee('1 Filter aktiv')->assertSee('Noch keine passenden Meldungen')
+        ->call('filterZuruecksetzen')->assertSee($e->titel)
+        ->call('oeffnen', $e->id)->assertSeeHtml('data-observatorium-detail')->call('merken', $e->id)
+        ->call('ansichtSetzen', 'merkliste')->assertSee($e->titel)
+        ->call('ansichtSetzen', 'radar')->assertSeeHtml('data-observatorium-entwicklungskarten')
+        ->assertDontSeeHtml('data-observatorium-radar-chart')->assertSee('TEST Fermentation mobil')->assertSee('Konfidenz:')
+        ->set('typen', ['hype'])->assertSee('Keine Entwicklungen für diese Filter')
+        ->call('radarFilterZuruecksetzen')->assertSee('TEST Fermentation mobil');
+    Livewire::withCookie(HandyLesemodus::COOKIE, '0')->test(Index::class)->call('ansichtSetzen', 'radar')
+        ->assertSeeHtml('data-fa-page-sidebar')->assertSeeHtml('data-observatorium-radar-chart')->assertDontSeeHtml('data-observatorium-handy-navigation');
+});
