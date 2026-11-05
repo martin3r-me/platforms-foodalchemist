@@ -6,16 +6,11 @@
         "mini_schrift": 1,
         "style_statisch": 1
     },
-    "components/kombination.blade.php": {
-        "mini_schrift": 2
-    },
     "components/kpi-tiles.blade.php": {
         "mini_schrift": 1
     },
     "components/pairing-netz.blade.php": {
-        "hex_farbe": 1,
-        "emoji": 3,
-        "style_statisch": 1
+        "emoji": 3
     },
     "dokumente/angebot-karte.blade.php": {
         "hex_farbe": 22,
@@ -141,18 +136,33 @@
         "mini_schrift": 5,
         "style_statisch": 2
     },
+    "livewire/handy/trend-recherche.blade.php": {
+        "important": 2
+    },
+    "livewire/observatorium/index.blade.php": {
+        "style_statisch": 5
+    },
+    "livewire/observatorium/karte.blade.php": {
+        "style_statisch": 1
+    },
+    "livewire/observatorium/marktdaten.blade.php": {
+        "style_statisch": 4
+    },
+    "livewire/observatorium/styles.blade.php": {
+        "hex_farbe": 19,
+        "important": 2,
+        "style_block": 1
+    },
     "livewire/planung/index.blade.php": {
         "hex_farbe": 13,
         "important": 1,
         "emoji": 18,
         "mini_schrift": 5,
-        "style_statisch": 8
+        "style_statisch": 7
     },
     "livewire/recipes/pairing-netz-modal.blade.php": {
-        "hex_farbe": 13,
-        "emoji": 10,
-        "mini_schrift": 2,
-        "style_statisch": 6
+        "hex_farbe": 10,
+        "emoji": 10
     },
     "livewire/settings/speiseplan-chips.blade.php": {
         "important": 6,
@@ -166,6 +176,19 @@
     },
     "livewire/speisekarte/praesentation.blade.php": {
         "hex_farbe": 2
+    },
+    "livewire/trendradar/beobachten.blade.php": {
+        "important": 2
+    },
+    "livewire/trendradar/index.blade.php": {
+        "style_statisch": 1
+    },
+    "livewire/trendradar/research-styles.blade.php": {
+        "style_block": 1
+    },
+    "livewire/trendradar/wettbewerber-styles.blade.php": {
+        "important": 1,
+        "style_block": 1
     },
     "partials/editor-dark.blade.php": {
         "important": 7,
