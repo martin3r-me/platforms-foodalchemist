@@ -1258,7 +1258,13 @@ class IngredientMatchService
         $this->currentIngredientName = $zutat;
         $this->tiebreakQuery = $this->engine->ingredientTokens($zutat);
         $this->aliasTokens = null;
-        if (! $this->hauptzutatPasst($gp)) {
+        // Spec 95d (Neuabgleich 05.11.: „Essig“ → „Essig-Essenz 25 %“): die GANZE Hauptzutat muss gedeckt sein, nicht nur das Kopfwort
+        if (! $this->hauptzutatPasst($gp, [], true)) {
+            return false;
+        }
+        // Spec 95d („Getrocknete Tomaten in Öl“ → „Tomate: trocken, ohne Öl“): nennt die Zutat, was das GP ausdrücklich ausschließt — anderes Produkt
+        if (preg_match_all('/(?<![\p{L}])ohne\s+(\p{L}+)/iu', (string) $gp->name, $m) > 0 && ! in_array('ohne', $this->tiebreakQuery, true)
+            && array_intersect($this->engine->tokenize(implode(' ', $m[1])), $this->tiebreakQuery) !== []) {
             return false;
         }
         $offen = app(Matching\BasisVariante::class)->ungenannt($gp, $this->tiebreakQuery);
