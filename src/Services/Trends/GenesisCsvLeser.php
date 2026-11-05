@@ -5,7 +5,11 @@ namespace Platform\FoodAlchemist\Services\Trends;
 /** GENESIS Flat-File-CSV; unbekannte Strukturen werden abgelehnt, nie geraten. */
 class GenesisCsvLeser
 {
-    public function lesen(string $csv, string $code): array
+    /**
+     * @param  string  $wertLabel  Teil des value_variable_label in Kleinbuchstaben (z. B. „verbraucherpreisindex“, „real“)
+     * @param  list<string>  $zusatz  weitere Schlüssel, die in der Zeile stehen müssen (z. B. Originalwert statt bereinigt)
+     */
+    public function lesen(string $csv, string $code, string $wertLabel = 'verbraucherpreisindex', array $zusatz = []): array
     {
         $f = fopen('php://temp', 'r+');
         fwrite($f, preg_replace('/^\xEF\xBB\xBF/', '', $csv));
@@ -25,10 +29,10 @@ class GenesisCsvLeser
                 }
                 $r = array_combine($kopf, $felder);
                 $codes = array_filter($r, fn ($k) => str_ends_with($k, '_variable_attribute_code'), ARRAY_FILTER_USE_KEY);
-                if (! in_array($code, $codes, true)) {
+                if (! in_array($code, $codes, true) || array_diff($zusatz, $codes) !== []) {
                     continue;
                 }
-                if (! str_contains(mb_strtolower($r['value_variable_label']), 'verbraucherpreisindex')) {
+                if (! str_contains(mb_strtolower($r['value_variable_label']), mb_strtolower($wertLabel))) {
                     continue;
                 }
                 $monat = null;

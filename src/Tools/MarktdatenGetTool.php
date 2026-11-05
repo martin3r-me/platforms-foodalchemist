@@ -17,7 +17,7 @@ class MarktdatenGetTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Liest gespeicherte Destatis-Preisindizes mit Monatswerten, Quelle, Original-Kennzeichnungen und Vorjahresvergleich. Kein API- oder KI-Aufruf. Fehlender Zugang, Datenalter und Abruffehler bleiben sichtbar; keine Betriebskosten oder Trendfreigaben.';
+        return 'Liest gespeicherte Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) mit Monatswerten, Quelle, Original-Kennzeichnungen und Vorjahresvergleich sowie Klartext-Aussagen (aussagen), die nur aus diesen Werten gebildet sind. Kein API- oder KI-Aufruf. Fehlender Zugang, Datenalter und Abruffehler bleiben sichtbar; keine Betriebskosten oder Trendfreigaben.';
     }
 
     public function getSchema(): array

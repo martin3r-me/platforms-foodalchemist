@@ -367,3 +367,40 @@ it('UI: Reiter Eingang und Quellen, Quelle anlegen, Eintrag verwerfen und auf di
     $this->actingAs($this->leser);
     Livewire::test(QuellenReiter::class)->assertDontSeeHtml('data-quelle-neu')->assertDontSee('Quelle neu prüfen');
 });
+
+it('Abruf Übersicht: Artikel-Kopf bleibt — Titel aus der Überschrift, nicht der Teaser-Link samt „mehr erfahren“', function () {
+    // Aufbau wie BZfE: <article><header><h3><a>Titel</a></h3></header><section class="teaser-text"><a><p>Dachzeile</p><p>Text</p><p class="more">mehr erfahren</p></a>
+    $treffer = app(FeedLeser::class)->uebersicht(spec93Fixture('uebersicht_artikelkopf.html'), 'https://www.bzfe.test/presse/aktuell');
+
+    expect(array_column($treffer, 'titel'))->toBe(['Kochen mit Pastinaken', 'Erfundener Teaser ohne eigene Überschrift im Artikel.'])
+        ->and($treffer[0]['url'])->toBe('https://www.bzfe.test/presse/archiv/kochen-mit-pastinaken#teaser')
+        ->and($treffer[0]['teaser'])->toBe('Erfundene Dachzeile für Suppe und Ofengemüse – Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe.')
+        ->and($treffer[0]['veroeffentlicht_am'])->toStartWith('2026-10-28');
+    foreach ($treffer as $t) {
+        expect($t['titel'])->not->toContain('mehr erfahren')->and($t['url'])->not->toContain('-ist-kein-artikel');
+    }
+});
+
+it('Titel nachziehen: Probelauf schreibt nichts, --apply korrigiert nur „mehr erfahren“-Titel dieser Quelle, die noch auf der Seite stehen', function () {
+    Http::fake(['https://www.bzfe.test/*' => Http::response(spec93Fixture('uebersicht_artikelkopf.html'))]);
+    $q = spec93Quelle($this->rootTeam, ['name' => 'TEST-93 BZfE', 'url' => 'https://www.bzfe.test/presse/aktuell', 'feed_typ' => 'uebersicht']);
+    $andere = spec93Quelle($this->rootTeam, ['name' => 'TEST-93 andere', 'url' => 'https://andere.beispiel.test/rubrik/', 'feed_typ' => 'uebersicht']);
+    $alt = 'Erfundene Dachzeile für Suppe und Ofengemüse Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe. mehr erfahren';
+    $kaputt = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/kochen-mit-pastinaken#teaser', 'titel' => $alt, 'teaser' => 'Erfundene Dachzeile für Suppe und Ofengemüse', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    $weg = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/nicht-mehr-da#teaser', 'titel' => 'Erfundener alter Teaser über Kürbis im Herbst. mehr erfahren', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    // Sauberer Titel (z. B. von Hand gesetzt), URL steht auf der Seite: bleibt unangetastet
+    $sauber = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://www.bzfe.test/presse/archiv/ohne-ueberschrift#teaser', 'titel' => 'Von Hand gesetzter Titel TEST-93', 'quelle_id' => $q->id], 'abruf')['eintrag'];
+    $fremd = $this->eingang->einreichen($this->rootTeam, ['url' => 'https://andere.beispiel.test/kochen-mit-pastinaken', 'titel' => 'Erfundener fremder Teaser über Pastinaken. mehr erfahren', 'quelle_id' => $andere->id], 'abruf')['eintrag'];
+
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id])
+        ->expectsOutputToContain('→ Kochen mit Pastinaken')->expectsOutputToContain('2 Kandidaten mit „mehr erfahren“-Titel, 1 korrigierbar, 1 nicht mehr auf der Seite')
+        ->expectsOutputToContain('Probelauf: nichts geschrieben')->assertSuccessful();
+    expect($kaputt->refresh()->titel)->toBe($alt);
+
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $q->id, '--apply' => true])->expectsOutputToContain('1 Einträge korrigiert.')->assertSuccessful();
+    expect($kaputt->refresh()->titel)->toBe('Kochen mit Pastinaken')
+        ->and($kaputt->teaser)->toBe('Erfundene Dachzeile für Suppe und Ofengemüse – Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe.')
+        ->and($weg->refresh()->titel)->toEndWith('mehr erfahren')->and($fremd->refresh()->titel)->toEndWith('mehr erfahren')
+        ->and($sauber->refresh()->titel)->toBe('Von Hand gesetzter Titel TEST-93');
+    $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $andere->id + 999])->assertFailed();
+});

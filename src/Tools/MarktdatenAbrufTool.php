@@ -17,19 +17,37 @@ class MarktdatenAbrufTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Ruft zwei feste monatliche Destatis-Preisindexreihen über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Keine KI-Aufträge, Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
+        return 'Ruft die festen monatlichen Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Reihen ohne Codes stehen in noch_nicht_abrufbar. Nachschlagen statt raten: erkunden_tabelle (nur konfigurierte Tabellen) liefert den Tabellenaufbau; mit erkunden_merkmal (+ suche) die Schlüssel eines Merkmals. Erkunden schreibt nie. Keine KI-Aufträge, Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
     }
 
     public function getSchema(): array
     {
-        return ['type' => 'object', 'properties' => ['apply' => ['type' => 'boolean', 'default' => false]]];
+        return ['type' => 'object', 'properties' => [
+            'apply' => ['type' => 'boolean', 'default' => false],
+            'erkunden_tabelle' => ['type' => 'string', 'enum' => MarktdatenService::TABELLEN, 'description' => 'Nur nachschlagen: Aufbau dieser Tabelle (Merkmale).'],
+            'erkunden_merkmal' => ['type' => 'string', 'description' => 'Mit erkunden_tabelle: Schlüssel dieses Merkmals (GENESIS-Code).'],
+            'suche' => ['type' => 'string', 'description' => 'Filter für erkunden_merkmal (Code oder Text, z. B. „fleisch“).'],
+        ]];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         $team = $this->team($context);
 
-        return $team ? ToolResult::success(app(MarktdatenService::class)->abrufen($team, ($arguments['apply'] ?? false) === true)) : ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        if (! $team) {
+            return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        $svc = app(MarktdatenService::class);
+        if (($tabelle = $arguments['erkunden_tabelle'] ?? null) !== null) {
+            try {
+                return ToolResult::success($svc->erkunden($team, (string) $tabelle, isset($arguments['erkunden_merkmal']) ? (string) $arguments['erkunden_merkmal'] : null,
+                    isset($arguments['suche']) ? (string) $arguments['suche'] : null));
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'ERKUNDEN_FEHLGESCHLAGEN');
+            }
+        }
+
+        return ToolResult::success($svc->abrufen($team, ($arguments['apply'] ?? false) === true));
     }
 
     public function getMetadata(): array
