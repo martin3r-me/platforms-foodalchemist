@@ -38,8 +38,11 @@ class TrendVertiefungService
 
     public const MAX_AUSSAGEN = 6;
 
-    /** So viel Text geht höchstens in den Prompt (Zeichen). */
-    public const PROMPT_TEXT_MAX = 14000;
+    /**
+     * So viel Text geht höchstens in den Prompt (Zeichen, ≈ 8.000 Token). Gemessen 05.11.: Das RATIONAL-Barometer hat 31.671 Zeichen
+     * Haupttext, Methodik (n = 250, Statista) ab Zeichen ≈ 30.000 — bei 14.000 fiele sie weg.
+     */
+    public const PROMPT_TEXT_MAX = 32000;
 
     /** Unter so viel Haupttext gilt eine Seite als nicht lesbar (oder als Login-Wand, wenn ein Passwortfeld da ist). */
     public const MIN_TEXT = 300;

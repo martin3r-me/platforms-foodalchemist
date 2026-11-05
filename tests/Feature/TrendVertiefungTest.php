@@ -199,3 +199,13 @@ it('Rechte und Teams: Leser darf nicht vertiefen, fremde Einträge bleiben unber
     (new TrendEingangVertiefenJob($eigen->id, $this->rootTeam->id))->handle(app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class));
     expect($eigen->refresh()->vertiefung_status)->toBeNull()->and($this->stub->calls)->toBe(0);
 });
+
+it('langer Text: eine Zahl weit hinten (Methodik am Seitenende) erreicht die KI und den Zahlen-Riegel', function () {
+    $lang = str_replace('<p>Die Ergebnisse beruhen', str_repeat('<p>Fülltext ohne Zahlen für eine lange Seite im Stil eines Reports.</p>', 380).'<p>Befragt wurden 477 Küchenleitungen.</p><p>Die Ergebnisse beruhen', VT_SEITE);
+    Http::fake(['https://studie.beispiel.test/*' => Http::response($lang)]);
+    $this->stub->werte = vtAntwort([['aussage' => 'Befragt wurden 477 Küchenleitungen.', 'zahl' => '477', 'bezug' => 'Stichprobe', 'fundstelle' => 'Methodik']]);
+    $e = vtEintrag($this->rootTeam->id);
+    expect(mb_strlen(app(TrendVertiefungService::class)->quelleLesen($e->url)['text']))->toBeGreaterThan(25000);
+    $this->svc->anstossen($this->rootTeam, [$e->id], $this->user->id);
+    expect(array_column($e->refresh()->vertiefung['kernaussagen'], 'zahl'))->toBe(['477']);
+});
