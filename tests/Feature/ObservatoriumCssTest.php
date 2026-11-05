@@ -24,7 +24,8 @@ it('liefert die dist-Kopie identisch zur Quelle aus (npm run build:css nicht ver
 });
 
 it('kommt ohne !important aus und trägt die Regeln der früheren style-Blöcke', function () use ($basis) {
-    $css = file_get_contents($basis.'/resources/css/foodalchemist-observatorium.css');
+    // Kommentare zählen nicht (sie erklären, was ersetzt wurde).
+    $css = preg_replace('#/\*.*?\*/#s', '', file_get_contents($basis.'/resources/css/foodalchemist-observatorium.css'));
     expect($css)->not->toContain('!important')
         ->and($css)->toContain('.fa-obs{')->and($css)->toContain('.fa-research-nav{')->and($css)->toContain('.fa-wett{')
         ->and($css)->toContain('.fa-obs.fa-obs-is-handy{padding:16px}')->and($css)->toContain('.fa-obs .fa-obs-link{color:var(--obs-accent)}');
