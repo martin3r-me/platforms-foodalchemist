@@ -121,6 +121,18 @@ class RecipeReifeAdapter implements ReifeAdapter
             $erfuellt[] = 'lagerung';
         }
 
+        // Neuabgleich der Pilot-Rezepte (05.11.): eine OFFENE Zeile (kein GP, kein Unterrezept) fiel aus jeder Messung heraus — die EK-Zähler
+        // kennen nur zugeordnete Zeilen, die Ampel stand auf grün. Offene Pflicht-Zutaten sind eine Lücke; der Weg ist das Erden.
+        $offeneZutaten = self::offeneZutaten($r);
+        if ($offeneZutaten !== []) {
+            $luecken[] = $this->luecke('zutaten_offen', $istVk ? 'gericht' : 'basisrezept', 'wichtig',
+                count($offeneZutaten) . ' Zutat(en) ohne Grundprodukt und ohne Unterrezept: ' . implode(', ', $offeneZutaten)
+                    . '. Sie fehlen in EK, Allergenen und Ausbeute.',
+                'foodalchemist.gps.MATCH');
+        } else {
+            $erfuellt[] = 'zutaten_offen';
+        }
+
         // Spec 83 B2: der Posten kommt aus dem Rezept in die Auftragszeile (ProductionOrderService::recomputeOrder) — das gilt für Basisrezepte UND
         // Gerichte (auch das Gericht hat eine eigene Zeile im Auftrag). Ohne Posten bleibt die Zeile „Kein Posten".
         // Gerichte gehen an den Pass: mit gesetzter Team-Vorgabe "Posten für Gerichte" ist die Lücke keine (die Zeile bekommt den Pass).
@@ -208,6 +220,20 @@ class RecipeReifeAdapter implements ReifeAdapter
             'vorlaeufig' => $vorlaeufig,
             'kennzahlen' => $kennzahlen,
         ];
+    }
+
+    /**
+     * Namen der offenen Pflicht-Zutaten (kein GP, kein Unterrezept, nicht optional, nicht bewusst ignoriert) — auch für die
+     * EK-Vollständigkeit ({@see \Platform\FoodAlchemist\Services\KostenCacheService::fuer}).
+     *
+     * @return list<string>
+     */
+    public static function offeneZutaten(FoodAlchemistRecipe $r): array
+    {
+        return $r->ingredients()->whereNull('gp_id')->whereNull('referenced_recipe_id')->where('is_optional', false)
+            ->where(fn ($q) => $q->whereNull('match_method')->orWhere('match_method', '!=', \Platform\FoodAlchemist\Enums\MatchMethod::Ignored->value))
+            ->orderBy('position')->get(['display_name', 'raw_text'])
+            ->map(fn ($z) => (string) ($z->display_name ?: $z->raw_text))->values()->all();
     }
 
     /** @return array{code: string, ebene: string, schwere: string, was: string, wie: ?array} */
