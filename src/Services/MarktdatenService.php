@@ -98,6 +98,19 @@ class MarktdatenService
     public function lesen(Team $team): array
     {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Lesen, 'Marktdaten lesen');
+        $m = $this->lesenFuerTeam($team);
+        $m['ansicht'] = MarktdatenAnsicht::bauen($m);
+        unset($m['alle_reihen']);   // nur intern (Ansicht, Einordnung); GET/Blade bekommen die sichtbaren Reihen
+        $e = MarktEinordnungService::aktuelle($team);
+        $m['einordnung'] = $e === null ? null : ['saetze' => $e->saetze, 'stand_monat' => $e->stand_monat,
+            'erstellt_am' => $e->updated_at?->toIso8601String(), 'verworfen' => (int) $e->verworfen];
+
+        return $m;
+    }
+
+    /** Wie lesen(), ohne Rechteprüfung und ohne Ansicht — für den Einordnungs-Job im Worker (kein angemeldeter Nutzer). */
+    public function lesenFuerTeam(Team $team): array
+    {
         $daten = Daten::visibleToTeam($team)->orderByDesc('abgerufen_at')->get();
         $alle = [];
         foreach (self::REIHEN as $serie => $meta) {
@@ -125,6 +138,7 @@ class MarktdatenService
         $aussagen = self::aussagen($alle);
 
         return ['zugang_eingerichtet' => $this->client->eingerichtet(), 'reihen' => $sichtbar, 'aussagen' => $aussagen,
+            'alle_reihen' => array_values(array_filter($alle, fn ($r) => $r['aktuell'] !== null)),
             'aussage' => $aussagen[0] ?? null,
             'hinweis' => 'Amtliche Indizes für Deutschland: Sie zeigen die Entwicklung, keine Euro-Beträge und keine Einkaufs- oder Betriebskosten des eigenen Betriebs. Vorjahresvergleich nur bei gleicher Indexbasis; Original-Kennzeichnungen beachten.'];
     }
@@ -306,7 +320,14 @@ class MarktdatenService
             }
         }
 
-        return ['gespeichert' => $apply, 'probelauf' => ! $apply, 'ergebnisse' => $out, 'noch_nicht_abrufbar' => $offen];
+        // Nach einem gespeicherten Abruf: KI-Einordnung anstoßen (nur wenn sich die Werte geändert haben).
+        $einordnung = null;
+        if ($apply && array_filter($out, fn ($e) => $e['fehler'] === null) !== []) {
+            $einordnung = app(MarktEinordnungService::class)->nachAbruf($team, $this->lesenFuerTeam($team));
+        }
+
+        return ['gespeichert' => $apply, 'probelauf' => ! $apply, 'ergebnisse' => $out, 'noch_nicht_abrufbar' => $offen,
+            'einordnung_angestossen' => $einordnung !== null];
     }
 
     /**

@@ -17,7 +17,7 @@ class MarktdatenAbrufTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Ruft die festen monatlichen Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Reihen ohne Codes stehen in noch_nicht_abrufbar. reihen = Liste von Schlüsseln für einen Teil-Abruf (24 Reihen am Stück können in einen Client-Timeout laufen). Nachschlagen statt raten: erkunden_tabelle (nur konfigurierte Tabellen) liefert den Tabellenaufbau; mit erkunden_merkmal (+ suche) die Schlüssel eines Merkmals. Erkunden schreibt nie. Keine KI-Aufträge, Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
+        return 'Ruft die festen monatlichen Destatis-Reihen (Preisindizes, Gastgewerbe-Umsatz, Erzeugerpreise) über die kostenlose GENESIS-API ab. Benötigt serverseitigen GENESIS-Token. Standard Probelauf ohne Speicherung; apply=true übernimmt ausschließlich Daten des aktuellen Teams. Reihen ohne Codes stehen in noch_nicht_abrufbar. reihen = Liste von Schlüsseln für einen Teil-Abruf (24 Reihen am Stück können in einen Client-Timeout laufen). Nachschlagen statt raten: erkunden_tabelle (nur konfigurierte Tabellen) liefert den Tabellenaufbau; mit erkunden_merkmal (+ suche) die Schlüssel eines Merkmals. Erkunden schreibt nie. Nach apply mit geänderten Werten entsteht eine KI-Einordnung (per MCP als KI-Auftrag, foodalchemist.ki_auftraege.GET → ANTWORT). Keine Artikel oder Radarfreigaben. Ergebnisfehler je Reihe prüfen.';
     }
 
     public function getSchema(): array
@@ -59,7 +59,7 @@ class MarktdatenAbrufTool extends FoodAlchemistTool implements ToolContract, Too
     public function getMetadata(): array
     {
         return ['category' => 'action', 'tags' => ['foodalchemist', 'destatis', 'markt'], 'read_only' => false,
-            'idempotent' => true, 'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'external_api',
-            'side_effects' => ['HTTP-Abruf Destatis', 'apply=true: eigene Marktdaten aktualisieren']];
+            'idempotent' => true, 'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm',
+            'side_effects' => ['HTTP-Abruf Destatis', 'apply=true: eigene Marktdaten aktualisieren', 'apply=true: KI-Einordnung anstoßen']];
     }
 }
