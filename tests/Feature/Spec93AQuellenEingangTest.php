@@ -367,3 +367,16 @@ it('UI: Reiter Eingang und Quellen, Quelle anlegen, Eintrag verwerfen und auf di
     $this->actingAs($this->leser);
     Livewire::test(QuellenReiter::class)->assertDontSeeHtml('data-quelle-neu')->assertDontSee('Quelle neu prüfen');
 });
+
+it('Abruf Übersicht: Artikel-Kopf bleibt — Titel aus der Überschrift, nicht der Teaser-Link samt „mehr erfahren“', function () {
+    // Aufbau wie BZfE: <article><header><h3><a>Titel</a></h3></header><section class="teaser-text"><a><p>Dachzeile</p><p>Text</p><p class="more">mehr erfahren</p></a>
+    $treffer = app(FeedLeser::class)->uebersicht(spec93Fixture('uebersicht_artikelkopf.html'), 'https://www.bzfe.test/presse/aktuell');
+
+    expect(array_column($treffer, 'titel'))->toBe(['Kochen mit Pastinaken', 'Erfundener Teaser ohne eigene Überschrift im Artikel.'])
+        ->and($treffer[0]['url'])->toBe('https://www.bzfe.test/presse/archiv/kochen-mit-pastinaken#teaser')
+        ->and($treffer[0]['teaser'])->toBe('Erfundene Dachzeile für Suppe und Ofengemüse – Erfundener Text: Pastinaken bringen eine nussige Note in Suppen und Aufläufe.')
+        ->and($treffer[0]['veroeffentlicht_am'])->toStartWith('2026-10-28');
+    foreach ($treffer as $t) {
+        expect($t['titel'])->not->toContain('mehr erfahren')->and($t['url'])->not->toContain('-ist-kein-artikel');
+    }
+});

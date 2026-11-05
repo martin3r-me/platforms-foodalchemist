@@ -53,3 +53,6 @@
 .fa-obs-scroll-x{overflow-x:auto}
 .fa-obs-umbruch{overflow-wrap:anywhere}
 .fa-radar-svg{display:block;width:100%;max-width:720px;height:auto;margin-inline:auto}
+
+/* Markt in Zahlen: Klartext-Aussage oben, Monatstabelle mit echten Spaltenabständen. */
+.fa-obs p.fa-obs-marktdaten-aussage{margin:14px 0 4px;font-size:16px;line-height:1.5;color:var(--obs-ink)}.fa-obs .fa-obs-marktdaten-tabelle{border-collapse:collapse;font-size:13px;margin:8px 0}.fa-obs .fa-obs-marktdaten-tabelle th,.fa-obs .fa-obs-marktdaten-tabelle td{padding:5px 16px 5px 0;text-align:left;white-space:nowrap;border-bottom:1px solid var(--obs-line)}.fa-obs .fa-obs-marktdaten-tabelle th{font-weight:500;color:var(--obs-dim)}.fa-obs .fa-obs-marktdaten-tabelle td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}

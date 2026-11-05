@@ -26,6 +26,12 @@ class FeedLeser
     /** Container, deren Links nie Artikel sind. */
     private const RAUSWERFEN = ['nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 'form', 'template', 'svg'];
 
+    /** Aus RAUSWERFEN: nur außerhalb von <article> entfernen (Artikel-Kopf/-Fuß gehört zum Artikel). */
+    private const NUR_AUSSERHALB_ARTIKEL = ['header', 'footer'];
+
+    /** Link-Beschriftungen am Ende eines Teaser-Links; gehören nie zum Titel. */
+    private const MEHR_LINK = '/\s*(?:mehr erfahren|mehr lesen|weiterlesen|weiter lesen|zum artikel|read more)\s*[»›→>.…]*\s*$/iu';
+
     /** Titel kürzer als das sind „Mehr“, „Weiterlesen“, Pfeile — keine Artikeltitel. */
     private const TITEL_MIN = 12;
 
@@ -161,12 +167,17 @@ class FeedLeser
     public function uebersicht(string $html, string $basisUrl): array
     {
         $dom = $this->dom($html);
+        $xp = new \DOMXPath($dom);
         foreach (self::RAUSWERFEN as $tag) {
             foreach (iterator_to_array($dom->getElementsByTagName($tag)) as $knoten) {
+                // <header>/<footer> IN einem Artikel tragen Titel und Datum (BZfE: <article><header><h3><a>Titel…).
+                // Nur die Seiten-Kopf-/Fußzeile fliegt raus, sonst wird der Teaser-Link samt „mehr erfahren“ zum Titel.
+                if (in_array($tag, self::NUR_AUSSERHALB_ARTIKEL, true) && $xp->query('ancestor::article', $knoten)->length > 0) {
+                    continue;
+                }
                 $knoten->parentNode?->removeChild($knoten);
             }
         }
-        $xp = new \DOMXPath($dom);
         $basis = parse_url($basisUrl);
         $basisHost = $this->hostOhneWww((string) ($basis['host'] ?? ''));
         $basisPfad = rtrim((string) ($basis['path'] ?? ''), '/');
@@ -212,7 +223,7 @@ class FeedLeser
             if (isset($gesehen[$schluessel])) {
                 continue;
             }
-            $titel = $this->text($a);
+            $titel = trim(preg_replace(self::MEHR_LINK, '', $this->text($a)) ?? '');
             if (mb_strlen($titel) < self::TITEL_MIN) {
                 continue;
             }
@@ -298,16 +309,25 @@ class FeedLeser
         return null;
     }
 
+    /**
+     * Erster Absatz im Artikel-Container. Ist er eine Dachzeile ohne Satzende (BZfE: <strong>Würzige Wurzel …</strong>),
+     * kommt der nächste Absatz dazu. „mehr erfahren“ & Co. zählen nie als Absatz.
+     */
     private function teaserIn(\DOMXPath $xp, \DOMElement $huelle, string $titel): ?string
     {
+        $absaetze = [];
         foreach ($xp->query('.//p', $huelle) as $p) {
             $t = $this->text($p);
-            if ($t !== '' && $t !== $titel) {
-                return $this->kuerzen($t);
+            if ($t === '' || $t === $titel || preg_replace(self::MEHR_LINK, '', $t) === '') {
+                continue;
+            }
+            $absaetze[] = $t;
+            if (count($absaetze) === 2 || preg_match('/[.!?…:]["“”»«)]?$/u', $absaetze[0])) {
+                break;
             }
         }
 
-        return null;
+        return $absaetze === [] ? null : $this->kuerzen(implode(' – ', $absaetze));
     }
 
     private function datum(string $roh): ?string

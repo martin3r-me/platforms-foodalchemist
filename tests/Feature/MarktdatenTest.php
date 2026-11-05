@@ -191,3 +191,29 @@ it('filtert eindeutige fachfremde RSS-Treffer vor der KI mit derselben Vorschau'
         ->and(RechercheRelevanz::grund('Aktienanalyse: neues Kursziel'))->not->toBeNull();
     expect(ObservatoriumInhalt::einordnen(['titel' => 'Stadion-Catering: Speiseangebot zu den Bundesliga-Ergebnissen'])['verwendungen'])->toContain('news');
 });
+
+it('formuliert die Klartext-Aussage nur aus den abgerufenen Werten und blendet Monate ohne Wert aus der Tabelle', function () {
+    Http::fake([GenesisClient::ENDPOINT => function ($r) {
+        $wert = $r['classifyingkey1'] === 'CC13-111' ? '103,1' : '100,3';
+
+        return Http::response(marktCsv($r['classifyingkey1'], $wert)."2026;MONAT10;{$r['classifyingkey1']};...;2020=100;Verbraucherpreisindex;\n", 200);
+    }]);
+    $this->svc->abrufen($this->rootTeam, true);
+    $m = $this->svc->lesen($this->rootTeam);
+    expect($m['aussage']['text'])->toBe('Restaurantpreise +3,1 %, Lebensmittel +0,3 % zum Vorjahresmonat: Die Restaurantpreise steigen stärker als die Lebensmittelpreise im Handel (Abstand 2,8 Prozentpunkte).')
+        ->and($m['aussage']['monat'])->toBe('2026-09')->and($m['aussage']['basis'])->toBe('2020=100')
+        ->and(array_column($m['reihen'][0]['tabelle'], 'monat'))->toBe(['2026-09', '2025-09'])
+        ->and($m['reihen'][0]['tabelle'][0])->not->toHaveKey('original');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-aussage')
+        ->assertSee('Die Restaurantpreise steigen stärker')->assertDontSee('unbekannt')->assertSeeHtml('fa-obs-marktdaten-tabelle');
+});
+
+it('trifft keine Aussage bei fehlendem Vergleich, verschiedener Indexbasis oder Bezugsmonat und sagt „etwa gleich“ unter der Schwelle', function () {
+    $reihe = fn (string $serie, ?float $vj, string $monat = '2026-09', string $basis = '2020=100') => ['serie' => $serie, 'vorjahr_prozent' => $vj, 'aktuell' => ['monat' => $monat, 'einheit' => $basis]];
+    expect(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', null)]))->toBeNull()
+        ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', 0.3, '2026-08')]))->toBeNull()
+        ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 3.1), $reihe('lebensmittelpreise', 0.3, '2026-09', '2025=100')]))->toBeNull()
+        ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 2.0), $reihe('lebensmittelpreise', 1.7)])['text'])->toContain('Beide entwickeln sich etwa gleich (Abstand 0,3 Prozentpunkte)')
+        ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', -0.4), $reihe('lebensmittelpreise', -2.0)])['text'])->toContain('Die Restaurantpreise sinken weniger stark als die Lebensmittelpreise im Handel')
+        ->and(MarktdatenService::aussage([$reihe('gaststaettenpreise', 1.0), $reihe('lebensmittelpreise', 4.0)])['text'])->toContain('Die Lebensmittelpreise im Handel steigen stärker als die Restaurantpreise');
+});

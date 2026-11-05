@@ -1,20 +1,23 @@
 <section class="fa-obs-briefing fa-obs-marktdaten" data-observatorium-marktdaten aria-label="Amtliche Marktdaten">
     <h2>Markt in Zahlen <span class="fa-obs-pill">Destatis · Deutschland</span></h2>
     <p class="fa-obs-subtitle fa-obs-marktdaten-hinweis">{{ $marktdaten['hinweis'] }} Diese deutschlandweiten Reihen sind unabhängig von den Meldungsfiltern.</p>
+    @if($marktdaten['aussage'])
+        <p class="fa-obs-marktdaten-aussage" data-marktdaten-aussage>{{ $marktdaten['aussage']['text'] }}</p>
+        <p class="fa-obs-subtitle">Bezugsmonat {{ $marktdaten['aussage']['monat'] }} · Verbraucherpreisindex, Basis {{ $marktdaten['aussage']['basis'] }} · Restaurantpreise = Gaststättendienstleistungen, Lebensmittel = Nahrungsmittel &amp; alkoholfreie Getränke.</p>
+    @endif
     @unless($marktdaten['zugang_eingerichtet'])<p class="fa-obs-subtitle" role="status">Noch nicht verbunden: Der kostenlose GENESIS-Zugang muss eingerichtet werden.</p>@endunless
     <div class="fa-obs-wett-profile">
     @foreach($marktdaten['reihen'] as $reihe)
         <article>
             <h3>{{ $reihe['name'] }}</h3>
             @if($reihe['aktuell'])
-                <p><strong>{{ $reihe['aktuell']['wert'] === null ? 'Wert nicht verfügbar' : number_format($reihe['aktuell']['wert'], 1, ',', '.') }}</strong> · {{ $reihe['aktuell']['einheit'] }}</p>
-                <p class="fa-obs-subtitle">Bezugsmonat {{ $reihe['aktuell']['monat'] }} · {{ $reihe['veraltet'] ? 'Älterer Datenstand' : 'Letzter verfügbarer Wert' }}</p>
+                <p><strong>{{ $reihe['vorjahr_prozent'] === null ? 'Kein belastbarer Vorjahresvergleich' : sprintf('%s%s %% zum Vorjahresmonat', $reihe['vorjahr_prozent'] > 0 ? '+' : '', number_format($reihe['vorjahr_prozent'], 1, ',', '.')) }}</strong></p>
+                <p class="fa-obs-subtitle">Index {{ $reihe['aktuell']['wert'] === null ? 'nicht verfügbar' : number_format($reihe['aktuell']['wert'], 1, ',', '.') }} ({{ $reihe['aktuell']['einheit'] }}) · Bezugsmonat {{ $reihe['aktuell']['monat'] }} · {{ $reihe['veraltet'] ? 'Älterer Datenstand' : 'Letzter verfügbarer Wert' }}</p>
                 @if($reihe['neuere_monate_ohne_wert'])<p class="fa-obs-subtitle">Für neuere Monate liegen noch keine Werte vor.</p>@endif
-                <p>{{ $reihe['vorjahr_prozent'] === null ? 'Kein belastbarer Vorjahresvergleich' : sprintf('%s%s %% zum Vorjahresmonat', $reihe['vorjahr_prozent'] > 0 ? '+' : '', number_format($reihe['vorjahr_prozent'], 1, ',', '.')) }}</p>
                 <p class="fa-obs-subtitle">Abgerufen {{ \Illuminate\Support\Carbon::parse($reihe['abgerufen_am'])->format('d.m.Y H:i') }}</p>
                 <details><summary>Monatswerte &amp; Original-Kennzeichnungen</summary>
-                    <div class="fa-obs-scroll-x"><table><thead><tr><th>Monat</th><th>Index</th><th>Einheit / Basis</th></tr></thead><tbody>
-                    @foreach(array_reverse($reihe['punkte']) as $punkt)<tr><td>{{ $punkt['monat'] }}</td><td>{{ $punkt['wert'] === null ? 'unbekannt' : number_format($punkt['wert'], 1, ',', '.') }}</td><td>{{ $punkt['einheit'] }}</td></tr>@endforeach
+                    <div class="fa-obs-scroll-x"><table class="fa-obs-marktdaten-tabelle"><thead><tr><th>Monat</th><th>Index</th><th>Einheit / Basis</th></tr></thead><tbody>
+                    @foreach($reihe['tabelle'] as $punkt)<tr><td>{{ $punkt['monat'] }}</td><td>{{ number_format($punkt['wert'], 1, ',', '.') }}</td><td>{{ $punkt['einheit'] }}</td></tr>@endforeach
                     </tbody></table></div>
                     <p class="fa-obs-subtitle">Original der letzten Beobachtung, einschließlich möglicher Qualitätskennzeichen:</p>
                     <dl>@foreach($reihe['aktuell']['original'] as $feld => $wert)<dt>{{ $feld }}</dt><dd class="fa-obs-umbruch">{{ $wert ?: '—' }}</dd>@endforeach</dl>

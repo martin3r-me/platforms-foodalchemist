@@ -37,13 +37,50 @@ class MarktdatenService
                 && $aktuell['einheit'] === $vorjahr['einheit']
                 ? round(($aktuell['wert'] / $vorjahr['wert'] - 1) * 100, 1) : null;
             $out[] = $meta + ['serie' => $serie, 'aktuell' => $aktuell, 'neuere_monate_ohne_wert' => $offeneMonate, 'vorjahr_prozent' => $vergleich, 'punkte' => $punkte,
+                // Anzeige-Tabelle: nur Monate mit Wert, neueste zuerst. Zukunft filtert schon der CSV-Leser.
+                'tabelle' => array_reverse(array_values(array_map(fn ($p) => ['monat' => $p['monat'], 'wert' => $p['wert'], 'einheit' => $p['einheit']],
+                    array_filter($punkte, fn ($p) => $p['wert'] !== null)))),
                 'abgerufen_am' => $d?->abgerufen_at?->toIso8601String(), 'versucht_am' => $d?->versucht_at?->toIso8601String(),
                 'fehler' => $d?->letzter_fehler, 'quelle' => self::QUELLE, 'team_id' => $d?->team_id,
                 'veraltet' => $aktuell !== null && $aktuell['monat'] < now()->subMonthsNoOverflow(3)->format('Y-m')];
         }
 
-        return ['zugang_eingerichtet' => $this->client->eingerichtet(), 'reihen' => $out,
+        return ['zugang_eingerichtet' => $this->client->eingerichtet(), 'reihen' => $out, 'aussage' => self::aussage($out),
             'hinweis' => 'Verbraucherpreisindizes für Deutschland, keine Einkaufs- oder Betriebskosten. Vorjahresvergleich nur bei gleicher Indexbasis; Original-Kennzeichnungen beachten.'];
+    }
+
+    /** Mindestabstand in Prozentpunkten, ab dem die Aussage eine Richtung nennt; darunter „etwa gleich“. */
+    public const AUSSAGE_SCHWELLE_PP = 0.5;
+
+    /**
+     * Klartext-Aussage NUR aus den abgerufenen Werten. Keine Aussage, wenn eine Reihe keinen Vorjahresvergleich hat,
+     * die Bezugsmonate auseinanderfallen oder die Indexbasis der beiden Reihen verschieden ist.
+     * Verbraucherpreise ≠ Wareneinsatz: die Formulierung bleibt bei „Lebensmittelpreise im Handel“.
+     */
+    public static function aussage(array $reihen): ?array
+    {
+        $r = collect($reihen)->keyBy('serie');
+        $gast = $r->get('gaststaettenpreise');
+        $lm = $r->get('lebensmittelpreise');
+        if (! $gast || ! $lm || $gast['vorjahr_prozent'] === null || $lm['vorjahr_prozent'] === null
+            || $gast['aktuell']['monat'] !== $lm['aktuell']['monat'] || $gast['aktuell']['einheit'] !== $lm['aktuell']['einheit']) {
+            return null;
+        }
+        $g = (float) $gast['vorjahr_prozent'];
+        $l = (float) $lm['vorjahr_prozent'];
+        $fmt = fn (float $v) => ($v > 0 ? '+' : '').number_format($v, 1, ',', '.').' %';
+        $abstand = round(abs($g - $l), 1);
+        $pp = number_format($abstand, 1, ',', '.').' Prozentpunkte';
+        if ($abstand < self::AUSSAGE_SCHWELLE_PP) {
+            $folge = 'Beide entwickeln sich etwa gleich (Abstand '.$pp.').';
+        } else {
+            [$hoch, $tief] = $g > $l ? ['die Restaurantpreise', 'die Lebensmittelpreise im Handel'] : ['die Lebensmittelpreise im Handel', 'die Restaurantpreise'];
+            $verb = max($g, $l) > 0 ? 'steigen stärker als' : 'sinken weniger stark als';
+            $folge = ucfirst($hoch).' '.$verb.' '.$tief.' (Abstand '.$pp.').';
+        }
+
+        return ['text' => 'Restaurantpreise '.$fmt($g).', Lebensmittel '.$fmt($l).' zum Vorjahresmonat: '.$folge,
+            'monat' => $gast['aktuell']['monat'], 'basis' => $gast['aktuell']['einheit']];
     }
 
     /** Nur feste Pilotserien, aktuelles Team; kein Hintergrundabruf aus einem Render-/GET-Pfad. */
