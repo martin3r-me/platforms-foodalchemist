@@ -34,6 +34,11 @@ class FoodAlchemistTrendEingang extends Model
         return TrendUrl::ohneSignal($this->url);
     }
 
+    public function wettbewerbFunde()
+    {
+        return $this->hasMany(FoodAlchemistWettbewerbFund::class, 'eingang_id');
+    }
+
     public function quelle(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistTrendQuelle::class, 'quelle_id');

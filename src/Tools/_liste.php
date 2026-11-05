@@ -706,6 +706,10 @@ return [
     \Platform\FoodAlchemist\Tools\VocabWarengruppenPostTool::class,
     \Platform\FoodAlchemist\Tools\VocabWarengruppenPutTool::class,
     \Platform\FoodAlchemist\Tools\VocabWarengruppenReorderTool::class,
+    \Platform\FoodAlchemist\Tools\WettbewerberGetTool::class,
+    \Platform\FoodAlchemist\Tools\WettbewerberPostTool::class,
+    \Platform\FoodAlchemist\Tools\WettbewerberPutTool::class,
+    \Platform\FoodAlchemist\Tools\WettbewerberZuordnenTool::class,
     \Platform\FoodAlchemist\Tools\ZielgruppenGetTool::class,
     \Platform\FoodAlchemist\Tools\ZielgruppenPostTool::class,
 ];

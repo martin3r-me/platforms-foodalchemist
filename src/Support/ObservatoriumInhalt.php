@@ -11,6 +11,7 @@ final class ObservatoriumInhalt
         'ideen' => ['Ideenwelt', 'heroicon-o-light-bulb'],
         'radar' => ['Trendradar', 'heroicon-o-signal'],
         'markt' => ['Markt & Chancen', 'heroicon-o-building-office-2'],
+        'wettbewerb' => ['Wettbewerb', 'heroicon-o-building-office'],
         'merkliste' => ['Merkliste', 'heroicon-o-bookmark'],
     ];
 

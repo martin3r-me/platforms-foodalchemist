@@ -2,12 +2,13 @@
     use Platform\FoodAlchemist\Support\ObservatoriumInhalt as O;
     use Platform\FoodAlchemist\Support\TrendVokabular as V;
     $titel = match ($ansicht) {
-        'news' => 'Was die Gastronomie bewegt.', 'ideen' => 'Aus einer Idee wird dein nächstes Angebot.',
+        'wettbewerb' => 'Wer bewegt den Markt?', 'news' => 'Was die Gastronomie bewegt.', 'ideen' => 'Aus einer Idee wird dein nächstes Angebot.',
         'markt' => 'Bewegung im Markt. Chancen für euch.', 'merkliste' => 'Gute Gedanken bleiben.',
         'radar' => 'Entwicklungen mit Substanz.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
         default => 'Heute entdecken. Morgen gestalten.',
     };
     $untertitel = match ($ansicht) {
+        'wettbewerb' => 'Bestätigte Unternehmensmeldungen – mit Quellen und eigener Einordnung.',
         'news' => 'Nach Branchen und Themen eingeordnet – mit dem Blick fürs Wesentliche.',
         'ideen' => 'Gerichte, Zutaten und Konzepte zum Weiterdenken.',
         'markt' => 'Betreiber, Veränderungen und belegte Hinweise zur weiteren Prüfung.',
@@ -16,7 +17,7 @@
         'briefing' => 'Eine kompakte Auswahl aus deiner aktuellen Recherche und deinen Filtern.',
         default => 'Dein Blick auf Gastronomie, Food-Ideen und neue Möglichkeiten.',
     };
-    $hatFilter = $suche !== '' || $branche !== '' || $region !== '' || $tage !== '30' || $markt !== '' || $pruefen;
+    $hatFilter = $suche !== '' || $branche !== '' || $region !== '' || $tage !== '30' || $markt !== '' || $pruefen || $wettbewerber !== 0 || $bewegung !== '';
     $hero = $ansicht === 'entdecken' && ! $gewaehlt && $eintraege->currentPage() === 1
         ? $eintraege->getCollection()->first(fn ($e) => in_array('idee', $e->observatorium['verwendungen'] ?? [], true)) : null;
 @endphp
@@ -73,6 +74,10 @@
                 <label class="fa-obs-field branch"><select wire:model.live="branche" aria-label="Branche filtern"><option value="">Alle Branchen</option>@foreach(O::BRANCHEN as $key => $name)<option value="{{ $key }}">{{ $name }}</option>@endforeach</select></label>
                 <label class="fa-obs-field small"><select wire:model.live="region" aria-label="Region filtern"><option value="">Alle Regionen</option><option value="DE">Deutschland</option><option value="AT">Österreich</option><option value="CH">Schweiz</option><option value="offen">Region offen</option></select></label>
                 <label class="fa-obs-field small"><select wire:model.live="tage" aria-label="Zeitraum filtern"><option value="7" @selected($tage === '7')>Letzte 7 Tage</option><option value="30" @selected($tage === '30')>Letzte 30 Tage</option><option value="90" @selected($tage === '90')>Letzte 90 Tage</option><option value="alle" @selected($tage === 'alle')>Archiv</option></select></label>
+                @if($ansicht === 'wettbewerb')
+                    <label class="fa-obs-field branch"><select wire:model.live="wettbewerber" aria-label="Wettbewerber filtern"><option value="0">Alle Wettbewerber</option>@foreach($wettbewerberProfile as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select></label>
+                    <label class="fa-obs-field branch"><select wire:model.live="bewegung" aria-label="Marktbewegung filtern"><option value="">Alle Entwicklungen</option>@foreach(\Platform\FoodAlchemist\Services\WettbewerbService::BEWEGUNGEN as $key => $name)<option value="{{ $key }}">{{ $name }}</option>@endforeach</select></label>
+                @endif
                 @if($hatFilter)<button class="fa-obs-filter-reset" type="button" wire:click="filterZuruecksetzen">Filter zurücksetzen</button>@endif
             </div>
             @if($ansicht === 'markt')<div class="fa-obs-filters"><label class="fa-obs-field small"><select wire:model.live="markt" aria-label="Marktansicht"><option value="">Alle Marktbewegungen</option><option value="chance">Chancen prüfen</option></select></label><span class="fa-obs-subtitle">Hinweise aus Quellen – noch keine bestätigten Geschäftschancen.</span></div>@endif
@@ -81,6 +86,17 @@
             @if($istHandy)<button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>@endif
             </div>
 
+            @if($ansicht === 'wettbewerb')
+                <div class="fa-obs-briefing" data-observatorium-wettbewerb>
+                    <h2>{{ $wettbewerberProfile->count() }} beobachtete Unternehmen</h2>
+                    <p class="fa-obs-subtitle" style="margin:10px 0">{{ $istHandy ? 'Bestätigte Firmenmeldungen mit Quellen und eigener Bewertung.' : 'Hier erscheinen ausschließlich redaktionell bestätigte Firmenzuordnungen. Branchen- und Regionsfilter beziehen sich auf die Unternehmen. Aussagen aus Quellen und eigene Bewertungen bleiben getrennt.' }}</p>
+                    @if($istHandy)<details class="fa-obs-wett-vergleich"><summary>Unternehmen &amp; Vergleich ansehen</summary>@endif
+                    <div class="fa-obs-wett-profile">@foreach($wettbewerberProfile as $p)<article><button type="button" class="fa-obs-link" wire:click="$set('wettbewerber', {{ $p->id }})"><strong>{{ $p->name }}</strong></button><p class="fa-obs-subtitle">{{ $p->region ?: 'Region offen' }}{{ $p->gebiet ? ' · '.$p->gebiet : '' }}{{ ! $p->aktiv ? ' · Profil pausiert' : '' }}</p><p class="fa-obs-subtitle">{{ array_sum($wettbewerbVergleich[$p->id] ?? []) }} {{ array_sum($wettbewerbVergleich[$p->id] ?? []) === 1 ? 'bestätigte Fundstelle' : 'bestätigte Fundstellen' }} insgesamt</p><div class="fa-obs-tags">@foreach($wettbewerbVergleich[$p->id] ?? [] as $art => $anzahl)<span class="fa-obs-pill">{{ \Platform\FoodAlchemist\Services\WettbewerbService::BEWEGUNGEN[$art] ?? $art }} · {{ $anzahl }}</span>@endforeach</div></article>@endforeach</div>
+                    @if($istHandy)</details>@endif
+                    <a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'wettbewerber']) }}" wire:navigate>Profile und Treffer in Research verwalten @svg('heroicon-o-arrow-up-right')</a>
+                </div>
+            @endif
+
             @if($hero)
                 <article class="fa-obs-hero" data-observatorium-fokus>
                     <div class="fa-obs-hero-copy"><span class="fa-obs-pill idea">Im Fokus · Food-Idee</span><h2>{{ $hero->titel }}</h2><p>{{ \Illuminate\Support\Str::limit($hero->zusammenfassung ?: $hero->teaser, 210) }}</p><button type="button" class="fa-obs-button primary" wire:click="oeffnen({{ $hero->id }})">Idee entdecken @svg('heroicon-o-arrow-up-right')</button></div>
@@ -88,7 +104,7 @@
                 </article>
             @endif
 
-            <div class="fa-obs-sectionhead"><h2>{{ $ansicht === 'briefing' ? 'Das nimmst du mit' : ($ansicht === 'ideen' ? 'Ideen zum Weiterdenken' : ($ansicht === 'merkliste' ? 'Für dich gesammelt' : 'Frische Perspektiven für deine Branche')) }}</h2><span class="fa-obs-subtitle">{{ $eintraege->total() }} {{ $eintraege->total() === 1 ? 'Meldung' : 'Meldungen' }}</span></div>
+            <div class="fa-obs-sectionhead"><h2>{{ $ansicht === 'briefing' ? 'Das nimmst du mit' : ($ansicht === 'ideen' ? 'Ideen zum Weiterdenken' : ($ansicht === 'merkliste' ? 'Für dich gesammelt' : ($ansicht === 'wettbewerb' ? 'Bestätigte Wettbewerbsmeldungen' : 'Frische Perspektiven für deine Branche'))) }}</h2><span class="fa-obs-subtitle">{{ $eintraege->total() }} {{ $eintraege->total() === 1 ? 'Meldung' : 'Meldungen' }}</span></div>
 
             @if($eintraege->isEmpty())
                 <div class="fa-obs-empty"><h2>{{ $ansicht === 'merkliste' ? 'Deine Merkliste ist noch leer.' : 'Noch keine passenden Meldungen.' }}</h2><p>{{ $ansicht === 'merkliste' ? 'Merke interessante Beiträge über das Lesezeichen. Deine Auswahl bleibt persönlich.' : 'Neue Beiträge erscheinen nach dem Quellenabruf. Ändere die Filter oder schau in die Recherche.' }}</p><button class="fa-obs-button" type="button" wire:click="filterZuruecksetzen">Filter zurücksetzen</button></div>
@@ -96,7 +112,7 @@
                 <div class="fa-obs-briefing"><span class="fa-obs-pill">Aus deiner Recherche · {{ now()->format('d.m.Y') }}</span>@foreach($eintraege->take(5) as $e)<article class="fa-obs-brief-item"><div class="fa-obs-meta"><span>{{ $e->herausgeber ?: $e->quelle?->name }}</span><span>{{ $e->veroeffentlicht_am?->format('d.m.Y') ?? 'Veröffentlichungsdatum offen' }}</span></div><h3>{{ $e->titel }}</h3><p class="fa-obs-subtitle">{{ $e->zusammenfassung ?: $e->teaser }}</p><button class="fa-obs-link" style="margin-top:14px" type="button" wire:click="oeffnen({{ $e->id }})">Beitrag entdecken @svg('heroicon-o-arrow-up-right')</button></article>@endforeach</div>
             @else
                 <div class="{{ in_array($ansicht, ['entdecken', 'ideen'], true) ? 'fa-obs-grid' : 'fa-obs-list' }}" wire:loading.class="fa-obs-loading" wire:target="branche,region,tage,suche,markt,pruefen">
-                    @foreach($eintraege as $e)@if(! $hero || $hero->id !== $e->id)@include('foodalchemist::livewire.observatorium.karte', ['mitIllustration' => in_array($ansicht, ['entdecken', 'ideen'], true)])@endif @endforeach
+                    @foreach($eintraege as $e)@if(! $hero || $hero->id !== $e->id)@if($ansicht === 'wettbewerb')@include('foodalchemist::livewire.observatorium.wettbewerb-karte')@else @include('foodalchemist::livewire.observatorium.karte', ['mitIllustration' => in_array($ansicht, ['entdecken', 'ideen'], true)]) @endif@endif @endforeach
                 </div>
                 @if($eintraege->hasPages())
                     <nav class="fa-obs-actions" aria-label="Meldungsseiten">

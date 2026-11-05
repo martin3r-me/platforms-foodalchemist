@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
 use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\ObservatoriumService;
 use Platform\FoodAlchemist\Services\TrendService;
+use Platform\FoodAlchemist\Services\WettbewerbService;
 use Platform\FoodAlchemist\Support\FaShell;
 use Platform\FoodAlchemist\Support\HandyLesemodus;
 use Platform\FoodAlchemist\Support\ObservatoriumInhalt as Inhalt;
@@ -64,6 +65,15 @@ class Index extends Component
     #[Url(as: 'befragung')]
     public bool $nurBefragung = false;
 
+    #[Url]
+    public int $wettbewerber = 0;
+
+    #[Url]
+    public string $briefingBasis = 'entdecken';
+
+    #[Url]
+    public string $bewegung = '';
+
     public ?string $meldung = null;
 
     public function mount(): void
@@ -85,6 +95,9 @@ class Index extends Component
         if (! isset(Inhalt::ANSICHTEN[$ansicht]) && $ansicht !== 'briefing') {
             return;
         }
+        if ($ansicht === 'briefing' && isset(Inhalt::ANSICHTEN[$this->ansicht])) {
+            $this->briefingBasis = $this->ansicht;
+        }
         $this->ansicht = $ansicht;
         $this->artikelId = null;
         $this->meldung = null;
@@ -93,7 +106,7 @@ class Index extends Component
 
     public function updated($name): void
     {
-        if (in_array($name, ['suche', 'branche', 'region', 'tage', 'markt', 'pruefen', 'ansicht'], true)) {
+        if (in_array($name, ['suche', 'branche', 'region', 'tage', 'markt', 'pruefen', 'ansicht', 'wettbewerber', 'bewegung'], true)) {
             $this->resetPage();
             $this->artikelId = null;
         }
@@ -101,7 +114,7 @@ class Index extends Component
 
     public function filterZuruecksetzen(): void
     {
-        $this->reset('suche', 'branche', 'region', 'tage', 'markt', 'pruefen', 'artikelId');
+        $this->reset('suche', 'branche', 'region', 'tage', 'markt', 'pruefen', 'artikelId', 'wettbewerber', 'bewegung');
         $this->resetPage();
     }
 
@@ -150,8 +163,8 @@ class Index extends Component
     {
         $team = $this->team();
         $svc = app(ObservatoriumService::class);
-        $filter = ['ansicht' => $this->ansicht, 'suche' => $this->suche, 'branche' => $this->branche,
-            'region' => $this->region, 'tage' => $this->tage, 'markt' => $this->markt, 'pruefen' => $this->pruefen];
+        $filter = ['ansicht' => $this->ansicht === 'briefing' && isset(Inhalt::ANSICHTEN[$this->briefingBasis]) ? $this->briefingBasis : $this->ansicht, 'suche' => $this->suche, 'branche' => $this->branche,
+            'region' => $this->region, 'tage' => $this->tage, 'markt' => $this->markt, 'pruefen' => $this->pruefen, 'wettbewerber' => $this->wettbewerber, 'bewegung' => $this->bewegung];
         $eintraege = $svc->gruppiert($team, $filter)->paginate(12);
         $gewaehlt = $this->artikelId ? $svc->detail($team, $this->artikelId) : null;
         $alleMerker = $svc->merker($team)->where(fn ($w) => $w->where('gemerkt', true)->orWhere('trend_pruefen', true))->get();
@@ -166,6 +179,8 @@ class Index extends Component
             'weitereQuellen' => $gewaehlt ? $svc->weitereQuellen($team, $gewaehlt) : collect(),
             'merker' => $alleMerker->keyBy('eingang_id'), 'merkerAnzahl' => $alleMerker->count(),
             'darfKuratieren' => app(FaRechte::class)->darf(Auth::user(), $team, FaRolle::Kuratieren), 'teamId' => $team->id,
+            'wettbewerbVergleich' => $this->ansicht === 'wettbewerb' ? app(WettbewerbService::class)->vergleich($team) : [],
+            'wettbewerberProfile' => $this->ansicht === 'wettbewerb' ? app(WettbewerbService::class)->profile($team) : collect(),
             'radarGesamt' => $alleRadarTrends->count(),
             'radarFilterAktiv' => $this->radarSuche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung,
             'radar' => app(TrendService::class)->radarPositionen($trends, 260, 260, 220), 'trends' => $trends,

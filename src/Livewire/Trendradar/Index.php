@@ -111,7 +111,7 @@ class Index extends Component
         // Direkte Links aus dem Observatorium öffnen am Handy denselben Arbeitsbereich.
         $this->handyReiter = match ($this->ansicht) {
             'inspiration' => 'pinnwand',
-            'eingang', 'beobachten', 'quellen', 'automatik' => $this->ansicht,
+            'eingang', 'beobachten', 'quellen', 'automatik', 'wettbewerber' => $this->ansicht,
             default => 'trends',
         };
     }
@@ -135,7 +135,7 @@ class Index extends Component
     {
         $this->selectedId = null;
         $this->einordnenOffen = false;
-        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik'], true) ? $ansicht : 'liste';
+        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik', 'wettbewerber'], true) ? $ansicht : 'liste';
     }
 
     public function resetFilter(): void
