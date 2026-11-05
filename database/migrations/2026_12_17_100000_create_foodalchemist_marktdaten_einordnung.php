@@ -14,6 +14,7 @@ return new class extends Migration
     {
         Schema::create('foodalchemist_marktdaten_einordnung', function (Blueprint $t) {
             $t->id();
+            $t->uuid('uuid')->unique();
             $t->foreignId('team_id')->constrained('teams')->cascadeOnDelete();
             $t->string('stand_monat', 7);
             $t->char('werte_hash', 64);
@@ -22,6 +23,7 @@ return new class extends Migration
             $t->unsignedSmallInteger('verworfen')->default(0);
             $t->string('hinweis', 300)->nullable();
             $t->timestamps();
+            $t->softDeletes();
             $t->unique(['team_id', 'werte_hash'], 'fa_markt_einordnung_team_hash');
         });
     }

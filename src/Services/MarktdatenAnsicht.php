@@ -238,7 +238,7 @@ class MarktdatenAnsicht
         }
 
         return ['von' => $monate[0], 'bis' => $bis, 'linien' => $linien, 'ticks' => $ticks, 'null_y' => $y(0.0),
-            'x_labels' => [['text' => $monate[0], 'x' => $x(0)], ['text' => $bis, 'x' => $x(self::MONATE - 1)]],
+            'x_labels' => [['text' => $monate[0], 'x' => $x(0), 'anker' => 'start'], ['text' => $bis, 'x' => $x(self::MONATE - 1), 'anker' => 'end']],
             'breite' => $b, 'hoehe' => $h, 'links' => $l, 'unten' => $h - $u];
     }
 }

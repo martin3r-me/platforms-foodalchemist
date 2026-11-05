@@ -75,7 +75,12 @@ class MarktEinordnungService
             return null;
         }
         $hash = self::hash($kontext);
-        $e = Einordnung::where('team_id', $team->id)->where('werte_hash', $hash)->first();
+        // withTrashed: der Unique-Index (team_id, werte_hash) kennt kein deleted_at — eine gelöschte Zeile wird wiederbelebt statt zu kollidieren
+        $e = Einordnung::withTrashed()->where('team_id', $team->id)->where('werte_hash', $hash)->first();
+        if ($e?->trashed()) {
+            $e->restore();
+            $e->status = 'fehler';
+        }
         if ($e !== null && $e->status !== 'fehler') {
             return null;   // dieselben Zahlen: kein zweiter KI-Aufruf
         }

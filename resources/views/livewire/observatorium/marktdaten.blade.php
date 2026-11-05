@@ -61,7 +61,7 @@
             @foreach($sc['ticks'] as $t)<line class="fa-obs-markt-gitter" x1="{{ $sc['links'] }}" y1="{{ $t['y'] }}" x2="{{ $sc['breite'] - 10 }}" y2="{{ $t['y'] }}"/><text class="fa-obs-markt-achse" x="{{ $sc['links'] - 6 }}" y="{{ $t['y'] + 4 }}" text-anchor="end">{{ $t['wert'] }} %</text>@endforeach
             <line class="fa-obs-markt-null" x1="{{ $sc['links'] }}" y1="{{ $sc['null_y'] }}" x2="{{ $sc['breite'] - 10 }}" y2="{{ $sc['null_y'] }}"/>
             @foreach($sc['linien'] as $l)<polyline class="fa-obs-markt-linie is-{{ $l['strich'] }}" points="{{ $l['punkte'] }}" fill="none"/>@endforeach
-            @foreach($sc['x_labels'] as $x)<text class="fa-obs-markt-achse" x="{{ $x['x'] }}" y="{{ $sc['hoehe'] - 8 }}" text-anchor="middle">{{ $x['text'] }}</text>@endforeach
+            @foreach($sc['x_labels'] as $x)<text class="fa-obs-markt-achse" x="{{ $x['x'] }}" y="{{ $sc['hoehe'] - 8 }}" text-anchor="{{ $x['anker'] }}">{{ $x['text'] }}</text>@endforeach
         </svg>
         <ul class="fa-obs-markt-legende">@foreach($sc['linien'] as $l)<li><svg viewBox="0 0 28 8" aria-hidden="true"><line class="fa-obs-markt-linie is-{{ $l['strich'] }}" x1="0" y1="4" x2="28" y2="4"/></svg>{{ $l['titel'] }} <strong>{{ $pctFmt($l['letzter']) }}</strong></li>@endforeach</ul>
     </div>
