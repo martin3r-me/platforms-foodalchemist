@@ -7,7 +7,9 @@
     @endphp
     @if(($einordnung['saetze'] ?? []) !== [] || $marktdaten['aussagen'])
     <div class="fa-obs-markt-box" data-marktdaten-box>
-        <h3>Was heißt das für dich?</h3>
+        <div class="fa-obs-markt-box-kopf"><h3>Was heißt das für dich?</h3>
+            @if(($marktdaten['einordnung_moeglich'] ?? false) && ($darfKuratieren ?? false))<button class="fa-obs-button" type="button" wire:click="einordnungErzeugen" wire:loading.attr="disabled" data-marktdaten-einordnen {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('observatorium.markt_einordnen') }}>@svg('heroicon-o-sparkles')Einordnung erzeugen</button>@endif
+        </div>
         @if(($einordnung['saetze'] ?? []) !== [])
             <ul class="fa-obs-markt-ki" data-marktdaten-ki>@foreach($einordnung['saetze'] as $satz)<li>{{ $satz }}</li>@endforeach</ul>
             <p class="fa-obs-subtitle">KI-Einordnung · Stand {{ $einordnung['stand_monat'] }}@if($einordnung['erstellt_am']) · erstellt {{ \Illuminate\Support\Carbon::parse($einordnung['erstellt_am'])->format('d.m.Y') }}@endif · Zahlen gegen die abgerufenen Werte geprüft, keine Prognose.</p>

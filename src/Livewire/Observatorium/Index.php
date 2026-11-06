@@ -160,6 +160,18 @@ class Index extends Component
         }
     }
 
+    /** Knopf „Einordnung erzeugen“: KI-Einordnung aus den gespeicherten Marktdaten (Kuratieren, Plattform-KI im Hintergrund). */
+    public function einordnungErzeugen(): void
+    {
+        abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
+        try {
+            $r = app(\Platform\FoodAlchemist\Services\MarktEinordnungService::class)->einordnen($this->team(), (int) Auth::id());
+            $this->meldung = $r['angestossen'] ? 'Einordnung wird erstellt. Sie erscheint nach dem Neuladen.' : $r['grund'];
+        } catch (\RuntimeException $e) {
+            $this->meldung = $e->getMessage();
+        }
+    }
+
     public function aufPinnwand(int $id): void
     {
         abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
