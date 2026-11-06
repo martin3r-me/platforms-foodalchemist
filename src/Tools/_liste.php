@@ -329,6 +329,7 @@ return [
     \Platform\FoodAlchemist\Tools\MarkeOffenSperrenTool::class,    // Marken-Nachlauf: Kein Kürzel
     \Platform\FoodAlchemist\Tools\MarkeOffenZuordnenTool::class,  // Plan GP-Stamm 3g: Marken-Nachlauf
     \Platform\FoodAlchemist\Tools\MarktdatenAbrufTool::class,
+    \Platform\FoodAlchemist\Tools\MarktdatenEinordnenTool::class,
     \Platform\FoodAlchemist\Tools\MarktdatenGetTool::class,
     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,

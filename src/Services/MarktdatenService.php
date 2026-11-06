@@ -100,6 +100,10 @@ class MarktdatenService
         $this->rechte->pruefeAngemeldet($team, FaRolle::Lesen, 'Marktdaten lesen');
         $m = $this->lesenFuerTeam($team);
         $m['ansicht'] = MarktdatenAnsicht::bauen($m);
+        $kontext = MarktEinordnungService::kontext($m);
+        // Knopf „Einordnung erzeugen“ nur, wenn es Kennzahlen gibt und zu diesem Stand noch keine (laufende/fertige) Einordnung existiert
+        $m['einordnung_moeglich'] = count($kontext['kennzahlen']) >= 2
+            && ! in_array(MarktEinordnungService::stand($team, MarktEinordnungService::hash($kontext)), ['fertig', 'laeuft'], true);
         unset($m['alle_reihen']);   // nur intern (Ansicht, Einordnung); GET/Blade bekommen die sichtbaren Reihen
         $e = MarktEinordnungService::aktuelle($team);
         $m['einordnung'] = $e === null ? null : ['saetze' => $e->saetze, 'stand_monat' => $e->stand_monat,

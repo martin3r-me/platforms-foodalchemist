@@ -190,3 +190,39 @@ it('Team-Vererbung: Kinder-Teams sehen die Einordnung des Eltern-Teams, ohne eig
     $this->actingAs($this->makeUser($this->childA, 'TEST-MA Kind'));
     expect($this->svc->lesen($this->childA)['einordnung']['saetze'])->toBe(['Die Daten zeigen den Stand 2026-09.'])->and($this->stub->calls)->toBe(1);
 });
+
+it('EINORDNEN (MCP): aus gespeicherten Werten ohne Abruf ein KI-Auftrag; gleicher Stand, Kinder-Team und Leser stoßen nichts an', function () {
+    ($this->voll)();
+    $reg = app(ToolRegistry::class);
+    expect(KiUmleitung::LAUF_FLAG)->toHaveKey('foodalchemist.marktdaten.EINORDNEN');
+    $mcp = new ToolContext($this->owner, $this->rootTeam, ['team_source' => 'user_current']);
+    $r = $reg->get('foodalchemist.marktdaten.EINORDNEN')->execute([], $mcp);
+    expect($r->success)->toBeTrue()->and($r->data['angestossen'])->toBeTrue()->and($r->data['stand'])->toBe('2026-09')
+        ->and(DB::table('foodalchemist_ki_auftraege')->where('feature', 'markt.einordnung')->where('status', 'offen')->count())->toBe(1)
+        ->and($this->stub->calls)->toBe(0);
+    Http::assertNothingSent();
+
+    $nochmal = $reg->get('foodalchemist.marktdaten.EINORDNEN')->execute([], $mcp);
+    expect($nochmal->data['angestossen'])->toBeFalse()->and($nochmal->data['grund'])->toContain('schon eine Einordnung');
+    $kind = $this->makeUser($this->childA, 'TEST-MA Kind');
+    $this->actingAs($kind);
+    expect($reg->get('foodalchemist.marktdaten.EINORDNEN')->execute([], new ToolContext($kind, $this->childA, ['team_source' => 'user_current']))->data['angestossen'])->toBeFalse();
+    $leser = $this->makeUser($this->rootTeam, 'TEST-MA Leser', 'viewer');
+    expect($reg->get('foodalchemist.marktdaten.EINORDNEN')->execute([], new ToolContext($leser, $this->rootTeam))->success)->toBeFalse()
+        ->and(Einordnung::count())->toBe(1);
+});
+
+it('Knopf „Einordnung erzeugen“: nur für Kuratieren und nur ohne Einordnung zum aktuellen Stand; Klick erzeugt sie (Plattform-KI)', function () {
+    ($this->voll)();
+    $this->stub->saetze = ['Die Daten zeigen den Stand 2026-09.'];
+    $leser = $this->makeUser($this->rootTeam, 'TEST-MA Leser', 'viewer');
+    $this->actingAs($leser);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-einordnen')->call('einordnungErzeugen')->assertForbidden();
+    $this->actingAs($this->owner);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-einordnen')
+        ->call('einordnungErzeugen')->assertSee('Einordnung wird erstellt');
+    expect(Einordnung::first()->status)->toBe('fertig')->and($this->stub->calls)->toBe(1);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-einordnen')->assertSeeHtml('data-marktdaten-ki');
+    maReihe($this->rootTeam->id, 'gaststaettenpreise', basis: '2020=100', schritt: 0.35);   // neuer Stand → Knopf wieder da
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-einordnen');
+});

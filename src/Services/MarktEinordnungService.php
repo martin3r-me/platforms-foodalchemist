@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\MarktEinordnungJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarktdatenEinordnung as Einordnung;
+use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Services\Ai\KiExternModus;
 
 /**
@@ -75,14 +76,14 @@ class MarktEinordnungService
             return null;
         }
         $hash = self::hash($kontext);
+        // Dieselben Zahlen haben schon eine Einordnung (eigene oder vom Eltern-Team geerbte): kein zweiter KI-Aufruf
+        if (in_array(self::stand($team, $hash), ['fertig', 'laeuft'], true)) {
+            return null;
+        }
         // withTrashed: der Unique-Index (team_id, werte_hash) kennt kein deleted_at — eine gelöschte Zeile wird wiederbelebt statt zu kollidieren
         $e = Einordnung::withTrashed()->where('team_id', $team->id)->where('werte_hash', $hash)->first();
         if ($e?->trashed()) {
             $e->restore();
-            $e->status = 'fehler';
-        }
-        if ($e !== null && $e->status !== 'fehler') {
-            return null;   // dieselben Zahlen: kein zweiter KI-Aufruf
         }
         $e ??= new Einordnung(['team_id' => $team->id, 'werte_hash' => $hash]);
         $e->fill(['stand_monat' => self::standMonat($kontext), 'status' => 'laeuft', 'saetze' => null, 'verworfen' => 0, 'hinweis' => null])->save();
@@ -92,6 +93,40 @@ class MarktEinordnungService
         DB::afterCommit(fn () => MarktEinordnungJob::dispatch($id, $teamId, $extern));
 
         return $id;
+    }
+
+    /** Status der Einordnung zu diesem Werte-Stand, sichtbar für das Team (eigene vor geerbter): fertig | laeuft | fehler | null. */
+    public static function stand(Team $team, string $hash): ?string
+    {
+        $zeilen = Einordnung::visibleToTeam($team)->where('werte_hash', $hash)->get(['team_id', 'status']);
+        foreach (['fertig', 'laeuft', 'fehler'] as $status) {
+            if ($zeilen->contains('status', $status)) {
+                return $status;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Knopf „Einordnung erzeugen“ bzw. marktdaten.EINORDNEN: ohne Abruf, aus den gespeicherten Werten (Kuratieren).
+     *
+     * @return array{angestossen: bool, einordnung_id: ?int, stand: ?string, grund: ?string}
+     */
+    public function einordnen(Team $team, ?int $userId = null): array
+    {
+        $rechte = app(FaRechte::class);
+        $userId !== null ? $rechte->pruefeId($userId, $team, FaRolle::Kuratieren, 'Marktdaten einordnen')
+            : $rechte->pruefeAngemeldet($team, FaRolle::Kuratieren, 'Marktdaten einordnen');
+        $m = app(MarktdatenService::class)->lesenFuerTeam($team);
+        $kontext = self::kontext($m);
+        if (count($kontext['kennzahlen']) < 2) {
+            return ['angestossen' => false, 'einordnung_id' => null, 'stand' => null, 'grund' => 'Zu wenige Kennzahlen mit Vorjahresvergleich. Erst Marktdaten abrufen.'];
+        }
+        $id = $this->nachAbruf($team, $m);
+
+        return ['angestossen' => $id !== null, 'einordnung_id' => $id, 'stand' => self::standMonat($kontext),
+            'grund' => $id === null ? 'Zu diesem Werte-Stand gibt es schon eine Einordnung (oder sie läuft).' : null];
     }
 
     /** Ein Satz besteht, wenn seine Zahlen im Kontext stehen und er weder prognostiziert noch empfiehlt. */
