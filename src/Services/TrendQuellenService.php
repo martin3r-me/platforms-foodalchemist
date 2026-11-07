@@ -63,6 +63,9 @@ class TrendQuellenService
         return FoodAlchemistTrendQuelle::visibleToTeam($team)->findOrFail($id);
     }
 
+    /** Spielraum für den festen Lauf: Abruf um 05:50:09 → am Folgetag um 05:50:00 trotzdem fällig (sonst nur jeden 2. Tag). */
+    public const FAELLIG_TOLERANZ_MINUTEN = 60;
+
     /** Ab wann die Quelle fällig ist (null = nie: aus oder Rhythmus „aus“). Noch nie abgerufen = fällig seit Anlage. */
     public function faelligSeit(FoodAlchemistTrendQuelle $q): ?Carbon
     {
@@ -71,7 +74,7 @@ class TrendQuellenService
             return null;
         }
 
-        return $q->letzter_abruf_at !== null ? $q->letzter_abruf_at->copy()->addDays($tage) : ($q->created_at?->copy() ?? now());
+        return $q->letzter_abruf_at !== null ? $q->letzter_abruf_at->copy()->addDays($tage)->subMinutes(self::FAELLIG_TOLERANZ_MINUTEN) : ($q->created_at?->copy() ?? now());
     }
 
     public function istFaellig(FoodAlchemistTrendQuelle $q, ?Carbon $jetzt = null): bool
