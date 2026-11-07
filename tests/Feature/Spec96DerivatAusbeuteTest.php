@@ -141,7 +141,16 @@ it('Matcher: Fruchtteil-Zeilen gehen aufs Derivat, das Kompositum entscheidet di
         ->and(FruchtDerivat::treffer($team, 'Saft von 2 Limetten')['gp_id'] ?? null)->toBe($this->saft->id)
         ->and(FruchtDerivat::treffer($team, 'Abrieb einer Limette')['gp_id'] ?? null)->toBe($this->abrieb->id)
         ->and(FruchtDerivat::treffer($team, 'Limettensaft')['gp_id'] ?? null)->toBe($this->saft->id)
-        ->and(FruchtDerivat::treffer($team, 'Limettensaft', 'teil_convenience'))->toBeNull()
+        // Convenience ohne gekauften Saft im Bestand → trotzdem Derivat (Dominique 07.11.: „Fertigware, wenn GP vorhanden“)
+        ->and(FruchtDerivat::treffer($team, 'Limettensaft', 'teil_convenience')['gp_id'] ?? null)->toBe($this->saft->id);
+
+    $gekauft = $this->makeGp($team, 'Limettensaft: konserviert');
+    $gekauft->update(['commodity_group_code' => '02', 'status' => 'approved']);
+
+    expect(FruchtDerivat::treffer($team, 'Limettensaft', 'teil_convenience'))->toBeNull()
+        ->and(FruchtDerivat::treffer($team, 'Limettensaft', 'voll_convenience'))->toBeNull()
+        ->and(FruchtDerivat::treffer($team, 'Limettensaft', 'from_scratch')['gp_id'] ?? null)->toBe($this->saft->id)
+        ->and(FruchtDerivat::treffer($team, 'Limette (Saft)', 'voll_convenience')['gp_id'] ?? null)->toBe($this->saft->id)   // Frucht genannt = frisch
         ->and(FruchtDerivat::treffer($team, 'frisch gepresster Limettensaft', 'voll_convenience')['gp_id'] ?? null)->toBe($this->saft->id)
         ->and(FruchtDerivat::treffer($team, 'Tomatensaft'))->toBeNull()
         ->and(app(IngredientMatchService::class)->matchIngredient($team, 'Limette (Saft)')['gp_id'])->toBe($this->saft->id);
@@ -178,4 +187,23 @@ it('MCP: gp_derivat.PUT setzt Art und Ausbeute von Hand, gps.GET zeigt sie', fun
         ->and($put->data['derivat_ausbeute_quelle'])->toBe('manual')
         ->and($get->data['derivat']['derivat_ausbeute_wert'] ?? ($get->data['gp']['derivat']['derivat_ausbeute_wert'] ?? null))->toBe(28.0)
         ->and($falsch->success)->toBeFalse();
+});
+
+it('Bestellung direkt auf ein Derivat: Vorschau UND Entwurf gehen auf die Mutter, Parüren werden nie bestellt', function () {
+    $this->ausbeute->setze($this->rootTeam, (int) $this->saft->id, ['derivat_ausbeute_wert' => 30, 'derivat_ausbeute_basis' => 'g_je_stueck']);
+    $svc = app(\Platform\FoodAlchemist\Services\OrderService::class);
+    $quellen = [
+        ['type' => 'gp', 'id' => $this->saft->id, 'qty' => 60, 'unit' => 'g', 'delivery_date' => '2026-12-01'],
+        ['type' => 'gp', 'id' => $this->parueren->id, 'qty' => 500, 'unit' => 'g', 'delivery_date' => '2026-12-01'],
+    ];
+
+    $vorschau = $svc->previewFromSources($this->rootTeam, $quellen);
+    $positionen = collect($vorschau['orders_preview'])->pluck('positionen')->flatten(1);
+    expect($positionen->pluck('gp_id')->all())->toBe([$this->limette->id])
+        ->and(collect($vorschau['unresolved'])->pluck('code')->all())->toBe(['sammelbestand']);
+
+    $svc->generateDraftsFromSources($this->rootTeam, $quellen);
+    $zeilen = \Platform\FoodAlchemist\Models\FoodAlchemistOrderLine::query()->get();
+    expect($zeilen->pluck('gp_id')->unique()->values()->all())->toBe([$this->limette->id])
+        ->and((float) $zeilen->sum('needed_base_g'))->toBe(160.0);   // 60 g Saft = 2 Limetten × 80 g
 });

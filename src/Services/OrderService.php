@@ -364,11 +364,17 @@ class OrderService
                 if ($gp === null) {
                     continue;
                 }
+                $grams = $this->sourceGramsForGp($gp, $source);
+                if (($umleit = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::direkt($gp, $grams)) !== null) {   // Spec 96: wie previewGp
+                    if ($umleit['sammelbestand']) {
+                        continue;
+                    }
+                    [$gp, $grams] = [$umleit['gp'], $umleit['menge_g']];
+                }
                 $lead = $this->leadLa->effektiverLead($gp, $team, $strategie);
                 if ($lead?->supplier_id === null || $lead?->id === null) {
                     continue;
                 }
-                $grams = $this->sourceGramsForGp($gp, $source);
                 if ($grams <= 0) {
                     continue;
                 }

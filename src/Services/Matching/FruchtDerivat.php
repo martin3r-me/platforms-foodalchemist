@@ -56,8 +56,9 @@ final class FruchtDerivat
         if ($e === null) {
             return null;
         }
-        if ($e['kompositum'] && $e['teil'] === 'saft' && ! $e['gepresst'] && in_array($convenience, ['teil_convenience', 'voll_convenience'], true)) {
-            return null;   // Leitplanke Convenience: gekaufter Saft
+        if ($e['kompositum'] && $e['teil'] === 'saft' && ! $e['gepresst'] && in_array($convenience, ['teil_convenience', 'voll_convenience'], true)
+            && self::gekaufterSaftDa($team, $e['frucht'])) {
+            return null;   // Leitplanke Convenience: gekaufter Saft — nur wenn es ihn als GP gibt (Dominique 07.11.: „Fertigware, wenn GP vorhanden“)
         }
         $gp = self::derivatFuer($team, $e['frucht'], $e['teil']);
         if ($gp === null) {
@@ -94,6 +95,23 @@ final class FruchtDerivat
         });
 
         return $treffer->sortBy(fn (FoodAlchemistGp $d) => [($d->status?->value ?? $d->status) === 'approved' ? 0 : 1, mb_strlen((string) $d->name)])->first();
+    }
+
+    /** Gibt es gekauften Saft dieser Frucht als GP (kein Derivat), z. B. „Limettensaft: konserviert“? */
+    public static function gekaufterSaftDa(Team $team, string $frucht): bool
+    {
+        $stamm = self::stamm($frucht);
+        if (mb_strlen($stamm) < 3) {
+            return false;
+        }
+
+        return FoodAlchemistGp::visibleToTeam($team)->where('is_derivat', false)->whereNotIn('status', ['rejected', 'merged'])
+            ->where('name', 'like', '%saft%')->get(['id', 'name'])
+            ->contains(function (FoodAlchemistGp $g) use ($stamm) {
+                $kopf = self::norm(trim((string) strstr((string) $g->name . ':', ':', true)));
+
+                return (bool) preg_match('/^' . preg_quote($stamm, '/') . '[a-z]*\s?saft\b/u', $kopf);
+            });
     }
 
     private static function teil(string $t): string
