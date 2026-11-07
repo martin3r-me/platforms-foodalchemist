@@ -23,6 +23,8 @@ const ENUM_STATUS_GEPRUEFT = [
     'src/Services/OrderMailService.php', 'resources/views/livewire/orders/editor.blade.php', 'src/Services/RecipeFindingService.php',
     'src/Services/ConformanceService.php', 'src/Models/FoodAlchemistInventoryCount.php', 'resources/views/livewire/projekte/index.blade.php',
     'resources/views/livewire/preislisten/index.blade.php', 'src/Services/Ai/KiAuftragService.php', 'src/Services/PreislistenImportService.php',
+    // Markt-Einordnung (#759) und Wettbewerbs-Funde (#744): String-Spalten ohne Enum-Cast
+    'src/Jobs/MarktEinordnungJob.php', 'resources/views/livewire/trendradar/wettbewerber.blade.php',
     // Concept: (string)-Cast auf den Status, kein Enum-Modell aus der Liste
     'src/Tools/ConceptSlotsPostTool.php', 'src/Services/ConceptGeneratorService.php',
     // GP als Rohzeile (DB::table → status ist ein String)

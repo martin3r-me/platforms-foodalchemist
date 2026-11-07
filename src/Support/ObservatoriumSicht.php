@@ -12,7 +12,7 @@ use Platform\Core\Models\Team;
  *   gelesen wird beim Inhalts-Team. Persönliche Merker bleiben am eigenen Team.
  * - Kuratieren / Trend Research: nur im Master-Team (Bereich `trend_research` in {@see FaBereiche::NUR_BEIM_MASTER}).
  * - Ohne konfiguriertes Master-Team bleibt alles beim eigenen Team (autarke Installation).
- * - Wettbewerber sind weggelassen (Ertrag 0 Funde): {@see self::WETTBEWERB_AKTIV}. Daten und Code bleiben, nur Ansicht und Tools sind aus.
+ * - Wettbewerber sind weggelassen (Ertrag 0 Funde): {@see self::WETTBEWERB_AKTIV}. Daten und Code bleiben; Ansicht und Reiter sind aus, die MCP-Tools nur noch im Master (Bereich trend_research).
  */
 final class ObservatoriumSicht
 {

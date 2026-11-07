@@ -179,16 +179,18 @@ it('Budget: ein Topf mit dem Erschließen; erreicht → Fehler am Trend, Provide
     expect(DB::table('foodalchemist_ki_auftraege')->where('feature', 'trend.ableitung')->count())->toBe(1)->and($this->stub->calls)->toBe(0);
 });
 
-it('Team-Sicht: Kunde B und ein Kind-Team erzeugen keine Ableitung an fremden Trends', function () {
+it('Team-Sicht: Kunde B und ein Kind-Team erzeugen keine Ableitung an fremden Trends (mit Master: Trend Research gar nicht erreichbar)', function () {
     config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();   // Observatorium zentral 07.11.2026: Kunden-Teams → Bereich trend_research aus = FORBIDDEN
     $a = $this->trends->anlegen($this->childA, ['name' => 'TEST-93 Kunde A']);
     $parent = ($this->trend)();
     $b = new ToolContext($this->makeUser($this->childB, 'B TEST-93'), $this->childB);
     $kind = new ToolContext($this->makeUser($this->childA, 'A TEST-93'), $this->childA);
 
-    expect($this->reg->get('foodalchemist.trends.ABLEITUNG')->execute(['id' => $a->id], $b)->errorCode)->toBe('NOT_FOUND')
-        ->and($this->reg->get('foodalchemist.trends.ABLEITUNG')->execute(['id' => $parent->id], $kind)->errorCode)->toBe('NOT_FOUND')
-        ->and($this->reg->get('foodalchemist.trends.PUT')->execute(['id' => $parent->id, 'ableitung' => ['kurzfazit' => 'x']], $kind)->errorCode)->toBe('NOT_FOUND');
+    expect($this->reg->get('foodalchemist.trends.ABLEITUNG')->execute(['id' => $a->id], $b)->errorCode)->toBe('FORBIDDEN')
+        ->and($this->reg->get('foodalchemist.trends.ABLEITUNG')->execute(['id' => $parent->id], $kind)->errorCode)->toBe('FORBIDDEN')
+        ->and($this->reg->get('foodalchemist.trends.PUT')->execute(['id' => $parent->id, 'ableitung' => ['kurzfazit' => 'x']], $kind)->errorCode)->toBe('FORBIDDEN');
+    expect($parent->refresh()->ableitung)->toBeNull()->and($a->refresh()->ableitung)->toBeNull();
 });
 
 it('Zwischenspeicher je Lauf: eine neue Pinnwand-Karte zählt im nächsten Lauf', function () {

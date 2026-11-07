@@ -111,11 +111,11 @@ it('Trend Research nur im Master: Bereich, Navigation, Seite und MCP-Tools', fun
     expect($r->success)->toBeFalse();
 });
 
-it('Wettbewerber weggelassen: keine Ansicht, keine Tools, kein Reiter', function () {
+it('Wettbewerber weggelassen: keine Ansicht, kein Reiter; Tools nur noch im Master (Bereich trend_research)', function () {
     expect(ObservatoriumSicht::WETTBEWERB_AKTIV)->toBeFalse()
         ->and(ObservatoriumInhalt::ANSICHTEN)->not->toHaveKey('wettbewerb')->toHaveKey('lagebild')
-        ->and($this->reg->has('foodalchemist.wettbewerber.GET'))->toBeFalse()
-        ->and($this->reg->has('foodalchemist.wettbewerber.POST'))->toBeFalse();
+        ->and(FaBereiche::fuerTool('foodalchemist.wettbewerber.POST'))->toBe('trend_research');
+    expect($this->reg->get('foodalchemist.wettbewerber.GET')->execute([], new ToolContext($this->leser, $this->mandant, ['team_source' => 'user_current']))->errorCode)->toBe('FORBIDDEN');
     $this->actingAs($this->kurator);
     Livewire::test(\Platform\FoodAlchemist\Livewire\Trendradar\Index::class)->assertDontSee('Unternehmen beobachten und Firmenbezug prüfen');
 });
