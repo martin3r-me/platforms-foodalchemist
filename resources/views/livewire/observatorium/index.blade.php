@@ -81,6 +81,8 @@
             </div>
             @include('foodalchemist::livewire.observatorium.radar')
         @else
+            @if($ansicht === 'briefing')@include('foodalchemist::livewire.observatorium.briefing-profil')@endif
+            @unless($ansicht === 'briefing' && $briefingProfil)
             <div @if($istHandy) id="obs-handy-filter" x-show="filterOffen" x-cloak class="fa-obs-handy-filterpanel" @keydown.escape.window="filterOffen = false" @endif>
             <div class="fa-obs-filters" role="search" aria-label="Recherche filtern">
                 <label class="fa-obs-field search">@svg('heroicon-o-magnifying-glass')<input type="search" wire:model.live.debounce.300ms="suche" aria-label="Thema oder Idee suchen" placeholder="Thema oder Idee suchen" maxlength="200"></label>
@@ -98,6 +100,7 @@
 
             @if($istHandy)<button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>@endif
             </div>
+            @endunless
 
             @if($ansicht === 'entdecken' && $lagebild && $eintraege->currentPage() === 1)@include('foodalchemist::livewire.observatorium.lagebild-teaser')@endif
 
@@ -121,10 +124,12 @@
 
             <div class="fa-obs-sectionhead"><h2>{{ $ansicht === 'briefing' ? 'Das nimmst du mit' : ($ansicht === 'ideen' ? 'Ideen zum Weiterdenken' : ($ansicht === 'merkliste' ? 'Für dich gesammelt' : ($ansicht === 'wettbewerb' ? 'Bestätigte Wettbewerbsmeldungen' : 'Frische Perspektiven für deine Branche'))) }}</h2><span class="fa-obs-subtitle">{{ $eintraege->total() }} {{ $eintraege->total() === 1 ? 'Meldung' : 'Meldungen' }}</span></div>
 
-            @if($eintraege->isEmpty())
+            @if($eintraege->isEmpty() && $ansicht === 'briefing' && $briefingProfil)
+                <div class="fa-obs-empty" data-briefing-leer><h2>Für deine Einstellung gibt es gerade nichts Neues.</h2><p>Nimm mehr Branchen oder Themen dazu oder wähle einen längeren Zeitraum.</p><button class="fa-obs-button" type="button" wire:click="profilBearbeiten">Einstellung ändern</button></div>
+            @elseif($eintraege->isEmpty())
                 <div class="fa-obs-empty"><h2>{{ $ansicht === 'merkliste' ? 'Deine Merkliste ist noch leer.' : 'Noch keine passenden Meldungen.' }}</h2><p>{{ $ansicht === 'merkliste' ? 'Merke interessante Beiträge über das Lesezeichen. Deine Auswahl bleibt persönlich.' : 'Neue Beiträge erscheinen nach dem Quellenabruf. Ändere die Filter oder schau in die Recherche.' }}</p><button class="fa-obs-button" type="button" wire:click="filterZuruecksetzen">Filter zurücksetzen</button></div>
             @elseif($ansicht === 'briefing')
-                <div class="fa-obs-briefing"><span class="fa-obs-pill">Aus deiner Recherche · {{ now()->format('d.m.Y') }}</span>@foreach($eintraege->take(5) as $e)<article class="fa-obs-brief-item"><div class="fa-obs-meta"><span>{{ $e->herausgeber ?: $e->quelle?->name }}</span><span>{{ $e->veroeffentlicht_am?->format('d.m.Y') ?? 'Veröffentlichungsdatum offen' }}</span></div><h3>{{ $e->titel }}</h3><p class="fa-obs-subtitle">{{ $e->zusammenfassung ?: $e->teaser }}</p><button class="fa-obs-link" type="button" wire:click="oeffnen({{ $e->id }})">Beitrag entdecken @svg('heroicon-o-arrow-up-right')</button></article>@endforeach</div>
+                <div class="fa-obs-briefing"><span class="fa-obs-pill">{{ $briefingProfil ? 'Deine Auswahl' : 'Aus deiner Recherche' }} · {{ now()->format('d.m.Y') }}</span>@foreach($eintraege->take(5) as $e)<article class="fa-obs-brief-item"><div class="fa-obs-meta"><span>{{ $e->herausgeber ?: $e->quelle?->name }}</span><span>{{ $e->veroeffentlicht_am?->format('d.m.Y') ?? 'Veröffentlichungsdatum offen' }}</span></div><h3>{{ $e->titel }}</h3><p class="fa-obs-subtitle">{{ $e->zusammenfassung ?: $e->teaser }}</p><button class="fa-obs-link" type="button" wire:click="oeffnen({{ $e->id }})">Beitrag entdecken @svg('heroicon-o-arrow-up-right')</button></article>@endforeach</div>
             @else
                 <div class="{{ in_array($ansicht, ['entdecken', 'ideen'], true) ? 'fa-obs-grid' : 'fa-obs-list' }}" wire:loading.class="fa-obs-loading" wire:target="branche,region,tage,suche,markt,pruefen">
                     @foreach($eintraege as $e)@if(! $hero || $hero->id !== $e->id)@if($ansicht === 'wettbewerb')@include('foodalchemist::livewire.observatorium.wettbewerb-karte')@else @include('foodalchemist::livewire.observatorium.karte', ['mitIllustration' => in_array($ansicht, ['entdecken', 'ideen'], true)]) @endif@endif @endforeach

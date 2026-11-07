@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Livewire\Concerns\HandyLesebereich;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
 use Platform\FoodAlchemist\Services\FaRechte;
+use Platform\FoodAlchemist\Services\ObservatoriumBriefingService;
 use Platform\FoodAlchemist\Services\ObservatoriumService;
 use Platform\FoodAlchemist\Services\TrendService;
 use Platform\FoodAlchemist\Support\FaShell;
@@ -83,6 +84,11 @@ class Index extends Component
 
     public string $ideeLink = '';
 
+    /** „Mein Briefing“-Einstellung (persönlich): Formular offen + Entwurf */
+    public bool $profilOffen = false;
+
+    public array $profil = ['branchen' => [], 'region' => '', 'tage' => '7', 'themen' => ''];
+
     public function mount(): void
     {
         $this->team();
@@ -94,7 +100,7 @@ class Index extends Component
     public function handyLeseMethoden(): array
     {
         // Merken/Prüfliste sind persönliche Präferenzen. Pinnwand-Redaktion bleibt am Handy gesperrt.
-        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'anpinnen', 'ideeAnpinnen', 'pinNotiz', 'pinEntfernen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
+        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'anpinnen', 'ideeAnpinnen', 'pinNotiz', 'pinEntfernen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'profilBearbeiten', 'profilSpeichern', 'profilAbbrechen', 'profilLoeschen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
     }
 
     public function ansichtSetzen(string $ansicht): void
@@ -117,6 +123,41 @@ class Index extends Component
             $this->resetPage();
             $this->artikelId = null;
         }
+    }
+
+    public function profilBearbeiten(): void
+    {
+        $p = app(ObservatoriumBriefingService::class)->profil($this->team(), (int) Auth::id());
+        $this->profil = ['branchen' => $p?->branchen ?? [], 'region' => (string) ($p?->region ?? ''), 'tage' => (string) ($p?->tage ?? '7'),
+            'themen' => implode(', ', $p?->themen ?? [])];
+        $this->profilOffen = true;
+    }
+
+    public function profilAbbrechen(): void
+    {
+        $this->profilOffen = false;
+    }
+
+    public function profilSpeichern(): void
+    {
+        try {
+            app(ObservatoriumBriefingService::class)->speichern($this->team(), (int) Auth::id(), $this->profil);
+        } catch (\RuntimeException $e) {
+            $this->meldung = $e->getMessage();
+
+            return;
+        }
+        $this->profilOffen = false;
+        $this->meldung = 'Dein Briefing ist eingestellt.';
+        $this->resetPage();
+    }
+
+    public function profilLoeschen(): void
+    {
+        app(ObservatoriumBriefingService::class)->loeschen($this->team(), (int) Auth::id());
+        $this->profilOffen = false;
+        $this->meldung = 'Einstellung gelöscht. Das Briefing zeigt wieder deine aktuellen Filter.';
+        $this->resetPage();
     }
 
     public function filterZuruecksetzen(): void
@@ -230,6 +271,11 @@ class Index extends Component
         $svc = app(ObservatoriumService::class);
         $filter = ['ansicht' => $this->ansicht === 'briefing' && isset(Inhalt::ANSICHTEN[$this->briefingBasis]) ? $this->briefingBasis : $this->ansicht, 'suche' => $this->suche, 'branche' => $this->branche,
             'region' => $this->region, 'tage' => $this->tage, 'markt' => $this->markt, 'pruefen' => $this->pruefen, 'wettbewerber' => $this->wettbewerber, 'bewegung' => $this->bewegung];
+        // „Mein Briefing“ mit gespeicherter Einstellung: das Profil ersetzt die gerade offenen Filter
+        $briefingProfil = $this->ansicht === 'briefing' ? app(ObservatoriumBriefingService::class)->profil($team, (int) Auth::id()) : null;
+        if ($briefingProfil !== null) {
+            $filter = ObservatoriumBriefingService::filter($briefingProfil);
+        }
         $eintraege = $svc->gruppiert($team, $filter)->paginate(12);
         $gewaehlt = $this->artikelId ? $svc->detail($team, $this->artikelId) : null;
         $alleMerker = $svc->merker($team)->where(fn ($w) => $w->where('gemerkt', true)->orWhere('trend_pruefen', true))->get();
@@ -243,6 +289,7 @@ class Index extends Component
         return view('foodalchemist::livewire.observatorium.index', [
             'marktdaten' => $this->ansicht === 'zahlen' ? app(\Platform\FoodAlchemist\Services\MarktdatenService::class)->lesen($team) : null,
             'istHandy' => HandyLesemodus::anfrageVomHandy(),
+            'briefingProfil' => $briefingProfil,
             'eintraege' => $eintraege, 'gewaehlt' => $gewaehlt,
             'weitereQuellen' => $gewaehlt ? $svc->weitereQuellen($team, $gewaehlt) : collect(),
             'merker' => $alleMerker->keyBy('eingang_id'), 'merkerAnzahl' => $alleMerker->count(),

@@ -34,6 +34,24 @@ class ObservatoriumService
         if (! $wettbewerb && isset(Inhalt::BRANCHEN[$filter['branche'] ?? ''])) {
             $q->whereJsonContains('observatorium->branchen', $filter['branche']);
         }
+        // „Mein Briefing“-Profil: mehrere Branchen (ODER) und Themen (ODER über Titel, Teaser, Zusammenfassung, Thema)
+        $branchen = array_values(array_intersect(array_map('strval', (array) ($filter['branchen'] ?? [])), array_keys(Inhalt::BRANCHEN)));
+        if (! $wettbewerb && $branchen !== []) {
+            $q->where(function ($w) use ($branchen) {
+                foreach ($branchen as $b) {
+                    $w->orWhereJsonContains('observatorium->branchen', $b);
+                }
+            });
+        }
+        $themen = array_values(array_filter(array_map(fn ($t) => mb_substr(trim((string) $t), 0, 60), (array) ($filter['themen'] ?? []))));
+        if ($themen !== []) {
+            $q->where(function ($w) use ($themen) {
+                foreach (array_slice($themen, 0, 10) as $t) {
+                    $w->orWhere(fn ($o) => $o->where('titel', 'like', '%'.$t.'%')->orWhere('teaser', 'like', '%'.$t.'%')
+                        ->orWhere('zusammenfassung', 'like', '%'.$t.'%')->orWhere('thema', 'like', '%'.$t.'%'));
+                }
+            });
+        }
         if (! $wettbewerb && in_array($filter['region'] ?? '', ['DE', 'AT', 'CH'], true)) {
             $q->where('observatorium->region', $filter['region']);
         }
