@@ -1938,6 +1938,16 @@ return [
                 . 'Unsichere Form weglassen (nicht schaetzen/erfinden): '
                 . 'werte = {einheiten: [{unit, gewicht_g}]}.',
         ],
+        // Spec 96 (Dominique 06.11.: Ausbeute schaetzt die KI automatisch, gekennzeichnet ki, von Hand ueberschreibbar).
+        'gp.derivat_ausbeute' => [
+            'klasse' => 'mittel',
+            'task' => 'Schaetze die kuechenuebliche AUSBEUTE eines Derivats aus seiner Mutter. Zweck-Derivate von Obst '
+                . '(Saft, Abrieb, Zeste): basis g_je_stueck = Gramm Derivat aus EINEM durchschnittlichen Stueck Mutter '
+                . '(z. B. Limette Saft 30, Zitrone Saft 40, Orange Saft 80, Limette Abrieb 2, Zitrone Abrieb 3, Orange Abrieb 5). '
+                . 'Nebenprodukte (Abschnitte, Paruere, Knochen, Karkasse): basis prozent = Anteil an der Mutter-Masse (0-100). '
+                . 'mutter_stueckgewicht_g ist das hinterlegte Stueckgewicht (kann fehlen). Kuechenuebliche Richtwerte, keine Rechnung. '
+                . 'Unsicher => wert null, nie raten: werte = {basis: "g_je_stueck"|"prozent", wert: Zahl|null}.',
+        ],
         // Spec 60 · P4 (2026-10-14): Anker-Wissen flaechig aus den Zutaten-Dossiers lesen (Bedarf/Lieferung je
         // Achse). Ersetzt den Agenten-Pilot. NUR was im Text steht — der Code prueft Belege und `muss` nach
         // (AnkerWissenAuslese::bereinige), das Modell ist die Auslese, nicht die Quelle.

@@ -947,8 +947,11 @@ class PlanungsblattService
     private function gruppiereNachLieferant(Team $team, array $gpBedarf, ?LeadLaStrategie $strategieOverride = null): array
     {
         $gruppen = [];
-        foreach ($gpBedarf as $b) {
-            $gpModel = FoodAlchemistGp::find($b['gp_id']);
+        // Spec 96: Zweck-Derivate (Saft, Abrieb) → Mutter ÷ Ausbeute; Nebenprodukte (Abschnitte) → Info „aus Sammelbestand“, nie bestellt
+        $d = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::aufMutter($gpBedarf, fn (FoodAlchemistGp $m) => $this->recompute->preisProGrammPublic($m, $team));
+        foreach ([...$d['bedarf'], ...$d['sammelbestand']] as $b) {
+            $sammel = (bool) ($b['sammelbestand'] ?? false);
+            $gpModel = $sammel ? null : FoodAlchemistGp::find($b['gp_id']);
             $kette = $gpModel !== null ? $this->leadLa->rangliste($gpModel, $team, $strategieOverride) : collect();
             $lead = $kette->first(fn ($la) => $la->gepinnt && ! $la->locked) ?? $kette->first(fn ($la) => ! $la->locked);
             $ausweich = $kette->first(fn ($la) => $lead !== null && $la->id !== $lead->id && ! $la->locked);
@@ -959,14 +962,14 @@ class PlanungsblattService
             $geb = $this->gebinde->berechne($lead, (float) $b['menge_g'], $pieceG);
             // Effektive Bestell-Kosten = echte Gebinde-Summe, wenn berechenbar + Preis bekannt;
             // sonst ehrlicher Rückfall auf die Gramm-Theorie (Preisfalle/Stk ohne Gewicht).
-            $bestellEk = ($geb['berechenbar'] && $geb['line_total'] !== null) ? $geb['line_total'] : $b['ek_eur'];
+            $bestellEk = $sammel ? 0.0 : (($geb['berechenbar'] && $geb['line_total'] !== null) ? $geb['line_total'] : $b['ek_eur']);
             $ekBekannt = $bestellEk !== null;
             // Nicht-berechenbar (Preisfalle/Stk ohne Gewicht) wird pro Zeile über gebinde.grund
             // im Blatt gezeigt — keine globale Warnung nötig.
 
-            $key = $lead?->supplier_id ?? 0;
-            $lieferant = $lead?->supplier_name ?? 'ohne Lieferant/Lead-LA';
-            $gruppen[$key] ??= ['lieferant' => $lieferant, 'supplier_id' => $lead?->supplier_id, 'positionen' => [], 'ek_summe' => 0.0, 'ek_vollstaendig' => true];
+            $key = $sammel ? 'sammelbestand' : ($lead?->supplier_id ?? 0);
+            $lieferant = $sammel ? 'Aus Sammelbestand (Nebenprodukt, wird nicht bestellt)' : ($lead?->supplier_name ?? 'ohne Lieferant/Lead-LA');
+            $gruppen[$key] ??= ['lieferant' => $lieferant, 'supplier_id' => $lead?->supplier_id, 'positionen' => [], 'ek_summe' => 0.0, 'ek_vollstaendig' => true, 'sammelbestand' => $sammel];
 
             $gruppen[$key]['positionen'][] = [
                 'gp_id' => $b['gp_id'],
@@ -983,6 +986,8 @@ class PlanungsblattService
                 'ausweich' => $ausweich !== null
                     ? ['artikel' => $ausweich->designation, 'lieferant' => $ausweich->supplier_name]
                     : null,
+                'aus_derivaten' => $b['aus_derivaten'] ?? [],   // Spec 96: Mutter für Saft/Abrieb („Limetten auspressen“)
+                'sammelbestand' => $sammel,
             ];
             if ($ekBekannt) {
                 $gruppen[$key]['ek_summe'] += (float) $bestellEk;
@@ -998,6 +1003,9 @@ class PlanungsblattService
         unset($g);
         // Lieferanten mit Lead zuerst (Bucket „ohne" ans Ende), sonst alphabetisch.
         uasort($gruppen, function ($a, $b) {
+            if ($a['sammelbestand'] !== $b['sammelbestand']) {
+                return $a['sammelbestand'] ? 1 : -1;   // Spec 96: Info-Gruppe ganz ans Ende
+            }
             if (($a['supplier_id'] === null) !== ($b['supplier_id'] === null)) {
                 return $a['supplier_id'] === null ? 1 : -1;
             }

@@ -61,6 +61,7 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'alkohol' => $gp->alkohol, 'alkohol_source' => $gp->alkohol_source,
             'is_derivat' => (bool) $gp->is_derivat,
             'derivat_von_gp_id' => $gp->derivat_von_gp_id !== null ? (int) $gp->derivat_von_gp_id : null,
+            'derivat' => $gp->is_derivat ? GpDerivatPutTool::sicht($gp) : null,   // Spec 96: Art, Ausbeute, Herkunft
             'requires_la' => (bool) $gp->requires_la,
             'is_platzhalter' => (bool) $gp->is_platzhalter,
             'zusatz' => $gp->zusatz,

@@ -1,6 +1,6 @@
 # Spec 96 · Derivate mit Ausbeute: Saft, Abrieb & Co. über die Mutter einkaufen
 
-Stand 2026-11-05 · Entwurf · Auftraggeber Dominique · Kurator prüft und merged · Anlass: Pilot-Import KOCHBuch_2026, Zeile
+Stand 2026-11-07 · gebaut (Branch feat/spec96-derivat-ausbeute) · Auftraggeber Dominique · Kurator prüft und merged · Anlass: Pilot-Import KOCHBuch_2026, Zeile
 „Limette (Saft), 1 Stück“ (Rezept 49, Chimichurri)
 
 ## Warum
@@ -76,7 +76,29 @@ Vorschlag: im Planungsblatt (Spec Produktion) Bedarf des Nebenprodukts gegen den
 - „Limettensaft“ (ohne Mutter-Nennung) bleibt der gekaufte Saft; „Tomatensaft“, „Karottensaft“ werden nie Derivat.
 - Größen-Wächter, Spec90-KI-Pflichtliste (falls KI-Schätzung), KiUmleitung, Matching-Kreis grün.
 
-## Offene Fragen an Dominique
+## Entscheidungen (Dominique, Questioner 06.11.)
+1. **Ausbeute:** KI schätzt automatisch (Herkunft `ki`, von Hand überschreibbar `manual`, manuell gewinnt). Ohne Wert: Reife-Lücke „Ausbeute fehlt“.
+2. **Fehlende Mutter „Zitrone: frisch“:** Datenanlage nur nach Ansage (nicht im Code-PR).
+3. **Gekaufter Saft vs. Derivat:** die Leitplanke entscheidet — ohne Wahl / from_scratch → Derivat, teil_/voll_convenience → gekaufter Saft. „frisch gepresst“ ist immer Derivat.
+4. **Saft + Abrieb derselben Frucht:** bestellt wird der größere Bedarf, nicht die Summe.
+5. **Nebenprodukt:** 0 €, zählt als bepreist.
+6. **Bedarf > Anfall beim Nebenprodukt:** „Abschnitte werden ja gesammelt, daher kann man gar nicht sagen, es fehlt“ — keine Bilanz, kein Hinweis, keine Bestellung, keine Mutter-Erhöhung. Im Planungsblatt eine Info-Gruppe „Aus Sammelbestand“.
+7. **Standard-Art:** Saft/Abrieb/Zeste (immer) und Schale bei Obst = zweck; sonst nebenprodukt.
+
+## Umsetzung (07.11.)
+| Teil | Stelle |
+|---|---|
+| Migration | `2026_12_18_100000_add_derivat_ausbeute_to_foodalchemist_gps` (`derivat_art`, `derivat_ausbeute_wert/_basis/_quelle`) |
+| Art, Ausbeute | `Support/Derivat/DerivatArt`, `DerivatAusbeute` |
+| EK | `Support/Derivat/DerivatPreis`, je ein Aufruf in `RecipeRecomputeService::preisProGrammMitBasis` / `preisProStueckMitBasis` (Größen-Wächter gehalten) |
+| Bedarf/Bestellung | `Support/Derivat/DerivatBedarf` in `PlanungsblattService::gruppiereNachLieferant` und `OrderService::previewGp`; Gruppe `sammelbestand` wird nie bestellt |
+| Matcher | `Services/Matching/FruchtDerivat` am Anfang von `IngredientMatchService::matchIngredient` (nur Bindungsläufe) |
+| Pflege | `DerivatAusbeuteService::setze` (g_je_stueck spiegelt die Stück-Form), GP-Dialog (Art, Ausbeute, Knopf „Ausbeute schätzen“), MCP `gp_derivat.PUT`, `gps.GET` zeigt `derivat` |
+| KI | `DerivatAusbeuteService::schaetzeKi` (Prompt `gp.derivat_ausbeute`), MCP `gp_derivat.ESTIMATE` (umgeleitet), `DerivatAusbeuteNachholenJob` nach dem Rezept-Import; Pflichtliste A Nr. 91 + D |
+| Reife | Lücke `derivat_ausbeute` in `RecipeReifeAdapter` |
+| Tests | `Spec96DerivatAusbeuteTest` |
+
+## Offene Fragen an Dominique (Stand Entwurf, beantwortet siehe oben)
 1. **Ausbeute-Werte und Quelle:** Feste Werte je Frucht (z. B. Limette 30 g, Zitrone 40 g, Orange 80 g Saft; Abrieb 2–5 g) aus dem
    Regelwerk, KI-geschätzt mit Kennzeichnung oder nur von Hand? Je Team überschreibbar?
 2. **Fehlende Mutter „Zitrone: frisch“:** Aus welchem Lieferantenartikel anlegen (LA-First)? Oder „Amalfi-Zitrone“ als Mutter?

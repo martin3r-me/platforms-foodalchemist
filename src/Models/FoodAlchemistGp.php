@@ -66,6 +66,7 @@ class FoodAlchemistGp extends Model
         'uuid' => 'string',
         'status' => GpStatus::class,
         'is_derivat' => 'boolean',
+        'derivat_ausbeute_wert' => 'decimal:2',   // Spec 96
         'requires_la' => 'boolean',
         'is_platzhalter' => 'boolean',
         'namens_vegan' => 'boolean',

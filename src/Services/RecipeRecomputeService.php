@@ -1319,9 +1319,9 @@ class RecipeRecomputeService
      */
     private function preisProGrammMitBasis(FoodAlchemistGp $gp): array
     {
+        if (($d = \Platform\FoodAlchemist\Support\Derivat\DerivatPreis::proGramm($gp, fn ($m) => $this->preisProGrammMitBasis($m), fn ($m) => $this->preisProStueckMitBasis($m))) !== null) { return $d; }   // Spec 96
         foreach ($this->preisKandidaten($gp) as $la) {
-            // Lead OHNE aktiven Preis ist eine Lücke, kein 0-€-Preis (wie der Stk-Zwilling unten; Spec 82 Auflage 4).
-            // Vorher wurde (float) NULL = 0.0 als „bepreist" gezählt.
+            // Lead OHNE aktiven Preis ist eine Lücke, kein 0-€-Preis (Stk-Zwilling unten; Spec 82 Auflage 4). Vorher zählte (float) NULL = 0.0 als „bepreist".
             if (in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null) {
                 $pg = $this->preise->preisProGramm($la, (float) $la->aktiver_preis);
                 if ($pg !== null) {
@@ -1349,8 +1349,7 @@ class RecipeRecomputeService
             return [$summe / $n, EkPriceBasis::Avg];
         }
 
-        // Stk→g-Brücke: kein kg/l-LA, aber €/Stk + hinterlegtes Stückgewicht (gp_forms „stk“
-        // spiegelt auf piece_default_g). Ohne Gewicht bleibt es NULL — nie geraten.
+        // Stk→g-Brücke: kein kg/l-LA, aber €/Stk + hinterlegtes Stückgewicht (gp_forms „stk“ spiegelt auf piece_default_g). Ohne Gewicht NULL — nie geraten.
         $stueckG = $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null;
         if ($stueckG !== null && $stueckG > 0) {
             [$pStk, $bStk] = $this->preisProStueckMitBasis($gp);
@@ -1375,6 +1374,7 @@ class RecipeRecomputeService
      */
     private function preisProStueckMitBasis(FoodAlchemistGp $gp): array
     {
+        if (($d = \Platform\FoodAlchemist\Support\Derivat\DerivatPreis::proStueck($gp, fn ($m) => $this->preisProGrammMitBasis($m), fn ($m) => $this->preisProStueckMitBasis($m))) !== null) { return $d; }   // Spec 96
         foreach ($this->preisKandidaten($gp) as $la) {
             if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
                 $this->spur()->merke($la);
