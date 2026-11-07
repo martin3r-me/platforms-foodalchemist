@@ -211,3 +211,17 @@ it('Team-Pinnwand per MCP: anheften, Notiz, lesen, abnehmen — Bereich Wissen, 
     expect($this->reg->get('foodalchemist.observatorium_pinnwand.DELETE')->execute(['pin_id' => $a->data['pin_id']], $mcp)->success)->toBeTrue()
         ->and($this->reg->get('foodalchemist.observatorium_pinnwand.GET')->execute([], $mcp)->data['pins'])->toHaveCount(1);
 });
+
+it('Einstellungen: Trendradar-Seite nur im Master — Mandant (auch als Plattform-Admin) sieht sie nicht', function () {
+    $html = fn () => Livewire::test(\Platform\FoodAlchemist\Livewire\Settings\Index::class)->html();
+    $this->actingAs($this->makeUser($this->mandant, 'Admin TEST-OZ'));
+    expect($html())->not->toContain('data-settings-link="google-trends"')->not->toContain('data-settings-tab="trendradar"');
+
+    $padmin = $this->makeUser($this->mandant, 'Plattform TEST-OZ');
+    config(['platform-shell.admins' => [strtolower((string) $padmin->email)]]);
+    $this->actingAs($padmin);
+    expect($html())->not->toContain('data-settings-link="google-trends"');
+
+    $this->actingAs($this->kurator);
+    expect($html())->toContain('data-settings-link="google-trends"')->toContain('data-settings-tab="trendradar"');
+});

@@ -281,7 +281,8 @@ class Index extends Component
      * Spec 82 §5/§13 B2: Sektionen, die an einem Bereich der Freischaltung (FaBereiche) hängen. Aus = Sektion
      * unsichtbar und der Direktlink gesperrt. Plattform-Admins sehen sie wie bei jedem Bereich immer (darfBereich).
      */
-    public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams'];
+    // Observatorium zentral (Dominique 07.11.2026): Trendradar-Einstellungen wirken nur noch im Master (Trend Research) — Mandanten sehen sie nicht mehr
+    public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams', 'trendradar' => 'trend_research'];
 
     /**
      * Spec 82 §13 C1/D: Sektionen mit eigener Rechteprüfung. `plan-nutzung`: Inhaber/Admin des Mandanten, Plattform-Admin, Admin im

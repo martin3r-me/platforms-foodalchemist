@@ -346,6 +346,8 @@ return [
     \Platform\FoodAlchemist\Tools\NectaPruefaelleGetTool::class,
     \Platform\FoodAlchemist\Tools\NonfoodPruefenTool::class,   // Non-Food-Prüfliste
     \Platform\FoodAlchemist\Tools\NonfoodSetTool::class,   // Non-Food-Urteil von Hand
+    \Platform\FoodAlchemist\Tools\ObservatoriumBriefingGetTool::class,
+    \Platform\FoodAlchemist\Tools\ObservatoriumBriefingPutTool::class,
     \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandDeleteTool::class,
     \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandGetTool::class,
     \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandPostTool::class,
