@@ -21,6 +21,8 @@ final class TrendAutomatikRegeln
         'konsum_sparten' => ['Konsum-Ebene: Sparten', 1, 6, true],
         'konsum_monate' => ['Konsum-Ebene: Monate', 1, 12, true],
         'abklingen_monate' => ['Abklingen: Monate ohne Sichtung', 1, 24, true],
+        // Dominique 07.11.2026: abgeklungene Trends fliegen irgendwann von selbst vom Radar (archiviert, nie gelöscht); 0 = aus
+        'archiv_monate' => ['Automatisch archivieren: Monate nach dem Abklingen (0 = aus)', 0, 24, true],
         'max_neue_trends_je_lauf' => ['Neue Trends je Lauf höchstens', 0, 50, true],
         'quelle_fehler_signal_ab' => ['Signal ab Fehlern einer Quelle in Folge', 1, 50, true],
     ];

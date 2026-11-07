@@ -32,7 +32,10 @@ class TrendAutomatikCommand extends Command
                 continue;
             }
             $r = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $automatik->lauf($team));
-            $this->line(sprintf('Team %d (%s): %d Themen, %d neue Trends, %d warten (Grenze).', $team->id, $team->name, count($r['liste']), $r['neue_trends'], $r['gestaut']));
+            $this->line(sprintf('Team %d (%s): %d Themen, %d neue Trends, %d warten (Grenze), %d automatisch archiviert.', $team->id, $team->name, count($r['liste']), $r['neue_trends'], $r['gestaut'], count($r['archiv'] ?? [])));
+            foreach ($r['archiv'] ?? [] as $a) {
+                $this->line('  archiviert: '.$a['name'].' (letzte Meldung '.$a['letzte_meldung'].')');
+            }
         }
 
         return self::SUCCESS;

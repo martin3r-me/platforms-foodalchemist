@@ -382,3 +382,54 @@ it('Deploy-sicher: Stufe aus, Schatten an, Scheduler-Schalter aus; Reiter zeigt 
         ->call('laufen')->assertSee('nichts geschrieben');
     expect(FoodAlchemistTrend::count())->toBe(0);
 });
+
+// ── Automatisch archivieren (Dominique 07.11.2026) ──────────────────────
+
+it('Auto-Archiv: nach Abklingen + Archiv-Monaten archiviert (nie „in Umsetzung“), Schatten/0 schreibt nichts, von Hand zurückgeholt bleibt, „Thema ist zurück“', function () {
+    $trend = function (string $name, string $status, int $tageAlt) {
+        $t = $this->trends->anlegen($this->rootTeam, ['name' => $name, 'beleg' => ['quelle' => 'presse', 'url' => 'https://p.test/'.md5($name)]]);
+        FoodAlchemistTrendBeleg::where('trend_id', $t->id)->update(['beobachtet_am' => now()->subDays($tageAlt)->toDateString()]);
+        $t->forceFill(['status' => $status])->save();
+
+        return $t->refresh();
+    };
+    $still = $trend('TEST-93 Freakshakes', 'auf_radar', 300);      // > 6 + 3 Monate
+    $jung = $trend('TEST-93 Matcha', 'geprueft', 200);             // abgeklungen, aber < 9 Monate
+    $eigen = $trend('TEST-93 Hauskonzept', 'in_umsetzung', 300);   // eigene Arbeit: nie
+    $r = TrendAutomatikRegeln::startwerte();
+    expect($r['archiv_monate'])->toBe(3)
+        ->and(array_column($this->svc->archivKandidaten($this->rootTeam, $r), 'trend_id'))->toBe([$still->id])
+        ->and($this->svc->archivKandidaten($this->rootTeam, ['archiv_monate' => 0] + $r))->toBe([]);
+
+    // Schatten-Modus: gelistet, nichts geschrieben
+    ($this->stufe)('bis_geprueft', true);
+    $lauf = $this->svc->lauf($this->rootTeam);
+    expect(array_column($lauf['archiv'], 'trend_id'))->toBe([$still->id])->and($still->refresh()->status)->toBe('auf_radar');
+
+    // Scharf: archiviert mit Vermerk + Ereignis, Status NICHT als „von Hand“ markiert
+    ($this->stufe)('bis_geprueft');
+    $this->svc->lauf($this->rootTeam);
+    $still->refresh();
+    expect($still->status)->toBe('archiviert')
+        ->and($still->einordnung_begruendung)->toContain('Automatisch archiviert am '.now()->format('d.m.Y'))->toContain('vorher „Auf dem Radar“')
+        ->and(collect($still->automatik_ereignisse)->last())->toMatchArray(['art' => 'auto_archiviert', 'letzte_meldung' => now()->subDays(300)->toDateString()])
+        ->and($still->manuell_felder ?? [])->not->toContain('status')
+        ->and($jung->refresh()->status)->toBe('geprueft')->and($eigen->refresh()->status)->toBe('in_umsetzung');
+    $offen = fn (SignalTyp $typ) => FoodAlchemistSignal::where('team_id', $this->rootTeam->id)->where('type', $typ->value)->where('status', SignalStatus::Offen->value)->count();
+
+    // Neue Meldung → „Thema ist zurück“; Status von Hand setzen schließt das Signal
+    FoodAlchemistTrendBeleg::create(['team_id' => $this->rootTeam->id, 'trend_id' => $still->id, 'quelle' => 'presse', 'titel' => 'TEST-93 neu',
+        'url' => 'https://p.test/neu', 'beobachtet_am' => now()->toDateString(), 'fundstueck' => false]);
+    app(SignalDetektorService::class)->laufen($this->rootTeam);
+    expect($offen(SignalTyp::TrendradarThemaZurueck))->toBe(1);
+    $this->trends->statusSetzen($this->rootTeam, $still->id, 'geprueft');
+    app(SignalDetektorService::class)->laufen($this->rootTeam);
+    expect($offen(SignalTyp::TrendradarThemaZurueck))->toBe(0);
+
+    // Von Hand zurückgeholt in DERSELBEN stillen Phase → kein zweites Auto-Archiv
+    FoodAlchemistTrendBeleg::where('url', 'https://p.test/neu')->delete();
+    $this->trends->statusSetzen($this->rootTeam, $still->id, 'geprueft');
+    $this->svc->lauf($this->rootTeam);
+    expect($still->refresh()->status)->toBe('geprueft')
+        ->and($this->svc->archivKandidaten($this->rootTeam, $r))->toBe([]);
+});

@@ -164,6 +164,8 @@ final class SignalCockpit
             . 'oder ändern — das schließt das Signal.',
         'trendradar_thema_abgeklungen' => 'Trendradar → Reiter „Automatik“ bzw. den Trend zum Thema öffnen: keine Sichtung mehr seit der Abklingen-Grenze. '
             . 'Vorschlag: den Trend archivieren. Gelöscht wird nichts automatisch; eine neue Sichtung schließt das Signal.',
+        'trendradar_thema_zurueck' => 'Trendradar → Trend öffnen: Die Automatik hatte den Trend archiviert, seitdem kam wieder eine Meldung. '
+            . 'Prüfen und den Status von Hand wieder setzen (z. B. „Auf dem Radar“) — das schließt das Signal.',
         'trendradar_quelle_fehler' => 'Trendradar → Reiter „Quellen“: die Quelle mit „Quelle neu prüfen“ neu einordnen oder auf MCP umstellen (Bot-Sperre, '
             . 'Übersicht ohne Artikel). Der nächste erfolgreiche Abruf schließt das Signal.',
         'trendradar_mcp_quelle_ueberfaellig' => 'Im MCP-Client: foodalchemist.trend_quellen.GET (abruf_weg=mcp, fällige zuerst) holt die Quelle, Funde mit '
