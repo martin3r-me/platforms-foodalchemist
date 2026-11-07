@@ -133,6 +133,18 @@ class RecipeReifeAdapter implements ReifeAdapter
             $erfuellt[] = 'zutaten_offen';
         }
 
+        // Spec 96: ein Zweck-Derivat (Saft, Abrieb) ohne Ausbeute bleibt unbepreist und unbestellbar — sichtbar statt geraten
+        $ohneAusbeute = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->whereIn('id', $r->ingredients()->whereNotNull('gp_id')->pluck('gp_id'))
+            ->where('is_derivat', true)->whereNotNull('derivat_von_gp_id')->get()
+            ->filter(fn ($gp) => \Platform\FoodAlchemist\Support\Derivat\DerivatAusbeute::fehlt($gp))->pluck('name')->values()->all();
+        if ($ohneAusbeute !== []) {
+            $luecken[] = $this->luecke('derivat_ausbeute', $istVk ? 'gericht' : 'basisrezept', 'wichtig',
+                'Ausbeute fehlt: ' . implode(', ', $ohneAusbeute) . '. Ohne sie bleibt die Zeile ohne Preis und ohne Bestellung über das Ausgangsprodukt.',
+                'foodalchemist.gp_derivat.ESTIMATE');
+        } else {
+            $erfuellt[] = 'derivat_ausbeute';
+        }
+
         // Spec 83 B2: der Posten kommt aus dem Rezept in die Auftragszeile (ProductionOrderService::recomputeOrder) — das gilt für Basisrezepte UND
         // Gerichte (auch das Gericht hat eine eigene Zeile im Auftrag). Ohne Posten bleibt die Zeile „Kein Posten".
         // Gerichte gehen an den Pass: mit gesetzter Team-Vorgabe "Posten für Gerichte" ist die Lücke keine (die Zeile bekommt den Pass).

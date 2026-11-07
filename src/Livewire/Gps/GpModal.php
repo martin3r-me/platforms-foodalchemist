@@ -83,6 +83,9 @@ class GpModal extends Component
 
     public array $builder = self::BUILDER_LEER;
 
+    /** Spec 96: Art und Ausbeute des Derivats (eigene Felder, nicht im Naming-Builder). */
+    public array $derivat = ['art' => '', 'wert' => '', 'basis' => 'g_je_stueck', 'quelle' => null];
+
     /** Manueller Namens-Override — leer = AUTO-SYNC aus dem Builder (I4). */
     public string $manuellerName = '';
 
@@ -207,6 +210,8 @@ class GpModal extends Component
                 $wert = $gp->getAttribute("tag_{$tag}");
                 $this->tags[$tag] = $wert === null ? '' : ($wert ? '1' : '0');
             }
+            $this->derivat = ['art' => (string) ($gp->derivat_art ?? ''), 'wert' => $gp->derivat_ausbeute_wert !== null ? (string) (float) $gp->derivat_ausbeute_wert : '',
+                'basis' => (string) ($gp->derivat_ausbeute_basis ?: 'g_je_stueck'), 'quelle' => $gp->derivat_ausbeute_quelle];   // Spec 96
             $this->defaults = [
                 'cooking_loss_default_pct' => $gp->cooking_loss_default_pct !== null ? (string) (float) $gp->cooking_loss_default_pct : '',
                 'trimming_loss_default_pct' => $gp->trimming_loss_default_pct !== null ? (string) (float) $gp->trimming_loss_default_pct : '',
@@ -248,7 +253,7 @@ class GpModal extends Component
     {
         $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei — VOR dem Reset (braucht gpId)
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
+            $this->reset('gpId', 'builder', 'derivat', 'manuellerName', 'defaults', 'fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         }
     }
 
@@ -268,6 +273,46 @@ class GpModal extends Component
             $masse = app(\Platform\FoodAlchemist\Services\GpMasseService::class);
             $masse->setze($gp, array_intersect_key($this->defaults, \Platform\FoodAlchemist\Support\NonFoodMasse::EINGABE));
             $masse->setzeServierTyp($gp, ($this->defaults['serving_vehicle_vocab_id'] ?? '') === '' ? null : (int) $this->defaults['serving_vehicle_vocab_id']);
+        }
+    }
+
+    /** Spec 96: Art/Ausbeute nur schreiben, wenn geändert — ein unveränderter KI-Wert behält seine Herkunft. */
+    private function speichereDerivat(\Platform\Core\Models\Team $team, FoodAlchemistGp $gp): void
+    {
+        if (! $gp->is_derivat) {
+            return;
+        }
+        $in = [];
+        if ((string) ($gp->derivat_art ?? '') !== $this->derivat['art']) {
+            $in['derivat_art'] = $this->derivat['art'];
+        }
+        $wert = trim(str_replace(',', '.', (string) $this->derivat['wert']));
+        $alt = $gp->derivat_ausbeute_wert !== null ? (float) $gp->derivat_ausbeute_wert : null;
+        if (($wert === '' ? null : (float) $wert) !== $alt || ($wert !== '' && $this->derivat['basis'] !== (string) $gp->derivat_ausbeute_basis)) {
+            $in += ['derivat_ausbeute_wert' => $wert === '' ? null : (float) $wert, 'derivat_ausbeute_basis' => $this->derivat['basis']];
+        }
+        if ($in !== []) {
+            app(\Platform\FoodAlchemist\Services\DerivatAusbeuteService::class)->setze($team, (int) $gp->id, $in);
+        }
+    }
+
+    /** Spec 96: Knopf „Ausbeute schätzen“ — KI, Herkunft ki; ein manueller Wert bleibt. */
+    public function ausbeuteSchaetzen(): void
+    {
+        $this->fehler = null;
+        $gp = $this->gp();
+        $team = Auth::user()?->currentTeamRelation;
+        if ($gp === null || $team === null) {
+            return;
+        }
+        try {
+            $r = app(\Platform\FoodAlchemist\Services\DerivatAusbeuteService::class)->schaetzeKi($team, (int) $gp->id);
+            $gp->refresh();
+            $this->derivat = [...$this->derivat, 'wert' => $gp->derivat_ausbeute_wert !== null ? (string) (float) $gp->derivat_ausbeute_wert : '',
+                'basis' => (string) ($gp->derivat_ausbeute_basis ?: 'g_je_stueck'), 'quelle' => $gp->derivat_ausbeute_quelle];
+            $this->savedToast(match ($r['grund']) { null => 'Ausbeute geschätzt', 'manuell_gepflegt' => 'Ausbeute ist manuell gepflegt — unverändert', default => 'KI war unsicher — keine Ausbeute geschrieben' });
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
         }
     }
 
@@ -326,6 +371,7 @@ class GpModal extends Component
                 $this->speichereTags($gp);
                 $this->speichereDefaults($gp);
                 $this->speichereMasse($gp);
+                $this->speichereDerivat($team, $gp);
             }
 
             if ($this->gpId === null) {

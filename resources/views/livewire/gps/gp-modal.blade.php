@@ -491,6 +491,34 @@
                             @endif
                         @endif
                     </div>
+                    {{-- Spec 96: Art und Ausbeute (nur am gespeicherten Derivat) --}}
+                    @if(! $neu && $gp !== null && $gp->is_derivat)
+                        @php($artAbgeleitet = \Platform\FoodAlchemist\Support\Derivat\DerivatArt::von($gp))
+                        <div class="flex flex-col gap-2" data-derivat-ausbeute>
+                            <p class="{{ $titelKlein }}">Art</p>
+                            <x-fa::select wire:model="derivat.art" size="sm" aria-label="Art des Derivats">
+                                <option value="">Aus dem Namen ({{ $artAbgeleitet === 'zweck' ? 'Zweckverarbeitung' : 'Nebenprodukt' }})</option>
+                                <option value="nebenprodukt">Nebenprodukt — fällt ohnehin an, 0 €, wird nie bestellt</option>
+                                <option value="zweck">Zweckverarbeitung — Mutter wird dafür gekauft (Saft, Abrieb)</option>
+                            </x-fa::select>
+                            <p class="{{ $titelKlein }}">Ausbeute aus dem Ausgangsprodukt</p>
+                            <div class="flex items-center gap-2">
+                                <x-fa::input type="text" inputmode="decimal" wire:model="derivat.wert" placeholder="z. B. 30" aria-label="Ausbeute" class="w-24" />
+                                <x-fa::select wire:model="derivat.basis" size="sm" aria-label="Einheit der Ausbeute">
+                                    <option value="g_je_stueck">g je Stück</option>
+                                    <option value="prozent">% der Masse</option>
+                                </x-fa::select>
+                                <x-fa::button size="sm" variant="ghost" wire:click="ausbeuteSchaetzen" wire:loading.attr="disabled">Ausbeute schätzen</x-fa::button>
+                            </div>
+                            <span class="{{ $leise }}">
+                                @if($derivat['quelle'] === 'ki') KI-Schätzung — überschreibbar.
+                                @elseif($derivat['quelle'] === 'manual') Von Hand gepflegt.
+                                @elseif(\Platform\FoodAlchemist\Support\Derivat\DerivatAusbeute::fehlt($gp)) Ausbeute fehlt — ohne sie bleibt die Zeile im Rezept ohne Preis.
+                                @endif
+                                Zweckverarbeitung: EK und Bestellung über das Ausgangsprodukt ÷ Ausbeute.
+                            </span>
+                        </div>
+                    @endif
                 @endif
             </x-fa::section>
         </div>{{-- /Reiter STAMMDATEN --}}

@@ -28,6 +28,7 @@ beforeEach(function () {
     $this->internKontext = new ToolContext($this->user, $this->rootTeam);
     $this->vkId = $this->registry->get('foodalchemist.verkaufsrezepte.POST')->execute(['name' => 'HG: Umleitung'], $this->kontext)->data['id'];
     $this->gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ei'], $this->kontext)->data['id'];
+    $this->derivatId = $this->registry->get('foodalchemist.gps.POST')->execute(['name' => 'Ei: frisch, Schale', 'hauptzutat' => 'Ei', 'is_derivat' => true, 'derivat_von_gp_id' => $this->gpId], $this->kontext)->data['id'];   // Spec 96
     $this->basisId = $this->makeRecipe($this->rootTeam, 'Reduktion: Rotwein-Schalotte', ['status' => 'draft', 'description' => 'Sirup.', 'preparation' => '1. Reduzieren.'])->id;
     $this->conceptId = $this->makeConcept($this->rootTeam, 'Sommer-Buffet')->id;
     // Foodbook/Kapitel, Angebot/Kapitel und Speisekarte über die Tools anlegen (die Antwort-Form variiert: id oder {objekt: {id}})
@@ -76,6 +77,7 @@ beforeEach(function () {
 dataset('umgeleitete_tools', function () {
     return [
         'gp_forms.ESTIMATE' => ['foodalchemist.gp_forms.ESTIMATE', fn ($t) => ['gp_id' => $t->gpId], 'gp.zaehl_einheiten'],
+        'gp_derivat.ESTIMATE' => ['foodalchemist.gp_derivat.ESTIMATE', fn ($t) => ['gp_id' => $t->derivatId], 'gp.derivat_ausbeute'],
         'presentation_designs.GENERATE_CSS' => ['foodalchemist.presentation_designs.GENERATE_CSS', fn ($t) => ['brief' => 'Dunkel, edel'], 'praesentation.design_css'],
         'recipe_coherence.POST' => ['foodalchemist.recipe_coherence.POST', fn ($t) => ['recipe_id' => $t->vkId, 'mode' => 'judge'], 'vk.kohaerenz'],
         'recipe_klasse.POST' => ['foodalchemist.recipe_klasse.POST', fn ($t) => ['recipe_id' => $t->vkId], 'vk.speisen_klasse'],
@@ -110,7 +112,7 @@ dataset('umgeleitete_tools', function () {
 it('der Test deckt genau die umgeleiteten Tools ab', function () {
     $ds = array_map(fn ($z) => $z[0], (function () {
         return [
-            ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
+            ['foodalchemist.gp_forms.ESTIMATE'], ['foodalchemist.gp_derivat.ESTIMATE'], ['foodalchemist.presentation_designs.GENERATE_CSS'], ['foodalchemist.recipe_coherence.POST'],
             ['foodalchemist.recipe_klasse.POST'], ['foodalchemist.recipe_rollen.POST'], ['foodalchemist.recipe_sensorik.POST'],
             ['foodalchemist.recipes.GENERATE'], ['foodalchemist.la.GP_ABGLEICH'], ['foodalchemist.concept_wording.GENERATE'], ['foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
             ['foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'], ['foodalchemist.angebot.KUNDENTEXT_GENERATE'], ['foodalchemist.planung_leitplanken.EXTRACT'],

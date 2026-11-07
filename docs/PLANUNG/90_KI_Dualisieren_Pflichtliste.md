@@ -109,6 +109,7 @@ Status: `angeschlossen` · `offen` · `Ausnahme (Vorschlag)`. Ausnahmen gelten e
 | 87 | `src/Jobs/TrendEingangErschliessenJob.php::arbeite` | trend.eingang_erschliessen | 1 | a | P2 | trend_eingang.POST, trend_eingang.ERSCHLIESSEN (Job-Weg) | angeschlossen | Spec 93 B (30.10.): `KiExternWiederholbar` (`trend-erschliessen:{team}:{eingang}`); Extern-Flag aus dem MCP-Aufruf (`KiExternModus::fuerDispatch`, beim Einreichen gelesen, Dispatch nach dem Commit). Plattform-Abruf und Klick = Plattform-KI. Spec93BErschliessenBuendelnTest |
 | 89 | `src/Jobs/TrendEingangVertiefenJob.php::arbeite` | trend.eingang_vertiefen | 1 | a | P2 | trend_eingang.VERTIEFEN (Job-Weg), Knopf „Vertiefen“, Befehl foodalchemist:trend-eingang-vertiefen | angeschlossen | Vertiefung (05.11.): `KiExternWiederholbar` (`trend-vertiefen:{team}:{eingang}`), Extern-Flag aus dem MCP-Aufruf (`KiExternModus::fuerDispatch`, Dispatch nach dem Commit). Liest die Ziel-URL vor dem propose() über SichererAbruf, bei Bezahlschranke/Bot-Sperre kein KI-Aufruf; Neustart nach ANTWORT liest erneut (`ZIEL_GILT`). Zahlen-Riegel in der Übernahme. TrendVertiefungTest |
 | 90 | `src/Jobs/MarktEinordnungJob.php::arbeite` | markt.einordnung | 1 | a | P2 | marktdaten.ABRUF (apply, Job-Weg), marktdaten.EINORDNEN, Knopf „Einordnung erzeugen“ | angeschlossen | Markt in Zahlen (05.11.): `KiExternWiederholbar` (`markt-einordnung:{team}:{einordnung}`), Extern-Flag aus dem MCP-Aufruf (`KiExternModus::fuerDispatch`, Dispatch nach dem Commit). Kontext nur aus gespeicherten Werten (kein Netz beim Neustart). Zahlen- und Prognose-Riegel in der Übernahme; je Team und Werte-Stand eine Einordnung (werte_hash). MarktEinordnungTest |
+| 91 | `src/Services/DerivatAusbeuteService.php::schaetzeKi` | gp.derivat_ausbeute | 1 | a | P2 | GpDerivatEstimateTool, DerivatAusbeuteNachholenJob (nach Rezept-Import) | angeschlossen | Spec 96 (06.11.): Ausbeute eines Derivats aus der Mutter, Herkunft ki, manuell gewinnt. MCP-Umleitung gp_derivat.ESTIMATE (Tabelle D); der Job ist `KiExternWiederholbar` (`derivat-ausbeute:{team}:{rezept}`), Extern-Flag aus dem MCP-Aufruf (`KiExternModus::fuerDispatch`), Dispatch nach dem Commit. Spec96DerivatAusbeuteTest |
 
 ## B · Zusatzwege
 
@@ -155,6 +156,7 @@ Ein MCP-Aufruf eines umgeleiteten Tools liefert `status: ki_auftrag_offen` mit A
 | Tool | Status | Begründung |
 |---|---|---|
 | `foodalchemist.gp_forms.ESTIMATE` | umgeleitet | ein `propose()` (`gp.zaehl_einheiten`), danach nur DB-Schreiben |
+| `foodalchemist.gp_derivat.ESTIMATE` | umgeleitet | ein `propose()` (`gp.derivat_ausbeute`), danach nur DB-Schreiben (Spec 96) |
 | `foodalchemist.presentation_designs.GENERATE_CSS` | umgeleitet | ein `propose()`, schreibt nicht |
 | `foodalchemist.recipe_coherence.POST` | umgeleitet | ein `propose()` je Modus, danach DB-Schreiben |
 | `foodalchemist.recipe_klasse.POST` | umgeleitet | ein `propose()`, optional DB-Übernahme; fängt `Throwable`, darum meldet die Hülle über den Modus |

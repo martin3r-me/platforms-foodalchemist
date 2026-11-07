@@ -86,6 +86,10 @@ class IngredientMatchService
         ?string $zubereitung = null,        // 29.10.: eigen | zukauf | ohne aus den Leitplanken (MatchLeitplanken::zubereitung)
         ?float $menge = null,               // Spec 95c: Menge der Zeile (in $einheit) — Gewürzmenge wählt die getrocknete Form
     ): array {
+        // Spec 96: „Limette (Saft)“, „Saft von 2 Zitronen“ → Frucht-Derivat (vor den Hinweisen: „(Saft)“ ist hier Ware, kein Zusatz)
+        if ($basisVariante && ($frucht = Matching\FruchtDerivat::treffer($team, $ingredientName, $convenience)) !== null) {
+            return $frucht;
+        }
         // Spec 95: Hinweis-Zusätze aus dem Rezepttext („(1 EL)“, „, Raumtemperatur“, „(optional)“) tragen keine Ware — vor jedem Abgleich weg
         $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);
         // Spec 95c: die Zählform ist Einheit, nicht Ware („Knoblauchzehen“ sucht „Knoblauch“; die Zeile bekommt die Zehe als Einheit)
