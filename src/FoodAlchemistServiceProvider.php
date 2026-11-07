@@ -186,6 +186,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
+                \Platform\FoodAlchemist\Console\MarktdatenAbrufenCommand::class, // Markt in Zahlen monatlich (07.11.2026)
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\TrendQuellenAbrufenCommand::class, // Spec 93 A
                 \Platform\FoodAlchemist\Console\TrendEingangTitelNachziehenCommand::class, // Einmal-Reparatur Übersichts-Titel (BZfE)
@@ -352,6 +353,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->onOneServer()
                     ->runInBackground()
                     ->description('FoodAlchemist: Trendradar → Google Trends je Trend messen (DataForSEO)');
+            }
+
+            // Markt in Zahlen (Dominique 07.11.2026): monatlich Destatis holen (Master-Team), danach stößt der Abruf die Einordnung an.
+            if (config('foodalchemist.scheduler.marktdaten_enabled', true)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\MarktdatenAbrufenCommand::class)
+                    ->monthlyOn((int) config('foodalchemist.scheduler.marktdaten_tag', 25), config('foodalchemist.scheduler.marktdaten_zeit', '06:20'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Observatorium → Markt in Zahlen (Destatis) holen, Einordnung anstoßen');
             }
 
             // Spec 93 A: täglicher Quellen-Abruf (nur fällige plattform-Quellen). Standard AUS, bis Dominique einschaltet.
