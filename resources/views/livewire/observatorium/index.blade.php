@@ -4,7 +4,7 @@
     $titel = match ($ansicht) {
         'wettbewerb' => 'Wer bewegt den Markt?', 'news' => 'Was die Gastronomie bewegt.', 'ideen' => 'Aus einer Idee wird dein nächstes Angebot.',
         'markt' => 'Bewegung im Markt. Chancen für euch.', 'merkliste' => 'Gute Gedanken bleiben.',
-        'radar' => 'Entwicklungen mit Substanz.', 'lagebild' => 'Die Woche auf einen Blick.', 'pinnwand' => 'Was euch inspiriert.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
+        'radar' => 'Entwicklungen mit Substanz.', 'lagebild' => 'Die Woche auf einen Blick.', 'zahlen' => 'Der Markt in Zahlen.', 'pinnwand' => 'Was euch inspiriert.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
         default => 'Heute entdecken. Morgen gestalten.',
     };
     $untertitel = match ($ansicht) {
@@ -15,6 +15,7 @@
         'merkliste' => 'Deine persönliche Sammlung und Trend-Prüfliste.',
         'radar' => 'Bewertete Trends und Hypes – bewusst freigegeben.',
         'lagebild' => 'Was diese Woche wichtig war – jede Aussage mit Quelle.',
+        'zahlen' => 'Amtliche Preise und Umsätze für die Gastronomie – Destatis, monatlich.',
         'pinnwand' => 'Gemeinsam fürs Team: Meldungen und eigene Ideen.',
         'briefing' => 'Eine kompakte Auswahl aus deiner aktuellen Recherche und deinen Filtern.',
         default => 'Dein Blick auf Gastronomie, Food-Ideen und neue Möglichkeiten.',
@@ -68,6 +69,8 @@
             @include('foodalchemist::livewire.observatorium.pinnwand')
         @elseif($ansicht === 'lagebild')
             @include('foodalchemist::livewire.observatorium.lagebild')
+        @elseif($ansicht === 'zahlen')
+            @include('foodalchemist::livewire.observatorium.marktdaten')
         @elseif($ansicht === 'radar')
             @unless($istHandy)
                 <div class="fa-obs-filters"><button type="button" class="fa-obs-button" x-on:click="filterOffen = !filterOffen" :aria-expanded="filterOffen.toString()" aria-controls="obs-handy-filter">@svg('heroicon-o-adjustments-horizontal') Radar filtern @if($radarFilterAktiv)<span class="fa-obs-pill">Aktiv</span>@endif</button></div>
@@ -96,7 +99,6 @@
             @if($istHandy)<button type="button" class="fa-obs-button primary" x-on:click="filterOffen = false">Ergebnisse ansehen</button>@endif
             </div>
 
-            @if($ansicht === 'markt')@include('foodalchemist::livewire.observatorium.marktdaten')@endif
             @if($ansicht === 'entdecken' && $lagebild && $eintraege->currentPage() === 1)@include('foodalchemist::livewire.observatorium.lagebild-teaser')@endif
 
             @if($ansicht === 'wettbewerb')

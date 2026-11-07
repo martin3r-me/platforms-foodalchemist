@@ -82,7 +82,7 @@ it('liest echte GENESIS-CSV-Strukturen aus begrenzten ZIP-Antworten und erhält 
     expect($reihen[0]['aktuell']['monat'])->toBe('2026-09')->and($reihen[0]['aktuell']['wert'])->toEqual(137.2)
         ->and($reihen[1]['aktuell']['wert'])->toEqual(137.8)->and($reihen[0]['neuere_monate_ohne_wert'])->toBe(1)
         ->and($reihen[0]['punkte'])->toHaveCount(3)->and($reihen[0]['punkte'][2]['wert'])->toBeNull();
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('137,2')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSee('137,2')
         ->assertSee('2026-09')->assertSee('Für neuere Monate liegen noch keine Werte vor.');
 });
 
@@ -101,7 +101,7 @@ it('zeigt fehlenden Zugang ohne Netzwerk, Zahlen oder Erfolg zu erfinden', funct
     expect($r['probelauf'])->toBeTrue()->and($r['ergebnisse'][0]['fehler'])->toContain('Zugang fehlt')
         ->and(Daten::count())->toBe(0)->and($this->svc->lesen($this->rootTeam)['zugang_eingerichtet'])->toBeFalse();
     Http::assertNothingSent();
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('Noch nicht verbunden')->assertSee('Markt in Zahlen')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSee('Noch nicht verbunden')->assertSee('Markt in Zahlen')
         ->assertSee('keine Einkaufs- oder Betriebskosten')->call('ansichtSetzen', 'news')->assertDontSeeHtml('data-observatorium-marktdaten');
 });
 
@@ -174,7 +174,7 @@ it('zeigt gespeicherte Monatswerte mobil ohne Render-Netzwerkaufruf', function (
     $this->svc->abrufen($this->rootTeam, true);
     Http::fake();
     $this->withHeaders(['User-Agent' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1']);
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-observatorium-marktdaten')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-observatorium-marktdaten')
         ->assertSee('2026-09')->assertSee('110,0')->assertSee('10,0')->assertSee('Original-Kennzeichnungen');
     Http::assertNothingSent();
 });
@@ -205,7 +205,7 @@ it('formuliert die Klartext-Aussage nur aus den abgerufenen Werten und blendet M
         ->and($m['aussage']['monat'])->toBe('2026-09')->and($m['aussage']['quellen'])->toBe(['61111-0004'])
         ->and(array_column($m['reihen'][0]['tabelle_werte'], 'monat'))->toBe(['2026-09', '2025-09'])
         ->and($m['reihen'][0]['tabelle_werte'][0])->not->toHaveKey('original');
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-aussage')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-aussage')
         ->assertSee('Die Restaurantpreise steigen stärker')->assertDontSee('unbekannt')->assertSeeHtml('fa-obs-marktdaten-tabelle');
 });
 
@@ -242,7 +242,7 @@ it('nimmt den Großhandel statt des VPI Lebensmittel, sobald er Werte hat, mit U
         ->and(array_column($m['reihen'][0]['unterreihen'], 'serie'))->toBe(['grosshandel_fleisch'])
         ->and($m['aussagen'][0]['text'])->toBe('Großhandel Nahrungsmittel +5,0 %, Restaurantpreise +3,1 % zum Vorjahresmonat: Die Großhandelspreise steigen stärker als die Restaurantpreise (Abstand 1,9 Prozentpunkte) – der Einkauf verteuert sich schneller, die Kalkulation gerät unter Druck.')
         ->and($m['aussagen'][0]['quellen'])->toBe(['61281-0004', '61111-0004']);
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-unterreihen')->assertSee('+8,2 %')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-unterreihen')->assertSee('+8,2 %')
         ->assertSee('Originaltabelle 61281-0004 ansehen')->assertDontSee('Nahrungsmittel & alkoholfreie Getränke (Verbraucherpreisindex)');
 });
 
@@ -347,7 +347,7 @@ it('Kantinen-Aussage gegen den Großhandel (sonst gegen Restaurants), Detailzeil
         ->and($gh['staerkste_unterreihe']['serie'])->toBe('grosshandel_getraenke')
         ->and(array_column($m['reihen'], 'serie'))->toContain('kantinenpreise')->not->toContain('vpi_rind')
         ->and(array_column($m['aussagen'], 'schluessel'))->toContain('kantine');
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSee('3 Detailzeilen')->assertSee('stärkste Bewegung: Getränke -6,5 %')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSee('3 Detailzeilen')->assertSee('stärkste Bewegung: Getränke -6,5 %')
         ->assertSee('Verbraucherpreise im Laden (zum Vergleich)')->assertSee('Rind- und Kalbfleisch')->assertSee('Kantinen und Mensen');
 });
 
@@ -377,4 +377,12 @@ it('Großhandel 61281-0004: je Monat zählt nur die Indexzeile (2021=100), die b
     $r = $this->svc->abrufen($this->rootTeam, true, ['grosshandel_nahrungsmittel']);
     expect($r['ergebnisse'][0]['fehler'])->toBeNull()->and($r['ergebnisse'][0]['einheit'])->toBe('2021=100');
     expect(collect($this->svc->lesen($this->rootTeam)['reihen'])->firstWhere('serie', 'grosshandel_nahrungsmittel')['vorjahr_prozent'])->toBe(5.0);
+});
+
+it('trennt Markt in Zahlen als eigenen Reiter von Markt & Chancen (Dominique 07.11.2026)', function () {
+    config(['foodalchemist.marktdaten.genesis_token' => '']);
+    expect(array_keys(ObservatoriumInhalt::ANSICHTEN))->toContain('markt', 'zahlen')
+        ->and(ObservatoriumInhalt::ANSICHTEN['zahlen'][0])->toBe('Markt in Zahlen');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-observatorium-marktdaten')->assertSee('Chancen prüfen')
+        ->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-observatorium-marktdaten')->assertDontSee('Alle Marktbewegungen')->assertDontSee('Frische Perspektiven für deine Branche');
 });
