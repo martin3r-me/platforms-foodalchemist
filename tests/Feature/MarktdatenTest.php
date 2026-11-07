@@ -408,3 +408,16 @@ it('holt Markt in Zahlen monatlich per Kommando ins Master-Team und plant den La
     $plan = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())->first(fn ($e) => str_contains((string) $e->command, 'foodalchemist:marktdaten-abrufen'));
     expect($plan)->not->toBeNull()->and($plan->expression)->toBe('20 6 25 * *');
 });
+
+it('meldet „kein Datenquader“ (GENESIS-Status 7000) klar und behält gespeicherte Werte', function () {
+    marktHttp();
+    $this->svc->abrufen($this->rootTeam, true);
+    $vorher = Daten::where('serie', 'gastro_umsatz_nominal')->value('punkte');
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake([GenesisClient::ENDPOINT => Http::response(['Ident' => ['Service' => 'data'], 'Status' => ['Code' => 7000, 'Content' => 'wurde kein Datenquader gefunden!', 'Type' => 'Information']], 200)]);
+    $r = collect($this->svc->abrufen($this->rootTeam, true)['ergebnisse'])->firstWhere('serie', 'gastro_umsatz_nominal');
+    expect($r['fehler'])->toContain('derzeit keine Daten')->not->toContain('Flat-File')
+        ->and(Daten::where('serie', 'gastro_umsatz_nominal')->value('punkte'))->toEqual($vorher)
+        ->and(Daten::where('serie', 'gastro_umsatz_nominal')->value('letzter_fehler'))->toContain('kein Datenquader');
+});

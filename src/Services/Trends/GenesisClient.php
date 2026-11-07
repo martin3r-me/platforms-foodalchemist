@@ -30,7 +30,16 @@ class GenesisClient
         ]);
 
         // tablefile liefert auch bei compress=false ein ZIP. Nie auf die Platte entpacken.
-        return str_starts_with($r->body(), "PK\x03\x04") ? $this->csvAusZip($r->body()) : $r->body();
+        if (str_starts_with($r->body(), "PK\x03\x04")) {
+            return $this->csvAusZip($r->body());
+        }
+        // Status 7000 „kein Datenquader“: Destatis hat für die Tabelle gerade keine Daten (Umbau/Aktualisierung) — kein Formatfehler.
+        $j = json_decode($r->body(), true);
+        if (is_array($j) && (int) ($j['Status']['Code'] ?? 0) === 7000) {
+            throw new \RuntimeException("Destatis liefert für Tabelle {$tabelle} derzeit keine Daten (kein Datenquader). Gespeicherte Werte bleiben; nächster Abruf versucht es erneut.");
+        }
+
+        return $r->body();
     }
 
     /** Aufbau einer Tabelle (Merkmale samt Codes), gekürzt. Nur zum Nachschlagen der Reihen-Codes. */
