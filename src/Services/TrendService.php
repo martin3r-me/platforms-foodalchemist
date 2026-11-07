@@ -873,14 +873,26 @@ class TrendService
         }
     }
 
+    /**
+     * Titel einer neuen Inspiration (Dominique 07.11.2026): nie die Domain des Links — „www.instagram.com“ stand sonst als
+     * „Entwicklung“ im Trendradar. Reihenfolge: Titel › erste Zeile der Notiz › Schlagworte › „Instagram-Fundstück vom …“.
+     */
     private function inspirationsTitel(array $daten): string
     {
         $titel = trim((string) ($daten['titel'] ?? ''));
-        if ($titel === '' && ! empty($daten['url'])) {
-            $titel = (string) (parse_url((string) $daten['url'], PHP_URL_HOST) ?: $daten['url']);
+        if ($titel === '') {
+            $zeile = trim((string) strtok(trim((string) ($daten['notiz'] ?? '')), "\n"));
+            $titel = mb_strlen($zeile) > 80 ? rtrim(mb_substr($zeile, 0, 79)).'…' : $zeile;
+        }
+        if ($titel === '' && ($worte = $this->liste_($daten['schlagworte'] ?? null, true)) !== null) {
+            $titel = implode(', ', array_map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)).mb_substr($w, 1), array_slice($worte, 0, 3)));
+        }
+        if ($titel === '') {
+            $titel = (['instagram' => 'Instagram-Fundstück', 'social_media' => 'Social-Media-Fundstück'][(string) ($daten['quelle'] ?? '')] ?? 'Fundstück')
+                .' vom '.now()->format('d.m.Y');
         }
 
-        return mb_substr($titel !== '' ? $titel : 'Fundstück vom '.now()->format('d.m.Y'), 0, 255);
+        return mb_substr($titel, 0, 255);
     }
 
     /** @return list<string> */

@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Livewire\Trendradar\Index as TrendradarIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg;
+use Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendSignal;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TrendService;
@@ -700,4 +701,22 @@ it('Radar (09.10.): Trends derselben Kategorie und Ebene überlappen nicht, Posi
     foreach ($deko as $t) {
         expect($pos[$t->id]['x'])->toBeGreaterThan(320);
     }
+});
+
+it('Fundstück ohne Titel: Inspiration heißt nie wie die Domain (www.instagram.com), sondern Notiz › Schlagworte › „Instagram-Fundstück vom …“', function () {
+    $nurLink = $this->svc->fundstueckAblegen($this->rootTeam, ['url' => 'https://www.instagram.com/reel/Dd6tsWlReuQ/?dlrf=x'], null, $this->leser->id);
+    $mitNotiz = $this->svc->fundstueckAblegen($this->rootTeam, ['url' => 'https://www.instagram.com/p/a', 'notiz' => "Brioche-Bun mit Kimchi-Butter\nGesehen in Köln"], null, $this->leser->id);
+    $mitWorten = $this->svc->fundstueckAblegen($this->rootTeam, ['url' => 'https://www.instagram.com/p/b', 'schlagworte' => '#kimchi, butter'], null, $this->leser->id);
+    $video = $this->svc->fundstueckAblegen($this->rootTeam, ['quelle' => 'social_media', 'url' => 'https://www.youtube.com/watch?v=z'], null, $this->leser->id);
+    $langeNotiz = $this->svc->fundstueckAblegen($this->rootTeam, ['url' => 'https://www.instagram.com/p/c', 'notiz' => str_repeat('Sehr lange Notiz ', 10)], null, $this->leser->id);
+    $mitTitel = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Matcha-Croissant', 'url' => 'https://www.instagram.com/p/d', 'notiz' => 'egal'], null, $this->leser->id);
+
+    $titel = fn ($b) => FoodAlchemistTrendInspiration::find($b->inspiration_id)->titel;
+    expect($titel($nurLink))->toBe('Instagram-Fundstück vom '.now()->format('d.m.Y'))
+        ->and($titel($mitNotiz))->toBe('Brioche-Bun mit Kimchi-Butter')
+        ->and($titel($mitWorten))->toBe('Kimchi, Butter')
+        ->and($titel($video))->toBe('Social-Media-Fundstück vom '.now()->format('d.m.Y'))
+        ->and(mb_strlen($titel($langeNotiz)))->toBeLessThanOrEqual(80)->and($titel($langeNotiz))->toEndWith('…')
+        ->and($titel($mitTitel))->toBe('Matcha-Croissant');
+    expect(FoodAlchemistTrendInspiration::where('titel', 'like', '%www.%')->exists())->toBeFalse();
 });
