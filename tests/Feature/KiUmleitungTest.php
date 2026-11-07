@@ -28,7 +28,9 @@ beforeEach(function () {
     $this->internKontext = new ToolContext($this->user, $this->rootTeam);
     $this->vkId = $this->registry->get('foodalchemist.verkaufsrezepte.POST')->execute(['name' => 'HG: Umleitung'], $this->kontext)->data['id'];
     $this->gpId = $this->registry->get('foodalchemist.gps.POST')->execute(['hauptzutat' => 'Ei'], $this->kontext)->data['id'];
-    $this->derivatId = $this->registry->get('foodalchemist.gps.POST')->execute(['name' => 'Ei: frisch, Schale', 'hauptzutat' => 'Ei', 'is_derivat' => true, 'derivat_von_gp_id' => $this->gpId], $this->kontext)->data['id'];   // Spec 96
+    $derivat = $this->makeGp($this->rootTeam, 'Ei: frisch, Schale');   // Spec 96 · direkt am Model: gps.POST lehnt Derivat-Anlage ab
+    $derivat->update(['is_derivat' => true, 'derivat_von_gp_id' => $this->gpId, 'requires_la' => false]);
+    $this->derivatId = (int) $derivat->id;
     $this->basisId = $this->makeRecipe($this->rootTeam, 'Reduktion: Rotwein-Schalotte', ['status' => 'draft', 'description' => 'Sirup.', 'preparation' => '1. Reduzieren.'])->id;
     $this->conceptId = $this->makeConcept($this->rootTeam, 'Sommer-Buffet')->id;
     // Foodbook/Kapitel, Angebot/Kapitel und Speisekarte über die Tools anlegen (die Antwort-Form variiert: id oder {objekt: {id}})
