@@ -27,7 +27,7 @@ class GpDerivatPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
             . 'derivat_art: nebenprodukt (Abschnitte, Parüren, Knochen — fällt ohnehin an, EK 0 €, wird nie bestellt) | zweck '
             . '(Saft, Abrieb — die Mutter wird dafür gekauft, EK und Bestellung über die Mutter ÷ Ausbeute); leer = aus dem Namen abgeleitet. '
             . 'Ausbeute: derivat_ausbeute_basis g_je_stueck (Gramm Derivat aus einem Stück Mutter, z. B. Limette Saft 30) oder prozent '
-            . '(Anteil der Mutter-Masse); derivat_ausbeute_wert leer löscht. Gilt als manuell gepflegt (die KI überschreibt ihn nicht).';
+            . '(Anteil der Mutter-Masse); ausbeute_loeschen=true löscht. Gilt als manuell gepflegt (die KI überschreibt ihn nicht).';
     }
 
     public function getSchema(): array
@@ -36,8 +36,10 @@ class GpDerivatPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'gp_id' => ['type' => 'integer', 'description' => 'Derivat-GP (team-eigen).'],
-                'derivat_art' => ['type' => ['string', 'null'], 'enum' => [...DerivatArt::ARTEN, null], 'description' => 'nebenprodukt | zweck | null (abgeleitet).'],
-                'derivat_ausbeute_wert' => ['type' => ['number', 'null'], 'description' => 'Ausbeute-Wert; null löscht.'],
+                // Nur einfache Typen: Union-Typen (["string","null"]) bringen den Core-ToolExecutor zum Absturz
+                'derivat_art' => ['type' => 'string', 'enum' => [...DerivatArt::ARTEN, ''], 'description' => 'nebenprodukt | zweck | leerer String (aus dem Namen abgeleitet).'],
+                'derivat_ausbeute_wert' => ['type' => 'number', 'description' => 'Ausbeute-Wert (> 0, Prozent höchstens 100).'],
+                'ausbeute_loeschen' => ['type' => 'boolean', 'description' => 'true löscht die Ausbeute (statt derivat_ausbeute_wert).'],
                 'derivat_ausbeute_basis' => ['type' => 'string', 'enum' => DerivatAusbeute::BASEN, 'description' => 'g_je_stueck | prozent.'],
             ],
             'required' => ['gp_id'],
@@ -58,8 +60,11 @@ class GpDerivatPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Derivate pflegt nur das Besitzer-Team.', 'ACCESS_DENIED');
         }
         try {
-            $gp = app(DerivatAusbeuteService::class)->setze($team, (int) $gp->id,
-                array_intersect_key($arguments, array_flip(['derivat_art', 'derivat_ausbeute_wert', 'derivat_ausbeute_basis'])));
+            $felder = array_intersect_key($arguments, array_flip(['derivat_art', 'derivat_ausbeute_wert', 'derivat_ausbeute_basis']));
+            if (! empty($arguments['ausbeute_loeschen'])) {
+                $felder['derivat_ausbeute_wert'] = null;
+            }
+            $gp = app(DerivatAusbeuteService::class)->setze($team, (int) $gp->id, $felder);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

@@ -91,4 +91,31 @@ final class DerivatBedarf
 
         return $m !== null ? ['sammelbestand' => false, 'gp' => $mutter, 'menge_g' => $m['menge_g']] : null;
     }
+
+    /**
+     * Bestellziel für einen direkt bestellten GP (OrderService): [gp, menge_g] — Zweck-Derivat → Mutter, sonst unverändert;
+     * null = Nebenprodukt aus dem Sammelbestand, wird nie bestellt.
+     *
+     * @return array{0: FoodAlchemistGp, 1: float}|null
+     */
+    public static function bestellziel(FoodAlchemistGp $gp, float $mengeG): ?array
+    {
+        $u = self::direkt($gp, $mengeG);
+        if ($u === null) {
+            return [$gp, $mengeG];
+        }
+
+        return $u['sammelbestand'] ? null : [$u['gp'], $u['menge_g']];
+    }
+
+    /**
+     * Lieferanten-Gruppen eines Bedarfsvorschlags ohne die Sammelbestand-Gruppe (Nebenprodukte werden nie bestellt).
+     *
+     * @param  array<int|string, array<string, mixed>>  $gruppen
+     * @return array<int|string, array<string, mixed>>
+     */
+    public static function ohneSammelbestand(array $gruppen): array
+    {
+        return array_filter($gruppen, fn ($g) => ! ($g['sammelbestand'] ?? false));
+    }
 }

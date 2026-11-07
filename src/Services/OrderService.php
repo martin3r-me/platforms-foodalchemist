@@ -364,13 +364,7 @@ class OrderService
                 if ($gp === null) {
                     continue;
                 }
-                $grams = $this->sourceGramsForGp($gp, $source);
-                if (($umleit = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::direkt($gp, $grams)) !== null) {   // Spec 96: wie previewGp
-                    if ($umleit['sammelbestand']) {
-                        continue;
-                    }
-                    [$gp, $grams] = [$umleit['gp'], $umleit['menge_g']];
-                }
+                if (($bz = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::bestellziel($gp, $this->sourceGramsForGp($gp, $source))) === null) { continue; } [$gp, $grams] = $bz;   // Spec 96: wie previewGp
                 $lead = $this->leadLa->effektiverLead($gp, $team, $strategie);
                 if ($lead?->supplier_id === null || $lead?->id === null) {
                     continue;
@@ -1108,11 +1102,7 @@ class OrderService
 
             return;
         }
-        if (($umleit = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::direkt($gp, $grams)) !== null) {   // Spec 96: Nebenprodukt nie bestellen, Zweck-Derivat → Mutter
-            if ($umleit['sammelbestand']) { $unresolved[] = $this->unresolved($source, $label, 'sammelbestand', 'Nebenprodukt aus dem Sammelbestand, wird nicht bestellt.'); return; }
-            [$gp, $grams] = [$umleit['gp'], $umleit['menge_g']];
-        }
-
+        if (($bz = \Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::bestellziel($gp, $grams)) === null) { $unresolved[] = $this->unresolved($source, $label, 'sammelbestand', 'Nebenprodukt aus dem Sammelbestand, wird nicht bestellt.'); return; } [$gp, $grams] = $bz;   // Spec 96: Zweck-Derivat → Mutter
         $overrideKey = $this->overrideKey($sourceRef, (int) $gp->id);
         $lead = $this->leadLa->effektiverLead($gp, $team, $strategie);
         $lead = $this->overrideLead($team, $gp, $overrides[$overrideKey] ?? null) ?? $lead;
@@ -1156,12 +1146,16 @@ class OrderService
         $vorschlag = $this->planung->bestellvorschlag($team, $ziel, $strategie, $rezeptLager);
         $warnings = array_merge($warnings, $vorschlag['warnungen'] ?? []);
 
-        foreach ($vorschlag['lieferanten'] ?? [] as $grp) {
+        foreach (\Platform\FoodAlchemist\Support\Derivat\DerivatBedarf::ohneSammelbestand($vorschlag['lieferanten'] ?? []) as $grp) {   // Spec 96: Sammelbestand nie bestellen
             $supplierId = $grp['supplier_id'] ?? null;
-            if ($grp['sammelbestand'] ?? false) { continue; }   // Spec 96: Nebenprodukte aus dem Sammelbestand werden nie bestellt
             if ($supplierId === null) {
                 foreach (($grp['positionen'] ?? []) as $pos) {
-                    $unresolved[] = $this->unresolved(['type' => 'recipe', 'id' => $ziel['recipe_id'] ?? null], $label.($pos['gp'] ? ' · '.$pos['gp'] : ''), 'lead_la_fehlt', 'Kein bestellbarer Hauptartikel für diese Bedarfsposition. Lieferantenartikel zuordnen.');
+                    $unresolved[] = $this->unresolved(
+                        ['type' => 'recipe', 'id' => $ziel['recipe_id'] ?? null],
+                        $label.($pos['gp'] ? ' · '.$pos['gp'] : ''),
+                        'lead_la_fehlt',
+                        'Kein bestellbarer Hauptartikel für diese Bedarfsposition. Lieferantenartikel zuordnen.'
+                    );
                 }
 
                 continue;
