@@ -135,6 +135,13 @@ it('Stichwort-Filter: Team-Standard greift ohne eigene Liste der Quelle; MCP-Ant
 
 // ── Abruf-Weg und Rhythmus ──────────────────────────────────────────────
 
+it('Rhythmus täglich: Abruf am Vortag ein paar Sekunden nach dem festen Lauf ist heute trotzdem fällig', function () {
+    $gestern = now()->setTime(5, 50, 9)->subDay();
+    $q = spec93Quelle($this->rootTeam, ['rhythmus' => 'taeglich', 'letzter_abruf_at' => $gestern]);
+    expect($this->quellen->istFaellig($q, $gestern->copy()->addDay()->setTime(5, 50, 0)))->toBeTrue()
+        ->and($this->quellen->istFaellig($q, $gestern->copy()->setTime(12, 0, 0)))->toBeFalse();
+});
+
 it('Rhythmus: Fälligkeit je Rhythmus, „aus“ und pausiert nie fällig, neue Quelle erbt den Team-Standard („aus“)', function () {
     $q = spec93Quelle($this->rootTeam, ['rhythmus' => 'woechentlich', 'letzter_abruf_at' => now()]);
     expect($this->quellen->istFaellig($q))->toBeFalse()
