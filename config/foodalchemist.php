@@ -474,6 +474,8 @@ return [
             'tiefe_schwelle' => 0.5,
             'konsum_sparten' => 2, 'konsum_monate' => 6,
             'abklingen_monate' => 6,
+            // Dominique 07.11.2026: so viele Monate NACH dem Abklingen archiviert die Automatik den Trend selbst (0 = aus)
+            'archiv_monate' => 3,
             'max_neue_trends_je_lauf' => 5,
             // Signal „Quelle liefert seit N Abrufen Fehler“ ab so vielen Fehlern in Folge (Kurator 30.10.: ein Ausfall allein kein Signal)
             'quelle_fehler_signal_ab' => 3,

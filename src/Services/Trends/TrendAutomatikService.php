@@ -233,13 +233,87 @@ class TrendAutomatikService
             $liste[] = ['kennzahlen' => $k, 'einordnung' => $ein] + $plan;
         }
 
+        // Dominique 07.11.2026: abgeklungene Trends nach weiteren archiv_monate selbst archivieren (nie löschen)
+        $archiv = [];
+        foreach ($this->archivKandidaten($team, $r) as $kandidat) {
+            if ($schreiben && $e['stufe'] !== 'aus') {
+                $this->autoArchivieren($team, $kandidat);
+                $kandidat['ergebnis'] = 'archiviert';
+            }
+            $archiv[] = $kandidat;
+        }
+
         if ($schreiben && $e['stufe'] !== 'aus') {
             // Buchführung des Laufs (kein Einstellungs-Schreiben durch den Benutzer, daher ohne Admin-Prüfung): Quelle des Signals „Kandidaten warten“
             $this->settings->for($team)->forceFill(['trend_automatik_letzter_lauf' => ['am' => now()->toIso8601String(), 'neue_trends' => $neu, 'gestaut' => $gestaut]])->save();
         }
 
         return ['stufe' => $e['stufe'], 'schatten' => $e['schatten'], 'geschrieben' => $schreiben && $e['stufe'] !== 'aus',
-            'neue_trends' => $neu, 'gestaut' => $gestaut, 'liste' => $liste];
+            'neue_trends' => $neu, 'gestaut' => $gestaut, 'liste' => $liste, 'archiv' => $archiv];
+    }
+
+    // ── Automatisch archivieren (Dominique 07.11.2026) ─────────────────────
+
+    /**
+     * Trends, die die Automatik jetzt archivieren würde: Status gesichtet/geprüft/auf dem Radar (nie „in Umsetzung“), letzte Meldung
+     * älter als abklingen_monate + archiv_monate. Wurde der Trend in DIESER stillen Phase schon einmal automatisch archiviert und
+     * von Hand zurückgeholt, bleibt er stehen (erst eine neue Meldung startet die Uhr neu).
+     *
+     * @return list<array{trend_id:int, name:string, status:string, letzte_meldung:string, hinweis:string}>
+     */
+    public function archivKandidaten(Team $team, array $r, ?Carbon $jetzt = null): array
+    {
+        $monate = (int) ($r['archiv_monate'] ?? 0);
+        if ($monate <= 0) {
+            return [];
+        }
+        $jetzt ??= now();
+        $grenze = $jetzt->copy()->subMonths((int) $r['abklingen_monate'] + $monate)->startOfDay();
+        $out = [];
+        foreach (FoodAlchemistTrend::where('team_id', $team->id)->whereIn('status', ['gesichtet', 'geprueft', 'auf_radar'])->orderBy('id')->get() as $t) {
+            $letzte = $this->letzteMeldung($t);
+            if ($letzte->greaterThanOrEqualTo($grenze) || $this->autoArchiviertSeit($t, $letzte)) {
+                continue;
+            }
+            $out[] = ['trend_id' => (int) $t->id, 'name' => (string) $t->name, 'status' => (string) $t->status, 'letzte_meldung' => $letzte->toDateString(),
+                'hinweis' => 'Keine Meldung seit '.$letzte->format('d.m.Y').' (Abklingen '.$r['abklingen_monate'].' + Archiv '.$monate.' Monate) — wird archiviert.'];
+        }
+
+        return $out;
+    }
+
+    /** Datum der letzten Meldung eines Trends: jüngster Beleg (beobachtet_am, sonst angelegt), ohne Belege das Anlagedatum. */
+    public function letzteMeldung(FoodAlchemistTrend $trend): Carbon
+    {
+        $m = FoodAlchemistTrendBeleg::where('trend_id', $trend->id)->selectRaw('MAX(COALESCE(beobachtet_am, created_at)) as m')->value('m');
+
+        return Carbon::parse($m ?? $trend->created_at)->startOfDay();
+    }
+
+    /** Wurde der Trend nach dieser letzten Meldung schon einmal automatisch archiviert? */
+    public function autoArchiviertSeit(FoodAlchemistTrend $trend, Carbon $letzte): bool
+    {
+        foreach ($trend->automatik_ereignisse ?? [] as $ev) {
+            if (($ev['art'] ?? null) === 'auto_archiviert' && ($ev['letzte_meldung'] ?? null) === $letzte->toDateString()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function autoArchivieren(Team $team, array $kandidat): void
+    {
+        $trend = FoodAlchemistTrend::where('team_id', $team->id)->find($kandidat['trend_id']);
+        if ($trend === null) {
+            return;
+        }
+        // Kein statusSetzen: das würde den Status als „von Hand“ markieren. Vermerk am Trend + Ereignis (Grundlage für „Thema ist zurück“).
+        $vermerk = 'Automatisch archiviert am '.now()->format('d.m.Y').': keine Meldung seit '.Carbon::parse($kandidat['letzte_meldung'])->format('d.m.Y')
+            .' (vorher „'.V::label(V::STATUS, $kandidat['status']).'“).';
+        $trend->forceFill(['status' => 'archiviert',
+            'einordnung_begruendung' => trim(trim((string) $trend->einordnung_begruendung).' '.$vermerk)])->save();
+        $this->ereignis($trend->refresh(), 'auto_archiviert', ['letzte_meldung' => $kandidat['letzte_meldung'], 'vorher' => $kandidat['status']]);
     }
 
     /** @return array{aktion:string, trend_id:?int, hinweis:string} */
@@ -368,10 +442,10 @@ class TrendAutomatikService
         }
     }
 
-    private function ereignis(FoodAlchemistTrend $trend, string $art): void
+    private function ereignis(FoodAlchemistTrend $trend, string $art, array $extra = []): void
     {
         $liste = $trend->automatik_ereignisse ?? [];
-        $liste[] = ['art' => $art, 'am' => now()->toIso8601String()];
+        $liste[] = ['art' => $art, 'am' => now()->toIso8601String()] + $extra;
         $trend->forceFill(['automatik_ereignisse' => array_slice($liste, -10)])->save();
     }
 

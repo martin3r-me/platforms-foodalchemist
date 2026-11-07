@@ -173,6 +173,7 @@ enum SignalTyp: string
     case TrendradarHypeWirdTrend = 'trendradar_hype_wird_trend';
     case TrendradarAufRadar = 'trendradar_auf_radar';
     case TrendradarThemaAbgeklungen = 'trendradar_thema_abgeklungen';
+    case TrendradarThemaZurueck = 'trendradar_thema_zurueck';
     case TrendradarQuelleFehler = 'trendradar_quelle_fehler';
     case TrendradarMcpQuelleUeberfaellig = 'trendradar_mcp_quelle_ueberfaellig';
     case TrendradarPinnwandPasst = 'trendradar_pinnwand_passt';
@@ -196,6 +197,7 @@ enum SignalTyp: string
             self::TrendradarHypeWirdTrend => 'Hype wird Trend',
             self::TrendradarAufRadar => 'Automatisch aufs Radar gesetzt',
             self::TrendradarThemaAbgeklungen => 'Trend-Thema abgeklungen',
+            self::TrendradarThemaZurueck => 'Archiviertes Trend-Thema ist zurück',
             self::TrendradarQuelleFehler => 'Trend-Quelle liefert Fehler',
             self::TrendradarMcpQuelleUeberfaellig => 'MCP-Quelle überfällig',
             self::TrendradarPinnwandPasst => 'Pinnwand-Karte passt zu einem Trend',
@@ -274,6 +276,7 @@ enum SignalTyp: string
             self::TrendradarHypeWirdTrend => 'heroicon-o-arrow-up-circle',
             self::TrendradarAufRadar => 'heroicon-o-signal',
             self::TrendradarThemaAbgeklungen => 'heroicon-o-arrow-trending-down',
+            self::TrendradarThemaZurueck => 'heroicon-o-arrow-path',
             self::TrendradarQuelleFehler => 'heroicon-o-exclamation-triangle',
             self::TrendradarMcpQuelleUeberfaellig => 'heroicon-o-clock',
             self::TrendradarPinnwandPasst => 'heroicon-o-light-bulb',

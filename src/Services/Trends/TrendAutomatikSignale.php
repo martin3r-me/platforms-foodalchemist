@@ -40,7 +40,37 @@ class TrendAutomatikSignale
 
     public function laufen(Team $team): int
     {
-        return $this->ereignisse($team) + $this->quellenSignale($team) + $this->themenSignale($team);
+        return $this->ereignisse($team) + $this->quellenSignale($team) + $this->themenSignale($team) + $this->zurueckSignale($team);
+    }
+
+    /**
+     * Dominique 07.11.2026: Die Automatik hat einen Trend archiviert, seitdem kam wieder eine Meldung → „Thema ist zurück“.
+     * Schließt sich, sobald jemand den Status ändert (nicht mehr archiviert) oder ein neuer Auto-Archiv-Lauf die neue Stille abdeckt.
+     */
+    private function zurueckSignale(Team $team): int
+    {
+        $keys = [];
+        foreach (FoodAlchemistTrend::where('team_id', $team->id)->where('status', 'archiviert')->orderBy('id')->get() as $t) {
+            $letztes = collect($t->automatik_ereignisse ?? [])->last();
+            if (($letztes['art'] ?? null) !== 'auto_archiviert' || empty($letztes['letzte_meldung'])) {
+                continue;
+            }
+            $neu = $this->automatik->letzteMeldung($t);
+            if (! $neu->greaterThan(\Illuminate\Support\Carbon::parse($letztes['letzte_meldung']))) {
+                continue;
+            }
+            $key = 'trendradar-zurueck-'.$t->id;
+            $keys[] = $key;
+            $this->signals->erzeuge($team, SignalTyp::TrendradarThemaZurueck, SignalSeverity::Info, 'Thema ist zurück: '.$t->name, [
+                'dedup_key' => $key,
+                'description' => 'Automatisch archiviert ('.trim((string) ($letztes['am'] ?? '')).'), neue Meldung vom '.$neu->format('d.m.Y')
+                    .'. Den Trend öffnen und den Status von Hand wieder setzen, z. B. „Auf dem Radar“.',
+                'payload' => ['trend_id' => (int) $t->id],
+            ]);
+        }
+        $this->signals->schliesseVerschwundene($team, SignalTyp::TrendradarThemaZurueck, 'detektor', $keys, 'Status von Hand geändert — automatisch geschlossen');
+
+        return count($keys);
     }
 
     private function ereignisse(Team $team): int
@@ -116,7 +146,9 @@ class TrendAutomatikSignale
         $pinnwand = [];
         foreach ($this->automatik->themen($team) as $thema) {
             $k = $this->automatik->kennzahlen($team, $thema, $e['regeln']);
-            if ($k['sichtungen'] > 0 && $this->automatik->einordnen($k, $e['regeln'])['abgeklungen']) {
+            // Archivierte/verworfene Trends brauchen keinen „bitte archivieren“-Vorschlag mehr
+            $trendStatus = $k['trend_id'] !== null ? FoodAlchemistTrend::whereKey($k['trend_id'])->value('status') : null;
+            if ($k['sichtungen'] > 0 && ! in_array($trendStatus, ['archiviert', 'verworfen'], true) && $this->automatik->einordnen($k, $e['regeln'])['abgeklungen']) {
                 $key = 'trendradar-abgeklungen-'.$thema->id;
                 $abgeklungen[] = $key;
                 $this->signals->erzeuge($team, SignalTyp::TrendradarThemaAbgeklungen, SignalSeverity::Info, 'Thema „'.$thema->titel.'“ ist abgeklungen', [
