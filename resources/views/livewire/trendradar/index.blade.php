@@ -231,7 +231,21 @@
                                     @if($darfKuratieren && $eigenesTeam && $insp->trend_id === null)
                                         <input type="checkbox" value="{{ $insp->id }}" wire:model.live="mergeWahl" class="mt-1 accent-[var(--fa-accent)]" title="Zum Zusammenführen markieren" data-inspiration-merge="{{ $insp->id }}" />
                                     @endif
-                                    <p class="flex-1 font-medium text-[var(--fa-ink)] break-words">{{ $insp->titel }}</p>
+                                    @if(array_key_exists($insp->id, $titelEntwurf))
+                                        <form class="flex-1 flex flex-col gap-1.5 min-w-0" wire:submit="inspirationUmbenennen({{ $insp->id }})" data-inspiration-titel-form="{{ $insp->id }}">
+                                            <x-fa::input size="sm" wire:model="titelEntwurf.{{ $insp->id }}" maxlength="255" aria-label="Titel der Inspiration" />
+                                            <span class="flex gap-1.5">
+                                                <x-fa::button size="sm" variant="secondary" type="submit">Speichern</x-fa::button>
+                                                <x-fa::button size="sm" variant="ghost" type="button" wire:click="titelAbbrechen({{ $insp->id }})">Abbrechen</x-fa::button>
+                                            </span>
+                                        </form>
+                                    @else
+                                        <p class="flex-1 font-medium text-[var(--fa-ink)] break-words">{{ $insp->titel }}</p>
+                                        @if($eigenesTeam && ($darfKuratieren || (int) $insp->created_by === (int) auth()->id()))
+                                            <button type="button" class="shrink-0 text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Titel ändern" aria-label="Titel ändern"
+                                                wire:click="titelBearbeiten({{ $insp->id }})" data-inspiration-titel-aendern="{{ $insp->id }}"><x-heroicon-m-pencil-square class="w-4 h-4" /></button>
+                                        @endif
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap items-center gap-1.5">
                                     <x-fa::badge>{{ $insp->quellen->count() }} {{ $insp->quellen->count() === 1 ? 'Quelle' : 'Quellen' }}</x-fa::badge>

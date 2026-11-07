@@ -81,6 +81,9 @@ class Index extends Component
     /** Pinnwand: zum Zusammenführen markierte Inspirationen */
     public array $mergeWahl = [];
 
+    /** Titel-Bearbeitung je Inspiration (id => Entwurf); nur gesetzt, solange das Feld offen ist. */
+    public array $titelEntwurf = [];
+
     /** „Trend daraus machen": diese Inspirationen gehen beim Anlegen mit */
     public array $ausInspirationen = [];
 
@@ -187,6 +190,28 @@ class Index extends Component
             $svc->inspirationZuordnen($this->team(), $inspirationId, $trendId, Auth::id());
             unset($this->zuordnung[$inspirationId]);
             $this->meldung = 'Inspiration dem Trend zugeordnet, alle Quellen sind jetzt Belege.';
+        });
+    }
+
+    public function titelBearbeiten(int $inspirationId): void
+    {
+        $insp = \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $this->team()->id)->find($inspirationId);
+        if ($insp !== null) {
+            $this->titelEntwurf[$inspirationId] = (string) $insp->titel;
+        }
+    }
+
+    public function titelAbbrechen(int $inspirationId): void
+    {
+        unset($this->titelEntwurf[$inspirationId]);
+    }
+
+    public function inspirationUmbenennen(int $inspirationId, TrendService $svc): void
+    {
+        $this->aktion(function () use ($svc, $inspirationId) {
+            $svc->inspirationUmbenennen($this->team(), $inspirationId, (string) ($this->titelEntwurf[$inspirationId] ?? ''), Auth::id());
+            unset($this->titelEntwurf[$inspirationId]);
+            $this->meldung = 'Titel geändert.';
         });
     }
 

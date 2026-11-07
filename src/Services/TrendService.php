@@ -510,6 +510,28 @@ class TrendService
         return $insp->refresh();
     }
 
+    /**
+     * Titel einer Pinnwand-Inspiration ändern (Dominique 07.11.2026). Eigenes Team: Kuratieren, oder wer sie angelegt hat
+     * (dann reicht Lesen — wer ablegt, darf seinen Titel nachbessern). Automatische Themen aus dem Eingang heißen wie ihr
+     * Thema-Schlüssel und werden hier nicht umbenannt.
+     */
+    public function inspirationUmbenennen(Team $team, int $inspirationId, string $titel, ?int $userId = null): FoodAlchemistTrendInspiration
+    {
+        $insp = $this->eigeneInspiration($team, $inspirationId);
+        $eigene = $userId !== null && (int) $insp->created_by === $userId;
+        $this->pruefe($userId, $team, $eigene ? FaRolle::Lesen : FaRolle::Kuratieren, 'Inspiration umbenennen');
+        if ($insp->herkunft === 'automatisch') {
+            throw new \RuntimeException('Automatische Themen aus dem Eingang lassen sich hier nicht umbenennen.');
+        }
+        $titel = trim(preg_replace('/\s+/u', ' ', $titel) ?? '');
+        if ($titel === '' || mb_strlen($titel) > 255) {
+            throw new \RuntimeException('Bitte einen Titel mit höchstens 255 Zeichen angeben.');
+        }
+        $insp->update(['titel' => $titel]);
+
+        return $insp->refresh();
+    }
+
     /** Zuordnung lösen — die Inspiration liegt wieder offen auf der Pinnwand. */
     public function inspirationLoesen(Team $team, int $inspirationId, ?int $userId = null): FoodAlchemistTrendInspiration
     {
