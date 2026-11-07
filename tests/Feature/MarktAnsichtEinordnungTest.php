@@ -86,7 +86,7 @@ it('Ansicht vollständig: 4 Kacheln mit Sparkline und Farbe nach Bedeutung, Balk
         ->and(array_column($a['balken']['zeilen'], 'farbe'))->toBe(['schlecht', 'neutral', 'gut'])
         ->and($a['schere']['von'])->toBe('2025-10')->and($a['schere']['bis'])->toBe('2026-09')
         ->and(array_column($a['schere']['linien'], 'strich'))->toBe(['voll', 'gestrichelt', 'gepunktet']);
-    $html = Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-kacheln')->assertSeeHtml('data-marktdaten-balken')
+    $html = Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-kacheln')->assertSeeHtml('data-marktdaten-balken')
         ->assertSeeHtml('data-marktdaten-schere')->assertSee('Was heißt das für dich?')->assertSeeHtml('data-marktdaten-alle')->html();
     // Die Markt-Sektion selbst kommt ohne style-Attribute aus (Geometrie als SVG-Attribute, Farben über Klassen/Tokens)
     $sektion = substr($html, strpos($html, 'data-observatorium-marktdaten'), strpos($html, '</section>', strpos($html, 'data-observatorium-marktdaten')) - strpos($html, 'data-observatorium-marktdaten'));
@@ -104,7 +104,7 @@ it('unvollständig = ausgeblendet: Lücke in den letzten 12 Monaten, zu wenig Mo
     $a = $this->svc->lesen($this->rootTeam)['ansicht'];
     expect(array_column($a['kacheln'], 'serie'))->toBe(['gaststaettenpreise', 'kantinenpreise'])
         ->and($a['balken'])->toBeNull()->and($a['schere'])->toBeNull();
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-balken')->assertDontSeeHtml('data-marktdaten-schere');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertDontSeeHtml('data-marktdaten-balken')->assertDontSeeHtml('data-marktdaten-schere');
 });
 
 it('Riegel: Zahlen nur aus dem Kontext; Prognose/Empfehlung gesperrt, Passiv-„wird“ erlaubt (beide Richtungen)', function () {
@@ -143,7 +143,7 @@ it('Plattform: Abruf mit apply stößt genau eine Einordnung an, Riegel verwirft
         ->and($e->verworfen)->toBe(2)->and($e->stand_monat)->toBe('2026-09');
     expect(app(E::class)->nachAbruf($this->rootTeam, $this->svc->lesenFuerTeam($this->rootTeam)))->toBeNull()->and($this->stub->calls)->toBe(1);
 
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-ki')->assertSee("liegt {$txt} % über dem Vorjahresmonat")
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-ki')->assertSee("liegt {$txt} % über dem Vorjahresmonat")
         ->assertSee('KI-Einordnung · Stand 2026-09')->assertSee('Aus den Werten berechnet:')->assertDontSee('Erfunden: 12,3 %');
 });
 
@@ -158,7 +158,7 @@ it('KI fällt aus: Einordnung „fehler“, die Box zeigt nur die Regelsätze', 
     });
     app(E::class)->nachAbruf($this->rootTeam, $this->svc->lesenFuerTeam($this->rootTeam));
     expect(Einordnung::first()->status)->toBe('fehler');
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-ki')->assertSeeHtml('data-marktdaten-aussagen')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertDontSeeHtml('data-marktdaten-ki')->assertSeeHtml('data-marktdaten-aussagen')
         ->assertDontSee('Aus den Werten berechnet:');
 });
 
@@ -217,12 +217,12 @@ it('Knopf „Einordnung erzeugen“: nur für Kuratieren und nur ohne Einordnung
     $this->stub->saetze = ['Die Daten zeigen den Stand 2026-09.'];
     $leser = $this->makeUser($this->rootTeam, 'TEST-MA Leser', 'viewer');
     $this->actingAs($leser);
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-einordnen')->call('einordnungErzeugen')->assertForbidden();
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertDontSeeHtml('data-marktdaten-einordnen')->call('einordnungErzeugen')->assertForbidden();
     $this->actingAs($this->owner);
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-einordnen')
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-einordnen')
         ->call('einordnungErzeugen')->assertSee('Einordnung wird erstellt');
     expect(Einordnung::first()->status)->toBe('fertig')->and($this->stub->calls)->toBe(1);
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-marktdaten-einordnen')->assertSeeHtml('data-marktdaten-ki');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertDontSeeHtml('data-marktdaten-einordnen')->assertSeeHtml('data-marktdaten-ki');
     maReihe($this->rootTeam->id, 'gaststaettenpreise', basis: '2020=100', schritt: 0.35);   // neuer Stand → Knopf wieder da
-    Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertSeeHtml('data-marktdaten-einordnen');
+    Livewire::test(Index::class)->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-marktdaten-einordnen');
 });
