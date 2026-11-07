@@ -487,6 +487,22 @@ class TrendEingangService
         return $eintrag->refresh();
     }
 
+    /**
+     * MCP-Sichtung ohne Fund (Kurator 07.11.2026): Quelle als besucht stempeln, damit sie nicht ewig „fällig“ bleibt und das
+     * Fenster beim nächsten Lauf ab heute zählt. Nur eigene, aktive MCP-Quellen; Rolle wie beim Einreichen.
+     */
+    public function gesichtetOhneFund(Team $team, int $quelleId, ?int $userId = null): FoodAlchemistTrendQuelle
+    {
+        $this->pruefe($userId, $team, 'Quelle als gesichtet markieren');
+        $quelle = FoodAlchemistTrendQuelle::where('team_id', $team->id)->findOrFail($quelleId);
+        if ($quelle->abruf_weg !== 'mcp') {
+            throw new \RuntimeException('Nur MCP-Quellen werden von Hand gesichtet; Plattform-Quellen holt der Abruf selbst.');
+        }
+        $this->mcpBesuch($quelle, 0);
+
+        return $quelle->refresh();
+    }
+
     // ── intern ─────────────────────────────────────────────────────────────
 
     /** MCP hat die Quelle besucht: letzter_abruf_at setzen, Filter-Zähler je Kalendertag führen. */

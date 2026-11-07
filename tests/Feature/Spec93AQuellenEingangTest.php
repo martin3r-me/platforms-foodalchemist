@@ -316,33 +316,33 @@ it('Entscheiden: verwerfen, Thema, „Auf die Pinnwand“ legt eine manuelle Ins
     expect($ent->execute(['ids' => [$e->id], 'aktion' => 'verwerfen', 'wert' => 'TEST-93 doppelt'], $this->ctx)->data['eintraege'][0]['status'])->toBe('verworfen');
 });
 
-it('Rechte und Team-Sicht: Lesen darf nicht schreiben; Kunde B sieht Quellen und Eingang von Kunde A nicht; Kind sieht Eltern, ändert sie nicht', function () {
+it('Rechte und Team-Sicht: Lesen darf nicht schreiben; mit Master-Team kommen Kunden-Teams an kein Trend-Tool (Observatorium zentral)', function () {
     $q = spec93Quelle($this->rootTeam, ['abruf_weg' => 'mcp', 'feed_typ' => 'manuell']);
     $leserCtx = new ToolContext($this->leser, $this->rootTeam);
     expect($this->reg->get('foodalchemist.trend_quellen.POST')->execute(['url' => 'https://y.beispiel.test/', 'abruf_weg' => 'mcp'], $leserCtx)->errorCode)->toBe('FORBIDDEN')
         ->and($this->reg->get('foodalchemist.trend_eingang.POST')->execute(['url' => 'https://y.beispiel.test/1', 'titel' => 'TEST-93'], $leserCtx)->errorCode)->toBe('FORBIDDEN')
         ->and($this->reg->get('foodalchemist.trend_quellen.GET')->execute([], $leserCtx)->data['anzahl'])->toBe(1);
 
-    // Master-Team mit zwei Kunden: A und B sehen sich nicht
+    // Observatorium zentral (07.11.2026): mit Master-Team ist Trend Research NUR beim Master — Kunden-Teams kommen an kein Trend-Tool,
+    // weder an fremde noch an die des Masters (lesen das Observatorium in der Oberfläche). Früher: Kunde sah Eltern-Quellen lesend.
     config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     $qa = spec93Quelle($this->childA, ['name' => 'TEST-93 Kunde A', 'url' => 'https://kunde-a.beispiel.test/']);
     $ea = $this->eingang->einreichen($this->childA, ['url' => 'https://a.beispiel.test/1', 'titel' => 'TEST-93 Kunde A'], 'abruf')['eintrag'];
     $nutzerB = $this->makeUser($this->childB, 'B TEST-93');
     $ctxB = new ToolContext($nutzerB, $this->childB);
-
-    $quellenB = $this->reg->get('foodalchemist.trend_quellen.GET')->execute([], $ctxB)->data;
-    expect(array_column($quellenB['quellen'], 'id'))->not->toContain($qa->id)
-        ->and($this->reg->get('foodalchemist.trend_eingang.GET')->execute([], $ctxB)->data['anzahl'])->toBe(0)
-        ->and($this->reg->get('foodalchemist.trend_quellen.GET')->execute(['id' => $qa->id], $ctxB)->errorCode)->toBe('NOT_FOUND')
-        ->and($this->reg->get('foodalchemist.trend_eingang.ENTSCHEIDEN')->execute(['ids' => [$ea->id], 'aktion' => 'verwerfen'], $ctxB)->errorCode)->toBe('NOT_FOUND')
-        ->and($this->reg->get('foodalchemist.trend_eingang.POST')->execute(['quelle_id' => $qa->id, 'url' => 'https://b.beispiel.test/', 'titel' => 'TEST-93'], $ctxB)->errorCode)->toBe('NOT_FOUND');
-
-    // Kind sieht die Quelle der Eltern (Lesen wie Spec 79), darf sie aber nicht ändern
+    foreach ([['foodalchemist.trend_quellen.GET', []], ['foodalchemist.trend_eingang.GET', []], ['foodalchemist.trend_quellen.GET', ['id' => $qa->id]],
+        ['foodalchemist.trend_eingang.ENTSCHEIDEN', ['ids' => [$ea->id], 'aktion' => 'verwerfen']],
+        ['foodalchemist.trend_eingang.POST', ['quelle_id' => $qa->id, 'url' => 'https://b.beispiel.test/', 'titel' => 'TEST-93']]] as [$tool, $args]) {
+        expect($this->reg->get($tool)->execute($args, $ctxB)->errorCode)->toBe('FORBIDDEN', $tool);
+    }
     $nutzerA = $this->makeUser($this->childA, 'A TEST-93');
     $ctxA = new ToolContext($nutzerA, $this->childA);
-    expect(array_column($this->reg->get('foodalchemist.trend_quellen.GET')->execute([], $ctxA)->data['quellen'], 'id'))->toContain($q->id)
-        ->and($this->reg->get('foodalchemist.trend_quellen.PUT')->execute(['id' => $q->id, 'rhythmus' => 'taeglich'], $ctxA)->errorCode)->toBe('NOT_FOUND')
-        ->and($this->reg->get('foodalchemist.trend_quellen.DELETE')->execute(['id' => $q->id, 'confirm' => true], $ctxA)->errorCode)->toBe('NOT_FOUND');
+    expect($this->reg->get('foodalchemist.trend_quellen.GET')->execute([], $ctxA)->errorCode)->toBe('FORBIDDEN')
+        ->and($this->reg->get('foodalchemist.trend_quellen.PUT')->execute(['id' => $q->id, 'rhythmus' => 'monatlich'], $ctxA)->errorCode)->toBe('FORBIDDEN')
+        ->and($q->refresh()->rhythmus)->toBe('taeglich');
+    // Master selbst arbeitet weiter
+    expect($this->reg->get('foodalchemist.trend_quellen.GET')->execute([], new ToolContext($this->inhaber, $this->rootTeam))->success)->toBeTrue();
 });
 
 it('Deploy-sicher: Scheduler-Schalter und Team-Rhythmus stehen ab Werk auf aus', function () {
@@ -410,4 +410,17 @@ it('Titel nachziehen: Probelauf schreibt nichts, --apply korrigiert nur „mehr 
         ->and($weg->refresh()->titel)->toEndWith('mehr erfahren')->and($fremd->refresh()->titel)->toEndWith('mehr erfahren')
         ->and($sauber->refresh()->titel)->toBe('Von Hand gesetzter Titel TEST-93');
     $this->artisan('foodalchemist:trend-eingang-titel-nachziehen', ['--quelle' => $andere->id + 999])->assertFailed();
+});
+
+it('MCP-Sichtung ohne Fund: ohne_fund stempelt letzter_abruf_at, Quelle nicht mehr fällig; nur MCP-Quellen, nur mit quelle_id', function () {
+    $q = spec93Quelle($this->rootTeam, ['abruf_weg' => 'mcp', 'feed_typ' => 'manuell', 'name' => 'TEST-93 ohne Fund', 'rhythmus' => 'woechentlich']);
+    expect($this->quellen->istFaellig($q))->toBeTrue();
+    $r = $this->reg->get('foodalchemist.trend_eingang.POST')->execute(['quelle_id' => $q->id, 'ohne_fund' => true], $this->ctx);
+    expect($r->success)->toBeTrue()->and($r->data['zaehler'])->toBe(['ohne_fund' => 1])
+        ->and($q->refresh()->letzter_abruf_at)->not->toBeNull()->and($this->quellen->istFaellig($q))->toBeFalse()
+        ->and(FoodAlchemistTrendEingang::count())->toBe(0);
+    $platt = spec93Quelle($this->rootTeam, ['name' => 'TEST-93 Plattform']);
+    expect($this->reg->get('foodalchemist.trend_eingang.POST')->execute(['quelle_id' => $platt->id, 'ohne_fund' => true], $this->ctx)->success)->toBeFalse()
+        ->and($this->reg->get('foodalchemist.trend_eingang.POST')->execute(['ohne_fund' => true], $this->ctx)->success)->toBeFalse()
+        ->and($this->reg->get('foodalchemist.trend_eingang.POST')->execute(['quelle_id' => $q->id, 'ohne_fund' => true, 'url' => 'https://x.beispiel.test/a', 'titel' => 'x'], $this->ctx)->success)->toBeFalse();
 });

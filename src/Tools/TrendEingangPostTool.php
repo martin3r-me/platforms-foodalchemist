@@ -25,7 +25,8 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
             .'der Quelle bzw. des Teams; grund nennt das Stichwort). Landet nie auf der Pinnwand. '
             .'Studie oder Trendliste mit mehreren Trends: je Artikel signale = [{titel, teaser}] (max. 12) mitgeben — dann wird jedes '
             .'Signal ein eigener Eintrag mit eigenem Thema (gleiche URL, Dublette = URL + Signal-Titel); ohne signale landet die ganze '
-            .'Studie in einem Thema, und Sammelthemen wie „Trendprognose 2027“ lehnt das Erschließen ab. Höchstens 50 Einträge je Aufruf (Signale zählen einzeln).';
+            .'Studie in einem Thema, und Sammelthemen wie „Trendprognose 2027“ lehnt das Erschließen ab. Höchstens 50 Einträge je Aufruf (Signale zählen einzeln). '
+            .'Quelle gesichtet, aber nichts Neues: nur quelle_id + ohne_fund=true senden — das setzt letzter_abruf_at, die Quelle ist dann nicht mehr fällig.';
     }
 
     public function getSchema(): array
@@ -41,6 +42,7 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
         return ['type' => 'object', 'properties' => $artikel['properties'] + [
             'quelle_id' => ['type' => 'integer', 'description' => 'Quelle aus foodalchemist.trend_quellen.GET (eigenes Team).'],
             'artikel' => ['type' => 'array', 'items' => $artikel, 'description' => 'Mehrere Artikel derselben Quelle auf einmal.'],
+            'ohne_fund' => ['type' => 'boolean', 'description' => 'Quelle gesichtet, nichts Neues: nur mit quelle_id, ohne Artikel. Setzt letzter_abruf_at.'],
         ]];
     }
 
@@ -49,6 +51,20 @@ class TrendEingangPostTool extends FoodAlchemistTool implements ToolContract, To
         $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        }
+        if (! empty($arguments['ohne_fund'])) {
+            if (empty($arguments['quelle_id']) || ! empty($arguments['artikel']) || ! empty($arguments['url'])) {
+                return ToolResult::error('ohne_fund nur mit quelle_id und ohne Artikel.', 'VALIDATION_ERROR');
+            }
+            try {
+                $q = app(TrendEingangService::class)->gesichtetOhneFund($team, (int) $arguments['quelle_id'], $context->user?->id);
+            } catch (ModelNotFoundException) {
+                return ToolResult::error('Quelle nicht gefunden oder gehört einem anderen Team.', 'NOT_FOUND');
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            }
+
+            return ToolResult::success(['zaehler' => ['ohne_fund' => 1], 'quelle_id' => (int) $q->id, 'letzter_abruf_at' => $q->letzter_abruf_at?->toIso8601String()]);
         }
         $liste = ! empty($arguments['artikel']) && is_array($arguments['artikel']) ? array_values($arguments['artikel']) : [$arguments];
         $eintraege = array_sum(array_map(fn ($a) => ! empty(((array) $a)['signale']) && is_array(((array) $a)['signale']) ? count(((array) $a)['signale']) : 1, $liste));
