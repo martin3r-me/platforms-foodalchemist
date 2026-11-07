@@ -81,7 +81,8 @@ class TrendSignalService
 
     /**
      * Wöchentlicher Lauf: alle Trends des Teams mit Status gesichtet/geprüft/auf dem Radar/in Umsetzung,
-     * deren letzte Messung älter als 6 Tage ist. Stoppt am Budget.
+     * deren letzte Messung mindestens `trends.messen_abstand_tage` zurückliegt (Standard 28 = monatlich, Dominique 07.11.2026;
+     * der Lauf prüft weiter jeden Dienstag, neue Trends kommen also binnen einer Woche dran). Stoppt am Budget.
      *
      * @return array{gemessen:int, uebersprungen:int, fehler:list<string>}
      */
@@ -95,7 +96,7 @@ class TrendSignalService
             ->whereIn('status', ['gesichtet', 'geprueft', 'auf_radar', 'in_umsetzung'])->orderBy('id')->get();
         foreach ($trends as $trend) {
             $letzte = FoodAlchemistTrendSignal::where('trend_id', $trend->id)->where('quelle', 'google_trends')->max('created_at');
-            if ($letzte !== null && now()->diffInDays($letzte, true) < 6) {
+            if ($letzte !== null && now()->diffInDays($letzte, true) < (int) config('foodalchemist.trends.messen_abstand_tage', 28)) {
                 $ergebnis['uebersprungen']++;
                 continue;
             }
