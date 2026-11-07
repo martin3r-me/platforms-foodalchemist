@@ -135,7 +135,8 @@ class Index extends Component
     {
         $this->selectedId = null;
         $this->einordnenOffen = false;
-        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik', 'wettbewerber'], true) ? $ansicht : 'liste';
+        // Wettbewerber weggelassen (Observatorium zentral 07.11.2026, ObservatoriumSicht::WETTBEWERB_AKTIV)
+        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration', 'eingang', 'beobachten', 'quellen', 'automatik'], true) ? $ansicht : 'liste';
     }
 
     public function resetFilter(): void

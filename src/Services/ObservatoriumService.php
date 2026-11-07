@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\FoodAlchemistObservatoriumMerker as Merker;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendEingang as Artikel;
 use Platform\FoodAlchemist\Models\FoodAlchemistWettbewerber;
+use Platform\FoodAlchemist\Support\ObservatoriumSicht;
 use Platform\FoodAlchemist\Support\ObservatoriumInhalt as Inhalt;
 
 /** Leseansichten und persönliche Merker; bestehende Trend-Freigaben werden hier nie geändert. */
@@ -21,8 +22,9 @@ class ObservatoriumService
     public function abfrage(Team $team, array $filter = []): Builder
     {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Lesen, 'Observatorium lesen');
-        $wettbewerb = ($filter['ansicht'] ?? '') === 'wettbewerb';
-        $q = Artikel::visibleToTeam($team);
+        $wettbewerb = ObservatoriumSicht::WETTBEWERB_AKTIV && ($filter['ansicht'] ?? '') === 'wettbewerb';
+        // Observatorium zentral: gelesen wird beim Master (Rechte oben am eigenen Team), Merker unten bleiben am eigenen Team
+        $q = Artikel::visibleToTeam(ObservatoriumSicht::inhaltsTeam($team));
         if ($wettbewerb) {
             $q->whereIn('id', app(WettbewerbService::class)->bestaetigteArtikelIds($team, (int) ($filter['wettbewerber'] ?? 0) ?: null,
                 (string) ($filter['branche'] ?? ''), (string) ($filter['region'] ?? ''), (string) ($filter['bewegung'] ?? '')));
@@ -76,6 +78,7 @@ class ObservatoriumService
     {
         $basis = $this->abfrage($team, $filter);
         $ids = (clone $basis)->selectRaw('MAX(id)')->groupBy(DB::raw('COALESCE(inhalt_hash, url_hash)'));
+        $team = ObservatoriumSicht::inhaltsTeam($team);
 
         return Artikel::visibleToTeam($team)->whereIn('id', $ids)->with(['quelle:id,name,art', 'wettbewerbFunde' => fn ($q) => $q->visibleToTeam($team)->where('status', 'bestaetigt')->whereIn('wettbewerber_id', FoodAlchemistWettbewerber::visibleToTeam($team)->select('id'))->with('wettbewerber')])->orderByRaw('COALESCE(veroeffentlicht_am, created_at) DESC')->orderByDesc('id');
     }
@@ -83,6 +86,7 @@ class ObservatoriumService
     public function detail(Team $team, int $id): Artikel
     {
         $this->rechte->pruefeAngemeldet($team, FaRolle::Lesen, 'Observatorium lesen');
+        $team = ObservatoriumSicht::inhaltsTeam($team);
 
         return Artikel::visibleToTeam($team)->with(['quelle', 'wettbewerbFunde' => fn ($q) => $q->visibleToTeam($team)->where('status', 'bestaetigt')->whereIn('wettbewerber_id', FoodAlchemistWettbewerber::visibleToTeam($team)->select('id'))->with('wettbewerber')])->find($id) ?? abort(404);
     }
@@ -95,7 +99,7 @@ class ObservatoriumService
             return collect();
         }
 
-        return Artikel::visibleToTeam($team)->where('inhalt_hash', $e->inhalt_hash)->where('id', '!=', $e->id)->with('quelle')->limit(8)->get();
+        return Artikel::visibleToTeam(ObservatoriumSicht::inhaltsTeam($team))->where('inhalt_hash', $e->inhalt_hash)->where('id', '!=', $e->id)->with('quelle')->limit(8)->get();
     }
 
     public function merker(Team $team): Builder
@@ -122,6 +126,7 @@ class ObservatoriumService
 
     public function pinnwand(Team $team, int $artikelId): Artikel
     {
+        abort_unless(ObservatoriumSicht::kuratiertHier($team), 403);
         $e = $this->detail($team, $artikelId);
         abort_unless((int) $e->team_id === (int) $team->id, 403);
 

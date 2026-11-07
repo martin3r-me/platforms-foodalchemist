@@ -86,7 +86,7 @@ trait HandyTrendsLesen
     {
         $team = $this->team();
         $gewaehlt = $this->gewaehlt();
-        $reiter = in_array($this->handyReiter, ['trends', 'themen', 'pinnwand', 'beobachten', 'quellen', 'eingang', 'automatik', 'wettbewerber'], true) ? $this->handyReiter : 'trends';
+        $reiter = in_array($this->handyReiter, ['trends', 'themen', 'pinnwand', 'beobachten', 'quellen', 'eingang', 'automatik'], true) ? $this->handyReiter : 'trends';
         $gruppe = $this->handyGruppe === 'kategorie' ? 'kategorie' : 'ebene';
         // Spec 93 · Reiter „Themen“: automatische Themen aus dem Eingang und Pinnwand-Karten des Teams, nur lesen (Sicht über visibleToTeam
         // wie am Computer). Jüngste Sichtung zuerst; Belege-Links ohne das interne #signal=-Fragment.

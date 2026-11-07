@@ -3,7 +3,7 @@
 @if($trends->isEmpty() && $radarFilterAktiv)
     <div class="fa-obs-empty"><h2>Keine Entwicklungen für diese Filter.</h2><p>Ändere Kategorie, Sparte oder Einordnung in der Bereichsspalte.</p><button class="fa-obs-button" type="button" wire:click="radarFilterZuruecksetzen">Radarfilter zurücksetzen</button></div>
 @elseif($trends->isEmpty())
-    <div class="fa-obs-empty"><h2>Noch keine freigegebenen Entwicklungen.</h2><p>Hier erscheinen Trends und Hypes mit dem Status „Auf dem Radar“ oder „In Umsetzung“.</p><a class="fa-obs-button" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste']) }}" wire:navigate>In Trend Research prüfen</a></div>
+    <div class="fa-obs-empty"><h2>Noch keine freigegebenen Entwicklungen.</h2><p>Hier erscheinen Trends und Hypes mit dem Status „Auf dem Radar“ oder „In Umsetzung“.</p>@if($kuratiertHier)<a class="fa-obs-button" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste']) }}" wire:navigate>In Trend Research prüfen</a>@endif</div>
 @else
     <div class="fa-obs-briefing fa-obs-radar">
         @unless($istHandy)
@@ -18,16 +18,16 @@
                 $farbe = $t->kategorie === 'food' ? 'var(--fa-warn)' : 'var(--fa-ok)';
                 $deck = ['hoch' => 1, 'mittel' => .62, 'niedrig' => .45][$t->wirksameKonfidenz()] ?? .45;
             @endphp
-                <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste', 'trend' => $t->id]) }}" aria-label="{{ $t->name }} in Trend Research öffnen">
+                @if($kuratiertHier)<a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste', 'trend' => $t->id]) }}" aria-label="{{ $t->name }} in Trend Research öffnen">@else<g>@endif
                     <circle cx="{{ $position['x'] }}" cy="{{ $position['y'] }}" r="17" fill="transparent"/>
                     @if($t->befragung_bestaetigt)<circle cx="{{ $position['x'] }}" cy="{{ $position['y'] }}" r="11.5" fill="none" stroke="var(--fa-gold-2)" stroke-width="2"/>@endif
                     <circle opacity="{{ $deck }}" cx="{{ $position['x'] }}" cy="{{ $position['y'] }}" r="7" fill="{{ $t->typ === 'hype' ? 'var(--obs-card)' : $farbe }}" stroke="{{ $farbe }}" stroke-width="2" @if($t->typ === 'hype') stroke-dasharray="3 2" @endif/>
                     <title>{{ $t->name }} · {{ V::TYPEN[$t->typ] ?? $t->typ }} · {{ V::EBENEN[$t->ebene] ?? $t->ebene }}</title>
-                </a>
+                @if($kuratiertHier)</a>@else</g>@endif
             @endforeach
         </svg>
         @endunless
-        <div class="fa-obs-entwicklungen" data-observatorium-entwicklungskarten>@foreach($trends as $t)<article class="fa-obs-trend"><span class="fa-obs-pill {{ $t->typ === 'trend' ? 'idea' : 'market' }}">{{ V::TYPEN[$t->typ] ?? $t->typ }} · {{ V::EBENEN[$t->ebene] ?? $t->ebene }}</span><h3>{{ $t->name }}</h3>@if($istHandy)<div class="fa-obs-meta"><span>{{ V::KATEGORIEN[$t->kategorie] ?? 'Kategorie offen' }}</span><span>Konfidenz: {{ V::KONFIDENZ[$t->wirksameKonfidenz()] }}</span></div>@endif<p>{{ \Illuminate\Support\Str::limit($t->definition, 230) }}</p><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste', 'trend' => $t->id]) }}" wire:navigate>{{ $t->belege_count }} Belege · Einordnung ansehen @svg('heroicon-o-arrow-up-right', 'fa-obs-inline-icon', ['width' => 16, 'height' => 16])</a></article>@endforeach</div>
+        <div class="fa-obs-entwicklungen" data-observatorium-entwicklungskarten>@foreach($trends as $t)<article class="fa-obs-trend"><span class="fa-obs-pill {{ $t->typ === 'trend' ? 'idea' : 'market' }}">{{ V::TYPEN[$t->typ] ?? $t->typ }} · {{ V::EBENEN[$t->ebene] ?? $t->ebene }}</span><h3>{{ $t->name }}</h3>@if($istHandy)<div class="fa-obs-meta"><span>{{ V::KATEGORIEN[$t->kategorie] ?? 'Kategorie offen' }}</span><span>Konfidenz: {{ V::KONFIDENZ[$t->wirksameKonfidenz()] }}</span></div>@endif<p>{{ \Illuminate\Support\Str::limit($t->definition, 230) }}</p>@if($kuratiertHier)<a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste', 'trend' => $t->id]) }}" wire:navigate>{{ $t->belege_count }} Belege · Einordnung ansehen @svg('heroicon-o-arrow-up-right', 'fa-obs-inline-icon', ['width' => 16, 'height' => 16])</a>@else<span class="fa-obs-subtitle">{{ $t->belege_count }} Belege</span>@endif</article>@endforeach</div>
     </div>
     @unless($istHandy)<div class="fa-obs-radar-legend"><span>● Trend · ◌ Hype</span><span>Goldring: Befragung bestätigt · blass: unsichere Belege</span><span>Innen: Mode · außen: Metatrend</span><span>Trends ohne Sparte gelten für alle Sparten.</span></div>@endunless
 @endif
