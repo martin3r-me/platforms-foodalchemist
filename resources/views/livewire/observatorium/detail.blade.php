@@ -20,6 +20,7 @@
     <div class="fa-obs-actions">
         <button class="fa-obs-button primary" type="button" wire:click="merken({{ $gewaehlt->id }})" wire:loading.attr="disabled">@svg($m?->gemerkt ? 'heroicon-s-bookmark' : 'heroicon-o-bookmark'){{ $m?->gemerkt ? 'Gemerkt' : 'Beitrag merken' }}</button>
         <button class="fa-obs-button" type="button" wire:click="trendPruefen({{ $gewaehlt->id }})" wire:loading.attr="disabled">@svg('heroicon-o-signal'){{ $m?->trend_pruefen ? 'Aus Prüfliste entfernen' : 'Für Trendprüfung merken' }}</button>
+        @if($darfPinnen)<button class="fa-obs-button" type="button" wire:click="anpinnen({{ $gewaehlt->id }})" wire:loading.attr="disabled" data-observatorium-anpinnen>@svg('heroicon-o-rectangle-stack'){{ in_array($gewaehlt->id, $angepinnt, true) ? 'An der Team-Pinnwand' : 'An Team-Pinnwand' }}</button>@endif
         @if($darfKuratieren && (int) $gewaehlt->team_id === (int) $teamId)
             @if($gewaehlt->vertiefung_status !== 'laeuft')<button class="fa-obs-button" type="button" wire:click="vertiefen({{ $gewaehlt->id }})" wire:loading.attr="disabled" data-observatorium-vertiefen {{ \Platform\FoodAlchemist\Support\HandyLesemodus::attr('observatorium.vertiefen') }}>@svg('heroicon-o-document-magnifying-glass'){{ $gewaehlt->vertiefung_status === null ? 'Vertiefen' : 'Neu vertiefen' }}</button>@endif
             @if($gewaehlt->inspiration_id)<a class="fa-obs-button" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>Auf der Pinnwand ansehen</a>

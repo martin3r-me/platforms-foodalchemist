@@ -10,8 +10,10 @@ final class ObservatoriumInhalt
         'news' => ['Branchennews', 'heroicon-o-newspaper'],
         'ideen' => ['Ideenwelt', 'heroicon-o-light-bulb'],
         'radar' => ['Trendradar', 'heroicon-o-signal'],
+        'lagebild' => ['Lagebild', 'heroicon-o-document-text'],
         'markt' => ['Markt & Chancen', 'heroicon-o-building-office-2'],
-        'wettbewerb' => ['Wettbewerb', 'heroicon-o-building-office'],
+        // 'wettbewerb' weggelassen (Dominique 07.11.2026, ObservatoriumSicht::WETTBEWERB_AKTIV)
+        'pinnwand' => ['Team-Pinnwand', 'heroicon-o-rectangle-stack'],
         'merkliste' => ['Merkliste', 'heroicon-o-bookmark'],
     ];
 

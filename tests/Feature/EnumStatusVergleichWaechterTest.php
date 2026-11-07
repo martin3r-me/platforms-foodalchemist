@@ -17,12 +17,15 @@ const ENUM_STATUS_GEPRUEFT = [
     // Trends, Produktpass, Necta, Mails, Befunde, Inventur, Projekte, Preislisten-Lauf, KI-Aufträge: eigene Modelle ohne Enum-Cast
     'src/Livewire/Trendradar/Index.php', 'src/Services/TrendService.php', 'resources/views/livewire/trendradar/index.blade.php',
     'resources/views/livewire/trendradar/eingang.blade.php',   // Spec 93: FoodAlchemistTrendEingang.status ist eine String-Spalte
+    'src/Services/TrendVertiefungService.php',   // Vertiefung nur für status=gebuendelt (07.11.2026), TrendEingang.status = String-Spalte
     'src/Services/Trends/TrendAutomatikService.php',   // Spec 93 C: FoodAlchemistTrend.status ist eine String-Spalte (wie TrendService)
     'src/Livewire/Suppliers/ProduktpassPanel.php', 'src/Jobs/ProduktpassLesenJob.php', 'src/Services/Produktpass/ProduktpassService.php',
     'src/Services/Produktpass/ProduktpassAbweichungService.php', 'src/Livewire/Suppliers/NectaPruefaelle.php',
     'src/Services/OrderMailService.php', 'resources/views/livewire/orders/editor.blade.php', 'src/Services/RecipeFindingService.php',
     'src/Services/ConformanceService.php', 'src/Models/FoodAlchemistInventoryCount.php', 'resources/views/livewire/projekte/index.blade.php',
     'resources/views/livewire/preislisten/index.blade.php', 'src/Services/Ai/KiAuftragService.php', 'src/Services/PreislistenImportService.php',
+    // Markt-Einordnung (#759) und Wettbewerbs-Funde (#744): String-Spalten ohne Enum-Cast
+    'src/Jobs/MarktEinordnungJob.php', 'resources/views/livewire/trendradar/wettbewerber.blade.php',
     // Concept: (string)-Cast auf den Status, kein Enum-Modell aus der Liste
     'src/Tools/ConceptSlotsPostTool.php', 'src/Services/ConceptGeneratorService.php',
     // GP als Rohzeile (DB::table → status ist ein String)

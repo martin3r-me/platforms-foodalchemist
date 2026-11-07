@@ -346,6 +346,9 @@ return [
     \Platform\FoodAlchemist\Tools\NectaPruefaelleGetTool::class,
     \Platform\FoodAlchemist\Tools\NonfoodPruefenTool::class,   // Non-Food-Prüfliste
     \Platform\FoodAlchemist\Tools\NonfoodSetTool::class,   // Non-Food-Urteil von Hand
+    \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandDeleteTool::class,
+    \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandGetTool::class,
+    \Platform\FoodAlchemist\Tools\ObservatoriumPinnwandPostTool::class,
     \Platform\FoodAlchemist\Tools\OfferBlockDeleteTool::class,
     \Platform\FoodAlchemist\Tools\OfferBlockPostTool::class,
     \Platform\FoodAlchemist\Tools\OfferBlockPutTool::class,
@@ -673,6 +676,8 @@ return [
     \Platform\FoodAlchemist\Tools\TrendEingangGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangPostTool::class,
     \Platform\FoodAlchemist\Tools\TrendEingangVertiefenTool::class,
+    \Platform\FoodAlchemist\Tools\TrendLagebildGetTool::class,
+    \Platform\FoodAlchemist\Tools\TrendLagebildPostTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenDeleteTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenGetTool::class,
     \Platform\FoodAlchemist\Tools\TrendQuellenPostTool::class,

@@ -82,7 +82,7 @@ it('veröffentlicht ausschließlich bestätigte Firmenzuordnungen und trennt die
         ->call('oeffnen', $a->id)->assertSee('Firmenbezug bestätigt');
     $this->svc->entscheiden($this->rootTeam, $p->id, $a->id, 'abgelehnt');
     expect($obs->gruppiert($this->rootTeam, ['ansicht' => 'wettbewerb'])->count())->toBe(0);
-});
+})->skip(! \Platform\FoodAlchemist\Support\ObservatoriumSicht::WETTBEWERB_AKTIV, 'Wettbewerber-Ansicht weggelassen (Dominique 07.11.2026), Code bleibt für ein Wiederanschalten');
 
 it('bewahrt eigene manuelle Zuordnungen auch ohne automatischen Namenstreffer und ermöglicht mehrere Unternehmen je Artikel', function () {
     $a = wettArtikel($this->rootTeam, 'TEST Zwei Caterer schließen eine Partnerschaft');
@@ -135,7 +135,7 @@ it('integriert Research Observatorium und mobile Lesesicht mit bestehender Schre
     Livewire::withQueryParams(['ansicht' => 'wettbewerber'])->withCookie(HandyLesemodus::COOKIE, '1')->test(Research::class)
         ->assertSet('handyReiter', 'wettbewerber')->assertSeeHtml('data-wettbewerber-research');
     expect(FaBereiche::fuerKomponente(Wettbewerber::class))->toBe('wissen');
-});
+})->skip(! \Platform\FoodAlchemist\Support\ObservatoriumSicht::WETTBEWERB_AKTIV, 'Wettbewerber-Ansicht weggelassen (Dominique 07.11.2026), Code bleibt für ein Wiederanschalten');
 
 it('validiert URL Branchen und fremde Quellen vor jedem Schreiben und hält Migration reversibel', function () {
     expect(fn () => $this->svc->speichern($this->rootTeam, ['name' => 'TEST Unsicher', 'website' => 'javascript:alert(1)']))->toThrow(RuntimeException::class);
@@ -175,7 +175,7 @@ it('hält die bestätigte Wettbewerbersicht im Briefing und schützt fremde Quel
     expect(fn () => $this->svc->speichern($this->rootTeam, ['name' => 'TEST Angriff', 'quellen_ids' => [$fremd->id]]))->toThrow(HttpException::class);
     expect(fn () => $this->svc->speichern($this->rootTeam, ['name' => 'TEST Branche', 'branchen' => ['erfunden']]))->toThrow(ValidationException::class);
     expect(Profil::count())->toBe(1);
-});
+})->skip(! \Platform\FoodAlchemist\Support\ObservatoriumSicht::WETTBEWERB_AKTIV, 'Wettbewerber-Ansicht weggelassen (Dominique 07.11.2026), Code bleibt für ein Wiederanschalten');
 
 it('normalisiert offene Regionen und erhält vorhandene Bewertungen beim Prüfen und Bearbeiten', function () {
     $p = $this->svc->speichern($this->rootTeam, ['name' => str_repeat('Ä', 190), 'region' => '']);

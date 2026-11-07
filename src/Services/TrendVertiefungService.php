@@ -103,9 +103,15 @@ class TrendVertiefungService
         return $kandidaten->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
     }
 
-    /** Marktbewegung (Observatorium) oder harte Quelle (Marktforschung, Verbraucherstudie …) mit echter Ziel-URL. */
+    /**
+     * Marktbewegung (Observatorium) oder harte Quelle (Marktforschung, Verbraucherstudie …) mit echter Ziel-URL — und nur Behaltenes
+     * (Status gebuendelt, Dominique 07.11.2026): verworfene Artikel erscheinen nicht im Observatorium, ihre Vertiefung wäre verschenkt.
+     */
     public static function autoGeeignet(FoodAlchemistTrendEingang $e): bool
     {
+        if ($e->status !== 'gebuendelt') {
+            return false;
+        }
         if (! preg_match('~^https?://~i', (string) $e->url) || str_contains((string) $e->url, 'trends.google.com')) {
             return false;
         }

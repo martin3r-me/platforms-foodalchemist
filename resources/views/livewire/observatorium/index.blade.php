@@ -4,7 +4,7 @@
     $titel = match ($ansicht) {
         'wettbewerb' => 'Wer bewegt den Markt?', 'news' => 'Was die Gastronomie bewegt.', 'ideen' => 'Aus einer Idee wird dein nächstes Angebot.',
         'markt' => 'Bewegung im Markt. Chancen für euch.', 'merkliste' => 'Gute Gedanken bleiben.',
-        'radar' => 'Entwicklungen mit Substanz.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
+        'radar' => 'Entwicklungen mit Substanz.', 'lagebild' => 'Die Woche auf einen Blick.', 'pinnwand' => 'Was euch inspiriert.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
         default => 'Heute entdecken. Morgen gestalten.',
     };
     $untertitel = match ($ansicht) {
@@ -14,6 +14,8 @@
         'markt' => 'Betreiber, Veränderungen und belegte Hinweise zur weiteren Prüfung.',
         'merkliste' => 'Deine persönliche Sammlung und Trend-Prüfliste.',
         'radar' => 'Bewertete Trends und Hypes – bewusst freigegeben.',
+        'lagebild' => 'Was diese Woche wichtig war – jede Aussage mit Quelle.',
+        'pinnwand' => 'Gemeinsam fürs Team: Meldungen und eigene Ideen.',
         'briefing' => 'Eine kompakte Auswahl aus deiner aktuellen Recherche und deinen Filtern.',
         default => 'Dein Blick auf Gastronomie, Food-Ideen und neue Möglichkeiten.',
     };
@@ -34,12 +36,16 @@
                         @svg($icon)<span>{{ $name }}</span>@if($key === 'merkliste' && $merkerAnzahl)<span class="fa-obs-nav-count">{{ $merkerAnzahl }}</span>@endif
                     </button>
                 @endforeach
+                @if($kuratiertHier)
                 <div class="fa-obs-nav-foot">
                     <div class="fa-obs-nav-label">Die Recherche dahinter</div>
                     <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'beobachten']) }}" wire:navigate>@svg('heroicon-o-magnifying-glass-circle')<span>Trend Research</span>@svg('heroicon-o-arrow-up-right')</a>
                     <a href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>@svg('heroicon-o-light-bulb')<span>Recherche-Pinnwand</span></a>
                     <p class="fa-obs-subtitle fa-obs-nav-meta">{{ $quellenAnzahl }} Quellen · {{ $themenAnzahl }} Suchthemen</p>
                 </div>
+                @else
+                <div class="fa-obs-nav-foot"><p class="fa-obs-subtitle fa-obs-nav-meta" data-observatorium-kuratiert>Kuratiert von BHG.DIGITAL · {{ $quellenAnzahl }} Quellen</p></div>
+                @endif
             </nav>
         </x-foodalchemist::page-sidebar>
     </x-slot:sidebar>
@@ -58,6 +64,10 @@
 
         @if($gewaehlt)
             @include('foodalchemist::livewire.observatorium.detail')
+        @elseif($ansicht === 'pinnwand')
+            @include('foodalchemist::livewire.observatorium.pinnwand')
+        @elseif($ansicht === 'lagebild')
+            @include('foodalchemist::livewire.observatorium.lagebild')
         @elseif($ansicht === 'radar')
             @unless($istHandy)
                 <div class="fa-obs-filters"><button type="button" class="fa-obs-button" x-on:click="filterOffen = !filterOffen" :aria-expanded="filterOffen.toString()" aria-controls="obs-handy-filter">@svg('heroicon-o-adjustments-horizontal') Radar filtern @if($radarFilterAktiv)<span class="fa-obs-pill">Aktiv</span>@endif</button></div>
@@ -87,6 +97,7 @@
             </div>
 
             @if($ansicht === 'markt')@include('foodalchemist::livewire.observatorium.marktdaten')@endif
+            @if($ansicht === 'entdecken' && $lagebild && $eintraege->currentPage() === 1)@include('foodalchemist::livewire.observatorium.lagebild-teaser')@endif
 
             @if($ansicht === 'wettbewerb')
                 <div class="fa-obs-briefing" data-observatorium-wettbewerb>
@@ -125,7 +136,7 @@
                 @endif
             @endif
         @endif
-        @if($istHandy)<div class="fa-obs-actions"><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste']) }}" wire:navigate>Trend Research @svg('heroicon-o-arrow-up-right')</a><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>Recherche-Pinnwand @svg('heroicon-o-arrow-up-right')</a></div>@endif
+        @if($istHandy && $kuratiertHier)<div class="fa-obs-actions"><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'liste']) }}" wire:navigate>Trend Research @svg('heroicon-o-arrow-up-right')</a><a class="fa-obs-link" href="{{ route('foodalchemist.trendradar.index', ['ansicht' => 'inspiration']) }}" wire:navigate>Recherche-Pinnwand @svg('heroicon-o-arrow-up-right')</a></div>@endif
         <footer class="fa-obs-footnote"><span>Gastronomie-Observatorium</span><span>Titel & Kurzbeschreibungen · Originalquellen prüfen · keine automatische Radar-Freigabe</span></footer>
     </main>
 </x-ui-page>

@@ -184,7 +184,7 @@ class FaRechte
     public function bereichAktiv(Team $team, string $bereich): bool
     {
         // Spec 82 §9: Master-only-Bereiche sind außerhalb des Master-Teams aus
-        if (in_array($bereich, FaBereiche::NUR_MASTER, true) && ! $this->istMasterTeam($team)) {
+        if (FaBereiche::masterSperre($bereich, $team)) {
             return false;
         }
 
@@ -199,7 +199,7 @@ class FaRechte
             return true;
         }
         // Spec 82 §9: Master-only-Bereich — ohne Master-Team zu, auch für Plattform-Admins (kein Durchgriff auf Agentur-Daten)
-        if (in_array($bereich, FaBereiche::NUR_MASTER, true) && ! $this->istMasterTeam($team)) {
+        if (FaBereiche::masterSperre($bereich, $team)) {
             return false;
         }
         if ($user !== null && ! $user->isAiUser() && $this->istPlattformAdmin($user)) {
@@ -218,9 +218,7 @@ class FaRechte
     {
         $aus = FoodAlchemistTeamBereich::whereIn('team_id', $this->teamKette($team))->where('aktiv', false)->pluck('bereich')->all();
 
-        $master = $this->istMasterTeam($team);
-
-        return array_map(fn ($b) => ! in_array($b, $aus, true) && ($master || ! in_array($b, FaBereiche::NUR_MASTER, true)),
+        return array_map(fn ($b) => ! in_array($b, $aus, true) && ! FaBereiche::masterSperre($b, $team),
             array_combine(array_keys(FaBereiche::KATALOG), array_keys(FaBereiche::KATALOG)));
     }
 

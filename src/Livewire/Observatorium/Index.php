@@ -13,10 +13,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTrendQuelle;
 use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\ObservatoriumService;
 use Platform\FoodAlchemist\Services\TrendService;
-use Platform\FoodAlchemist\Services\WettbewerbService;
 use Platform\FoodAlchemist\Support\FaShell;
 use Platform\FoodAlchemist\Support\HandyLesemodus;
 use Platform\FoodAlchemist\Support\ObservatoriumInhalt as Inhalt;
+use Platform\FoodAlchemist\Support\ObservatoriumSicht;
 
 class Index extends Component
 {
@@ -76,6 +76,13 @@ class Index extends Component
 
     public ?string $meldung = null;
 
+    /** Team-Pinnwand: Formular „Eigene Idee“ */
+    public string $ideeTitel = '';
+
+    public string $ideeNotiz = '';
+
+    public string $ideeLink = '';
+
     public function mount(): void
     {
         $this->team();
@@ -87,7 +94,7 @@ class Index extends Component
     public function handyLeseMethoden(): array
     {
         // Merken/Prüfliste sind persönliche Präferenzen. Pinnwand-Redaktion bleibt am Handy gesperrt.
-        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
+        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'anpinnen', 'ideeAnpinnen', 'pinNotiz', 'pinEntfernen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
     }
 
     public function ansichtSetzen(string $ansicht): void
@@ -148,10 +155,44 @@ class Index extends Component
         $this->meldung = $m->trend_pruefen ? 'In deiner persönlichen Trend-Prüfliste vorgemerkt. Noch kein Trendbeleg.' : 'Aus deiner Trend-Prüfliste entfernt.';
     }
 
+    /** Team-Pinnwand: Meldung für alle im Team anheften (eigenes Team, nicht beim Master). */
+    public function anpinnen(int $id): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->meldungAnpinnen($team, $id, null, (int) Auth::id()), 'An die Team-Pinnwand geheftet. Alle im Team sehen es.');
+    }
+
+    public function ideeAnpinnen(): void
+    {
+        $this->pinnwandAktion(function ($svc, $team) {
+            $svc->ideeAnpinnen($team, $this->ideeTitel, $this->ideeNotiz, $this->ideeLink, (int) Auth::id());
+            $this->reset('ideeTitel', 'ideeNotiz', 'ideeLink');
+        }, 'Deine Idee hängt an der Team-Pinnwand.');
+    }
+
+    public function pinNotiz(int $pinId, string $notiz): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->notizSetzen($team, $pinId, $notiz), 'Notiz gespeichert.');
+    }
+
+    public function pinEntfernen(int $pinId): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->entfernen($team, $pinId), 'Von der Team-Pinnwand genommen.');
+    }
+
+    private function pinnwandAktion(\Closure $tun, string $ok): void
+    {
+        try {
+            $tun(app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class), $this->team());
+            $this->meldung = $ok;
+        } catch (\RuntimeException $e) {
+            $this->meldung = $e->getMessage();
+        }
+    }
+
     /** Vertiefung anstoßen (Kuratieren, eigenes Team): Kernaussagen mit Beleg aus der verlinkten Seite. Plattform-KI im Hintergrund. */
     public function vertiefen(int $id): void
     {
-        abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
+        $this->nurKuratoren();
         try {
             $ids = app(\Platform\FoodAlchemist\Services\TrendVertiefungService::class)->anstossen($this->team(), [$id], (int) Auth::id(), true);
             $this->meldung = $ids === [] ? 'Die Vertiefung läuft bereits.' : 'Vertiefung gestartet: Die Quelle wird gelesen, die Kernaussagen erscheinen hier in Kürze.';
@@ -163,7 +204,7 @@ class Index extends Component
     /** Knopf „Einordnung erzeugen“: KI-Einordnung aus den gespeicherten Marktdaten (Kuratieren, Plattform-KI im Hintergrund). */
     public function einordnungErzeugen(): void
     {
-        abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
+        $this->nurKuratoren();
         try {
             $r = app(\Platform\FoodAlchemist\Services\MarktEinordnungService::class)->einordnen($this->team(), (int) Auth::id());
             $this->meldung = $r['angestossen'] ? 'Einordnung wird erstellt. Sie erscheint nach dem Neuladen.' : $r['grund'];
@@ -174,7 +215,7 @@ class Index extends Component
 
     public function aufPinnwand(int $id): void
     {
-        abort_unless(app(FaRechte::class)->darf(Auth::user(), $this->team(), FaRolle::Kuratieren), 403);
+        $this->nurKuratoren();
         try {
             app(ObservatoriumService::class)->pinnwand($this->team(), $id);
             $this->meldung = 'Als Inspiration auf die Pinnwand gelegt.';
@@ -192,8 +233,10 @@ class Index extends Component
         $eintraege = $svc->gruppiert($team, $filter)->paginate(12);
         $gewaehlt = $this->artikelId ? $svc->detail($team, $this->artikelId) : null;
         $alleMerker = $svc->merker($team)->where(fn ($w) => $w->where('gemerkt', true)->orWhere('trend_pruefen', true))->get();
-        $alleRadarTrends = app(TrendService::class)->liste($team, ['nur_radar' => true]);
-        $trends = app(TrendService::class)->liste($team, ['nur_radar' => true,
+        // Observatorium zentral: Trends, Quellen-Zähler und Lagebild kommen vom Master (Rechte am eigenen Team geprüft)
+        $inhalt = ObservatoriumSicht::inhaltsTeam($team);
+        $alleRadarTrends = app(TrendService::class)->liste($inhalt, ['nur_radar' => true]);
+        $trends = app(TrendService::class)->liste($inhalt, ['nur_radar' => true,
             'suche' => $this->radarSuche, 'kategorie' => $this->kategorien, 'sparte' => $this->sparten,
             'typ' => $this->typen, 'ebene' => $this->ebenen, 'nur_befragung' => $this->nurBefragung]);
 
@@ -203,15 +246,31 @@ class Index extends Component
             'eintraege' => $eintraege, 'gewaehlt' => $gewaehlt,
             'weitereQuellen' => $gewaehlt ? $svc->weitereQuellen($team, $gewaehlt) : collect(),
             'merker' => $alleMerker->keyBy('eingang_id'), 'merkerAnzahl' => $alleMerker->count(),
-            'darfKuratieren' => app(FaRechte::class)->darf(Auth::user(), $team, FaRolle::Kuratieren), 'teamId' => $team->id,
-            'wettbewerbVergleich' => $this->ansicht === 'wettbewerb' ? app(WettbewerbService::class)->vergleich($team) : [],
-            'wettbewerberProfile' => $this->ansicht === 'wettbewerb' ? app(WettbewerbService::class)->profile($team) : collect(),
+            'darfKuratieren' => $this->darfKuratieren($team), 'teamId' => $team->id, 'kuratiertHier' => ObservatoriumSicht::kuratiertHier($team),
+            'lagebild' => $this->ansicht === 'entdecken' ? app(\Platform\FoodAlchemist\Services\LagebildService::class)->aktuelles($team) : null,
+            'pins' => $this->ansicht === 'pinnwand' ? app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class)->liste($team) : collect(),
+            'angepinnt' => app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class)->angepinnteMeldungen($team),
+            'darfPinnen' => app(FaRechte::class)->darf(Auth::user(), $team, FaRolle::Kuratieren),
+            'lagebilder' => $this->ansicht === 'lagebild' ? app(\Platform\FoodAlchemist\Services\LagebildService::class)->liste($team, 4)->all() : [],
+            'wettbewerbVergleich' => [],
+            'wettbewerberProfile' => collect(),
             'radarGesamt' => $alleRadarTrends->count(),
             'radarFilterAktiv' => $this->radarSuche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung,
             'radar' => app(TrendService::class)->radarPositionen($trends, 260, 260, 220), 'trends' => $trends,
-            'quellenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($team)->count(),
-            'themenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($team)->where('url', 'like', 'https://news.google.com/rss/search%')->count(),
+            'quellenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($inhalt)->count(),
+            'themenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($inhalt)->where('url', 'like', 'https://news.google.com/rss/search%')->count(),
         ])->layout(FaShell::layout());
+    }
+
+    /** Kuratieren nur im Master-Team (Observatorium zentral) und mit Rolle Kuratieren. */
+    private function darfKuratieren(Team $team): bool
+    {
+        return ObservatoriumSicht::kuratiertHier($team) && app(FaRechte::class)->darf(Auth::user(), $team, FaRolle::Kuratieren);
+    }
+
+    private function nurKuratoren(): void
+    {
+        abort_unless($this->darfKuratieren($this->team()), 403);
     }
 
     private function team(): Team

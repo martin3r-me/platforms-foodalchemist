@@ -32,7 +32,8 @@ final class FaBereiche
         'produktion' => 'Produktion (Tagesplan, Wandmonitor, Etiketten)',
         'einkauf' => 'Einkauf (Bestellungen, Wareneingang, Vorlagen)',
         'lager' => 'Lager & Inventur',
-        'wissen' => 'Wissen & Trendradar',
+        'wissen' => 'Wissen & Observatorium',
+        'trend_research' => 'Trend Research (nur im Master-Team: Quellen, Eingang, Trends, Markt, Lagebild)',   // Observatorium zentral 07.11.2026
         'einstellungen' => 'Einstellungen',
         'unterteams' => 'Unter-Teams & Freigaben',   // Spec 82 §13 B2: schaltbar in /verwaltung → Freigaben
         'projekte' => 'Projekte (Agentur-Akte, nur im Master-Team)',   // Spec 82 §9: Projekt = Agentur-Akte im Master
@@ -44,6 +45,23 @@ final class FaBereiche
      * Plattform-Admins (kein Admin-Durchgriff auf Agentur-Daten). Eine ausdrückliche Zeile `aktiv=false` schaltet ihn im Master ebenfalls aus.
      */
     public const NUR_MASTER = ['projekte'];
+
+    /**
+     * Observatorium zentral (Dominique 07.11.2026): Bereiche, die der Master für alle kuratiert. Gibt es ein Master-Team, sind sie
+     * nur dort an (auch nicht für Plattform-Admins in anderen Teams); ohne Master-Team (autarke Installation) gelten sie normal.
+     * Gleiche Regel wie {@see ObservatoriumSicht::kuratiertHier}.
+     */
+    public const NUR_BEIM_MASTER = ['trend_research'];
+
+    /** Ist der Bereich wegen der Master-Regeln für dieses Team gesperrt (NUR_MASTER oder NUR_BEIM_MASTER)? */
+    public static function masterSperre(string $bereich, \Platform\Core\Models\Team $team): bool
+    {
+        if (in_array($bereich, self::NUR_MASTER, true)) {
+            return ! MasterTeam::istMaster($team);
+        }
+
+        return in_array($bereich, self::NUR_BEIM_MASTER, true) && ! ObservatoriumSicht::kuratiertHier($team);
+    }
 
     /** Routen: erstes Segment nach „foodalchemist." => Bereich. `null` = bereichsfrei. */
     public const ROUTEN = [
@@ -57,7 +75,7 @@ final class FaBereiche
         'produktion' => 'produktion', 'etiketten' => 'produktion',
         'orders' => 'einkauf', 'wareneingang' => 'einkauf', 'bestellvorlagen' => 'einkauf', 'preislisten' => 'einkauf',
         'lager' => 'lager',
-        'knowledge' => 'wissen', 'trendradar' => 'wissen', 'observatorium' => 'wissen',
+        'knowledge' => 'wissen', 'trendradar' => 'trend_research', 'observatorium' => 'wissen',
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
         'standortprofil' => 'einstellungen',   // Spec 82 §9: Eigene Standorte + Kunden-Standorte (nur Master)
         'projekte' => 'projekte',   // Spec 82 §9: Projekt-Liste und -Detail (nur im Master-Team)
@@ -121,7 +139,11 @@ final class FaBereiche
         ['lab_notes', 'rezepte'], ['reife', 'rezepte'], ['surplus', 'rezepte'], ['quality_run', 'rezepte'], ['anreicherung_vorschlag', 'rezepte'],
         ['datenwerk', 'rezepte'], ['substitution', 'rezepte'], ['machbarkeit', 'rezepte'],
         // Wissen & Trendradar
-        ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'], ['trendradar', 'wissen'], ['trends', 'wissen'], ['trend_belege', 'wissen'], ['fundstuecke', 'wissen'], ['trend_quellen', 'wissen'], ['trend_eingang', 'wissen'], ['trend_automatik', 'wissen'], ['wettbewerber', 'wissen'], ['marktdaten', 'wissen'], ['pairing', 'wissen'], ['reference', 'wissen'],
+        ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'],
+        // Observatorium zentral (07.11.2026): Trend Research kuratiert nur der Master — Mandanten lesen das Observatorium in der Oberfläche
+        ['trendradar', 'trend_research'], ['trends', 'trend_research'], ['trend_belege', 'trend_research'], ['fundstuecke', 'trend_research'], ['trend_quellen', 'trend_research'], ['trend_eingang', 'trend_research'], ['trend_automatik', 'trend_research'], ['trend_lagebild', 'trend_research'], ['wettbewerber', 'trend_research'], ['marktdaten', 'trend_research'],
+        ['observatorium_pinnwand', 'wissen'],   // Team-Pinnwand: jeder Mandant im eigenen Team
+        ['pairing', 'wissen'], ['reference', 'wissen'],
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
         // Stammdaten
         ['gp', 'stammdaten'], ['gps', 'stammdaten'], ['preise_verlauf', 'stammdaten'], ['preise_historie', 'stammdaten'], ['nonfood', 'stammdaten'], ['artikel', 'stammdaten'], ['produktpass', 'stammdaten'], ['necta_pruefaelle', 'stammdaten'], ['marke_offen', 'stammdaten'], ['supplier', 'stammdaten'], ['suppliers', 'stammdaten'],
@@ -147,7 +169,7 @@ final class FaBereiche
         'Produktion' => 'produktion', 'Etiketten' => 'produktion',
         'Orders' => 'einkauf', 'Wareneingang' => 'einkauf', 'Bestellvorlagen' => 'einkauf', 'Preislisten' => 'einkauf',
         'Lager' => 'lager',
-        'Knowledge' => 'wissen', 'Trendradar' => 'wissen', 'Observatorium' => 'wissen',
+        'Knowledge' => 'wissen', 'Trendradar' => 'trend_research', 'Observatorium' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',
         'Projekte' => 'projekte', 'Standortprofil' => 'einstellungen', 'Abos' => 'abos',
     ];
@@ -215,8 +237,8 @@ final class FaBereiche
         }
         // Spec 82 §9: Master-only-Bereiche stehen außerhalb des Master-Teams in keiner Navigation, auch nicht für Plattform-Admins
         if (! MasterTeam::istMaster($team)) {
-            $gruppen = array_values(array_filter(array_map(function (array $g) {
-                $g['items'] = array_values(array_filter($g['items'] ?? [], fn (array $item) => ! in_array(self::fuerRoute($item['route'] ?? null), self::NUR_MASTER, true)));
+            $gruppen = array_values(array_filter(array_map(function (array $g) use ($team) {
+                $g['items'] = array_values(array_filter($g['items'] ?? [], fn (array $item) => ($b = self::fuerRoute($item['route'] ?? null)) === null || ! self::masterSperre($b, $team)));
 
                 return $g;
             }, $gruppen), fn (array $g) => ($g['items'] ?? []) !== []));

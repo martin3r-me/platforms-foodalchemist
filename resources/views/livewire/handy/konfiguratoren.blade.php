@@ -62,9 +62,9 @@
                 @if($live && $url)
                     <p class="flex flex-wrap items-center gap-2"><x-fa::badge tone="ok">Live bis {{ $k->presentation_expires_at?->format('d.m.Y') }}</x-fa::badge></p>
                     <p class="break-all {{ $leise }}" data-fa-handy-kf-url>{{ $url }}</p>
-                    <div class="flex flex-wrap gap-2" x-data="{ kopiert: false }">
-                        <x-fa::button icon="heroicon-m-share" x-on:click="navigator.share ? navigator.share({ title: @js($k->kunden_titel ?: $k->name), url: @js($url) }) : (navigator.clipboard.writeText(@js($url)), kopiert = true)" data-fa-handy-kf-teilen>Teilen</x-fa::button>
-                        <x-fa::button variant="ghost" icon="heroicon-m-clipboard" x-on:click="navigator.clipboard.writeText(@js($url)); kopiert = true"><span x-text="kopiert ? 'Kopiert' : 'Link kopieren'">Link kopieren</span></x-fa::button>
+                    <div class="flex flex-wrap gap-2" x-data="{ kopiert: false, titel: @js($k->kunden_titel ?: $k->name), link: @js($url) }">
+                        <x-fa::button icon="heroicon-m-share" x-on:click="navigator.share ? navigator.share({ title: titel, url: link }) : (navigator.clipboard.writeText(link), kopiert = true)" data-fa-handy-kf-teilen>Teilen</x-fa::button>
+                        <x-fa::button variant="ghost" icon="heroicon-m-clipboard" x-on:click="navigator.clipboard.writeText(link); kopiert = true"><span x-text="kopiert ? 'Kopiert' : 'Link kopieren'">Link kopieren</span></x-fa::button>
                         <x-fa::button variant="ghost" icon="heroicon-m-arrow-top-right-on-square" :href="$url" target="_blank">Öffnen</x-fa::button>
                     </div>
                 @else

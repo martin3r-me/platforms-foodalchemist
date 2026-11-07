@@ -164,16 +164,18 @@ it('MCP: VERTIEFEN legt einen KI-Auftrag an (0 Provider-Calls), die Antwort läu
         ->and($e->vertiefung['verworfen'])->toBe(1)->and($this->stub->calls)->toBe(0);
 });
 
-it('Tageslauf: nur Marktbewegungen und harte Quellen, höchstens auto_je_tag je Team, nie Google Trends, nie doppelt', function () {
+it('Tageslauf: nur behaltene Marktbewegungen und harte Quellen, höchstens auto_je_tag je Team, nie Google Trends, nie doppelt', function () {
     Http::fake(['*' => Http::response(VT_SEITE)]);
     config(['foodalchemist.trends.vertiefung.auto_je_tag' => 2]);
     $hart = FoodAlchemistTrendQuelle::create(['team_id' => $this->rootTeam->id, 'name' => 'TEST-VT Studie', 'url' => 'https://studie.beispiel.test/',
         'art' => 'marktforschung', 'feed_typ' => 'rss', 'abruf_weg' => 'mcp', 'rhythmus' => 'aus', 'aktiv' => true]);
-    $markt = vtEintrag($this->rootTeam->id, ['url' => 'https://studie.beispiel.test/a']);
-    $quelle = vtEintrag($this->rootTeam->id, ['url' => 'https://studie.beispiel.test/b', 'quelle_id' => $hart->id, 'observatorium' => ['verwendungen' => ['news']]]);
-    $news = vtEintrag($this->rootTeam->id, ['url' => 'https://studie.beispiel.test/c', 'observatorium' => ['verwendungen' => ['news']]]);
-    $google = vtEintrag($this->rootTeam->id, ['url' => 'https://trends.google.com/trends/explore?q=TEST']);
-    $dritte = vtEintrag($this->rootTeam->id, ['url' => 'https://studie.beispiel.test/d']);
+    $b = ['status' => 'gebuendelt'];
+    $markt = vtEintrag($this->rootTeam->id, $b + ['url' => 'https://studie.beispiel.test/a']);
+    $quelle = vtEintrag($this->rootTeam->id, $b + ['url' => 'https://studie.beispiel.test/b', 'quelle_id' => $hart->id, 'observatorium' => ['verwendungen' => ['news']]]);
+    $news = vtEintrag($this->rootTeam->id, $b + ['url' => 'https://studie.beispiel.test/c', 'observatorium' => ['verwendungen' => ['news']]]);
+    $google = vtEintrag($this->rootTeam->id, $b + ['url' => 'https://trends.google.com/trends/explore?q=TEST']);
+    $dritte = vtEintrag($this->rootTeam->id, $b + ['url' => 'https://studie.beispiel.test/d']);
+    $verworfen = vtEintrag($this->rootTeam->id, ['url' => 'https://studie.beispiel.test/e']);   // Marktmeldung, aber verworfen → nie automatisch
 
     Artisan::call('foodalchemist:trend-eingang-vertiefen');
     expect(FoodAlchemistTrendEingang::whereNotNull('vertiefung_status')->pluck('id')->sort()->values()->all())->toBe([$quelle->id, $dritte->id])
@@ -183,7 +185,8 @@ it('Tageslauf: nur Marktbewegungen und harte Quellen, höchstens auto_je_tag je 
         ->and($news->refresh()->vertiefung_status)->toBeNull()->and($google->refresh()->vertiefung_status)->toBeNull();
     $this->travel(1)->days();
     Artisan::call('foodalchemist:trend-eingang-vertiefen');
-    expect($markt->refresh()->vertiefung_status)->toBe('fertig')->and($news->refresh()->vertiefung_status)->toBeNull();
+    expect($markt->refresh()->vertiefung_status)->toBe('fertig')->and($news->refresh()->vertiefung_status)->toBeNull()
+        ->and($verworfen->refresh()->vertiefung_status)->toBeNull();
 });
 
 it('Rechte und Teams: Leser darf nicht vertiefen, fremde Einträge bleiben unberührt, Job ohne „läuft“ tut nichts', function () {

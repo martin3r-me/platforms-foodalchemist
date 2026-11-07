@@ -138,7 +138,7 @@
         @else
             <h1 class="text-[length:var(--fa-text-2xl)] font-semibold text-[var(--fa-ink)]">Trendradar</h1>
             <div role="tablist" aria-label="Ansicht" class="flex overflow-x-auto p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-fa-handy-reiter>
-                @foreach(['trends' => 'Trends', 'themen' => 'Entwicklungen', 'pinnwand' => 'Pinnwand', 'beobachten' => 'Suchthemen', 'quellen' => 'Quellen', 'eingang' => 'Eingang', 'automatik' => 'Auswertung', 'wettbewerber' => 'Wettbewerber'] as $rk => $rt)
+                @foreach(['trends' => 'Trends', 'themen' => 'Entwicklungen', 'pinnwand' => 'Pinnwand', 'beobachten' => 'Suchthemen', 'quellen' => 'Quellen', 'eingang' => 'Eingang', 'automatik' => 'Auswertung'] as $rk => $rt)
                     <button type="button" role="tab" wire:click="$set('handyReiter', '{{ $rk }}')" aria-selected="{{ $reiter === $rk ? 'true' : 'false' }}"
                             class="shrink-0 px-3 min-h-11 rounded-[5px] text-[length:var(--fa-text-md)] font-medium {{ $reiter === $rk ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)]' }}">{{ $rt }}</button>
                 @endforeach

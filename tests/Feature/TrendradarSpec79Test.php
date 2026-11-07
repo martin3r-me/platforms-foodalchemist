@@ -335,6 +335,10 @@ it('Google Trends: Monatsbudget stoppt die Abfrage, Wochenlauf nur bei eingescha
     expect($signale->wochenlauf($this->rootTeam)['gemessen'])->toBe(0);   // Messung im Team aus
     app(TeamSettingsService::class)->update($this->rootTeam, ['trend_dataforseo_enabled' => true, 'trend_dataforseo_budget_usd' => 5]);
     expect($signale->wochenlauf($this->rootTeam))->toMatchArray(['gemessen' => 0, 'uebersprungen' => 1]);   // eben erst gemessen
+    $this->travel(7)->days();   // monatlich (Dominique 07.11.2026): eine Woche später noch nicht wieder dran
+    expect($signale->wochenlauf($this->rootTeam)['uebersprungen'])->toBe(1);
+    config(['foodalchemist.trends.messen_abstand_tage' => 6]);   // Abstand ist Einstellung: mit 6 Tagen wäre er dran
+    expect($signale->wochenlauf($this->rootTeam)['uebersprungen'])->toBe(0);
 });
 
 it('Auswertung der Kurve: Richtung und Spitze ohne Sockel', function () {

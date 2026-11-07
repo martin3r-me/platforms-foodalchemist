@@ -439,6 +439,8 @@ return [
     'marktdaten' => ['genesis_token' => env('FOODALCHEMIST_GENESIS_TOKEN', '')],
 
     'trends' => [
+        // Google-Trends-Messung (DataForSEO): Mindestabstand je Trend. 28 = monatlich (Dominique 07.11.2026, ~0,30 $/Monat); der Lauf prüft dienstags.
+        'messen_abstand_tage' => (int) env('FOODALCHEMIST_TRENDS_MESSEN_ABSTAND_TAGE', 28),
         // Vertiefung im Trend-Eingang: Tageslauf höchstens auto_je_tag je Team, nur Einträge der letzten auto_tage, Abruf bis max_bytes.
         'vertiefung' => [
             'auto_je_tag' => (int) env('FOODALCHEMIST_TREND_VERTIEFUNG_JE_TAG', 10),

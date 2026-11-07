@@ -13,7 +13,6 @@
         'inspiration' => ['Pinnwand', 'heroicon-o-light-bulb', 'Fundstücke sammeln und gemeinsam weiterdenken'],
         'eingang' => ['Eingang', 'heroicon-o-inbox-arrow-down', 'Neue Meldungen sichten und Auswertung nachvollziehen'],
         'beobachten' => ['Suchthemen', 'heroicon-o-magnifying-glass', 'Themen und Suchbegriffe verwalten'],
-        'wettbewerber' => ['Wettbewerber', 'heroicon-o-building-office', 'Unternehmen beobachten und Firmenbezug prüfen'],
         'quellen' => ['Quellen', 'heroicon-o-rss', 'RSS-Feeds und manuelle Quellen pflegen'],
         'automatik' => ['Automatik', 'heroicon-o-cpu-chip', 'Abläufe, Budget und Prüfregeln kontrollieren'],
     ];
