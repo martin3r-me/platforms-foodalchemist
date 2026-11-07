@@ -142,6 +142,7 @@ final class FaBereiche
         ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'],
         // Observatorium zentral (07.11.2026): Trend Research kuratiert nur der Master — Mandanten lesen das Observatorium in der Oberfläche
         ['trendradar', 'trend_research'], ['trends', 'trend_research'], ['trend_belege', 'trend_research'], ['fundstuecke', 'trend_research'], ['trend_quellen', 'trend_research'], ['trend_eingang', 'trend_research'], ['trend_automatik', 'trend_research'], ['trend_lagebild', 'trend_research'], ['wettbewerber', 'trend_research'], ['marktdaten', 'trend_research'],
+        ['observatorium_pinnwand', 'wissen'],   // Team-Pinnwand: jeder Mandant im eigenen Team
         ['pairing', 'wissen'], ['reference', 'wissen'],
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
         // Stammdaten

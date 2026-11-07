@@ -13,6 +13,7 @@ final class ObservatoriumInhalt
         'lagebild' => ['Lagebild', 'heroicon-o-document-text'],
         'markt' => ['Markt & Chancen', 'heroicon-o-building-office-2'],
         // 'wettbewerb' weggelassen (Dominique 07.11.2026, ObservatoriumSicht::WETTBEWERB_AKTIV)
+        'pinnwand' => ['Team-Pinnwand', 'heroicon-o-rectangle-stack'],
         'merkliste' => ['Merkliste', 'heroicon-o-bookmark'],
     ];
 

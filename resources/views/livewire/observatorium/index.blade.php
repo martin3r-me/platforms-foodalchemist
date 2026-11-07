@@ -4,7 +4,7 @@
     $titel = match ($ansicht) {
         'wettbewerb' => 'Wer bewegt den Markt?', 'news' => 'Was die Gastronomie bewegt.', 'ideen' => 'Aus einer Idee wird dein nächstes Angebot.',
         'markt' => 'Bewegung im Markt. Chancen für euch.', 'merkliste' => 'Gute Gedanken bleiben.',
-        'radar' => 'Entwicklungen mit Substanz.', 'lagebild' => 'Die Woche auf einen Blick.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
+        'radar' => 'Entwicklungen mit Substanz.', 'lagebild' => 'Die Woche auf einen Blick.', 'pinnwand' => 'Was euch inspiriert.', 'briefing' => 'Weniger suchen. Mehr mitnehmen.',
         default => 'Heute entdecken. Morgen gestalten.',
     };
     $untertitel = match ($ansicht) {
@@ -15,6 +15,7 @@
         'merkliste' => 'Deine persönliche Sammlung und Trend-Prüfliste.',
         'radar' => 'Bewertete Trends und Hypes – bewusst freigegeben.',
         'lagebild' => 'Was diese Woche wichtig war – jede Aussage mit Quelle.',
+        'pinnwand' => 'Gemeinsam fürs Team: Meldungen und eigene Ideen.',
         'briefing' => 'Eine kompakte Auswahl aus deiner aktuellen Recherche und deinen Filtern.',
         default => 'Dein Blick auf Gastronomie, Food-Ideen und neue Möglichkeiten.',
     };
@@ -63,6 +64,8 @@
 
         @if($gewaehlt)
             @include('foodalchemist::livewire.observatorium.detail')
+        @elseif($ansicht === 'pinnwand')
+            @include('foodalchemist::livewire.observatorium.pinnwand')
         @elseif($ansicht === 'lagebild')
             @include('foodalchemist::livewire.observatorium.lagebild')
         @elseif($ansicht === 'radar')

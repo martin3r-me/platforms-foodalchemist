@@ -167,3 +167,47 @@ it('Leeres Lagebild: Ansicht zeigt ehrlichen Hinweis', function () {
     $this->actingAs($this->leser);
     Livewire::test(Index::class)->call('ansichtSetzen', 'lagebild')->assertSee('Noch kein Lagebild.');
 });
+
+it('Team-Pinnwand: Mandant heftet Master-Meldung und eigene Idee an, gemeinsam fürs Team, nie beim Master oder anderen Teams', function () {
+    $m = ozEintrag($this->master->id);
+    $kollegin = $this->makeUser($this->mandant, 'Kollegin TEST-OZ');
+    $nurLeser = $this->makeUser($this->mandant, 'Leser TEST-OZ', 'viewer');
+    $this->actingAs($this->leser);
+    Livewire::test(Index::class)->call('oeffnen', $m->id)->assertSee('data-observatorium-anpinnen', false)
+        ->call('anpinnen', $m->id)->assertSet('meldung', 'An die Team-Pinnwand geheftet. Alle im Team sehen es.')
+        ->call('anpinnen', $m->id)
+        ->set('ideeTitel', 'TEST-OZ Linsen-Bowl')->set('ideeNotiz', 'Für die Mittagslinie')->set('ideeLink', 'https://idee.beispiel.test/bowl')
+        ->call('ideeAnpinnen')->assertSet('ideeTitel', '')
+        ->set('ideeTitel', 'TEST-OZ kaputt')->set('ideeLink', 'javascript:alert(1)')->call('ideeAnpinnen')->assertSet('meldung', 'Der Link muss mit http:// oder https:// beginnen (höchstens 500 Zeichen).');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistObservatoriumPin::where('team_id', $this->mandant->id)->count())->toBe(2)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistObservatoriumPin::where('team_id', $this->master->id)->count())->toBe(0);
+
+    // Kollegin im selben Team sieht beides; Master und Kind-Team sehen nichts davon
+    $this->actingAs($kollegin);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'pinnwand')->assertSee('TEST-OZ Kantinen setzen auf Linsen')->assertSee('TEST-OZ Linsen-Bowl')->assertSee('Für die Mittagslinie');
+    $this->actingAs($this->kurator);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'pinnwand')->assertDontSee('TEST-OZ Linsen-Bowl')->assertSee('Eure Pinnwand ist noch leer.');
+
+    // Leserolle: sieht, heftet nicht an
+    $this->actingAs($nurLeser);
+    Livewire::test(Index::class)->call('ansichtSetzen', 'pinnwand')->assertSee('TEST-OZ Linsen-Bowl')->assertDontSee('data-pinnwand-idee', false);
+    expect(fn () => app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class)->ideeAnpinnen($this->mandant, 'x', null, null, $nurLeser->id))
+        ->toThrow(\Platform\FoodAlchemist\Exceptions\FaRechtFehltException::class);
+});
+
+it('Team-Pinnwand per MCP: anheften, Notiz, lesen, abnehmen — Bereich Wissen, also auch beim Mandanten', function () {
+    $m = ozEintrag($this->master->id);
+    $this->actingAs($this->leser);
+    $mcp = new ToolContext($this->leser, $this->mandant, ['team_source' => 'user_current']);
+    expect(FaBereiche::fuerTool('foodalchemist.observatorium_pinnwand.POST'))->toBe('wissen');
+    $a = $this->reg->get('foodalchemist.observatorium_pinnwand.POST')->execute(['eingang_id' => $m->id, 'notiz' => 'Spannend'], $mcp);
+    $b = $this->reg->get('foodalchemist.observatorium_pinnwand.POST')->execute(['titel' => 'TEST-OZ eigene Idee'], $mcp);
+    expect($a->success)->toBeTrue()->and($b->success)->toBeTrue();
+    expect($this->reg->get('foodalchemist.observatorium_pinnwand.POST')->execute(['pin_id' => $b->data['pin_id'], 'notiz' => 'Notiz neu'], $mcp)->success)->toBeTrue();
+    expect($this->reg->get('foodalchemist.observatorium_pinnwand.POST')->execute(['eingang_id' => 999999], $mcp)->success)->toBeFalse();
+    $pins = $this->reg->get('foodalchemist.observatorium_pinnwand.GET')->execute([], $mcp)->data['pins'];
+    expect(collect($pins)->pluck('art')->sort()->values()->all())->toBe(['idee', 'meldung'])
+        ->and(collect($pins)->firstWhere('art', 'idee')['notiz'])->toBe('Notiz neu');
+    expect($this->reg->get('foodalchemist.observatorium_pinnwand.DELETE')->execute(['pin_id' => $a->data['pin_id']], $mcp)->success)->toBeTrue()
+        ->and($this->reg->get('foodalchemist.observatorium_pinnwand.GET')->execute([], $mcp)->data['pins'])->toHaveCount(1);
+});

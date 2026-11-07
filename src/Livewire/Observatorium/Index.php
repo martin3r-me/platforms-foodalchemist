@@ -76,6 +76,13 @@ class Index extends Component
 
     public ?string $meldung = null;
 
+    /** Team-Pinnwand: Formular „Eigene Idee“ */
+    public string $ideeTitel = '';
+
+    public string $ideeNotiz = '';
+
+    public string $ideeLink = '';
+
     public function mount(): void
     {
         $this->team();
@@ -87,7 +94,7 @@ class Index extends Component
     public function handyLeseMethoden(): array
     {
         // Merken/Prüfliste sind persönliche Präferenzen. Pinnwand-Redaktion bleibt am Handy gesperrt.
-        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
+        return ['ansichtSetzen', 'oeffnen', 'schliessen', 'merken', 'trendPruefen', 'anpinnen', 'ideeAnpinnen', 'pinNotiz', 'pinEntfernen', 'filterZuruecksetzen', 'radarFilterZuruecksetzen', 'setPage', 'nextPage', 'previousPage', 'gotoPage'];
     }
 
     public function ansichtSetzen(string $ansicht): void
@@ -146,6 +153,40 @@ class Index extends Component
     {
         $m = app(ObservatoriumService::class)->merken($this->team(), $id, true);
         $this->meldung = $m->trend_pruefen ? 'In deiner persönlichen Trend-Prüfliste vorgemerkt. Noch kein Trendbeleg.' : 'Aus deiner Trend-Prüfliste entfernt.';
+    }
+
+    /** Team-Pinnwand: Meldung für alle im Team anheften (eigenes Team, nicht beim Master). */
+    public function anpinnen(int $id): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->meldungAnpinnen($team, $id, null, (int) Auth::id()), 'An die Team-Pinnwand geheftet. Alle im Team sehen es.');
+    }
+
+    public function ideeAnpinnen(): void
+    {
+        $this->pinnwandAktion(function ($svc, $team) {
+            $svc->ideeAnpinnen($team, $this->ideeTitel, $this->ideeNotiz, $this->ideeLink, (int) Auth::id());
+            $this->reset('ideeTitel', 'ideeNotiz', 'ideeLink');
+        }, 'Deine Idee hängt an der Team-Pinnwand.');
+    }
+
+    public function pinNotiz(int $pinId, string $notiz): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->notizSetzen($team, $pinId, $notiz), 'Notiz gespeichert.');
+    }
+
+    public function pinEntfernen(int $pinId): void
+    {
+        $this->pinnwandAktion(fn ($svc, $team) => $svc->entfernen($team, $pinId), 'Von der Team-Pinnwand genommen.');
+    }
+
+    private function pinnwandAktion(\Closure $tun, string $ok): void
+    {
+        try {
+            $tun(app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class), $this->team());
+            $this->meldung = $ok;
+        } catch (\RuntimeException $e) {
+            $this->meldung = $e->getMessage();
+        }
     }
 
     /** Vertiefung anstoßen (Kuratieren, eigenes Team): Kernaussagen mit Beleg aus der verlinkten Seite. Plattform-KI im Hintergrund. */
@@ -207,6 +248,9 @@ class Index extends Component
             'merker' => $alleMerker->keyBy('eingang_id'), 'merkerAnzahl' => $alleMerker->count(),
             'darfKuratieren' => $this->darfKuratieren($team), 'teamId' => $team->id, 'kuratiertHier' => ObservatoriumSicht::kuratiertHier($team),
             'lagebild' => $this->ansicht === 'entdecken' ? app(\Platform\FoodAlchemist\Services\LagebildService::class)->aktuelles($team) : null,
+            'pins' => $this->ansicht === 'pinnwand' ? app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class)->liste($team) : collect(),
+            'angepinnt' => app(\Platform\FoodAlchemist\Services\ObservatoriumPinnwandService::class)->angepinnteMeldungen($team),
+            'darfPinnen' => app(FaRechte::class)->darf(Auth::user(), $team, FaRolle::Kuratieren),
             'lagebilder' => $this->ansicht === 'lagebild' ? app(\Platform\FoodAlchemist\Services\LagebildService::class)->liste($team, 4)->all() : [],
             'wettbewerbVergleich' => [],
             'wettbewerberProfile' => collect(),
