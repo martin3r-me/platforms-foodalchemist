@@ -720,3 +720,48 @@ it('Fundstück ohne Titel: Inspiration heißt nie wie die Domain (www.instagram.
         ->and($titel($mitTitel))->toBe('Matcha-Croissant');
     expect(FoodAlchemistTrendInspiration::where('titel', 'like', '%www.%')->exists())->toBeFalse();
 });
+
+it('Inspiration umbenennen: Anleger mit Lesen oder Kuratieren, fremde Leser nicht, automatische Themen nie — Service, MCP und Pinnwand', function () {
+    $eigenLeser = $this->svc->fundstueckAblegen($this->rootTeam, ['url' => 'https://www.instagram.com/reel/x'], null, $this->leser->id);
+    $vomInhaber = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Alt', 'url' => 'https://www.instagram.com/p/y'], null, $this->inhaber->id);
+    $auto = FoodAlchemistTrendInspiration::create(['team_id' => $this->rootTeam->id, 'titel' => 'Hülsenfrucht', 'herkunft' => 'automatisch', 'thema_schluessel' => 'huelsenfrucht']);
+
+    // Anleger darf mit Lesen nachbessern; Leerzeichen werden geglättet
+    expect($this->svc->inspirationUmbenennen($this->rootTeam, $eigenLeser->inspiration_id, '  Brioche-Bun   mit Kimchi-Butter ', $this->leser->id)->titel)
+        ->toBe('Brioche-Bun mit Kimchi-Butter')
+        ->and(fn () => $this->svc->inspirationUmbenennen($this->rootTeam, $vomInhaber->inspiration_id, 'Gekapert', $this->leser->id))->toThrow(FaRechtFehltException::class)
+        ->and(fn () => $this->svc->inspirationUmbenennen($this->rootTeam, $auto->id, 'Bohnen', $this->inhaber->id))->toThrow(\RuntimeException::class, 'Automatische')
+        ->and(fn () => $this->svc->inspirationUmbenennen($this->rootTeam, $vomInhaber->inspiration_id, '   ', $this->inhaber->id))->toThrow(\RuntimeException::class, 'Titel')
+        ->and(fn () => $this->svc->inspirationUmbenennen($this->childA, $vomInhaber->inspiration_id, 'Fremd', $this->inhaber->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect(FoodAlchemistTrendInspiration::find($vomInhaber->inspiration_id)->titel)->toBe('Alt')
+        ->and($auto->refresh()->titel)->toBe('Hülsenfrucht');
+
+    // MCP: fundstuecke.PUT mit titel (ausführender Test über die Registry)
+    $put = app(ToolRegistry::class)->get('foodalchemist.fundstuecke.PUT');
+    $ctx = new ToolContext($this->inhaber, $this->rootTeam);
+    $ok = $put->execute(['inspiration_ids' => [$vomInhaber->inspiration_id], 'titel' => 'Matcha-Croissant'], $ctx);
+    expect($ok->success)->toBeTrue()->and($ok->data['titel'])->toBe('Matcha-Croissant')
+        ->and($put->execute(['inspiration_ids' => [$vomInhaber->inspiration_id, $eigenLeser->inspiration_id], 'titel' => 'Zwei'], $ctx)->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($put->execute(['inspiration_ids' => [$auto->id], 'titel' => 'Bohnen'], $ctx)->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($put->execute(['inspiration_ids' => [$vomInhaber->inspiration_id], 'titel' => 'X', 'loesen' => true], $ctx)->errorCode)->toBe('VALIDATION_ERROR');
+
+    // Pinnwand: Stift öffnet das Feld mit dem aktuellen Titel, Speichern übernimmt
+    $iid = $vomInhaber->inspiration_id;
+    Livewire::test(TrendradarIndex::class)->set('ansicht', 'inspiration')
+        ->assertSeeHtml('data-inspiration-titel-aendern="'.$iid.'"')
+        ->call('titelBearbeiten', $iid)
+        ->assertSet('titelEntwurf.'.$iid, 'Matcha-Croissant')
+        ->assertSeeHtml('data-inspiration-titel-form="'.$iid.'"')
+        ->set('titelEntwurf.'.$iid, 'Matcha-Croissant mit Yuzu')
+        ->call('inspirationUmbenennen', $iid)
+        ->assertSet('fehler', null)
+        ->assertSee('Matcha-Croissant mit Yuzu')
+        ->assertDontSeeHtml('data-inspiration-titel-form="'.$iid.'"');
+    expect(FoodAlchemistTrendInspiration::find($iid)->titel)->toBe('Matcha-Croissant mit Yuzu');
+
+    // Leser sieht den Stift nur an der eigenen Karte
+    $this->actingAs($this->leser);
+    Livewire::test(TrendradarIndex::class)->set('ansicht', 'inspiration')
+        ->assertSeeHtml('data-inspiration-titel-aendern="'.$eigenLeser->inspiration_id.'"')
+        ->assertDontSeeHtml('data-inspiration-titel-aendern="'.$iid.'"');
+});
