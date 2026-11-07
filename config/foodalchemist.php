@@ -532,6 +532,10 @@ return [
         // trend_dataforseo_enabled und stoppt am Monatsbudget des Teams.
         'trends_messen_enabled' => env('FOODALCHEMIST_TRENDS_MESSEN', true),
         'trends_messen_zeit' => env('FOODALCHEMIST_TRENDS_MESSEN_ZEIT', '06:10'),
+        // Markt in Zahlen: monatlicher Destatis-Abruf (Destatis veröffentlicht um die Monatsmitte), danach automatische Einordnung.
+        'marktdaten_enabled' => env('FOODALCHEMIST_MARKTDATEN_MONATLICH', true),
+        'marktdaten_tag' => (int) env('FOODALCHEMIST_MARKTDATEN_TAG', 25),
+        'marktdaten_zeit' => env('FOODALCHEMIST_MARKTDATEN_ZEIT', '06:20'),
         // Spec 93 A: täglicher Quellen-Abruf (holt nur fällige plattform-Quellen). Standard AUS — kein Lauf allein durch den Deploy.
         'trend_quellen_enabled' => env('FOODALCHEMIST_TREND_QUELLEN', false),
         'trend_quellen_zeit' => env('FOODALCHEMIST_TREND_QUELLEN_ZEIT', '05:50'),

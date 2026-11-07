@@ -386,3 +386,25 @@ it('trennt Markt in Zahlen als eigenen Reiter von Markt & Chancen (Dominique 07.
     Livewire::test(Index::class)->call('ansichtSetzen', 'markt')->assertDontSeeHtml('data-observatorium-marktdaten')->assertSee('Chancen prüfen')
         ->call('ansichtSetzen', 'zahlen')->assertSeeHtml('data-observatorium-marktdaten')->assertDontSee('Alle Marktbewegungen')->assertDontSee('Frische Perspektiven für deine Branche');
 });
+
+it('holt Markt in Zahlen monatlich per Kommando ins Master-Team und plant den Lauf am 25. (Dominique 07.11.2026)', function () {
+    marktHttp();
+    config(['foodalchemist.master_team_id' => null]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    \Illuminate\Support\Facades\Auth::logout();
+    $this->artisan('foodalchemist:marktdaten-abrufen')->expectsOutputToContain('Kein Master-Team')->assertSuccessful();
+    expect(Daten::count())->toBe(0);
+
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+    $this->artisan('foodalchemist:marktdaten-abrufen', ['--probelauf' => true])->expectsOutputToContain('Probelauf')->assertSuccessful();
+    expect(Daten::count())->toBe(0);
+    $this->artisan('foodalchemist:marktdaten-abrufen')->expectsOutputToContain('gespeichert')->assertSuccessful();
+    expect(Daten::where('team_id', $this->rootTeam->id)->whereNotNull('abgerufen_at')->count())->toBeGreaterThan(0)
+        ->and(Daten::where('team_id', '!=', $this->rootTeam->id)->count())->toBe(0);
+    config(['foodalchemist.master_team_id' => null]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
+
+    $plan = collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())->first(fn ($e) => str_contains((string) $e->command, 'foodalchemist:marktdaten-abrufen'));
+    expect($plan)->not->toBeNull()->and($plan->expression)->toBe('20 6 25 * *');
+});
