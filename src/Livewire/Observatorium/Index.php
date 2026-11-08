@@ -48,6 +48,10 @@ class Index extends Component
     #[Url(as: 'artikel')]
     public ?int $artikelId = null;
 
+    /** Lese-Detail eines Radar-Trends (für alle, auch Mandanten). */
+    #[Url(as: 'trend')]
+    public ?int $trendId = null;
+
     #[Url(as: 'radar_q')]
     public string $radarSuche = '';
 
@@ -113,6 +117,7 @@ class Index extends Component
         }
         $this->ansicht = $ansicht;
         $this->artikelId = null;
+        $this->trendId = null;
         $this->meldung = null;
         $this->resetPage();
     }
@@ -176,6 +181,17 @@ class Index extends Component
         app(ObservatoriumService::class)->detail($this->team(), $id);
         $this->artikelId = $id;
         $this->meldung = null;
+    }
+
+    public function trendOeffnen(int $id): void
+    {
+        app(ObservatoriumService::class)->radarTrend($this->team(), $id);   // Sichtbarkeit + Radar-Status prüfen, sonst 404
+        $this->trendId = $id;
+    }
+
+    public function trendSchliessen(): void
+    {
+        $this->trendId = null;
     }
 
     public function schliessen(): void
@@ -304,6 +320,7 @@ class Index extends Component
             'radarGesamt' => $alleRadarTrends->count(),
             'radarFilterAktiv' => $this->radarSuche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung,
             'radar' => app(TrendService::class)->radarPositionen($trends, 260, 260, 220), 'trends' => $trends,
+            'trendDetail' => $this->ansicht === 'radar' && $this->trendId ? $svc->radarTrend($team, $this->trendId) : null,
             'quellenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($inhalt)->count(),
             'themenAnzahl' => FoodAlchemistTrendQuelle::visibleToTeam($inhalt)->where('url', 'like', 'https://news.google.com/rss/search%')->count(),
         ])->layout(FaShell::layout());

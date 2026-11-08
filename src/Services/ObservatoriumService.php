@@ -109,6 +109,26 @@ class ObservatoriumService
         return Artikel::visibleToTeam($team)->with(['quelle', 'wettbewerbFunde' => fn ($q) => $q->visibleToTeam($team)->where('status', 'bestaetigt')->whereIn('wettbewerber_id', FoodAlchemistWettbewerber::visibleToTeam($team)->select('id'))->with('wettbewerber')])->find($id) ?? abort(404);
     }
 
+    /**
+     * Lese-Detail eines freigegebenen Radar-Trends (Dominique 08.11.2026: Mandanten sahen im Radar nur Name und Belegzahl). Rechte „Lesen“ am
+     * eigenen Team, Inhalt beim Inhalts-Team (Master); nur Trends mit Radar-Status wie die Radar-Liste, sonst 404. Belege und Messungen nur aus dem
+     * Sichtbereich des Inhalts-Teams; Kurator-Interna (Notizen, Kosten, Automatik-Ereignisse) gibt die Ansicht nicht aus.
+     */
+    public function radarTrend(Team $team, int $id): \Platform\FoodAlchemist\Models\FoodAlchemistTrend
+    {
+        $this->rechte->pruefeAngemeldet($team, FaRolle::Lesen, 'Observatorium lesen');
+        $inhalt = ObservatoriumSicht::inhaltsTeam($team);
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistTrend::visibleToTeam($inhalt)
+            ->whereIn('status', \Platform\FoodAlchemist\Support\TrendVokabular::RADAR_STATUS)
+            ->with([
+                'belege' => fn ($q) => $q->visibleToTeam($inhalt),
+                'signale' => fn ($q) => $q->visibleToTeam($inhalt)->limit(3),
+            ])
+            ->withCount('belege')
+            ->find($id) ?? abort(404);
+    }
+
     public function weitereQuellen(Team $team, Artikel $artikel): Collection
     {
         // Vorher den übergebenen Datensatz gegen den Sichtbereich auflösen, auch bei direkten Service-Aufrufen.

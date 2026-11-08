@@ -71,6 +71,8 @@
             @include('foodalchemist::livewire.observatorium.lagebild')
         @elseif($ansicht === 'zahlen')
             @include('foodalchemist::livewire.observatorium.marktdaten')
+        @elseif($ansicht === 'radar' && $trendDetail)
+            @include('foodalchemist::livewire.observatorium.radar-trend', ['t' => $trendDetail])
         @elseif($ansicht === 'radar')
             @unless($istHandy)
                 <div class="fa-obs-filters"><button type="button" class="fa-obs-button" x-on:click="filterOffen = !filterOffen" :aria-expanded="filterOffen.toString()" aria-controls="obs-handy-filter">@svg('heroicon-o-adjustments-horizontal') Radar filtern @if($radarFilterAktiv)<span class="fa-obs-pill">Aktiv</span>@endif</button></div>
