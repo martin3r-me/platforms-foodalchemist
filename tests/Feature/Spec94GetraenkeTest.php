@@ -156,3 +156,20 @@ it('Planungs-Bedarf: Zusatz-Leistung des gewählten Getränkepakets zählt mit, 
         ->and(collect($ohne['leistungen'])->pluck('bezeichnung')->all())->not->toContain('Barkeeper');
 });
 
+
+it('Karte nennt die Stunden je Zeitfenster: Tag und Abend = „4 + 6“, nicht die Day-into-Night-Zeit; nur Abend-Concept = nur „6“', function () {
+    // Dominique 08.11.2026: die Pauschale rechnet Tag und Abend getrennt mit ihren Einsatzzeiten, die Karte sagt dasselbe
+    $k = $this->k->fresh();
+    $beide = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'lunch_concept_id' => $this->wein->id,
+        'dinner_concept_id' => $this->wein->id, 'getraenk_dauer' => 'stunde']);
+    $abend = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'getraenk_dauer' => 'stunde']);
+
+    expect(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorSnapshot::getraenkStunden($beide, $k))->toBe(['lunch' => '4', 'dinner' => '6', 'day_night' => '4 + 6'])
+        ->and(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorSnapshot::getraenkStunden($abend, $k))->toBe(['lunch' => '', 'dinner' => '6', 'day_night' => '6']);
+
+    // und so steht es im veröffentlichten Link
+    app(PresentationService::class)->publish($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id,
+        ['expires_at' => now()->addMonth()->toIso8601String(), 'design' => 'konfigurator', 'price_mode' => 'auto']);
+    $karten = collect($this->k->fresh()->presentation_snapshot_json['content']['getraenke'])->keyBy('id');
+    expect($karten[$beide->id]['stunden']['day_night'])->toBe('4 + 6')->and($karten[$abend->id]['stunden']['day_night'])->toBe('6');
+});
