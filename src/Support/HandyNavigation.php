@@ -36,6 +36,7 @@ final class HandyNavigation
         'foodalchemist.speiseplan.index',
         'foodalchemist.speisekarte.index',
         'foodalchemist.foodbooks.index',
+        'foodalchemist.angebote.index',            // Handy-Lesen (Dominique 08.11.2026)
         'foodalchemist.angebote.konfiguratoren',   // Spec 94 Stufe 6
         'foodalchemist.trendradar.index',
         'foodalchemist.observatorium.index',

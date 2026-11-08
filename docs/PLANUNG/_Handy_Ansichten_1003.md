@@ -68,7 +68,7 @@ Geprüft wird bei 375 px und 390–430 px, Desktop vorher/nachher bei 1440 und 1
 | Dashboard (Leitstelle) | `/` | Dashboard | Lesen, prominent (ganz oben in „Mehr“ bzw. Startseite) | – | 1b |
 | Concepts (alt) | `/concepts` | Concepts\Index | Desktop | – | – |
 | Pakete | `/pakete` | Pakete\Index | Desktop | – | – |
-| Angebote | `/angebote` | Angebote\Index | Desktop | – | – |
+| Angebote | `/angebote` | Angebote\Index | Lesen (Dominique 08.11.2026, wie Foodbooks): Karten (Name · Kunde · Anlass · Datum · Gäste, Status, Angebotssumme) mit Suche und Status-Chips; Antippen öffnet die Live-Vorschau `/angebote/{id}/praesentation` (Kundensicht), „Dokument“ das Angebots-Dokument mit Preisen. Editor, Anlegen, Status-Wechsel, Kalkulation, Veröffentlichen am Computer | Concerns\HandyAngeboteLesen → livewire/handy/angebote | ✓ |
 | Kalkulation, Controlling | `/kalkulation`, `/controlling` | Controlling\Cockpit | Desktop | – | – |
 | Favoriten | `/favoriten` | Favorites\Index | Desktop | – | – |
 | Food-DNA | `/food-dna` | FoodDna\Index | Desktop | – | – |
