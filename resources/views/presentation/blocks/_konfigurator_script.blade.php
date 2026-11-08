@@ -160,8 +160,12 @@
             pp = tab[schluessel(k, t)];
             z.addons.forEach(function (a) { if (tab['a' + a] !== undefined) { pp += tab['a' + a]; } });
             pp += getraenkePp;
-        } else if (i !== null) {   // noch kein Konzept: günstigster Preis der Stufe als „ab“
-            Object.keys(tab).forEach(function (s) { if (s.charAt(0) === 'k' && (pp === null || tab[s] < pp)) { pp = tab[s]; } });
+        } else if (i !== null) {   // noch kein Konzept: günstigster Preis der Stufe als „ab“ — im gewählten Zeitfenster (08.11.2026), sonst über alle
+            if (t) {   // wie die Zeitfenster-Karte: je Konzept sein Preis im Zeitfenster (Tag und Abend: dasselbe Konzept tags und abends)
+                d.konzepte.forEach(function (x) { if (passt(x, t)) { var v = tab[t === 'day_night' ? 'dn' + x.id + ':' + x.id : 'k' + x.id + ':' + t]; if (v !== undefined && (pp === null || v < pp)) { pp = v; } } });
+            } else {
+                Object.keys(tab).forEach(function (s) { if (s.charAt(0) === 'k' && (pp === null || tab[s] < pp)) { pp = tab[s]; } });
+            }
             ab = pp !== null;
         }
         setze('[data-konfig-pp]', pp !== null ? euro(pp) : '—');
@@ -210,8 +214,10 @@
         var zzBox = q('[data-konfig-zzgl]'), zzListe = q('[data-konfig-zzgl-liste]');
         if (zzBox && zzListe) { zzFuellen(zzBox, zzListe); }
         var zzSumme = zz.reduce(function (s, e) { return s + zzBetrag(e); }, 0);
-        qa('[data-konfig-zzgl-leiste]').forEach(function (e) { e.hidden = zz.length === 0; });
-        setze('[data-konfig-zzgl-summe]', zz.length ? '≈ ' + euro(zzSumme) : '');
+        // Leiste: Gesamt inkl. geschätztem Aufwand/Verbrauch, damit der Kunde sieht, was es insgesamt kostet (08.11.2026)
+        setze('[data-konfig-gesamt-leiste]', pp !== null ? (zz.length ? '≈ ' : '') + euro(pp * z.pax + (zz.length ? zzSumme : 0)) : '—');
+        setze('[data-konfig-gesamt-label]', zz.length ? 'Gesamt inkl. ' + (zz.some(function (e) { return e.art !== 'verbrauch'; }) ? 'Aufwand' : 'Verbrauch') : 'Gesamt');
+        setze('[data-konfig-gesamt-inkl]', pp !== null && zz.length ? euro(pp * z.pax + zzSumme) : '');
         var liste = q('[data-konfig-auswahl]');
         if (liste) {
             var zeilen = [];

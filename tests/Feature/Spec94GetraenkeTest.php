@@ -82,13 +82,14 @@ it('Verschiedene Concepts je Zeitfenster: Tag und Abend = Tag-Teil + Abend-Teil 
         ->and(($this->preis)($g, 'day_night'))->toBe(round(26 * 0.9, 2));
 });
 
-it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; Anfrage addiert die Pakete, Pflicht greift, Bindung wird geprüft', function () {
+it('Kundenlink: Schritt Getränke nach den Extras, Preistabelle g…, kein EK; Anfrage addiert die Pakete, Pflicht greift, Bindung wird geprüft', function () {
     Mail::fake();
     $g1 = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => $this->wein->id, 'kunden_titel' => 'Weinbegleitung']);
     $g2 = $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'getraenk', 'concept_id' => ($this->c)('Softdrinks', 6, 1.5)->id, 'kunden_titel' => 'Softdrinks',
         'gebunden_an_id' => $this->haupt->id]);
     expect(fn () => $this->svc->konzeptAendern($this->rootTeam, $g2->id, ['gebunden_an_id' => $g1->id]))->toThrow(InvalidArgumentException::class, 'Hauptkonzept');
     $this->svc->aendern($this->rootTeam, $this->k->id, ['getraenke_pflicht' => true]);
+    $this->svc->konzeptHinzu($this->rootTeam, $this->k->id, ['rolle' => 'addon', 'concept_id' => ($this->c)('Snack', 6, 2)->id, 'kunden_titel' => 'Snack', 'abschnitt' => 'Late Night']);
     $link = app(PresentationService::class)->publish($this->rootTeam, PresentationService::TYPE_KONFIGURATOR, $this->k->id,
         ['expires_at' => now()->addMonth()->toIso8601String(), 'design' => 'konfigurator', 'price_mode' => 'auto']);
     $body = $this->k->fresh()->presentation_snapshot_json['content'];
@@ -104,6 +105,7 @@ it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; An
     }
     expect($html)->toContain('data-konfig-zu="getraenke"')->toContain('data-konfig-getraenk-zeile="' . $g1->id . '"')->toContain('Weinbegleitung')
         ->and(strpos($html, 'data-konfig-zu="getraenke"'))->toBeLessThan(strpos($html, 'data-konfig-zu="anfrage"'))
+        ->and(strpos($html, 'data-konfig-zu="addons"'))->toBeInt()->and(strpos($html, 'data-konfig-zu="getraenke"'))->toBeGreaterThan(strpos($html, 'data-konfig-zu="addons"'))   // Extras vor Getränken (08.11.2026)
         ->and(strpos($html, 'id="konfig-getraenke"'))->toBeGreaterThan(strpos($html, 'id="konfig-konzepte"'));
     // Druckfassung: Getränke-Abschnitt zwischen Speisen und Extras bzw. Preis, Pakete verborgen bis zur Auswahl
     $druck = \Illuminate\Support\Str::between($html, 'data-konfig-druck', '</article>');
@@ -123,10 +125,10 @@ it('Kundenlink: Schritt Getränke vor den Extras, Preistabelle g…, kein EK; An
         ->and($a->konfiguration_json['getraenke'])->toBe([$g1->id, $g2->id])->and($a->brief)->toContain('Getränke: Weinbegleitung, Softdrinks');
 });
 
-it('Layout: ein eigenes Design ohne Getränke-Block bekommt ihn vor den Extras', function () {
+it('Layout: ein eigenes Design ohne Getränke-Block bekommt ihn nach den Extras', function () {
     $layout = PresentationDesignService::konfiguratorLayout([['block_type' => 'konfig_konzepte', 'style' => []], ['block_type' => 'konfig_addons', 'style' => []],
         ['block_type' => 'konfig_anfrage', 'style' => []]]);
-    expect(array_column($layout, 'block_type'))->toBe(['konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage']);
+    expect(array_column($layout, 'block_type'))->toBe(['konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_getraenke', 'konfig_zusammenfassung', 'konfig_anfrage']);
 });
 
 it('Editor: Reiter Getränke zeigt Concepts der Kategorie „Getränke“ ohne Suche, fügt als Getränkepaket hinzu und speichert die Staffel', function () {

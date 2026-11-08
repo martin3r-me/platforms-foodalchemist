@@ -93,7 +93,7 @@ it('Kundenlink: zzgl. nach Aufwand je Preisschlüssel mit Titel, Satz, Einheit, 
 
     auth()->logout();
     $html = $this->get(route('foodalchemist.presentation.show', ['type' => 'konfigurator', 'token' => $this->k->fresh()->presentationPublicRef()]))->assertOk()->getContent();
-    expect($html)->toContain('data-konfig-zzgl')->toContain('data-konfig-zzgl-leiste')->toContain('zzgl. nach Aufwand');
+    expect($html)->toContain('data-konfig-zzgl')->toContain('data-konfig-gesamt-leiste')->toContain('data-konfig-gesamt-inkl')->not->toContain('data-konfig-zzgl-leiste')->toContain('zzgl. nach Aufwand');
     if (getenv('FA_KONFIG_HTML_ZZGL')) {
         file_put_contents(getenv('FA_KONFIG_HTML_ZZGL'), $html);
     }

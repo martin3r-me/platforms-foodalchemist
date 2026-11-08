@@ -117,7 +117,7 @@ it('Editor-Reiter: Branding speichern, aus einem Foodbook übernehmen, veröffen
 it('Design: jedes Layout bekommt alle Konfigurator-Schritte (fehlende vor dem nächsten vorhandenen), fremde Blöcke fallen weg', function () {
     $l = PresentationDesignService::konfiguratorLayout([['block_type' => 'cover', 'style' => []], ['block_type' => 'chapter_loop', 'style' => []],
         ['block_type' => 'konfig_anfrage', 'style' => []], ['block_type' => 'konfig_anfrage', 'style' => []]]);
-    expect(array_column($l, 'block_type'))->toBe(['cover', 'konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage']);
+    expect(array_column($l, 'block_type'))->toBe(['cover', 'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_getraenke', 'konfig_zusammenfassung', 'konfig_anfrage']);
     expect(collect(app(PresentationDesignService::class)->pickerOptions($this->rootTeam, 'konfigurator'))->pluck('value'))->toContain('konfigurator');
 });
 

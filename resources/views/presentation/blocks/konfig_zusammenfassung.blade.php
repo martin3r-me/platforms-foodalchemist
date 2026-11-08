@@ -16,6 +16,7 @@
         <div class="pt-konfig-zzgl" data-konfig-zzgl hidden>
             <p class="pt-kicker" data-konfig-zzgl-titel>zzgl. nach Aufwand</p>
             <ul data-konfig-zzgl-liste></ul>
+            <p class="pt-konfig-gesamt">Voraussichtlich gesamt ca. <strong data-konfig-gesamt-inkl></strong> netto</p>
             <p class="pt-konfig-legende">Geschätzt für diese Gästezahl, abgerechnet wird nach tatsächlichem Aufwand bzw. Verbrauch.</p>
         </div>
         <p class="pt-section-text" data-konfig-indikativ hidden>Der Preis ist indikativ und wird im Angebot bestätigt.</p>
