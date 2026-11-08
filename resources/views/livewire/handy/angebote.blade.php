@@ -46,6 +46,11 @@
                         @svg('heroicon-m-document-text', 'w-5 h-5')
                         Dokument
                     </a>
+                    <a href="{{ $k['intern'] }}" class="flex shrink-0 flex-col items-center justify-center gap-0.5 min-w-16 px-3 border-l border-[var(--fa-line)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)]"
+                       aria-label="{{ $k['name'] }}: interne Sicht mit EK und Wareneinsatz" data-fa-handy-intern="{{ $k['id'] }}">
+                        @svg('heroicon-m-calculator', 'w-5 h-5')
+                        Intern
+                    </a>
                 </li>
             @empty
                 <li class="p-4"><x-fa::empty compact icon="heroicon-o-magnifying-glass" title="Nichts gefunden">Suche oder Status zurücksetzen.</x-fa::empty></li>

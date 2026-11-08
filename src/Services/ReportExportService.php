@@ -500,6 +500,88 @@ class ReportExportService
     }
 
     /**
+     * Interner Angebots-Report (Dominique 08.11.2026, „wie bei den Foodbooks“): Kapitel × Positionen über den GETEILTEN
+     * Concept-/Rezept-Körper wie {@see foodbookDaten}; ein Format-Kapitel (format_id) zeigt die Editionen des Formats als Concepts.
+     * Sichtbarkeit prüft der Aufrufer über AngebotService::detail (wie das Angebots-Dokument). Gleiche Form wie der Foodbook-Report
+     * (Schlüssel `foodbook`), damit die Ausgabe dieselbe bleibt.
+     *
+     * @return array<string, mixed>
+     */
+    public function angebotDaten(Team $team, \Platform\FoodAlchemist\Models\FoodAlchemistAngebot $angebot, array $optionen): array
+    {
+        $this->preisTeam = $team;
+        $angebot->loadMissing([
+            'chapters' => fn ($q) => $q->orderBy('position'),
+            'chapters.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
+            'chapters.blocks.dish:id,name',
+            'crmCompany',
+        ]);
+        $byParent = $angebot->chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
+        $kapitelRows = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitelRows, $team, $optionen) {
+            foreach ($byParent[$parentId] ?? [] as $k) {
+                $positionen = [];
+                if ($k->format_id !== null) {
+                    try {
+                        foreach ($this->formatDaten($team, (int) $k->format_id, $optionen)['format']['positionen'] ?? [] as $p) {
+                            $positionen[] = $p['kind'] === 'edition' ? ['kind' => 'concept', 'concept' => $p['concept']] : $p;
+                        }
+                    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                        // Format nicht (mehr) sichtbar → Kapitel ohne Positionen
+                    }
+                }
+                foreach ($k->blocks as $b) {
+                    if ($b->type === 'concept_ref' && $b->concept_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'concept', 'concept' => $this->conceptDaten($team, (int) $b->concept_id, $optionen)['concept']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue;
+                        }
+                    } elseif ($b->type === 'recipe_ref' && $b->sales_recipe_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'recipe', 'name' => $b->dish?->name, 'recipe' => $this->rezeptDaten($team, (int) $b->sales_recipe_id, $optionen)['recipe']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue;
+                        }
+                    } elseif (str_starts_with((string) $b->type, 'header')) {
+                        $t = trim((string) $b->label);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'header', 'text' => $t];
+                        }
+                    } elseif ($b->type === 'text') {
+                        $t = trim((string) $b->customer_text);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'text', 'text' => $t];
+                        }
+                    }
+                }
+                $kapitelRows[] = ['title' => trim((string) ($k->consumer_title ?? '') ?: (string) $k->title), 'depth' => $depth, 'positionen' => $positionen];
+                $walk((int) $k->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        return [
+            'typ' => 'angebot',
+            'titel' => 'Angebot',
+            'name' => (string) $angebot->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'format' => null,
+            'foodbook' => [
+                'id' => (int) $angebot->id,
+                'name' => (string) $angebot->name,
+                'customer' => $angebot->crmCompany?->display_name,
+                'gaeste' => $angebot->personen ? (int) $angebot->personen : null,
+                'ueberschrift' => 'Angebots-Übersicht',
+                'leer' => 'Noch keine Kapitel — im Angebots-Editor anlegen.',
+                'kapitel' => $kapitelRows,
+            ],
+        ];
+    }
+
+    /**
      * Technischer Speisekarte-Report (Dominique 2026-08-27, Parität zum Foodbook-Report): Rubrik-Baum ×
      * Positionen, jede über den GETEILTEN Concept-/Rezept-Körper (Filter LITERAL dieselben wie Concept/
      * Format/Foodbook). menue_ref (Konzept ODER Paket) läuft über die Concept-Auflösung, gericht_ref über

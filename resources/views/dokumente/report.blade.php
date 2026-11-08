@@ -464,10 +464,11 @@
         {{-- #5a: Technischer Foodbook-Report — Kapitel × Positionen, jede über den GETEILTEN Concept-/
              Rezept-Körper (Filter LITERAL dieselben wie Concept/Format). Die Produktions-Kaskade lebt HIER. --}}
         <section>
-            <h2>Foodbook-Übersicht</h2>
+            <h2>{{ $foodbook['ueberschrift'] ?? 'Foodbook-Übersicht' }}</h2>
             {!! $gitter([
                 $kachel('Name', $foodbook['name'] ?? null, 'wide'),
                 $kachel('Kunde', $foodbook['customer'] ?? null),
+                $kachel('Gäste', $foodbook['gaeste'] ?? null),
                 $kachel('Profil', $profile[$opt['profil'] ?? ''] ?? ($opt['profil'] ?? null)),
             ]) !!}
         </section>
@@ -489,7 +490,7 @@
                 <p class="muted">Keine Positionen in diesem Kapitel.</p>
             @endforelse
         @empty
-            <p class="muted">Noch keine Kapitel — im Foodbook-Editor anlegen.</p>
+            <p class="muted">{{ $foodbook['leer'] ?? 'Noch keine Kapitel — im Foodbook-Editor anlegen.' }}</p>
         @endforelse
     @elseif($speisekarte ?? null)
         {{-- Technischer Speisekarte-Report — Rubriken × Positionen über den GETEILTEN Concept-/Rezept-Körper
