@@ -45,6 +45,8 @@ trait HandyAngeboteLesen
                 'ton' => $ton[$a->status->badgeVariant()] ?? 'neutral',
                 'href' => route('foodalchemist.angebote.praesentation', $a->id),
                 'dokument' => route('foodalchemist.angebote.dokument', $a->id),
+                // Interne Sicht wie bei den Foodbooks (Dominique 08.11.2026): Angebots-Report im Profil Kalkulation (EK, VK, Wareneinsatz)
+                'intern' => route('foodalchemist.angebote.report', ['id' => $a->id, 'profil' => 'kalkulation']),
             ]),
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }

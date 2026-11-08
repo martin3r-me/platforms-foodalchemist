@@ -72,3 +72,20 @@ it('Spec 84 E8 auch am Handy: Unter-Team mit leerer Hülle sieht die Angebote de
 
     handyAng()->assertSeeHtml('data-fa-handy-angebote')->assertDontSee('Sommerfest HANDY')->assertDontSee('Winterball HANDY');
 });
+
+it('Intern wie bei den Foodbooks: Knopf am Handy führt in den Angebots-Report im Profil Kalkulation; Report zeigt Kapitel und Concept, fremdes Team 404', function () {
+    // Dominique 08.11.2026: interne Sicht mit EK wie „Intern“ bei den Foodbooks
+    $c = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Concept REPORT', 'kind' => 'concept', 'status' => 'active']);
+    $kap = \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter::create(['team_id' => $this->rootTeam->id, 'offer_id' => $this->a->id, 'title' => 'Hauptgang INTERN', 'position' => 0]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::create(['team_id' => $this->rootTeam->id, 'chapter_id' => $kap->id, 'type' => 'concept_ref', 'position' => 0, 'visible' => true, 'concept_id' => $c->id]);
+    $url = route('foodalchemist.angebote.report', ['id' => $this->a->id, 'profil' => 'kalkulation']);
+
+    handyAng()->assertSeeHtml('data-fa-handy-intern="' . $this->a->id . '"')->assertSeeHtml('href="' . e($url) . '"');
+
+    $this->get($url)->assertOk()->assertSee('Angebots-Übersicht')->assertSee('Sommerfest HANDY')->assertSee('120')
+        ->assertSee('Hauptgang INTERN')->assertSee('Concept REPORT')->assertDontSee('Foodbook-Übersicht');
+
+    $fremdTeam = \Platform\Core\Models\Team::create(['name' => 'Fremd REPORT', 'user_id' => 1, 'personal_team' => false]);   // eigener Root, nicht unter dem Ersteller
+    $this->actingAs($this->makeUser($fremdTeam));
+    $this->get($url)->assertNotFound();
+});

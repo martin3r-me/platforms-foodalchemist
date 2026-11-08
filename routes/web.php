@@ -494,6 +494,27 @@ Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist
 })->whereNumber('id')->name('foodalchemist.angebote.dokument');
 
 /**
+ * Interner Angebots-Report (Dominique 08.11.2026, wie der Foodbook-Report): Kapitel × Positionen mit Profilen + Filtern
+ * (?profil=kalkulation → EK, VK, Wareneinsatz). Sichtbarkeit wie das Dokument über AngebotService::detail. ?pdf=1 = PDF (guarded).
+ */
+Route::get('/angebote/{id}/report', function (int $id, \Platform\FoodAlchemist\Services\AngebotService $svc, \Platform\FoodAlchemist\Services\ReportExportService $report) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $angebot = $svc->detail($team, $id) ?? abort(404);
+    $data = $report->angebotDaten($team, $angebot, $report->optionen(request()->query(), 'foodbook'));
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download(\Platform\FoodAlchemist\Services\ReportExportService::pdfDateiname($data['name'] ?? '', 'Angebot-Report-' . $id));
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.angebote.report');
+
+/**
  * #380 Composer: Angebots-KARTE — schöne Kundenausgabe (Foodbook-Look) NEBEN dem schlichten
  * Dokument. Zeigt die Kapitel/Format-Editionen als Gäste-Menü + Preis-Footer netto+MwSt+brutto.
  * Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded). Spiegelt concepts.karte.
