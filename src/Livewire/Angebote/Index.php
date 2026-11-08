@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Services\AngebotService;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HandyAngeboteLesen;   // Handy: Karten lesen (Dominique 08.11.2026)
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -30,7 +31,7 @@ class Index extends Component
 
     public function mount(): void
     {
-        if ($this->selectedId !== null) {
+        if ($this->selectedId !== null && ! \Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
             $this->dispatch('angebot-editor.bearbeiten', id: $this->selectedId);
         }
     }
@@ -75,6 +76,9 @@ class Index extends Component
 
     public function render(AngebotService $svc)
     {
+        if (\Platform\FoodAlchemist\Support\HandyLesemodus::anfrageVomHandy()) {
+            return $this->handyAngebote($svc);
+        }
         $team = $this->team();
 
         return view('foodalchemist::livewire.angebote.index', [
