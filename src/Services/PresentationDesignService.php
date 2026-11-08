@@ -315,6 +315,32 @@ class PresentationDesignService
         return $tokens;
     }
 
+    /**
+     * Druck auf weißem Papier (Dominique 08.11.2026, Konfigurator „Glorious Bastards“ im dunklen Design): Designfarben, die auf Weiß zu
+     * schwach sind, bekommen NUR im Druck eine lesbare Ersatzfarbe — der Bildschirm bleibt unverändert. Schwellen nach WCAG: Text,
+     * Primär und Nebentext 4,5, Akzent 3 (wird abgedunkelt statt ersetzt, damit die Markenfarbe erkennbar bleibt). Leer = nichts zu tun.
+     *
+     * @param  array<string, mixed>  $palette
+     * @return array<string, string> CSS-Variable (ohne --pt-) => Wert
+     */
+    public static function druckErsatzfarben(array $palette): array
+    {
+        $aus = [];
+        foreach (['text' => [4.5, '#1a1712'], 'primary' => [4.5, '#1a1712'], 'muted' => [4.5, '#5f5850'], 'accent' => [3.0, null]] as $rolle => [$min, $ersatz]) {
+            $wert = (string) ($palette[$rolle] ?? '');
+            $k = $wert !== '' ? self::kontrast($wert, '#ffffff') : null;
+            if ($k !== null && $k < $min) {
+                $aus[$rolle] = $ersatz ?? 'color-mix(in srgb, ' . $wert . ' 55%, #000)';
+            }
+        }
+        if ($aus !== []) {
+            $aus['bg'] = '#ffffff';
+            $aus['surface'] = 'rgba(0,0,0,0.035)';
+        }
+
+        return $aus;
+    }
+
     /** Kontrastverhältnis nach WCAG (1–21) zweier Farben (#rgb, #rrggbb, rgb()/rgba()); null, wenn eine nicht lesbar ist. */
     public static function kontrast(string $a, string $b): ?float
     {
