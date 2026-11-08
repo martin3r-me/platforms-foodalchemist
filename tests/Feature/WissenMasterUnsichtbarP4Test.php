@@ -46,9 +46,11 @@ it('★ Wurzel-Mandant legt Wissen team-eigen an, nicht global (auch ohne Master
     $zeile = DB::table('foodalchemist_knowledge_documents')->where('slug', $res->data['document']['slug'])->first();
     expect((int) $zeile->team_id)->toBe((int) $this->rootTeam->id);
 
+    // Mit Master-Team legt ein Mandant gar kein Wissen mehr an (Dominique 07.11.2026)
     ($this->mitMaster)();
     $res2 = ($this->anlegen)($this->rootTeam, 'Mandanten Dossier Zwei');
-    expect((int) DB::table('foodalchemist_knowledge_documents')->where('slug', $res2->data['document']['slug'])->value('team_id'))->toBe((int) $this->rootTeam->id);
+    expect($res2->success)->toBeFalse()
+        ->and(DB::table('foodalchemist_knowledge_documents')->where('title', 'Mandanten Dossier Zwei')->count())->toBe(0);
 });
 
 it('Master-Team legt global an (team_id NULL)', function () {

@@ -61,6 +61,11 @@ final class FaBereiche
             return ! MasterTeam::istMaster($team);
         }
 
+        if ($bereich === 'wissensbasis') {
+            // gleiche Regel wie die Service-Sperre: Master-Familie (Master + Unter-Teams) pflegt Wissen, ohne Master alle
+            return ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfWissenPflegen($team);
+        }
+
         return in_array($bereich, self::NUR_BEIM_MASTER, true) && ! ObservatoriumSicht::kuratiertHier($team);
     }
 
@@ -140,7 +145,7 @@ final class FaBereiche
         ['lab_notes', 'rezepte'], ['reife', 'rezepte'], ['surplus', 'rezepte'], ['quality_run', 'rezepte'], ['anreicherung_vorschlag', 'rezepte'],
         ['datenwerk', 'rezepte'], ['substitution', 'rezepte'], ['machbarkeit', 'rezepte'],
         // Wissen & Trendradar
-        // Dominique 07.11.2026: das Wissens-Modul (Dossiers, Kanon, Regeln, Anker-Freigaben) gibt es nur im Master — Mandanten nutzen es nur über den Prompt
+        // Dominique 07.11.2026: das Wissens-Modul (Dossiers, Kanon, Regeln, Anker-Freigaben) gibt es nur im Master — Mandanten nutzen es über den Prompt und die Lese-Tools (TOOLS_WISSEN_LESEN)
         ['knowledge', 'wissensbasis'], ['rules', 'wissensbasis'], ['anker_wissen', 'wissensbasis'],
         // Observatorium zentral (07.11.2026): Trend Research kuratiert nur der Master — Mandanten lesen das Observatorium in der Oberfläche
         ['trendradar', 'trend_research'], ['trends', 'trend_research'], ['trend_belege', 'trend_research'], ['fundstuecke', 'trend_research'], ['trend_quellen', 'trend_research'], ['trend_eingang', 'trend_research'], ['trend_automatik', 'trend_research'], ['trend_lagebild', 'trend_research'], ['wettbewerber', 'trend_research'], ['marktdaten', 'trend_research'],
@@ -159,6 +164,16 @@ final class FaBereiche
 
     /** Einzelne Tools, die unabhängig von ihrer Ressource bereichsfrei sind (nur Ansicht des Benutzers). */
     public const TOOLS_FREI = ['foodalchemist.outlets.SET_ACTIVE', 'foodalchemist.outlets.GET'];
+
+    /**
+     * Lese-Tools des Wissens bleiben im Bereich `wissen`, auch wenn ihre Ressource sonst zur `wissensbasis` (nur Master) gehört:
+     * die KI eines Mandanten liest darüber Vorgangs-Anleitungen, Anker-Wissen und die Regelwerks-Wirkung. Was sie sieht, regelt
+     * {@see \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit} (Mandant: nur Ablauf-Dossiers, kein Regelwerk-Volltext).
+     */
+    public const TOOLS_WISSEN_LESEN = [
+        'foodalchemist.knowledge.GET', 'foodalchemist.knowledge.LIST', 'foodalchemist.knowledge.SEARCH',
+        'foodalchemist.regelwerk.GET', 'foodalchemist.terminology.LIST', 'foodalchemist.anker_wissen.GET',
+    ];
 
     /** Livewire: erstes Namespace-Segment unter Platform\FoodAlchemist\Livewire => Bereich. Fehlt = frei. */
     public const KOMPONENTEN = [
@@ -215,6 +230,9 @@ final class FaBereiche
         }
         if (! str_starts_with($toolName, 'foodalchemist.')) {
             return [true, null];
+        }
+        if (in_array($toolName, self::TOOLS_WISSEN_LESEN, true)) {
+            return [true, 'wissen'];
         }
         $teile = explode('.', $toolName);
         $ressource = $teile[1] ?? '';

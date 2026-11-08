@@ -49,11 +49,11 @@ dataset('steuerSichten', [
     'Embedding-Kontrolle' => [['foodalchemist.knowledge.EMBED_STATUS', []]],
 ]);
 
-it('★ Mandant bekommt die Master-Steuer-Sicht nicht (ACCESS_DENIED)', function (array $fall) {
+it('★ Mandant bekommt die Master-Steuer-Sicht nicht (FORBIDDEN: Wissens-Modul nur im Master)', function (array $fall) {
     [$tool, $args] = $fall;
     $res = $this->registry->get($tool)->execute($args, ($this->als)($this->childA));
 
-    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('ACCESS_DENIED');
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('FORBIDDEN');   // seit 07.11.2026 sperrt schon der Bereich wissensbasis
 })->with('steuerSichten');
 
 it('Master-Team und dessen Unter-Team bekommen die Steuer-Sicht weiter', function (array $fall) {
@@ -61,7 +61,7 @@ it('Master-Team und dessen Unter-Team bekommen die Steuer-Sicht weiter', functio
     foreach ([$this->master, $this->masterKind] as $team) {
         $res = $this->registry->get($tool)->execute($args, ($this->als)($team));
 
-        expect($res->errorCode ?? null)->not->toBe('ACCESS_DENIED');
+        expect($res->errorCode ?? null)->not->toBe('ACCESS_DENIED')->and($res->errorCode ?? null)->not->toBe('FORBIDDEN');
     }
 })->with('steuerSichten');
 
@@ -81,8 +81,8 @@ it('★ Verbindungen: Mandant sieht Master-Kanten nicht, der Master schon', func
 
     $mandant = $this->registry->get('foodalchemist.knowledge_links.SET')->execute(
         ['action' => 'get', 'slug' => 'master-regel-neu'], ($this->als)($this->childA));
-    // Unlesbares Dossier = leere Auskunft, kein Fehler (sonst verriete der Fehler, dass es das Dossier gibt).
-    expect($mandant->data['raus'])->toBe([])->and($mandant->data['rein'])->toBe([]);
+    // Seit 07.11.2026 ist das Verbindungs-Tool für Mandanten zu (Bereich wissensbasis) — die Sperre verrät nichts über das Dossier.
+    expect($mandant->success)->toBeFalse()->and($mandant->errorCode)->toBe('FORBIDDEN')->and((string) $mandant->error)->not->toContain('master-regel');
 
     $master = $this->registry->get('foodalchemist.knowledge_links.SET')->execute(
         ['action' => 'get', 'slug' => 'master-regel-neu'], ($this->als)($this->masterKind));
