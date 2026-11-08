@@ -47,7 +47,7 @@
                     <x-fa::notice tone="info">Erst das Stamm-Paket buchen, dann Lieferanten freischalten.</x-fa::notice>
                 @else
                     <div class="max-w-3xl" data-stamm-paket-lieferanten-wrap>
-                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch] pb-3">Nur freigeschaltete Lieferanten (und ihre Artikel, auch künftige) sehen Mandant und Unter-Teams. Neue Lieferanten erscheinen hier automatisch, unfreigeschaltet. Grundprodukte bleiben für alle sichtbar.</p>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch] pb-3">Nur freigeschaltete Lieferanten (und ihre Artikel, auch künftige) sehen Mandant und Unter-Teams. Neue Lieferanten erscheinen hier automatisch, unfreigeschaltet. Grundprodukte bleiben für alle sichtbar. „Preise“ gibt die Preise des Master-Teams für diesen Lieferanten laufend mit (eigene Preise des Mandanten gewinnen immer).</p>
                     <div class="flex flex-wrap items-center gap-2 pb-2">
                         <div class="relative flex-1 min-w-[12rem]">
                             <label for="lieferanten-suche" class="sr-only">Lieferant suchen</label>
@@ -71,11 +71,16 @@
                     @else
                     <ul class="max-h-[24rem] overflow-y-auto grid md:grid-cols-2 gap-x-3 border border-[var(--fa-line)] rounded-[var(--fa-radius-control)] p-1" data-stamm-paket-lieferanten-liste>
                         @foreach($ld['lieferanten'] as $l)
-                            <li wire:key="spl-{{ $l['id'] }}">
-                                <label class="flex items-center gap-2 px-2 py-1 rounded-[var(--fa-radius-control)] cursor-pointer text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                            @php($istFrei = in_array($l['id'], array_map('intval', $auswahl), true))
+                            <li wire:key="spl-{{ $l['id'] }}" class="flex items-center gap-2 px-2 py-1 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                                <label class="flex min-w-0 flex-1 items-center gap-2 cursor-pointer">
                                     <input type="checkbox" value="{{ $l['id'] }}" wire:model.live="auswahl" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-stamm-paket-lieferant="{{ $l['id'] }}">
                                     <span class="truncate">{{ $l['name'] }}</span>
                                     <span class="ml-auto pl-2 text-[var(--fa-ink-3)] tabular-nums whitespace-nowrap">{{ $l['artikel'] }} Artikel</span>
+                                </label>
+                                {{-- Stamm-Preise mitgeben (Dominique 08.11.2026): laufend die Master-Preise dieses Lieferanten, nur wenn freigeschaltet --}}
+                                <label class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap {{ $istFrei ? 'cursor-pointer text-[var(--fa-ink-2)]' : 'opacity-40' }}" title="Preise des Master-Teams laufend mitgeben">
+                                    <input type="checkbox" value="{{ $l['id'] }}" wire:model.live="preiseAuswahl" @disabled(! $istFrei) class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-stamm-paket-preise="{{ $l['id'] }}"> Preise
                                 </label>
                             </li>
                         @endforeach

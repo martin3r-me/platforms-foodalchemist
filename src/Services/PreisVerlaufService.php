@@ -272,8 +272,11 @@ class PreisVerlaufService
     private function stufenFunktion(?Team $team): \Closure
     {
         $kette = $team !== null ? PriceService::preisKette($team) : [];
+        // „Preise mitgeben“ (08.11.2026): Master-Preise globaler Artikel freigegebener Lieferanten zählen wie ein Besitzer-Listenpreis
+        $freiLieferanten = array_flip(\Platform\FoodAlchemist\Support\StammPaket::preisFreigabeLieferanten($team));
+        $master = \Platform\FoodAlchemist\Support\MasterTeam::id();
 
-        return function (object $r, FoodAlchemistSupplierItem $item) use ($kette): ?int {
+        return function (object $r, FoodAlchemistSupplierItem $item) use ($kette, $freiLieferanten, $master): ?int {
             $tid = $r->team_id === null ? null : (int) $r->team_id;
             if ($tid === null) {
                 return count($kette) + 1;                          // global
@@ -281,6 +284,10 @@ class PreisVerlaufService
             $pos = array_search($tid, $kette, true);
             if ($pos !== false) {
                 return (int) $pos;                                 // eigene Team-Kette, eigenes Team zuerst
+            }
+
+            if ($tid === $master && $item->team_id === null && isset($freiLieferanten[(int) $item->supplier_id])) {
+                return count($kette);                              // freigegebener Master-Preis (Preise mitgeben)
             }
 
             return $tid === (int) $item->team_id ? count($kette) : null;   // Listenpreis des Besitzers; sonst nicht sichtbar

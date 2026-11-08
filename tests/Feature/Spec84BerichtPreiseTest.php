@@ -121,6 +121,7 @@ it('Lieferanten-Bericht: Abfragen-Zahl hängt nicht an der Artikelzahl (Preise a
 
         return $n;
     };
+    $zaehle();   // Aufwärmen: je Team einmalige Abfragen (z. B. Preis-Freigabe „Preise mitgeben“, 08.11.2026), danach aus dem Request-Cache
     $wenige = $zaehle();
     foreach (range(1, 30) as $i) {
         $la = FoodAlchemistSupplierItem::create(['team_id' => null, 'supplier_id' => $this->lief->id, 'designation' => "Artikel {$i}",

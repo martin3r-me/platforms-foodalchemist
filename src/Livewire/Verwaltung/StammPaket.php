@@ -35,6 +35,9 @@ class StammPaket extends Component
     /** @var list<int> Auswahl im offenen Panel (Checkboxen) */
     public array $auswahl = [];
 
+    /** @var list<int> „Preise mitgeben“ im offenen Panel (nur wirksam für freigeschaltete Lieferanten) */
+    public array $preiseAuswahl = [];
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -78,6 +81,7 @@ class StammPaket extends Component
     {
         $this->lieferantenTeamId = null;
         $this->auswahl = [];
+        $this->preiseAuswahl = [];
     }
 
     public function alleWaehlen(): void
@@ -89,6 +93,7 @@ class StammPaket extends Component
     public function keineWaehlen(): void
     {
         $this->auswahl = [];
+        $this->preiseAuswahl = [];
     }
 
     public function lieferantenSpeichern(): void
@@ -99,8 +104,12 @@ class StammPaket extends Component
             return;
         }
         try {
-            $r = app(StammPaketService::class)->setzeLieferanten($t, array_map('intval', $this->auswahl), Auth::user());
-            $this->meldung = $r['freigegeben'].' von '.$r['gesamt'].' Lieferanten für „'.$t->name.'“ freigeschaltet.';
+            $svc = app(StammPaketService::class);
+            $frei = array_map('intval', $this->auswahl);
+            $r = $svc->setzeLieferanten($t, $frei, Auth::user());
+            $this->preiseAuswahl = array_values(array_intersect(array_map('intval', $this->preiseAuswahl), $frei));
+            $p = $svc->setzePreisFreigabe($t, $this->preiseAuswahl, Auth::user());
+            $this->meldung = $r['freigegeben'].' von '.$r['gesamt'].' Lieferanten für „'.$t->name.'“ freigeschaltet, Preise für '.$p['preise_freigegeben'].' mitgegeben.';
         } catch (FaRechtFehltException|\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -114,7 +123,9 @@ class StammPaket extends Component
     private function auswahlLaden(): void
     {
         $t = $this->lieferantenTeam();
-        $this->auswahl = $t ? array_column(array_filter(app(StammPaketService::class)->lieferanten($t)['lieferanten'], fn ($z) => $z['frei']), 'id') : [];
+        $zeilen = $t ? app(StammPaketService::class)->lieferanten($t)['lieferanten'] : [];
+        $this->auswahl = array_column(array_filter($zeilen, fn ($z) => $z['frei']), 'id');
+        $this->preiseAuswahl = array_column(array_filter($zeilen, fn ($z) => $z['preise_frei'] ?? false), 'id');
     }
 
     public function mount(): void

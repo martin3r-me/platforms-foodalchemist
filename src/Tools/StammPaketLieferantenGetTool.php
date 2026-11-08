@@ -19,7 +19,7 @@ class StammPaketLieferantenGetTool extends WareneingangTool implements ToolContr
 
     public function getDescription(): string
     {
-        return 'Alle Lieferanten des globalen Stamm-Pakets mit Artikelzahl und Freischaltung (frei) für einen Mandanten. Neue globale Lieferanten erscheinen sofort, unfreigeschaltet. '
+        return 'Alle Lieferanten des globalen Stamm-Pakets mit Artikelzahl, Freischaltung (frei) und „Preise mitgeben“ (preise_frei: Master-Preise laufend sichtbar) für einen Mandanten. Neue globale Lieferanten erscheinen sofort, unfreigeschaltet. '
             .'Standard nach Paketbuchung: keine Lieferanten frei. Optional suche (Namensteil). Nur Plattform-Admin, sonst FORBIDDEN.';
     }
 

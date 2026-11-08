@@ -25,6 +25,20 @@
                 @endif
             </div>
             <p class="{{ $leise }} pt-2" data-preisliste-vorlage-hinweis>{{ $vorlageHinweis }}</p>
+            {{-- Meine Artikel als Liste (08.11.2026): alle sichtbaren Artikel mit Artikelnummer und EAN, Preis = eigener Preis oder leer — ausfüllen und oben wieder hochladen --}}
+            <div class="flex flex-wrap items-center gap-2 pt-4 border-t border-[var(--fa-line)] mt-3" data-preisliste-artikelliste>
+                <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">Meine Artikel als Liste</span>
+                <label for="export-lieferant" class="sr-only">Lieferant</label>
+                <select id="export-lieferant" wire:model.live="exportLieferantId" class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1 text-[length:var(--fa-text-sm)]" data-preisliste-artikelliste-lieferant>
+                    <option value="">Alle Lieferanten</option>
+                    @foreach($lieferanten as $l)
+                        <option value="{{ $l->id }}">{{ $l->name }}</option>
+                    @endforeach
+                </select>
+                <x-fa::button size="sm" variant="ghost" icon="heroicon-o-document-text" wire:click="artikelListeCsv" data-preisliste-artikelliste-csv>CSV</x-fa::button>
+                @if($xlsxVorlage)<x-fa::button size="sm" variant="ghost" icon="heroicon-o-table-cells" wire:click="artikelListeXlsx" data-preisliste-artikelliste-xlsx>Excel</x-fa::button>@endif
+            </div>
+            <p class="{{ $leise }} pt-1">Alle Artikel, die du siehst, mit Artikelnummer und EAN. Trag deine Preise ein und lade die Datei oben wieder hoch: leere Preise werden übersprungen, unveränderte nicht doppelt gespeichert.</p>
         </x-fa::section>
 
         <livewire:foodalchemist.preislisten.stammdaten-import />

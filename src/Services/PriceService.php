@@ -67,11 +67,12 @@ class PriceService
         //     Für den Listenpreis gilt die alte Aktiv-Regel unverändert (auch gestempelte Zeilen).
         $inKette = implode(',', array_fill(0, count($kette), '?'));
         $inSicht = implode(',', array_fill(0, count($sichtbar), '?'));
-        $query->where(function (Builder $w) use ($col, $kette, $sichtbar, $besitzer, $inKette, $inSicht) {
+        $query->where(function (Builder $w) use ($col, $kette, $sichtbar, $besitzer, $inKette, $inSicht, $team) {
             $w->whereNull($col)
                 ->orWhereRaw("({$col} IN ({$inKette}) AND ({$col} = {$besitzer} OR foodalchemist_prices.valid_to IS NULL OR foodalchemist_prices.valid_to >= ?))",
                     [...$kette, now()->toDateTimeString()])
                 ->orWhereRaw("({$col} IN ({$inSicht}) AND {$col} = {$besitzer})", $sichtbar);
+            $this->freigegebeneMasterPreise($w, 'foodalchemist_prices', $team);
         });
 
         // Rang: Kette in Reihenfolge (eigenes Team zuerst), dann Besitzer-Listenpreis jenseits
@@ -86,6 +87,24 @@ class PriceService
             "CASE WHEN {$col} IS NULL THEN ? ELSE (CASE {$col} {$faelle} ELSE ? END) END",
             [count($kette) + 1, ...$bindings, count($kette)],
         );
+    }
+
+    /**
+     * 4. Stufe der Team-Sicht (Dominique 08.11.2026, „Preise mitgeben“): Master-Preiszeilen eines GLOBALEN Stamm-Artikels, dessen Lieferant der
+     * Plattform-Admin für das Haupt-Team des Betrachters ausdrücklich freigegeben hat ({@see StammPaket::preisFreigabeLieferanten}). Laufend: jede neue
+     * Necta-Zeile im Master-Team ist sofort sichtbar. Rang wie ein Besitzer-Listenpreis (nach der eigenen Kette, vor global) — ein eigener Preis
+     * des Mandanten gewinnt immer. Kein Ketten-Erbe: ohne Freigabe hängt diese Methode nichts an (Leck-Klasse #491).
+     */
+    private function freigegebeneMasterPreise(Builder|\Illuminate\Database\Query\Builder $w, string $alias, ?Team $team): void
+    {
+        $lieferanten = StammPaket::preisFreigabeLieferanten($team);
+        $master = MasterTeam::id();
+        if ($lieferanten === [] || $master === null) {
+            return;
+        }
+        $in = implode(',', array_fill(0, count($lieferanten), '?'));
+        $w->orWhereRaw("({$alias}.team_id = ? AND EXISTS (SELECT 1 FROM foodalchemist_supplier_items si_pf WHERE si_pf.id = {$alias}.supplier_item_id"
+            . " AND si_pf.team_id IS NULL AND si_pf.supplier_id IN ({$in})))", [$master, ...$lieferanten]);
     }
 
     /** Korrelierte Besitzer-Spalte des Artikels einer Preiszeile (für Listenpreis-Regeln). */
@@ -290,8 +309,11 @@ class PriceService
             $sichtbar = FoodAlchemistPrice::teamAncestryIds($team);
             $inKette = implode(',', array_fill(0, count($kette), '?'));
             $inSicht = implode(',', array_fill(0, count($sichtbar), '?'));
-            $q->where(fn ($w) => $w->whereNull('lp.team_id')->orWhereRaw("lp.team_id IN ({$inKette})", $kette)
-                ->orWhereRaw("(lp.team_id IN ({$inSicht}) AND lp.team_id = {$besitzer})", $sichtbar));
+            $q->where(function ($w) use ($inKette, $kette, $inSicht, $besitzer, $sichtbar, $team) {
+                $w->whereNull('lp.team_id')->orWhereRaw("lp.team_id IN ({$inKette})", $kette)
+                    ->orWhereRaw("(lp.team_id IN ({$inSicht}) AND lp.team_id = {$besitzer})", $sichtbar);
+                $this->freigegebeneMasterPreise($w, 'lp', $team);
+            });
             $faelle = implode(' ', array_fill(0, count($kette), 'WHEN ? THEN ?'));
             $bindings = [];
             foreach ($kette as $rang => $teamId) {

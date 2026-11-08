@@ -158,6 +158,12 @@ class PreislistenImportService
 
             foreach ($datei['zeilen'] as $nr => $felder) {
                 $wert = fn (string $feld): string => isset($zuordnung[$feld]) ? trim((string) ($felder[$zuordnung[$feld]] ?? '')) : '';
+                // Artikelliste zurück (08.11.2026): Zeilen ohne Preis sind „noch nicht ausgefüllt“, kein Fehler — still übersprungen und gezählt.
+                if (isset($zuordnung['price']) && $wert('price') === '') {
+                    $zaehler['ohne_preis'] = ($zaehler['ohne_preis'] ?? 0) + 1;
+
+                    continue;
+                }
                 $eintrag = [
                     'team_id' => $team->id, 'run_id' => $run->id, 'row_nr' => $nr,
                     'supplier_name' => $this->kuerze($wert('supplier')), 'article_number' => $this->kuerze($wert('article_number'), 64),
@@ -345,6 +351,109 @@ class PreislistenImportService
     public function vorlage(): array
     {
         return ['spalten' => self::VORLAGE_KOPF, 'beispielzeile' => self::VORLAGE_BEISPIEL, 'hinweis' => self::VORLAGE_HINWEIS, 'xlsx_verfuegbar' => $this->xlsxVerfuegbar()];
+    }
+
+    /** Kopf der Artikelliste: Vorlagen-Spalten (der Import erkennt sie ohne Nachzuordnung) + Info-Spalte Grundprodukt. */
+    public const ARTIKELLISTE_KOPF = [...self::VORLAGE_KOPF, 'Grundprodukt'];
+
+    /**
+     * Artikelliste zum Ausfüllen (Dominique 08.11.2026): ALLE für den Mandanten sichtbaren, lieferbaren Artikel (eigene und freigeschaltete Stamm-Artikel),
+     * optional nur eines Lieferanten, in der Spaltenreihenfolge der Vorlage. „Preis netto“ = aktueller EIGENER Teampreis der Kette (nie Master-, Listen-
+     * oder freigegebener Preis), sonst leer. Ausgefüllt wieder hochladen: Artikelnummer + Lieferant stimmen, leere Preise werden übersprungen,
+     * unveränderte Preise schreiben keine neue Zeile ({@see anwenden}).
+     *
+     * @return list<list<string>>
+     */
+    public function artikelListe(Team $team, ?int $supplierId = null): array
+    {
+        $kette = PriceService::preisKette($team);
+        $zeilen = [];
+        FoodAlchemistSupplierItem::visibleToTeam($team)->lieferbar()
+            ->when($supplierId !== null, fn ($q) => $q->where('supplier_id', $supplierId))
+            ->with(['supplier:id,name', 'structure.gp:id,name'])
+            ->orderBy('supplier_id')->orderBy('designation')->orderBy('id')
+            ->chunkById(500, function ($items) use ($kette, &$zeilen) {
+                $preise = $this->eigenePreise($items->pluck('id')->all(), $kette);
+                foreach ($items as $i) {
+                    $menge = $i->qty !== null ? rtrim(rtrim(number_format((float) $i->qty, 3, ',', ''), '0'), ',') : '';
+                    $gebinde = trim(implode(' ', array_filter([(string) $i->ordering_unit, trim($menge . ' ' . (string) $i->unit_code)])));
+                    $p = $preise[(int) $i->id] ?? null;
+                    $zeilen[] = [(string) ($i->supplier?->name ?? ''), (string) $i->article_number, (string) ($i->ean_ordering ?: $i->ean_packaging),
+                        (string) $i->designation, $gebinde, $p !== null ? number_format($p, 2, ',', '') : '', '', (string) ($i->structure?->gp?->name ?? '')];
+                }
+            });
+
+        return $zeilen;
+    }
+
+    /**
+     * Aktueller eigener Teampreis je Artikel (Preis-Kette des Mandanten, eigenes Team zuerst; nur datums-aktive Zeilen). Kein Listen-, Master- oder globaler Preis.
+     *
+     * @param  list<int>  $itemIds
+     * @param  list<int>  $kette
+     * @return array<int, float>
+     */
+    private function eigenePreise(array $itemIds, array $kette): array
+    {
+        if ($itemIds === [] || $kette === []) {
+            return [];
+        }
+        $rang = array_flip($kette);
+        $beste = [];
+        app(PriceService::class)->scopeAktiv(FoodAlchemistPrice::query())
+            ->whereIn('supplier_item_id', $itemIds)->whereIn('team_id', $kette)
+            ->where(fn ($w) => $w->whereNull('valid_to')->orWhere('valid_to', '>=', now()))
+            ->orderByRaw('valid_to IS NULL DESC')->orderByDesc('valid_to')->orderByDesc('id')
+            ->get(['supplier_item_id', 'team_id', 'price'])
+            ->each(function ($p) use (&$beste, $rang) {
+                $id = (int) $p->supplier_item_id;
+                $r = $rang[(int) $p->team_id] ?? PHP_INT_MAX;
+                if (! isset($beste[$id]) || $r < $beste[$id][0]) {
+                    $beste[$id] = [$r, (float) $p->price];
+                }
+            });
+
+        return array_map(fn ($b) => $b[1], $beste);
+    }
+
+    /** Artikelliste als CSV-Text (Trennzeichen ;, UTF-8 mit BOM) — Format wie die Vorlage. */
+    public function artikelListeCsv(Team $team, ?int $supplierId = null): string
+    {
+        $fp = fopen('php://temp', 'w+');
+        fwrite($fp, "\xEF\xBB\xBF");
+        fputcsv($fp, self::ARTIKELLISTE_KOPF, ';');
+        foreach ($this->artikelListe($team, $supplierId) as $z) {
+            fputcsv($fp, $z, ';');
+        }
+        rewind($fp);
+        $csv = (string) stream_get_contents($fp);
+        fclose($fp);
+
+        return $csv;
+    }
+
+    /** Artikelliste als XLSX (nur mit openspout), Blatt „Preisliste“ — der Import liest Blatt 1. */
+    public function schreibeArtikelListeXlsx(Team $team, string $pfad, ?int $supplierId = null): void
+    {
+        if (! $this->xlsxVerfuegbar()) {
+            throw new \RuntimeException('Excel braucht die Bibliothek openspout/openspout. Bitte die CSV-Liste nehmen.');
+        }
+        $writer = new \OpenSpout\Writer\XLSX\Writer();
+        $writer->openToFile($pfad);
+        $writer->getCurrentSheet()->setName('Preisliste');
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues(self::ARTIKELLISTE_KOPF));
+        foreach ($this->artikelListe($team, $supplierId) as $z) {
+            $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues($z));
+        }
+        $writer->close();
+    }
+
+    /** Dateiname der Artikelliste (je Lieferant oder alle). */
+    public function artikelListeDateiname(?int $supplierId, string $endung = 'csv'): string
+    {
+        $name = $supplierId !== null ? (string) (FoodAlchemistSupplier::query()->whereKey($supplierId)->value('name') ?? 'lieferant') : 'alle';
+
+        return 'preisliste_artikel_' . \Illuminate\Support\Str::slug($name, '_') . '.' . $endung;
     }
 
     /** Vorlage als CSV-Text (Trennzeichen ;, UTF-8 mit BOM für Excel) — dasselbe Format wie die Prüfliste. */

@@ -107,15 +107,18 @@ class StammPaketService
     {
         $haupt = $this->rechte->kundenHauptTeam($mandant);
         $frei = $this->freigegebeneIds($haupt);
+        $preise = $this->preisFreigabeIds($haupt);
         $alle = DB::table('foodalchemist_suppliers')->whereNull('team_id')->where('stamm_class', StammPaket::PAKET)->whereNull('deleted_at')
             ->orderBy('name')->get(['id', 'name']);
         $artikel = DB::table('foodalchemist_supplier_items')->whereNull('team_id')->where('stamm_class', StammPaket::PAKET)->whereNull('deleted_at')
             ->selectRaw('supplier_id, COUNT(*) AS n')->groupBy('supplier_id')->pluck('n', 'supplier_id');
-        $zeilen = $alle->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name, 'artikel' => (int) ($artikel[$s->id] ?? 0), 'frei' => isset($frei[(int) $s->id])]);
+        $zeilen = $alle->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name, 'artikel' => (int) ($artikel[$s->id] ?? 0), 'frei' => isset($frei[(int) $s->id]),
+            'preise_frei' => isset($frei[(int) $s->id]) && isset($preise[(int) $s->id])]);
         $gefiltert = $suche === '' ? $zeilen : $zeilen->filter(fn ($z) => mb_stripos($z['name'], $suche) !== false);
 
         return ['team_id' => (int) $haupt->id, 'gebucht' => $this->status($haupt)['gebucht'], 'gesamt' => $zeilen->count(),
-            'freigegeben' => $zeilen->where('frei', true)->count(), 'lieferanten' => $gefiltert->values()->all()];
+            'freigegeben' => $zeilen->where('frei', true)->count(), 'preise_freigegeben' => $zeilen->where('preise_frei', true)->count(),
+            'lieferanten' => $gefiltert->values()->all()];
     }
 
     /**
@@ -164,6 +167,68 @@ class StammPaketService
         }
 
         return ['team_id' => (int) $mandant->id, 'gesamt' => $stamm->count(), 'freigegeben' => count($soll), 'hinzu' => count($hinzu), 'entfernt' => count($weg)];
+    }
+
+    /**
+     * Stamm-Preise mitgeben (Dominique 08.11.2026): für welche freigeschalteten Lieferanten der Mandant die Master-Preise LAUFEND sieht — EXAKT
+     * diese Menge (`alle` = jeder freigeschaltete Lieferant, `keine` = leer). Nur Plattform-Admin, nur Haupt-Team, nur freigeschaltete Lieferanten
+     * (fällt die Freischaltung weg, ist die Preis-Freigabe mit dem Datensatz weg). Eigene Preise des Mandanten gewinnen immer
+     * ({@see PriceService::preisSichtFuer}). Protokoll am Opt-in.
+     *
+     * @param  list<int>|'alle'|'keine'  $auswahl
+     * @return array{team_id:int, freigeschaltet:int, preise_freigegeben:int, hinzu:int, entfernt:int}
+     */
+    public function setzePreisFreigabe(Team $mandant, array|string $auswahl, ?User $user): array
+    {
+        $admin = $this->nurPlattformAdmin($user, 'Stamm-Preise mitgeben');
+        $this->pruefeMandant($mandant);
+        if (! $this->status($mandant)['gebucht']) {
+            throw new \RuntimeException('Erst das Stamm-Paket buchen und Lieferanten freischalten, dann Preise mitgeben.');
+        }
+        $frei = array_keys($this->freigegebeneIds($mandant));
+        $soll = match (true) {
+            $auswahl === 'alle' => $frei,
+            $auswahl === 'keine' => [],
+            is_string($auswahl) => throw new \RuntimeException('Preise: alle, keine oder eine Liste von Lieferanten-IDs.'),
+            default => array_values(array_unique(array_map('intval', $auswahl))),
+        };
+        $nichtFrei = array_values(array_diff($soll, $frei));
+        if ($nichtFrei !== []) {
+            throw new \RuntimeException('Preise nur für freigeschaltete Lieferanten: '.implode(', ', array_slice($nichtFrei, 0, 10)).' ist nicht freigeschaltet.');
+        }
+        $ist = array_keys($this->preisFreigabeIds($mandant));
+        $hinzu = array_values(array_diff($soll, $ist));
+        $weg = array_values(array_diff($ist, $soll));
+        DB::transaction(function () use ($mandant, $admin, $hinzu, $weg) {
+            if ($hinzu !== []) {
+                DB::table(StammPaket::LIEFERANTEN_TABELLE)->where('team_id', $mandant->id)->whereIn('supplier_id', $hinzu)
+                    ->update(['preise_mitgeben' => true, 'preise_freigegeben_von' => $admin->id, 'preise_freigegeben_at' => now(), 'updated_at' => now()]);
+            }
+            if ($weg !== []) {
+                DB::table(StammPaket::LIEFERANTEN_TABELLE)->where('team_id', $mandant->id)->whereIn('supplier_id', $weg)
+                    ->update(['preise_mitgeben' => false, 'preise_freigegeben_von' => null, 'preise_freigegeben_at' => null, 'updated_at' => now()]);
+            }
+        });
+        StammPaket::flush();
+        if ($hinzu !== [] || $weg !== []) {
+            $namen = DB::table('foodalchemist_suppliers')->whereIn('id', array_merge($hinzu, $weg))->pluck('name', 'id');
+            $liste = fn (array $ids) => array_values(array_map(fn ($i) => (string) ($namen[$i] ?? $i), array_slice($ids, 0, 15)));
+            $this->protokoll->schreibe('stamm_preise_gesetzt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'hinzu' => count($hinzu), 'entfernt' => count($weg),
+                'preise_gesamt' => count($soll), 'hinzu_namen' => $liste($hinzu), 'entfernt_namen' => $liste($weg)], $admin, FoodAlchemistTeamStammOptin::where('team_id', $mandant->id)->first());
+        }
+
+        return ['team_id' => (int) $mandant->id, 'freigeschaltet' => count($frei), 'preise_freigegeben' => count($soll), 'hinzu' => count($hinzu), 'entfernt' => count($weg)];
+    }
+
+    /** @return array<int, true> supplier_id => true mit „Preise mitgeben“ (nur dieses Haupt-Team) */
+    private function preisFreigabeIds(Team $haupt): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn(StammPaket::LIEFERANTEN_TABELLE, 'preise_mitgeben')) {
+            return [];
+        }
+
+        return DB::table(StammPaket::LIEFERANTEN_TABELLE)->where('team_id', $haupt->id)->where('preise_mitgeben', true)->pluck('supplier_id')
+            ->mapWithKeys(fn ($i) => [(int) $i => true])->all();
     }
 
     /** @return array<int, true> supplier_id => true (nur die Auswahl dieses Haupt-Teams, nicht der Eltern) */
