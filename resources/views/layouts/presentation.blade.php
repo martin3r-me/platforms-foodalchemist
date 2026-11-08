@@ -6,6 +6,7 @@
 @php
     $tokens = $snapshot['resolved_design']['tokens'] ?? [];
     $pal = $tokens['palette'] ?? [];
+    $druckFarben = \Platform\FoodAlchemist\Services\PresentationDesignService::druckErsatzfarben($pal);   // Druck auf weißem Papier: zu blasse Farben ersetzen
     $typo = $tokens['typography'] ?? [];
     $fontMap = [
         'display-serif' => '"Fraunces", Georgia, "Times New Roman", serif',
@@ -109,6 +110,14 @@
             --pt-measure: 720px;
             --pt-wide: 1180px;
         }
+        @if($druckFarben !== [])
+        @media print {
+            :root {   /* druck-ersatzfarben */
+                @foreach($druckFarben as $rolle => $farbe)--pt-{{ $rolle }}: {{ $farbe }};
+                @endforeach
+            }
+        }
+        @endif
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; }
         body {
@@ -273,7 +282,7 @@
             .pt-konfig-js .pt-konfig-seite, .pt-konfig-js .pt-footer, .pt-konfig-js .pt-konfig-detail { display: none; }
             .pt-konfig-js .pt-konfig-druck { display: block; page: konfig; font-size: 10pt; padding: 14mm 15mm 16mm; }
             .pt-konfig-js body, .pt-konfig-js .pt-wrap { padding: 0; margin: 0; }
-            .pt-druck-preis-kasten, .pt-konfig-druck .pt-item, .pt-konfig-druck .pt-konfig-legende, .pt-druck-kopf, .pt-druck-fakten { break-inside: avoid; }
+            .pt-druck-preis-kasten, .pt-konfig-druck .pt-item, .pt-konfig-druck .pt-konfig-legende, .pt-druck-kopf, .pt-druck-fakten, .pt-druck-fuss { break-inside: avoid; }   /* Fuß nicht zerteilen: „Ihr Kontakt“ stand allein auf Seite 2 (08.11.2026) */
             .pt-konfig-druck h2, .pt-konfig-druck h3, .pt-konfig-druck .pt-subheader { break-after: avoid; }
         }
         h1,h2,h3,h4 { font-family: var(--pt-heading-font); color: var(--pt-text); margin: 0; line-height: 1.08; font-weight: 600; letter-spacing: -0.01em; }
