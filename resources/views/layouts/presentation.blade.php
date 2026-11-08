@@ -154,7 +154,20 @@
         .pt-konfig-schritt { padding-block: var(--pt-gap); counter-increment: konfig-schritt; }
         .pt-konfig-nr::before { content: "Schritt " counter(konfig-schritt); }   /* fortlaufend, auch wenn Zeitfenster oder Extras fehlen */
         .pt-konfig-nr[data-nr]::before { content: "Schritt " attr(data-nr); }     /* mit Skript: Nummer aus der Schritt-Leiste (ausgeblendete Schritte zählen sonst nicht mit) */
-        @media (max-width: 480px) { .pt-konfig-schritte { justify-content: space-between; padding-inline: 10px; } .pt-konfig-schritt-knopf { letter-spacing: .06em; font-size: .66rem; padding-inline: 6px; } }
+        /* Handy (Dominique 08.11.2026): fünf Schritte inkl. Getränke und die Summen unten passen auch mit breiter Android-Serif (gemessen 320/360/412 px, 106.860 €) */
+        @media (max-width: 480px) {
+            .pt-konfig-schritte { justify-content: flex-start; gap: 0; padding-inline: 6px; }
+            .pt-konfig-schritt-knopf { flex: 1 0 auto; letter-spacing: .03em; font-size: .62rem; padding-inline: 5px; }
+            .pt-konfig-preisleiste { gap: 8px; padding-inline: 12px; }
+            .pt-konfig-stepper { gap: 5px; flex: none; }
+            .pt-konfig-stepper-knopf { width: 30px; height: 30px; }
+            .pt-konfig-stepper-zahl { width: 50px; }
+            .pt-konfig-summen { flex: 1 1 auto; min-width: 0; justify-content: flex-end; gap: 10px; }
+            .pt-konfig-summen p { min-width: 0; }
+            .pt-konfig-summen strong { font-size: clamp(.8rem, 4.2vw, 1.05rem); }
+            .pt-konfig-summen .pt-konfig-leise { font-size: .55rem; letter-spacing: .06em; }
+        }
+        @media (max-width: 340px) { .pt-konfig-schritte { padding-inline: 2px; } .pt-konfig-schritt-knopf { letter-spacing: 0; font-size: .58rem; padding-inline: 4px; } }
         .pt-konfig-schritt > :not(.pt-konfig-raster):not(.pt-konfig-liste):not(.pt-konfig-form):not(.pt-konfig-weiter):not(dialog) { max-width: var(--pt-measure); }
         .pt-konfig-schritt h2 { margin: 8px 0 14px; font-size: clamp(1.6rem, 5vw, 2.6rem); }
         .pt-konfig-raster { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); margin-top: 20px; }
