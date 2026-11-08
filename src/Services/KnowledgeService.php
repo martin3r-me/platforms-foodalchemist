@@ -40,6 +40,9 @@ class KnowledgeService
      */
     public function create(Team $team, array $data): object
     {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfWissenPflegen($team)) {
+            throw new WissenGesperrtException(\Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::MELDUNG_NUR_MASTER);
+        }
         $title = trim((string) ($data['title'] ?? ''));
         $category = trim((string) ($data['category'] ?? ''));
         if ($title === '' || $category === '') {
@@ -240,6 +243,9 @@ class KnowledgeService
      */
     public function import(Team $team, array $eintraege): array
     {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfWissenPflegen($team)) {
+            throw new WissenGesperrtException(\Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::MELDUNG_NUR_MASTER);
+        }
         $ergebnisse = [];
         foreach (array_values($eintraege) as $index => $eintrag) {
             $ergebnisse[] = DB::transaction(fn () => $this->importEintrag($team, $index, $eintrag));
@@ -546,6 +552,9 @@ class KnowledgeService
      */
     public function createCategory(Team $team, string $label, ?string $description = null, ?string $slug = null): array
     {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfWissenPflegen($team)) {
+            throw new WissenGesperrtException(\Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::MELDUNG_NUR_MASTER);
+        }
         $label = trim($label);
         if ($label === '') {
             throw new RuntimeException('label ist Pflicht.');

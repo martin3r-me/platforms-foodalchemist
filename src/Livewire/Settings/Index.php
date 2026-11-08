@@ -282,7 +282,7 @@ class Index extends Component
      * unsichtbar und der Direktlink gesperrt. Plattform-Admins sehen sie wie bei jedem Bereich immer (darfBereich).
      */
     // Observatorium zentral (Dominique 07.11.2026): Trendradar-Einstellungen wirken nur noch im Master (Trend Research) — Mandanten sehen sie nicht mehr
-    public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams', 'trendradar' => 'trend_research'];
+    public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams', 'trendradar' => 'trend_research', 'wissenskategorien' => 'wissensbasis'];
 
     /**
      * Spec 82 §13 C1/D: Sektionen mit eigener Rechteprüfung. `plan-nutzung`: Inhaber/Admin des Mandanten, Plattform-Admin, Admin im

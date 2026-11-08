@@ -112,6 +112,18 @@ final class WissensSichtbarkeit
         return self::aktiv() ? MasterTeam::istMaster($team) : TeamScope::isMaster($team);
     }
 
+    public const MELDUNG_NUR_MASTER = 'Das Wissen pflegt das Master-Team zentral für alle Mandanten — eigenes Wissen, eigene Kategorien oder eigener Kanon sind nicht vorgesehen.';
+
+    /**
+     * Dominique 07.11.2026: Mandanten legen KEIN eigenes Wissen an (auch keine Kategorien, keinen Kanon) — es käme dem kuratierten
+     * Plattform-Wissen in die Quere. Pflegen darf nur die Master-Familie (Master + Unter-Teams). Ohne Master-Team (autarke Installation)
+     * oder mit Notbremse `knowledge_master_regel=false` gilt die alte Regel (jedes Team pflegt seins).
+     */
+    public static function darfWissenPflegen(?Team $team): bool
+    {
+        return ! self::aktiv() || MasterTeam::id() === null || self::darfGlobalLesen($team);
+    }
+
     /** Schreibrecht an einer Wissens-Zeile: Besitzer-Team, oder global (team_id NULL) nur der Master. Ersetzt `TeamScope::mayWrite` im Wissensmodul. */
     public static function mayWrite(mixed $rowTeamId, ?Team $team): bool
     {

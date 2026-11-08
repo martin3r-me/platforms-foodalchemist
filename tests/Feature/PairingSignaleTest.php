@@ -81,7 +81,7 @@ it('Wissens-Signale nur beim Kurator; schreiben darf auch nur er', function () {
 
     expect(($this->svc)()->wissenZurPruefung($this->rootTeam))->toBe(0)
         ->and(($this->tool)('foodalchemist.anker_wissen.STATUS', ['anker_id' => $this->a['pumpkin'], 'status' => 'geprueft'])->errorCode)
-        ->toBe('ACCESS_DENIED');
+        ->toBe('FORBIDDEN');   // Bereich wissensbasis nur im Master (07.11.2026)
 });
 
 it('Widerspruch: Dossier sagt Konflikt, Messung sagt 3★ — verworfen schließt das Signal', function () {

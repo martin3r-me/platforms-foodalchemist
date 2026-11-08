@@ -269,6 +269,10 @@ class KnowledgeCanonService
      */
     public function set(Team $team, array $data): array
     {
+        // Dominique 07.11.2026 (Spec 82 §13 H „Kanon = nur Master“): Mandanten setzen keine eigenen Kanon-Zeilen
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfWissenPflegen($team)) {
+            throw new RuntimeException(\Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::MELDUNG_NUR_MASTER);
+        }
         $scope = $this->pruefeEnum((string) ($data['scope'] ?? ''), self::SCOPES, 'scope');
         $role = $this->pruefeEnum((string) ($data['role'] ?? 'root'), self::ROLES, 'role');
         $mode = $this->pruefeEnum((string) ($data['mode'] ?? 'pflicht'), self::MODES, 'mode');
