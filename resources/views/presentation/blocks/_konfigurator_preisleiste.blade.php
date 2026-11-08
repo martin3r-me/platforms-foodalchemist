@@ -7,7 +7,6 @@
 </div>
 <div class="pt-konfig-summen">
     <p><span class="pt-konfig-leise"><span data-konfig-ab>ab · </span>Pro Person</span><strong data-konfig-pp>—</strong></p>
-    <p><span class="pt-konfig-leise"><span data-konfig-ab>ab · </span>Gesamt</span><strong data-konfig-gesamt>—</strong></p>
-    {{-- Spec 94b: Summe der Leistungen nach Aufwand, geschätzt, nicht im Preis --}}
-    <p class="pt-konfig-zzgl-leiste" data-konfig-zzgl-leiste hidden><span class="pt-konfig-leise">geschätzt zzgl.</span><strong data-konfig-zzgl-summe></strong></p>
+    {{-- Gesamt in der Leiste = was es insgesamt kostet: all-in plus geschätzter Aufwand/Verbrauch (Dominique 08.11.2026, ersetzt die Spalte „geschätzt zzgl.“) --}}
+    <p><span class="pt-konfig-leise"><span data-konfig-ab>ab · </span><span data-konfig-gesamt-label>Gesamt</span></span><strong data-konfig-gesamt-leiste>—</strong></p>
 </div>

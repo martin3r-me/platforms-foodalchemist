@@ -214,7 +214,7 @@
         .pt-zzgl-hinweis { display: block; margin-top: .4rem; font-size: .8rem; color: var(--pt-muted); }
         .pt-konfig-zzgl ul { list-style: none; margin: 4px 0; padding: 0; }
         .pt-konfig-zzgl li { padding: 4px 0; border-bottom: 1px solid var(--pt-line); font-size: .92rem; }
-        @media (max-width: 420px) { .pt-konfig-zzgl-leiste { display: none; } }
+        @media (max-width: 420px) { .pt-konfig-summen .pt-konfig-zzgl-leiste { display: none; } }   /* .pt-konfig-summen p (display:flex) war stärker — die Spalte lief am Handy in den Gesamtpreis (08.11.2026); der Betrag steht in der Zusammenfassung */
         .pt-konfig-haken { position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; accent-color: var(--pt-accent); }
         .pt-konfig-abschnitt { font-size: 1.1rem; margin: 26px 0 0; }
         .pt-konfig-weiter { display: flex; justify-content: space-between; gap: 12px; margin-top: 28px; }
