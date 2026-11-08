@@ -110,6 +110,20 @@ class KiAuftragService
         return array_values($aus);
     }
 
+    /**
+     * Ein neuer Start fand einen wartenden Lauf vor (LAEUFT_BEREITS): sind dessen Aufträge alle beantwortet und ist er noch nicht angestoßen,
+     * jetzt anstoßen — sonst bliebe er hängen, wenn der Neustart bei der Antwort ausblieb (Selbstheilung, io 08.11.2026).
+     *
+     * @return list<array{lauf_key: string, job: string, versuch: int}>
+     */
+    public function setzeWartendenLaufFort(int $teamId, string $laufKey): array
+    {
+        $uuids = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $laufKey)->where('status', 'beantwortet')
+            ->whereNotNull('wiederholung')->where('laeuft_ab_at', '>', now())->pluck('uuid')->all();
+
+        return $uuids === [] ? [] : $this->stoesseWiederholungAn($teamId, $uuids);
+    }
+
     /** Wartet für dieses Ziel schon ein Lauf (offener oder beantworteter, noch nicht verbrauchter Auftrag)? Dann startet kein zweiter. */
     public function laufAktiv(int $teamId, string $laufKey): bool
     {
@@ -137,10 +151,14 @@ class KiAuftragService
                     ->where('laeuft_ab_at', '>', now())->exists()) {
                 continue;                                            // der Lauf wartet noch auf weitere Antworten
             }
+            // Nur die laufende Antwort-Runde zählt (Bacon Jam, io 08.11.2026): der Lauf-Schlüssel hängt am Ziel, nicht am Lauf — beantwortete,
+            // nie verbrauchte Aufträge eines FRÜHEREN Laufs (abgelaufen, höherer Versuch, schon angestoßen) blockierten sonst jeden neuen Lauf
+            // still mit „für diesen Versuch schon angestoßen“. Darum: abgelaufene Zeilen raus, Versuch aus den soeben beantworteten Zeilen.
             $alle = DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('lauf_key', $key)->where('status', 'beantwortet')
-                ->whereNotNull('wiederholung')->orderBy('id')->get()
+                ->whereNotNull('wiederholung')->where('laeuft_ab_at', '>', now())->orderBy('id')->get()
                 ->map(fn ($r) => ['zeile' => $r, 'p' => json_decode((string) $r->wiederholung, true) ?: []]);
-            $maxV = (int) $alle->max(fn ($a) => (int) ($a['p']['versuch'] ?? 0));
+            $maxV = (int) $beantwortet->filter(fn ($r) => (string) $r->lauf_key === $key)
+                ->max(fn ($r) => (int) ((json_decode((string) $r->wiederholung, true) ?: [])['versuch'] ?? 0));
             $letzte = $alle->filter(fn ($a) => (int) ($a['p']['versuch'] ?? 0) === $maxV);
             if ($letzte->contains(fn ($a) => isset($a['p']['gestartet_at']))) {
                 continue;                                            // für diesen Versuch schon angestoßen

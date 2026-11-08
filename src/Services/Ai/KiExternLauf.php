@@ -96,6 +96,8 @@ class KiExternLauf
         $key = $job->externSchluessel();
         // Ein laufender Lauf je Ziel: ein neuer Start (Versuch 0) findet einen wartenden/angestoßenen Lauf vor → kein zweiter
         if ($job->externVersuch() === 0 && app(KiAuftragService::class)->laufAktiv($teamId, $key)) {
+            app(KiAuftragService::class)->setzeWartendenLaufFort($teamId, $key);   // alles beantwortet, aber nie angestoßen → jetzt (Selbstheilung)
+
             return self::LAEUFT_BEREITS;
         }
 

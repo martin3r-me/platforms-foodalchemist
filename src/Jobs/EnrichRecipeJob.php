@@ -142,6 +142,9 @@ class EnrichRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\A
         $stand = app(\Platform\FoodAlchemist\Services\Ai\KiExternLauf::class)->fuehreAus($this, fn () => $this->arbeite($oneShot));
         if ($stand === \Platform\FoodAlchemist\Services\Ai\KiExternLauf::WARTET) {
             $this->markEnrichWartet();
+        } elseif ($stand === \Platform\FoodAlchemist\Services\Ai\KiExternLauf::LAEUFT_BEREITS && $this->stepId !== null && ! $this->nurBilder && ! $this->nurProduktfoto) {
+            // Vorher blieb dieser Step stumm auf „queued“ (Lauf 38, io 08.11.2026): sichtbar machen, dass der frühere Lauf weiterarbeitet
+            $this->markEnrich('failed', 'Für dieses Rezept wartet schon ein Anreicherungs-Lauf auf KI-Antworten. Der frühere Lauf übernimmt die Antworten; dieser Start entfällt.');
         }
     }
 
