@@ -121,7 +121,10 @@ class KonfiguratorService
         return $k->fresh();
     }
 
-    /** Logo bzw. Titelbild hochladen (wie FoodbookService::storeLogo/storeCover), ersetzt ein vorhandenes. */
+    /** Bild-Arten am Konfigurator: Logo, Titelbild und die drei Zeitfenster-Karten (Dominique 08.11.2026). */
+    public const BILD_ARTEN = ['logo', 'cover', 'lunch', 'dinner', 'day_night'];
+
+    /** Logo, Titelbild bzw. Bild einer Zeitfenster-Karte hochladen (wie FoodbookService::storeLogo/storeCover), ersetzt ein vorhandenes. */
     public function bildSpeichern(Team $team, int $id, string $art, \Illuminate\Http\UploadedFile $datei): FoodAlchemistKonfigurator
     {
         $k = $this->eigener($team, $id);
@@ -149,7 +152,8 @@ class KonfiguratorService
         return match ($art) {
             'logo' => ['logo_path', 'logo_context_file_id'],
             'cover' => ['cover_image_path', 'cover_context_file_id'],
-            default => throw new \InvalidArgumentException('Bild: logo oder cover.'),
+            'lunch', 'dinner', 'day_night' => ["bild_{$art}_path", "bild_{$art}_context_file_id"],   // Zeitfenster-Karten Tag, Abend, Tag und Abend
+            default => throw new \InvalidArgumentException('Bild: logo, cover, lunch, dinner oder day_night.'),
         };
     }
 
@@ -163,8 +167,13 @@ class KonfiguratorService
         if ($pfad === '') {
             return;
         }
+        foreach (array_map(fn ($a) => $this->bildSpalten($a)[0], self::BILD_ARTEN) as $eigene) {   // dieselbe Datei in einem anderen Bild-Feld dieses Konfigurators
+            if ($eigene !== $spalte && (string) $k->{$eigene} === $pfad) {
+                return;
+            }
+        }
         $nutzer = [
-            [FoodAlchemistKonfigurator::class, ['logo_path', 'cover_image_path']],
+            [FoodAlchemistKonfigurator::class, ['logo_path', 'cover_image_path', 'bild_lunch_path', 'bild_dinner_path', 'bild_day_night_path']],
             [\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::class, ['logo_path', 'cover_image_path']],
             [\Platform\FoodAlchemist\Models\FoodAlchemistAngebot::class, ['logo_path', 'cover_image_path']],
             [\Platform\FoodAlchemist\Models\FoodAlchemistOutlet::class, ['logo_path']],

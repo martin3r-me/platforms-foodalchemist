@@ -158,6 +158,9 @@ final class KonfiguratorSnapshot
                 'zzgl' => $zzgl,
                 'pax_vorgabe' => (int) $k->pax_vorgabe,
                 'tageszeit_aktiv' => (bool) $k->tageszeit_aktiv,
+                // Bilder der Zeitfenster-Karten (08.11.2026): nur Datei-Kennungen, die URL löst der Block auf
+                'tageszeit_bilder' => collect(['lunch', 'dinner', 'day_night'])->mapWithKeys(fn ($t) => [$t => $k->{"bild_{$t}_path"} || $k->{"bild_{$t}_context_file_id"}
+                    ? ['context_file_id' => $k->{"bild_{$t}_context_file_id"} !== null ? (int) $k->{"bild_{$t}_context_file_id"} : null, 'path' => $k->{"bild_{$t}_path"}] : null])->all(),
                 'reihenfolge' => in_array($k->reihenfolge, \Platform\FoodAlchemist\Models\FoodAlchemistKonfigurator::REIHENFOLGEN, true) ? $k->reihenfolge : 'tageszeit_zuerst',
                 'kombi_rabatt_pct' => (float) $k->kombi_rabatt_pct,
                 'anfrage' => true,

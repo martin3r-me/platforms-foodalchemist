@@ -42,6 +42,16 @@ class KonfiguratorPraesentation extends Component
 
     public $coverUpload = null;
 
+    /** Bilder der Zeitfenster-Karten Tag, Abend, Tag und Abend (08.11.2026) */
+    public $bildLunchUpload = null;
+
+    public $bildDinnerUpload = null;
+
+    public $bildDayNightUpload = null;
+
+    private const BILD_PROPS = ['logo' => ['logoUpload', 'Logo'], 'cover' => ['coverUpload', 'Titelbild'], 'lunch' => ['bildLunchUpload', 'Bild Tag'],
+        'dinner' => ['bildDinnerUpload', 'Bild Abend'], 'day_night' => ['bildDayNightUpload', 'Bild Tag und Abend']];
+
     public string $quelle = 'foodbook';
 
     public string $quelleId = '';
@@ -104,6 +114,29 @@ class KonfiguratorPraesentation extends Component
         $this->bildHochladen($svc, 'cover');
     }
 
+    public function updatedBildLunchUpload(KonfiguratorService $svc): void
+    {
+        $this->bildHochladen($svc, 'lunch');
+    }
+
+    public function updatedBildDinnerUpload(KonfiguratorService $svc): void
+    {
+        $this->bildHochladen($svc, 'dinner');
+    }
+
+    public function updatedBildDayNightUpload(KonfiguratorService $svc): void
+    {
+        $this->bildHochladen($svc, 'day_night');
+    }
+
+    public function zeitBildEntfernen(KonfiguratorService $svc, string $art): void
+    {
+        if (! in_array($art, ['lunch', 'dinner', 'day_night'], true)) {
+            return;
+        }
+        $this->tue(fn () => $svc->bildEntfernen($this->team(), $this->konfiguratorId, $art), self::BILD_PROPS[$art][1] . ' entfernt.');
+    }
+
     public function brandingLogoEntfernen(KonfiguratorService $svc): void
     {
         $this->tue(fn () => $svc->bildEntfernen($this->team(), $this->konfiguratorId, 'logo'), 'Logo entfernt.');
@@ -117,12 +150,12 @@ class KonfiguratorPraesentation extends Component
     /** Auto-Upload bei Dateiwahl wie im Foodbook: prüfen, Service (ersetzt das alte Bild), Feld leeren. */
     private function bildHochladen(KonfiguratorService $svc, string $art): void
     {
-        $prop = $art === 'logo' ? 'logoUpload' : 'coverUpload';
+        [$prop, $label] = self::BILD_PROPS[$art];
         if ($this->uploadGesperrt($prop) || $this->{$prop} === null) {
             return;
         }
-        $this->validate([$prop => 'image|max:8192'], [], [$prop => $art === 'logo' ? 'Logo' : 'Titelbild']);
-        $this->tue(fn () => $svc->bildSpeichern($this->team(), $this->konfiguratorId, $art, $this->{$prop}), $art === 'logo' ? 'Logo gespeichert.' : 'Titelbild gespeichert.');
+        $this->validate([$prop => 'image|max:8192'], [], [$prop => $label]);
+        $this->tue(fn () => $svc->bildSpeichern($this->team(), $this->konfiguratorId, $art, $this->{$prop}), $label . ' gespeichert.');
         $this->reset($prop);
     }
 
@@ -185,6 +218,9 @@ class KonfiguratorPraesentation extends Component
             'betriebsLogo' => $k !== null && ($w = $k->wirksamesLogo())['aus_betrieb'] ? $medien->url($w['context_file_id'], $w['path']) : null,
             'betriebe' => FoodAlchemistOutlet::visibleToTeam($team)->orderBy('name')->pluck('name', 'id')->all(),
             'coverUrl' => $k?->cover_image_path ? $medien->url($k->cover_context_file_id, $k->cover_image_path) : null,
+            'zeitBilder' => collect(['lunch' => 'Tag', 'dinner' => 'Abend', 'day_night' => 'Tag und Abend'])->map(fn ($label, $t) => ['label' => $label,
+                'url' => $k?->{"bild_{$t}_path"} ? $medien->url($k->{"bild_{$t}_context_file_id"}, $k->{"bild_{$t}_path"}) : null,
+                'prop' => self::BILD_PROPS[$t][0]])->all(),
         ]);
     }
 
