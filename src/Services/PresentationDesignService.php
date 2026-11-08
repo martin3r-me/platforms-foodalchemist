@@ -27,11 +27,11 @@ class PresentationDesignService
         'cover', 'chapter_loop', 'dish_list', 'price_summary', 'preis_aufschluesselung', 'legend', 'grid',
         'text', 'heading', 'image', 'spacer', 'cta',
         // Spec 94: Konfigurator-Schritte (nur für die Ausgabeform `konfigurator`, je genau einmal)
-        'konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage',
+        'konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_getraenke', 'konfig_zusammenfassung', 'konfig_anfrage',
     ];
 
     /** Spec 94: Pflicht-Blöcke des Konfigurators in Standard-Reihenfolge. */
-    public const KONFIG_BLOCKS = ['konfig_konzepte', 'konfig_tageszeit', 'konfig_getraenke', 'konfig_addons', 'konfig_zusammenfassung', 'konfig_anfrage'];
+    public const KONFIG_BLOCKS = ['konfig_konzepte', 'konfig_tageszeit', 'konfig_addons', 'konfig_getraenke', 'konfig_zusammenfassung', 'konfig_anfrage'];
 
     /** Spec 94: Blöcke, die im Konfigurator nichts bedeuten (Kapitel-, Raster- und Preisblöcke anderer Ausgaben). */
     private const KONFIG_FREMD = ['chapter_loop', 'dish_list', 'grid', 'price_summary', 'preis_aufschluesselung', 'legend'];
@@ -183,11 +183,11 @@ class PresentationDesignService
                 'base_slug' => 'konfigurator',
                 'output_types' => ['konfigurator'],
                 'layout' => [
-                    ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => false, 'show_logo' => true]],
+                    ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => true, 'show_logo' => true]],   // Deckblatt auch dunkel, wenn hochgeladen (Dominique 08.11.2026)
                     ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
                     ['block_type' => 'konfig_tageszeit', 'style' => []],
-                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_addons', 'style' => []],
+                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
                     ['block_type' => 'konfig_anfrage', 'style' => []],
                 ],
@@ -208,8 +208,8 @@ class PresentationDesignService
                     ['block_type' => 'cover', 'style' => ['align' => 'left', 'show_cover_image' => true, 'show_logo' => true]],
                     ['block_type' => 'konfig_konzepte', 'style' => ['ansicht' => 'raster', 'show_bild' => true, 'show_ab_preis' => true]],
                     ['block_type' => 'konfig_tageszeit', 'style' => []],
-                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_addons', 'style' => []],
+                    ['block_type' => 'konfig_getraenke', 'style' => []],
                     ['block_type' => 'konfig_zusammenfassung', 'style' => ['show_gesamt' => true]],
                     ['block_type' => 'konfig_anfrage', 'style' => []],
                 ],

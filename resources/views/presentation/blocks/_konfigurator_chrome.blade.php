@@ -10,8 +10,8 @@
     $zeit = ($content['tageszeit_aktiv'] ?? false) ? ['tageszeit' => 'Zeitfenster'] : [];
     // Stufe 5b: Reihenfolge je Konfigurator, Standard Tageszeit zuerst
     $schritte = array_filter(($zeitZuerst ? $zeit + ['konzepte' => 'Konzept'] : ['konzepte' => 'Konzept'] + $zeit) + [
-        'getraenke' => ! empty($content['getraenke']) ? 'Getränke' : null,   // Spec 94c: nach Konzept (und Zeitfenster), vor den Extras
         'addons' => ! empty($content['addons']) ? 'Extras' : null,
+        'getraenke' => ! empty($content['getraenke']) ? 'Getränke' : null,   // Spec 94c: nach den Extras (Dominique 08.11.2026, vorher davor)
         'anfrage' => 'Anfrage',
     ]);
     $startPaket = collect($pakete)->first(fn ($p) => $start >= $p['von'] && $start <= $p['bis']);
