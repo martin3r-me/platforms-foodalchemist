@@ -150,7 +150,7 @@
             var pe = zeile.querySelector('[data-konfig-getraenk-preis]'), g = getraenk(id), v = t ? tab[gKey(id, t)] : undefined;
             var vz = g && g.verbrauch && t && i !== null ? verbrauchZeile(i, id, t) : null;
             if (pe && vz) { pe.textContent = 'nach Verbrauch, ca. ' + euro(zzBetrag(vz)) + ' bei ' + z.pax + ' Gästen' + (vz.deckel ? ', höchstens ' + euro(vz.deckel) : ''); }
-            else if (pe) { pe.textContent = v !== undefined ? '+ ' + euro(v) + ' pro Person' + (g && g.je_stunde && g.stunden[t] ? ' (' + String(g.stunden[t]).replace('.', ',') + ' Std.)' : '') : ''; }
+            else if (pe) { pe.textContent = v !== undefined ? '+ ' + euro(v) + ' pro Person' + (g && g.je_stunde && g.stunden[t] ? ' (' + g.stunden[t] + ' Std.)' : '') : ''; }
         });
         z.getraenke = qa('[data-konfig-getraenk]').filter(function (b) { return b.checked; }).map(function (b) { return parseInt(b.value, 10); });
         var getraenkePp = 0; z.getraenke.forEach(function (g) { var v = tab[gKey(g, t)]; if (v !== undefined) { getraenkePp += v; } });

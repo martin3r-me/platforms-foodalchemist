@@ -72,7 +72,7 @@ final class KonfiguratorSnapshot
                 'gebunden_an' => $g->gebunden_an_id !== null ? (int) $g->gebunden_an_id : null,
                 'je_stunde' => $g->getraenk_dauer === 'stunde' || $g->folgestunde_satz !== null,
                 'verbrauch' => $g->getraenk_abrechnung === 'verbrauch',   // 8c: Karte zeigt „nach Verbrauch, ca. …“ statt Preis pro Person
-                'stunden' => ['lunch' => (float) $k->stunden_lunch, 'dinner' => (float) $k->stunden_dinner, 'day_night' => (float) $k->stunden_day_night],
+                'stunden' => self::getraenkStunden($g, $k),
             ];
         }
 
@@ -284,5 +284,25 @@ final class KonfiguratorSnapshot
         }
 
         return ['paket' => $index, 'paket_name' => (string) ($body['pakete'][$index]['name'] ?? ''), 'pro_person' => round($pp, 2), 'gesamt' => round($pp * $pax, 2)];
+    }
+
+    /**
+     * Stundenangabe der Getränke-Karte je Zeitfenster als Text (Dominique 08.11.2026): Tag und Abend rechnet je Zeitfenster mit seiner
+     * Einsatzzeit ({@see \Platform\FoodAlchemist\Services\KonfiguratorPricingService::getraenkPauschale}), die Karte zeigt deshalb „8 + 8“
+     * statt der Day-into-Night-Zeit. Ein fehlender Teil zählt nicht.
+     *
+     * @return array{lunch: string, dinner: string, day_night: string}
+     */
+    public static function getraenkStunden(object $g, object $k): array
+    {
+        $zahl = fn ($h) => rtrim(rtrim(number_format((float) $h, 2, ',', ''), '0'), ',');
+        $teile = [];
+        foreach (['lunch' => $k->stunden_lunch, 'dinner' => $k->stunden_dinner] as $tz => $h) {
+            if ($g->getraenkConceptId($tz) !== null && (float) $h > 0) {
+                $teile[$tz] = $zahl($h);
+            }
+        }
+
+        return ['lunch' => $teile['lunch'] ?? '', 'dinner' => $teile['dinner'] ?? '', 'day_night' => implode(' + ', $teile)];
     }
 }
