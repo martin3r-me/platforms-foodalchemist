@@ -42,6 +42,9 @@ final class StammPaket
     /** @var array<int, bool> je Team-ID: Master-Kette = sieht alle Stamm-Lieferanten ungefiltert */
     private static array $alleCache = [];
 
+    /** @var array<int, list<int>> je Team-ID: Lieferanten mit „Preise mitgeben“ */
+    private static array $preisCache = [];
+
     public static function betrifft(string $tabelle): bool
     {
         return in_array($tabelle, self::TABELLEN, true);
@@ -92,6 +95,30 @@ final class StammPaket
         $kette = TeamScope::ancestryIds($team);
 
         return static fn ($sub) => $sub->select('supplier_id')->from(self::LIEFERANTEN_TABELLE)->whereIn('team_id', $kette);
+    }
+
+    /**
+     * Stamm-Preise mitgeben (Dominique 08.11.2026): Lieferanten, deren Master-Preise (Necta-Listenpreise der globalen Stamm-Artikel) dieses Team
+     * LAUFEND sieht — ausdrückliche Admin-Freigabe je Lieferant am Freischalt-Datensatz des Haupt-Teams (Unter-Teams erben). Kein Ketten-Erbe:
+     * Master-Preise landen sonst nie bei einem Mandanten (Regel „drei Schichten“); ohne Paket, ohne Freischaltung oder in der Master-Kette leer.
+     *
+     * @return list<int>
+     */
+    public static function preisFreigabeLieferanten(?Team $team): array
+    {
+        if ($team === null || MasterTeam::id() === null || self::sieheAlleLieferanten($team) || ! self::istFreigeschaltet($team)) {
+            return [];
+        }
+        $id = (int) $team->id;
+        if (isset(self::$preisCache[$id])) {
+            return self::$preisCache[$id];
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasColumn(self::LIEFERANTEN_TABELLE, 'preise_mitgeben')) {
+            return self::$preisCache[$id] = [];
+        }
+
+        return self::$preisCache[$id] = DB::table(self::LIEFERANTEN_TABELLE)->whereIn('team_id', TeamScope::ancestryIds($team))
+            ->where('preise_mitgeben', true)->pluck('supplier_id')->map(fn ($i) => (int) $i)->unique()->values()->all();
     }
 
     /** Spalte mit der Lieferanten-ID je Stamm-Tabelle (`i.supplier_id` am Artikel, `s.id` am Lieferanten); GPs haben keine. */
@@ -184,6 +211,7 @@ final class StammPaket
     {
         self::$cache = [];
         self::$alleCache = [];
+        self::$preisCache = [];
         MasterTeam::flush();   // hängt an derselben Kette: Master-Wechsel ändert, wer das Paket immer hat
     }
 }

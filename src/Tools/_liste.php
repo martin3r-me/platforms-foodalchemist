@@ -434,6 +434,7 @@ return [
     \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteUploadTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteVorlageGetTool::class,
+    \Platform\FoodAlchemist\Tools\PreislisteArtikelExportTool::class,
     \Platform\FoodAlchemist\Tools\PreislisteZuordnenTool::class,   // eigene Lieferanten-Datei: Spalten zuordnen, je Lieferant merken
     \Platform\FoodAlchemist\Tools\PresentationDesignsDeleteTool::class,
     \Platform\FoodAlchemist\Tools\PresentationDesignsDuplicateTool::class,

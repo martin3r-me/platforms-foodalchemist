@@ -26,6 +26,9 @@ class Index extends Component
 
     public ?int $lieferantId = null;
 
+    /** Artikelliste: nur dieser Lieferant (null = alle sichtbaren). */
+    public ?int $exportLieferantId = null;
+
     /** Zielfeld => Spaltenindex der Datei (leer = nicht vorhanden). @var array<string, string> */
     public array $zuordnung = [];
 
@@ -70,6 +73,46 @@ class Index extends Component
         $svc->schreibeVorlageXlsx($pfad);
 
         return response()->download($pfad, 'preisliste_vorlage.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /** Meine Artikel als Liste (CSV): alle sichtbaren Artikel, Preis = eigener Teampreis oder leer — ausfüllen und wieder hochladen (08.11.2026). */
+    public function artikelListeCsv()
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return null;
+        }
+        $svc = app(PreislistenImportService::class);
+        $lieferant = $this->exportLieferant($team);
+        $csv = $svc->artikelListeCsv($team, $lieferant);
+
+        return response()->streamDownload(function () use ($csv) {
+            echo $csv;
+        }, $svc->artikelListeDateiname($lieferant), ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Meine Artikel als Liste (XLSX, nur mit openspout). */
+    public function artikelListeXlsx()
+    {
+        $team = $this->team();
+        $svc = app(PreislistenImportService::class);
+        if ($team === null || ! $svc->xlsxVerfuegbar()) {
+            $this->fehler = 'Excel ist auf diesem Server nicht verfügbar. Bitte die CSV-Liste nehmen.';
+
+            return null;
+        }
+        $lieferant = $this->exportLieferant($team);
+        $pfad = tempnam(sys_get_temp_dir(), 'fa-artikelliste-');
+        $svc->schreibeArtikelListeXlsx($team, $pfad, $lieferant);
+
+        return response()->download($pfad, $svc->artikelListeDateiname($lieferant, 'xlsx'))->deleteFileAfterSend(true);
+    }
+
+    /** Gewählter Lieferant, nur wenn für das Team sichtbar. */
+    private function exportLieferant(\Platform\Core\Models\Team $team): ?int
+    {
+        return $this->exportLieferantId !== null && FoodAlchemistSupplier::visibleToTeam($team)->whereKey($this->exportLieferantId)->exists()
+            ? (int) $this->exportLieferantId : null;
     }
 
     public function updatedDatei(): void
