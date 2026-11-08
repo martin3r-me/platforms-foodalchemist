@@ -91,5 +91,23 @@
         </div>
         <p class="{{ $hinweisKlasse }}">Übernehmen kopiert die Werte einmalig, danach ist das Branding des Konfigurators unabhängig.</p>
     </x-fa::section>
+
+    <x-fa::section title="Bilder der Zeitfenster" icon="heroicon-o-photo" description="Optional je Karte im Schritt „Wann startet euer Event?“. Ohne Bild bleibt die Karte wie bisher. Gilt ab dem nächsten Veröffentlichen." data-kfp-zeitbilder>
+        @unless($k?->tageszeit_aktiv)<p class="{{ $hinweisKlasse }}">Der Schritt Zeitfenster ist bei diesem Konfigurator aus; die Bilder erscheinen erst, wenn er an ist.</p>@endunless
+        <div class="grid gap-3 sm:grid-cols-3">
+            @foreach($zeitBilder as $t => $zb)
+                <div class="flex flex-col gap-2" data-kfp-zeitbild="{{ $t }}">
+                    <span class="text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink)]">{{ $zb['label'] }}</span>
+                    @if($zb['url'])
+                        <img src="{{ $zb['url'] }}" alt="Bild {{ $zb['label'] }}" class="w-full aspect-[4/3] object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                        <x-fa::button variant="ghost" size="sm" wire:click="zeitBildEntfernen('{{ $t }}')" data-kfp-zeitbild-entfernen="{{ $t }}">Entfernen</x-fa::button>
+                    @else
+                        <div class="w-full aspect-[4/3] rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line)] bg-[var(--fa-ground)] flex items-center justify-center {{ $hinweisKlasse }}">kein Bild</div>
+                    @endif
+                    <input type="file" accept="image/*" wire:model="{{ $zb['prop'] }}" class="block w-full text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] cursor-pointer file:mr-2 file:h-7 file:px-2.5 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:text-[length:var(--fa-text-sm)] file:font-medium hover:file:bg-[var(--fa-hover)]" data-kfp-zeitbild-upload="{{ $t }}" aria-label="Bild {{ $zb['label'] }} hochladen">
+                </div>
+            @endforeach
+        </div>
+    </x-fa::section>
     </fieldset>
 </div>
