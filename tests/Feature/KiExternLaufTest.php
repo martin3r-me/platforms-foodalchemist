@@ -186,3 +186,34 @@ it('Aufträge ohne Nutzlast (Backfill, Tool-Hülle) lösen keine Wiederholung au
 
     expect($this->ki->stoesseWiederholungAn($this->rootTeam->id, ['ohne-nutzlast']))->toBe([]);
 });
+
+it('alte, nie verbrauchte Antworten eines früheren Laufs blockieren den Neustart nicht (Bacon Jam, io 08.11.2026)', function () {
+    ($this->start)();
+    $a1 = ($this->offen)();
+    $key = DB::table('foodalchemist_ki_auftraege')->where('uuid', $a1)->value('lauf_key');
+    // Rest eines früheren Laufs auf demselben Ziel: beantwortet, nie verbraucht, abgelaufen, höherer Versuch, schon angestoßen
+    DB::table('foodalchemist_ki_auftraege')->insert(['uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => $this->rootTeam->id, 'feature' => 'alt',
+        'messages_hash' => str_repeat('a', 64), 'messages' => '[]', 'status' => 'beantwortet', 'lauf_key' => $key,
+        'wiederholung' => json_encode(['klasse' => KiExternFakeJob::class, 'versuch' => 3, 'lauf_key' => $key, 'nutzlast' => [], 'gestartet_at' => now()->subDays(6)->toIso8601String()]),
+        'laeuft_ab_at' => now()->subDays(5), 'created_at' => now()->subDays(6), 'updated_at' => now()->subDays(6)]);
+
+    $r = ($this->antwort)($a1);
+
+    expect($r->data['laeufe_neu_gestartet'])->toHaveCount(1)
+        ->and($r->data['laeufe_neu_gestartet'][0]['versuch'])->toBe(1, 'Versuch aus der laufenden Runde, nicht aus dem alten Rest');
+});
+
+it('Selbstheilung: ein neuer Start findet einen fertig beantworteten, nie angestoßenen Lauf vor und stößt ihn an', function () {
+    ($this->start)();
+    $a1 = ($this->offen)();
+    $this->ki->beantworte($this->rootTeam->id, $a1, ['werte' => ['description' => 'x']], 'a', 'b');   // beantwortet, aber kein Neustart (wie io)
+    \Illuminate\Support\Facades\Bus::fake();
+
+    expect(($this->start)())->toBe(KiExternLauf::LAEUFT_BEREITS);
+    \Illuminate\Support\Facades\Bus::assertDispatchedTimes(KiExternFakeJob::class, 1);
+    \Illuminate\Support\Facades\Bus::assertDispatched(KiExternFakeJob::class, fn ($j) => $j->versuch === 1);
+
+    // ein weiterer Start stößt denselben Versuch nicht noch einmal an
+    expect(($this->start)())->toBe(KiExternLauf::LAEUFT_BEREITS);
+    \Illuminate\Support\Facades\Bus::assertDispatchedTimes(KiExternFakeJob::class, 1);
+});
