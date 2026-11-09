@@ -28,7 +28,7 @@ beforeEach(function () {
 
         public function chat(array $messages, array $options = []): array
         {
-            return ['content' => json_encode(['werte' => ['rollen' => [$this->zeile => 'traeger']], 'confidence' => 0.8, 'reasoning' => 'stub']),
+            return ['content' => json_encode(['werte' => ['rollen' => [1 => 'traeger']], 'confidence' => 0.8, 'reasoning' => 'stub']),
                 'usage' => ['input_tokens' => 10, 'output_tokens' => 5], 'model' => 'fake', 'tool_calls' => null];
         }
     });

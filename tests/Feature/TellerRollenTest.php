@@ -279,7 +279,7 @@ it('vk.rollen: die KI bekommt das Teller-Vokabular samt Hinweis; ein V-21-Wert w
         public function chat(array $messages, array $options = []): array
         {
             $this->gesendet->append(implode("\n", array_map(fn ($m) => (string) $m['content'], $messages)));
-            $werte = ['rollen' => [$this->a => 'komponente', $this->b => 'sauce']];
+            $werte = ['rollen' => [1 => 'komponente', 2 => 'sauce']];
 
             return ['content' => json_encode(['werte' => $werte, 'confidence' => 0.8, 'reasoning' => 'stub'], JSON_UNESCAPED_UNICODE),
                 'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake', 'tool_calls' => null];
