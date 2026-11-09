@@ -83,6 +83,20 @@ it('editor-tabs kann schwere Alpine-Reiter beim ersten Besuch freischalten', fun
         ->toContain("\$wire.tabLaden('details')");
 });
 
+it('editor-tabs: x-data bleibt nach dem ersten Reiter-Besuch wortgleich — sonst baut Alpine den Scope neu und springt auf den Start-Reiter (09.11.2026)', function () {
+    $render = fn (array $besucht) => Blade::render(
+        '<x-foodalchemist::editor-tabs visit-action="tabLaden" :visited="$v" :tabs="[\'aufbau\' => \'Aufbau\', \'details\' => \'Details\']"><div>Inhalt</div></x-foodalchemist::editor-tabs>',
+        ['v' => $besucht]
+    );
+    $xData = fn (string $html) => preg_match('/x-data="([^"]*)"/', $html, $m) ? $m[1] : null;
+    $vorher = $render([]);
+    $nachher = $render(['details']);
+
+    expect($xData($vorher))->not->toBeNull()
+        ->and($xData($nachher))->toBe($xData($vorher))
+        ->and($nachher)->toContain('data-visited="[&quot;details&quot;]"');
+});
+
 it('kpi-tiles bildet Tones auf die Palette ab und hält die Marker', function () {
     $html = Blade::render(
         '<x-foodalchemist::kpi-tiles marker="editor-kpis" :tiles="[

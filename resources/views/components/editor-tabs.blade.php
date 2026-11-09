@@ -82,12 +82,16 @@
     </div>
 @else
     <div @if($wireKey) wire:key="{{ $wireKey }}" @endif
-         x-data="{ tab: @js($startTab), visited: @js(array_values($visited)) }"
+         {{-- x-data bleibt wortgleich (09.11.2026): stand `visited` darin, änderte der erste Reiter-Besuch (visitAction) das Attribut —
+              Alpine räumt bei einer x-data-Änderung den Scope ab und baut ihn neu (tab = Start-Reiter), der Nutzer landete wieder auf
+              «Aufbau» und musste ein zweites Mal klicken. `visited` kommt darum aus data-visited und wird nur beim Start gelesen. --}}
+         x-data="{ tab: @js($startTab), visited: [] }"
+         data-visited="{{ json_encode(array_values($visited)) }}"
          {{-- Reset nur beim ÜBERGANG auf open=true ($watch), nicht bei jedem Neuauswerten: ein x-effect lief nach dem Roundtrip des ersten Reiter-Besuchs
               (visitAction) erneut und setzte den Tab auf «Aufbau» zurück — der Nutzer musste den Reiter ein zweites Mal klicken.
               `open` existiert nur im Modal-Scope — Guard, damit der Baustein auch außerhalb eines
               Modals (Panel, Seite) ohne Alpine-Fehler läuft. --}}
-         x-init="if (typeof open !== 'undefined') $watch('open', (offen) => { if (offen) tab = @js($startTab) })"
+         x-init="visited = JSON.parse($el.dataset.visited || '[]'); if (typeof open !== 'undefined') $watch('open', (offen) => { if (offen) tab = @js($startTab) })"
          data-fa-editor-tabs @if($marker) data-{{ $marker }}-tabs @endif>
 
         {{-- Eine einzige Lasche ist keine Navigation, sondern Rauschen (z. B. GP-Neuanlage, die
