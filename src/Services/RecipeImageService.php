@@ -399,7 +399,7 @@ class RecipeImageService
      */
     public function schrittPrompt(Team $team, FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step, array &$filesUsed = []): string
     {
-        $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
+        $zutaten = $recipe->ingredients->take(20)->map->anzeigeName()->filter()->implode(', ');
         $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
             ->orderBy('position')->orderBy('id')
             ->get(['position', 'phase', 'text'])

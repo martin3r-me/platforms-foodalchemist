@@ -741,7 +741,7 @@ class VkModal extends Component
             $v = $gateway->propose('recipe.dichteklasse', [
                 'name' => $r->name,
                 'kategorie' => $r->category?->label,
-                'zutaten' => $r->ingredients->take(15)->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                'zutaten' => $r->ingredients->take(15)->map->anzeigeName()->filter()->values()->all(),
                 'ausbeute_kg' => $r->yield_kg !== null ? round((float) $r->yield_kg, 2) : null,
                 'behaelter' => $katalog->map(fn ($b) => [
                     'id' => (int) $b->id, 'name' => $b->name, 'familie' => $b->familie,

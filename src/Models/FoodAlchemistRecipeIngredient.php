@@ -51,6 +51,18 @@ class FoodAlchemistRecipeIngredient extends Model
             ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)->ohneTeamSicht('verweis');   // Spec 82: Fassung → Unter-Fassung
     }
 
+    /**
+     * Der aktuelle Name der Zeile, wie Editor und recipes.GET ihn zeigen: Unterrezept > GP >
+     * Anzeigename > Rohtext. KI-Prompts lesen DIESEN Namen — nicht raw_text, der nach einer
+     * Korrektur (recipe_ingredients.PUT, Editor) noch den alten Import-Text trägt
+     * (Pilot-Befund 09.11.2026: Handkäs bekam „Hippe: Parmesan“ statt Grana Padano).
+     */
+    public function anzeigeName(): string
+    {
+        return trim((string) ($this->referencedRecipe?->name ?? $this->gp?->name
+            ?? (($this->display_name ?? '') !== '' ? $this->display_name : $this->raw_text) ?? ''));
+    }
+
     public function unit(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'unit_vocab_id')->ohneTeamSicht('verweis');

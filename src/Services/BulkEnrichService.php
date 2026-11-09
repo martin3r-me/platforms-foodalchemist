@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Enums\BulkRunStatus;
 use Platform\FoodAlchemist\Enums\BulkRunType;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkGpProposal;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkProposal;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistBulkRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -300,7 +301,7 @@ class BulkEnrichService
 
         [$key, $kontext, $extract] = match ($feld) {
             'description' => ['recipe.description',
-                ['name' => $r->name, 'description' => $r->description, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->pluck('display_name')->all()],
+                ['name' => $r->name, 'description' => $r->description, 'zutaten' => $r->ingredients()->whereNull('deleted_at')->with(['gp:id,name', 'referencedRecipe:id,name'])->orderBy('position')->get()->map->anzeigeName()->filter()->values()->all()],
                 fn (array $w) => $w['description'] ?? null],
             'category' => ['recipe.category',
                 ['name' => $r->name, 'category_id' => $r->category_id,
@@ -376,7 +377,7 @@ class BulkEnrichService
             'name' => $r->name,
             'kategorie' => $r->category?->label,
             'zutaten' => $r->ingredients()->whereNull('deleted_at')->with('gp:id,name')->limit(15)->get()
-                ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                ->map->anzeigeName()->filter()->values()->all(),
             'ausbeute_kg' => $r->yield_kg !== null ? round((float) $r->yield_kg, 2) : null,
             'behaelter' => $katalog->map(fn ($b) => [
                 'id' => (int) $b->id,
@@ -463,7 +464,7 @@ class BulkEnrichService
             'beschreibung' => $r->description,
             'zubereitung' => $r->preparation ? mb_strimwidth((string) $r->preparation, 0, 1200, '…') : null,
             'zutaten' => $r->ingredients()->whereNull('deleted_at')->with('gp:id,name')->limit(15)->get()
-                ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                ->map->anzeigeName()->filter()->values()->all(),
             'geraete' => $geraete->pluck('name', 'id')->all(),
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);
 
@@ -505,7 +506,7 @@ class BulkEnrichService
         $zutaten = [];
         foreach ($offen->values() as $i => $z) {
             $zeileZuNr[$i + 1] = (int) $z->id;
-            $zutaten[$i + 1] = $z->display_name ?: ($gpNamen[$z->gp_id] ?? $z->raw_text ?? '');
+            $zutaten[$i + 1] = $gpNamen[$z->gp_id] ?? (($z->display_name ?? '') !== '' ? $z->display_name : ($z->raw_text ?? ''));   // GP vor Anzeigename: s. anzeigeName()
         }
         if ($zutaten === []) {
             return ['value' => null, 'confidence' => null, 'reasoning' => null, 'call_log_id' => null];
@@ -516,10 +517,10 @@ class BulkEnrichService
             'kategorie' => $r->category?->label,
             'zutaten' => $zutaten,
             // Kontext-Echo: schon gesetzte Verluste nach Zutatenname (ohne Zeilen-ID, s. o.)
-            'verluste' => DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $r->id)
-                ->whereNull('deleted_at')->whereNotNull('cooking_loss_pct')->orderBy('position')->orderBy('id')
-                ->get(['display_name', 'raw_text', 'cooking_loss_pct'])
-                ->map(fn ($z) => ['zutat' => (string) ($z->display_name ?: $z->raw_text), 'pct' => (float) $z->cooking_loss_pct])->all(),
+            'verluste' => FoodAlchemistRecipeIngredient::where('recipe_id', $r->id)
+                ->whereNull('deleted_at')->whereNotNull('cooking_loss_pct')->with(['gp:id,name', 'referencedRecipe:id,name'])
+                ->orderBy('position')->orderBy('id')->get()
+                ->map(fn ($z) => ['zutat' => $z->anzeigeName(), 'pct' => (float) $z->cooking_loss_pct])->values()->all(),
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);
 
         $verluste = [];
