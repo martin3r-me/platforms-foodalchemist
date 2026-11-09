@@ -137,3 +137,15 @@ it('mehrere Antworten auf dieselbe Frage: die neueste gilt, damit eine Korrektur
 
     expect($lauf()->werte)->toBe(['description' => 'Korrigiert.']);
 });
+
+it('Wiedererkennung: eine geänderte Kandidatenliste (Score-Rauschen, anderer letzter Treffer) zählt nicht — gleiche Frage, gleicher Hash (Rillette, io 09.11.2026)', function () {
+    $msg = fn (array $treffer, string $roh = 'Rillette: Thunfisch') => [
+        ['role' => 'system', 'content' => 'Antworte als JSON.'],
+        ['role' => 'user', 'content' => "Extrahiere.\n\nKontext:\n" . json_encode(['roh_text' => $roh, 'gp_kandidaten' => ['treffer' => $treffer]], JSON_UNESCAPED_UNICODE)],
+    ];
+    $a = $msg([['id' => 11768, 'score' => 0.7], ['id' => 12856, 'score' => 0.55]]);
+    $b = $msg([['id' => 11768, 'score' => 0.69], ['id' => 12319, 'score' => 0.55]]);
+
+    expect(KiAuftragService::hash($a))->toBe(KiAuftragService::hash($b))
+        ->and(KiAuftragService::hash($msg([], 'Rillette: Lachs')))->not->toBe(KiAuftragService::hash($a));
+});

@@ -399,7 +399,30 @@ class KiAuftragService
 
     public static function hash(array $messages): string
     {
-        return hash('sha256', json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return hash('sha256', json_encode(array_map(self::ohneKandidaten(...), $messages), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * Für die Wiedererkennung zählt die Kandidatenliste (`gp_kandidaten`) im Kontext-Block nicht: ihre Scores kommen teils aus der
+     * semantischen Suche und rauschen, ein Kandidat rutscht an der Grenze rein oder raus (Rillette Thunfisch, io 09.11.2026: drei
+     * Aufträge, je ein Score 0,69 ↔ 0,70 bzw. ein anderer letzter Treffer). Die Antwort bleibt trotzdem gültig — jede vorgeschlagene
+     * gp_id prüft der Aufrufer ohnehin gegen den Bestand. Die Liste selbst steht unverändert im gespeicherten Prompt.
+     */
+    private static function ohneKandidaten(mixed $m): mixed
+    {
+        $text = is_array($m) ? ($m['content'] ?? null) : null;
+        if (! is_string($text) || ! str_contains($text, '"gp_kandidaten"') || ($pos = mb_strrpos($text, "\n\nKontext:\n")) === false) {
+            return $m;
+        }
+        $kopf = mb_substr($text, 0, $pos + mb_strlen("\n\nKontext:\n"));
+        $kontext = json_decode(mb_substr($text, mb_strlen($kopf)), true);
+        if (! is_array($kontext) || ! array_key_exists('gp_kandidaten', $kontext)) {
+            return $m;
+        }
+        unset($kontext['gp_kandidaten']);
+        $m['content'] = $kopf . json_encode($kontext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $m;
     }
 
     private function laufAb(int $teamId): void
