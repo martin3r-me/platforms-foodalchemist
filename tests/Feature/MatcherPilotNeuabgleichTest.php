@@ -204,3 +204,23 @@ it('(6) „Essig“: scheitert Kandidat 1 am Hauptzutat-Schutz (Essig-Essenz), g
         ->and($t['gp_id'])->not->toBeNull()
         ->and(IngredientMatchService::istAutomatischVerdrahtbar($t))->toBeFalse();
 });
+
+it('(1) Kandidatenliste: das Query-Wort zählt nur an Wortanfang oder -ende — „rote“ steckt nicht in „geschrotet“', function () {
+    $geschrotet = ($this->gp)('Chili: geschrotet, trocken', '10', 'trocken', 'chili');
+    $kuerbis = ($this->gp)('Hokkaidokürbis: ganz, frisch', '01', 'frisch', 'hokkaidokuerbis');
+    $svc = app(IngredientMatchService::class);
+    $score = fn (string $z, FoodAlchemistGp $g) => collect($svc->candidatesFor($this->rootTeam, $z, null, 5))->firstWhere('id', $g->id)['score'] ?? 0.0;
+
+    expect($score('Rote Chili', $geschrotet))->toBeLessThan(1.0)
+        ->and($score('Kürbis', $kuerbis))->toBeGreaterThanOrEqual(1.0);   // Kompositum-Ende zählt weiter
+});
+
+it('(9) Terminologie: Pfefferschote ↛ Pfeffer (Anti-Marker trotz „pfeffer“ im Trigger), Pfefferschote = Chilischote', function () {
+    $t = app(\Platform\FoodAlchemist\Services\TerminologyService::class);
+
+    expect($t->isAntiMarker('Rote Pfefferschoten', 'Pfeffer bunt: geschrotet, trocken'))->toBeTrue()
+        ->and($t->isAntiMarker('Rote Pfefferschoten', 'Chilischote: frisch, rot'))->toBeFalse()
+        ->and($t->isAntiMarker('Pfeffer', 'Pfeffer bunt: geschrotet, trocken'))->toBeFalse()
+        ->and($t->aliasVariantenFor('Rote Pfefferschoten'))->toContain('rote chilischoten')
+        ->and($t->aliasVariantenFor('Beef Jerky'))->toContain('rindfleisch jerky');
+});
