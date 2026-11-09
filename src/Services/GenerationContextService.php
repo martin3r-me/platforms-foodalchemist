@@ -138,12 +138,10 @@ class GenerationContextService
         // mit SONDIERUNG_MAX_TOKENS=16 probierten Tokens reicht die reine Einfüge-
         // Reihenfolge nicht mehr als Kappungs-Kriterium — sonst gewinnen frühe Tokens
         // trotz schwächerem Treffer gegen spät gefundene, stärker passende Kandidaten.
-        $sortByScore = static function (array $map): array {
-            $liste = array_values($map);
-            usort($liste, static fn ($a, $b) => $b['score'] <=> $a['score']);
-
-            return $liste;
-        };
+        // Deterministisch (Rezeptimport-Pilot, io 09.11.2026): Score auf 2 Stellen gerundet, bei Gleichstand nach id. Über MCP muss der
+        // Prompt bei jedem Neustart wortgleich sein, sonst passt die gespeicherte Antwort nicht und es entsteht ein neuer Auftrag —
+        // gleich bewertete Kandidaten wechselten die Reihenfolge, Scores rauschten in der 3. Nachkommastelle (0,694 ↔ 0,695).
+        $sortByScore = static fn (array $map): array => self::kandidatenStabil($map);
 
         $out = [];
         if ($gp !== []) {
@@ -297,5 +295,20 @@ class GenerationContextService
     private function leitTokens(string $description): array
     {
         return $this->tokens->leitTokens($description, self::SONDIERUNG_MAX_TOKENS);
+    }
+
+    /**
+     * Kandidaten nach Score (auf 2 Stellen gerundet) absteigend, bei Gleichstand nach id — gleiche Eingabe in beliebiger Reihenfolge
+     * oder mit Rauschen hinter der 2. Stelle ergibt dieselbe Liste (stabiler Prompt für den externen KI-Weg).
+     *
+     * @param  array<int|string, array{id:int|string, score:float|int|string}>  $map
+     * @return list<array<string, mixed>>
+     */
+    public static function kandidatenStabil(array $map): array
+    {
+        $liste = array_map(static fn ($k) => ['score' => round((float) $k['score'], 2)] + $k, array_values($map));
+        usort($liste, static fn ($a, $b) => [$b['score'], (int) $a['id']] <=> [$a['score'], (int) $b['id']]);
+
+        return $liste;
     }
 }
