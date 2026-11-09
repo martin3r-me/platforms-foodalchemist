@@ -344,7 +344,7 @@ class RecipeOneShotService
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.production_depth', [
                 'name' => $recipe->name,
                 'production_depth' => $recipe->production_depth,
-                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->with(['gp:id,name', 'referencedRecipe:id,name'])->orderBy('position')->limit(30)->get()->map->anzeigeName()->filter()->values()->all(),
             ], [
                 'target_table' => 'foodalchemist_recipes',
                 'target_id' => $recipe->id,
@@ -384,7 +384,7 @@ class RecipeOneShotService
                 'yield_kg' => $recipe->yield_kg_manual ?? $recipe->yield_kg,
                 'yield_pieces' => $recipe->yield_pieces,
                 'preparation' => $recipe->preparation,
-                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->with(['gp:id,name', 'referencedRecipe:id,name'])->orderBy('position')->limit(30)->get()->map->anzeigeName()->filter()->values()->all(),
             ], [
                 'target_table' => 'foodalchemist_recipes',
                 'target_id' => $recipe->id,
@@ -493,7 +493,7 @@ class RecipeOneShotService
                 'equipment_slugs' => $recipe->equipment()->pluck('slug')->all(),
                 'vokabular' => $vokabular,
                 'preparation' => $recipe->preparation,
-                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->with(['gp:id,name', 'referencedRecipe:id,name'])->orderBy('position')->limit(30)->get()->map->anzeigeName()->filter()->values()->all(),
             ], [
                 'target_table' => 'foodalchemist_recipe_equipment',
                 'target_id' => $recipe->id,
@@ -614,7 +614,7 @@ class RecipeOneShotService
             $kontext = [
                 'name' => $recipe->name,
                 'zubereitung' => $recipe->preparation,
-                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->with(['gp:id,name', 'referencedRecipe:id,name'])->orderBy('position')->limit(30)->get()->map->anzeigeName()->filter()->values()->all(),
             ];
             $sektor = app(Ai\AiGatewayService::class)->propose('recipe.sektor', $kontext + [
                 'vokabular' => RecipeService::eignungVokabular()['sektor']['slugs'],
@@ -750,7 +750,7 @@ class RecipeOneShotService
             // nicht auseinanderlaeuft. Trennung der Ebenen: Regelwerk Verkaufsgerichte §3.
             'zubereitungsziel' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.ziel'),
             'hinweis' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.hinweis'),
-            'zutaten' => $zutaten->pluck('raw_text')->filter()->values()->all(),
+            'zutaten' => $zutaten->map->anzeigeName()->filter()->values()->all(),
             'komponenten' => $zutaten->filter(fn ($z) => $z->referencedRecipe !== null)->map(fn ($z) => [
                 'name' => $z->referencedRecipe?->name,
                 'typ' => $z->referencedRecipe?->is_sales_recipe ? 'gericht' : 'basisrezept',

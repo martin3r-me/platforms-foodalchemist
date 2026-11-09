@@ -407,7 +407,7 @@ class RecipeModal extends Component
             $vorschlag = $ki->propose('recipe.description', [
                 'name' => $r?->name ?? $this->form['name'],
                 'description' => $this->form['description'] ?: null,
-                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(20)->all() ?? [],
+                'zutaten' => $r?->ingredients?->take(20)->map->anzeigeName()->filter()->values()->all() ?? [],
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -556,7 +556,7 @@ class RecipeModal extends Component
             return null;
         }
 
-        return FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients:id,recipe_id,raw_text')->find($this->recipeId);
+        return FoodAlchemistRecipe::visibleToTeam($team)->with(['ingredients' => fn ($q) => $q->orderBy('position'), 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name'])->find($this->recipeId);
     }
 
     // ── Editor-Parität (Ist-App-Vorbild): Löschen · ✨-Header-Aktionen · Anreichern ──
@@ -706,7 +706,7 @@ class RecipeModal extends Component
             $vorschlag = $ki->propose('recipe.production_depth', [
                 'name' => $this->form['name'],
                 'production_depth' => $this->form['production_depth'] ?: null,
-                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+                'zutaten' => $r?->ingredients?->take(30)->map->anzeigeName()->filter()->values()->all() ?? [],
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -724,7 +724,7 @@ class RecipeModal extends Component
     {
         $this->fehler = null;
         $r = $this->rezept();
-        $zutaten = $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [];
+        $zutaten = $r?->ingredients?->take(30)->map->anzeigeName()->filter()->values()->all() ?? [];
         $zubereitung = trim((string) ($r?->preparation ?? ''));
         // C (Dominique 2026-08-27): NUR mit Basisdaten schätzen (Guardrail „nicht erfinden"). Ohne
         // Zutaten UND ohne Zubereitung fehlt die belastbare Grundlage → ehrliche Meldung statt still
@@ -812,7 +812,7 @@ class RecipeModal extends Component
                 'equipment_slugs' => [],
                 // F2 (unique je Team): nur das sichtbare Equipment — sonst stünden fremde Mandanten-Kopien im Vokabular
                 'vokabular' => FoodAlchemistVocabKochequipment::visibleToTeam(Auth::user()?->currentTeamRelation)->pluck('slug')->unique()->values()->all(),
-                'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
+                'zutaten' => $r?->ingredients?->take(30)->map->anzeigeName()->filter()->values()->all() ?? [],
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -1167,7 +1167,7 @@ class RecipeModal extends Component
                 'name' => $r->name,
                 'kategorie' => $r->category?->label,
                 'zutaten' => $r->ingredients->take(15)
-                    ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                    ->map->anzeigeName()->filter()->values()->all(),
                 'ausbeute_kg' => $r->yield_kg !== null ? round((float) $r->yield_kg, 2) : null,
                 'behaelter' => $katalog->map(fn ($b) => [
                     'id' => (int) $b->id,

@@ -559,12 +559,12 @@ class StepEditor extends Component
     {
         $zutaten = $recipe->ingredients()
             ->whereNull('deleted_at')
-            ->with('referencedRecipe:id,name,is_sales_recipe')
+            ->with(['referencedRecipe:id,name,is_sales_recipe', 'gp:id,name'])
             ->orderBy('position')
             ->limit(30)
             ->get();
         $beschreibung = trim((string) $recipe->name."\n".$zutaten->map(
-            fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
+            fn ($z) => $z->anzeigeName()
         )->filter()->implode(', '));
         $wissen = app(KnowledgeContextService::class)->contextFor($this->team(), $prompt, $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
@@ -599,7 +599,7 @@ class StepEditor extends Component
             // nicht auseinanderlaeuft. Trennung der Ebenen: Regelwerk Verkaufsgerichte §3.
             'zubereitungsziel' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.ziel'),
             'hinweis' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.hinweis'),
-            'zutaten' => $zutaten->pluck('raw_text')->filter()->values()->all(),
+            'zutaten' => $zutaten->map->anzeigeName()->filter()->values()->all(),
             'komponenten' => $zutaten->filter(fn ($z) => $z->referencedRecipe !== null)->map(fn ($z) => [
                 'name' => $z->referencedRecipe?->name,
                 'typ' => $z->referencedRecipe?->is_sales_recipe ? 'gericht' : 'basisrezept',
