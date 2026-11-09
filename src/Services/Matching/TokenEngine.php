@@ -139,6 +139,11 @@ class TokenEngine
                 $zustandTreffer[] = $zustand;
             }
         }
+        // Neuabgleich 09.11. („Getrocknete Tomaten in Öl“ → no_match): getrocknet UND in Öl/Lake/Essig eingelegt ist konservierte Ware (§9) —
+        // „getrocknet“ ist dann die Verarbeitung, nicht der Zustand
+        if (in_array('trocken', $zustandTreffer, true) && preg_match('/(?<![\p{L}])in\s+(?:(?:ö|oe)l|lake|salzlake|essig|marinade)(?![\p{L}])/iu', $normalisiert) === 1) {
+            $zustandTreffer = array_values(array_unique([...array_diff($zustandTreffer, ['trocken']), 'konserviert']));
+        }
         // Widersprüchlich (z. B. „TK, getrocknet") ⇒ kein Zustand gesetzt — Raten wäre hier
         // schlimmer als ungeprüft lassen (identische Politik zu GpZustandBackfillCommand).
         // v3.6.0 (Dominique 19.10.): mehrere Behandlungen ⇒ Vorrang, TK + Behandlung ⇒ Behandlung; echt widersprüchlich ⇒ null
@@ -241,6 +246,10 @@ class TokenEngine
     {
         if ($a === $b) {
             return true;
+        }
+        // Neuabgleich 09.11.: „rote“ ↔ „rot“ — Farbwörter sind für Stamm (≥ 5) zu kurz
+        if (($fa = \Platform\FoodAlchemist\Support\ZutatFreitext::farbe($a)) !== null) {
+            return $fa === \Platform\FoodAlchemist\Support\ZutatFreitext::farbe($b);
         }
         $stemA = $this->stemGerman($a);
         if (mb_strlen($stemA) >= 4 && $stemA === $this->stemGerman($b)) {
@@ -371,7 +380,8 @@ class TokenEngine
             foreach ($candidateTokens as $c) {
                 if ($this->tokenMatches($q, $c)) {
                     $i++;
-                    $inhalt = $inhalt || ! $this->istReinesMerkmal($q);
+                    // eine gemeinsame Farbe allein ist kein gemeinsames Produkt („Rote Zwiebel“ ↔ „Paprika: rot“)
+                    $inhalt = $inhalt || (! $this->istReinesMerkmal($q) && \Platform\FoodAlchemist\Support\ZutatFreitext::farbe($q) === null);
 
                     continue 2;
                 }

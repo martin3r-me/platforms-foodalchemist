@@ -510,7 +510,8 @@ class GpNamingService
     private const SCHNITTFORMEN = ['brunoise', 'würfel', 'stifte', 'scheiben', 'streifen', 'julienne'];
 
     private const FORMWOERTER = ['ganz', 'ganze', 'halbiert', 'geviertelt', 'geachtelt', 'pulver', 'paste', 'granulat', 'flocken', 'fein', 'grob', 'stück',
-        'stange', 'stangen', 'bund', 'blatt', 'bruch', 'seite', 'rolle', 'hälften', 'spalten', 'ringe', 'blätter', 'portion', 'filet', 'filets', 'loin', 'loins', 'block', 'kugeln'];
+        'stange', 'stangen', 'bund', 'blatt', 'bruch', 'seite', 'rolle', 'hälften', 'spalten', 'ringe', 'blätter', 'portion', 'filet', 'filets', 'loin', 'loins', 'block', 'kugeln',
+        'wedges'];   // Neuabgleich 09.11.: „Hokkaido-Kürbis: Wedges, …“ ist ein Zuschnitt, kein Geschmack
 
     /**
      * Art eines Namensteils (ohne Zustand): `processing` (Verarbeitung: §2-Verarbeitungs-Token, Partizip wie gegart/geschält/paniert, roh,
