@@ -46,7 +46,7 @@ class KiAuftragService
             if ($n === 1) {
                 $modell = trim(($fertig->anbieter ? $fertig->anbieter . '/' : '') . (string) $fertig->modell, '/');
 
-                $roh = ['content' => (string) $fertig->antwort, 'model' => $modell !== '' ? $modell : 'extern', 'usage' => [], 'extern' => true];
+                $roh = ['content' => self::mitUmschlag((string) $fertig->antwort), 'model' => $modell !== '' ? $modell : 'extern', 'usage' => [], 'extern' => true];
                 if (($optionen['include_web_search'] ?? false) === true) {
                     $roh['sources'] = (array) (json_decode((string) $fertig->antwort, true)['sources'] ?? []);   // ANTWORT hat sie beim Speichern geprüft
                 }
@@ -92,6 +92,23 @@ class KiAuftragService
         }
 
         throw new KiAuftragAusstehendException($uuid, $feature);
+    }
+
+    /**
+     * Ergänzt den verlangten Umschlag {"werte": {…}, "confidence", "reasoning"}, wenn eine Antwort die Fachfelder auf oberster Ebene
+     * trägt (Bro-Scetta, io 08.11.2026: name/zutaten ohne „werte“ → der Generator hielt die Antwort für unbrauchbar und fragte mit
+     * demselben Prompt erneut — über MCP eine Endlosschleife identischer Aufträge). confidence/reasoning/sources bleiben oben.
+     */
+    public static function mitUmschlag(string $antwort): string
+    {
+        $j = json_decode($antwort, true);
+        if (! is_array($j) || array_is_list($j) || array_key_exists('werte', $j)) {
+            return $antwort;
+        }
+        $oben = array_intersect_key($j, array_flip(['confidence', 'reasoning', 'sources']));
+        $werte = array_diff_key($j, $oben);
+
+        return $werte === [] ? $antwort : (string) json_encode(['werte' => $werte] + $oben, JSON_UNESCAPED_UNICODE);
     }
 
     /**

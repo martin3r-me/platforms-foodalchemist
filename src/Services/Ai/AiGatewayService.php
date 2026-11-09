@@ -451,6 +451,13 @@ class AiGatewayService
                 if ($e instanceof KiAuftragAusstehendException) {
                     break;                                           // #1002: kein Re-Roll gegen einen wartenden Auftrag
                 }
+                if (is_array($antwort) && ($antwort['extern'] ?? false)) {
+                    // Externe Antwort (MCP): ein Re-Roll fragt mit demselben Prompt erneut und legt nur einen identischen Auftrag an
+                    // (Endlosschleife, io 08.11.2026) — stattdessen sofort mit klarem Grund scheitern
+                    $fehler = new \RuntimeException('Die externe KI-Antwort für [' . $promptKey . '] ist nicht verwertbar: ' . $e->getMessage()
+                        . ' Erwartet wird {"werte": {…Pflichtfelder…}, "confidence": …, "reasoning": …} laut Auftrag.', 0, $e);
+                    break;
+                }
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
