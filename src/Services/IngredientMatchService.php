@@ -221,9 +221,7 @@ class IngredientMatchService
         // Rein additiv wie die beiden Fallbacks darüber: feuert NUR unter der Schwelle, die
         // Goldens bleiben unberührt. Bewusst NUR Schnittformen (nicht alle Qualifier) —
         // Zustand und Verarbeitungsgrad sind eigene Achsen und dürfen nicht verschwinden.
-        // Neuabgleich 09.11.: seit der Vorfilter den Singular findet, trifft „Schalotten, in Brunoise“ die Brunoise-Ware mit 0,67 (Review) —
-        // der Zuschnitt fällt darum weg, solange der Treffer nicht automatisch verdrahtbar ist (nur besser, nie schlechter)
-        if (! self::istAutomatischVerdrahtbar($final)) {
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
             $ohneZuschnitt = array_values(array_filter(
                 $queryTokens,
                 fn (string $t): bool => ! $this->engine->isCutFormToken($t),

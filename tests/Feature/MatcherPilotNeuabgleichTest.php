@@ -224,3 +224,9 @@ it('(9) Terminologie: Pfefferschote ↛ Pfeffer (Anti-Marker trotz „pfeffer“
         ->and($t->aliasVariantenFor('Rote Pfefferschoten'))->toContain('rote chilischoten')
         ->and($t->aliasVariantenFor('Beef Jerky'))->toContain('rindfleisch jerky');
 });
+
+it('(2) „Wedges“ ist im GP-Namen ein Zuschnitt, kein Geschmack', function () {
+    $f = app(\Platform\FoodAlchemist\Services\GpNamingService::class)->felderAusName('Hokkaido-Kürbis: Wedges, frisch, mit Schale', true);
+
+    expect($f['form'])->toBe('Wedges')->and($f['flavor'])->toBe('');
+});
