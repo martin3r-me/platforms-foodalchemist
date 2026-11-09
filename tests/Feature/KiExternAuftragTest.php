@@ -120,3 +120,20 @@ it('mitUmschlag: lässt korrekte Umschläge, Listen und Nicht-JSON unverändert,
         ->and(json_decode(KiAuftragService::mitUmschlag('{"name":"X","reasoning":"r","sources":[]}'), true))
         ->toBe(['werte' => ['name' => 'X'], 'reasoning' => 'r', 'sources' => []]);
 });
+
+it('mehrere Antworten auf dieselbe Frage: die neueste gilt, damit eine Korrektur ankommt (Crostini, io 09.11.2026)', function () {
+    $lauf = fn () => ($this->extern)(fn () => $this->gw->propose('recipe.description', ['description' => 'Klarer Fond.']));
+    expect($lauf)->toThrow(KiAuftragAusstehendException::class);
+    $erste = DB::table('foodalchemist_ki_auftraege')->first();
+    app(KiAuftragService::class)->beantworte($this->rootTeam->id, $erste->uuid, ['werte' => ['description' => 'Alt.'], 'confidence' => 0.9], 'x', 'y');
+
+    // zweite beantwortete Zeile zur selben Frage (wie nach einem zurückgerollten MCP-Lauf mit korrigierter Antwort)
+    $neu = (array) $erste;
+    unset($neu['id']);
+    $neu['uuid'] = (string) \Illuminate\Support\Str::uuid7();
+    $neu['antwort'] = json_encode(['werte' => ['description' => 'Korrigiert.'], 'confidence' => 0.9]);
+    $neu['status'] = 'beantwortet';
+    DB::table('foodalchemist_ki_auftraege')->insert($neu);
+
+    expect($lauf()->werte)->toBe(['description' => 'Korrigiert.']);
+});

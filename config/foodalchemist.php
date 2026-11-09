@@ -1711,8 +1711,8 @@ return [
                 . 'Reduzieren auf die Hälfte 50, auf ein Drittel 67, auf ein Viertel 75; Fond-Flüssigkeit '
                 . '20-40; abgeseihte/entfernte Feststoffe (Knochen, Karkassen, Röstgemüse, Kräuter, Gewürze '
                 . 'im Fond) 100; Brat-/Garverlust Fleisch/Fisch 20-30, Gemüse 10-25; kalte Rohmischungen, '
-                . 'Dressings, Marinaden, Trockenwaren 0. Nur die mitgegebenen zutat-ids, keine erfundenen: '
-                . 'werte = {verluste: {<zutat_id>: pct}}.',
+                . 'Dressings, Marinaden, Trockenwaren 0. Nur die Nummern aus zutaten, keine erfundenen: '
+                . 'werte = {verluste: {<nummer>: pct}}.',
         ],
         // Zukauf-Basisrezept (Dominique 10.10.): Kaufware im Gericht — der Code legt Name und Zeile fest, die KI schreibt
         // nur die Handgriffe. Kleiner Call statt des vollen Generators (~1k statt ~30k Tokens).
@@ -1883,7 +1883,7 @@ return [
             // Teller-Vokabular (Dominique 11.10.) kommt als `vokabular` aus der Regel gericht.teller_rolle.
             'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Werte NUR laut Regel-Block bzw. vokabular im Kontext — '
                 . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; die alten Werte aroma_treiber und '
-                . 'komponente sind UNGUELTIG, auch wenn ein Text sie noch nennt): werte = {rollen: {<zutat_id>: role}}.',
+                . 'komponente sind UNGUELTIG, auch wenn ein Text sie noch nennt): werte = {rollen: {<nummer aus zutaten>: role}}.',
         ],
         // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
         // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER

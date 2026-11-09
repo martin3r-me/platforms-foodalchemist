@@ -499,9 +499,14 @@ class BulkEnrichService
         $offen = $this->zutatenOhne($r, 'cooking_loss_pct')->orderBy('position')->orderBy('id')
             ->get(['id', 'display_name', 'raw_text', 'gp_id']);
         $gpNamen = FoodAlchemistGp::whereIn('id', $offen->pluck('gp_id')->filter()->all())->pluck('name', 'id');
-        $zutaten = $offen->mapWithKeys(fn ($z) => [
-            (int) $z->id => $z->display_name ?: ($gpNamen[$z->gp_id] ?? $z->raw_text ?? ''),
-        ])->all();
+        // Schlüssel = laufende Nummer (1, 2, …), nie die Zeilen-ID: über MCP baut jeder Neustart das Rezept neu (Rollback), die
+        // Zeilen bekommen neue IDs — mit IDs im Prompt passte keine Antwort je zum nächsten Lauf (Crostini-Schleife, io 09.11.2026).
+        $zeileZuNr = [];
+        $zutaten = [];
+        foreach ($offen->values() as $i => $z) {
+            $zeileZuNr[$i + 1] = (int) $z->id;
+            $zutaten[$i + 1] = $z->display_name ?: ($gpNamen[$z->gp_id] ?? $z->raw_text ?? '');
+        }
         if ($zutaten === []) {
             return ['value' => null, 'confidence' => null, 'reasoning' => null, 'call_log_id' => null];
         }
@@ -510,14 +515,17 @@ class BulkEnrichService
             'name' => $r->name,
             'kategorie' => $r->category?->label,
             'zutaten' => $zutaten,
+            // Kontext-Echo: schon gesetzte Verluste nach Zutatenname (ohne Zeilen-ID, s. o.)
             'verluste' => DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $r->id)
-                ->whereNull('deleted_at')->whereNotNull('cooking_loss_pct')->pluck('cooking_loss_pct', 'id')->all(),   // Kontext-Echo
+                ->whereNull('deleted_at')->whereNotNull('cooking_loss_pct')->orderBy('position')->orderBy('id')
+                ->get(['display_name', 'raw_text', 'cooking_loss_pct'])
+                ->map(fn ($z) => ['zutat' => (string) ($z->display_name ?: $z->raw_text), 'pct' => (float) $z->cooking_loss_pct])->all(),
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);
 
         $verluste = [];
-        foreach ((array) ($p->werte['verluste'] ?? []) as $id => $pct) {
-            if (array_key_exists((int) $id, $zutaten) && is_numeric($pct) && (float) $pct >= 0.0 && (float) $pct <= 100.0) {
-                $verluste[(int) $id] = round((float) $pct, 1);
+        foreach ((array) ($p->werte['verluste'] ?? []) as $nr => $pct) {
+            if (isset($zeileZuNr[(int) $nr]) && is_numeric($pct) && (float) $pct >= 0.0 && (float) $pct <= 100.0) {
+                $verluste[$zeileZuNr[(int) $nr]] = round((float) $pct, 1);
             }
         }
 

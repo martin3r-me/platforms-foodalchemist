@@ -37,7 +37,7 @@ class KiAuftragService
 
         $fertig = DB::table('foodalchemist_ki_auftraege')
             ->where('team_id', $teamId)->where('feature', $feature)->where('messages_hash', $hash)
-            ->where('status', 'beantwortet')->orderBy('id')->first()
+            ->where('status', 'beantwortet')->orderByDesc('id')->first()   // neueste Antwort: eine Korrektur muss ankommen (io 09.11.2026)
             ?? $this->zumZiel($teamId, $feature, $messages, $audit, 'beantwortet');
         if ($fertig !== null) {
             // einmalig verbrauchen: UPDATE mit Statusbedingung, damit zwei parallele Läufe nicht dieselbe Antwort ziehen

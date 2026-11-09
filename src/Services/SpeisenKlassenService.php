@@ -130,14 +130,23 @@ class SpeisenKlassenService
         // Neu zuordnen (Kommando --alle, Dominique 11.10.): Rollen aus migration/ki NICHT als Echo zeigen — sonst bestätigt die KI
         // eher den Altwert (Probelauf 2: „Olivenöl [beilage]“) statt neu zu entscheiden. Manuelle bleiben als Kontext sichtbar.
         $echo = fn ($z) => $z->role !== null && ! ($neuZuordnen && in_array($z->role_source, ['migration', 'ki'], true)) ? $z->role : null;
-        $zeilen = $r->ingredients->mapWithKeys(fn ($z) => [
-            $z->id => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name) . ($echo($z) !== null ? " [{$echo($z)}]" : ''),
-        ])->all();
+        // Schlüssel = laufende Nummer (1, 2, …), nie die Zeilen-ID: über MCP baut jeder Neustart das Gericht neu (Rollback, neue IDs) —
+        // mit IDs im Prompt passte die Antwort nie zum nächsten Lauf (io 09.11.2026). Zurück auf die Zeile über $zeileZuNr.
+        $zeileZuNr = [];
+        $zeilen = [];
+        $rollenEcho = [];
+        foreach ($r->ingredients->values() as $i => $z) {
+            $zeileZuNr[$i + 1] = (int) $z->id;
+            $zeilen[$i + 1] = ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name) . ($echo($z) !== null ? " [{$echo($z)}]" : '');
+            if ($echo($z) !== null) {
+                $rollenEcho[$i + 1] = $echo($z);
+            }
+        }
 
         $vorschlag = $this->ki->propose('vk.rollen', [
             'gericht' => $r->name,
             'zutaten' => $zeilen,
-            'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $echo($z)])->filter()->all(),  // Kontext-Echo
+            'rollen' => $rollenEcho,                                  // Kontext-Echo
             // Wert, Anzeigename und Bedeutung nebeneinander (Probelauf 3: ohne Bedeutung zog die KI alles zu protein).
             'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::eintraege(),
             // demo Probelauf 11.10.: der Kanon (Regelwerk §12) nannte noch V-21 — die KI lieferte komponente/aroma_treiber.
@@ -148,9 +157,9 @@ class SpeisenKlassenService
 
         $gueltig = [];
         $verworfen = [];
-        $ids = array_map('intval', array_keys($zeilen));
-        foreach ((array) ($vorschlag->werte['rollen'] ?? []) as $zeileId => $role) {
-            if (! in_array((int) $zeileId, $ids, true)) {
+        foreach ((array) ($vorschlag->werte['rollen'] ?? []) as $nr => $role) {
+            $zeileId = $zeileZuNr[(int) $nr] ?? null;
+            if ($zeileId === null) {
                 continue;
             }
             if (($k = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($role)) !== null) {

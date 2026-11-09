@@ -62,12 +62,14 @@ beforeEach(function () {
         public function chat(array $messages, array $options = []): array
         {
             $user = collect($messages)->last()['content'];
+            $GLOBALS['b1b2_prompts'][] = $user;
             $werte = match (true) {
                 str_contains($user, '"geraete"') => ['kalt' => false, 'geraet_id' => $this->geraetId, 'temp_c' => 140, 'duration_min' => 12, 'core_temp_c' => 65, 'note' => 'Abgedeckt regenerieren.'],
                 // Garverlust: die Schalotte hat schon 10 → der Fake „vergisst" sie nicht, der Service muss sie schützen.
-                str_contains($user, '"verluste"') => ['verluste' => [$this->ids['jus'] => 50, $this->ids['schalotte'] => 99]],
+                // Schlüssel = laufende Nummer der offenen Zeilen (nie die Zeilen-ID): 1 = Rinderfond, 2 gibt es nicht.
+                str_contains($user, '"verluste"') => ['verluste' => [1 => 50, 2 => 99]],
                 // Rollen: die Jus hat schon `komponente` → der Fake versucht sie umzuschreiben.
-                str_contains($user, '"vokabular"') => ['rollen' => [$this->ids['ruecken'] => 'sauce', $this->ids['vkjus'] => 'garnitur']],
+                str_contains($user, '"vokabular"') => ['rollen' => [1 => 'sauce', 2 => 'garnitur']],          // 1 = Rücken, 2 = Jus
                 str_contains($user, '"vehikel"') => ['servier_vehikel_id' => $this->vehikelId],   // Registry-Schema vk.servier_vehikel
                 str_contains($user, '"taste_direction"') => ['taste_direction' => 'herzhaft'],
                 default => ['description' => 'Kräftige Jus.'],
@@ -199,6 +201,30 @@ it('B-2: der Garverlust landet nur in LEEREN Zutaten-Zeilen, mit Provenienz ki, 
 
     // Recompute: 2000 g × 0,5 + 200 g × 0,9 = 1,18 kg (F6.2 mit Zeilen-Verlust), nicht 2,2 kg.
     expect(round((float) $this->basis->fresh()->yield_kg, 2))->toBe(1.18);
+});
+
+it('B-2: die Garverlust-Frage nennt keine Zeilen-IDs — nach Neuaufbau der Zeilen (neue IDs) ist sie wortgleich', function () {
+    // Über MCP (extern) baut jeder Neustart das Rezept neu und rollt zurück; mit Zeilen-IDs im Prompt passte keine Antwort je
+    // zum nächsten Lauf (Crostini-Schleife, io 09.11.2026). Gleiche Zutaten ⇒ gleiche Frage ⇒ die gespeicherte Antwort greift.
+    $GLOBALS['b1b2_prompts'] = [];
+    $this->svc->starte($this->rootTeam, [$this->basis->id], ['garverlust']);
+    $vorher = collect($GLOBALS['b1b2_prompts'])->first(fn ($u) => str_contains($u, '"verluste"'));
+
+    $alteId = $this->zutatA->id;
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($this->zutatA->gp_id);
+    DB::table('foodalchemist_bulk_proposals')->delete();
+    $this->zutatA->forceDelete();
+    $neu = $this->makeIngredient($this->basis->fresh(), 'Rinderfond', $gp, '2000', 1);
+    expect($neu->id)->not->toBe($alteId);
+
+    $GLOBALS['b1b2_prompts'] = [];
+    $runId = $this->svc->starte($this->rootTeam, [$this->basis->id], ['garverlust']);
+    $nachher = collect($GLOBALS['b1b2_prompts'])->first(fn ($u) => str_contains($u, '"verluste"'));
+
+    expect($vorher)->not->toBeNull()->and($nachher)->toBe($vorher);
+    // Die Antwort (Nummer 1) landet auf der NEUEN Zeile.
+    $wert = json_decode(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('field', 'garverlust')->value('value'), true);
+    expect(array_map('intval', array_keys($wert['verluste'])))->toBe([$neu->id]);
 });
 
 it('B-2: ohne offene Zutat kein Provider-Call — der Vorschlag ist leer', function () {
