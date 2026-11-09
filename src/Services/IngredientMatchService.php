@@ -23,6 +23,11 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  */
 class IngredientMatchService
 {
+    use Matching\KandidatenNachwahl;
+
+    /** Toleranz „gleich gut“ in der Kandidatenliste (Kopf-Boden 0,90 vs. 0,901 mit Ganzwort-Bonus) — {@see Matching\KandidatenNachwahl}. */
+    private const GLEICH_GUT = 0.01;
+
     public function __construct(
         private TokenEngine $engine,
         private MatchHeuristics $heuristik,
@@ -173,8 +178,9 @@ class IngredientMatchService
         // auf dem ORIGINAL-Namen (Verwechslungs-Schutz der Absicht). S3-Decompound hat die
         // Entscheidung bereits über den flag-gegateten decompoundTokens-Fallback unten.
         if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
-            foreach ($this->terminology->aliasPhrasesFor($ingredientName) as $phrase) {
-                $ptok = $this->engine->tokenize($phrase);
+            // Neuabgleich 09.11.: die Alias-Phrase ersetzt das Wort, der Rest der Zeile bleibt („Beef Jerky“ ≠ „Rindfleisch“)
+            foreach ($this->terminology->aliasVariantenFor($ingredientName) as $phrase) {
+                $ptok = $this->engine->ingredientTokens($phrase);
                 if ($ptok === []) {
                     continue;
                 }
@@ -220,6 +226,10 @@ class IngredientMatchService
                 $queryTokens,
                 fn (string $t): bool => ! $this->engine->isCutFormToken($t),
             ));
+            // Neuabgleich 09.11. („Schalotten, fein gewürfelt“ blieb offen): das Maß-Adverb des Zuschnitts geht mit ihm
+            if (count($ohneZuschnitt) < count($queryTokens)) {
+                $ohneZuschnitt = array_values(array_diff($ohneZuschnitt, self::ZUSCHNITT_MASS));
+            }
             // Nur wenn wirklich ein Zuschnitt wegfiel UND eine Identität übrig bleibt.
             if ($ohneZuschnitt !== [] && count($ohneZuschnitt) < count($queryTokens)) {
                 $reduziert = $this->poolLauf($team, $ohneZuschnitt, $querySlug, $mode, $pref, $preferRaw, $bio);
@@ -231,7 +241,9 @@ class IngredientMatchService
 
         // 27.10. (Dominique: Freitext aus Internetrezept, Kundenzettel, Foto): Menge/Einheit vorn, Füllwörter („gutes“, „zum Braten“), Klammern
         // und Plural (Lorbeerblaetter) — wie die Fallbacks darüber nur unter der Schwelle, bestehende Treffer bleiben unberührt.
-        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
+        // Neuabgleich 09.11.: seit der Vorfilter den Singular findet, landet „Steinpilze getrocknet“ schon im ersten Lauf bei 0,5 (Review) — der
+        // Freitext-Lauf (Lemma) läuft darum, solange der Treffer nicht automatisch verdrahtbar ist; er ersetzt ihn nur, wenn er besser ist.
+        if (! self::istAutomatischVerdrahtbar($final)) {
             foreach ([...\Platform\FoodAlchemist\Support\ZutatFreitext::varianten($ingredientName), $ingredientName] as $variante) {
                 $vt = $this->engine->ingredientTokens($variante);
                 foreach (array_unique([implode(' ', $vt), implode(' ', array_map(\Platform\FoodAlchemist\Support\ZutatFreitext::lemma(...), $vt))]) as $folge) {
@@ -256,38 +268,19 @@ class IngredientMatchService
         }
 
         // 27.10. (Kurator): ohne genannte Variante nie automatisch Bio/Marke/Zuschnitt/Fettstufe — Basisvariante oder Review
-        return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
-            ? $this->noMatch($final['score'])
-            : ($basisVariante ? app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $pref === 'neutral' ? 'fresh_first' : $pref, $bio, $this->einheit, $this->menge, $convenience) : $final);
-    }
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
+            return $this->noMatch($final['score']);
+        }
+        if (! $basisVariante) {
+            return $final;
+        }
+        $bvPref = $pref === 'neutral' ? 'fresh_first' : $pref;
+        $geprueft = app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $bvPref, $bio, $this->einheit, $this->menge, $convenience);
+        if ($mode === 'gp_first' && ($geprueft['target'] ?? null) === 'gp' && ($geprueft['variante_offen'] ?? []) !== []) {
+            $geprueft = $this->ohneUngenannteVariante($team, $ingredientName, $querySlug, $final, $geprueft, $bvPref, $bio, $convenience) ?? $geprueft;
+        }
 
-    /**
-     * Spec 95c: Kandidat 1 der Kandidatenliste ({@see candidatesFor}, lexikalisch oder lexikalisch+semantisch — nie rein semantisch, das ist
-     * der Draw), wenn er besser liegt als der Pool-Treffer und dessen Schutzregeln besteht: Produktform, Verwechslungs-Falle, Hauptzutat.
-     */
-    private function kandidatEins(Team $team, string $ingredientName, ?string $querySlug, float $score): ?array
-    {
-        $name = $this->currentIngredientName;
-        $c = collect($this->candidatesFor($team, $ingredientName, $querySlug, 3))->first(fn ($c) => ($c['kind'] ?? null) === 'gp');
-        $this->currentIngredientName = $name;
-        if ($c === null || ! in_array($c['origin'] ?? 'lexical', ['lexical', 'both'], true) || (float) $c['score'] <= $score + MatchHeuristics::SCORE_EPS) {
-            return null;
-        }
-        $gp = FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)->find((int) $c['id']);
-        if ($gp === null || ! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition, $gp)
-            || $this->terminology->isAntiMarker($ingredientName, $gp->name) || ! $this->hauptzutatPasst($gp, [], true)) {
-            return null;
-        }
-        // Derivat-Form wie im Pool-Scan (Lauf 91/92): „Petersilie Stiele“ nie das ganze Kraut, „Grapefruitsaft“ nie die Zeste
-        $form = $this->heuristik->nebenproduktDerivat($name)['marker'] ?? null;
-        $gpForm = $gp->is_derivat ? ($this->heuristik->nebenproduktDerivat((string) $gp->name)['marker'] ?? null) : null;
-        if (($form !== null && ! $this->heuristik->nenntDerivatForm((string) $gp->name, $form)) || ($gpForm !== null && ! $this->heuristik->nenntDerivatForm($name, $gpForm))) {
-            return null;
-        }
-        $s = min(1.0, (float) $c['score']);
-
-        return ['target' => 'gp', 'status' => MatchBand::fuerScore($s), 'gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name,
-            'recipe_id' => null, 'recipe_name' => null, 'score' => $s];
+        return $geprueft;
     }
 
     /** Einheit der aktuellen Zeile (28.10.: Stück → ganze Gewürzform). */
@@ -319,6 +312,9 @@ class IngredientMatchService
     {
         return $this->zubereitungsWeg($team, $text, $convenience, $zubereitung) === 'basis';
     }
+
+    /** Maß-Adverbien eines Zuschnitts („fein gewürfelt“, „grob gehackt“, „dünn geschnitten“) — nur mit einer Schnittform weg (§2). */
+    private const ZUSCHNITT_MASS = ['in', 'als', 'fein', 'feine', 'grob', 'grobe', 'klein', 'kleine', 'gross', 'grosse', 'mittel', 'duenn', 'duenne', 'dick', 'hauchduenn', 'sehr'];
 
     /** „Öl: neutral“ & Co. ist nie ein Unterrezept, sondern das §5-Standard-GP (Rapsöl). */
     private const OEL_NEUTRAL = ['neutral', 'pflanzen', 'pflanzenoel', 'raps', 'rapsoel', 'speise', 'speiseoel', 'brat', 'bratoel', 'frittier', 'frittieroel', 'sonnenblumen', 'sonnenblumenoel'];
@@ -612,7 +608,7 @@ class IngredientMatchService
         // S1 Alias-Phrasen + S3 Decompound-Phrasen (Kürbispüree→„kürbis püree")
         // laufen durch dasselbe Best-über-Varianten-Scoring.
         $expandPhrases = array_merge(
-            $this->terminology->aliasPhrasesFor($ingredientName),
+            $this->terminology->aliasVariantenFor($ingredientName),   // Neuabgleich 09.11.: Ersetzung im Satz, nicht die nackte Phrase
             $this->terminology->decompoundPhrasesFor($ingredientName),
         );
         $aliasVariants = array_values(array_filter(
@@ -648,6 +644,9 @@ class IngredientMatchService
             $scoreName = $this->naming()->nameOhneMarke((string) $gp->name, $gp->zusatz);   // Marken-Klammer zählt nicht (wie bestGpMatch)
             $combined = trim($scoreName . ' ' . ($gp->main_ingredient_display ?? ''));
             $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
+            if ($this->nurMarke($gp, $queryTokens)) {
+                $score = max($score, MatchHeuristics::NAME_CONTAINMENT_FLOOR);   // Neuabgleich 09.11.: „Mondamin“ — die Marke ist der Produktname
+            }
             if ($score > 0.0) {
                 $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
@@ -769,7 +768,7 @@ class IngredientMatchService
     {
         $best = max(
             $this->scoreMitFloor($queryTokens, $querySlug, $candText, $candSlug, $candName),
-            $this->heuristik->substringOverlap($queryTokens, $candText),
+            $this->heuristik->substringOverlap($queryTokens, $candText, true),
         );
         // Alias-Varianten NUR token-strikt (kein substringOverlap): ein kurzes
         // generisches Alias-Token wie „rind" darf nicht als Substring dutzende
@@ -895,6 +894,12 @@ class IngredientMatchService
     {
         $alternativen = array_map(fn ($a) => array_values(array_filter($this->engine->tokenize($a), fn ($t) => ! $this->engine->istReinesMerkmal($t)
             && ! $this->engine->isCutFormToken($t))), preg_split('/\s+\/\s+/u', $this->hauptzutatText($gp)) ?: []);
+        // Neuabgleich 09.11. („Gochugaru“ → „Gochugaru Paprika / Chili“ blieb offen): Doppelname mit Auslassung — „A B / C“ heißt „A B“ oder „A C“.
+        // Das gemeinsame Wort A ist die Ware, B/C erklären sie; für die ganze Hauptzutat reicht dann A.
+        if ($ganz && count($alternativen) === 2 && count($alternativen[0]) >= 2 && count($alternativen[1]) === 1
+            && ! in_array($alternativen[1][0], $alternativen[0], true)) {
+            $alternativen[] = [$alternativen[0][0]];
+        }
         // Zutat-Seite: Originalzeile + Tokens dieses Pool-Laufs (Freitext-/Decompound-Fallback) + Terminologie-Aliase (Porree ↔ Lauch, Tamari → Sojasauce)
         $this->aliasTokens ??= array_merge([], ...array_map(fn ($p) => $this->engine->tokenize((string) $p), $this->terminology->aliasPhrasesFor($this->currentIngredientName)));
 
@@ -929,13 +934,16 @@ class IngredientMatchService
         // Lauf 92: „Petersilienstiele" → „Petersilienwurzeln: frisch" — nennt die Zeile eine Derivat-Form (Stiele, Schale,
         // Knochen …), muss das GP sie tragen; sonst ist es ein anderes Produkt (wie der Mint seit #251).
         $queryForm = $this->heuristik->nebenproduktDerivat($this->currentIngredientName)['marker'] ?? null;
-        foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
+        $pool = $this->gpPool($team, $queryTokens, $querySlug);
+        $markenScore = $this->markenScore($pool, $queryTokens);
+        foreach ($pool as $gp) {
             if ($queryForm !== null && ! $this->heuristik->nenntDerivatForm((string) $gp->name, $queryForm)) {
                 continue;
             }
+            $nurMarke = $this->nurMarke($gp, $queryTokens);
             if (! $this->acceptsProductForm($this->currentIngredientName, $gp->name, $gp->condition, $gp)
                 || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)
-                || ! $this->hauptzutatPasst($gp, $queryTokens)) {
+                || (! $nurMarke && ! $this->hauptzutatPasst($gp, $queryTokens))) {
                 continue;   // S2: Anti-Marker nie als Entscheidung; 27.10.: andere Hauptzutat nie als Entscheidung
             }
             // Lauf 91 (demo): „Grapefruitsaft" → Derivat „Grapefruitsaft: frisch, Zeste" (Kopf-Floor 0,9). Ein §11.2-Derivat
@@ -951,7 +959,7 @@ class IngredientMatchService
             // 27.10. (d): nennt die Zeile genau die Marke dieses GP („Geflügelfond Pulver (Knorr)“), fehlt das Marken-Wort im Score nicht
             $marke = trim((string) $gp->zusatz) === '' ? [] : $this->engine->tokenize((string) $gp->zusatz);
             $qTokens = $marke !== [] && array_diff($marke, $queryTokens) === [] && array_diff($queryTokens, $marke) !== [] ? array_values(array_diff($queryTokens, $marke)) : $queryTokens;
-            $score = $this->scoreMitFloor($qTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
+            $score = $nurMarke ? $markenScore : $this->scoreMitFloor($qTokens, $querySlug, $combined, $gp->main_ingredient_slug, $scoreName);
 
             $take = false;
             if ($best === null) {
@@ -1264,8 +1272,9 @@ class IngredientMatchService
         $this->currentIngredientName = $zutat;
         $this->tiebreakQuery = $this->engine->ingredientTokens($zutat);
         $this->aliasTokens = null;
-        // Spec 95d (Neuabgleich 05.11.: „Essig“ → „Essig-Essenz 25 %“): die GANZE Hauptzutat muss gedeckt sein, nicht nur das Kopfwort
-        if (! $this->hauptzutatPasst($gp, [], true)) {
+        // Spec 95d (Neuabgleich 05.11.: „Essig“ → „Essig-Essenz 25 %“): die GANZE Hauptzutat muss gedeckt sein, nicht nur das Kopfwort —
+        // außer die Zeile nennt genau die Marke des GP (Neuabgleich 09.11.: „Mondamin“)
+        if (! $this->nurMarke($gp, $this->tiebreakQuery) && ! $this->hauptzutatPasst($gp, [], true)) {
             return false;
         }
         // Spec 95d („Getrocknete Tomaten in Öl“ → „Tomate: trocken, ohne Öl“): nennt die Zutat, was das GP ausdrücklich ausschließt — anderes Produkt
@@ -1372,7 +1381,20 @@ class IngredientMatchService
         // Token zusätzlich die Umlaut-Rückform LIKEn. Rein additiv: erweitert
         // NUR das Kandidaten-Set, Scores bleiben token-normalisiert.
         $varianten = [];
+        // Neuabgleich 09.11.: GP-Namen stehen im Singular (§6.1) — „Schalotten“ fand „Schalotte“, „Äpfel“ fand „Apfel“, „Oliven“ fand
+        // „Olive“ nicht im Vorfilter. Stamm und Lemma (≥ 4 Zeichen) zusätzlich LIKEn; Farbwörter filtern nicht vor, solange ein Produktwort bleibt.
+        $ohneFarbe = array_values(array_filter($tokens, fn ($t) => \Platform\FoodAlchemist\Support\ZutatFreitext::farbe($t) === null));
+        if ($ohneFarbe !== []) {
+            $tokens = $ohneFarbe;
+        }
         foreach ($tokens as $t) {
+            foreach ([$this->engine->stemGerman($t), \Platform\FoodAlchemist\Support\ZutatFreitext::lemma($t)] as $stamm) {
+                if ($stamm !== $t && mb_strlen($stamm) >= 4) {
+                    $tokens[] = $stamm;
+                }
+            }
+        }
+        foreach (array_unique($tokens) as $t) {
             $varianten[$t] = true;
             $u = str_replace(['ae', 'oe', 'ue', 'ss'], ['ä', 'ö', 'ü', 'ß'], $t);
             if ($u !== $t) {

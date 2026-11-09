@@ -144,6 +144,7 @@ final class BasisVariante
                 ->where('main_ingredient_slug', $gewaehlt->main_ingredient_slug)->orderBy('id')->get($spalten)
                 // gleicher Slug reicht nicht: „Zitronengraspulver“ ist ein anderes Produkt als „Zitronengras“ — nur dieselbe Hauptzutat ist Geschwister
                 ->filter(fn ($g) => $this->hauptzutat($g) === $this->hauptzutat($gewaehlt))->values();
+        $geschwister = $geschwister->concat($this->gleicheHauptzutat($team, $gewaehlt, $spalten))->unique('id')->sortBy('id')->values();
         // Leitplanke Bio (Session/Import): Bio ist dann keine ungenannte Variante, sondern gewollt — und hat Vorrang
         $bioGewollt = $bio === 'bio';
         // Zustand nach Leitplanke (frisch | TK | konserviert/behandelt), ohne Leitplanke frisch — sofern die Ware ihn hat
@@ -172,7 +173,7 @@ final class BasisVariante
         // Kochtyp, „Weizenmehl Type 550“ → Type 405): was der Text aus Geschmack/Verarbeitung/Pflichtangabe nennt, muss der Treffer tragen
         $teil = array_values(array_unique([...$teil, ...$this->benannteMerkmale($zutat, $geschwister)]));
         if ($teil !== []) {
-            $geschwister = $geschwister->filter(fn ($g) => array_diff($teil, $this->engine->tokenize((string) $g->name)) === [])->values();
+            $geschwister = $geschwister->filter(fn ($g) => array_diff($teil, array_map(self::grundform(...), $this->engine->tokenize((string) $g->name))) === [])->values();
             if (! $geschwister->contains('id', $gewaehlt->id)) {
                 $sauber = $geschwister->filter(fn ($g) => $this->hart($g, $query, $bioGewollt) === [])->values();
                 if ($sauber->count() === 1) {
@@ -344,14 +345,19 @@ final class BasisVariante
             // volle Convenience: der Zuschnitt („Würfel 5 mm“) ist ein Einkaufsmerkmal wie Geschmack/Verarbeitung
             foreach (['flavor', 'processing', 'pflichtangabe', ...($this->convenience === 'voll_convenience' ? ['form'] : [])] as $feld) {
                 foreach ($this->engine->tokenize((string) ($f[$feld] ?? '')) as $t) {
-                    $merkmal[$t] = true;
+                    $merkmal[self::grundform($t)] = true;
                 }
             }
         }
         $text = $this->engine->tokenize($zutat);
+        // Neuabgleich 09.11. („Hokkaido-Kürbis (mit Schale)“): „mit Schale/Haut“ ist der Naturzustand der ganzen Ware — ein Küchenhinweis
+        // (nicht schälen), kein Einkaufsmerkmal
+        if (preg_match('/(?<![\p{L}])mit\s+(schale|haut)(?![\p{L}])/iu', $zutat, $ns) === 1) {
+            $text = array_values(array_diff($text, ['mit', mb_strtolower($ns[1])]));
+        }
         $zahlen = preg_match_all('/\b(?:type|tipo)\s*(\d+)|(\d+(?:[.,]\d+)?)\s*%/iu', $zutat, $m) > 0 ? array_filter([...$m[1], ...$m[2]]) : [];
         $out = [];
-        foreach ($text as $t) {
+        foreach (array_map(self::grundform(...), $text) as $t) {
             // Zubereitung in der Zeile („im Meersalz gegart“, „geschält, gekocht“) ist Küchenarbeit, kein Einkaufsmerkmal (§2)
             // Leitplanke Convenience: Zubereitung (teil/voll) bzw. auch der Zuschnitt (voll) ist dann ein Einkaufsmerkmal, wenn ein GP es trägt
             $kuechenarbeit = [...($this->convenience === 'voll_convenience' ? [] : self::PARA2_SUFFIXE), ...($this->convenience === null ? self::ZUBEREITUNG : [])];
@@ -366,6 +372,43 @@ final class BasisVariante
         }
 
         return $out;
+    }
+
+    /**
+     * Neuabgleich 09.11. („Hokkaido-Kürbis: Wedges“ ↔ „Kürbis Hokkaido: ganz“): dieselbe Hauptzutat in anderer Wortfolge oder mit anderem Slug ist
+     * ebenfalls Geschwister — gleiche Wortmenge der Hauptzutat (Lemma), über den Namen gesucht.
+     */
+    private function gleicheHauptzutat(Team $team, FoodAlchemistGp $gewaehlt, array $spalten)
+    {
+        $menge = $this->hauptzutatMenge($gewaehlt);
+        if ($menge === [] || trim((string) $gewaehlt->main_ingredient_slug) === '') {   // ohne Slug keine Geschwister (wie bisher)
+            return collect();
+        }
+        $laengstes = collect($this->engine->tokenize($this->hauptzutat($gewaehlt)))->sortByDesc(fn ($t) => mb_strlen($t))->first();
+        $suche = array_unique([$laengstes, str_replace(['ae', 'oe', 'ue'], ['ä', 'ö', 'ü'], $laengstes)]);
+
+        return FoodAlchemistGp::visibleToTeam($team)->lebensmittel()->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
+            ->where(function ($q) use ($suche) {
+                foreach ($suche as $w) {
+                    $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . $w . '%']);
+                }
+            })->orderBy('id')->limit(200)->get($spalten)
+            ->filter(fn ($g) => trim((string) $g->main_ingredient_slug) !== '' && $this->hauptzutatMenge($g) === $menge)->values();
+    }
+
+    /** @return list<string> Wortmenge der Hauptzutat in Lemma-Form, sortiert */
+    private function hauptzutatMenge(FoodAlchemistGp $gp): array
+    {
+        $m = array_values(array_unique(array_map(ZutatFreitext::lemma(...), $this->engine->tokenize($this->hauptzutat($gp)))));
+        sort($m);
+
+        return $m;
+    }
+
+    /** Neuabgleich 09.11.: Farbwort in Grundform („rote“ → „rot“), sonst das Token selbst — die genannte Farbe zählt als Merkmal. */
+    private static function grundform(string $t): string
+    {
+        return ZutatFreitext::farbe($t) ?? $t;
     }
 
     private function istZerkleinert(FoodAlchemistGp $gp): bool
@@ -440,6 +483,14 @@ final class BasisVariante
         if (! $bioGewollt && (mb_strtolower((string) $gp->bio) === 'bio' || $f['bio']) && ! in_array('bio', $query, true)) {
             $offen[] = 'Bio';
         }
+        // Neuabgleich 09.11. („Äpfel“ → „Rote Äpfel“, „Strauchtomaten“ → „Tomate am Strauch: gelb“): eine Farbe im Namen der Hauptzutat ist eine
+        // Variante wie jede andere — nennt die Zeile sie nicht, ist sie offen
+        $qFarben = array_filter(array_map(ZutatFreitext::farbe(...), $query));
+        foreach ($this->engine->tokenize($this->hauptzutat($gp)) as $t) {
+            if (($farbe = ZutatFreitext::farbe($t)) !== null && ! in_array($farbe, $qFarben, true)) {
+                $offen[] = 'Farbe: ' . $farbe;
+            }
+        }
         $zusatz = trim((string) ($gp->zusatz ?: ($f['zusatz'] ?? '')));
         foreach (['Marke' => $zusatz, 'Geschmack' => $f['flavor'] ?? '', 'Verarbeitung' => $f['processing'], 'Zuschnitt' => $f['form'],
             'Portion' => $f['portion'], 'Pflichtangabe' => $f['pflichtangabe']] as $art => $wert) {
@@ -482,7 +533,7 @@ final class BasisVariante
             }
             $treffer = false;
             foreach ($query as $q) {
-                if ($q === $t || (! is_numeric($t) && (ZutatFreitext::lemma($q) === ZutatFreitext::lemma($t)
+                if ($q === $t || (! is_numeric($t) && (ZutatFreitext::lemma($q) === ZutatFreitext::lemma($t) || (ZutatFreitext::farbe($t) !== null && ZutatFreitext::farbe($t) === ZutatFreitext::farbe($q))
                     || (min(mb_strlen($q), mb_strlen($t)) >= 4 && (str_starts_with($q, $t) || str_starts_with($t, $q)))))) {
                     $treffer = true;
                     break;

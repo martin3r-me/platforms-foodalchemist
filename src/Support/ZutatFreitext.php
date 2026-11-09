@@ -15,6 +15,24 @@ final class ZutatFreitext
 
     private const FUELLWOERTER = ['gut', 'gute', 'guter', 'gutes', 'guten', 'etwas', 'ca', 'circa', 'evtl', 'eventuell', 'reichlich', 'wenig', 'einige', 'beliebig'];
 
+    /** Farbwörter (TokenEngine-normalisiert) — Grundform; gebeugt mit -e/-er/-es/-en/-em. */
+    private const FARBEN = ['rot', 'gruen', 'gelb', 'weiss', 'schwarz', 'braun', 'blau', 'lila', 'bunt', 'violett', 'rosa'];
+
+    /**
+     * Neuabgleich 09.11. („Rote Chili“ → „Chili: frisch, grün“, „Chilischote: frisch, rot“ zählte nicht): Grundform eines Farbworts
+     * („rote“, „roter“ → „rot“), sonst null. Kurze Farbwörter fallen sonst durch Stamm und Lemma (beide erst ab fünf Zeichen).
+     */
+    public static function farbe(string $t): ?string
+    {
+        foreach (self::FARBEN as $f) {
+            if ($t === $f || (str_starts_with($t, $f) && in_array(mb_substr($t, mb_strlen($f)), ['e', 'er', 'es', 'en', 'em'], true))) {
+                return $f;
+            }
+        }
+
+        return null;
+    }
+
     /** Singular-/Grundform eines (TokenEngine-)Tokens; kurze Tokens bleiben. */
     public static function lemma(string $t): string
     {
@@ -197,7 +215,8 @@ final class ZutatFreitext
     private const NEBENWOERTER = ['ohne', 'mit', 'und', 'oder', 'aus', 'von', 'vom', 'der', 'die', 'das', 'den', 'dem', 'des', 'nach', 'art',
         'weiss', 'weisse', 'weisser', 'schwarz', 'schwarze', 'schwarzer', 'rot', 'rote', 'roter', 'gruen', 'gruene', 'gruener', 'gelb', 'gelbe',
         'gelber', 'braun', 'braune', 'dunkel', 'dunkle', 'dunkler', 'hell', 'helle', 'heller', 'bunt', 'bunte', 'lila', 'blau', 'blaue',
-        'saure', 'saurer', 'suesse', 'suesser', 'scharfe', 'scharfer', 'milde', 'milder', 'junge', 'junger', 'grosse', 'kleine', 'echte', 'echter'];
+        'saure', 'saurer', 'suesse', 'suesser', 'scharfe', 'scharfer', 'milde', 'milder', 'junge', 'junger', 'grosse', 'kleine', 'echte', 'echter',
+        'glatt', 'glatte', 'kraus', 'krause'];   // Neuabgleich 09.11.: Sorte der Petersilie („Petersilie glatt“), kein Kopfwort
 
     private static function wortPasst(string $t, string $q): bool
     {
@@ -214,6 +233,11 @@ final class ZutatFreitext
         $p = 0;
         while ($p < $min && mb_substr($t, $p, 1) === mb_substr($q, $p, 1)) {
             $p++;
+        }
+        // Neuabgleich 09.11. („Petersilienblätter“ ↔ „Petersilienöl“): gleicher Anfang, aber zwei verschiedene Grundwörter (je ≥ 3 Zeichen
+        // Rest) sind zwei Produkte — Schreibvarianten unterscheiden sich nur am Ende (Lemma/Umlaut fängt Blätter ↔ Blatt schon oben)
+        if (mb_strlen($t) - $p >= 3 && mb_strlen($q) - $p >= 3) {
+            return false;
         }
 
         return $p >= 6 && $p >= 0.75 * $min;

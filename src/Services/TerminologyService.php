@@ -171,6 +171,10 @@ class TerminologyService
         ['limonenöl', 'zitronenöl'],
         ['limonensaft', 'zitronensaft'],
         ['limonenabrieb', 'zitronenschale'],
+        // Neuabgleich 09.11. (Dominique): Pfefferschote = Chilischote (frische Schote), „Chili“ meint in der Zeile meist die Schote
+        ['chilischote', 'pfefferschote'],
+        ['chilischoten', 'pfefferschoten'],
+        ['chili', 'chilischote'],
         // ── AT/regional → DE ─────────────────────────────────────────────────
         ['erdapfel', 'kartoffel'],
         ['fisolen', 'grüne bohnen', 'gartenbohne'],
@@ -226,6 +230,9 @@ class TerminologyService
         // Sojasauce (Asia-Würze) ≠ Sauce Hollandaise (Butter-Sauce) — Anti_Marker Würzen
         ['trigger' => 'sojasauce',  'forbid' => 'hollandaise'],
         ['trigger' => 'soja',       'forbid' => 'hollandaise'],
+        // Pfefferschote (frische Chili) ≠ Pfeffer (Gewürz) — Neuabgleich 09.11. („Rote Pfefferschoten“ → „Pfeffer bunt: geschrotet“)
+        ['trigger' => 'pfefferschote',  'forbid' => 'pfeffer', 'unless' => 'schote'],
+        ['trigger' => 'pfefferschoten', 'forbid' => 'pfeffer', 'unless' => 'schote'],
     ];
 
     /**
@@ -264,6 +271,40 @@ class TerminologyService
         }
 
         return array_keys($phrases);
+    }
+
+    /**
+     * Neuabgleich 09.11. („Beef Jerky“ → „Rindfleisch: Bürgermeisterstück“): die Alias-Phrase ERSETZT das Wort in der Zeile, der Rest bleibt —
+     * „Beef Jerky“ → „rindfleisch jerky“, nicht „rindfleisch“. Eine Übersetzung macht aus einem Produkt mit Zusatzwort kein Grundprodukt.
+     * Einwortzeilen ergeben dieselben Phrasen wie {@see aliasPhrasesFor}.
+     *
+     * @return list<string>
+     */
+    public function aliasVariantenFor(string $ingredientName): array
+    {
+        $hay = ' ' . $this->norm($ingredientName) . ' ';
+        $out = [];
+        foreach ($this->aliasGroups() as $group) {
+            $treffer = null;
+            foreach ($group as $member) {
+                $m = $this->norm($member);
+                if ($m !== '' && str_contains($hay, ' ' . $m . ' ')) {
+                    $treffer = $m;
+                    break;
+                }
+            }
+            if ($treffer === null) {
+                continue;
+            }
+            foreach ($group as $member) {
+                $m = $this->norm($member);
+                if ($m !== '' && ! str_contains($hay, ' ' . $m . ' ')) {
+                    $out[trim(str_replace(' ' . $treffer . ' ', ' ' . $m . ' ', $hay))] = true;
+                }
+            }
+        }
+
+        return array_map('strval', array_keys($out));
     }
 
     /**
@@ -351,7 +392,10 @@ class TerminologyService
             // bekommen. Belegt ist bislang nur der Sherryessig-Fall (Test wird ohne den
             // Riegel rot); die Brie/Bries-Regel feuert im Test-Fixture nicht, dort ist der
             // Riegel also nicht nachgewiesen, sondern nur zugesichert.
-            if ($this->tokenHit($q, $rule['forbid'])) {
+            // Steckt das Verbot im Trigger selbst („pfefferschote“ ⊃ „pfeffer“), zählt nur das Verbot als eigenes Wort — sonst hebt jede
+            // Nennung des Triggers die eigene Regel auf (Neuabgleich 09.11.: „Rote Pfefferschoten“ → „Pfeffer bunt“)
+            $imTrigger = str_contains($rule['trigger'], $rule['forbid']);
+            if ($imTrigger ? str_contains(' ' . $q . ' ', ' ' . $rule['forbid'] . ' ') : $this->tokenHit($q, $rule['forbid'])) {
                 continue;
             }
             if ($this->tokenHit($q, $rule['trigger'])

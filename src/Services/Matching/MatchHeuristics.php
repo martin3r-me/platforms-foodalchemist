@@ -695,18 +695,25 @@ class MatchHeuristics
         return $zuordnung->finde($regel, implode(' ', $tokens), ['prefer_raw' => $preferRaw ? 'ja' : 'nein'])['ziel_name'] ?? null;
     }
 
-    /** 4.4p — Recall-Substring-Overlap für die LLM-Shortlist (Komposita überleben). */
-    public function substringOverlap(array $queryTokens, string $candName): float
+    /**
+     * 4.4p — Recall-Substring-Overlap für die LLM-Shortlist (Komposita überleben).
+     *
+     * $wortgrenze (Neuabgleich 09.11.: „Rote Chili“ → „Chili: geschROTEt, trocken“ mit 1,001 als Kandidat 1): das Query-Wort zählt nur als
+     * Anfang oder Ende eines Wortes (Kompositum „Hokkaidokürbis“ ⊃ „kürbis“), nicht mitten im Wort. Die GP-Kandidatenliste nutzt das;
+     * LA-Bezeichnungen (zusammengeschriebene Lieferantentexte) bleiben beim alten Teilstring.
+     */
+    public function substringOverlap(array $queryTokens, string $candName, bool $wortgrenze = false): float
     {
         $toks = array_values(array_filter($queryTokens, fn ($t) => mb_strlen($t) >= 3));
         if ($toks === []) {
             return 0.0;
         }
-        $candNorm = implode(' ', $this->engine->tokenize($candName));
+        $candTokens = $this->engine->tokenize($candName);
+        $candNorm = implode(' ', $candTokens);
         $hits = 0;
         $inhalt = false;
         foreach ($toks as $t) {
-            if (str_contains($candNorm, $t)) {
+            if ($wortgrenze ? array_filter($candTokens, fn ($c) => str_starts_with($c, $t) || str_ends_with($c, $t)) !== [] : str_contains($candNorm, $t)) {
                 $hits++;
                 $inhalt = $inhalt || ! $this->engine->istReinesMerkmal($t);
             }
