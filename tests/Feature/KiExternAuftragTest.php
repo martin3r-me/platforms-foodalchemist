@@ -86,3 +86,37 @@ it('Plattformweg bleibt unberührt: ohne Extern-Modus kein Auftrag', function ()
 
     expect(DB::table('foodalchemist_ki_auftraege')->count())->toBe(0);
 });
+
+it('Antwort ohne Umschlag (Fachfelder oben) wird übernommen statt eine Schleife identischer Aufträge zu starten (Bro-Scetta, io 08.11.2026)', function () {
+    $lauf = fn () => ($this->extern)(fn () => $this->gw->propose('recipe.description', ['description' => 'Klarer Fond.'], [
+        'structural_retry' => fn (array $p) => ! empty($p['werte']['description']),
+    ]));
+    expect($lauf)->toThrow(KiAuftragAusstehendException::class);
+    $id = DB::table('foodalchemist_ki_auftraege')->value('uuid');
+
+    app(KiAuftragService::class)->beantworte($this->rootTeam->id, $id, ['description' => 'Fertig.', 'confidence' => 0.8], 'anthropic', 'claude-opus-5-5');
+    $p = $lauf();
+
+    expect($p->werte)->toBe(['description' => 'Fertig.'])->and($p->confidence)->toBe(0.8)
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(1, 'kein zweiter, identischer Auftrag');
+});
+
+it('wirklich unbrauchbare externe Antwort: kein stiller Re-Roll (kein identischer Folgeauftrag), sondern ein klarer Fehler', function () {
+    $lauf = fn () => ($this->extern)(fn () => $this->gw->propose('recipe.description', ['description' => 'Klarer Fond.'], [
+        'structural_retry' => fn (array $p) => ! empty($p['werte']['description']),
+    ]));
+    expect($lauf)->toThrow(KiAuftragAusstehendException::class);
+    $id = DB::table('foodalchemist_ki_auftraege')->value('uuid');
+    app(KiAuftragService::class)->beantworte($this->rootTeam->id, $id, ['werte' => ['anderes' => 'x']], 'anthropic', 'claude-opus-5-5');
+
+    expect($lauf)->toThrow(RuntimeException::class, 'nicht verwertbar')
+        ->and(DB::table('foodalchemist_ki_auftraege')->count())->toBe(1, 'kein identischer Folgeauftrag');
+});
+
+it('mitUmschlag: lässt korrekte Umschläge, Listen und Nicht-JSON unverändert, hebt confidence/reasoning/sources nach oben', function () {
+    expect(KiAuftragService::mitUmschlag('{"werte":{"a":1},"confidence":0.5}'))->toBe('{"werte":{"a":1},"confidence":0.5}')
+        ->and(KiAuftragService::mitUmschlag('[1,2]'))->toBe('[1,2]')
+        ->and(KiAuftragService::mitUmschlag('kein json'))->toBe('kein json')
+        ->and(json_decode(KiAuftragService::mitUmschlag('{"name":"X","reasoning":"r","sources":[]}'), true))
+        ->toBe(['werte' => ['name' => 'X'], 'reasoning' => 'r', 'sources' => []]);
+});
