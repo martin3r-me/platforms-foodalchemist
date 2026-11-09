@@ -207,11 +207,8 @@ class RecipeExtractService
         $matcher = app(IngredientMatchService::class);
         foreach ($zutaten as $i => $z) {
             $text = trim((string) ($z['text'] ?? $z['name'] ?? ''));
-            // Kein Stub, wenn die Extraktion die Zeile als Kaufware führt (sub_rezept=false) oder ein GP vorschlägt — sonst entstand für
-            // „Kräutermischung Grüne Soße“ (GP vorhanden) und „Gewürzgurkenfond“ ein leeres Unterrezept samt Generator-Auftrag (Pilot 09.11.).
-            if (($z['sub_rezept'] ?? null) === false || (! empty($z['gp_id']) && ($z['sub_rezept'] ?? null) !== true)) {
-                continue;
-            }
+            // Basiskomponente = Unterrezept (Dominique 09.11.2026, bestätigt die Regel vom 27.10.): weder sub_rezept=false noch ein
+            // GP-Vorschlag der KI machen aus „Gewürzgurkenfond“ eine Kaufware — nur ein Zukauf-Signal im Text (TK, Marke, …) tut das.
             if ($text === '' || ! empty($z['sub_rezept_id']) || ! $matcher->basiskomponenteOhneZukauf($team, $text, $lp['convenience'], $lp['zubereitung'])) {
                 continue;
             }
