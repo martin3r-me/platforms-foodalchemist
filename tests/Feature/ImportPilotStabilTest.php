@@ -12,7 +12,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Rezeptimport-Pilot (io 09.11.2026): (1) über MCP muss der EXTRACT-Prompt bei jedem Neustart wortgleich sein — gleich bewertete
  * Kandidaten wechselten die Reihenfolge, Scores rauschten in der 3. Nachkommastelle → je Antwort ein neuer Auftrag (Schleife).
- * (2) Kein Unterrezept-Stub für Zeilen, die die Extraktion als Kaufware führt (sub_rezept=false oder GP-Vorschlag).
+ * (2) Basiskomponente = Unterrezept (Dominique 09.11.): die KI-Einschätzung als Kaufware überstimmt die Regel nicht.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -32,7 +32,7 @@ it('(1) Kandidaten: gleiche Eingabe in anderer Reihenfolge oder mit Score-Rausch
         ->and($sa[0]['score'])->toBe(0.69);
 });
 
-it('(2) Import: sub_rezept=false oder GP-Vorschlag → kein Stub; ohne Angabe bleibt der Stub (Basiskomponente)', function () {
+it('(2) Import: Basiskomponente bleibt Unterrezept — auch bei sub_rezept=false oder GP-Vorschlag der KI', function () {
     $import = app(RecipeExtractService::class);
     $gp = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'name' => 'Kräutermischung: frisch', 'gp_key' => 'ip-' . bin2hex(random_bytes(4)) . '||',
         'status' => 'approved', 'requires_la' => true, 'commodity_group_code' => '04', 'main_ingredient_slug' => 'kraeutermischung']);
@@ -44,8 +44,9 @@ it('(2) Import: sub_rezept=false oder GP-Vorschlag → kein Stub; ohne Angabe bl
     $mitGp = $import->legeAn($this->rootTeam, $rezept('Rahmsauce C', ['gp_id' => $gp->id]));
     $explizit = $import->legeAn($this->rootTeam, $rezept('Rahmsauce D', ['gp_id' => $gp->id, 'sub_rezept' => true]));
 
+    // Basiskomponente = Unterrezept (Dominique 09.11.): die KI-Einschätzung (sub_rezept=false, gp_id) überstimmt die Regel nicht
     expect($ohne['stubs'])->toHaveCount(1)
-        ->and($kauf['stubs'])->toBe([])
-        ->and($mitGp['stubs'])->toBe([])
-        ->and($explizit['stubs'])->toHaveCount(1);                         // ausdrücklich Unterrezept: Stub bleibt
+        ->and($kauf['stubs'])->toHaveCount(1)
+        ->and($mitGp['stubs'])->toHaveCount(1)
+        ->and($explizit['stubs'])->toHaveCount(1);
 });
