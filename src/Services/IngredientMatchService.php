@@ -533,6 +533,14 @@ class IngredientMatchService
         $erweitert = [];
         $gefunden = false;
         foreach ($queryTokens as $tok) {
+            // Probelauf Excel-Rezepte 10.11. (21× „Pimentkörner“ offen): „-körner“ ist die ganze Gewürzform — „Piment: ganz“. Nur wenn
+            // das Gewürz selbst im Pool steht. Heißt das GP selbst „…korn“ (Korianderkorn), bleibt es dabei — „Koriander: ganz“ ist das frische Kraut.
+            if (preg_match('/^(\p{L}{4,})koerner$/u', $tok, $k) && (isset($vokabular[$k[1] . 'korn']) || isset($vokabular[$k[1]]))) {
+                array_push($erweitert, ...(isset($vokabular[$k[1] . 'korn']) ? [$k[1] . 'korn'] : [$k[1], 'ganz']));
+                $gefunden = true;
+
+                continue;
+            }
             $erweitert[] = $tok;
             if (mb_strlen($tok) < 8) {
                 continue;

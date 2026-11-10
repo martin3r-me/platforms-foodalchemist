@@ -199,6 +199,8 @@ class TerminologyService
         ['beetroot', 'rote bete'],
         // ── Hyperonym → gängigster Vertreter (bewusst, Golden-Set) ───────────
         ['champignon', 'pilz'],
+        ['nelke', 'gewürznelke'],                         // Probelauf Excel 10.11.: „Nelken“ 22× offen (Plural am Kompositum-Ende zu breit, s. Forelle ≠ Lachsforelle)
+        ['nelken', 'gewürznelken', 'gewürznelke'],
     ];
 
     /**
