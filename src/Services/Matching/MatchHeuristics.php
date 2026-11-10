@@ -713,7 +713,7 @@ class MatchHeuristics
         $hits = 0;
         $inhalt = false;
         foreach ($toks as $t) {
-            if ($wortgrenze ? array_filter($candTokens, fn ($c) => str_starts_with($c, $t) || str_ends_with($c, $t)) !== [] : str_contains($candNorm, $t)) {
+            if ($wortgrenze ? $this->amWortrand($t, $candTokens) : str_contains($candNorm, $t)) {
                 $hits++;
                 $inhalt = $inhalt || ! $this->engine->istReinesMerkmal($t);
             }
@@ -722,5 +722,26 @@ class MatchHeuristics
         // Wie matchScore (#233/#240): nur gemeinsame Zustandswörter sind kein Treffer — sonst stand „Auberginen:
         // frisch, ganz" in der Shortlist für „Pilzmischung: frisch, ganz" gleichauf mit der Pilzmischung (0,667).
         return $inhalt ? $hits / count($toks) : 0.0;
+    }
+
+    /**
+     * Probelauf Excel-Rezepte 10.11. („Nelken“ blieb offen, „Nelke“ traf „Gewürznelke“): GP-Namen stehen im Singular (§6.1), die Zeile oft im
+     * Plural — am Wortende zählt darum auch der Stamm („nelk“ ⊂ „gewuerznelk“). Nur ab 4 Zeichen Stamm, sonst trifft jede Endung.
+     *
+     * @param  list<string>  $candTokens
+     */
+    private function amWortrand(string $t, array $candTokens): bool
+    {
+        $stamm = $this->engine->stemGerman($t);
+        foreach ($candTokens as $c) {
+            if (str_starts_with($c, $t) || str_ends_with($c, $t)) {
+                return true;
+            }
+            if ($stamm !== $t && mb_strlen($stamm) >= 4 && str_ends_with($this->engine->stemGerman($c), $stamm)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
