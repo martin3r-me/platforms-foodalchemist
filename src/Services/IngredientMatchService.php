@@ -96,9 +96,11 @@ class IngredientMatchService
             return $frucht;
         }
         // Spec 95: Hinweis-Zusätze aus dem Rezepttext („(1 EL)“, „, Raumtemperatur“, „(optional)“) tragen keine Ware — vor jedem Abgleich weg
-        $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName);
+        $ingredientName = \Platform\FoodAlchemist\Support\ZutatFreitext::rezeptBegriff(\Platform\FoodAlchemist\Support\ZutatFreitext::ohneHinweise($ingredientName));
         // Spec 95c: die Zählform ist Einheit, nicht Ware („Knoblauchzehen“ sucht „Knoblauch“; die Zeile bekommt die Zehe als Einheit)
         $ingredientName = \Platform\FoodAlchemist\Support\Zaehlform::ohneForm($ingredientName);
+        $this->krautBlaetter = false;
+        $ingredientName = $this->ohneKrautBlaetter($team, $ingredientName);
         // Leitplanke Eigenleistung (05.11.): mit Convenience spricht die Zeile die Sprache der Fertigware („gekocht“ → „gegart“)
         $ingredientName = Matching\BasisVariante::fertigwareText($ingredientName, $convenience);
         // Kurator 28.10. (1): „Vollei“/„Volleier“ ohne flüssig/pasteurisiert meint das Schalenei — Flüssigei nur, wenn der Text es sagt
@@ -106,8 +108,13 @@ class IngredientMatchService
             $ingredientName = (string) preg_replace('/(?<![\p{L}])voll-?ei(?:er)?(?![\p{L}])/iu', 'Eier', $ingredientName);
         }
         $this->einheit = $einheit;
-        $this->menge = $menge;
+        $this->menge = $this->krautBlaetter ? null : $menge;
         $queryTokens = $this->engine->ingredientTokens($ingredientName);
+        // Neuabgleich 09.11. („Schalotten, fein gewürfelt“ → TK gewürfelt, „Schalotten gewürfelt“ → ganz, frisch): das Maß-Adverb einer Schnittform
+        // beschreibt die Küchenarbeit, nie die Ware — weg, bevor es als Identitäts-Wort zählt
+        if (array_filter($queryTokens, fn ($t) => $this->engine->isCutFormToken($t)) !== []) {
+            $queryTokens = array_values(array_diff($queryTokens, self::ZUSCHNITT_MASS)) ?: $queryTokens;
+        }
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
 
         if ($queryTokens === [] && $querySlug === null) {
@@ -263,7 +270,10 @@ class IngredientMatchService
         }
         // Spec 95c (Pilot: „Cheddar, gerieben“ → „Cheddar-Sauce“ 0,5, während „Cheddarkäse: gerieben“ in der Kandidatenliste vorn stand): der
         // Treffer ist nie schlechter als Kandidat 1 — sofern der dieselben Schutzregeln besteht wie jeder Pool-Treffer.
-        if ($mode === 'gp_first' && ! self::istAutomatischVerdrahtbar($final) && ($besser = $this->kandidatEins($team, $ingredientName, $querySlug, (float) $final['score'])) !== null) {
+        // Neuabgleich 09.11. (Gochugaru/Oliven/Paprika edelsüß mit „selbst gemacht“): sub_recipe_first kommt auch aus der Convenience-Leitplanke, nicht
+        // nur aus der Zeile — ist der Treffer kein Unterrezept, gelten dieselben Schlussregeln wie im gp_first-Lauf
+        $gpLauf = $mode === 'gp_first' || ($final['target'] ?? null) !== 'sub_recipe';
+        if ($gpLauf && ! self::istAutomatischVerdrahtbar($final) && ($besser = $this->kandidatEins($team, $ingredientName, $querySlug, (float) $final['score'])) !== null) {
             $final = $besser;
         }
 
@@ -276,7 +286,7 @@ class IngredientMatchService
         }
         $bvPref = $pref === 'neutral' ? 'fresh_first' : $pref;
         $geprueft = app(Matching\BasisVariante::class)->pruefe($team, $ingredientName, $final, $bvPref, $bio, $this->einheit, $this->menge, $convenience);
-        if ($mode === 'gp_first' && ($geprueft['target'] ?? null) === 'gp' && ($geprueft['variante_offen'] ?? []) !== []) {
+        if ($gpLauf && ($geprueft['target'] ?? null) === 'gp' && ($geprueft['variante_offen'] ?? []) !== []) {
             $geprueft = $this->ohneUngenannteVariante($team, $ingredientName, $querySlug, $final, $geprueft, $bvPref, $bio, $convenience) ?? $geprueft;
         }
 
@@ -334,6 +344,7 @@ class IngredientMatchService
     public function zubereitungsWeg(Team $team, string $text, string $convenience = 'standard', ?string $zubereitung = null): ?string
     {
         $this->zukaufHinweis = $this->zukaufTreffer = null;
+        $text = \Platform\FoodAlchemist\Support\ZutatFreitext::rezeptBegriff($text);
         $pos = mb_strpos($text, ':');
         if ($pos !== false && $pos > 0 && $this->engine->tokenize(mb_substr($text, 0, $pos)) === ['oel']
             && array_intersect($this->engine->tokenize(mb_substr($text, $pos + 1)), self::OEL_NEUTRAL) !== []) {
@@ -517,6 +528,59 @@ class IngredientMatchService
             : null;
 
         return $this->besserer($gpBest, $subBest);
+    }
+
+    /**
+     * Neuabgleich 09.11. („Petersilienblätter“ → Petersilienöl): „-blätter“ eines Krauts ist das Kraut selbst — „Petersilie“, „Minze“ (Fugen-n/-e
+     * toleriert), damit auch der §5-Standard greift. Heißt das GP selbst „…blatt“ (Lorbeerblatt, Gelatineblatt), bleibt der Text, wie er ist.
+     */
+    private function ohneKrautBlaetter(Team $team, string $text): string
+    {
+        return (string) preg_replace_callback('/(?<![\p{L}])(\p{L}{4,})bl(?:ä|ae)tter(?![\p{L}])/iu', function ($m) use ($team) {
+            $vokabular = $this->poolVokabular($team);
+            $koepfe = $this->gpKoepfe($team);   // nur ein Produktwort am Anfang eines GP-Namens („Pandan“ ≠ Marke „Panda“)
+            $stamm = $this->engine->tokenize($m[1])[0] ?? '';
+            if ($stamm === '' || isset($vokabular[$stamm . 'blatt'])) {
+                return $m[0];
+            }
+            // Fugen-n zuerst („Petersilien|blätter“ → Petersilie, nicht das Kompositum-Vokabel „petersilien…“), dann der Stamm, dann Fugen-e (Minze)
+            $kraut = match (true) {
+                str_ends_with($stamm, 'n') && isset($koepfe[mb_substr($stamm, 0, -1)]) => mb_substr($m[1], 0, -1),
+                isset($koepfe[$stamm]) => $m[1],
+                isset($koepfe[$stamm . 'e']) => $m[1] . 'e',
+                default => null,
+            };
+            if ($kraut === null) {
+                return $m[0];
+            }
+            // Blätter sind das frische Kraut: die Gewürzmengen-Regel (Spec 95c, kleine Menge → getrocknet/gemahlen) gilt für sie nicht
+            $this->krautBlaetter = true;
+
+            return $kraut;
+        }, $text);
+    }
+
+    /** Die Zeile nannte Kraut-„-blätter“ ({@see ohneKrautBlaetter}) — keine Gewürzmengen-Regel. */
+    private bool $krautBlaetter = false;
+
+    /** @var array<int, array<string, true>> erstes Wort je GP-Name (Produktwort), je Team */
+    private array $gpKoepfeCache = [];
+
+    /** @return array<string, true> */
+    private function gpKoepfe(Team $team): array
+    {
+        if (isset($this->gpKoepfeCache[$team->id])) {
+            return $this->gpKoepfeCache[$team->id];
+        }
+        $koepfe = [];
+        foreach (FoodAlchemistGp::visibleToTeam($team)->where('is_platzhalter', false)->pluck('name') as $name) {
+            $t = $this->engine->tokenize((string) $name)[0] ?? '';
+            if (mb_strlen($t) >= 4) {
+                $koepfe[$t] = true;
+            }
+        }
+
+        return $this->gpKoepfeCache[$team->id] = $koepfe;
     }
 
     /**
@@ -1404,9 +1468,11 @@ class IngredientMatchService
         }
         foreach (array_unique($tokens) as $t) {
             $varianten[$t] = true;
-            $u = str_replace(['ae', 'oe', 'ue', 'ss'], ['ä', 'ö', 'ü', 'ß'], $t);
-            if ($u !== $t) {
-                $varianten[$u] = true;
+            // 11.11.: Umlaut und ß getrennt zurück — „maisstaerke“ wurde sonst nur zu „maißtärke“ (MySQL verzeiht ß = ss, SQLite nicht)
+            foreach ([str_replace(['ae', 'oe', 'ue'], ['ä', 'ö', 'ü'], $t), str_replace(['ae', 'oe', 'ue', 'ss'], ['ä', 'ö', 'ü', 'ß'], $t)] as $u) {
+                if ($u !== $t) {
+                    $varianten[$u] = true;
+                }
             }
         }
         $tokens = array_keys($varianten);

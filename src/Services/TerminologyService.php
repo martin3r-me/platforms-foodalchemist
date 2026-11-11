@@ -201,6 +201,10 @@ class TerminologyService
         ['champignon', 'pilz'],
         ['nelke', 'gewürznelke'],                         // Probelauf Excel 10.11.: „Nelken“ 22× offen (Plural am Kompositum-Ende zu breit, s. Forelle ≠ Lachsforelle)
         ['nelken', 'gewürznelken', 'gewürznelke'],
+        // Probelauf Excel 10.11. / Neuabgleich 09.11.: Kokosmilch 17×, Weißer Balsamico 25×, Mangopüree/-mark 18× offen
+        ['kokosmilch', 'kokosnussmilch'],
+        ['weißer balsamico', 'balsamico essig hell', 'heller balsamico', 'balsamico bianco', 'weißer balsamicoessig'],
+        ['mangopüree', 'fruchtpüree mango', 'mangomark'],
     ];
 
     /**

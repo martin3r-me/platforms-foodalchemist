@@ -55,7 +55,16 @@ final class ZutatFreitext
     }
 
     /** Spec 95: Hinweise im Rezepttext, die keine Ware beschreiben („optional“, „Raumtemperatur“) — nur als ganzes Segment. */
-    private const HINWEISE = 'optional|nach belieben|nach geschmack|bei bedarf|raumtemperatur|raumtemperiert|zimmerwarm|zimmertemperatur|zum garnieren|zum bestreuen|zum servieren|zum anrichten|zum dekorieren';
+    private const HINWEISE = 'optional|nach belieben|nach geschmack|bei bedarf|raumtemperatur|raumtemperiert|zimmerwarm|zimmertemperatur|zum garnieren|zum bestreuen|zum servieren|zum anrichten|zum dekorieren|lauwarm|handwarm|warm|kalt|eiskalt|heiß|heiss|kochend';   // Probelauf Excel 10.11.: „Wasser (lauwarm)“ 13× offen
+
+    /**
+     * Entscheid Dominique 11.11.2026: „Senfkörner, eingelegt“ ist ein eigenes Rezept (Senfkörner in Apfelsaft) = „Senfkaviar“ — ein Basisrezept,
+     * keine Kaufware. Der Zustand „eingelegt“ las sich sonst als Einkaufsform (konserviert) und machte die Zeile zur Ware.
+     */
+    public static function rezeptBegriff(string $text): string
+    {
+        return (string) preg_replace('/(?<![\p{L}])(?:eingelegte?n?\s+senfk(?:ö|oe)rner|senfk(?:ö|oe)rner\s*,?\s*eingelegt)(?![\p{L}])/iu', 'Senfkaviar', $text);
+    }
 
     /**
      * Spec 95 (Rezeptimport, Pilot 02.11.): Klammer- und Komma-Zusätze ohne Warenbezug weg — „Crème fraîche (1 EL)“ → „Crème fraîche“,

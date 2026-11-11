@@ -209,7 +209,8 @@ class MatchHeuristics
     private const MOLKEREI_CREME = ['fraiche', 'double'];
 
     /** Zusätzliche Schreibweisen, die das Vokabular nicht führt. */
-    private const BASISKOMPONENTE_SYNONYME = ['sosse'];
+    // Neuabgleich 09.11. (ENRICH band „7-Kräuter-Pesto“ an Bärlauch-Pesto TK): Pesto/Tapenade sind Basiskomponenten (Gruppe „Aufstriche & Pestos“ sonst nicht)
+    private const BASISKOMPONENTE_SYNONYME = ['sosse', 'pesto', 'tapenade', 'senfkaviar'];   // Senfkaviar = eingelegte Senfkörner (Dominique 11.11.)
 
     /** @var list<string>|null */
     private ?array $basisKomponentenTypen = null;

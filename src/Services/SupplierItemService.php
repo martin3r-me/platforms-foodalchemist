@@ -69,10 +69,26 @@ class SupplierItemService
     {
         $query = $this->baseQuery($team, $filters)->with('supplier:id,name');
         // Multi-Wort: jedes Token muss treffen (Bezeichnung ODER Artikelnummer-Präfix)
-        foreach (\Platform\FoodAlchemist\Support\Suche::tokens($q) as $token) {
+        // 11.11. (Dominique: „Aprikose frisch“ fand „O+G Aprikosen Kal.A (40-45mm)“ nicht): reine Zustands-/Schnittwörter (frisch, ganz,
+        // gehackt …) stehen selten in Lieferanten-Bezeichnungen — sie filtern nicht, sondern ranken nach vorn. „TK“ filtert weiter.
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $tokens = \Platform\FoodAlchemist\Support\Suche::tokens($q);
+        $merkmal = array_values(array_filter($tokens, fn ($t) => $t !== 'tk' && $engine->istReinesMerkmal($engine->tokenize($t)[0] ?? $t)));
+        if (count($merkmal) === count($tokens)) {
+            $merkmal = [];   // nur Merkmale gesucht: dann filtern sie wie bisher
+        }
+        foreach (array_diff($tokens, $merkmal) as $token) {
             $query->where(fn (Builder $x) => $x
                 ->whereRaw('LOWER(designation) LIKE ?', ['%' . $token . '%'])
                 ->orWhere('article_number', 'like', $token . '%'));
+        }
+        if ($merkmal !== []) {
+            // als ganzes Wort („frisch“ ≠ „Frischkäse“), dann die kürzere Bezeichnung (Rohware vor Zubereitung: „Aprikosen Kal.A“ vor „Aprikose mit Frischkäse“)
+            $text = $query->getConnection()->getDriverName() === 'sqlite' ? "(' ' || LOWER(designation) || ' ')" : "CONCAT(' ', LOWER(designation), ' ')";   // MySQL: || ist ODER
+            $wort = "CASE WHEN {$text} LIKE ? OR {$text} LIKE ? THEN 1 ELSE 0 END";
+            $query->orderByRaw('(' . implode(' + ', array_fill(0, count($merkmal), $wort)) . ') DESC',
+                array_merge(...array_map(fn ($t) => ['% ' . $t . ' %', '% ' . $t . ',%'], $merkmal)))
+                ->orderByRaw('LENGTH(designation)');
         }
 
         return $query->orderBy('designation');
