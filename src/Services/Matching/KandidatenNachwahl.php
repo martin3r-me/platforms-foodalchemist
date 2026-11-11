@@ -70,8 +70,9 @@ trait KandidatenNachwahl
             }
             $gp = $this->kandidatZulaessig($team, $ingredientName, (int) $c['id']);
             // Golden „Drei-Zustand-Pool“ (rot seit #789): die Nachwahl tauscht eine ungenannte Variante, nie den Zustand — „Tomaten“ unter
-            // „konserviert bevorzugt“ blieb „konserviert, geschält“ (Review), die Nachwahl machte TK daraus. Den Zustand entscheidet die Leitplanke.
-            if ($gp === null || ($gewaehlt !== null && ! $this->gleicherZustand($gewaehlt, $gp))) {
+            // „konserviert bevorzugt“ blieb „konserviert, geschält“ (Review), die Nachwahl machte TK daraus. Den Zustand entscheidet die Leitplanke —
+            // außer der Kandidat trägt ein Wort der Zeile, das der Treffer nicht hat („Chili gemahlen“ → „Chilipulver: gemahlen“ statt frischer Chili).
+            if ($gp === null || ($gewaehlt !== null && ! $this->gleicherZustand($gewaehlt, $gp) && ! $this->nenntMehr($gp, $gewaehlt, $this->tiebreakQuery))) {
                 continue;
             }
             $t = app(BasisVariante::class)->pruefe($team, $ingredientName, ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name] + $final,
@@ -86,6 +87,14 @@ trait KandidatenNachwahl
         }
 
         return $besser;
+    }
+
+    /** Trägt $kandidat mehr Wörter der Zeile als $treffer? */
+    private function nenntMehr(FoodAlchemistGp $kandidat, FoodAlchemistGp $treffer, array $query): bool
+    {
+        $n = fn (FoodAlchemistGp $g) => count(array_intersect($query, $this->engine->tokenize((string) $g->name)));
+
+        return $n($kandidat) > $n($treffer);
     }
 
     /** Zustand aus der Spalte, sonst aus dem Namen; unbekannt auf einer Seite = kein Widerspruch. */
