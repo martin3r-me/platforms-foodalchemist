@@ -28,8 +28,8 @@ beforeEach(function () {
         'team_id' => $this->rootTeam->id, 'gp_key' => $key, 'name' => $name,
         'status' => 'approved', 'is_platzhalter' => false, 'main_ingredient_slug' => 'wasser',
     ]);
-    // So heisst es wirklich …
-    $this->leitung = $mk('Leitungswasser: frisch', 'leitungswasser_frisch');
+    // So heisst es wirklich (io nach der GP-Bereinigung, Migration 2026_12_22_100000) …
+    $this->leitung = $mk('Leitungswasser', 'leitungswasser');
     // … und das ist die gekaufte Ware, auf die »Wasser« fälschlich fiel.
     $this->flasche = $mk('Wasser: still, 0,5 l, Bio', 'wasser_still_bio');
 });
@@ -54,6 +54,7 @@ it('der Alias-Name muss ein GP treffen können — sonst ist er stumm wirkungslo
     $ziele = collect(\Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', 'basisrezept.5.default_gp')->firstOrFail()->params['eintraege'])
         ->pluck('ziel_name');
 
-    expect($ziele)->toContain('Leitungswasser: frisch')
+    expect($ziele)->toContain('Leitungswasser')
+        ->and($ziele)->not->toContain('Leitungswasser: frisch')   // Name vor der GP-Bereinigung (lief 10.11.2026 ins Leere)
         ->and($ziele)->not->toContain('Wasser: Leitung');
 });

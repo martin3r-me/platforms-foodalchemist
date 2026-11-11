@@ -23,7 +23,7 @@ beforeEach(function () {
 });
 
 it('§5 Default: das Gattungswort „Öl" ist Rapsöl — ein Aromaöl gewinnt nicht', function () {
-    $raps = ($this->gp)('Rapsoel / Pflanzenoel: trocken, raffiniert');
+    $raps = ($this->gp)('Rapsöl / Pflanzenöl: raffiniert');   // Name nach der GP-Bereinigung (Migration 2026_12_22_100000)
     ($this->gp)('Lauchoel Groenn: trocken');
 
     $m = app(IngredientMatchService::class)->matchIngredient($this->rootTeam, 'Öl');

@@ -224,18 +224,18 @@ it('nebenprodukt_derivat trennt Mutter von Form + respektiert Anti-Pattern', fun
 // Funktion einen bestimmten String zurückgibt, nie ob dieser String ein GP trifft. Ein
 // Alias, der ins Leere zeigt, verhält sich wie »kein Alias« — er wirft nichts.
 it('default_gp_alias: bare Wasser → Leitungswasser, Mineral-/Flaschenwasser nicht', function () {
-    expect($this->h->defaultGpAlias(($this->ts)('Wasser'), false))->toBe('Leitungswasser: frisch')
-        ->and($this->h->defaultGpAlias(($this->ts)('Leitungswasser'), false))->toBe('Leitungswasser: frisch')
+    expect($this->h->defaultGpAlias(($this->ts)('Wasser'), false))->toBe('Leitungswasser')
+        ->and($this->h->defaultGpAlias(($this->ts)('Leitungswasser'), false))->toBe('Leitungswasser')
         ->and($this->h->defaultGpAlias(($this->ts)('Mineralwasser'), false))->toBeNull()
         ->and($this->h->defaultGpAlias(($this->ts)('Wasser still'), false))->toBeNull();
 });
 
 // Spec 41 FIX-1 (RC-1 / D1–D3): Basis-Gemüse erdet unter From Scratch (preferRaw) auf »frisch, ganz«.
 it('default_gp_alias: Basis-Gemüse → frisch/ganz nur unter prefer_raw, n===1, Sellerie ausgenommen', function () {
-    expect($this->h->defaultGpAlias(($this->ts)('Tomaten'), true))->toBe('Tomaten: frisch, ganz')
-        ->and($this->h->defaultGpAlias(($this->ts)('Zwiebeln'), true))->toBe('Zwiebeln: frisch, ganz')
-        ->and($this->h->defaultGpAlias(($this->ts)('Karotten'), true))->toBe('Karotten: frisch, ganz')
-        ->and($this->h->defaultGpAlias(($this->ts)('Möhren'), true))->toBe('Karotten: frisch, ganz')
+    expect($this->h->defaultGpAlias(($this->ts)('Tomaten'), true))->toBe('Tomate: ganz, frisch')
+        ->and($this->h->defaultGpAlias(($this->ts)('Zwiebeln'), true))->toBe('Zwiebel: ganz, frisch')
+        ->and($this->h->defaultGpAlias(($this->ts)('Karotten'), true))->toBe('Möhre: frisch, mittel')
+        ->and($this->h->defaultGpAlias(($this->ts)('Möhren'), true))->toBe('Möhre: frisch, mittel')
         // Frische-/Convenience-Achse frei, wenn NICHT From Scratch → kein Hard-Alias
         ->and($this->h->defaultGpAlias(($this->ts)('Tomaten'), false))->toBeNull()
         // n≠1: eine spezifischere Sorte/Angabe wird NICHT auf die Basis gezwungen
@@ -456,8 +456,8 @@ it('default_gp_alias_salz_only_generic', function () {
 it('default_gp_alias_full_set', function () {
     $a = fn (string $s, bool $raw = false) => $this->h->defaultGpAlias(($this->ts)($s), $raw);
 
-    expect($a('Eigelb'))->toBe('Eigelb: fluessig, pasteurisiert')
-        ->and($a('Eiweiß'))->toBe('Huehnereiweiss: fluessig, pasteurisiert')
+    expect($a('Eigelb'))->toBe('Eigelb: pasteurisiert, frisch, flüssig')
+        ->and($a('Eiweiß'))->toBe('Eiklar / Eiweiß: pasteurisiert, frisch, flüssig')
         ->and($a('Eigelb', true))->toBe('Eier: frisch, Groesse L, Bodenhaltung')
         ->and($a('Eiweiß', true))->toBe('Eier: frisch, Groesse L, Bodenhaltung')
         ->and($a('Eier'))->toBe('Eier: frisch, Groesse L, Bodenhaltung')
@@ -465,7 +465,7 @@ it('default_gp_alias_full_set', function () {
         ->and($a('Milch'))->toBe('Milch: frisch, 3,5 % Fett')
         ->and($a('Mehl'))->toBe('Weizenmehl: trocken, Type 405')
         ->and($a('Zucker'))->toBe('Zucker Raffinade: trocken, weiss')
-        ->and($a('Olivenöl'))->toBe('Olivenoel: trocken, hochwertig')
+        ->and($a('Olivenöl'))->toBe('Olivenöl')
         ->and($a('Pfeffer'))->toBe('Pfeffer schwarz: trocken, gemahlen')
         ->and($a('Schwarzer Pfeffer'))->toBe('Pfeffer schwarz: trocken, gemahlen')
         ->and($a('Weißer Pfeffer'))->toBe('Pfeffer weiss: trocken, gemahlen')

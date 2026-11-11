@@ -48,7 +48,7 @@ it('Zuordnung: Speichern behält Kontext und Wortmengen-Optionen der Einträge',
     Livewire::test(Regeln::class)->call('oeffne', $r->id)->call('pruefeProbelauf')->call('speichern')->assertSet('fehler', null);
 
     $eintraege = collect($r->fresh()->params['eintraege']);
-    expect($eintraege->firstWhere('ziel_name', 'Tomaten: frisch, ganz')['kontext'])->toBe(['prefer_raw' => ['ja']])
+    expect($eintraege->firstWhere('ziel_name', 'Tomate: ganz, frisch')['kontext'])->toBe(['prefer_raw' => ['ja']])
         ->and($eintraege->firstWhere('begriff', 'pfeffer')['erlaubt'])->toBe(['schwarz', 'schwarzer', 'ganz', 'gemahlen'])
         ->and($r->fresh()->params['vergleich'])->toBe('tokens');
 });
