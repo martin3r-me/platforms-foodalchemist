@@ -72,7 +72,7 @@ trait KandidatenNachwahl
             // Golden „Drei-Zustand-Pool“ (rot seit #789): die Nachwahl tauscht eine ungenannte Variante, nie den Zustand — „Tomaten“ unter
             // „konserviert bevorzugt“ blieb „konserviert, geschält“ (Review), die Nachwahl machte TK daraus. Den Zustand entscheidet die Leitplanke —
             // außer der Kandidat trägt ein Wort der Zeile, das der Treffer nicht hat („Chili gemahlen“ → „Chilipulver: gemahlen“ statt frischer Chili).
-            if ($gp === null || ($gewaehlt !== null && ! $this->gleicherZustand($gewaehlt, $gp) && ! $this->nenntMehr($gp, $gewaehlt, $this->tiebreakQuery))) {
+            if ($gp === null || ($gewaehlt !== null && ! $this->gleicherZustand($gewaehlt, $gp) && ! $this->nenntMehr($gp, $gewaehlt, $this->engine->tokenize($name)))) {
                 continue;
             }
             $t = app(BasisVariante::class)->pruefe($team, $ingredientName, ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name] + $final,
@@ -92,7 +92,9 @@ trait KandidatenNachwahl
     /** Trägt $kandidat mehr Wörter der Zeile als $treffer? */
     private function nenntMehr(FoodAlchemistGp $kandidat, FoodAlchemistGp $treffer, array $query): bool
     {
-        $n = fn (FoodAlchemistGp $g) => count(array_intersect($query, $this->engine->tokenize((string) $g->name)));
+        // Wortanfang zählt mit („chili“ ⊂ „chilipulver“), sonst trägt das Kompositum die Zeile nicht
+        $n = fn (FoodAlchemistGp $g) => count(array_filter($query, fn ($q) => array_filter($this->engine->tokenize((string) $g->name),
+            fn ($t) => $t === $q || (mb_strlen($q) >= 4 && str_starts_with($t, $q))) !== []));
 
         return $n($kandidat) > $n($treffer);
     }
