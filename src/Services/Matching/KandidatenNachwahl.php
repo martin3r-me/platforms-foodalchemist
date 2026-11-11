@@ -55,7 +55,7 @@ trait KandidatenNachwahl
         $this->tiebreakQuery = $this->engine->ingredientTokens($name);
         $this->aliasTokens = null;
         $eigen = (float) ($liste->first(fn ($c) => (int) $c['id'] === (int) $final['gp_id'])['score'] ?? $liste->max('score') ?? 0.0);
-        $gewaehlt = FoodAlchemistGp::query()->find((int) $geprueft['gp_id'], ['id', 'zusatz']);
+        $gewaehlt = FoodAlchemistGp::query()->find((int) $geprueft['gp_id'], ['id', 'name', 'zusatz', 'condition']);
         if ($gewaehlt !== null && $this->markeGenannt($gewaehlt, $this->tiebreakQuery)) {
             return null;   // die Zeile nennt die Marke dieses GP — es ist gemeint
         }
@@ -69,7 +69,10 @@ trait KandidatenNachwahl
                 continue;
             }
             $gp = $this->kandidatZulaessig($team, $ingredientName, (int) $c['id']);
-            if ($gp === null) {
+            // Golden „Drei-Zustand-Pool“ (rot seit #789): die Nachwahl tauscht eine ungenannte Variante, nie den Zustand — „Tomaten“ unter
+            // „konserviert bevorzugt“ blieb „konserviert, geschält“ (Review), die Nachwahl machte TK daraus. Den Zustand entscheidet die Leitplanke —
+            // außer der Kandidat trägt ein Wort der Zeile, das der Treffer nicht hat („Chili gemahlen“ → „Chilipulver: gemahlen“ statt frischer Chili).
+            if ($gp === null || ($gewaehlt !== null && ! $this->gleicherZustand($gewaehlt, $gp) && ! $this->nenntMehr($gp, $gewaehlt, $this->engine->tokenize($name)))) {
                 continue;
             }
             $t = app(BasisVariante::class)->pruefe($team, $ingredientName, ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name] + $final,
@@ -84,6 +87,25 @@ trait KandidatenNachwahl
         }
 
         return $besser;
+    }
+
+    /** Trägt $kandidat mehr Wörter der Zeile als $treffer? */
+    private function nenntMehr(FoodAlchemistGp $kandidat, FoodAlchemistGp $treffer, array $query): bool
+    {
+        // Wortanfang zählt mit („chili“ ⊂ „chilipulver“), sonst trägt das Kompositum die Zeile nicht
+        $n = fn (FoodAlchemistGp $g) => count(array_filter($query, fn ($q) => array_filter($this->engine->tokenize((string) $g->name),
+            fn ($t) => $t === $q || (mb_strlen($q) >= 4 && str_starts_with($t, $q))) !== []));
+
+        return $n($kandidat) > $n($treffer);
+    }
+
+    /** Zustand aus der Spalte, sonst aus dem Namen; unbekannt auf einer Seite = kein Widerspruch. */
+    private function gleicherZustand(FoodAlchemistGp $a, FoodAlchemistGp $b): bool
+    {
+        $z = fn (FoodAlchemistGp $g) => mb_strtolower(trim((string) ($g->condition ?: ($this->engine->produktForm((string) $g->name)['zustand'] ?? ''))));
+        [$za, $zb] = [$z($a), $z($b)];
+
+        return $za === '' || $zb === '' || $za === $zb;
     }
 
     /**
