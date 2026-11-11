@@ -557,6 +557,11 @@ class LeadLaService
             $this->applyLeadLa($gp->refresh(), $team);                     // T3: Verknüpfen triggert Neuwahl
         });
         app(GpAggregateService::class)->konfidenzNachziehen([$gp->id]);   // Allergen-Konfidenz/Review sofort (neuer Artikel kann einen Widerspruch bringen)
+        try {
+            \Platform\FoodAlchemist\Support\StueckgewichtNachAnlage::ausloesen($team, $gp, $laId);   // 11.11.: GP aus loser Ware → Stückgewicht schätzen
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Stückgewicht nach Anlage (GP {$gp->id}): {$e->getMessage()}");   // fail-soft
+        }
     }
 
     /** M3-07-Picker: verknüpfbare LAs (Struktur-Zeile mit gp_id NULL), Suche über designation. */
