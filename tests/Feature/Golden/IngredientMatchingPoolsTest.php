@@ -137,9 +137,9 @@ it('tiebreaker: FreshFirst/FrozenFirst/PreservedFirst/Neutral über Karotten-Var
 // Ein Fixture, das den Namen selbst herstellt, kann einen falschen Namen nicht entdecken.
 it('default-alias: bare Wasser gewinnt das Leitungswasser-GP, nicht die Flasche', function () {
     ($this->mkGp)('Wasser: still, 0,5 l, Bio', 'wasser');
-    ($this->mkGp)('Leitungswasser: frisch', 'wasser');
+    ($this->mkGp)('Leitungswasser', 'wasser');   // io-Name nach der GP-Bereinigung (Migration 2026_12_22_100000)
 
-    expect(($this->match)('Wasser', 'wasser')['gp_name'])->toBe('Leitungswasser: frisch');
+    expect(($this->match)('Wasser', 'wasser')['gp_name'])->toBe('Leitungswasser');
 });
 
 it('tiebreaker: Drei-Zustand-Pool (konserviert/TK/frisch) diskriminiert alle Pole', function () {
