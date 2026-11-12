@@ -321,8 +321,6 @@
                         </x-fa::field>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <x-fa::button size="sm" variant="secondary" icon="heroicon-o-arrow-down-tray" wire:click="felderAusName"
-                            title="Leere Felder aus dem bisherigen Namen übernehmen (einmalig für Bestands-Grundprodukte)">Felder aus dem Namen übernehmen</x-fa::button>
                         <x-fa::button size="sm" variant="secondary" icon="heroicon-o-arrow-path" wire:click="nameAusFeldern"
                             title="Namen nach §6 aus den Feldern neu bilden">Name aus Feldern ableiten</x-fa::button>
                     </div>
