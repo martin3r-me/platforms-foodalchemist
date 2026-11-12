@@ -347,6 +347,7 @@ class GpService
             })
             ->select('foodalchemist_gps.*', 'lead.unit_code AS lead_unit_code')
             ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('lead').' AS lead_qty')   // korrigierte Menge vor Necta-qty
+            ->addSelect('lead.abtropfgewicht AS lead_abtropf')   // Preis je kg rechnet mit dem Abtropfgewicht (12.11.2026)
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis') // Spec 82 3a
             ->addSelect('lead.lieferstatus_seit AS lead_eingestellt_seit')
             ->tap(fn ($q) => app(PriceService::class)->mitLetztemPreis($q, 'lead.id', $team))   // Rückfall: letzter Preis eines eingestellten Leads (27.10.)
@@ -373,6 +374,7 @@ class GpService
             \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items AS lead')->whereIn('lead.id', $leadIds), 'lead', $team, 'foodalchemist_supplier_items')
             ->select('lead.id', 'lead.unit_code AS lead_unit_code', 'lead.lieferstatus_seit AS lead_eingestellt_seit')
             ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('lead').' AS lead_qty')
+            ->addSelect('lead.abtropfgewicht AS lead_abtropf')
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis')
             ->tap(fn ($q) => app(PriceService::class)->mitLetztemPreis($q, 'lead.id', $team))
             ->get()->keyBy('id');
@@ -381,7 +383,7 @@ class GpService
             ->selectRaw('gp_id, COUNT(*) AS n')->groupBy('gp_id')->pluck('n', 'gp_id');
         foreach ($zeilen as $gp) {
             $lead = $leads->get($gp->lead_la_supplier_item_id);
-            foreach (['lead_unit_code', 'lead_eingestellt_seit', 'lead_qty', 'lead_preis', 'letzter_preis', 'letzter_preis_ab'] as $feld) {
+            foreach (['lead_unit_code', 'lead_eingestellt_seit', 'lead_qty', 'lead_abtropf', 'lead_preis', 'letzter_preis', 'letzter_preis_ab'] as $feld) {
                 $gp->setAttribute($feld, $lead?->{$feld});
             }
             $gp->setAttribute('la_count', (int) ($laCounts[$gp->id] ?? 0));
@@ -414,7 +416,7 @@ class GpService
                 $gp->setAttribute('lead_letzter', PriceService::letzterPreisKennzeichen($gp->letzter_preis_ab, $gp->lead_eingestellt_seit));
             }
             $gp->setAttribute('lead_vergleichspreis', $gp->lead_preis !== null
-                ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
+                ? $preise->vergleichspreis((object) ['qty' => $gp->lead_qty, 'abtropfgewicht' => $gp->lead_abtropf, 'unit_code' => $gp->lead_unit_code], (float) $gp->lead_preis)
                 : null);
             $gp->setAttribute('rezepte_count', $rezepteAktiv ? (int) ($rezeptCounts[$gp->id] ?? 0) : null);
 

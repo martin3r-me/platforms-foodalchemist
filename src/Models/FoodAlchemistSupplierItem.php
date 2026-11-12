@@ -101,12 +101,35 @@ class FoodAlchemistSupplierItem extends Model
         return $wert === null || $wert === '' ? null : (float) $wert;
     }
 
+    /** Einheiten, in denen ein Abtropfgewicht die Preis-Menge ersetzt (Gewicht/Volumen; nie Stück). */
+    public const ABTROPF_EINHEITEN = ['kg', 'l'];
+
+    /**
+     * Menge für den Preis je kg/l/Stk (Entscheid Dominique 12.11.2026): ein gesetztes Abtropfgewicht (> 0, Einheit kg/l) vor der
+     * wirksamen Menge ({@see mengeVon}). Einzige Stelle für {@see \Platform\FoodAlchemist\Services\PriceService::vergleichspreis};
+     * Bestellung, Lager und Gebinde rechnen weiter mit {@see mengeVon} (Inhalt der Bestelleinheit).
+     */
+    public static function preisMengeVon(object $la): ?float
+    {
+        return self::preisAbgetropft($la) ? (float) $la->abtropfgewicht : self::mengeVon($la);
+    }
+
+    /** Ist die Preis-Menge das Abtropfgewicht? (Anzeige-Zusatz „abgetropft“) */
+    public static function preisAbgetropft(object $la): bool
+    {
+        $abtropf = $la->abtropfgewicht ?? null;
+
+        return $abtropf !== null && $abtropf !== '' && (float) $abtropf > 0 && in_array($la->unit_code ?? null, self::ABTROPF_EINHEITEN, true);
+    }
+
     protected $guarded = ['id'];
 
     protected $casts = [
         'uuid' => 'string',
         'qty' => 'decimal:3',
         'qty_korrigiert' => 'decimal:4',
+        'fuellgewicht' => 'decimal:4',
+        'abtropfgewicht' => 'decimal:4',
         'qty_ordering_per_packaging' => 'decimal:3',
         'is_organic' => 'boolean',
         'is_vegan' => 'boolean',

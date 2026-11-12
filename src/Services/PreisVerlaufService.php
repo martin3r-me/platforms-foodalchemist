@@ -93,7 +93,7 @@ class PreisVerlaufService
         if ($team !== null) {
             $itemQuery->visibleToTeam($team);
         }
-        $items = $itemQuery->get(['id', 'team_id', 'supplier_id', 'designation', 'marketing_name', 'qty', 'qty_korrigiert', 'unit_code', 'lieferstatus', 'lieferstatus_seit'])->keyBy('id');
+        $items = $itemQuery->get(['id', 'team_id', 'supplier_id', 'designation', 'marketing_name', 'qty', 'qty_korrigiert', 'abtropfgewicht', 'unit_code', 'lieferstatus', 'lieferstatus_seit'])->keyBy('id');
         if ($items->isEmpty()) {
             return $leer;
         }

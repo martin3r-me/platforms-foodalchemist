@@ -21,6 +21,7 @@ class ArtikelPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     {
         return 'Bearbeitet Stammdaten/Verpackung/Eigenschaften eines team-eigenen Lieferantenartikels. '
             . 'felder: designation, article_number, brand, manufacturer, origin, qty, unit_code, ean_packaging, '
+            . 'fuellgewicht / abtropfgewicht (in der Kalkulationseinheit je Bestelleinheit wie qty; gesetztes Abtropfgewicht = Menge für den Preis je kg, leer = entfernen), '
             . 'is_organic, vat, origin_country, preorder_days, shelf_life_chilled_days / shelf_life_frozen_days / shelf_life_dry_days (Haltbarkeit in Tagen) … (nur Whitelist wirkt).';
     }
 
@@ -61,7 +62,12 @@ class ArtikelPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['id' => (int) $item->id, 'designation' => $item->designation]);
+        return ToolResult::success([
+            'id' => (int) $item->id, 'designation' => $item->designation,
+            'fuellgewicht' => $item->fuellgewicht !== null ? (float) $item->fuellgewicht : null,
+            'abtropfgewicht' => $item->abtropfgewicht !== null ? (float) $item->abtropfgewicht : null,
+            'abtropf_quelle' => $item->abtropf_quelle,
+        ]);
     }
 
     public function getMetadata(): array

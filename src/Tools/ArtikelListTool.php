@@ -30,7 +30,7 @@ class ArtikelListTool extends FoodAlchemistTool implements ToolContract, ToolMet
             . 'Lieferanten-Browser: supplier_id = Sortiment eines Lieferanten, q = Suche (Bezeichnung oder Artikelnummer-Präfix, '
             . 'jedes Wort muss treffen), art = food|nonfood|pruefen, only_active (Standard true: ausgelistete/eingestellte fallen raus). '
             . 'page/per_page-Paging (last_page zum Weiterblättern). Liefert je Artikel id, designation, article_number, supplier_id, supplier; '
-            . 'felder="voll" zusätzlich Menge/Einheit, EK (aktiver Preis), Aktion bis, Lieferstatus, GP und Lead-Kennzeichen. '
+            . 'felder="voll" zusätzlich Menge/Einheit, Füll- und Abtropfgewicht, EK (aktiver Preis), Aktion bis, Lieferstatus, GP und Lead-Kennzeichen. '
             . 'Unbekannte Parameter stehen in warnungen.';
     }
 
@@ -45,7 +45,7 @@ class ArtikelListTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'q' => ['type' => 'string', 'description' => 'Suche: Bezeichnung oder Artikelnummer-Präfix, jedes Wort muss treffen.'],
                 'art' => ['type' => 'string', 'enum' => ['food', 'nonfood', 'pruefen'], 'description' => 'food = ohne entschiedenes Non-Food, nonfood = entschiedenes Non-Food, pruefen = Prüfliste.'],
                 'only_active' => ['type' => 'boolean', 'default' => true, 'description' => 'false zeigt auch ausgelistete und eingestellte Artikel.'],
-                'felder' => ['type' => 'string', 'enum' => ['kurz', 'voll'], 'default' => 'kurz', 'description' => '„voll“ liefert zusätzlich Menge/Einheit, EK, Aktion bis, Lieferstatus, GP und Lead-Kennzeichen.'],
+                'felder' => ['type' => 'string', 'enum' => ['kurz', 'voll'], 'default' => 'kurz', 'description' => '„voll“ liefert zusätzlich Menge/Einheit, Füll- und Abtropfgewicht, EK, Aktion bis, Lieferstatus, GP und Lead-Kennzeichen.'],
             ],
             'required' => [],
         ];
@@ -84,6 +84,9 @@ class ArtikelListTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'supplier' => $i->supplier?->name ?? null,
             ] + ($voll ? [
                 'qty' => $i->qty !== null ? (float) $i->qty : null, 'unit_code' => $i->unit_code, 'ordering_unit' => $i->ordering_unit,
+                'fuellgewicht' => $i->fuellgewicht !== null ? (float) $i->fuellgewicht : null,
+                'abtropfgewicht' => $i->abtropfgewicht !== null ? (float) $i->abtropfgewicht : null,   // gesetzt = Menge für den Preis je kg
+                'abtropf_quelle' => $i->abtropf_quelle,
                 'ek' => $i->aktiver_preis !== null ? (float) $i->aktiver_preis : null, 'aktion_bis' => $i->aktion_bis,
                 'lieferstatus' => $i->lieferstatus, 'is_discontinued' => (bool) $i->is_discontinued,
                 'gp' => $i->structure?->gp !== null ? ['id' => $i->structure->gp->id, 'name' => $i->structure->gp->name] : null,
