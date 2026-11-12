@@ -145,7 +145,7 @@ class LaFelderService
         return $this->vocab->listWarengruppen($team)->map(fn ($wg) => [
             'code' => (string) $wg->code,
             'name' => (string) $wg->name,
-            'sub_categories' => $this->vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
+            'sub_categories' => $this->vocab->listSubCategories($team, (string) $wg->code, nurVerwaltet: true)->pluck('sub_category')->values()->all(),
         ])->values()->all();
     }
 

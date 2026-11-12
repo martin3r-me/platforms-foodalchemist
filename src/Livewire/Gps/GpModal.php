@@ -838,7 +838,7 @@ class GpModal extends Component
         $taxonomie = $warengruppen->map(fn ($wg) => [
             'code' => (string) $wg->code,
             'name' => (string) $wg->name,
-            'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
+            'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code, nurVerwaltet: true)->pluck('sub_category')->values()->all(),
         ])->values()->all();
         $kontext = [
             'label' => (string) $gp->name,
@@ -869,7 +869,7 @@ class GpModal extends Component
         if ($wg !== null) {
             $this->builder['commodity_group_code'] = (string) $wg->code;
             $sub = trim((string) ($v->werte['sub_category'] ?? ''));
-            $treffer = self::subKategorieTreffer($vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->all(), $sub);
+            $treffer = self::subKategorieTreffer($vocab->listSubCategories($team, (string) $wg->code, nurVerwaltet: true)->pluck('sub_category')->all(), $sub);
             $this->builder['sub_category'] = $treffer !== null ? (string) $treffer : '';
             $gesetzt[] = 'Warengruppe '.$wg->codedLabel().($treffer !== null ? ' › '.$treffer : ' (keine passende Unterkategorie)');
         }
@@ -901,7 +901,7 @@ class GpModal extends Component
             $taxonomie = $warengruppen->map(fn ($wg) => [
                 'code' => (string) $wg->code,
                 'name' => (string) $wg->name,
-                'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
+                'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code, nurVerwaltet: true)->pluck('sub_category')->values()->all(),
             ])->values()->all();
             $kontext = [
                 'label' => trim($this->kiRohtext),
@@ -983,7 +983,7 @@ class GpModal extends Component
             ?? $warengruppen->first(fn ($x) => mb_strtolower((string) $x->name) === mb_strtolower($code));
         if ($wg !== null) {
             $this->builder['commodity_group_code'] = (string) $wg->code;
-            $erlaubt = $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category');
+            $erlaubt = $vocab->listSubCategories($team, (string) $wg->code, nurVerwaltet: true)->pluck('sub_category');
             $treffer = self::subKategorieTreffer($erlaubt->all(), (string) ($vorschlag->werte['sub_category'] ?? ''));
             $this->builder['sub_category'] = $treffer ?? '';
         }
@@ -1336,7 +1336,7 @@ class GpModal extends Component
             'warengruppen' => $team !== null ? $vocab->listWarengruppen($team) : collect(),
             // Punkt C: WG-gescopetes Sub-Kategorie-Dropdown (verwaltet + GP-Freitext gemerged, #371)
             'subKategorien' => $team !== null && ($this->builder['commodity_group_code'] ?? '') !== ''
-                ? $vocab->listSubCategories($team, $this->builder['commodity_group_code'])
+                ? $vocab->listSubCategories($team, $this->builder['commodity_group_code'], nurVerwaltet: true)
                 : collect(),
             'supplierItem' => $this->supplierItemId !== null && $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->with('supplier:id,name')->find($this->supplierItemId)
