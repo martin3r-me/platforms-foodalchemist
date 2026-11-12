@@ -32,12 +32,9 @@ it('Editor: Felder werden beim Bearbeiten geladen, gespeichert und der Name läs
 
     $c = Livewire::test(GpModal::class)->call('oeffnen', $gp->id)->call('bearbeitenStarten');
     expect($c->get('builder.processing'))->toBe('');
+    $c->assertSeeHtml('Name aus Feldern ableiten')->assertDontSeeHtml('Felder aus dem Namen übernehmen');   // Knopf entfernt (12.11.2026, Dominique)
 
-    $c->call('felderAusName');
-    expect($c->get('builder.form'))->toBe('Wuerfel 5 mm')
-        ->and($c->get('builder.hauptzutat'))->toBe('Schalotten');
-
-    $c->set('builder.processing', '')->set('builder.form', 'ganz')->call('nameAusFeldern');
+    $c->set('builder.hauptzutat', 'Schalotten')->set('builder.processing', '')->set('builder.form', 'ganz')->call('nameAusFeldern');
     expect($c->get('manuellerName'))->toBe('Schalotten: ganz, frisch');
 
     $c->call('speichern');

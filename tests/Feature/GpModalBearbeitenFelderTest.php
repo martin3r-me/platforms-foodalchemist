@@ -40,7 +40,7 @@ it('Kennung in der Vorschau kommt live aus den Feldern; die gespeicherte steht d
         ->assertSeeHtml('<span class="font-mono" data-gespeicherter-key>aalfilet||</span>');
 });
 
-it('Portion „250 g“ ohne gp.portion: kommt aus „Felder aus dem Namen übernehmen“ (… 250 g pro Stück im Namen) — das Feld zeigt sie jetzt und lässt sie leeren', function () {
+it('Portion „250 g“ ohne gp.portion: geladen wird NULL (kein Altzustand aus dem Namen); von Hand gesetzt zeigt das Feld die Gebinde-Warnung und lässt sich leeren', function () {
     $lieferant = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Räucherei Test']);
     $la = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $lieferant->id,
         'designation' => 'Räucheraalfilets 250g', 'article_number' => 'A1']);
@@ -52,8 +52,7 @@ it('Portion „250 g“ ohne gp.portion: kommt aus „Felder aus dem Namen über
         ->assertSet('builder.portion', '')                                    // geladen wird gp.portion (NULL) — kein Altzustand
         ->assertDontSeeHtml('entspricht der Gebindemenge');
 
-    $m->call('felderAusName')
-        ->assertSet('builder.portion', '250 g')                               // die einzige Quelle im Bearbeiten-Fall
+    $m->set('builder.portion', '250 g')
         ->assertSeeHtml('entspricht der Gebindemenge')
         ->set('builder.portion', '')
         ->assertDontSeeHtml('entspricht der Gebindemenge');

@@ -1411,24 +1411,6 @@ class GpModal extends Component
         }
     }
 
-    /**
-     * Spec 80 (Paket 11): Bestands-GP — Felder einmalig aus dem bisherigen Namen übernehmen (nur leere Felder;
-     * Gepflegtes bleibt). Danach gilt das Feld; der Name lässt sich mit {@see nameAusFeldern} neu bilden.
-     */
-    public function felderAusName(GpNamingService $naming): void
-    {
-        foreach ($naming->felderAusName($this->manuellerName, true) as $feld => $wert) {
-            if ($feld === 'bio') {
-                $this->builder['bio'] = (bool) ($this->builder['bio'] ?? false) || $wert;
-
-                continue;
-            }
-            if (trim((string) ($this->builder[$feld] ?? '')) === '' && $wert !== '') {
-                $this->builder[$feld] = $wert;
-            }
-        }
-    }
-
     private function vorschauName(): string
     {
         if (trim($this->manuellerName) !== '') {

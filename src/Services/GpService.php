@@ -463,7 +463,9 @@ class GpService
             // Merged-GPs sind System-Tombstones des Merge-Werkzeugs — im Browser
             // komplett unsichtbar (User-Entscheidung 2026-07-02): kein Filter, keine Zeilen.
             ->where('foodalchemist_gps.status', '!=', GpStatus::Merged->value)
-            ->when(($filters['search'] ?? '') !== '', fn (Builder $q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', 'main_ingredient_slug'], $filters['search']))
+            // Synonyme (12.11.2026): Suchwörter zusätzlich über die Terminologie-Alias-Gruppen („anchovis“ findet „Sardellenfilet“)
+            ->when(($filters['search'] ?? '') !== '', fn (Builder $q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', 'main_ingredient_slug'], $filters['search'],
+                app(TerminologyService::class)->aliasGroups()))
             ->when(($filters['commodity_group'] ?? '') !== '', fn (Builder $q) => $q->where('commodity_group_code', $filters['commodity_group']))
             ->when(($filters['sub_category'] ?? '') !== '', fn (Builder $q) => $q->where('sub_category', $filters['sub_category']))
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']));
