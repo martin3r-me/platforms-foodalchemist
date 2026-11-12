@@ -856,7 +856,9 @@ class PresentationService
                 'text' => $k['text'] ?? null,
                 'depth' => (int) ($k['depth'] ?? 0),
                 'anker' => (string) ($k['anker'] ?? ''),
-                'image' => null, 'images' => [],
+                // Kapitelbild + Galerie (Identifier; hydrateImages löst sie beim Rendern auf).
+                'image' => $k['bild'] ?? null,
+                'images' => $k['bilder'] ?? [],
                 'blocks' => $blocks,
             ];
         }
@@ -945,9 +947,12 @@ class PresentationService
     {
         $items = [];
         foreach ($gerichte as $g) {
+            $kind = (string) ($g['type'] ?? 'gericht');
             $items[] = [
-                'kind' => (string) ($g['type'] ?? 'gericht'),
+                'kind' => $kind,
                 'label' => (string) ($g['text'] ?? ''),
+                // Text-Block des Konzepts: Titel + Fließtext (label = text_content).
+                'title' => $kind === 'text' ? ($g['titel'] ?? null) : null,
                 'indent' => (int) ($g['einrueckung'] ?? 0),
                 'price' => ($showPrice && ($g['preis'] ?? null) !== null) ? (float) $g['preis'] : null,
                 'codes' => [],
@@ -1392,6 +1397,8 @@ class PresentationService
         return [
             'price_display' => array_key_exists('price_display', $settings) ? (bool) $settings['price_display'] : $priceDefault,
             'declaration' => $decl,
+            // Cover: Titel (z. B. Angebotsname) zeigen. Aus → nur Logo, dafür größer (Angebot ohne Kundennamen).
+            'show_title' => array_key_exists('show_title', $settings) ? (bool) $settings['show_title'] : true,
             'cta' => [
                 'text' => isset($settings['cta']['text']) ? (string) $settings['cta']['text'] : null,
                 'link' => isset($settings['cta']['link']) ? (string) $settings['cta']['link'] : null,

@@ -6,10 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Menge/Person einer Paket-Position setzen (danach Preis-Recompute). */
+/** Menge/Person einer Paket-Position setzen. */
 class PaketGerichteMengeTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +20,7 @@ class PaketGerichteMengeTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Setzt die Menge/Person einer Gericht-Position im Paket (row_id). quantity weglassen = leeren.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Setzt die Menge/Person einer Gericht-Position (row_id aus pakete.GET) im Paket-Entwurf. quantity weglassen = leeren.';
     }
 
     public function getSchema(): array
@@ -28,7 +29,7 @@ class PaketGerichteMengeTool extends FoodAlchemistTool implements ToolContract, 
             'type' => 'object',
             'properties' => [
                 'paket_id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
-                'row_id' => ['type' => 'integer', 'description' => 'Positions-Zeilen-Id (paket_gerichte).'],
+                'row_id' => ['type' => 'integer', 'description' => 'Positions-Id (pakete.GET → dishes[].row_id).'],
                 'quantity' => ['type' => 'number', 'description' => 'Menge/Person (weglassen = leeren).'],
             ],
             'required' => ['paket_id', 'row_id'],
@@ -41,23 +42,19 @@ class PaketGerichteMengeTool extends FoodAlchemistTool implements ToolContract, 
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $paketId = (int) ($arguments['paket_id'] ?? 0);
-        if (($guard = $this->guardOwned($team, FoodAlchemistPaket::class, $paketId, 'Paket')) !== null) {
-            return $guard;
+        $paket = $this->paketConcept($team, (int) ($arguments['paket_id'] ?? 0));
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
+        $rowId = (int) ($arguments['row_id'] ?? 0);
 
         try {
-            app(PaketService::class)->setGerichtMenge(
-                $team,
-                $paketId,
-                (int) ($arguments['row_id'] ?? 0),
-                isset($arguments['quantity']) ? (float) $arguments['quantity'] : null
-            );
+            app(ConceptPaketService::class)->setMenge($team, $paket->id, $rowId, isset($arguments['quantity']) ? (float) $arguments['quantity'] : null);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['paket_id' => $paketId, 'row_id' => (int) ($arguments['row_id'] ?? 0)]);
+        return ToolResult::success(['paket_id' => (int) $paket->id, 'row_id' => $rowId]);
     }
 
     public function getMetadata(): array

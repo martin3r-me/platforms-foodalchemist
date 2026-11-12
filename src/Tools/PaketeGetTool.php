@@ -6,9 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Paket-Detail (Stamm + Gericht-Positionen). Read-only. */
+/** Concepter-Paket mit Gericht-Positionen lesen. */
 class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,15 +20,14 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
     public function getDescription(): string
     {
-        return 'Liefert ein (sichtbares) Paket mit Stammdaten, Preis-Modus und seinen Gericht-Positionen. '
-            . 'Paket-Ids werden von concept_slots.PUT (package_id) und foodbook_blocks referenziert.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Liefert ein sichtbares Paket mit Stammdaten, Status, Preis und Gericht-Positionen (row_id = concept_slot.id). '
+            . 'Die Paket-Id ist package_id in concept_slots.POST/PUT.';
     }
 
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
-            'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Kalkulationsprofil — VK/Person je Kalkulationsprofil (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline.'],
+            'id' => ['type' => 'integer', 'description' => 'Paket-Id (Concept-Id mit kind=paket).'],
         ], 'required' => ['id']];
     }
 
@@ -36,22 +37,13 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $paket = app(PaketService::class)->detail($team, (int) ($arguments['id'] ?? 0));
-        if ($paket === null) {
-            return ToolResult::error('Paket nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        $paket = $this->paketConcept($team, (int) ($arguments['id'] ?? 0), false);
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
-        $outlet = null;
-        if (! empty($arguments['outlet_id'])) {
-            $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
-            if ($outlet === null) {
-                return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
-            }
-        } else {
-            $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
-                ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
-        }
+        $paket = app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->anwenden($paket, $team);
 
-        return ToolResult::success(['paket' => $this->paketPayload($paket, true, $outlet, $team)]);
+        return ToolResult::success(['paket' => app(ConceptPaketService::class)->payload($paket, true)]);
     }
 
     public function getMetadata(): array

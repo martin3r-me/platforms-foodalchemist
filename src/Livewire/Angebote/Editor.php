@@ -192,6 +192,9 @@ class Editor extends Component
 
     public bool $presentationPreisAnzeige = true;
 
+    /** Cover zeigt den Angebotsnamen. Aus → nur Logo (größer), z. B. wenn noch kein Kunde feststeht. */
+    public bool $presentationTitelZeigen = true;
+
     /** Republish-Preis-Schutz: AUS = eingefrorene Preise behalten; AN = aktuelle VK ziehen. */
     public bool $presentationPreiseAktualisieren = false;
 
@@ -400,6 +403,18 @@ class Editor extends Component
             ? "In Produktion übergeben ({$res['ziele']} Ziele) — jetzt im Tagesplan planbar."
             : 'Kein Menü/Concept im Angebot — nichts zu übergeben.');
         $this->dispatch('angebot-gespeichert');
+    }
+
+    /** Angebot kopieren (Kapitel, Blöcke, lokale Concepts, Bilder) und die Kopie direkt öffnen. */
+    public function kopieren(): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $kopie = app(\Platform\FoodAlchemist\Services\AngebotKopieService::class)->kopieren($this->team(), $this->selectedId);
+        $this->dispatch('angebot-gespeichert');
+        $this->oeffnen((int) $kopie->id);
+        $this->dispatch('toast', text: 'Kopie angelegt: ' . $kopie->name);
     }
 
     public function loeschen(AngebotService $svc): void
@@ -1319,6 +1334,7 @@ class Editor extends Component
                 'design' => $this->presentationDesign,
                 'expires_at' => $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'show_title' => $this->presentationTitelZeigen,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
@@ -1364,6 +1380,7 @@ class Editor extends Component
             $settings = [
                 'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'show_title' => $this->presentationTitelZeigen,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
@@ -1557,6 +1574,7 @@ class Editor extends Component
             $this->presentationDesign = $angebot->presentation_design ?: 'editorial';
             $this->presentationGueltigBis = $angebot->presentation_expires_at?->format('Y-m-d');
             $this->presentationPreisAnzeige = (bool) ($s['price_display'] ?? true);
+            $this->presentationTitelZeigen = (bool) ($s['show_title'] ?? true);
             $this->presentationDeklaration = (bool) ($s['declaration'] ?? true);
             $this->presentationCtaText = $s['cta']['text'] ?? null;
             $this->presentationCtaLink = $s['cta']['link'] ?? null;

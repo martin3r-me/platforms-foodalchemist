@@ -18,7 +18,9 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Legt ein Gerichte-Konzept als ENTWURF an (status=draft). Slots (Gerichte/Pakete) danach '
+        return 'Legt ein Gerichte-Konzept ODER ein Concepter-Paket als ENTWURF an (status=draft). '
+            . 'kind=konzept (Default) = ganzes Menü/Buffet; kind=paket = wiederverwendbares Bündel (Concepter-Reiter „Pakete“), '
+            . 'das per concept_slots.POST(package_id=<id>) in ein Konzept eingehängt wird. Slots (Gerichte/Pakete) danach '
             . 'via foodalchemist.concept_slots.POST. brief = KI-Arbeitsauftrag ans Konzept; zielpreis_pro_person '
             . 'für die Kalkulations-Leitplanke.'
             . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="konzept_anlegen").';
@@ -30,6 +32,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string'],
+                'kind' => ['type' => 'string', 'enum' => ['konzept', 'paket'], 'description' => 'konzept (Default) oder paket. paket legt ein Concepter-Paket an (Reiter „Pakete“); geruest ist dann nicht erlaubt.'],
                 'occasion' => ['type' => 'string'],
                 'level' => ['type' => 'string'],
                 'class' => ['type' => 'string'],
@@ -67,15 +70,27 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(ConceptService::class);
+        $kind = strtolower(trim((string) ($arguments['kind'] ?? 'konzept')));
+        $kind = $kind === 'concept' ? 'konzept' : $kind;
+        if (! in_array($kind, ['konzept', 'paket'], true)) {
+            return ToolResult::error('kind muss "konzept" oder "paket" sein.', 'VALIDATION_ERROR');
+        }
+        if ($kind === 'paket' && is_array($arguments['geruest'] ?? null)) {
+            return ToolResult::error('geruest gibt es nur für kind=konzept. Ein Paket befüllst du mit paket_gerichte.SET oder concept_slots.POST.', 'VALIDATION_ERROR');
+        }
 
         try {
-            $c = $svc->create($team, [
+            $basis = [
                 'name' => (string) $arguments['name'],
                 'occasion' => $arguments['occasion'] ?? null,
                 'level' => $arguments['level'] ?? null,
                 'class' => $arguments['class'] ?? null,
                 'status' => 'draft',
-            ]);
+            ];
+            $c = $kind === 'paket' ? $svc->createPaket($team, $basis) : $svc->create($team, $basis);
+            if ($kind === 'paket' && ($arguments['occasion'] ?? null) !== null) {
+                $c->update(['occasion' => $arguments['occasion']]);
+            }
             $extras = array_intersect_key($arguments, array_flip([
                 'description', 'brief', 'target_price_per_person', 'season', 'target_group', 'diet_requirement',
                 'price_display',
@@ -116,9 +131,10 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
         }
 
         return ToolResult::success(array_filter([
-            'concept' => ['id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'serving_form_id' => $c->serving_form_id],
+            'concept' => ['id' => $c->id, 'kind' => $kind, 'name' => $c->name, 'status' => $c->status, 'serving_form_id' => $c->serving_form_id],
             'geruest' => $geruest,
             'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter. Servierform steuert die Slot-Darreichungs-Auflösung.'
+                . ($kind === 'paket' ? ' Paket: Gerichte via paket_gerichte.SET, einhängen via concept_slots.POST(concept_id, package_id=' . $c->id . ').' : '')
                 . ($geruest !== null ? ' Gerüst steht: leere Positionen (type=gericht) per foodalchemist.concept_slots.PUT mit sales_recipe_id füllen, Header-Titel per concept_blocks.PUT.' : ''),
         ], fn ($v) => $v !== null));
     }

@@ -3,6 +3,8 @@
     $coverUrl = ($style['show_cover_image'] ?? true) ? ($branding['cover']['url'] ?? null) : null;
     $logoUrl = ($style['show_logo'] ?? true) ? ($branding['logo']['url'] ?? null) : null;
     $kicker = $meta['kicker'] ?? 'Kulinarisches Angebot';
+    // Veröffentlichungs-Einstellung: Titel aus → nur Logo, dafür größer (.pt-hero--ohne-titel).
+    $zeigeTitel = (bool) ($snap['settings']['show_title'] ?? true);
     // Bild-Spielraum: Füll-Modus (füllen=cover / einpassen=contain, zeigt das ganze Bild) + Höhe.
     $fitContain = ($style['cover_fit'] ?? 'cover') === 'contain';
     // Höhe: frei einstellbar in % der Fensterhöhe (Bug-Runde 2026-09-17 — drei feste Stufen
@@ -24,14 +26,14 @@
         $hoeheKlasse = 'pt-hero--h-gross';
     }
 @endphp
-<header class="pt-hero {{ $hoeheKlasse }} {{ $fitContain ? 'pt-hero--fit-contain' : '' }} {{ $coverUrl ? 'has-media' : 'no-media' }}"@if($hoeheStil) style="{{ $hoeheStil }}"@endif>
+<header class="pt-hero {{ $zeigeTitel ? '' : 'pt-hero--ohne-titel' }} {{ $hoeheKlasse }} {{ $fitContain ? 'pt-hero--fit-contain' : '' }} {{ $coverUrl ? 'has-media' : 'no-media' }}"@if($hoeheStil) style="{{ $hoeheStil }}"@endif>
     @if($coverUrl)
         <div class="pt-hero-media"><img src="{{ $coverUrl }}" alt=""></div>
     @endif
     <div class="pt-hero-inner">
         @if($logoUrl)<img class="pt-hero-logo" src="{{ $logoUrl }}" alt="">@endif
         <div class="pt-kicker">{{ $kicker }}</div>
-        <h1 class="pt-hero-title">{{ $snap['title'] ?? '' }}</h1>
+        @if($zeigeTitel)<h1 class="pt-hero-title">{{ $snap['title'] ?? '' }}</h1>@endif
         @if(!empty($snap['subtitle']))<p class="pt-hero-sub">{{ $snap['subtitle'] }}</p>@endif
         <div class="pt-hero-meta">
             @if(!empty($meta['customer'])){{ $meta['customer'] }}@endif

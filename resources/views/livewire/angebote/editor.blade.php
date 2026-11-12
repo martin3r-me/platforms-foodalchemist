@@ -82,6 +82,11 @@
                            class="{{ $menuePunkt }}" title="Kundenpräsentation als Webseite, ohne interne Angaben">
                             @svg('heroicon-o-presentation-chart-bar', 'w-4 h-4 text-[var(--fa-ink-3)]') Kundenpräsentation ansehen
                         </a>
+                        {{-- Kopieren ist immer erlaubt (legt ein neues, eigenes Angebot an; das Original bleibt unverändert). --}}
+                        <button type="button" role="menuitem" wire:click="kopieren" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                title="Neues Angebot mit gleichem Aufbau, Branding und Bildern anlegen (Status Anfrage, nicht veröffentlicht)" data-angebot-kopieren>
+                            @svg('heroicon-o-document-duplicate', 'w-4 h-4 text-[var(--fa-ink-3)]') Angebot kopieren
+                        </button>
                         <div class="my-1 border-t border-[var(--fa-line)]"></div>
                         {{-- Spec 65: Drucken/Ansehen bleiben frei (Links), Produktion + Löschen nur im Bearbeiten-Modus --}}
                         <fieldset @disabled($gesperrt) class="contents">
@@ -1087,6 +1092,7 @@
 
                         <div class="flex flex-wrap gap-x-5 gap-y-2">
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}"> Preise je Gast zeigen</label>
+                            <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer" title="Aus: das Cover zeigt nur das Logo, dafür größer – z. B. solange kein Kunde feststeht."><input type="checkbox" wire:model="presentationTitelZeigen" class="{{ $haken }}" data-angebot-praes-titel> Angebotsnamen im Cover zeigen</label>
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationDeklaration" class="{{ $haken }}"> Allergen-Legende zeigen</label>
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen, neue Speisen kommen mit aktuellem Preis dazu. An: alle aktuellen Verkaufspreise übernehmen. Die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise aktualisieren</label>
                         </div>

@@ -7,7 +7,6 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -26,7 +25,8 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
     public function getDescription(): string
     {
         return 'Legt einen Slot in einem draft-Konzept an (Position ans Ende) und befüllt ihn optional: '
-            . 'sales_recipe_id = Gericht (via verkaufsrezepte.SEARCH), package_id = Paket (XOR). role z. B. '
+            . 'sales_recipe_id = Gericht (via verkaufsrezepte.SEARCH), package_id = Concepter-Paket (concepts mit kind=paket, '
+            . 'IDs via pakete.LIST / anlegen via pakete.POST oder concepts.POST kind=paket) (XOR). role z. B. '
             . 'vorspeise/hauptgang/dessert, wording = kundenseitiger Anzeigename.';
     }
 
@@ -40,7 +40,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'title' => ['type' => 'string'],
                 'is_pflicht' => ['type' => 'boolean', 'default' => true],
                 'sales_recipe_id' => ['type' => 'integer'],
-                'package_id' => ['type' => 'integer'],
+                'package_id' => ['type' => 'integer', 'description' => 'Concepter-Paket-Id (concept mit kind=paket) — wird als Station eingehängt.'],
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'wording' => ['type' => 'string', 'description' => 'Kundenseitiger Anzeigename der Position'],
@@ -60,8 +60,8 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         if ($concept === null) {
             return ToolResult::error('Konzept nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if ((string) $concept->status !== 'draft') {
-            return ToolResult::error("Konzept hat Status \"{$concept->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
+        if (($draft = $this->guardDraft($concept)) !== null) {
+            return $draft;
         }
         if (isset($arguments['sales_recipe_id'], $arguments['package_id'])) {
             return ToolResult::error('sales_recipe_id und package_id sind XOR — nur eines angeben.', 'VALIDATION_ERROR');
@@ -70,9 +70,13 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
             && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
             return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if (isset($arguments['package_id'])
-            && ! FoodAlchemistPaket::visibleToTeam($team)->whereKey((int) $arguments['package_id'])->exists()) {
-            return ToolResult::error('package_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        $paketId = null;
+        if (isset($arguments['package_id'])) {
+            // package_id = Concepter-Paket (kind=paket-Concept) → embedded_concept_id (Kaskade-Pfad).
+            $paketId = $this->paketReferenz($team, (int) $arguments['package_id'], (int) $concept->id);
+            if ($paketId instanceof ToolResult) {
+                return $paketId;
+            }
         }
         $svc = app(ConceptService::class);
 
@@ -83,7 +87,10 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'is_pflicht' => (bool) ($arguments['is_pflicht'] ?? true),
             ]);
             if (isset($arguments['sales_recipe_id']) || isset($arguments['package_id'])) {
-                $fill = array_intersect_key($arguments, array_flip(['sales_recipe_id', 'package_id', 'quantity']));
+                $fill = array_intersect_key($arguments, array_flip(['sales_recipe_id', 'quantity']));
+                if ($paketId !== null) {
+                    $fill['embedded_concept_id'] = $paketId;
+                }
                 if (($arguments['unit'] ?? '') !== '') {
                     $unit = app(VocabularyService::class)->findEinheit($team, (string) $arguments['unit']);
                     if ($unit === null) {
@@ -114,7 +121,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
 
         return ToolResult::success(['slot' => [
             'id' => $slot->id, 'position' => $slot->position, 'type' => $slot->type,
-            'role' => $slot->role, 'sales_recipe_id' => $slot->sales_recipe_id, 'package_id' => $slot->package_id,
+            'role' => $slot->role, 'sales_recipe_id' => $slot->sales_recipe_id, 'package_id' => $slot->embedded_concept_id,
             'presentation_id' => $slot->presentation_id,
         ]]);
     }

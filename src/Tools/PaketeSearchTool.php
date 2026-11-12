@@ -6,11 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Pakete per Freitext suchen. Read-only. */
+/** Concepter-Pakete per Freitext suchen. */
 class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -20,7 +20,7 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Sucht sichtbare Pakete per Freitext (Name), optional mit role-Filter.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Sucht sichtbare Pakete per Freitext (Name), optional class/status.';
     }
 
     public function getSchema(): array
@@ -29,8 +29,9 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'query' => ['type' => 'string', 'description' => 'Suchbegriff (Paketname).'],
-                'role' => ['type' => 'string', 'description' => 'Optionaler Rollen-Filter.'],
-                'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
+                'class' => ['type' => 'string'],
+                'status' => ['type' => 'string', 'enum' => ['draft', 'active', 'archiviert']],
+                'per_page' => ['type' => 'integer', 'description' => 'Max. Treffer (Default 100).'],
             ],
             'required' => ['query'],
         ];
@@ -42,29 +43,15 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $q = trim((string) ($arguments['query'] ?? ''));
-        $filters = ['search' => $q];
-        if (($role = trim((string) ($arguments['role'] ?? ''))) !== '') {
-            $filters['role'] = $role;
-        }
-        $perPage = (int) ($arguments['per_page'] ?? 100);
-        $limit = $perPage > 0 ? $perPage : 100;
-        $page = app(PaketService::class)->paginateBrowser($filters, $team, $limit);
-        $out = collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, null, $team) + ['via' => 'lexical'])->all();
-
-        // Hybrid (Ausbau b): semantischer Pass über den Paket-Pool — ergänzt nur NEUES.
-        $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_PAKET, array_column($out, 'id'), $limit);
-        if ($sem !== []) {
-            arsort($sem);
-            $rows = FoodAlchemistPaket::visibleToTeam($team)->whereIn('id', array_keys($sem))->get()->keyBy('id');
-            foreach ($sem as $id => $score) {
-                $p = $rows->get($id);
-                if ($p === null || count($out) >= $limit) {
-                    continue;
-                }
-                $out[] = $this->paketPayload($p, false, null, $team) + ['via' => 'semantic', 'semantic_score' => round($score, 3)];
-            }
-        }
+        $filters = array_filter([
+            'search' => trim((string) ($arguments['query'] ?? '')),
+            'class' => trim((string) ($arguments['class'] ?? '')),
+            'status' => trim((string) ($arguments['status'] ?? '')),
+        ], fn ($v) => $v !== '');
+        $limit = max(1, (int) ($arguments['per_page'] ?? 100));
+        $page = app(ConceptService::class)->paginatePakete($filters, $team, $limit);
+        $svc = app(ConceptPaketService::class);
+        $out = collect($page->items())->map(fn ($p) => $svc->payload($p) + ['via' => 'lexical'])->all();
 
         return ToolResult::success(['total' => count($out), 'pakete' => $out]);
     }

@@ -6,10 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Paket-Preis/EK aus den Gerichten neu ableiten. */
+/** Preis-/EK-Cache eines Concepter-Pakets neu rechnen. */
 class PaketeRecomputeTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +20,7 @@ class PaketeRecomputeTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Berechnet EK/Person + Wareneinsatz (im auto-Modus zusätzlich den Preis) eines team-eigenen Pakets aus seinen Gerichten neu.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Berechnet EK/Person und (im auto-Modus) den Preis eines team-eigenen Pakets aus seinen Gerichten neu.';
     }
 
     public function getSchema(): array
@@ -33,19 +34,16 @@ class PaketeRecomputeTool extends FoodAlchemistTool implements ToolContract, Too
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $id = (int) ($arguments['id'] ?? 0);
-        if (($guard = $this->guardOwned($team, FoodAlchemistPaket::class, $id, 'Paket')) !== null) {
-            return $guard;
+        $paket = $this->paketConcept($team, (int) ($arguments['id'] ?? 0), false);
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
-        $svc = app(PaketService::class);
-        $paket = $svc->detail($team, $id);
-        if ($paket === null) {
-            return ToolResult::error('Paket nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        if (! $paket->isOwnedBy($team)) {
+            return ToolResult::error('Paket: nur fürs Besitzer-Team.', 'ACCESS_DENIED');
         }
+        $paket = app(ConceptService::class)->recomputeCache($paket);
 
-        $paket = $svc->recomputePrice($paket);
-
-        return ToolResult::success(['paket' => $this->paketPayload($paket), 'recomputed' => true]);
+        return ToolResult::success(['paket' => app(ConceptPaketService::class)->payload($paket), 'recomputed' => true]);
     }
 
     public function getMetadata(): array

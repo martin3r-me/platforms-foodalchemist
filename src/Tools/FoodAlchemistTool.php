@@ -365,6 +365,73 @@ abstract class FoodAlchemistTool
      * Guard für Konzept-Slot-/Block-by-id-Tools: existiert der Slot und gehört sein Konzept dem Team?
      * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
      */
+    /**
+     * MCP darf Konzepte und Concepter-Pakete nur im Entwurf inhaltlich ändern. Die Fehlermeldung
+     * sagt, wer was tun muss (Entscheidung Dominique 2026-11-12: kein active→draft durch den Agenten).
+     */
+    protected function guardDraft(FoodAlchemistConcept $concept): ?ToolResult
+    {
+        if ((string) $concept->status === 'draft') {
+            return null;
+        }
+        $was = $concept->kind === 'paket' ? 'Paket' : 'Konzept';
+        $reiter = $concept->kind === 'paket' ? 'Pakete' : 'Concepts';
+
+        return ToolResult::error(
+            "{$was} #{$concept->id} „{$concept->name}\" hat Status \"{$concept->status}\". Über MCP sind nur Entwürfe änderbar. "
+            . "Ein Mensch mit Rolle Kuratieren muss es im Concepter (Reiter {$reiter} → Spalte Status) auf „Entwurf\" setzen. "
+            . 'Danach den Aufruf wiederholen. Alternativ: foodalchemist.concepts.DUPLICATE legt eine bearbeitbare Kopie als Entwurf an.',
+            'ACCESS_DENIED'
+        );
+    }
+
+    /**
+     * Concepter-Paket (kind=paket-Concept) laden. $schreiben = Besitzer-Team + Entwurf erforderlich.
+     * Gibt das Paket oder das passende Fehler-ToolResult zurück.
+     */
+    protected function paketConcept(Team $team, int $id, bool $schreiben = true): FoodAlchemistConcept|ToolResult
+    {
+        $paket = app(\Platform\FoodAlchemist\Services\ConceptPaketService::class)->sichtbar($team, $id);
+        if ($paket === null) {
+            $istKonzept = FoodAlchemistConcept::visibleToTeam($team)->whereKey($id)->where('kind', '!=', 'paket')->exists();
+
+            return ToolResult::error($istKonzept
+                ? "#{$id} ist ein Konzept, kein Paket. Für Konzepte: foodalchemist.concepts.*."
+                : "Paket #{$id} nicht sichtbar/vorhanden. Pakete sind seit der Concepter-Kaskade Concepter-Pakete (concepts mit kind=paket); IDs über foodalchemist.pakete.LIST.", 'NOT_FOUND');
+        }
+        if ($schreiben) {
+            if (! $paket->isOwnedBy($team)) {
+                return ToolResult::error('Paket: nur fürs Besitzer-Team.', 'ACCESS_DENIED');
+            }
+            if (($draft = $this->guardDraft($paket)) !== null) {
+                return $draft;
+            }
+        }
+
+        return $paket;
+    }
+
+    /**
+     * `package_id` in concept_slots.POST/PUT referenziert ein Concepter-Paket (kind=paket-Concept) und wird
+     * als `embedded_concept_id` gespeichert — derselbe Pfad wie der Paket-Picker im Concepter.
+     * Gibt die Paket-Id oder ein Fehler-ToolResult zurück.
+     */
+    protected function paketReferenz(Team $team, int $paketId, int $inConceptId): int|ToolResult
+    {
+        if ($paketId === $inConceptId) {
+            return ToolResult::error('Ein Paket kann sich nicht selbst einbetten.', 'VALIDATION_ERROR');
+        }
+        $paket = $this->paketConcept($team, $paketId, false);
+        if ($paket instanceof ToolResult) {
+            return $paket;
+        }
+        if ($paket->status === 'archiviert') {
+            return ToolResult::error("Paket #{$paketId} ist archiviert und kann nicht eingehängt werden.", 'VALIDATION_ERROR');
+        }
+
+        return (int) $paket->id;
+    }
+
     protected function guardConceptSlotOwned(Team $team, int $slotId): ?ToolResult
     {
         $slot = FoodAlchemistConceptSlot::whereKey($slotId)->first();

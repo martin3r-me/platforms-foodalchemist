@@ -88,18 +88,21 @@ it('Paket-Editor: Form-Auswahl je Posten, Preis der gewählten Form in der Zeile
 });
 
 it('MCP paket_gerichte.SET: presentation_id setzen, weglassen erhält, Payload liefert die Form', function () {
+    // Seit 2026-11-12 arbeitet paket_gerichte.SET auf Concepter-Paketen (kind=paket-Concepts).
     $ctx = new ToolContext($this->user, $this->rootTeam);
     $tool = app(PaketGerichteSetTool::class);
+    $paket = app(\Platform\FoodAlchemist\Services\ConceptPaketService::class)->create($this->rootTeam, ['name' => 'Beilagen-Duo']);
+    $tool->execute(['paket_id' => $paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id, 'quantity' => 1]]], $ctx);
 
-    $r = $tool->execute(['paket_id' => $this->paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id, 'presentation_id' => $this->kinder->id]]], $ctx);
+    $r = $tool->execute(['paket_id' => $paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id, 'presentation_id' => $this->kinder->id]]], $ctx);
     expect($r->success)->toBeTrue('set: ' . ($r->error ?? ''))
         ->and($r->data['paket']['dishes'][0]['presentation_id'])->toBe($this->kinder->id)
         ->and($r->data['paket']['dishes'][0]['darreichung'])->toBe('Kinder')
         ->and($r->data['paket']['dishes'][0]['quantity'])->toBe(1.0);          // Menge blieb erhalten
 
-    $r = $tool->execute(['paket_id' => $this->paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id], ['sales_recipe_id' => $this->zweites->id]]], $ctx);
+    $r = $tool->execute(['paket_id' => $paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id], ['sales_recipe_id' => $this->zweites->id]]], $ctx);
     expect($r->data['paket']['dishes'][0]['presentation_id'])->toBe($this->kinder->id);
 
-    $r = $tool->execute(['paket_id' => $this->paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id, 'presentation_id' => 0]]], $ctx);
+    $r = $tool->execute(['paket_id' => $paket->id, 'items' => [['sales_recipe_id' => $this->gericht->id, 'presentation_id' => 0]]], $ctx);
     expect($r->data['paket']['dishes'][0]['presentation_id'])->toBeNull();
 });

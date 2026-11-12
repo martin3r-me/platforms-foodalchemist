@@ -6,9 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Paket anlegen (Stamm; Gerichte danach via paket_gerichte.SET). */
+/** Concepter-Paket (kind=paket-Concept) als Entwurf anlegen; Gerichte danach via paket_gerichte.SET. */
 class PaketePostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,8 +20,9 @@ class PaketePostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Legt ein team-eigenes Paket an (name; optional role/class/level/price_mode). '
-            . 'price_mode=fixed erfordert price_per_person + price_override_reason. Gerichte danach via paket_gerichte.SET.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Legt ein team-eigenes Paket als ENTWURF an (name; optional class/level/consumer_name/price_mode). '
+            . 'price_mode=fixed erfordert price_per_person + price_override_reason. Gerichte danach via paket_gerichte.SET, '
+            . 'einhängen ins Konzept via concept_slots.POST(concept_id, package_id=<diese id>). Gleichwertig: concepts.POST(kind=paket).';
     }
 
     public function getSchema(): array
@@ -27,11 +30,12 @@ class PaketePostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return [
             'type' => 'object',
             'properties' => [
-                'name' => ['type' => 'string', 'description' => 'Paket-Name.'],
-                'role' => ['type' => 'string', 'description' => 'Rolle/Gang.'],
+                'name' => ['type' => 'string', 'description' => 'Paket-Name (intern).'],
+                'consumer_name' => ['type' => 'string', 'description' => 'Kundenseitiger Name (Stationszeile in Angebot/Präsentation).'],
                 'class' => ['type' => 'string', 'description' => 'Klasse.'],
                 'level' => ['type' => 'string', 'description' => 'Niveau.'],
-                'price_mode' => ['type' => 'string', 'enum' => ['auto', 'fixed', 'manuell'], 'description' => 'Preis-Modus (Default auto).'],
+                'description' => ['type' => 'string'],
+                'price_mode' => ['type' => 'string', 'enum' => ['auto', 'fixed', 'manuell'], 'description' => 'Preis-Modus (Default auto = Summe der Gerichte).'],
                 'price_per_person' => ['type' => 'number', 'description' => 'Preis/Person (bei fixed/manuell).'],
                 'price_override_reason' => ['type' => 'string', 'description' => 'Begründung (bei fixed Pflicht).'],
             ],
@@ -45,24 +49,23 @@ class PaketePostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $name = trim((string) ($arguments['name'] ?? ''));
-        if ($name === '') {
+        if (trim((string) ($arguments['name'] ?? '')) === '') {
             return ToolResult::error('name ist Pflicht.', 'VALIDATION_ERROR');
         }
-        $in = ['name' => $name];
-        foreach (['role', 'class', 'level', 'price_mode', 'price_per_person', 'price_override_reason'] as $k) {
-            if (array_key_exists($k, $arguments)) {
-                $in[$k] = $arguments[$k];
-            }
+        if (array_key_exists('role', $arguments)) {
+            // role gab es nur im Alt-Modell; Concepter-Pakete tragen die Rolle am Slot (concept_slots.POST role).
+            unset($arguments['role']);
         }
 
         try {
-            $paket = app(PaketService::class)->create($team, $in);
+            $svc = app(ConceptPaketService::class);
+            $paket = $svc->create($team, $arguments);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['paket' => $this->paketPayload($paket)]);
+        return ToolResult::success(['paket' => $svc->payload($paket),
+            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter (Reiter Pakete). Rolle/Gang setzt du beim Einhängen über concept_slots.POST(role).']);
     }
 
     public function getMetadata(): array
@@ -73,8 +76,8 @@ class PaketePostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates'],
-            'related_tools' => ['foodalchemist.paket_gerichte.SET', 'foodalchemist.pakete.PUT'],
-            'examples' => ['Lege das Paket „Grill-Buffet" (Rolle Buffet) an.'],
+            'related_tools' => ['foodalchemist.paket_gerichte.SET', 'foodalchemist.concept_slots.POST', 'foodalchemist.pakete.PUT'],
+            'examples' => ['Lege das Paket „NOSE TO TAIL" an.'],
         ];
     }
 }

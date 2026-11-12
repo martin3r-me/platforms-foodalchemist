@@ -43,6 +43,8 @@ return [
     \Platform\FoodAlchemist\Tools\AngebotPlanFromBriefTool::class,   // Angebot aus Brief (vollkaskade owner=offer, Concept je Slot)
     \Platform\FoodAlchemist\Tools\AngebotPresentationGetTool::class,
     \Platform\FoodAlchemist\Tools\AngebotPresentationPublishTool::class,
+    \Platform\FoodAlchemist\Tools\AngeboteDuplicateTool::class,   // Angebot kopieren
+    \Platform\FoodAlchemist\Tools\BilderUploadTool::class,   // Bild per MCP: Cover/Logo/Gericht-Foto/Design-Block
     \Platform\FoodAlchemist\Tools\AngebotPresentationWithdrawTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenGetTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenStatusTool::class,

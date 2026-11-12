@@ -24,7 +24,9 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
         return 'Legt ein Präsentations-Design an: Blockliste (layout_json) + Style-Tokens (tokens_json) '
             . '+ optional freies sandboxed custom_css. base_slug editorial|menu|kiosk|navigator als Ausgangspunkt. '
             . 'Damit steuerbar: Farben/Typo/Spacing, Navigation (Sprungmenü/Sidebar), Lightbox, Bild-Band (Raster/Rondell), '
-            . 'Speiseplan-Ausgabe (Tabelle/Liste), Cover-/Bild-Darstellung, Gericht-Fotos, Kapitel-Bilder — UND eigenes CSS.';
+            . 'Speiseplan-Ausgabe (Tabelle/Liste), Cover-/Bild-Darstellung, Gericht-Fotos, Kapitel-Bilder — UND eigenes CSS.'
+            . ' Stylbare Klassen: ' . PresentationDesignService::cssKlassenDoc()
+            . ' Schriften: tokens_json.typography.heading/body = Google-Font aus der Whitelist (' . implode(', ', array_keys(PresentationDesignService::GOOGLE_FONTS)) . ').';
     }
 
     public function getSchema(): array

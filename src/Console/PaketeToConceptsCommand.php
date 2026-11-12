@@ -19,7 +19,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
  */
 class PaketeToConceptsCommand extends Command
 {
-    protected $signature = 'foodalchemist:pakete-to-concepts {--apply : schreiben (ohne Flag nur Dry-Run)}';
+    protected $signature = 'foodalchemist:pakete-to-concepts {--apply : schreiben (ohne Flag nur Dry-Run)} {--id=* : nur diese Alt-Paket-Ids migrieren (z. B. --id=1 --id=2); ohne = alle}';
 
     protected $description = 'Migriert Pakete → kind=paket-Concepts + package_dishes → concept_slots (idempotent, Shadow).';
 
@@ -28,7 +28,10 @@ class PaketeToConceptsCommand extends Command
         $apply = (bool) $this->option('apply');
         $this->info(($apply ? 'APPLY' : 'DRY-RUN').' — Pakete → kind=paket-Concepts');
 
-        $pakete = FoodAlchemistPaket::with(['dishes.dish:id,is_sales_recipe'])->orderBy('id')->get();
+        $ids = array_values(array_filter(array_map('intval', (array) $this->option('id'))));
+        $pakete = FoodAlchemistPaket::with(['dishes.dish:id,is_sales_recipe'])
+            ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
+            ->orderBy('id')->get();
         $neu = 0;
         $aktualisiert = 0;
         $slots = 0;
@@ -57,7 +60,9 @@ class PaketeToConceptsCommand extends Command
             ];
 
             if (! $apply) {
-                $this->line(($concept ? '  ~ update ' : '  + neu    ').$pkg->name.' ('.$pkg->dishes->count().' Posten)');
+                $eingehaengt = FoodAlchemistConceptSlot::where('package_id', $pkg->id)->pluck('id')->implode(', ');
+                $this->line(($concept ? '  ~ update ' : '  + neu    ').'#'.$pkg->id.' '.$pkg->name.' ('.$pkg->dishes->count().' Posten'
+                    .($eingehaengt !== '' ? ', eingehängt in Slots '.$eingehaengt : '').')');
 
                 continue;
             }

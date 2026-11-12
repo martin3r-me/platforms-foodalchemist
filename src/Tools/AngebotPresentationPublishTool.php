@@ -37,6 +37,7 @@ class AngebotPresentationPublishTool extends FoodAlchemistTool implements ToolCo
                 'expires_at' => ['type' => 'string', 'description' => 'Gültig bis (Datum ISO, Pflicht — kein Link ohne Ablauf)'],
                 'design' => ['type' => 'string', 'description' => 'editorial|menu|kiosk oder design:{id}'],
                 'price_display' => ['type' => 'boolean', 'description' => 'Kundenpreise zeigen (Default an).'],
+                'show_title' => ['type' => 'boolean', 'description' => 'Angebotsnamen im Cover zeigen (Default an). Aus = nur Logo, größer.'],
                 'price_mode' => ['type' => 'string', 'enum' => ['auto', 'preserve'], 'description' => 'Republish-Preis-Modus: '
                     . 'fehlt/„preserve" = eingefrorene Preise BEHALTEN (neue Positionen kommen mit aktuellem Preis rein), '
                     . '„auto" = aktuelle VK ziehen. Erst-Veröffentlichung ist immer aktuell.'],
@@ -64,6 +65,7 @@ class AngebotPresentationPublishTool extends FoodAlchemistTool implements ToolCo
                 'expires_at' => $arguments['expires_at'] ?? null,
                 'design' => $arguments['design'] ?? null,
                 'price_display' => $arguments['price_display'] ?? true,
+                'show_title' => $arguments['show_title'] ?? true,
                 'price_mode' => ($arguments['price_mode'] ?? null) === 'auto' ? 'auto' : 'preserve',
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
             ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);
