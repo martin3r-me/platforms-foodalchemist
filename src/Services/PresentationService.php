@@ -402,6 +402,8 @@ class PresentationService
             'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team), $speiseplanLayout),
             'tokens' => $tokens,
             'custom_css' => $this->designs->resolveCss($designSource, $team),
+            // Eigene Team-Schriften (typography = "team:<Familie>") als eingefrorene Datei-Identifier.
+            'fonts' => app(PresentationFontService::class)->fuerTokens($team, $tokens),
         ];
 
         return [
@@ -776,6 +778,9 @@ class PresentationService
         $kalk = app(AngebotService::class)->kalkulation($team, $angebot, $outlet);
 
         $zzgl = [];   // Spec 94b: Positionen nach Aufwand (unter der Summe)
+        // Gericht-Fotos (Identifier) je recipe_id — Anzeige steuert das Design (show_dish_photos), wie beim Foodbook.
+        // Vorher immer null: der Design-Schalter „Gericht-Fotos zeigen" wirkte beim Angebot nicht.
+        $this->angebotFotos = $this->gerichtFotos($komp);
         $sections = [];
         foreach ($komp['kapitel'] as $k) {
             $blocks = [];
@@ -956,11 +961,44 @@ class PresentationService
                 'indent' => (int) ($g['einrueckung'] ?? 0),
                 'price' => ($showPrice && ($g['preis'] ?? null) !== null) ? (float) $g['preis'] : null,
                 'codes' => [],
-                'image' => null,
+                'image' => ! empty($g['recipe_id']) ? ($this->angebotFotos[(int) $g['recipe_id']] ?? null) : null,
             ];
         }
 
         return $items;
+    }
+
+    /** @var array<int, array{context_file_id:?int, path:?string}> recipe_id → Foto-Identifier (nur während normalizeAngebot) */
+    private array $angebotFotos = [];
+
+    /**
+     * Gericht-Fotos aller Gerichte einer Angebots-Komposition in EINER Abfrage (kein N+1).
+     *
+     * @return array<int, array{context_file_id:?int, path:?string}>
+     */
+    private function gerichtFotos(array $komp): array
+    {
+        $ids = [];
+        foreach ($komp['kapitel'] as $k) {
+            foreach (array_merge($k['bloecke'] ?? [], $k['editionen'] ?? []) as $b) {
+                foreach ($b['gerichte'] ?? [] as $g) {
+                    if (! empty($g['recipe_id'])) {
+                        $ids[(int) $g['recipe_id']] = true;
+                    }
+                }
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+        $fotos = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::whereIn('id', array_keys($ids))
+            ->where(fn ($q) => $q->whereNotNull('image_context_file_id')->orWhereNotNull('image_path'))
+            ->get(['id', 'image_context_file_id', 'image_path']) as $r) {
+            $fotos[(int) $r->id] = ['context_file_id' => $r->image_context_file_id, 'path' => $r->image_path];
+        }
+
+        return $fotos;
     }
 
     /**
@@ -984,6 +1022,7 @@ class PresentationService
             'layout' => $this->adaptLayoutForType($type, $this->designs->normalizeLayout($layout), $spMode),
             'tokens' => $tokens,
             'custom_css' => $this->designs->sanitizeCss($customCss),
+            'fonts' => app(PresentationFontService::class)->fuerTokens($team, $tokens),
         ];
 
         return $this->hydrateImages($snapshot);
@@ -1260,14 +1299,28 @@ class PresentationService
         }
 
         // Freier Bild-Block (Struktur-Builder): Identifier in der Layout-Definition → frische URL.
+        // quelle=angebot_1..3 → das gleichnamige Präsentationsbild der Ausgabe (je Angebot setzbar) statt des Design-Bilds;
+        // fehlt es dort, bleibt der Block leer (kein Rückfall aufs Design-Bild — das gehört zu einem anderen Kunden).
+        $eigene = $snapshot['branding']['bilder'] ?? [];
         foreach ($snapshot['resolved_design']['layout'] ?? [] as $i => $block) {
             if (($block['block_type'] ?? '') !== 'image') {
                 continue;
             }
             $st = $block['style'] ?? [];
+            $quelle = (string) ($st['quelle'] ?? 'design');
+            if (preg_match('/^angebot_([1-3])$/', $quelle, $m)) {
+                $st = is_array($eigene[$m[1]] ?? null) ? $eigene[$m[1]] : [];
+                $snapshot['resolved_design']['layout'][$i]['style']['url'] = null;
+            }
             if (($st['context_file_id'] ?? null) || ($st['path'] ?? null)) {
                 $snapshot['resolved_design']['layout'][$i]['style']['url'] = $this->media->url($st['context_file_id'] ?? null, $st['path'] ?? null);
             }
+        }
+
+        // Eigene Schriften: Datei-Identifier → frische URL für @font-face.
+        foreach ($snapshot['resolved_design']['fonts'] ?? [] as $i => $f) {
+            $snapshot['resolved_design']['fonts'][$i]['url'] = (($f['context_file_id'] ?? null) || ($f['path'] ?? null))
+                ? $this->media->url($f['context_file_id'] ?? null, $f['path'] ?? null) : null;
         }
 
         return $snapshot;
@@ -1357,7 +1410,24 @@ class PresentationService
             'footer' => $e->footer_text ?: null,
             'logo' => ['context_file_id' => $e->logo_context_file_id ?? null, 'path' => $e->logo_path ?? null],
             'cover' => ['context_file_id' => $e->cover_context_file_id ?? null, 'path' => $e->cover_image_path ?? null],
+            // Freie Präsentationsbilder 1–3 (nur Angebot): für image-Blöcke mit quelle=angebot_N.
+            'bilder' => $this->praesentationsBilder($e),
         ];
+    }
+
+    /** @return array<string, array{context_file_id:?int, path:?string}> Nummer ("1".."3") → Identifier */
+    private function praesentationsBilder(Model $e): array
+    {
+        $roh = $e instanceof FoodAlchemistAngebot && is_array($e->presentation_images_json) ? $e->presentation_images_json : [];
+        $out = [];
+        foreach (['1', '2', '3'] as $n) {
+            $b = $roh[$n] ?? null;
+            if (is_array($b) && (($b['context_file_id'] ?? null) || ($b['path'] ?? null))) {
+                $out[$n] = ['context_file_id' => $b['context_file_id'] ?? null, 'path' => $b['path'] ?? null];
+            }
+        }
+
+        return $out;
     }
 
     private function publicUrl(string $type, string $token): string

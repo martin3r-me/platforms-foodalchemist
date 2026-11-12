@@ -44,7 +44,8 @@ return [
     \Platform\FoodAlchemist\Tools\AngebotPresentationGetTool::class,
     \Platform\FoodAlchemist\Tools\AngebotPresentationPublishTool::class,
     \Platform\FoodAlchemist\Tools\AngeboteDuplicateTool::class,   // Angebot kopieren
-    \Platform\FoodAlchemist\Tools\BilderUploadTool::class,   // Bild per MCP: Cover/Logo/Gericht-Foto/Design-Block
+    \Platform\FoodAlchemist\Tools\BilderUploadTool::class,
+    \Platform\FoodAlchemist\Tools\PresentationFontsUploadTool::class,   // eigene Team-Schriften   // Bild per MCP: Cover/Logo/Gericht-Foto/Design-Block
     \Platform\FoodAlchemist\Tools\AngebotPresentationWithdrawTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenGetTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenStatusTool::class,

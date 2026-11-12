@@ -27,7 +27,7 @@ class AngebotKopieService
         'uuid', 'offer_number',
         'presentation_enabled', 'presentation_token', 'presentation_slug', 'presentation_snapshot_json',
         'presentation_published_at', 'presentation_published_by', 'presentation_expires_at',
-        'logo_context_file_id', 'logo_path', 'cover_context_file_id', 'cover_image_path',
+        'logo_context_file_id', 'logo_path', 'cover_context_file_id', 'cover_image_path', 'presentation_images_json',
         'deleted_at',
     ];
 
@@ -107,6 +107,15 @@ class AngebotKopieService
         }
         if ($b = $this->bild($orig->cover_context_file_id, $orig->cover_image_path, $team, 'foodalchemist.offer', $kopie->id, "foodalchemist/offer-branding/{$kopie->id}")) {
             $updates += ['cover_context_file_id' => $b['context_file_id'], 'cover_image_path' => $b['path']];
+        }
+        $bilder = [];
+        foreach ((is_array($orig->presentation_images_json) ? $orig->presentation_images_json : []) as $nr => $pb) {
+            if (is_array($pb) && ($b = $this->bild($pb['context_file_id'] ?? null, $pb['path'] ?? null, $team, 'foodalchemist.offer', $kopie->id, "foodalchemist/offer-branding/{$kopie->id}"))) {
+                $bilder[(string) $nr] = $b;
+            }
+        }
+        if ($bilder !== []) {
+            $updates['presentation_images_json'] = $bilder;
         }
         if ($updates !== []) {
             $kopie->forceFill($updates)->save();

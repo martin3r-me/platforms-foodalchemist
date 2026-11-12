@@ -57,6 +57,75 @@ class PraesentationsDesigns extends Component
     /** Upload-Puffer für das Bild des gewählten Bild-Blocks. */
     public $blockImageUpload = null;
 
+    /** Eigene Schrift hochladen (Datei + Familie + Schnitt). */
+    public $fontUpload = null;
+
+    public string $fontFamilie = '';
+
+    public string $fontWeight = '400';
+
+    public string $fontStyle = 'normal';
+
+    public function schriftHochladen(): void
+    {
+        if ($this->schreibenAbgewiesen('schriftHochladen')) {
+            return;
+        }
+        $this->resetFeedback();
+        $this->validate(['fontUpload' => 'required|file|max:' . \Platform\FoodAlchemist\Services\PresentationFontService::MAX_KB], [], ['fontUpload' => 'Schriftdatei']);
+        try {
+            $font = app(\Platform\FoodAlchemist\Services\PresentationFontService::class)
+                ->upload($this->team(), $this->fontUpload, $this->fontFamilie, (int) $this->fontWeight, $this->fontStyle);
+            $this->status = "Schrift „{$font->family}“ hinzugefügt. Sie steht jetzt bei der Schriftwahl unter „Eigene Schriften“.";
+            $this->reset('fontUpload');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function schriftLoeschen(int $id): void
+    {
+        if ($this->schreibenAbgewiesen('schriftLoeschen')) {
+            return;
+        }
+        $this->resetFeedback();
+        try {
+            app(\Platform\FoodAlchemist\Services\PresentationFontService::class)->delete($this->team(), $id);
+            $this->status = 'Schrift entfernt.';
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** @return array{standard:array<string,string>, team:array<string,string>, google:array<string,string>} */
+    private function schriftOptionen(): array
+    {
+        $team = [];
+        foreach (app(\Platform\FoodAlchemist\Services\PresentationFontService::class)->familien($this->team()) as $f) {
+            $team['team:' . $f] = $f;
+        }
+        $google = [];
+        foreach (array_keys(PresentationDesignService::GOOGLE_FONTS) as $f) {
+            $google[$f] = $f;
+        }
+
+        return [
+            'standard' => ['display-serif' => 'Display mit Serifen (Standard)', 'serif' => 'Mit Serifen', 'sans' => 'Ohne Serifen', 'mono' => 'Schreibmaschine'],
+            'team' => $team,
+            'google' => $google,
+        ];
+    }
+
+    /** @return list<array{id:int, family:string, weight:int, style:string, format:string, eigen:bool}> */
+    private function schriftListe(): array
+    {
+        $team = $this->team();
+
+        return app(\Platform\FoodAlchemist\Services\PresentationFontService::class)->list($team)
+            ->map(fn ($f) => ['id' => (int) $f->id, 'family' => $f->family, 'weight' => (int) $f->weight, 'style' => $f->style, 'format' => $f->format, 'eigen' => $f->isOwnedBy($team)])
+            ->all();
+    }
+
     public function updatedBlockImageUpload(): void
     {
         if ($this->schreibenAbgewiesen('updatedBlockImageUpload')) {   // Spec 65: Upload-Hook legt die Datei sofort ab
@@ -468,6 +537,8 @@ class PraesentationsDesigns extends Component
             'blockLabels' => self::BLOCK_LABELS,
             'blockImageUrl' => $this->blockImageUrl(),
             'vorschauHtml' => $this->vorschauHtml(),
+            'schriftOptionen' => $this->schriftOptionen(),
+            'schriften' => $this->schriftListe(),
         ]);
     }
 }

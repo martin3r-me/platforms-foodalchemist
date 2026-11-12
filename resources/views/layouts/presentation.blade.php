@@ -17,8 +17,21 @@
     // Generische Keys (display-serif|serif|sans|mono) ODER ein Google-Font aus der Whitelist (PresentationDesignService::GOOGLE_FONTS).
     $gfHeading = \Platform\FoodAlchemist\Services\PresentationDesignService::googleFont(is_string($typo['heading'] ?? null) ? $typo['heading'] : null);
     $gfBody = \Platform\FoodAlchemist\Services\PresentationDesignService::googleFont(is_string($typo['body'] ?? null) ? $typo['body'] : null);
-    $headingFont = $gfHeading[1] ?? ($fontMap[$typo['heading'] ?? 'display-serif'] ?? $fontMap['display-serif']);
-    $bodyFont = $gfBody[1] ?? ($fontMap[$typo['body'] ?? 'sans'] ?? $fontMap['sans']);
+    // Eigene Team-Schrift: "team:<Familie>" → @font-face aus resolved_design.fonts (Familienname bereinigt, s. PresentationFontService::familie).
+    $teamFonts = array_values(array_filter($snapshot['resolved_design']['fonts'] ?? [], fn ($f) => ! empty($f['url'])));
+    $teamFamilien = array_unique(array_map(fn ($f) => (string) $f['family'], $teamFonts));
+    $teamStack = function ($wert, string $fallback) use ($teamFamilien) {
+        if (! is_string($wert) || ! str_starts_with($wert, 'team:')) {
+            return null;
+        }
+        $fam = \Platform\FoodAlchemist\Services\PresentationFontService::familie(substr($wert, 5));
+
+        return in_array($fam, $teamFamilien, true) ? '"' . $fam . '", ' . $fallback : null;
+    };
+    $headingFont = $teamStack($typo['heading'] ?? null, 'Georgia, "Times New Roman", serif')
+        ?? $gfHeading[1] ?? ($fontMap[$typo['heading'] ?? 'display-serif'] ?? $fontMap['display-serif']);
+    $bodyFont = $teamStack($typo['body'] ?? null, 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif')
+        ?? $gfBody[1] ?? ($fontMap[$typo['body'] ?? 'sans'] ?? $fontMap['sans']);
     $extraFontFamilies = array_values(array_unique(array_filter([$gfHeading[2] ?? null, $gfBody[2] ?? null])));
     $scale = (float) ($typo['scale'] ?? 1.0);
     $gap = match ($tokens['spacing'] ?? 'comfortable') { 'compact' => '18px', 'roomy' => '56px', default => '34px' };
@@ -102,6 +115,9 @@
         <link href="https://fonts.googleapis.com/css2?family={{ implode('&family=', $extraFontFamilies) }}&display=swap" rel="stylesheet">
     @endif
     <style>
+        @foreach($teamFonts as $tf)
+        @font-face { font-family: "{!! \Platform\FoodAlchemist\Services\PresentationFontService::familie($tf['family']) !!}"; src: url("{!! str_replace(['"', '\\', '<'], '', (string) $tf['url']) !!}") format("{{ in_array($tf['format'] ?? '', ['woff2', 'woff', 'truetype', 'opentype'], true) ? $tf['format'] : 'woff2' }}"); font-weight: {{ (int) ($tf['weight'] ?? 400) }}; font-style: {{ ($tf['style'] ?? 'normal') === 'italic' ? 'italic' : 'normal' }}; font-display: swap; }
+        @endforeach
         :root {
             --pt-primary: {{ $pal['primary'] ?? '#6d28d9' }};
             --pt-on-primary: {{ $pal['on_primary'] ?? 'white' }};   /* Spec 94: Schrift auf Primärflächen, aus resolveTokens mit Kontrast ≥ 4,5 */

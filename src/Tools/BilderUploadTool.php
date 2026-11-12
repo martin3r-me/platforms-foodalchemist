@@ -25,7 +25,7 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
 {
     use DateiAusArgumenten;
 
-    private const ZIELE = ['angebot_cover', 'angebot_logo', 'gericht_foto', 'konzept_bild', 'design_block'];
+    private const ZIELE = ['angebot_cover', 'angebot_logo', 'angebot_bild', 'gericht_foto', 'konzept_bild', 'design_block'];
 
     public function getName(): string
     {
@@ -36,7 +36,8 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Lädt ein Bild hoch (datei.base64 – auch data-URL – ODER datei.url, max. 15 MB, nur Bilder) und weist es zu. '
             . 'ziel: angebot_cover / angebot_logo (id = Angebots-Id; erscheint im Cover der Angebots-Präsentation nach erneutem Veröffentlichen), '
-            . 'gericht_foto (id = Gericht-/Rezept-Id; sichtbar mit Design-Option show_dish_photos), konzept_bild (id = Konzept-Id), '
+            . 'angebot_bild (id = Angebots-Id, nummer 1–3; erscheint in image-Blöcken des Designs mit style.quelle=angebot_<nummer>), '
+            . 'gericht_foto (id = Gericht-/Rezept-Id; sichtbar mit Design-Option show_dish_photos, auch im Angebot), konzept_bild (id = Konzept-Id), '
             . 'design_block (ohne id; liefert context_file_id + path für einen image-Block in presentation_designs layout_json: style{context_file_id, path}). '
             . 'Ersetzt ein vorhandenes Bild am Ziel.';
     }
@@ -48,6 +49,7 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'ziel' => ['type' => 'string', 'enum' => self::ZIELE, 'description' => 'Wohin das Bild gehört.'],
                 'id' => ['type' => 'integer', 'description' => 'Angebots-/Gericht-/Konzept-Id (nicht bei design_block).'],
+                'nummer' => ['type' => 'integer', 'enum' => [1, 2, 3], 'description' => 'Nur bei angebot_bild: Präsentationsbild 1, 2 oder 3.'],
                 'datei' => [
                     'type' => 'object',
                     'description' => 'Bilddatei: base64 (auch data:image/…;base64,…) ODER url (http/https), dazu optional name.',
@@ -77,7 +79,7 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('id ist für ziel=' . $ziel . ' Pflicht.', 'VALIDATION_ERROR');
         }
         $guard = match ($ziel) {
-            'angebot_cover', 'angebot_logo' => $this->guardOwned($team, FoodAlchemistAngebot::class, $id, 'Angebot'),
+            'angebot_cover', 'angebot_logo', 'angebot_bild' => $this->guardOwned($team, FoodAlchemistAngebot::class, $id, 'Angebot'),
             'gericht_foto' => $this->guardOwned($team, FoodAlchemistRecipe::class, $id, 'Gericht'),
             'konzept_bild' => $this->guardOwned($team, FoodAlchemistConcept::class, $id, 'Konzept'),
             default => null,
@@ -95,7 +97,16 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 return ToolResult::error('Nur Bilddateien (image/*) erlaubt, erkannt: ' . $datei->getMimeType() . '.', 'VALIDATION_ERROR');
             }
 
+            $nummer = (int) ($arguments['nummer'] ?? 0);
+            if ($ziel === 'angebot_bild' && ($nummer < 1 || $nummer > 3)) {
+                return ToolResult::error('nummer (1–3) ist für ziel=angebot_bild Pflicht.', 'VALIDATION_ERROR');
+            }
             [$contextFileId, $pfad] = match ($ziel) {
+                'angebot_bild' => (function () use ($team, $id, $nummer, $datei) {
+                    $m = app(AngebotService::class)->storePraesentationsBild($team, $id, $nummer, $datei);
+
+                    return [$m['context_file_id'], $m['path']];
+                })(),
                 'angebot_cover' => $this->angebotBild($team, $id, fn () => app(AngebotService::class)->storeCover($team, $id, $datei), 'cover_context_file_id'),
                 'angebot_logo' => $this->angebotBild($team, $id, fn () => app(AngebotService::class)->storeLogo($team, $id, $datei), 'logo_context_file_id'),
                 'gericht_foto' => $this->nachSpeichern(fn () => app(RecipeService::class)->storeDishImage($team, $id, $datei),
@@ -122,7 +133,7 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'context_file_id' => $contextFileId !== null ? (int) $contextFileId : null,
             'path' => $pfad,
             'url' => app(FoodAlchemistMediaService::class)->url($contextFileId !== null ? (int) $contextFileId : null, $pfad),
-            'hinweis' => in_array($ziel, ['angebot_cover', 'angebot_logo'], true)
+            'hinweis' => in_array($ziel, ['angebot_cover', 'angebot_logo', 'angebot_bild'], true)
                 ? 'Im öffentlichen Link sichtbar nach erneutem Veröffentlichen (foodalchemist.angebot_presentation.PUBLISH).' : null,
         ], fn ($v) => $v !== null));
     }

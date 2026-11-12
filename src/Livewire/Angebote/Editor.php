@@ -171,6 +171,9 @@ class Editor extends Component
 
     public $coverUpload = null;
 
+    /** Freie Präsentationsbilder 1–3 (image-Block im Design mit quelle=angebot_N). Index = Nummer. */
+    public array $praesBildUpload = [1 => null, 2 => null, 3 => null];
+
     public ?int $brandingLoadedId = null;
 
     public ?string $brandingFehler = null;
@@ -1249,6 +1252,35 @@ class Editor extends Component
             $this->brandingFehler = $e->getMessage();
         }
         $this->reset($prop);
+    }
+
+    public function updatedPraesBildUpload($wert, $schluessel): void
+    {
+        $nr = (int) $schluessel;
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {   // wie uploadGesperrt, aber für den Array-Slot
+            $this->praesBildUpload[$nr] = null;
+            $this->sperreAbgewiesen('updatedPraesBildUpload');
+
+            return;
+        }
+        $this->brandingFehler = null;
+        if ($this->selectedId === null || $nr < 1 || $nr > 3 || ($this->praesBildUpload[$nr] ?? null) === null) {
+            return;
+        }
+        $this->validate(["praesBildUpload.{$nr}" => 'image|max:8192'], [], ["praesBildUpload.{$nr}" => "Präsentationsbild {$nr}"]);
+        try {
+            app(AngebotService::class)->storePraesentationsBild($this->team(), $this->selectedId, $nr, $this->praesBildUpload[$nr]);
+        } catch (\RuntimeException $e) {
+            $this->brandingFehler = $e->getMessage();
+        }
+        $this->praesBildUpload[$nr] = null;
+    }
+
+    public function praesBildEntfernen(int $nr, AngebotService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $svc->clearPraesentationsBild($this->team(), $this->selectedId, $nr);
+        }
     }
 
     public function brandingLogoEntfernen(AngebotService $svc): void
