@@ -238,8 +238,12 @@ class VocabularyService
      * Sub-Kategorie-Übersicht (#371): verwaltete Einträge (anlegbar) + vorhandene GP-Freitext-
      * werte (Bestand), gemerged je Warengruppe. Felder bleiben `sub_category` + `n` (GP-Zähler)
      * UI-kompatibel; `managed_id` markiert verwaltete Einträge.
+     *
+     * `$nurVerwaltet` (Dominique 12.11.2026): Auswahlfelder und KI-Vorgaben im GP-Editor bieten NUR die verwaltete Liste aus den Einstellungen an —
+     * GP-Freitextwerte daneben erzeugten Doppelungen („Brot & Brötchen“ + „09.1 Brot & Brötchen“). Die Einstellungs-Übersicht zeigt weiter beides,
+     * damit Freitextwerte dort sichtbar bleiben und übernommen werden können.
      */
-    public function listSubCategories(Team $team, ?string $warengruppeCode = null): \Illuminate\Support\Collection
+    public function listSubCategories(Team $team, ?string $warengruppeCode = null, bool $nurVerwaltet = false): \Illuminate\Support\Collection
     {
         $gpRows = FoodAlchemistGp::visibleToTeam($team)
             ->whereNotNull('sub_category')
@@ -264,6 +268,9 @@ class VocabularyService
                 'n' => (int) ($counts[$key]->n ?? 0),
                 'managed_id' => $m->id,
             ]);
+        }
+        if ($nurVerwaltet) {
+            return $out;
         }
         foreach ($gpRows->sortBy('sub_category') as $r) {  // Bestands-Freitextwerte (noch nicht verwaltet)
             $key = $r->commodity_group_code.'|'.$r->sub_category;
