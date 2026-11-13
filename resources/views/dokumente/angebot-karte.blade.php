@@ -2,11 +2,16 @@
 <html lang="de">
 @php($pdf = $istPdf ?? false)
 {{-- #380 Composer: Angebots-„Karte" — schöne Kundenausgabe im Foodbook-Look (Kapitel + Format-Editionen
-     als Gäste-Menü + Preis-Footer netto/MwSt/brutto). Fixe Marken-Violett; DomPDF-safe. --}}
-@php($brand = '#6d28d9')
-@php($band = $brand)
-@php($footerText = 'Erstellt mit Food Alchemist')
-@php($brandRgb = [0.427, 0.157, 0.851])
+     als Gäste-Menü + Preis-Footer netto/MwSt/brutto). Marken-Tokens je Angebot (AngebotService::brandingDaten)
+     mit Defaults; DomPDF: kein var(), Farben per Blade-Echo, Bilder base64. --}}
+@php($marke = ($branding ?? []) + \Platform\FoodAlchemist\Services\AngebotService::BRANDING_STANDARD)
+@php($brand = $marke['color'])
+@php($band = $marke['band'] ?: $brand)
+@php($footerText = $marke['footer'] ?: 'Erstellt mit Food Alchemist')
+@php($bcHex = ltrim($brand, '#'))
+@php($brandRgb = strlen($bcHex) === 6
+    ? [round(hexdec(substr($bcHex, 0, 2)) / 255, 3), round(hexdec(substr($bcHex, 2, 2)) / 255, 3), round(hexdec(substr($bcHex, 4, 2)) / 255, 3)]
+    : [0.427, 0.157, 0.851])
 @php($kapitelListe = $komposition['kapitel'] ?? [])
 @php($nf = fn ($v) => number_format((float) $v, 2, ',', '.'))
 <head>
@@ -18,11 +23,17 @@
         body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.55; margin: 0; padding: 0; }
         .doc { max-width: {{ $pdf ? 'none' : '680px' }}; margin: 0 auto; padding: {{ $pdf ? '0' : '2.4cm 1.5cm 1.7cm 1.5cm' }}; }
 
-        .band-top { {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }} height: 1.4cm; background: {{ $band }}; color: #fff; padding: 0 1.5cm; }
-        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+        .band-top { {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }} height: 1.4cm; background: {{ $band }}; color: {{ $marke['on_band'] }}; padding: 0 1.5cm; }
+        /* KEIN float in den fixed-Bändern (DomPDF-Paginierung, siehe foodbook.blade.php): im PDF Block/absolut. */
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'float: left; line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .92; }
+        .band-top .bt-logo { {{ $pdf ? 'position: absolute; right: 1.5cm; top: 0.28cm;' : 'float: right;' }} }
+        .band-top .bt-logo img { max-height: 0.85cm; max-width: 5cm; {{ $pdf ? '' : 'margin-top: 0.28cm;' }} }
         .band-bottom { {{ $pdf ? 'position: fixed; bottom: -1.7cm; left: -1.5cm; width: 21cm;' : '' }} height: 1.0cm; border-top: 2px solid {{ $brand }}; color: #9ca3af; font-size: 9px; padding: 0 1.5cm; }
         .band-bottom .bb-foot { {{ $pdf ? 'display: block;' : '' }} line-height: 1.0cm; }
 
+        .cover-logo { max-height: 1.8cm; max-width: 8cm; margin-bottom: .6cm; }
+        .cover-photo { margin: 12px 0 4px; }
+        .cover-photo img { max-width: 100%; max-height: 9cm; border-radius: 6px; }
         .cover-kicker { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6b7280; }
         .cover-title { font-size: 30px; font-weight: bold; color: #111827; margin: 4px 0 2px; }
         .cover-rule { height: 4px; width: 4.5cm; background: {{ $brand }}; margin: 14px 0 12px; border-radius: 2px; }
@@ -51,14 +62,17 @@
         .alt { color: #6b7280; font-size: 10px; margin-top: 6px; }
 
         .actions { margin-bottom: 18px; }
-        .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
+        .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: {{ $marke['on_color'] }}; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } }
     </style>
 </head>
 <body>
 
-<div class="band-top"><span class="bt-label">Angebot — {{ $titel }}</span></div>
+<div class="band-top">
+    <span class="bt-label">Angebot — {{ $titel }}</span>
+    @if($marke['logo'])<span class="bt-logo"><img src="{{ $marke['logo'] }}" alt=""></span>@endif
+</div>
 <div class="band-bottom"><span class="bb-foot">{{ $footerText }}</span></div>
 
 <div class="doc">
@@ -70,6 +84,7 @@
         </div>
     @endunless
 
+    @if($marke['logo'])<img class="cover-logo" src="{{ $marke['logo'] }}" alt="">@endif
     <div class="cover-kicker">{{ $angebot->occasion ?: 'Angebot' }}</div>
     <div class="cover-title">{{ $titel }}</div>
     <div class="cover-rule"></div>
@@ -80,6 +95,7 @@
         @if($pax > 0)<strong>Gäste:</strong> {{ $pax }} · @endif
         @if($angebot->valid_until)<strong>Gültig bis:</strong> {{ $angebot->valid_until->format('d.m.Y') }}@endif
     </div>
+    @if($marke['cover'])<div class="cover-photo"><img src="{{ $marke['cover'] }}" alt=""></div>@endif
 
     {{-- Spec 94b: Positionen nach Aufwand stehen unter der Summe (geschätzt, nicht im Gesamt); reine Aufwand-Kapitel entfallen oben --}}
     @php($zzglKarte = collect($kapitelListe)->flatMap(fn ($k) => collect($k['bloecke'] ?? [])->filter(fn ($b) => $b['aufwand'] ?? false))->values())

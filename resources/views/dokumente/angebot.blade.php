@@ -1,5 +1,8 @@
 <!DOCTYPE html>
 <html lang="de">
+{{-- Marken-Tokens je Angebot (AngebotService::brandingDaten) mit Defaults; DomPDF: kein var(), Farben per Blade-Echo, Logo base64. --}}
+@php($marke = ($branding ?? []) + \Platform\FoodAlchemist\Services\AngebotService::BRANDING_STANDARD)
+@php($brand = $marke['color'])
 <head>
     <meta charset="utf-8">
     <title>Angebot — {{ $angebot->name }}</title>
@@ -7,17 +10,18 @@
         * { box-sizing: border-box; }
         body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.55; margin: 0; padding: 32px; }
         .doc { max-width: 720px; margin: 0 auto; }
-        .head { border-bottom: 2px solid #6d28d9; padding-bottom: 12px; margin-bottom: 16px; }
+        .head { border-bottom: 2px solid {{ $brand }}; padding-bottom: 12px; margin-bottom: 16px; }
+        .head-logo { max-height: 1.6cm; max-width: 7cm; margin-bottom: 10px; }
         h1 { font-size: 22px; margin: 0 0 4px; color: #111827; }
         .sub { color: #6b7280; }
         table.meta { width: 100%; border-collapse: collapse; margin: 12px 0 20px; }
         table.meta td { padding: 2px 8px 2px 0; vertical-align: top; }
         table.meta .k { color: #6b7280; width: 130px; }
         .menue { margin-bottom: 14px; }
-        .menue h2 { font-size: 14px; color: #6d28d9; margin: 0 0 4px; border-bottom: 1px solid #ececec; padding-bottom: 3px; }
+        .menue h2 { font-size: 14px; color: {{ $brand }}; margin: 0 0 4px; border-bottom: 1px solid #ececec; padding-bottom: 3px; }
         .pos { padding: 1px 0; }
         .pos .role { color: #9ca3af; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
-        .preis { margin-top: 20px; border-top: 2px solid #6d28d9; padding-top: 10px; }
+        .preis { margin-top: 20px; border-top: 2px solid {{ $brand }}; padding-top: 10px; }
         .preis table { width: 100%; border-collapse: collapse; }
         .preis td { padding: 4px 0; }
         .preis .total { font-size: 18px; font-weight: bold; color: #111827; }
@@ -25,7 +29,7 @@
         .note { margin-top: 16px; }
         .foot { margin-top: 28px; color: #9ca3af; font-size: 10px; border-top: 1px solid #ececec; padding-top: 10px; }
         .actions { margin-bottom: 18px; }
-        .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
+        .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: {{ $marke['on_color'] }}; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } body { padding: 0; } }
     </style>
@@ -40,6 +44,7 @@
     @endunless
 
     <div class="head">
+        @if($marke['logo'])<img class="head-logo" src="{{ $marke['logo'] }}" alt=""><br>@endif
         <h1>Angebot</h1>
         <div class="sub">{{ $angebot->name }}</div>
     </div>
@@ -101,7 +106,7 @@
     @endif
 
     <div class="foot">
-        Erstellt mit Food Alchemist
+        {{ $marke['footer'] ?: 'Erstellt mit Food Alchemist' }}
         @if($angebot->valid_until) · gültig bis {{ $angebot->valid_until->format('d.m.Y') }}@endif
     </div>
 </div>

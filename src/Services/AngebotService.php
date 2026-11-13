@@ -423,6 +423,7 @@ class AngebotService
             'menues' => $menues,
             'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
             'kontakt' => $angebot->crmContact?->display_name,
+            'branding' => $this->brandingDaten($angebot),
             // Spec 94b: Positionen (Menge × Satz) ohne EK — in der Summe (positionen) bzw. zzgl. nach Aufwand (zzgl, unter der Summe)
             ...collect(\Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::visibleToTeam($team)->where('type', 'position')->where('visible', true)
                 ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))->with('unit')->orderBy('position')->get())
@@ -553,6 +554,41 @@ class AngebotService
             'brutto_gesamt' => round($nettoGesamt * (1 + $satz / 100), 2),
             'pax' => (int) $kalk['pax'],
             'vk_pro_person' => (float) $kalk['vk_pro_person'],
+            'branding' => $this->brandingDaten($angebot),
+        ];
+    }
+
+    /** Rückfall der Druck-Views, wenn kein Branding übergeben wird (Farben stehen hier, nicht in der View). */
+    public const BRANDING_STANDARD = ['color' => '#6d28d9', 'on_color' => '#ffffff', 'band' => '#6d28d9', 'on_band' => '#ffffff', 'logo' => null, 'cover' => null, 'footer' => null];
+
+    /**
+     * Marken-Tokens für Angebotskarte und Angebotsdokument (Druck-HTML und PDF) — spiegelt
+     * FoodbookService::brandingDaten. Logo/Titelbild als base64-Data-URI (DomPDF lädt keine http-URLs).
+     *
+     * Linien, Etiketten und Seitenzahl stehen auf weißem Papier. Eine sehr helle Markenfarbe (zum
+     * Beispiel Weiß) wäre dort unsichtbar: dann trägt die Bandfarbe die Linien, sonst ein neutrales
+     * Grau. Die Schrift auf Band und Knopf nimmt Weiß oder Dunkel, je nachdem was besser lesbar ist.
+     *
+     * @return array{color:string, on_color:string, band:string, on_band:string, logo:?string, cover:?string, footer:?string}
+     */
+    public function brandingDaten(FoodAlchemistAngebot $angebot): array
+    {
+        $marke = ($angebot->brand_color ?? '') !== '' ? (string) $angebot->brand_color : self::BRANDING_STANDARD['color'];
+        $band = ($angebot->band_color ?? '') !== '' ? (string) $angebot->band_color : $marke;
+        $kontrast = fn (string $a, string $b): float => PresentationDesignService::kontrast($a, $b) ?? 21.0;
+        $sichtbar = fn (string $farbe): bool => $kontrast($farbe, '#ffffff') >= 1.5;
+        $schrift = fn (string $grund): string => $kontrast($grund, '#ffffff') >= $kontrast($grund, '#1f2937') ? '#ffffff' : '#1f2937';
+        $linie = $sichtbar($marke) ? $marke : ($sichtbar($band) ? $band : '#374151');
+        $media = app(FoodAlchemistMediaService::class);
+
+        return [
+            'color' => $linie,
+            'on_color' => $schrift($linie),
+            'band' => $band,
+            'on_band' => $schrift($band),
+            'logo' => $media->dataUri($angebot->logo_context_file_id, $angebot->logo_path),
+            'cover' => $media->dataUri($angebot->cover_context_file_id, $angebot->cover_image_path),
+            'footer' => ($angebot->footer_text ?? '') !== '' ? (string) $angebot->footer_text : null,
         ];
     }
 
