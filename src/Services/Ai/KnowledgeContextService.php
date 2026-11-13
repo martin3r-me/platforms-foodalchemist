@@ -594,16 +594,16 @@ class KnowledgeContextService
      *
      * Bei $team === null bleibt genau der globale Seed übrig — nicht alles, nicht nichts.
      */
-    /**
-     * Die sichtbaren Dossiers als Abfrage-Basis — EINE Stelle für „was darf dieses Team sehen".
-     *
-     * Öffentlich, damit Aufrufer ausserhalb dieses Services (Datenwerk-Auflösung per MCP)
-     * dieselbe Regel benutzen statt sie abzuschreiben. Die Sichtbarkeit dreimal zu
-     * formulieren ist genau das Muster, das Spec 52 abbaut.
-     */
+    /** Sichtbare Dossiers als Abfrage-Basis (§13 H) — EINE Stelle für „was darf dieses Team sehen", statt sie abzuschreiben (Spec 52). */
     public function sichtbareDokumente(?Team $team): \Illuminate\Database\Query\Builder
     {
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team));
+    }
+
+    /** MCP-Leseweg (Entscheid 13.11.2026): wie oben plus Plattform-Regelwerke/-Abläufe für jedes Team ({@see WissensSichtbarkeit::mcpLesbar()}). Nie für die Oberfläche. */
+    public function mcpLesbareDokumente(?Team $team): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('foodalchemist_knowledge_documents')->tap(WissensSichtbarkeit::aktiv() ? static fn ($q) => WissensSichtbarkeit::mcpLesbar($q, 'team_id', $team) : $this->nurSichtbar($team));
     }
 
     /**
@@ -1972,7 +1972,7 @@ class KnowledgeContextService
      * Volltext-leichte Suche über den Wissens-Bestand: Token-Treffer in
      * slug/titel + Alias-Treffer (gewichtet).
      *
-     * Team-Sicht seit Spec 82 §13 H: eigene Kette + globales Wissen nur für Master-Team/Unter-Teams (`nurLesbar`, siehe Klassen-Docblock).
+     * Team-Sicht: §13 H (eigene Kette, global nur Master-Familie) + seit 13.11.2026 Plattform-Regelwerke/-Abläufe ({@see mcpLesbareDokumente()}).
      * (Früher: kein Team-Filter, MANDANTEN-INVARIANTE.)
      * Präzisierung gegenüber der früheren Fassung („der Bestand ist global"): die
      * Zeilen sind NICHT `team_id NULL`, sondern tragen zu 99 % den Kurator (Team 6).
@@ -1983,7 +1983,7 @@ class KnowledgeContextService
      */
     public function searchDocuments(?Team $team, string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
     {
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
+        $base = $this->mcpLesbareDokumente($team)
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
             ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie));
@@ -2009,13 +2009,13 @@ class KnowledgeContextService
         $limit = max(1, min(200, $limit));
         $offset = max(0, $offset);
 
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
+        $base = $this->mcpLesbareDokumente($team)
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->when($kategorie !== null, fn ($q) => $q->where('category', $kategorie));
 
         $total = (clone $base)->count();
-        $categories = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
+        $categories = $this->mcpLesbareDokumente($team)
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
@@ -2161,10 +2161,10 @@ class KnowledgeContextService
         return trim($s);
     }
 
-    /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht). */
+    /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht) — MCP-Leseweg ({@see mcpLesbareDokumente()}). */
     public function getDocument(?Team $team, string $slug): ?object
     {
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
+        return $this->mcpLesbareDokumente($team)
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
             ->first(['id', 'slug', 'title', 'category', 'anchor_id', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
     }

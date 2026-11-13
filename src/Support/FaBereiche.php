@@ -169,7 +169,7 @@ final class FaBereiche
     /**
      * Lese-Tools des Wissens bleiben im Bereich `wissen`, auch wenn ihre Ressource sonst zur `wissensbasis` (nur Master) gehört:
      * die KI eines Mandanten liest darüber Vorgangs-Anleitungen, Anker-Wissen und die Regelwerks-Wirkung. Was sie sieht, regelt
-     * {@see \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit} (Mandant: nur Ablauf-Dossiers, kein Regelwerk-Volltext).
+     * {@see \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit} (Mandant per MCP: Regelwerke und Abläufe des Masters seit Entscheid 13.11.2026, sonst nur die eigene Kette).
      */
     public const TOOLS_WISSEN_LESEN = [
         'foodalchemist.knowledge.GET', 'foodalchemist.knowledge.LIST', 'foodalchemist.knowledge.SEARCH',

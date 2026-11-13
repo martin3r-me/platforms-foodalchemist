@@ -81,14 +81,12 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             if (! array_key_exists($promptKey, (array) config('foodalchemist.prompts', []))) {
                 return ToolResult::error('Unbekannter prompt_key «' . $promptKey . '».', 'VALIDATION_ERROR');
             }
-            if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team)) {
-                return ToolResult::success([
-                    'prompt_key' => $promptKey, 'role' => $role, 'quelle' => 'nicht_lesbar', 'dokumente' => [],
-                    'hinweis' => 'Der Kanon dieses Arbeitsschritts ist Plattform-Wissen: Er wirkt im Generator-Prompt, ist für dieses Team aber nicht lesbar.',
-                ]);
-            }
-            $docs = $team !== null
-                ? app(KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team, $role)
+            // Entscheid 13.11.2026: Regelwerke sind per MCP für jedes Team lesbar. Der Mandant liest den Kanon mit den Augen des
+            // Master-Teams, gefiltert auf die MCP-lesbaren Kategorien (Regelwerk, Ablauf) — dieselbe Auswahl wie der Master.
+            $leser = \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mcpLeseTeam($team);
+            $docs = $leser !== null
+                ? app(KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $leser, $role)
+                    ->filter(fn ($d) => \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mcpKategorieLesbar($team, $d->category))->values()
                 : collect();
 
             if ($docs->isEmpty()) {
@@ -96,6 +94,12 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 // DENSELBEN Kanon und antwortet also genauso leer. Der Agent lief im Kreis und
                 // hielt „schau woanders" für „es gibt etwas". Jetzt wird das Routing wirklich
                 // aufgelöst, und wo nichts ist, steht `ungesteuert`.
+                // Routing-Konfiguration und Alt-Bindungen bleiben Steuer-Sicht des Masters (§13 H) — der Mandant erfährt nur „keins".
+                if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team)) {
+                    return ToolResult::success(['prompt_key' => $promptKey, 'role' => $role, 'quelle' => 'keine', 'dokumente' => [],
+                        'hinweis' => 'Für diesen Arbeitsschritt ist kein lesbares Regelwerk hinterlegt.']);
+                }
+
                 return ToolResult::success(
                     ['prompt_key' => $promptKey, 'role' => $role]
                     + $this->routingAuskunft($promptKey)

@@ -45,7 +45,7 @@ class SignalCauseService
      * (frische Installation ohne Wissens-Import), bleibt der §-Text stehen und der Link
      * entfällt — ein toter Link wäre schlechter als keiner.
      */
-    private const NAMING_PARAGRAPHEN = [
+    public const NAMING_PARAGRAPHEN = [
         'leerraum' => [
             'paragraph' => 'Regelwerk Basisrezepte, Abschnitt 1 (Benennung)',
             'slug' => 'regelwerk.regelwerk_basisrezepte',

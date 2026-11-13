@@ -28,7 +28,8 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             . 'Zutaten optional direkt mit: pro Zeile name + quantity + unit (Slug, z. B. g/kg/ml/stk) und '
             . 'gp_id ODER referenced_recipe_id (XOR; vorher via foodalchemist.gps.MATCH erden — ungematcht nur als Ausnahme). '
             . 'Yield/Allergene/EK werden automatisch aggregiert. Freigabe (approved) macht nur ein Mensch im Editor.'
-            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="basisrezept_anlegen").';
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="basisrezept_anlegen").'
+            . ' Bei is_sales_recipe=true (Gericht, besser verkaufsrezepte.POST): Name = [HG] Leitkomponente | Baustein | Baustein … (VK §1), z. B. „[HG] Rinderfilet | Portwein-Jus | Selleriepüree“. Nicht in den Namen: Gefäß/Darreichung, Deko, Öle, Garnitur, Herkunft, Diät-Tags, Grammatur, Marketingname, Füllwörter (mit, auf).';
     }
 
     public function getSchema(): array
@@ -171,7 +172,11 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                     : '')
                 . 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
                 . ($standardForm !== null ? ' Standard-Darreichung (Form „unbestimmt") angelegt — Servierform kuratieren.' : ''),
-        ], $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
+        ] + ($recipe->is_sales_recipe ? [
+            // Agentenpfad 13.11.2026: Gericht-Name gegen VK §1 (warnen, nicht blockieren) + Weg zum fertigen Gericht.
+            'warnungen' => $this->gerichtNamensWarnungen($team, (int) $recipe->id, (string) $recipe->name),
+            'naechste_schritte' => $this->gerichtNaechsteSchritte($context, $team, (int) $recipe->id),
+        ] : []), $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
     }
 
     public function getMetadata(): array

@@ -319,6 +319,34 @@ class RecipeConformanceAdapter implements ConformanceAdapter
     }
 
     /**
+     * VK-Name gegen die AKTIVEN Regeln vk.1.1.* (Kürzel, Bausteine) und alle Regeln mit Ziel `vk.name` (vk.1.2.marker/diaet/
+     * fuellwoerter …). Eine Stelle für Conformance-Check und Anlege-Warnung der MCP-Tools (13.11.2026, Agentenpfad) — keine Kopie.
+     *
+     * @return list<array{paragraph: ?string, schweregrad: string, begruendung: string, vorschlag: ?string, treffer: ?string, rule_id: int, schluessel: string}>
+     */
+    public static function vkNamensBefunde(string $name): array
+    {
+        $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
+        $buch = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::class;
+        $out = [];
+        if (($hg = $buch::falls('vk.1.1.hg')) !== null) {
+            $code = preg_match('/^\[([^\]]+)\]/u', $name, $m) === 1 ? $m[1] : '';
+            array_push($out, ...($code === '' ? [['paragraph' => $hg->paragraph, 'schweregrad' => 'hart', 'begruendung' => 'Hauptgruppen-Kürzel in eckigen Klammern fehlt, z. B. „[HG] …" (§1.1).',
+                'vorschlag' => null, 'treffer' => null, 'rule_id' => (int) $hg->id, 'schluessel' => (string) $hg->schluessel]] : $motor->pruefe($hg, $code)));
+        }
+        if (($bs = $buch::falls('vk.1.1.bausteine')) !== null) {
+            $rest = trim((string) preg_replace('/^\[[^\]]+\]\s*/u', '', $name));
+            $anzahl = count(array_filter(array_map('trim', explode('|', $rest)), static fn ($t) => $t !== ''));
+            array_push($out, ...$motor->pruefe($bs, (string) $anzahl));
+        }
+        foreach ($buch::fuerZiel('vk.name') as $regel) {
+            array_push($out, ...$motor->pruefe($regel, $name));
+        }
+
+        return $out;
+    }
+
+    /**
      * Spec 81 Paket 7 — Regeln als Daten für Verkaufsgerichte (Name §1.1/§1.2, Schritte §3.8) und Kostformen
      * (vegan/vegetarisch ausgelobt → ausgeschlossene Zutaten). Jede Regel greift nur, wenn sie aktiv ist.
      *
@@ -343,19 +371,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         $name = (string) $r->name;
 
         if ($r->is_sales_recipe) {
-            if (($hg = $buch::falls('vk.1.1.hg')) !== null) {
-                $code = preg_match('/^\[([^\]]+)\]/u', $name, $m) === 1 ? $m[1] : '';
-                $melde($code === '' ? [['paragraph' => $hg->paragraph, 'schweregrad' => 'hart', 'begruendung' => 'Hauptgruppen-Kürzel in eckigen Klammern fehlt, z. B. „[HG] …" (§1.1).',
-                    'vorschlag' => null, 'rule_id' => $hg->id]] : $motor->pruefe($hg, $code), 'name');
-            }
-            if (($bs = $buch::falls('vk.1.1.bausteine')) !== null) {
-                $rest = trim((string) preg_replace('/^\[[^\]]+\]\s*/u', '', $name));
-                $anzahl = count(array_filter(array_map('trim', explode('|', $rest)), static fn ($t) => $t !== ''));
-                $melde($motor->pruefe($bs, (string) $anzahl), 'name');
-            }
-            foreach ($buch::fuerZiel('vk.name') as $regel) {
-                $melde($motor->pruefe($regel, $name), 'name');
-            }
+            $melde(self::vkNamensBefunde($name), 'name');
             if (($sm = $buch::falls('vk.3.8.schritt_mengen')) !== null) {
                 foreach ([...$r->steps()->get(['position', 'text']), ...$r->platingSteps()->get(['position', 'text'])] as $schritt) {
                     $melde($motor->pruefe($sm, (string) $schritt->text), 'schritt:' . $schritt->position);

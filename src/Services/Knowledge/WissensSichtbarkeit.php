@@ -24,6 +24,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  *
  * Notbremse: `foodalchemist.knowledge_master_regel` = false stellt die alte Regel wieder her (Lesen wie Prompt, dann gilt allein
  * `knowledge_team_scope`).
+ *
+ * ENTSCHEID Dominique 13.11.2026 (Agentenpfad): „Mandanten dürfen über Agenten keine schlechtere Qualität bekommen als der Master."
+ * Ein Agent hatte für Broich.Catering 9 Gerichte angelegt, ohne die Namenssyntax zu kennen — das VK-Regelwerk war für ihn per MCP
+ * unlesbar. Darum gibt es neben {@see lesbar()} den engeren MCP-Lesepfad {@see mcpLesbar()}: Plattform-Dokumente (global oder
+ * Master-Team) der Kategorien {@see MCP_LESBARE_KATEGORIEN} liest per MCP JEDES Team. Spec 82 §13 H bleibt sonst gültig:
+ * Wissens-Browser, Livewire-Ansichten und Export laufen weiter über {@see lesbar()} / {@see lesbarOderAlt()} und zeigen Mandanten
+ * diese Dokumente NICHT; Schreiben bleibt Master ({@see mayWrite()}, {@see darfWissenPflegen()}); alle anderen Kategorien bleiben
+ * auch per MCP gesperrt.
  */
 final class WissensSichtbarkeit
 {
@@ -94,6 +102,60 @@ final class WissensSichtbarkeit
                 });
             }
         });
+    }
+
+    /**
+     * Entscheid 13.11.2026: Kategorien, die Agenten JEDES Teams per MCP lesen (Regelwerke = wie man etwas anlegt, Abläufe = in welcher
+     * Reihenfolge). Nur für die MCP-Lesewege (`knowledge.GET/LIST/SEARCH`, `ablauf.GET`, `regelwerk.GET`), nie für die Oberfläche.
+     */
+    public const MCP_LESBARE_KATEGORIEN = ['regelwerk', 'workflow'];
+
+    /**
+     * MCP-Lesefilter (Entscheid 13.11.2026): alles aus {@see lesbar()} PLUS Plattform-Dokumente (global oder Master-Team) der Kategorien
+     * {@see MCP_LESBARE_KATEGORIEN}. Bewusst eine eigene Methode: die Oberfläche ruft sie nie auf, damit bleibt §13 H dort unverändert.
+     *
+     * @template T of \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder
+     * @param  T  $query
+     * @return T
+     */
+    public static function mcpLesbar($query, string $teamIdColumn, ?Team $team)
+    {
+        $praefix = str_contains($teamIdColumn, '.') ? strstr($teamIdColumn, '.', true) . '.' : '';
+        $master = MasterTeam::id();
+
+        return $query->where(function ($q) use ($teamIdColumn, $team, $praefix, $master) {
+            $q->where(fn ($l) => self::lesbar($l, $teamIdColumn, $team))
+                ->orWhere(function ($p) use ($teamIdColumn, $praefix, $master) {
+                    $p->whereIn($praefix . 'category', self::MCP_LESBARE_KATEGORIEN)
+                        ->where(function ($t) use ($teamIdColumn, $master) {
+                            $t->whereNull($teamIdColumn);
+                            if ($master !== null) {
+                                $t->orWhere($teamIdColumn, $master);
+                            }
+                        });
+                });
+        });
+    }
+
+    /**
+     * Mit wessen Augen liest ein MCP-Aufruf die Regelwerks-AUSWAHL (Kanon bzw. Nachschlage-Dossiers) eines Vorgangs?
+     * Master-Familie (oder Notbremse aus): mit den eigenen. Mandant: mit denen des Master-Teams — er bekommt dieselbe Auswahl wie der
+     * Master, gefiltert auf {@see MCP_LESBARE_KATEGORIEN} (Entscheid 13.11.2026). Ohne konfiguriertes Master-Team: null (nur global).
+     */
+    public static function mcpLeseTeam(?Team $team): ?Team
+    {
+        if (self::darfKanonLesen($team)) {
+            return $team;
+        }
+        $master = MasterTeam::id();
+
+        return $master !== null ? Team::find($master) : null;
+    }
+
+    /** Darf ein Mandant (ohne Kanon-Leserecht) dieses Dokument per MCP lesen? Master-Familie: immer. */
+    public static function mcpKategorieLesbar(?Team $team, ?string $kategorie): bool
+    {
+        return self::darfKanonLesen($team) || in_array((string) $kategorie, self::MCP_LESBARE_KATEGORIEN, true);
     }
 
     /** Wie {@see lesbar()}, aber mit Notbremse: Regel aus = die alte Team-Sicht (`TeamScope::applyVisible`). */

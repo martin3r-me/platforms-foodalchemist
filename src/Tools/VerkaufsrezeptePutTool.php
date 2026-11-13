@@ -29,7 +29,8 @@ class VerkaufsrezeptePutTool extends FoodAlchemistTool implements ToolContract, 
             . 'plating_text, taste_direction, work_time_min, dichteklasse [fluessig|dicht|schuettfaehig|locker], '
             . 'storage_type / storage_types [gekuehlt|tiefgekuehlt|trocken], shelf_life_chilled_days/_frozen_days/_dry_days, …); '
             . 'nur erlaubte Keys werden geschrieben, FKs und Vokabulare geprüft (unbekannter Wert = VALIDATION_ERROR). '
-            . 'Von Hand gesetzte dish_class_id/dichteklasse gelten als Override (source=manual).';
+            . 'Von Hand gesetzte dish_class_id/dichteklasse gelten als Override (source=manual). '
+            . 'Name = [HG] Leitkomponente | Baustein | Baustein … (VK §1), z. B. „[HG] Rinderfilet | Portwein-Jus | Selleriepüree“. Nicht in den Namen: Gefäß/Darreichung, Deko, Öle, Garnitur, Herkunft, Diät-Tags, Grammatur, Marketingname, Füllwörter (mit, auf). Ein geänderter Name wird geprüft, Verstöße kommen als warnungen zurück.';
     }
 
     public function getSchema(): array
@@ -70,11 +71,14 @@ class VerkaufsrezeptePutTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success($this->mitReife([
+        // Agentenpfad 13.11.2026: nur ein mitgeschickter Name wird geprüft (warnen, nicht blockieren) — sonst bliebe jede Preis-Änderung
+        // an einem Altnamen hängen.
+        return ToolResult::success($this->mitReife(array_filter([
             'id' => (int) $r->id,
             'name' => $r->name,
             'status' => $this->statusWert($r),
-        ], $team, (int) $r->id, true));
+            'warnungen' => array_key_exists('name', $felder) ? $this->gerichtNamensWarnungen($team, (int) $r->id, (string) $r->name) : null,
+        ], fn ($x) => $x !== null), $team, (int) $r->id, true));
     }
 
     public function getMetadata(): array

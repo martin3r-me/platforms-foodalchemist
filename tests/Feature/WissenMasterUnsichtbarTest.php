@@ -61,10 +61,14 @@ function slugsAusListe(array $ergebnis): array
     return collect($ergebnis['documents'])->pluck('slug')->sort()->values()->all();
 }
 
-it('★ Mandant liest über Service-Liste/Suche/Einzelabruf 0 Master- und 0 globale Dossiers', function () {
+it('★ Mandant liest über Service-Liste/Suche/Einzelabruf 0 Master- und 0 globale Dossiers (außer Regelwerk/Ablauf)', function () {
     ($this->mitMaster)();
 
-    $liste = slugsAusListe($this->svc->listDocuments($this->childA, null, 0, 100, false));
+    // Entscheid 13.11.2026: Plattform-Regelwerke/-Abläufe sind per MCP für jedes Team lesbar (AgentenpfadRegelnTest) —
+    // die per Migration geseedeten workflow.*-Dossiers gehören darum nicht zum Prüfgegenstand dieses Tests.
+    $ohneMcpKategorien = fn (array $e) => ['documents' => array_values(array_filter($e['documents'],
+        fn ($d) => ! in_array($d['category'], \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::MCP_LESBARE_KATEGORIEN, true)))];
+    $liste = slugsAusListe($ohneMcpKategorien($this->svc->listDocuments($this->childA, null, 0, 100, false)));
     expect($liste)->toBe(['kind-a-dossier', 'mandant-dossier']);
 
     $such = collect($this->svc->searchDocuments($this->childA, 'dossier', null, 50))->pluck('slug')->sort()->values()->all();

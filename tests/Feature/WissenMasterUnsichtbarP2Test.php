@@ -17,6 +17,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Spec 82 §13 H — P2: MCP-Tools (ablauf.GET, regelwerk.GET, Bindings, PREVIEW) und Wissens-Browser.
  * Mandant: liest Ablauf-Anleitungen (art=ablauf), aber kein Regelwerk, keine Dossiers, keine Master-Bindungen, keine Slugs in der Vorschau.
+ * Seit Entscheid 13.11.2026 (Agentenpfad): per MCP liest der Mandant Plattform-Regelwerke und -Abläufe (Kategorien regelwerk/workflow)
+ * — die Oberfläche bleibt bei §13 H (siehe AgentenpfadRegelnTest).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -53,27 +55,28 @@ beforeEach(function () {
     };
 });
 
-it('★ Mandant liest Ablauf-Dossiers (art=ablauf), aber kein Regelwerk und kein Fachdossier', function () {
+it('★ Mandant liest per MCP Ablauf-Dossiers und Regelwerke (Entscheid 13.11.2026), aber kein Fachdossier', function () {
     $k = ($this->als)($this->childA);
     $get = $this->registry->get('foodalchemist.knowledge.GET');
 
     expect($get->execute(['slug' => 'workflow.basisrezept_regeln'], $k)->success)->toBeTrue()
         ->and($get->execute(['slug' => 'workflow.basisrezept_erzeugen'], $k)->success)->toBeTrue()
-        ->and($get->execute(['slug' => 'intern.wissensmodul_schreibrechte'], $k)->success)->toBeFalse()   // art=ablauf ohne Vorgang
-        ->and($get->execute(['slug' => 'regelwerk.basisrezepte_p2'], $k)->success)->toBeFalse()
+        ->and($get->execute(['slug' => 'intern.wissensmodul_schreibrechte'], $k)->success)->toBeTrue()   // Kategorie workflow: per MCP lesbar seit 13.11.
+        ->and($get->execute(['slug' => 'regelwerk.basisrezepte_p2'], $k)->success)->toBeTrue()
         ->and($get->execute(['slug' => 'zutat.fachdossier_p2'], $k)->success)->toBeFalse();
 });
 
-it('★ ablauf.GET liefert dem Mandanten die Anleitung, aber keine lesbare Regelwerks-Liste', function () {
+it('★ ablauf.GET liefert dem Mandanten Anleitung UND Regelwerks-Liste (Entscheid 13.11.2026)', function () {
     $res = $this->registry->get('foodalchemist.ablauf.GET')->execute(['vorgang' => 'basisrezept_anlegen'], ($this->als)($this->childA));
 
     expect($res->success)->toBeTrue()
         ->and(array_column($res->data['dossiers'], 'slug'))->toContain('workflow.basisrezept_regeln', 'workflow.basisrezept_erzeugen')
-        ->and($res->data['regelwerke']['quelle'])->toBe('nicht_lesbar')
-        ->and($res->data['regelwerke']['dokumente'])->toBe([]);
+        ->and($res->data['regelwerke']['quelle'])->toBe('nachschlagen')
+        ->and(array_column($res->data['regelwerke']['dokumente'], 'slug'))->toBe(['regelwerk.basisrezepte_p2']);
 
     $mitWissen = $this->registry->get('foodalchemist.ablauf.GET')->execute(['vorgang' => 'basisrezept_anlegen', 'mit_wissen' => true], ($this->als)($this->childA));
-    expect(json_encode($mitWissen->data))->not->toContain('regelwerk.basisrezepte_p2');
+    expect($mitWissen->data['regelwerke']['dokumente'][0]['text'])->toContain('regelwerk.basisrezepte_p2')
+        ->and(json_encode($mitWissen->data))->not->toContain('zutat.fachdossier_p2');
 });
 
 it('Master-Team bekommt in ablauf.GET weiter die Regelwerks-Auskunft', function () {
@@ -82,11 +85,12 @@ it('Master-Team bekommt in ablauf.GET weiter die Regelwerks-Auskunft', function 
     expect($res->success)->toBeTrue()->and($res->data['regelwerke']['quelle'])->not->toBe('nicht_lesbar');
 });
 
-it('regelwerk.GET: Mandant bekommt „nicht lesbar" (Wirkung bleibt), Master die Auskunft', function () {
+it('regelwerk.GET: Mandant bekommt ohne Kanon „keine" ohne Routing-Steuerdaten, Master die Routing-Auskunft', function () {
     $tool = $this->registry->get('foodalchemist.regelwerk.GET');
 
     $mandant = $tool->execute(['prompt_key' => 'recipe.generator'], ($this->als)($this->childA));
-    expect($mandant->success)->toBeTrue()->and($mandant->data['quelle'])->toBe('nicht_lesbar')->and($mandant->data['dokumente'])->toBe([]);
+    expect($mandant->success)->toBeTrue()->and($mandant->data['quelle'])->toBe('keine')->and($mandant->data['dokumente'])->toBe([])
+        ->and($mandant->data)->not->toHaveKeys(['routing', 'alt_bindungen']);
 
     $master = $tool->execute(['prompt_key' => 'recipe.generator'], ($this->als)($this->master));
     expect($master->data['quelle'] ?? null)->not->toBe('nicht_lesbar');
