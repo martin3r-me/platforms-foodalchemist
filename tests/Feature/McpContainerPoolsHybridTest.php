@@ -7,7 +7,7 @@ use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\FormatService;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Tests\Support\FakeEmbeddingProvider;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -62,12 +62,12 @@ it('Speisekarte-Pool: findet semantisch, wenn das Token nur in der Beschreibung 
 
 it('Angebot/Paket/Format: Pools embedden + Hybrid-SEARCH findet den Datensatz', function () {
     app(AngebotService::class)->create($this->rootTeam, ['name' => 'Galadinner Herbst']);
-    app(PaketService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet Deluxe']);
+    app(ConceptPaketService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet Deluxe']);   // pakete.* = Concepter-Pakete (Concept-Pool)
     app(FormatService::class)->create($this->rootTeam, ['name' => 'Urban Fusion Hub']);
 
     $pools = app(PoolEmbeddingService::class);
     expect($pools->embedAngebote($this->rootTeam->id)['candidates'])->toBeGreaterThanOrEqual(1)
-        ->and($pools->embedPakete($this->rootTeam->id)['candidates'])->toBeGreaterThanOrEqual(1)
+        ->and($pools->embedConcepts($this->rootTeam->id)['candidates'])->toBeGreaterThanOrEqual(1)
         ->and($pools->embedFormate($this->rootTeam->id)['candidates'])->toBeGreaterThanOrEqual(1);
 
     $ang = ($this->run)('foodalchemist.angebote.SEARCH', ['q' => 'Galadinner']);

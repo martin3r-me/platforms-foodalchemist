@@ -135,7 +135,11 @@ class WordingResolver
         return $positionen;
     }
 
-    public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|FoodAlchemistKonfiguratorKonzept|null $block = null): array
+    /**
+     * @param  bool  $mitTexten  Angebot: Text-Blöcke des Konzepts (type=text, title + text_content) als Zeilen `type=text`
+     *                           mitliefern. Default aus, damit Foodbook/Speisekarte/Konfigurator unverändert bleiben.
+     */
+    public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|FoodAlchemistOfferBlock|FoodAlchemistKonfiguratorKonzept|null $block = null, bool $mitTexten = false): array
     {
         // Preisdarstellung (2026-08-25): bei `einzel` trägt jede DIREKTE Gericht-/Package-Zeile ihren
         // eigenen VK (kein Concept-Summenpreis). Die Preise kommen aus der EINEN Preis-Stelle
@@ -169,9 +173,9 @@ class WordingResolver
                 // Wording-Kette gilt AUCH für die Gerichte des eingebetteten Pakets: der Block wird in die
                 // Rekursion durchgereicht, damit foodbook-lokale Overrides (payload_json['wording_overrides']
                 // je Paket-Slot-ID) greifen — sonst blieben Paket-Gerichte beim Kapitel-Wording „Wording fehlt".
-                foreach ($this->gerichtZeilen($paket, $block) as $z) {
+                foreach ($this->gerichtZeilen($paket, $block, $mitTexten) as $z) {
                     $zeilen[] = ['type' => $z['type'], 'text' => $z['text'], 'source' => $z['source'] ?? null,
-                        'einrueckung' => ($z['einrueckung'] ?? 0) + 1] + array_intersect_key($z, ['recipe_id' => true, 'slot_id' => true]);
+                        'einrueckung' => ($z['einrueckung'] ?? 0) + 1] + array_intersect_key($z, ['recipe_id' => true, 'slot_id' => true, 'titel' => true]);
                 }
 
                 continue;
@@ -189,6 +193,15 @@ class WordingResolver
             }
             if (in_array($slot->type, ['header', 'header_preis'], true) && trim((string) $slot->title) !== '') {
                 $zeilen[] = ['type' => 'header', 'text' => (string) $slot->title, 'source' => null, 'einrueckung' => 0];
+
+                continue;
+            }
+            if ($mitTexten && $slot->type === 'text') {
+                $titel = trim((string) $slot->title);
+                $inhalt = trim((string) $slot->text_content);
+                if ($titel !== '' || $inhalt !== '') {
+                    $zeilen[] = ['type' => 'text', 'titel' => $titel !== '' ? $titel : null, 'text' => $inhalt, 'source' => null, 'einrueckung' => 0];
+                }
 
                 continue;
             }

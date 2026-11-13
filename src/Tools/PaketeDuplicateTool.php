@@ -6,9 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Paket duplizieren (Stamm + Gerichte, „(Kopie)"). */
+/** Concepter-Paket duplizieren (Kopie im eigenen Team). */
 class PaketeDuplicateTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,7 +20,7 @@ class PaketeDuplicateTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Dupliziert ein sichtbares Paket (Stamm + Gericht-Positionen) als team-eigene Kopie „(Kopie)".';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Dupliziert ein sichtbares Paket (Stamm + Positionen) als team-eigene Kopie. Bleibt ein Paket.';
     }
 
     public function getSchema(): array
@@ -32,19 +34,18 @@ class PaketeDuplicateTool extends FoodAlchemistTool implements ToolContract, Too
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $id = (int) ($arguments['id'] ?? 0);
-        // Sichtbarkeit reicht (Kopie entsteht im eigenen Team); NOT_FOUND wenn unsichtbar.
-        if (! \Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)->whereKey($id)->exists()) {
-            return ToolResult::error('Paket nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        $paket = $this->paketConcept($team, (int) ($arguments['id'] ?? 0), false);
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
 
         try {
-            $neu = app(PaketService::class)->duplicate($team, $id);
+            $neu = app(ConceptService::class)->duplicate($team, $paket->id);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['paket' => $this->paketPayload($neu), 'source_id' => $id]);
+        return ToolResult::success(['paket' => app(ConceptPaketService::class)->payload($neu), 'source_id' => (int) $paket->id]);
     }
 
     public function getMetadata(): array

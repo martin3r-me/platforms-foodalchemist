@@ -778,6 +778,45 @@ class AngebotService
         return $this->speichereBrandingBild($team, $offerId, $file, 'cover_image_path');
     }
 
+    /**
+     * Freies Präsentationsbild 1–3 des Angebots (für image-Blöcke im Design mit quelle=angebot_N). Ersetzt ein vorhandenes.
+     *
+     * @return array{context_file_id:int, path:string}
+     */
+    public function storePraesentationsBild(Team $team, int $offerId, int $nummer, UploadedFile $file): array
+    {
+        if ($nummer < 1 || $nummer > 3) {
+            throw new \RuntimeException('Präsentationsbild: Nummer 1 bis 3.');
+        }
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+        $bilder = is_array($angebot->presentation_images_json) ? $angebot->presentation_images_json : [];
+        $alt = $bilder[(string) $nummer] ?? null;
+        if (is_array($alt)) {
+            app(FoodAlchemistMediaService::class)->delete($alt['context_file_id'] ?? null, (string) ($alt['path'] ?? ''), $team);
+        }
+        $media = app(FoodAlchemistMediaService::class)->storeImage($file, $team, 'foodalchemist.offer', $offerId, "foodalchemist/offer-branding/{$offerId}");
+        $bilder[(string) $nummer] = ['context_file_id' => $media['context_file_id'], 'path' => $media['path']];
+        $angebot->update(['presentation_images_json' => $bilder]);
+
+        return $media;
+    }
+
+    public function clearPraesentationsBild(Team $team, int $offerId, int $nummer): FoodAlchemistAngebot
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+        $bilder = is_array($angebot->presentation_images_json) ? $angebot->presentation_images_json : [];
+        $alt = $bilder[(string) $nummer] ?? null;
+        if (is_array($alt)) {
+            app(FoodAlchemistMediaService::class)->delete($alt['context_file_id'] ?? null, (string) ($alt['path'] ?? ''), $team);
+        }
+        unset($bilder[(string) $nummer]);
+        $angebot->update(['presentation_images_json' => $bilder !== [] ? $bilder : null]);
+
+        return $angebot->refresh();
+    }
+
     public function clearLogo(Team $team, int $offerId): FoodAlchemistAngebot
     {
         return $this->loescheBrandingBild($team, $offerId, 'logo_path');

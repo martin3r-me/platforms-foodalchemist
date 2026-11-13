@@ -24,7 +24,9 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
     {
         return 'Aktualisiert ein eigenes Präsentations-Design (Tokens/Layout/custom_css/output_types). '
             . 'Nur team-eigene Designs; geerbte/globale sind read-only. Teilfelder: nur mitgeschickte Felder werden geändert. '
-            . 'Freies CSS via custom_css ist möglich (siehe Feld-Beschreibung).';
+            . 'Freies CSS via custom_css ist möglich (siehe Feld-Beschreibung).'
+            . ' Stylbare Klassen: ' . PresentationDesignService::cssKlassenDoc()
+            . ' Schriften: tokens_json.typography.heading/body = Google-Font aus der Whitelist (' . implode(', ', array_keys(PresentationDesignService::GOOGLE_FONTS)) . ').';
     }
 
     public function getSchema(): array

@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
+use Platform\FoodAlchemist\Support\PraesentationsBilder;
 
 /**
  * Spec 43 — Public-Präsentations-Layer (digitales Kundenbuch) für die Ausgabeformen.
@@ -402,6 +403,8 @@ class PresentationService
             'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team), $speiseplanLayout),
             'tokens' => $tokens,
             'custom_css' => $this->designs->resolveCss($designSource, $team),
+            // Eigene Team-Schriften (typography = "team:<Familie>") als eingefrorene Datei-Identifier.
+            'fonts' => app(PresentationFontService::class)->fuerTokens($team, $tokens),
         ];
 
         return [
@@ -776,6 +779,9 @@ class PresentationService
         $kalk = app(AngebotService::class)->kalkulation($team, $angebot, $outlet);
 
         $zzgl = [];   // Spec 94b: Positionen nach Aufwand (unter der Summe)
+        // Gericht-Fotos (Identifier) je recipe_id — Anzeige steuert das Design (show_dish_photos), wie beim Foodbook.
+        // Vorher immer null: der Design-Schalter „Gericht-Fotos zeigen" wirkte beim Angebot nicht.
+        $this->angebotFotos = PraesentationsBilder::gerichtFotos($komp);
         $sections = [];
         foreach ($komp['kapitel'] as $k) {
             $blocks = [];
@@ -856,7 +862,9 @@ class PresentationService
                 'text' => $k['text'] ?? null,
                 'depth' => (int) ($k['depth'] ?? 0),
                 'anker' => (string) ($k['anker'] ?? ''),
-                'image' => null, 'images' => [],
+                // Kapitelbild + Galerie (Identifier; hydrateImages löst sie beim Rendern auf).
+                'image' => $k['bild'] ?? null,
+                'images' => $k['bilder'] ?? [],
                 'blocks' => $blocks,
             ];
         }
@@ -945,18 +953,24 @@ class PresentationService
     {
         $items = [];
         foreach ($gerichte as $g) {
+            $kind = (string) ($g['type'] ?? 'gericht');
             $items[] = [
-                'kind' => (string) ($g['type'] ?? 'gericht'),
+                'kind' => $kind,
                 'label' => (string) ($g['text'] ?? ''),
+                // Text-Block des Konzepts: Titel + Fließtext (label = text_content).
+                'title' => $kind === 'text' ? ($g['titel'] ?? null) : null,
                 'indent' => (int) ($g['einrueckung'] ?? 0),
                 'price' => ($showPrice && ($g['preis'] ?? null) !== null) ? (float) $g['preis'] : null,
                 'codes' => [],
-                'image' => null,
+                'image' => ! empty($g['recipe_id']) ? ($this->angebotFotos[(int) $g['recipe_id']] ?? null) : null,
             ];
         }
 
         return $items;
     }
+
+    /** @var array<int, array{context_file_id:?int, path:?string}> recipe_id → Foto-Identifier (nur während normalizeAngebot) */
+    private array $angebotFotos = [];
 
     /**
      * Live-Vorschau für den Struktur-Builder: rendert den (noch ungespeicherten) Layout-/
@@ -979,6 +993,7 @@ class PresentationService
             'layout' => $this->adaptLayoutForType($type, $this->designs->normalizeLayout($layout), $spMode),
             'tokens' => $tokens,
             'custom_css' => $this->designs->sanitizeCss($customCss),
+            'fonts' => app(PresentationFontService::class)->fuerTokens($team, $tokens),
         ];
 
         return $this->hydrateImages($snapshot);
@@ -1255,14 +1270,28 @@ class PresentationService
         }
 
         // Freier Bild-Block (Struktur-Builder): Identifier in der Layout-Definition → frische URL.
+        // quelle=angebot_1..3 → das gleichnamige Präsentationsbild der Ausgabe (je Angebot setzbar) statt des Design-Bilds;
+        // fehlt es dort, bleibt der Block leer (kein Rückfall aufs Design-Bild — das gehört zu einem anderen Kunden).
+        $eigene = $snapshot['branding']['bilder'] ?? [];
         foreach ($snapshot['resolved_design']['layout'] ?? [] as $i => $block) {
             if (($block['block_type'] ?? '') !== 'image') {
                 continue;
             }
             $st = $block['style'] ?? [];
+            $quelle = (string) ($st['quelle'] ?? 'design');
+            if (preg_match('/^angebot_([1-3])$/', $quelle, $m)) {
+                $st = is_array($eigene[$m[1]] ?? null) ? $eigene[$m[1]] : [];
+                $snapshot['resolved_design']['layout'][$i]['style']['url'] = null;
+            }
             if (($st['context_file_id'] ?? null) || ($st['path'] ?? null)) {
                 $snapshot['resolved_design']['layout'][$i]['style']['url'] = $this->media->url($st['context_file_id'] ?? null, $st['path'] ?? null);
             }
+        }
+
+        // Eigene Schriften: Datei-Identifier → frische URL für @font-face.
+        foreach ($snapshot['resolved_design']['fonts'] ?? [] as $i => $f) {
+            $snapshot['resolved_design']['fonts'][$i]['url'] = (($f['context_file_id'] ?? null) || ($f['path'] ?? null))
+                ? $this->media->url($f['context_file_id'] ?? null, $f['path'] ?? null) : null;
         }
 
         return $snapshot;
@@ -1352,6 +1381,8 @@ class PresentationService
             'footer' => $e->footer_text ?: null,
             'logo' => ['context_file_id' => $e->logo_context_file_id ?? null, 'path' => $e->logo_path ?? null],
             'cover' => ['context_file_id' => $e->cover_context_file_id ?? null, 'path' => $e->cover_image_path ?? null],
+            // Freie Präsentationsbilder 1–3 (nur Angebot): für image-Blöcke mit quelle=angebot_N.
+            'bilder' => PraesentationsBilder::angebotsBilder($e),
         ];
     }
 
@@ -1392,6 +1423,8 @@ class PresentationService
         return [
             'price_display' => array_key_exists('price_display', $settings) ? (bool) $settings['price_display'] : $priceDefault,
             'declaration' => $decl,
+            // Cover: Titel (z. B. Angebotsname) zeigen. Aus → nur Logo, dafür größer (Angebot ohne Kundennamen).
+            'show_title' => array_key_exists('show_title', $settings) ? (bool) $settings['show_title'] : true,
             'cta' => [
                 'text' => isset($settings['cta']['text']) ? (string) $settings['cta']['text'] : null,
                 'link' => isset($settings['cta']['link']) ? (string) $settings['cta']['link'] : null,

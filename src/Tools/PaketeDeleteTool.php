@@ -6,13 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/**
- * MCP-Steuerbarkeit · D5d: Paket löschen (Soft-Delete). Pakete sind interne Bausteine (von Konzepten/
- * Speiseplänen referenzierbar) — destruktiv, `confirm:true` Pflicht.
- */
+/** Concepter-Paket (Entwurf) löschen. */
 class PaketeDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -22,8 +20,8 @@ class PaketeDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Löscht ein team-eigenes Paket (Soft-Delete). Erfordert confirm=true. '
-            . 'Prüfe vorher pakete.GET / Referenzen — Konzepte/Speisepläne können das Paket referenzieren.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Löscht ein team-eigenes Paket im Entwurf (Soft-Delete). Erfordert confirm=true. '
+            . 'Eingebettet in Konzepten? Vorher dort entfernen.';
     }
 
     public function getSchema(): array
@@ -47,18 +45,23 @@ class PaketeDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMe
         if (($arguments['confirm'] ?? false) !== true) {
             return ToolResult::error('Löschen erfordert confirm=true (destruktive Aktion).', 'CONFIRM_REQUIRED');
         }
-        $id = (int) ($arguments['id'] ?? 0);
-        if (($guard = $this->guardOwned($team, FoodAlchemistPaket::class, $id, 'Paket')) !== null) {
-            return $guard;
+        $paket = $this->paketConcept($team, (int) ($arguments['id'] ?? 0));
+        if ($paket instanceof ToolResult) {
+            return $paket;
+        }
+        $svc = app(ConceptService::class);
+        $in = $svc->eingebettetInConcepts($team, $paket->id);
+        if ($in->isNotEmpty()) {
+            return ToolResult::error('Paket ist in ' . $in->count() . ' Konzept(en) eingehängt. Zuerst dort entfernen (concept_slots.DELETE).', 'HAS_REFERENCES');
         }
 
         try {
-            app(PaketService::class)->delete($team, $id);
+            $svc->delete($team, $paket->id);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['id' => $id, 'deleted' => true]);
+        return ToolResult::success(['id' => (int) $paket->id, 'deleted' => true]);
     }
 
     public function getMetadata(): array

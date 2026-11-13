@@ -27,6 +27,23 @@ class FoodAlchemistMediaService
     /**
      * @return array{context_file_id:int,path:string}
      */
+    /**
+     * Nicht-Bild-Datei (z. B. Schriftdatei) ablegen — ohne Verkleinerung, sonst wie storeImage.
+     *
+     * @return array{context_file_id:int, path:string}
+     */
+    public function storeFile(UploadedFile $file, Team $team, string $contextType, int $contextId, string $folder): array
+    {
+        $result = $this->contextFiles->uploadForContext($file, $contextType, $contextId, [
+            'team_id' => $team->id,
+            'folder' => $folder,
+            'keep_original' => true,
+            'generate_variants' => false,
+        ]);
+
+        return ['context_file_id' => (int) $result['id'], 'path' => (string) $result['path']];
+    }
+
     public function storeImage(UploadedFile $file, Team $team, string $contextType, int $contextId, string $folder): array
     {
         $result = $this->contextFiles->uploadForContext($this->verkleinert($file), $contextType, $contextId, [

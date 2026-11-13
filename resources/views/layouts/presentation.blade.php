@@ -14,8 +14,25 @@
         'sans'          => '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
         'mono'          => 'ui-monospace, SFMono-Regular, Menlo, monospace',
     ];
-    $headingFont = $fontMap[$typo['heading'] ?? 'display-serif'] ?? $fontMap['display-serif'];
-    $bodyFont = $fontMap[$typo['body'] ?? 'sans'] ?? $fontMap['sans'];
+    // Generische Keys (display-serif|serif|sans|mono) ODER ein Google-Font aus der Whitelist (PresentationDesignService::GOOGLE_FONTS).
+    $gfHeading = \Platform\FoodAlchemist\Services\PresentationDesignService::googleFont(is_string($typo['heading'] ?? null) ? $typo['heading'] : null);
+    $gfBody = \Platform\FoodAlchemist\Services\PresentationDesignService::googleFont(is_string($typo['body'] ?? null) ? $typo['body'] : null);
+    // Eigene Team-Schrift: "team:<Familie>" → @font-face aus resolved_design.fonts (Familienname bereinigt, s. PresentationFontService::familie).
+    $teamFonts = array_values(array_filter($snapshot['resolved_design']['fonts'] ?? [], fn ($f) => ! empty($f['url'])));
+    $teamFamilien = array_unique(array_map(fn ($f) => (string) $f['family'], $teamFonts));
+    $teamStack = function ($wert, string $fallback) use ($teamFamilien) {
+        if (! is_string($wert) || ! str_starts_with($wert, 'team:')) {
+            return null;
+        }
+        $fam = \Platform\FoodAlchemist\Services\PresentationFontService::familie(substr($wert, 5));
+
+        return in_array($fam, $teamFamilien, true) ? '"' . $fam . '", ' . $fallback : null;
+    };
+    $headingFont = $teamStack($typo['heading'] ?? null, 'Georgia, "Times New Roman", serif')
+        ?? $gfHeading[1] ?? ($fontMap[$typo['heading'] ?? 'display-serif'] ?? $fontMap['display-serif']);
+    $bodyFont = $teamStack($typo['body'] ?? null, 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif')
+        ?? $gfBody[1] ?? ($fontMap[$typo['body'] ?? 'sans'] ?? $fontMap['sans']);
+    $extraFontFamilies = array_values(array_unique(array_filter([$gfHeading[2] ?? null, $gfBody[2] ?? null])));
     $scale = (float) ($typo['scale'] ?? 1.0);
     $gap = match ($tokens['spacing'] ?? 'comfortable') { 'compact' => '18px', 'roomy' => '56px', default => '34px' };
     $auto = ! empty($tokens['auto_advance']);
@@ -93,7 +110,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    @if($extraFontFamilies !== [])
+        {{-- Design-Schriften aus der Whitelist (tokens.typography) --}}
+        <link href="https://fonts.googleapis.com/css2?family={{ implode('&family=', $extraFontFamilies) }}&display=swap" rel="stylesheet">
+    @endif
     <style>
+        @foreach($teamFonts as $tf)
+        @font-face { font-family: "{!! \Platform\FoodAlchemist\Services\PresentationFontService::familie($tf['family']) !!}"; src: url("{!! str_replace(['"', '\\', '<'], '', (string) $tf['url']) !!}") format("{{ in_array($tf['format'] ?? '', ['woff2', 'woff', 'truetype', 'opentype'], true) ? $tf['format'] : 'woff2' }}"); font-weight: {{ (int) ($tf['weight'] ?? 400) }}; font-style: {{ ($tf['style'] ?? 'normal') === 'italic' ? 'italic' : 'normal' }}; font-display: swap; }
+        @endforeach
         :root {
             --pt-primary: {{ $pal['primary'] ?? '#6d28d9' }};
             --pt-on-primary: {{ $pal['on_primary'] ?? 'white' }};   /* Spec 94: Schrift auf Primärflächen, aus resolveTokens mit Kontrast ≥ 4,5 */
@@ -103,8 +127,10 @@
             --pt-text: {{ $pal['text'] ?? '#1a1712' }};
             --pt-muted: {{ $pal['muted'] ?? '#8a8178' }};
             --pt-line: color-mix(in srgb, var(--pt-text) 14%, transparent);
-            --pt-heading-font: {{ $headingFont }};
-            --pt-body-font: {{ $bodyFont }};
+            {{-- Unescaped: nur Werte aus $fontMap / GOOGLE_FONTS-Whitelist (kein Nutzer-Freitext). Mit {{ }} wurden die
+                 Anführungszeichen zu &quot; → ungültige CSS-Variable, die Schrift fiel still auf den Browser-Default. --}}
+            --pt-heading-font: {!! $headingFont !!};
+            --pt-body-font: {!! $bodyFont !!};
             --pt-base: {{ round(16.5 * $scale, 2) }}px;
             --pt-gap: {{ $gap }};
             --pt-measure: 720px;
@@ -309,6 +335,8 @@
         .pt-hero.has-media .pt-kicker { color: color-mix(in srgb, var(--pt-accent) 60%, #fff); }
         .pt-hero-logo { max-height: 74px; max-width: 240px; object-fit: contain; margin: 0 auto clamp(18px,3vw,26px); }
         .pt-hero.has-media .pt-hero-logo { filter: drop-shadow(0 2px 8px rgba(0,0,0,.4)); }
+        /* Cover ohne Titel (Einstellung „Angebotsnamen zeigen“ aus): Logo trägt das Cover. */
+        .pt-hero--ohne-titel .pt-hero-logo { max-height: clamp(140px, 26vh, 260px); max-width: min(520px, 80vw); margin-bottom: clamp(22px, 4vw, 36px); }
         .pt-hero-title { font-family: var(--pt-heading-font); font-weight: 900; font-size: clamp(2.6rem, 8vw, 5.2rem); line-height: 1.02; margin: 18px 0 0; }
         .pt-hero-sub { font-size: clamp(1rem, 2.4vw, 1.28rem); color: var(--pt-muted); margin: 20px auto 0; max-width: 640px; }
         .pt-hero-meta { margin-top: 22px; font-size: .82rem; letter-spacing: .04em; color: var(--pt-muted); }
@@ -380,6 +408,14 @@
         .pt-grid-foto { display: block; width: 176px; max-width: none; height: 132px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
         .pt-item.pt-indent-1 { padding-left: 18px; }
         .pt-item.pt-indent-2 { padding-left: 36px; }
+        /* Semantische Zeilen (Angebot/Konzept): Paket = Stationszeile, Gericht = Unterzeile, Text-Block. */
+        .pt-line--paket .pt-line-label { font-family: var(--pt-heading-font); font-weight: 600; }
+        .pt-item-sub { color: var(--pt-muted); font-weight: 400; }
+        .pt-text-block { margin: calc(var(--pt-gap) * .6) 0 calc(var(--pt-gap) * .4); }
+        .pt-text-block.pt-indent-1 { padding-left: 18px; }
+        .pt-text-block.pt-indent-2 { padding-left: 36px; }
+        .pt-text-block-title { font-size: 1.08rem; margin: 0 0 4px; }
+        .pt-text-block-body { margin: 0; color: var(--pt-text); line-height: 1.6; white-space: pre-line; }
         .pt-codes { color: var(--pt-muted); font-size: .62em; font-weight: 600; letter-spacing: .06em; vertical-align: super; margin-left: 4px; }
 
         /* Preis-Summe */
@@ -508,8 +544,8 @@
     </style>
     @php $customCss = $snapshot['resolved_design']['custom_css'] ?? null; @endphp
     @if(!empty($customCss))
-        {{-- Stufe 2: KI/User-Design-CSS (sanitisiert: kein <, @import, expression). Überschreibt die Basis. --}}
-        <style>{!! str_replace(['<', '>'], '', $customCss) !!}</style>
+        {{-- Stufe 2: KI/User-Design-CSS (sanitisiert: kein <, @import, expression). Überschreibt die Basis. `>` bleibt (Kind-Selektor). --}}
+        <style>{!! str_replace('<', '', $customCss) !!}</style>
     @endif
 </head>
 <body data-foodalchemist-presentation="{{ $snapshot['type'] ?? '' }}" class="pt-nav-{{ $nav }}"@if($auto) data-kiosk-auto="1"@endif>

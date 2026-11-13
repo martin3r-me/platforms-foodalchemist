@@ -758,12 +758,13 @@ class OfferCompositionService
                 if ($intern) {
                     $row['ek_pro_person'] = $agg['ek_pro_person'];
                     $row['food_cost_percent'] = $agg['food_cost_percent'];
-                    // Bild-Epic (offer-scoped, wie normalizeFoodbook): Kapitel-Bild + Galerie, sonst Concept-Fallback.
-                    // Rohe Identifier (context_file_id + path) — Auflösung zur data-URI liegt beim Konsumenten.
-                    $bilder = $this->kapitelBilder($k);
-                    $row['bild'] = $bilder[0] ?? null;
-                    $row['bilder'] = array_slice($bilder, 0, 6);
                 }
+                // Bild-Epic (offer-scoped, wie normalizeFoodbook): Kapitel-Bild + Galerie, sonst Concept-Fallback.
+                // Rohe Identifier (context_file_id + path), keine Interna → auch für die Kundensicht (Präsentation).
+                // Vorher nur bei $intern: das Kapitelbild kam deshalb nie im öffentlichen Link an.
+                $bilder = $this->kapitelBilder($k);
+                $row['bild'] = $bilder[0] ?? null;
+                $row['bilder'] = array_slice($bilder, 0, 6);
 
                 if ($k->format_id !== null && $k->format !== null) {
                     foreach ($k->format->slots as $fs) {
@@ -772,7 +773,7 @@ class OfferCompositionService
                             $edZeile = ['typ' => 'concept', 'name' => $ed->consumer_name ?: $ed->name, 'claim' => $ed->claim ?: null,
                                 'text' => trim((string) $ed->description) ?: null,
                                 'preis_pp' => $ed->price_per_person_cache !== null ? (float) $ed->price_per_person_cache : null,
-                                'einzelpreise' => $ed->istEinzelpreis(), 'gerichte' => $wording->gerichtZeilen($ed)];
+                                'einzelpreise' => $ed->istEinzelpreis(), 'gerichte' => $wording->gerichtZeilen($ed, null, true)];
                             if ($intern) {
                                 $edZeile['ek_pp'] = $ed->ek_per_person_cache !== null ? (float) $ed->ek_per_person_cache : null;
                             }
@@ -803,7 +804,7 @@ class OfferCompositionService
                             'aufwand_betrag' => (float) ($bp['aufwand'] ?? 0),
                             'verbrauch' => $b->istVerbrauch(), 'deckel' => $b->deckel(),   // Spec 94c 8c: „nach Verbrauch“, höchstens Deckel
                             'einzelpreise' => $b->type === 'concept_ref' && $b->concept !== null && $b->concept->istEinzelpreis(),
-                            'gerichte' => ($b->type === 'concept_ref' && $b->concept !== null) ? $wording->gerichtZeilen($b->concept, null) : [],
+                            'gerichte' => ($b->type === 'concept_ref' && $b->concept !== null) ? $wording->gerichtZeilen($b->concept, null, true) : [],   // inkl. Text-Blöcke des Konzepts
                             'height' => $b->height,
                         ];
                         if ($intern) {

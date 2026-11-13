@@ -6,18 +6,13 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Paket-Stammdaten/Preis-Modus bearbeiten. */
+/** Stammfelder eines Concepter-Pakets (Entwurf) ändern. */
 class PaketePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
-    private const FELDER = [
-        'name', 'consumer_name', 'role', 'class', 'level', 'price_mode', 'price_per_person',
-        'ek_per_person', 'food_cost_percent', 'description', 'note', 'is_inactive',
-        'price_override_reason', 'price_override_expires_at',
-    ];
-
     public function getName(): string
     {
         return 'foodalchemist.pakete.PUT';
@@ -25,7 +20,7 @@ class PaketePutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
     public function getDescription(): string
     {
-        return 'Bearbeitet ein team-eigenes Paket (felder: name/role/class/level/price_mode/price_per_person/…). '
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Bearbeitet ein team-eigenes Paket im Entwurf (felder: name/consumer_name/class/level/description/note/price_mode/price_per_person/price_override_reason). '
             . 'price_mode=auto leitet den Preis aus den Gerichten ab; fixed erfordert Preis + Begründung.';
     }
 
@@ -51,22 +46,19 @@ class PaketePutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         if (! is_array($felder) || $felder === []) {
             return ToolResult::error('felder muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
         }
-        $in = array_intersect_key($felder, array_flip(self::FELDER));
-        if ($in === []) {
-            return ToolResult::error('Keine bekannten Felder in felder.', 'VALIDATION_ERROR');
-        }
-        $id = (int) ($arguments['id'] ?? 0);
-        if (($guard = $this->guardOwned($team, FoodAlchemistPaket::class, $id, 'Paket')) !== null) {
-            return $guard;
+        $paket = $this->paketConcept($team, (int) ($arguments['id'] ?? 0));
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
 
         try {
-            $paket = app(PaketService::class)->update($team, $id, $in);
+            $svc = app(ConceptPaketService::class);
+            $paket = $svc->update($team, $paket->id, $felder);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['paket' => $this->paketPayload($paket)]);
+        return ToolResult::success(['paket' => $svc->payload($paket)]);
     }
 
     public function getMetadata(): array

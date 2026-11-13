@@ -24,6 +24,7 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
         return 'Bearbeitet einen Konzept-Slot (felder: role, title, is_pflicht, note, sales_recipe_id, package_id). '
             . 'felder.sales_recipe_id FÜLLT eine leere Position mit einem Gericht (XOR package_id; type=basisrezept optional) — '
             . 'so werden die Positionen eines Gerüsts aus concepts.POST geruest=… belegt. '
+            . 'felder.package_id = Concepter-Paket (concepts mit kind=paket, IDs via pakete.LIST) — hängt das Paket als Station ein. '
             . 'felder.wording setzt den Slot-Text, felder.quantity/unit_vocab_id die Menge.';
     }
 
@@ -63,16 +64,22 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
             && ! \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $felder['sales_recipe_id'])->exists()) {
             return ToolResult::error('sales_recipe_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if (! empty($felder['package_id'])
-            && ! \Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)->whereKey((int) $felder['package_id'])->exists()) {
-            return ToolResult::error('package_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        if (! empty($felder['package_id'])) {
+            // package_id = Concepter-Paket (kind=paket-Concept) → embedded_concept_id (Kaskade-Pfad).
+            $conceptId = (int) \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::visibleToTeam($team)->whereKey($slotId)->value('concept_id');
+            $ref = $this->paketReferenz($team, (int) $felder['package_id'], $conceptId);
+            if ($ref instanceof ToolResult) {
+                return $ref;
+            }
+            $felder['embedded_concept_id'] = $ref;
+            unset($felder['package_id']);
         }
 
         $svc = app(ConceptService::class);
         try {
             $svc->updateSlot($team, $slotId, $felder);
-            if (! empty($felder['sales_recipe_id']) || ! empty($felder['package_id'])) {
-                $svc->fillSlot($team, $slotId, array_intersect_key($felder, array_flip(['sales_recipe_id', 'package_id', 'type', 'quantity', 'unit_vocab_id'])));
+            if (! empty($felder['sales_recipe_id']) || ! empty($felder['embedded_concept_id'])) {
+                $svc->fillSlot($team, $slotId, array_intersect_key($felder, array_flip(['sales_recipe_id', 'embedded_concept_id', 'type', 'quantity', 'unit_vocab_id'])));
             }
             if (array_key_exists('wording', $felder)) {
                 $svc->setSlotWording($team, $slotId, ($felder['wording'] ?? '') !== '' ? (string) $felder['wording'] : null);

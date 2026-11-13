@@ -82,6 +82,11 @@
                            class="{{ $menuePunkt }}" title="Kundenpräsentation als Webseite, ohne interne Angaben">
                             @svg('heroicon-o-presentation-chart-bar', 'w-4 h-4 text-[var(--fa-ink-3)]') Kundenpräsentation ansehen
                         </a>
+                        {{-- Kopieren ist immer erlaubt (legt ein neues, eigenes Angebot an; das Original bleibt unverändert). --}}
+                        <button type="button" role="menuitem" wire:click="kopieren" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                title="Neues Angebot mit gleichem Aufbau, Branding und Bildern anlegen (Status Anfrage, nicht veröffentlicht)" data-angebot-kopieren>
+                            @svg('heroicon-o-document-duplicate', 'w-4 h-4 text-[var(--fa-ink-3)]') Angebot kopieren
+                        </button>
                         <div class="my-1 border-t border-[var(--fa-line)]"></div>
                         {{-- Spec 65: Drucken/Ansehen bleiben frei (Links), Produktion + Löschen nur im Bearbeiten-Modus --}}
                         <fieldset @disabled($gesperrt) class="contents">
@@ -1061,6 +1066,26 @@
                                 <span wire:loading wire:target="coverUpload" class="{{ $hinweis }}">Lädt …</span>
                             </x-fa::field>
                         </div>
+                        {{-- Freie Präsentationsbilder: erscheinen dort, wo das Design einen Bild-Block mit „Angebot: Bild N“ hat. --}}
+                        <div class="mt-4 flex flex-col gap-2" data-angebot-praes-bilder>
+                            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Präsentationsbilder <span class="font-normal text-[var(--fa-ink-3)]">(optional)</span></p>
+                            <p class="{{ $hinweis }}">Erscheinen in der Kundenpräsentation dort, wo das Design einen Bild-Block mit „Angebot: Bild 1–3“ vorsieht.</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                @foreach([1, 2, 3] as $nr)
+                                    @php($pb = (is_array($angebot->presentation_images_json) ? $angebot->presentation_images_json : [])[(string) $nr] ?? null)
+                                    <x-fa::field :label="'Bild ' . $nr" :error="'praesBildUpload.' . $nr">
+                                        @if(is_array($pb))
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($pb['context_file_id'] ?? null, $pb['path'] ?? null) }}" alt="Präsentationsbild {{ $nr }}" class="h-10 max-w-[120px] object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" />
+                                                <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="praesBildEntfernen({{ $nr }})">Entfernen</x-fa::button>
+                                            </div>
+                                        @endif
+                                        <input type="file" wire:model="praesBildUpload.{{ $nr }}" accept="image/*" class="{{ $dateiFeld }}" aria-label="Präsentationsbild {{ $nr }} hochladen" data-praes-bild-upload="{{ $nr }}" />
+                                        <span wire:loading wire:target="praesBildUpload.{{ $nr }}" class="{{ $hinweis }}">Lädt …</span>
+                                    </x-fa::field>
+                                @endforeach
+                            </div>
+                        </div>
                     </x-fa::section>
 
                     {{-- Präsentation — digitales Kundenbuch (Kundenlink + eingefrorener Stand + Freigabe) --}}
@@ -1087,6 +1112,7 @@
 
                         <div class="flex flex-wrap gap-x-5 gap-y-2">
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}"> Preise je Gast zeigen</label>
+                            <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer" title="Aus: das Cover zeigt nur das Logo, dafür größer – z. B. solange kein Kunde feststeht."><input type="checkbox" wire:model="presentationTitelZeigen" class="{{ $haken }}" data-angebot-praes-titel> Angebotsnamen im Cover zeigen</label>
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationDeklaration" class="{{ $haken }}"> Allergen-Legende zeigen</label>
                             <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen, neue Speisen kommen mit aktuellem Preis dazu. An: alle aktuellen Verkaufspreise übernehmen. Die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise aktualisieren</label>
                         </div>

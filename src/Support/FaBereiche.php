@@ -113,7 +113,7 @@ final class FaBereiche
         // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung, Gebühren) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
         ['stamm_paket', null], ['paket_grundeinstellungen', null], ['master_team', null], ['mandant_export', null], ['equipment_standard', null], ['mandanten', null], ['plan_preise', null], ['plan_nutzung', null], ['support_zugang', null], ['ki_klassen', null], ['ki_verbrauch', null],   // Spec 84 §4.4 (E3): Rechte-Pflege des Mandanten, bereichsfrei wie die Zugriffsrechte
         // Spec 82 §8 / §13 B6: Abos (Bereich „Abos" im Master-Team)
-        ['abos', 'abos'],
+        ['abos', 'abos'], ['abo_pakete', 'abos'],
         // Spec 77d: Inhalte für Standorte (Editor im Controlling), Sammlungen + eigene Kopie gehören zu den Rezepten
         ['standort_inhalte', 'controlling'], ['sammlungen', 'rezepte'], ['inhalte', 'rezepte'],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)
@@ -136,6 +136,7 @@ final class FaBereiche
         ['speisekarte', 'speisekarte'], ['speiseplan', 'speiseplan'], ['speiseplaene', 'speiseplan'],
         ['foodbook', 'foodbook'], ['kapitel_', 'foodbook'],
         ['angebot', 'angebote'], ['offer', 'angebote'],
+        ['bilder', 'angebote'],   // bilder.UPLOAD: Bilder für Angebots-Präsentation (Cover/Logo/Präsentationsbilder/Gericht-Foto/Design-Block)
         ['konfigurator', 'angebote'], ['leistung_vorlagen', 'angebote'], ['leistungskategorien', 'angebote'],   // Spec 94: Konfiguratoren, Leistungs-Vorlagen, Kategorien (94b)
         // Concepter & Formate
         ['concept', 'concepter'], ['composer', 'concepter'], ['format', 'concepter'], ['paket', 'concepter'], ['baustein', 'concepter'],
@@ -159,7 +160,7 @@ final class FaBereiche
         ['struktur_vokabular', 'stammdaten'], ['component_equivalents', 'stammdaten'], ['naehrwerte', 'stammdaten'], ['naehrwert_pruefung', 'stammdaten'],
         // Einstellungen
         ['settings', 'einstellungen'], ['team_settings', 'einstellungen'], ['team_profile', 'einstellungen'], ['vocab_', 'einstellungen'], ['outlet_settings', 'einstellungen'],
-        ['outlets', 'einstellungen'], ['presentation_designs', 'einstellungen'], ['behaelter_katalog', 'einstellungen'],
+        ['outlets', 'einstellungen'], ['presentation_designs', 'einstellungen'], ['presentation_fonts', 'einstellungen'], ['behaelter_katalog', 'einstellungen'],
     ];
 
     /** Einzelne Tools, die unabhängig von ihrer Ressource bereichsfrei sind (nur Ansicht des Benutzers). */

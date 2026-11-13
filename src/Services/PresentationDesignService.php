@@ -36,6 +36,52 @@ class PresentationDesignService
     /** Spec 94: Blöcke, die im Konfigurator nichts bedeuten (Kapitel-, Raster- und Preisblöcke anderer Ausgaben). */
     private const KONFIG_FREMD = ['chapter_loop', 'dish_list', 'grid', 'price_summary', 'preis_aufschluesselung', 'legend'];
 
+    /**
+     * Google-Fonts-Whitelist für tokens.typography (heading/body). Externe CSS-Ressourcen bleiben im Custom-CSS
+     * gesperrt (@import), Schriften laden NUR über diese Liste — Familie → Google-Fonts-Achsen + Fallback-Stack.
+     */
+    public const GOOGLE_FONTS = [
+        'Cormorant Garamond' => ['ital,wght@0,400;0,500;0,600;0,700;1,400', 'Georgia, "Times New Roman", serif'],
+        'Playfair Display' => ['ital,wght@0,400;0,600;0,700;0,900;1,400', 'Georgia, serif'],
+        'Fraunces' => ['opsz,wght@9..144,400;9..144,600;9..144,900', 'Georgia, serif'],
+        'Libre Baskerville' => ['ital,wght@0,400;0,700;1,400', 'Georgia, serif'],
+        'Lora' => ['ital,wght@0,400;0,600;0,700;1,400', 'Georgia, serif'],
+        'EB Garamond' => ['ital,wght@0,400;0,600;0,700;1,400', 'Georgia, serif'],
+        'DM Serif Display' => ['ital@0;1', 'Georgia, serif'],
+        'Bodoni Moda' => ['ital,opsz,wght@0,6..96,400;0,6..96,700;1,6..96,400', 'Georgia, serif'],
+        'Marcellus' => ['', 'Georgia, serif'],
+        'Manrope' => ['wght@300;400;500;600;700', 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'],
+        'Inter' => ['wght@300;400;500;600;700', 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'],
+        'DM Sans' => ['opsz,wght@9..40,400;9..40,500;9..40,700', 'system-ui, sans-serif'],
+        'Work Sans' => ['wght@300;400;500;600;700', 'system-ui, sans-serif'],
+        'Montserrat' => ['wght@300;400;500;600;700', 'system-ui, sans-serif'],
+        'Lato' => ['wght@300;400;700', 'system-ui, sans-serif'],
+        'Open Sans' => ['wght@300;400;600;700', 'system-ui, sans-serif'],
+        'Raleway' => ['wght@300;400;500;600;700', 'system-ui, sans-serif'],
+        'Nunito Sans' => ['wght@300;400;600;700', 'system-ui, sans-serif'],
+        'Josefin Sans' => ['wght@300;400;600;700', 'system-ui, sans-serif'],
+        'Outfit' => ['wght@300;400;500;600;700', 'system-ui, sans-serif'],
+        'Space Grotesk' => ['wght@400;500;700', 'system-ui, sans-serif'],
+        'Jost' => ['wght@300;400;500;600;700', 'system-ui, sans-serif'],
+    ];
+
+    /**
+     * Google-Font aus der Whitelist auflösen (case-insensitive). Liefert [Familie, CSS-Stack, css2-Familien-Parameter] oder null.
+     *
+     * @return array{0:string,1:string,2:string}|null
+     */
+    public static function googleFont(?string $wert): ?array
+    {
+        $wert = trim((string) $wert);
+        foreach (self::GOOGLE_FONTS as $familie => [$achsen, $fallback]) {
+            if (strcasecmp($familie, $wert) === 0) {
+                return [$familie, '"' . $familie . '", ' . $fallback, str_replace(' ', '+', $familie) . ($achsen !== '' ? ':' . $achsen : '')];
+            }
+        }
+
+        return null;
+    }
+
     public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot', 'konfigurator', 'konfigurator_dunkel'];
 
     // ── MCP-Vokabular (damit die MCP-Tools alle setzbaren Keys dokumentieren) ──
@@ -45,7 +91,9 @@ class PresentationDesignService
     {
         return 'Globale Style-Tokens (Objekt). Keys: '
             . 'palette{primary,accent,bg,surface,text,muted} = Hex-Farben (z.B. accent "#b02530"); '
-            . 'typography{heading:display-serif|serif|sans|mono, body:sans|serif|mono, scale:0.7–2.0}; '
+            . 'typography{heading:display-serif|serif|sans|mono ODER ein Google-Font-Name aus der Whitelist, body:sans|serif|mono ODER Google-Font, scale:0.7–2.0} '
+            . '— Google-Fonts-Whitelist: ' . implode(', ', array_keys(self::GOOGLE_FONTS)) . ' (z. B. heading:"Cormorant Garamond", body:"Manrope") '
+            . 'ODER eigene Team-Schrift als "team:<Familie>" (hochladen via foodalchemist.presentation_fonts.UPLOAD); '
             . 'spacing:compact|comfortable|roomy; '
             . 'nav:none|anchor|sidebar (Sprungmenü/Sidebar); '
             . 'lightbox:bool (Bilder klickbar vergrößern); '
@@ -62,7 +110,7 @@ class PresentationDesignService
             . 'style je Typ: '
             . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
             . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
-            . 'image{context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
+            . 'image{quelle:design|angebot_1|angebot_2|angebot_3 (angebot_N = Präsentationsbild N des Angebots, via bilder.UPLOAD ziel=angebot_bild), context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
             . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}; '
             . 'konfig_konzepte{ansicht:raster|liste, show_bild:bool, show_ab_preis:bool}; konfig_tageszeit/konfig_getraenke/konfig_addons/konfig_anfrage{titel}; konfig_zusammenfassung{show_gesamt:bool} '
             . '(Spec 94: nur Ausgabeform konfigurator, je genau einmal; fehlende werden beim Rendern ergänzt). '
@@ -72,11 +120,24 @@ class PresentationDesignService
     /** Doku für custom_css (Stufe-2-Leinwand) — in die MCP-Schemas eingespeist. */
     public static function customCssDoc(): string
     {
-        return 'JA, freies CSS ist möglich (sandboxed, CSS-only). Wirkt auf die festen Präsentations-Klassen '
-            . '(pt-hero, pt-hero-title, pt-section-title, pt-section-text, pt-block-header, pt-line, pt-line-label, '
-            . 'pt-line-price, pt-legend, pt-cta-btn, pt-footer, pt-grid …) + CSS-Variablen '
-            . '(var(--pt-primary), --pt-accent, --pt-bg, --pt-text, --pt-muted, --pt-heading-font, --pt-body-font). '
-            . 'Verboten/gestrippt: < >, @import, expression(), javascript:, behavior: (kein HTML/JS, keine externen Ressourcen).';
+        return 'JA, freies CSS ist möglich (sandboxed, CSS-only). Wirkt auf die festen Präsentations-Klassen: '
+            . self::cssKlassenDoc()
+            . ' CSS-Variablen: var(--pt-primary), --pt-accent, --pt-bg, --pt-text, --pt-muted, --pt-line, --pt-heading-font, --pt-body-font, --pt-gap. '
+            . 'Kind-Selektoren (>) sind erlaubt. Gestrippt: <, @import, expression(), javascript:, behavior: (kein HTML/JS, keine externen Ressourcen). '
+            . 'Eigene Schriften NICHT per @import, sondern über tokens_json.typography (Google-Fonts-Whitelist).';
+    }
+
+    /** Alle stylbaren Präsentations-Klassen, gruppiert (MCP-Doku + KI-Prompt). */
+    public static function cssKlassenDoc(): string
+    {
+        return 'Seite: pt-page, pt-wrap, pt-footer · '
+            . 'Cover: pt-hero (.has-media/.no-media/.pt-hero--ohne-titel), pt-hero-media, pt-hero-inner, pt-hero-logo, pt-kicker, pt-hero-title, pt-hero-sub, pt-hero-meta · '
+            . 'Kapitel: pt-section, pt-depth-N, pt-section-head, pt-section-title, pt-section-text, pt-section-img · '
+            . 'Block: pt-block, pt-block--{concept_ref|text|header|position|recipe_ref}, pt-block-header, pt-block-header--{kind}, pt-block-sub · '
+            . 'Text-Blöcke: pt-text-block (--angebot = Freitext im Angebot, --konzept = Text-Block aus dem Konzept), pt-text-block-title, pt-text-block-body · '
+            . 'Zeilen: pt-line, pt-line--concept (Konzept mit Preis), pt-line--paket (Paket/Station, Label .pt-paket-name), pt-line--dish (Gericht, Label .pt-dish-name), '
+            . 'pt-item, pt-indent-0|1|2, pt-line-label, pt-line-dots, pt-line-price, pt-item-sub, pt-subheader (Gang-Überschrift im Konzept), pt-codes, pt-item-foto · '
+            . 'Preis: pt-price-summary, pt-price-big, pt-price-label · Sonstiges: pt-legend, pt-cta-btn, pt-grid, pt-cover-img, pt-logo.';
     }
 
     /**
@@ -409,8 +470,9 @@ class PresentationDesignService
 
     /**
      * Härtet KI/User-CSS für die eigenständige, chrome-freie Präsentationsseite. CSS-ONLY:
-     * verbietet `<`/`>` (kein </style>-Breakout → kein HTML/JS), `@import` (externe Ressourcen),
-     * `expression(` (IE-Altlast) und `javascript:`. Rein optischer Layer auf die Blöcke.
+     * verbietet `<` (kein </style>-Breakout → kein HTML/JS), `@import` (externe Ressourcen),
+     * `expression(` (IE-Altlast) und `javascript:`. `>` bleibt als Kind-Selektor erlaubt — ohne `<`
+     * kann es kein Tag öffnen oder schließen. Schriften kommen über tokens.typography (Whitelist).
      */
     public function sanitizeCss(?string $css): ?string
     {
@@ -418,8 +480,8 @@ class PresentationDesignService
         if ($css === '') {
             return null;
         }
-        // Kein Tag-Breakout.
-        $css = str_replace(['<', '>'], '', $css);
+        // Kein Tag-Breakout: `<` reicht (ohne `<` kein </style>); `>` bleibt als Kind-Selektor.
+        $css = str_replace('<', '', $css);
         // Gefährliche/externe Konstrukte raus (case-insensitive).
         $css = preg_replace('/@import\b[^;]*;?/i', '', $css);
         $css = preg_replace('/expression\s*\(/i', '(', $css);
@@ -476,11 +538,13 @@ class PresentationDesignService
     private function cssZielKlassen(): array
     {
         return [
-            'pt-page', 'pt-hero', 'pt-hero-media', 'pt-hero-inner', 'pt-hero-title', 'pt-hero-sub', 'pt-hero-meta',
+            'pt-page', 'pt-hero', 'pt-hero-media', 'pt-hero-inner', 'pt-hero-logo', 'pt-hero-title', 'pt-hero-sub', 'pt-hero-meta',
             'pt-kicker', 'pt-cover-img', 'pt-logo', 'pt-section', 'pt-section-head', 'pt-section-title', 'pt-section-text',
             'pt-section-img', 'pt-block', 'pt-block-header', 'pt-block-sub', 'pt-line', 'pt-line-label', 'pt-line-price',
             'pt-line-dots', 'pt-codes', 'pt-price-summary', 'pt-price-big', 'pt-price-label', 'pt-legend', 'pt-cta-btn',
             'pt-footer', 'pt-grid',
+            'pt-text-block', 'pt-text-block-title', 'pt-text-block-body', 'pt-line--concept', 'pt-line--paket', 'pt-paket-name',
+            'pt-line--dish', 'pt-dish-name', 'pt-item-sub', 'pt-subheader',
             'var(--pt-primary)', 'var(--pt-accent)', 'var(--pt-bg)', 'var(--pt-text)', 'var(--pt-muted)',
             'var(--pt-heading-font)', 'var(--pt-body-font)',
         ];

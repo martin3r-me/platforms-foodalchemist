@@ -6,10 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
-use Platform\FoodAlchemist\Services\PaketService;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptPaketService;
+use Platform\FoodAlchemist\Services\ConceptService;
 
-/** MCP-Steuerbarkeit · D5d: Gericht-Positionen eines Pakets neu ordnen. */
+/** Positionen eines Concepter-Pakets neu ordnen. */
 class PaketGerichteReorderTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +20,7 @@ class PaketGerichteReorderTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Ordnet die Gericht-Positionen eines team-eigenen Pakets neu (row_ids in Zielreihenfolge).';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Ordnet die Positionen eines Paket-Entwurfs neu (ids = row_ids in Zielreihenfolge; nicht genannte rücken dahinter).';
     }
 
     public function getSchema(): array
@@ -28,7 +29,7 @@ class PaketGerichteReorderTool extends FoodAlchemistTool implements ToolContract
             'type' => 'object',
             'properties' => [
                 'paket_id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
-                'ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Positions-Zeilen-Ids in Zielreihenfolge.'],
+                'ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Positions-Ids in Zielreihenfolge.'],
             ],
             'required' => ['paket_id', 'ids'],
         ];
@@ -44,18 +45,13 @@ class PaketGerichteReorderTool extends FoodAlchemistTool implements ToolContract
         if (! is_array($ids) || $ids === []) {
             return ToolResult::error('ids muss ein nicht-leeres Array sein.', 'VALIDATION_ERROR');
         }
-        $paketId = (int) ($arguments['paket_id'] ?? 0);
-        if (($guard = $this->guardOwned($team, FoodAlchemistPaket::class, $paketId, 'Paket')) !== null) {
-            return $guard;
+        $paket = $this->paketConcept($team, (int) ($arguments['paket_id'] ?? 0));
+        if ($paket instanceof ToolResult) {
+            return $paket;
         }
+        app(ConceptPaketService::class)->reorder($team, $paket->id, array_map('intval', $ids));
 
-        try {
-            app(PaketService::class)->reorderGerichte($team, $paketId, array_map('intval', $ids));
-        } catch (\RuntimeException $e) {
-            return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
-        }
-
-        return ToolResult::success(['paket_id' => $paketId, 'ids' => array_map('intval', $ids)]);
+        return ToolResult::success(['paket_id' => (int) $paket->id, 'ids' => array_map('intval', $ids)]);
     }
 
     public function getMetadata(): array

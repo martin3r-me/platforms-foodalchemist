@@ -256,6 +256,8 @@
                             @error('blockImageUpload')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
                             <p class="{{ $hilfe }}">Freie Bildstrecke, unabhängig von Konzept und Kapitel.</p>
                         </div>
+                        <x-fa::choice name="layout.{{ $i }}.style.quelle" label="Bild kommt aus" :options="['design' => 'Diesem Design', 'angebot_1' => 'Angebot: Bild 1', 'angebot_2' => 'Angebot: Bild 2', 'angebot_3' => 'Angebot: Bild 3']" />
+                        <p class="{{ $hilfe }}">„Angebot: Bild 1–3“ zeigt das Bild, das im jeweiligen Angebot unter Branding und Präsentation hinterlegt ist. Fehlt es dort, bleibt der Block leer.</p>
                         <x-fa::choice name="layout.{{ $i }}.style.img_fit" label="Darstellung" :options="['cover' => 'Füllen (Ausschnitt)', 'contain' => 'Ganz zeigen', 'auto' => 'Natürliche Höhe']" />
                         <x-fa::choice name="layout.{{ $i }}.style.img_height" label="Höhe" :options="['klein' => 'Klein (Panorama)', 'mittel' => 'Mittel', 'gross' => 'Groß']" />
                         <x-fa::choice name="layout.{{ $i }}.style.img_width" label="Breite" :options="['voll' => 'Breit', 'schmal' => 'Schmal (Lesebreite)', 'bleed' => 'Randlos']" />
@@ -288,7 +290,23 @@
                         </x-fa::field>
                     @endforeach
                 </div>
-                <x-fa::choice name="tokens.typography.heading" label="Schrift der Überschriften" :options="['serif' => 'Mit Serifen', 'sans' => 'Ohne Serifen']" />
+                @foreach(['heading' => 'Schrift der Überschriften', 'body' => 'Schrift des Fließtexts'] as $schriftFeld => $schriftLabel)
+                    <x-fa::field :label="$schriftLabel" for="design-schrift-{{ $schriftFeld }}" class="min-w-[14rem]">
+                        <x-fa::select id="design-schrift-{{ $schriftFeld }}" wire:model.live="tokens.typography.{{ $schriftFeld }}" data-fa-schrift="{{ $schriftFeld }}">
+                            <optgroup label="Standard">
+                                @foreach($schriftOptionen['standard'] as $wert => $text)<option value="{{ $wert }}">{{ $text }}</option>@endforeach
+                            </optgroup>
+                            @if($schriftOptionen['team'] !== [])
+                                <optgroup label="Eigene Schriften">
+                                    @foreach($schriftOptionen['team'] as $wert => $text)<option value="{{ $wert }}">{{ $text }}</option>@endforeach
+                                </optgroup>
+                            @endif
+                            <optgroup label="Google Fonts">
+                                @foreach($schriftOptionen['google'] as $wert => $text)<option value="{{ $wert }}">{{ $text }}</option>@endforeach
+                            </optgroup>
+                        </x-fa::select>
+                    </x-fa::field>
+                @endforeach
                 <x-fa::field label="Schriftgröße" for="design-schrift-skala" hint="1 ist Standard, 1,2 macht alles 20 % größer.">
                     <x-fa::input id="design-schrift-skala" type="number" step="0.05" min="0.7" max="2" wire:model.blur="tokens.typography.scale" numeric class="max-w-[8rem]" />
                 </x-fa::field>
@@ -303,6 +321,40 @@
                     <x-fa::choice name="tokens.speiseplan_layout" label="Speiseplan-Ausgabe" :options="['grid' => 'Wochen-Tabelle (Standard)', 'liste' => 'Liste, Tag für Tag']" />
                     <p class="{{ $hilfe }}">Wirkt nur bei Speiseplänen.</p>
                 </div>
+            </x-fa::section>
+
+            {{-- Eigene Schriften (Hausschrift/Kunden-CI): je Datei ein Schnitt, im Team für alle Designs nutzbar. --}}
+            <x-fa::section title="Eigene Schriften" icon="heroicon-o-language"
+                           description="Schriftdatei hochladen (woff2, woff, ttf oder otf, bis 5 MB). Danach steht sie oben bei der Schriftwahl unter „Eigene Schriften“. Je Datei ein Schnitt, z. B. Regular und Bold einzeln hochladen. Nur Schriften nutzen, für die eine Web-Lizenz besteht.">
+                <div class="flex flex-wrap items-end gap-3">
+                    <x-fa::field label="Name der Schrift" for="design-font-familie" class="min-w-[12rem] flex-1">
+                        <x-fa::input id="design-font-familie" wire:model="fontFamilie" placeholder="z. B. Green Tasty Sans" data-fa-font-familie />
+                    </x-fa::field>
+                    <x-fa::field label="Stärke" for="design-font-weight">
+                        <x-fa::select id="design-font-weight" wire:model="fontWeight" :options="['300' => 'Light 300', '400' => 'Regular 400', '500' => 'Medium 500', '600' => 'Semibold 600', '700' => 'Bold 700', '900' => 'Black 900']" />
+                    </x-fa::field>
+                    <x-fa::field label="Stil" for="design-font-style">
+                        <x-fa::select id="design-font-style" wire:model="fontStyle" :options="['normal' => 'Normal', 'italic' => 'Kursiv']" />
+                    </x-fa::field>
+                    <div class="flex flex-col gap-1">
+                        <input type="file" wire:model="fontUpload" accept=".woff2,.woff,.ttf,.otf" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] min-w-0" data-fa-font-datei>
+                        <x-fa::signal tone="info" icon="heroicon-m-arrow-path" wire:loading wire:target="fontUpload">Wird hochgeladen</x-fa::signal>
+                    </div>
+                    <x-fa::button size="sm" variant="primary" icon="heroicon-m-arrow-up-tray" wire:click="schriftHochladen" data-fa-font-hochladen>Schrift hinzufügen</x-fa::button>
+                </div>
+                @error('fontUpload')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
+                @if($schriften !== [])
+                    <ul class="mt-3 divide-y divide-[var(--fa-line)] text-[length:var(--fa-text-md)]">
+                        @foreach($schriften as $sf)
+                            <li class="flex items-center justify-between gap-3 py-1.5" wire:key="font-{{ $sf['id'] }}">
+                                <span>{{ $sf['family'] }} <span class="text-[var(--fa-ink-3)]">· {{ $sf['weight'] }}{{ $sf['style'] === 'italic' ? ' kursiv' : '' }} · {{ $sf['format'] }}</span></span>
+                                @if($sf['eigen'])
+                                    <x-fa::icon-button icon="heroicon-m-trash" label="Schrift {{ $sf['family'] }} entfernen" size="sm" tone="danger" wire:click="schriftLoeschen({{ $sf['id'] }})" wire:confirm="Schrift entfernen? Designs, die sie nutzen, fallen auf die Standardschrift zurück." />
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             </x-fa::section>
 
             {{-- Stufe 2 „Leinwand via Code": eigenes, sandboxed CSS auf die Blöcke (kein HTML/JS/@import). --}}

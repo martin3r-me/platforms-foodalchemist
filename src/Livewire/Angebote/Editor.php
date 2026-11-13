@@ -40,6 +40,7 @@ class Editor extends Component
     use WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+    use \Platform\FoodAlchemist\Livewire\Concerns\AngebotBrandingBilder;   // Logo/Cover/Präsentationsbilder + Kopieren
 
     /** Spec 65: Sperre gilt dem geöffneten Angebot. */
     protected function sperrZiel(): ?array
@@ -171,6 +172,9 @@ class Editor extends Component
 
     public $coverUpload = null;
 
+    /** Freie Präsentationsbilder 1–3 (image-Block im Design mit quelle=angebot_N). Index = Nummer. */
+    public array $praesBildUpload = [1 => null, 2 => null, 3 => null];
+
     public ?int $brandingLoadedId = null;
 
     public ?string $brandingFehler = null;
@@ -191,6 +195,9 @@ class Editor extends Component
     public ?string $presentationGueltigBis = null;
 
     public bool $presentationPreisAnzeige = true;
+
+    /** Cover zeigt den Angebotsnamen. Aus → nur Logo (größer), z. B. wenn noch kein Kunde feststeht. */
+    public bool $presentationTitelZeigen = true;
 
     /** Republish-Preis-Schutz: AUS = eingefrorene Preise behalten; AN = aktuelle VK ziehen. */
     public bool $presentationPreiseAktualisieren = false;
@@ -1204,52 +1211,6 @@ class Editor extends Component
         }
     }
 
-    public function updatedLogoUpload(): void
-    {
-        if ($this->uploadGesperrt('logoUpload')) {
-            return;
-        }
-        $this->brandingBildHochladen('logoUpload', 'storeLogo');
-    }
-
-    public function updatedCoverUpload(): void
-    {
-        if ($this->uploadGesperrt('coverUpload')) {
-            return;
-        }
-        $this->brandingBildHochladen('coverUpload', 'storeCover');
-    }
-
-    /** Auto-Upload bei Dateiwahl: validieren → Service (räumt Altdatei) → Feld leeren. */
-    private function brandingBildHochladen(string $prop, string $serviceMethod): void
-    {
-        $this->brandingFehler = null;
-        if ($this->selectedId === null || $this->{$prop} === null) {
-            return;
-        }
-        $this->validate([$prop => 'image|max:8192'], [], [$prop => $prop === 'logoUpload' ? 'Logo' : 'Cover-Bild']);
-        try {
-            app(AngebotService::class)->{$serviceMethod}($this->team(), $this->selectedId, $this->{$prop});
-        } catch (\RuntimeException $e) {
-            $this->brandingFehler = $e->getMessage();
-        }
-        $this->reset($prop);
-    }
-
-    public function brandingLogoEntfernen(AngebotService $svc): void
-    {
-        if ($this->selectedId !== null) {
-            $svc->clearLogo($this->team(), $this->selectedId);
-        }
-    }
-
-    public function brandingCoverEntfernen(AngebotService $svc): void
-    {
-        if ($this->selectedId !== null) {
-            $svc->clearCover($this->team(), $this->selectedId);
-        }
-    }
-
     // ── Kapitel-Bild (überschreibt das Concept-Titelbild im Kapitel-Band) ──────
     public function updatedKapitelImageUpload(): void
     {
@@ -1319,6 +1280,7 @@ class Editor extends Component
                 'design' => $this->presentationDesign,
                 'expires_at' => $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'show_title' => $this->presentationTitelZeigen,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
@@ -1364,6 +1326,7 @@ class Editor extends Component
             $settings = [
                 'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'show_title' => $this->presentationTitelZeigen,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
@@ -1557,6 +1520,7 @@ class Editor extends Component
             $this->presentationDesign = $angebot->presentation_design ?: 'editorial';
             $this->presentationGueltigBis = $angebot->presentation_expires_at?->format('Y-m-d');
             $this->presentationPreisAnzeige = (bool) ($s['price_display'] ?? true);
+            $this->presentationTitelZeigen = (bool) ($s['show_title'] ?? true);
             $this->presentationDeklaration = (bool) ($s['declaration'] ?? true);
             $this->presentationCtaText = $s['cta']['text'] ?? null;
             $this->presentationCtaLink = $s['cta']['link'] ?? null;
