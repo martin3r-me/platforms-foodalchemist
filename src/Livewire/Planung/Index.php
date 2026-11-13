@@ -2389,10 +2389,7 @@ class Index extends Component
         $jobBewiesen = $lauf->steps->contains(fn ($s) => in_array($s->status, ['done', 'failed'], true));
         $wartet = $lauf->steps->contains(fn ($s) => in_array($s->status, ['queued', 'running'], true));
         $alterSek = $lauf->created_at !== null ? $lauf->created_at->diffInSeconds(now()) : 0;
-        // Externer KI-Weg (per MCP gestartet/freigegeben): der Lauf wartet auf eine KI-Antwort von außen, nicht auf den Worker —
-        // der Wächter schlüge sonst fälschlich an und böte „freiräumen" an (Lauf 62, io 13.11.2026).
-        $wartetAufKi = $cascade->kiWartend($lauf->steps) !== [];
-        $this->hinweis = (! $jobBewiesen && $wartet && ! $wartetAufKi && $alterSek > self::WATCHDOG_SEKUNDEN)
+        $this->hinweis = (! $jobBewiesen && $wartet && $alterSek > self::WATCHDOG_SEKUNDEN && $cascade->kiWartend($lauf->steps) === [])   // wartet auf externe KI-Antwort (MCP, Lauf 62) → kein Alarm
             ? 'Die Erstellung dauert ungewöhnlich lange und kein Schritt kommt voran. Vermutlich läuft die Hintergrund-Erstellung gerade nicht. Sobald sie anläuft, geht es automatisch weiter.'
             : null;
     }
@@ -3411,9 +3408,7 @@ class Index extends Component
             'irgendeinLaeuft' => $irgendeinLaeuft,
             'pollAktiv' => $pollAktiv,
             'active' => $active,
-            'lauf' => $lauf,
-            // Schritte, die auf eine externe KI-Antwort warten (Step-ID → offene Aufträge) — eigene Anzeige statt „wartet auf Worker"
-            'kiWartend' => $lauf !== null ? app(PlanningCascadeService::class)->kiWartend($lauf->steps) : [],
+            'lauf' => $lauf, 'kiWartend' => $lauf !== null ? app(PlanningCascadeService::class)->kiWartend($lauf->steps) : [],   // Step-ID → offene KI-Aufträge (Lauf 62)
             'kalkulation' => $kalkulation,
             'bildCalls' => $bildCalls,
             'bilderAngefordert' => $bilderAngefordert,
