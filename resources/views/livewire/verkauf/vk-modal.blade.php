@@ -397,51 +397,32 @@
             @endphp
             <x-fa::kpis :items="$ueberblick" data-vk-kalkulation-kpis />
 
-            <div class="grid gap-4 lg:grid-cols-2">
-                <x-fa::section title="Verkaufseinheit" icon="heroicon-o-cube">
-                    <div class="grid gap-3 sm:grid-cols-3" data-vk-unit-block>
-                        <x-fa::field label="Einheit" for="vk-einheit">
-                            <x-fa::select id="vk-einheit" wire:model="form.sales_unit_vocab_id" placeholder="nicht gesetzt" data-vk-unit-select>
-                                @foreach($verkaufsEinheiten as $e)
-                                    <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
-                                @endforeach
-                            </x-fa::select>
-                        </x-fa::field>
-                        <x-fa::field label="Anzahl je Ansatz" for="vk-anzahl">
-                            <x-fa::input id="vk-anzahl" type="number" step="0.1" min="0" wire:model="form.sales_unit_count" numeric data-vk-anzahl />
-                        </x-fa::field>
-                        <x-fa::field label="g je Einheit" for="vk-g-unit" hint="Leer = aus dem Ertrag">
-                            <x-fa::input id="vk-g-unit" type="number" step="1" min="0" wire:model="form.sales_quantity_per_unit_g" numeric
-                                placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-unit />
-                        </x-fa::field>
-                    </div>
-                </x-fa::section>
-
-                <x-fa::section title="Preis und Rohertrag" icon="heroicon-o-banknotes">
-                    <div class="grid gap-3 sm:grid-cols-2" data-vk-verkaufsblock>
-                        <x-fa::field label="Preisklasse" for="vk-preisklasse">
-                            <x-fa::select id="vk-preisklasse" wire:model="form.markup_class_id"
-                                wire:change="preisklasseGeaendert($event.target.value)" placeholder="nicht gesetzt" data-vk-ak>
-                                @foreach($aufschlagsklassen as $ak)
-                                    <option value="{{ $ak->id }}">{{ $ak->code }} ({{ number_format((float) ($ak->class_factor_pct ?? 100), 1, ',', '.') }} % relativ)</option>
-                                @endforeach
-                            </x-fa::select>
-                        </x-fa::field>
-                        <x-fa::field label="Katalog-VK netto" hint="Preis der Standard-Darreichung">
-                            <p class="h-9 flex items-center text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-ink)]" data-vk-netto-manuell><x-fa::money :value="$cockpit['vk']['sales_net']" /></p>
-                        </x-fa::field>
-                        <x-fa::field label="Nebenkosten (€ je Ansatz)" for="vk-nebenkosten" hint="Energie, Verpackung und Ähnliches. Die Kalkulation teilt sie auf die Einheiten des Ansatzes.">
-                            <x-fa::input id="vk-nebenkosten" type="number" min="0" step="0.01" wire:model="form.additional_costs_eur" numeric data-vk-nebenkosten />
-                        </x-fa::field>
-                        <x-fa::field label="MwSt">
-                            <p class="h-9 flex items-center {{ $hinweis }}" data-vk-mwst>Wird je Darreichung gewählt</p>
-                        </x-fa::field>
-                    </div>
-                    @if($cockpit['vk']['vorschlag'] !== null)
-                        <p class="{{ $hinweis }}" data-vk-vorschau>Vorschlag nach Formel: <span class="font-medium text-[var(--fa-ink-2)]">{{ $euro($cockpit['vk']['vorschlag']['sales_net']) }} netto</span> ({{ $cockpit['vk']['vorschlag']['formel'] }})</p>
-                    @endif
-                </x-fa::section>
-            </div>
+            {{-- Verkaufseinheit des Gerichts. Preisklasse, Preis und MwSt stehen NUR an der Darreichung darunter (13.11.2026):
+                 das frühere zweite Preisklassen-Feld hier überschrieb beim Speichern, was in der Zeile gewählt war. --}}
+            <x-fa::section title="Verkaufseinheit" icon="heroicon-o-cube">
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-vk-unit-block>
+                    <x-fa::field label="Einheit" for="vk-einheit">
+                        <x-fa::select id="vk-einheit" wire:model="form.sales_unit_vocab_id" placeholder="nicht gesetzt" data-vk-unit-select>
+                            @foreach($verkaufsEinheiten as $e)
+                                <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
+                            @endforeach
+                        </x-fa::select>
+                    </x-fa::field>
+                    <x-fa::field label="Anzahl je Ansatz" for="vk-anzahl">
+                        <x-fa::input id="vk-anzahl" type="number" step="0.1" min="0" wire:model="form.sales_unit_count" numeric data-vk-anzahl />
+                    </x-fa::field>
+                    <x-fa::field label="g je Einheit" for="vk-g-unit" hint="Vorgabe am Gericht, leer = aus dem Ertrag. Die Darreichung unten kann abweichen.">
+                        <x-fa::input id="vk-g-unit" type="number" step="1" min="0" wire:model="form.sales_quantity_per_unit_g" numeric
+                            placeholder="{{ $cockpit['verkauft_als']['g_pro_einheit'] ?? '' }}" data-vk-g-unit />
+                    </x-fa::field>
+                    <x-fa::field label="Nebenkosten (€ je Ansatz)" for="vk-nebenkosten" hint="Energie, Verpackung und Ähnliches. Die Kalkulation teilt sie auf die Einheiten des Ansatzes.">
+                        <x-fa::input id="vk-nebenkosten" type="number" min="0" step="0.01" wire:model="form.additional_costs_eur" numeric data-vk-nebenkosten />
+                    </x-fa::field>
+                </div>
+                <p class="{{ $hinweis }}" data-vk-preis-hinweis>Preisklasse, Preis und MwSt stellst du je Darreichung ein.@if($cockpit['vk']['vorschlag'] !== null)
+                    <span data-vk-vorschau>Vorschlag nach Formel für die Standard-Darreichung: <span class="font-medium text-[var(--fa-ink-2)]">{{ $euro($cockpit['vk']['vorschlag']['sales_net']) }} netto</span> ({{ $cockpit['vk']['vorschlag']['formel'] }})</span>@endif
+                </p>
+            </x-fa::section>
 
             {{-- Umbau-Spec Phase 5 — Varianten je Servierform --}}
             <x-fa::section title="Darreichungen" icon="heroicon-o-squares-2x2" :meta="(string) $darreichungen->count()"
