@@ -1,4 +1,6 @@
 {{--
+    Farben (13.11.2026, Dominique: „Detail" oben schwarz auf dunkel): Kopf und Rail nur mit FA-Tokens (--fa-*, folgen dem
+    Dunkelmodus), nicht mit den Core-Tokens --ui-secondary/--ui-surface — die sind im Dunkelmodus dunkel auf dunkel.
     Eigener rechter Sidebar-Wrapper (Modul-Fix 2026-07-24): x-ui-page-sidebar (Core/UI-Modul)
     kennt nur zwei App-weite Store-Scopes ("page_sidebar" links, "activity" rechts) — alle
     Detail-Panels im Modul teilten sich daher EIN Toggle-Feld. Klappte man es irgendwo zu,
@@ -155,20 +157,20 @@
         x-show="!open"
         x-cloak
         @click="setOpen(true)"
-        class="group/rail h-full w-full flex flex-col items-center justify-between py-3 px-2 hover:bg-[var(--ui-muted-10)] transition-colors cursor-pointer"
+        class="group/rail h-full w-full flex flex-col items-center justify-between py-3 px-2 hover:bg-[var(--fa-hover)] transition-colors cursor-pointer"
         title="@if($title){{ $title }} öffnen @else Öffnen @endif"
     >
         @if($icon)
-            <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-white shadow-sm flex-shrink-0">
-                @svg($icon, 'w-3.5 h-3.5 text-[var(--ui-secondary)]')
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[var(--fa-surface)] shadow-sm flex-shrink-0">
+                @svg($icon, 'w-3.5 h-3.5 text-[var(--fa-ink-2)]')
             </span>
         @else
-            @svg($expandIcon, 'w-4 h-4 text-[var(--ui-secondary)] group-hover/rail:text-[var(--ui-primary)] transition-colors flex-shrink-0')
+            @svg($expandIcon, 'w-4 h-4 text-[var(--fa-ink-2)] transition-colors flex-shrink-0')
         @endif
 
         @if($title)
             <span
-                class="text-[10px] font-semibold uppercase tracking-wider text-[var(--ui-muted)] group-hover/rail:text-[var(--ui-secondary)] transition-colors my-2 truncate"
+                class="text-[10px] font-semibold uppercase tracking-wider text-[var(--fa-ink-3)] transition-colors my-2 truncate"
                 style="writing-mode: vertical-rl; transform: rotate(180deg); max-height: 100%;"
             >
                 {{ $title }}
@@ -178,7 +180,7 @@
         @endif
 
         @if($icon)
-            @svg($expandIcon, 'w-4 h-4 text-[var(--ui-secondary)] group-hover/rail:text-[var(--ui-primary)] transition-colors flex-shrink-0')
+            @svg($expandIcon, 'w-4 h-4 text-[var(--fa-ink-2)] transition-colors flex-shrink-0')
         @else
             <span class="block w-1.5 h-1.5"></span>
         @endif
@@ -196,23 +198,23 @@
         class="h-full overflow-hidden overflow-x-hidden flex flex-col"
     >
         @if($title)
-            <div class="px-6 h-14 flex-shrink-0 flex items-center border-b border-[var(--ui-border)]/60 bg-[var(--ui-surface)]/90 backdrop-blur">
+            <div class="px-6 h-14 flex-shrink-0 flex items-center border-b border-[var(--fa-line)] bg-[var(--fa-surface)] backdrop-blur">
                 {{-- #1003: am Handy steht „Zurück“ links, wo der Daumen es von Apps kennt --}}
                 <button type="button" x-show="handy" x-cloak @click="setOpen(false)"
                         class="-ml-3 inline-flex items-center gap-1 min-h-11 pr-3 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-accent)]" data-fa-detail-zurueck>
                     @svg('heroicon-m-chevron-left', 'w-5 h-5') Zurück
                 </button>
                 @if($icon)
-                    <span x-show="! handy" class="inline-flex items-center justify-center w-5 h-5 mr-2 text-[var(--ui-secondary)]">
+                    <span x-show="! handy" class="inline-flex items-center justify-center w-5 h-5 mr-2 text-[var(--fa-ink-2)]">
                         @svg($icon, 'w-4 h-4')
                     </span>
                 @endif
-                <h2 x-show="! handy" class="text-sm font-semibold text-[var(--ui-secondary)] m-0 tracking-wide uppercase truncate">{{ $title }}</h2>
+                <h2 x-show="! handy" class="text-sm font-semibold text-[var(--fa-ink-2)] m-0 tracking-wide uppercase truncate">{{ $title }}</h2>
                 <button
                     type="button"
                     x-show="! handy"
                     @click="setOpen(false)"
-                    class="ml-auto inline-flex items-center justify-center rounded-md text-[var(--ui-secondary)] hover:text-[var(--ui-primary)] hover:bg-[var(--ui-muted-10)] transition-colors flex-shrink-0"
+                    class="ml-auto inline-flex items-center justify-center rounded-md text-[var(--fa-ink-2)] hover:text-[var(--fa-accent)] hover:bg-[var(--fa-hover)] transition-colors flex-shrink-0"
                     :class="handy ? 'w-11 h-11' : 'w-7 h-7'"
                     :title="handy ? 'Zurück zur Liste' : 'Einklappen'"
                     data-fa-detail-schliessen
