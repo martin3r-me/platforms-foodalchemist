@@ -111,10 +111,13 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
     /** Zukauf-Basisrezept planen — derselbe Einstieg wie der Knopf am GP ({@see PlanningSessionService::zukaufAusGp}). */
     private function zukauf(PlanningSessionService $svc, \Platform\Core\Models\Team $team, int $gpId, ?string $typ): ToolResult
     {
+        if (! \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereKey($gpId)->exists()) {
+            return ToolResult::error('Grundprodukt nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');   // Fehlertyp per Prüfung, nicht per Wortlaut
+        }
         try {
             $e = $svc->zukaufAusGp($team, $gpId, $typ, 'mcp_gp');
         } catch (\RuntimeException $ex) {
-            return ToolResult::error($ex->getMessage(), str_contains($ex->getMessage(), 'nicht gefunden') ? 'NOT_FOUND' : 'VALIDATION_ERROR');
+            return ToolResult::error($ex->getMessage(), 'VALIDATION_ERROR');
         }
         if ($e['session'] === null) {
             return ToolResult::success([
