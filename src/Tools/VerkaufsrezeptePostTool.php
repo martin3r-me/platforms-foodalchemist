@@ -24,6 +24,7 @@ class VerkaufsrezeptePostTool extends FoodAlchemistTool implements ToolContract,
     {
         return 'Legt ein Verkaufsrezept (Gericht) an. Mit basis_recipe_id wird das (sichtbare) Basisrezept '
             . 'als erste Komponente eingehängt; ohne wird ein leeres Gericht erzeugt.'
+            . ' Name = [HG] Leitkomponente | Baustein | Baustein … (VK §1), z. B. „[HG] Rinderfilet | Portwein-Jus | Selleriepüree“. Nicht in den Namen: Gefäß/Darreichung, Deko, Öle, Garnitur, Herkunft, Diät-Tags, Grammatur, Marketingname, Füllwörter (mit, auf). Verstöße kommen als warnungen zurück.'
             . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gericht_anlegen").';
     }
 
@@ -32,7 +33,7 @@ class VerkaufsrezeptePostTool extends FoodAlchemistTool implements ToolContract,
         return [
             'type' => 'object',
             'properties' => [
-                'name' => ['type' => 'string', 'description' => 'Name des Gerichts.'],
+                'name' => ['type' => 'string', 'description' => 'Name des Gerichts: [HG] Leitkomponente | Baustein | Baustein (VK §1).'],
                 'basis_recipe_id' => ['type' => 'integer', 'description' => 'Optionales Basisrezept als erste Komponente (sichtbar).'],
             ],
             'required' => ['name'],
@@ -65,8 +66,11 @@ class VerkaufsrezeptePostTool extends FoodAlchemistTool implements ToolContract,
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
+        // Agentenpfad 13.11.2026: gespeichert ist — jetzt Name gegen VK §1 prüfen (warnen, nicht blockieren) und den Weg weisen.
         return ToolResult::success($this->mitReife(
-            ['id' => (int) $vk->id, 'name' => $vk->name, 'status' => $this->statusWert($vk)],
+            ['id' => (int) $vk->id, 'name' => $vk->name, 'status' => $this->statusWert($vk),
+                'warnungen' => $this->gerichtNamensWarnungen($team, (int) $vk->id, (string) $vk->name),
+                'naechste_schritte' => $this->gerichtNaechsteSchritte($context, $team, (int) $vk->id)],
             $team, (int) $vk->id, true
         ));
     }
@@ -80,7 +84,7 @@ class VerkaufsrezeptePostTool extends FoodAlchemistTool implements ToolContract,
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates'],
             'related_tools' => ['foodalchemist.verkaufsrezepte.PUT', 'foodalchemist.verkaufsrezepte.GET'],
-            'examples' => ['Lege ein Gericht „Wolfsbarsch, Fenchel" aus Basisrezept 12 an.'],
+            'examples' => ['Lege ein Gericht „[HG] Wolfsbarsch | Fenchel | Safranjus" aus Basisrezept 12 an.'],
         ];
     }
 }

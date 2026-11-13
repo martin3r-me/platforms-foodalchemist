@@ -96,8 +96,8 @@ class AblaufGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
         if ($mitWissen && $dokumente !== []) {
             // Volltexte ueber dieselbe Tabelle und dieselben Sichtbarkeitsregeln wie knowledge.GET —
-            // kein zweiter Lesepfad.
-            $texte = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->sichtbareDokumente($team)
+            // kein zweiter Lesepfad (MCP-Leseweg, Entscheid 13.11.2026: Regelwerke auch für Mandanten).
+            $texte = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->mcpLesbareDokumente($team)
                 ->whereIn('slug', array_column($dokumente, 'slug'))
                 ->whereNull('deleted_at')->where('active', 1)
                 ->pluck('content_md', 'slug');

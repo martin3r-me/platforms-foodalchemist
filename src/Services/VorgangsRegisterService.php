@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
+use Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit;
 
 /**
  * Spec 50 · E-3 — das Vorgangs-Register: was ein Agent wissen muss, BEVOR er anfängt.
@@ -268,26 +269,31 @@ class VorgangsRegisterService
      */
     public function regelwerke(array $v, ?Team $team): array
     {
-        // Spec 82 §13 H: Kanon-Zuordnung und Master-Regelwerke lesen nur Master-Team und Unter-Teams. Mandanten bekommen die Wirkung im
-        // Prompt, aber keine Dokumentliste — ehrlich benannt statt leer erscheinen zu lassen.
-        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team)) {
-            return [
-                'quelle' => 'nicht_lesbar',
-                'dokumente' => [],
-                'hinweis' => 'Das Regelwerk dieses Vorgangs ist Plattform-Wissen: Es wirkt im Generator-Prompt, ist für dieses Team aber nicht lesbar.',
-            ];
-        }
-        if ($team !== null) {
+        // Entscheid Dominique 13.11.2026 (ersetzt die §13-H-Sperre an dieser Stelle): Regelwerke sind per MCP für JEDES Team lesbar —
+        // ein Agent muss die Namenssyntax kennen, bevor er anlegt. Der Mandant liest die Auswahl mit den Augen des Master-Teams
+        // (gleiche Qualität wie der Master), gefiltert auf die MCP-lesbaren Kategorien. Die Oberfläche bleibt bei §13 H.
+        $leser = WissensSichtbarkeit::mcpLeseTeam($team);
+        $verdeckt = 0;
+        $lesbar = function ($docs) use ($team, &$verdeckt) {
+            $vorher = $docs->count();
+            $docs = $docs->filter(fn ($d) => WissensSichtbarkeit::mcpKategorieLesbar($team, $d->category ?? 'regelwerk'))->values();
+            $verdeckt = $vorher - $docs->count();
+
+            return $docs;
+        };
+
+        if ($leser !== null) {
             foreach ($v['prompt_keys'] as $key) {
-                $docs = $this->kanon->documentsFor('prompt_key', $key, $team);
+                $docs = $lesbar($this->kanon->documentsFor('prompt_key', $key, $leser));
                 if ($docs->isNotEmpty()) {
-                    return [
+                    return array_filter([
                         'quelle' => 'kanon',
                         'dokumente' => $docs->map(fn ($d) => [
                             'slug' => $d->slug, 'titel' => $d->title, 'kategorie' => $d->category,
                             'mode' => $d->mode, 'zeichen' => (int) $d->char_count, 'prompt_key' => $key,
-                        ])->values()->all(),
-                    ];
+                        ] + $this->lesehilfe($d->slug, (string) $d->content_md))->values()->all(),
+                        'nicht_lesbar' => $verdeckt > 0 ? $verdeckt : null,
+                    ], fn ($x) => $x !== null);
                 }
             }
         }
@@ -307,19 +313,39 @@ class VorgangsRegisterService
         // zwanzig §-Dossiers, und eines davon zu nennen waere schlechter als alle.
         $docs = $v['feature'] === null
             ? collect()
-            : $this->wissen->regelwerkDossiersFuer($team, $v['feature']);
+            : $this->wissen->regelwerkDossiersFuer($leser, $v['feature'], ['slug', 'title', 'char_count', 'version', 'content_md']);
 
         return [
             'quelle' => $docs->isNotEmpty() ? 'nachschlagen' : 'keine',
             'dokumente' => $docs->map(fn ($d) => [
                 'slug' => $d->slug, 'titel' => $d->title, 'kategorie' => 'regelwerk',
                 'mode' => 'nachschlagen', 'zeichen' => (int) $d->char_count, 'prompt_key' => null,
-            ])->values()->all(),
+            ] + $this->lesehilfe($d->slug, (string) $d->content_md))->values()->all(),
             'hinweis' => $docs->isNotEmpty()
                 ? 'Kein Kanon fuer diesen Vorgang — diese Dossiers gehoeren fachlich dazu, werden aber '
                     .'NICHT automatisch in den Prompt gelegt. Wer sie verbindlich machen will: '
                     .'`knowledge_canon.PUT` auf den passenden Prompt-Key.'
                 : null,
+        ];
+    }
+
+    /** Zeichen je Auszug: genug für den Kern einer Regel (Syntax, Beispiel), klein genug für 10–20 Dossiers in einer Antwort. */
+    private const AUSZUG_ZEICHEN = 400;
+
+    /**
+     * Auszug + Lese-Verweis je Regelwerk (13.11.2026): Der Agent soll den Kern sehen, ohne für jedes Dossier knowledge.GET aufzurufen
+     * — gemessen am 12.09. las ein Agent von 13 Titeln zwei. Den Volltext gibt es mit ablauf.GET(mit_wissen=true) oder knowledge.GET.
+     *
+     * @return array{auszug: ?string, lesen_mit: array{tool: string, args: array{slug: string}}}
+     */
+    private function lesehilfe(string $slug, string $md): array
+    {
+        $text = trim((string) preg_replace('/\A---\R.*?\R---\R?/s', '', $md));
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        return [
+            'auszug' => $text === '' ? null : (mb_strlen($text) > self::AUSZUG_ZEICHEN ? rtrim(mb_substr($text, 0, self::AUSZUG_ZEICHEN)) . ' …' : $text),
+            'lesen_mit' => ['tool' => 'foodalchemist.knowledge.GET', 'args' => ['slug' => $slug]],
         ];
     }
 

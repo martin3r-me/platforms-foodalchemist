@@ -208,13 +208,81 @@ abstract class FoodAlchemistTool
             ->orderByRaw('team_id IS NULL')->orderByDesc('team_id')   // F2: eigene Kopie vor geerbter/globaler Zeile
             ->value('id');
         if ($id === null) {
-            $verf = DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
-                ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle('foodalchemist_serving_forms', TeamScope::ancestryIds($team))))
-                ->orderBy('code')->pluck('code')->unique()->implode(', ');
+            $verf = implode(', ', array_column($this->verfuegbareServierformen($team), 'code'));
             throw new \RuntimeException("Unbekannte Servierform \"{$wert}\". Verfügbar: {$verf}");
         }
 
         return (int) $id;
+    }
+
+    /**
+     * Die aktiven Servierformen des Teams (team-scoped ∪ global), je Code einmal — dieselbe Liste, die {@see resolveServierformId()}
+     * bei einem unbekannten Wert nennt.
+     *
+     * @return list<array{code: string, label: string}>
+     */
+    protected function verfuegbareServierformen(Team $team): array
+    {
+        return DB::table('foodalchemist_serving_forms')->whereNull('deleted_at')->where('is_inactive', false)
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', \Platform\FoodAlchemist\Models\Scopes\TeamSicht::ketteFuerTabelle('foodalchemist_serving_forms', TeamScope::ancestryIds($team))))
+            ->orderBy('code')->get(['code', 'label'])->unique('code')
+            ->map(fn ($f) => ['code' => (string) $f->code, 'label' => (string) $f->label])->values()->all();
+    }
+
+    /**
+     * Agentenpfad (Dominique 13.11.2026): Namensprüfung eines Gerichts nach VK §1 — gespeichert wird trotzdem, die Antwort trägt die
+     * Warnungen ({@see \Platform\FoodAlchemist\Services\GerichtNamensPruefung}). Prüfung darf den Schreibvorgang nie kippen.
+     *
+     * @return list<array{regel: string, text: string, vorschlag: string}>
+     */
+    protected function gerichtNamensWarnungen(Team $team, int $recipeId, string $name): array
+    {
+        try {
+            return app(\Platform\FoodAlchemist\Services\GerichtNamensPruefung::class)->warnungen($team, $recipeId, $name);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
+    /**
+     * Agentenpfad (13.11.2026): was nach dem Anlegen eines Gerichts zu tun ist, mit den Werten, die der Agent dafür braucht —
+     * Hauptgruppen-Kürzel und Klassen aus dish_classes.GET (derselbe Aufruf, keine zweite Abfrage), Servierformen für die Darreichung.
+     * Leere Klassen-/Hauptgruppen-Liste ist ein Fehler-Hinweis, kein stilles Weiter.
+     *
+     * @return array<string, mixed>
+     */
+    protected function gerichtNaechsteSchritte(ToolContext $context, Team $team, int $recipeId): array
+    {
+        $dc = (new DishClassesGetTool())->execute([], $context);
+        $hauptgruppen = $dc->success ? ($dc->data['hauptgruppen'] ?? []) : [];
+        $klassen = $dc->success ? ($dc->data['klassen'] ?? []) : [];
+        $fehler = [];
+        if ($hauptgruppen === []) {
+            $fehler[] = 'dish_classes.GET liefert für dieses Team KEINE Hauptgruppen — ohne Kürzel kein regelkonformer Name ([HG] …) und keine '
+                . 'dish_main_group_id. Nicht raten: im Team die Gericht-Hauptgruppen anlegen lassen (Einstellungen › Vokabular).';
+        }
+        if ($klassen === []) {
+            $fehler[] = 'dish_classes.GET liefert für dieses Team KEINE Speisen-Klassen — dish_class_id kann nicht gesetzt werden. Bitte im Team klären.';
+        }
+
+        return array_filter([
+            'fehler' => $fehler !== [] ? $fehler : null,
+            'reihenfolge' => [
+                '1. Rahmen laden: foodalchemist.settings.GET, foodalchemist.canvas.GET(type=food_dna), foodalchemist.dish_classes.GET, Servierformen (unten).',
+                '2. Bestand prüfen: foodalchemist.verkaufsrezepte.SEARCH und foodalchemist.recipes.SEARCH — vorhandene Gerichte/Basisrezepte wiederverwenden.',
+                '3. Basisrezepte: Komponenten als Basisrezepte anlegen (foodalchemist.recipes.POST) und einhängen (foodalchemist.recipe_ingredients.PUT, referenced_recipe_id) — Zerlegen nach Regel 3, BEVOR ENRICH läuft.',
+                '4. Gericht mit [HG]-Name: „' . \Platform\FoodAlchemist\Services\GerichtNamensPruefung::BEISPIEL . '“ — Korrektur per foodalchemist.verkaufsrezepte.PUT(felder.name).',
+                '5. Darreichung: foodalchemist.recipe_darreichung.POST(recipe_id=' . $recipeId . ', serving_form=<code>) — das Gefäß gehört hierher, nicht in den Namen.',
+                '6. Klasse und Hauptgruppe: foodalchemist.verkaufsrezepte.PUT(felder.dish_class_id, felder.dish_main_group_id).',
+                '7. Anreichern: foodalchemist.verkaufsrezepte.ENRICH.',
+                '8. Prüfen: foodalchemist.reife.GET.',
+            ],
+            'hauptgruppen' => array_map(fn ($h) => ['id' => $h['id'], 'code' => $h['code'], 'label' => $h['label']], $hauptgruppen),
+            'klassen' => array_map(fn ($k) => ['id' => $k['id'], 'label' => $k['label'], 'diet_form' => $k['diet_form'] ?? null], $klassen),
+            'servierformen' => $this->verfuegbareServierformen($team),
+        ], fn ($x) => $x !== null);
     }
 
     /** M3: Facetten-Vokabel (name) → id in service_moments/seasons/event_types. */
