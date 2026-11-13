@@ -102,7 +102,7 @@ class GpConformanceAdapter implements ConformanceAdapter
                 'hersteller' => $la->manufacturer,
                 'herkunft' => $la->origin,
                 'lieferant' => $la->supplier?->name,
-                'bio' => $la->is_organic,
+                'bio' => $la->istBio(),   // Regel 94: Artikel belegt Bio oder reiner Bio-Händler
                 'vegan' => $la->is_vegan,
                 'vegetarisch' => $la->is_vegetarian,
                 'alkohol' => $la->is_alcohol,
@@ -148,7 +148,7 @@ class GpConformanceAdapter implements ConformanceAdapter
                 'marke' => $la->brand,
                 'hersteller' => $la->manufacturer,
                 'herkunft' => $la->origin,
-                'bio' => $la->is_organic,
+                'bio' => $la->istBio(),   // Regel 94: Artikel belegt Bio oder reiner Bio-Händler
                 'vegan' => $la->is_vegan,
                 'vegetarisch' => $la->is_vegetarian,
                 'alkohol' => $la->is_alcohol,

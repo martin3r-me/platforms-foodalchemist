@@ -176,8 +176,8 @@ class GpNamingService
         return $in;
     }
 
-    /** Namensflags in „ / (…)“, die Produkteigenschaften sind (bleiben auch im Kundentext und im Matcher-Score). */
-    public const NAMENS_FLAGS = ['bio', 'vegan', 'glutenfrei', 'laktosefrei'];
+    /** Namensflags in „ / (…)“, die Produkteigenschaften sind (bleiben auch im Kundentext und im Matcher-Score). MSC/ASC seit v3.10.0 (Regel 94). */
+    public const NAMENS_FLAGS = ['bio', 'msc', 'asc', 'vegan', 'glutenfrei', 'laktosefrei'];
 
     /** Anfang des Hinweises „Name passt nicht zu den Feldern“ (I4) — Konsumenten filtern über diese Konstante, nie über freien Text. */
     public const HINWEIS_NAME_FELDER = 'Name passt nicht zu den Feldern';
@@ -194,7 +194,7 @@ class GpNamingService
         }
 
         return trim((string) preg_replace_callback('/\s*\/\s*\(([^)]*)\)/u',
-            fn ($m) => in_array(mb_strtolower(trim($m[1])), self::NAMENS_FLAGS, true) ? $m[0] : '', $name));
+            fn ($m) => in_array(mb_strtolower(trim($m[1])), self::NAMENS_FLAGS, true) || \Platform\FoodAlchemist\Support\GpNamensKlammern::istLand($m[1]) ? $m[0] : '', $name));
     }
 
     /** Klammer-Zusatz (§6.6): ohne Klammern und Zeilenumbrüche, damit der Name lesbar zerlegbar bleibt („ / (…)“). */
@@ -338,6 +338,30 @@ class GpNamingService
         return $zusatzSlug === '' ? $key : $key . '|' . $zusatzSlug;
     }
 
+    /**
+     * gp_key aus den Strukturfeldern: {@see buildGpKey()} plus — nur wenn gesetzt — ein Merkmal-Slot `|m-…` (GP-Regelwerk v3.10.0, 13.11.2026):
+     * Stückgewicht (Regel 75: 150 g und 160 g sind zwei GPs), Fettwert (826: jeder Wert ein GP), Länder-Klammer und Siegel (94). Ohne diese Merkmale
+     * bleibt der Schlüssel wie bisher; Bestandsschlüssel werden nie umgeschrieben (updateGp). Ein Bestands-GP gleichen Namens fängt weiter der
+     * Namens-Guard ({@see anlageGuard()}).
+     */
+    public function gpKeyAusFeldern(string $hauptzutatSlug, array $in): string
+    {
+        $key = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
+        $fett = [];
+        foreach (['processing', 'form', 'pflichtangabe'] as $feld) {
+            $fett = [...$fett, ...\Platform\FoodAlchemist\Support\FettAngabe::ziehe((string) ($in[$feld] ?? ''))[0]];
+        }
+        $merkmale = array_filter([
+            trim((string) ($in['portion'] ?? '')) !== '' ? $this->normalisierePortion((string) $in['portion']) : '',
+            implode(' ', $fett),
+            \Platform\FoodAlchemist\Support\GpNamensKlammern::land($in['herkunft_land'] ?? null),
+            ! empty($in['msc']) ? 'msc' : (! empty($in['asc']) ? 'asc' : ''),
+        ], fn ($m) => $m !== '');
+        $slot = $this->slugify(implode(' ', $merkmale));
+
+        return $slot === '' ? $key : $key . '|m-' . $slot;
+    }
+
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
     public function normalisiereZustand(?string $condition): ?string
     {
@@ -370,7 +394,8 @@ class GpNamingService
      */
     public function felderAusName(string $name, bool $mitGeschmack = false, bool $alteReihenfolge = false): array
     {
-        $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false];
+        $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false, 'vegan' => false, 'glutenfrei' => false, 'laktosefrei' => false,
+            'msc' => false, 'asc' => false, 'herkunft_land' => ''];   // MSC/ASC/Land: Regel 94 (v3.10.0)
         if ($mitGeschmack) {
             $out = ['hauptzutat' => '', 'flavor' => ''] + array_slice($out, 1);   // nur für den Editor (§6.6); Bestands-Backfill und Pläne behalten die alte Form
         }
@@ -380,7 +405,7 @@ class GpNamingService
             // §6.6: ein Klammerteil „ / (…)“, der kein Flag ist (Bio/Vegan/Glutenfrei/Laktosefrei), ist der Zusatz (Fantasiename)
             if (preg_match_all('/\s*\/\s*\(([^)]*)\)/u', $name, $m) > 0) {
                 foreach ($m[1] as $inhalt) {
-                    if (! in_array(mb_strtolower(trim($inhalt)), ['bio', 'vegan', 'glutenfrei', 'laktosefrei'], true) && $out['zusatz'] === '') {
+                    if (! \Platform\FoodAlchemist\Support\GpNamensKlammern::istMarker($inhalt) && ! \Platform\FoodAlchemist\Support\GpNamensKlammern::istLand($inhalt) && $out['zusatz'] === '') {
                         $out['zusatz'] = trim($inhalt);
                     }
                 }
@@ -389,8 +414,16 @@ class GpNamingService
         if (preg_match('/\(\s*bio\s*\)/iu', $name) === 1) {
             $out['bio'] = true;
         }
-        foreach (['vegan', 'glutenfrei', 'laktosefrei'] as $diaet) {   // Namensmarker „/ (Vegan)“ usw. (Felder namens_*)
+        foreach (['vegan', 'glutenfrei', 'laktosefrei', 'msc', 'asc'] as $diaet) {   // Namensmarker „/ (Vegan)“, „/ (MSC)“ usw. (Felder namens_*)
             $out[$diaet] = preg_match('/\(\s*' . $diaet . '\s*\)/iu', $name) === 1;
+        }
+        if (preg_match_all('/\/\s*\(([^)]*)\)/u', $name, $km) > 0) {   // Länder-Klammer „/ (Argentinien)“ (Regel 94)
+            foreach ($km[1] as $inhalt) {
+                if (\Platform\FoodAlchemist\Support\GpNamensKlammern::istLand($inhalt)) {
+                    $out['herkunft_land'] = trim($inhalt);
+                    break;
+                }
+            }
         }
         $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
         // Trenner Hauptzutat/Eigenschaften ist der ERSTE Doppelpunkt mit Leerzeichen (oder Ende) danach — „Gelierzucker: trocken, 2:1“ (Klaus 26.10.)
@@ -555,8 +588,10 @@ class GpNamingService
     }
 
     /**
-     * §9-Zusatz (v3.6.1): Waren ohne Zustandswort — trinkfertige Getränke (WG 15; Kaffee/Tee/Kakaopulver mit „trocken“ behalten es), Öle/Fette (WG 11 außer Essig 11.3), Sirupe/Dicksäfte/Melassen
-     * (Sub-Kategorie „Sirupe“, Rückfall: Hauptzutat endet auf sirup/dicksaft/melasse). Der Renderer gibt hier keinen Zustand aus.
+     * §9-Zusatz (v3.6.1, erweitert v3.10.0 Regel 92/830, Entscheid Dominique 12./13.11.2026): Waren ohne Zustandswort — trinkfertige Getränke
+     * (WG 15; Kaffee/Tee/Kakaopulver mit „trocken“ behalten es), Öle/Fette UND Essig (ganze WG 11 inkl. 11.3; Hauptzutat auf „essig“ auch außerhalb),
+     * Sirupe/Dicksäfte/Melassen (Sub-Kategorie „Sirupe“, Rückfall: Hauptzutat endet auf sirup/dicksaft/melasse) und Honig (Hauptzutat endet auf „honig“:
+     * `Akazienhonig: flüssig`). Der Renderer gibt hier keinen Zustand aus.
      */
     public function ohneZustandswort(array $in): bool
     {
@@ -571,11 +606,12 @@ class GpNamingService
             return $this->normalisiereZustand($in['condition'] ?? null) !== 'trocken';
         }
         if ($wg === '11') {
-            return ! str_starts_with($sub, '11.3') && ! str_contains($haupt, 'essig');
+            return true;   // Öle, Fette und Essig (11.3) — O1 (13.11.2026): Essig ohne Zustandswort
         }
 
-        // Rückfall nur, wenn die Ware selbst der Sirup ist — nicht „Walnüsse in Sirup“, „Süßkartoffel mit Ahornsirup“ (Klaus 26.10.)
-        return $haupt !== '' && preg_match('/(?:sirup|dicksaft|melasse)$/u', $haupt) === 1 && preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) !== 1;
+        // Rückfall nur, wenn die Ware selbst der Sirup/Honig/Essig ist — nicht „Walnüsse in Sirup“, „Süßkartoffel mit Ahornsirup“ (Klaus 26.10.),
+        // nicht „Senf mit Honig“
+        return $haupt !== '' && preg_match('/(?:sirup|dicksaft|melasse|honig|essig)$/u', $haupt) === 1 && preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) !== 1;
     }
 
     /** Warengruppe 16 (Non-Food)? Die WG steht in den strukturierten Feldern als `warengruppe` oder `commodity_group_code`. */
@@ -609,11 +645,28 @@ class GpNamingService
         // Verarbeitung UND Zuschnitt stehen beide im Namen („gegart, Würfel 10 mm“), Verarbeitung zuerst. Steht die Form schon im Text der Verarbeitung, kein Doppel.
         $verarbeitung = trim((string) ($in['processing'] ?? ''));
         $tkHinten = false;
-        if ($condition !== null && in_array($condition, self::BEHANDLUNG, true) && preg_match('/^(?:TK|tiefgekühlt|tiefgekuehlt)\s*(?:,\s*|$)/iu', $verarbeitung, $m) === 1) {
-            $verarbeitung = trim(mb_substr($verarbeitung, mb_strlen($m[0])));   // TK + Behandlung: „TK“ (Datenmodell vorn in processing) steht im Namen hinter dem Zustand
-            $tkHinten = true;
+        if ($condition !== null && in_array($condition, self::BEHANDLUNG, true)) {
+            // TK + Behandlung (Regel 92, v3.10.0): „TK“ steht im Namen hinter dem Zustand — „…, geräuchert, TK“. Im Datenmodell vorn in processing,
+            // im Bestand auch mittendrin („geschnitten, TK“): jedes TK-Wort der Verarbeitung wandert nach hinten.
+            $ohneTk = array_values(array_filter(\Platform\FoodAlchemist\Support\FettAngabe::teile($verarbeitung),
+                fn ($t) => preg_match('/^(?:TK|tiefgekühlt|tiefgekuehlt)$/iu', $t) !== 1));
+            if (count($ohneTk) !== count(\Platform\FoodAlchemist\Support\FettAngabe::teile($verarbeitung))) {
+                $verarbeitung = implode(', ', $ohneTk);
+                $tkHinten = true;
+            }
         }
+        // Fettwert (Regel 826/75, M2/M4): exakt, „N % Fett“ bzw. „N % Fett i. Tr.“, immer direkt hinter dem Zustand — auch wenn er im Feld
+        // Verarbeitung, Zuschnitt oder Pflichtangabe steht. Felder ohne Fettwert bleiben Zeichen für Zeichen unverändert.
+        $fett = [];
         $zuschnitt = trim((string) ($in['form'] ?? ''));
+        $pflicht = trim((string) ($in['pflichtangabe'] ?? ''));
+        foreach (['verarbeitung', 'zuschnitt', 'pflicht'] as $feld) {
+            [$gefunden, $rest] = \Platform\FoodAlchemist\Support\FettAngabe::ziehe($$feld);
+            if ($rest !== null) {
+                $fett = [...$fett, ...$gefunden];
+                $$feld = $rest;
+            }
+        }
         $mid = $verarbeitung;
         if ($zuschnitt !== '' && ($verarbeitung === '' || mb_stripos($verarbeitung, $zuschnitt) === false)) {
             $mid = $verarbeitung === '' ? $zuschnitt : $verarbeitung . ', ' . $zuschnitt;
@@ -629,28 +682,23 @@ class GpNamingService
         if ($tkHinten) {
             $parts[] = 'TK';
         }
+        foreach (array_unique($fett) as $f) {
+            $parts[] = $f;
+        }
         if (! empty($in['portion'])) {
+            // Stückgewicht exakt wie im Artikel (Regel 75, G14 13.11.2026: keine ±10-%-Toleranz, Spannen bleiben Spannen) — nur die Schreibweise wird vereinheitlicht
             $parts[] = $this->normalisierePortion((string) $in['portion']) . ' pro Stück';        // „660 g pro Stück" (echter Umlaut im GP-Namen; kein „Portion", Leerzeichen vor der Einheit)
         }
-        if (! empty($in['pflichtangabe'])) {
-            $parts[] = self::umlautKanon((string) $in['pflichtangabe']);
+        if ($pflicht !== '') {
+            $parts[] = self::umlautKanon($pflicht);
         }
 
         $hauptzutat = trim($in['hauptzutat'] ?? '');
         $base = $parts === [] ? $hauptzutat : $hauptzutat . ': ' . implode(', ', $parts);
 
-        $suffixes = [];
-        // §6.6: der Fantasiename (Klammer-Zusatz) steht VOR den festen Flags: er gehört zur Produktidentität, die Flags (Bio/Vegan/…) bleiben als
-        // normierte Marker am Ende — so bleibt das abschließende Flag-Muster für Parser und Match unverändert.
-        $zusatz = $this->bereinigeZusatz($in['zusatz'] ?? null);
-        if ($zusatz !== '') {
-            $suffixes[] = '(' . $zusatz . ')';
-        }
-        foreach (['bio' => '(Bio)', 'vegan' => '(Vegan)', 'glutenfrei' => '(Glutenfrei)', 'laktosefrei' => '(Laktosefrei)'] as $flag => $suffix) {
-            if (! empty($in[$flag])) {
-                $suffixes[] = $suffix;                                       // Reihenfolge fix (A1)
-            }
-        }
+        // Regel 94 (v3.10.0): feste Klammer-Reihenfolge `/ (Marke) / (Land) / (Bio) / (MSC|ASC) / (Vegan) / (Glutenfrei) / (Laktosefrei)` — die Marke bzw.
+        // der Fantasiename (§6.6, Feld zusatz) steht vorn, die normierten Marker am Ende.
+        $suffixes = \Platform\FoodAlchemist\Support\GpNamensKlammern::klammern($in, $this->bereinigeZusatz($in['zusatz'] ?? null));
 
         return $suffixes === [] ? $base : $base . ' / ' . implode(' / ', $suffixes);
     }
@@ -681,7 +729,9 @@ class GpNamingService
         // Spec 81: alle aktiven Regeln für den GP-Namen. blockieren/korrigieren = Hard-Error, warnen = Hinweis.
         $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
         $kontext = ['zustand' => $condition, 'warengruppe' => $in['warengruppe'] ?? $in['commodity_group_code'] ?? null, 'form' => $in['form'] ?? null,
-            'hauptzutat' => trim((string) ($in['hauptzutat'] ?? strstr($name . ':', ':', true)))];
+            'hauptzutat' => trim((string) ($in['hauptzutat'] ?? strstr($name . ':', ':', true))),
+            // Regel 833 (v3.10.0): rohe ganze Ware = keine Verarbeitung, kein Zuschnitt außer „ganz“ (Kochtyp nur dort Pflicht, gp.8.12.kartoffel)
+            'verarbeitet' => trim((string) ($in['processing'] ?? '')) !== '' || ! in_array(mb_strtolower(trim((string) ($in['form'] ?? ''))), ['', 'ganz'], true) ? 'ja' : 'nein'];
         foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::fuerZiel('gp.name') as $regel) {
             foreach ($motor->pruefe($regel, $name, $kontext) as $b) {
                 $text = trim(($b['paragraph'] ?? '') . ': ' . $b['begruendung'], ': ');
@@ -696,7 +746,16 @@ class GpNamingService
             $errors[] = "§9: Zustand »{$condition}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
         }
         if ($condition !== null && $this->ohneZustandswort($in)) {
-            $warnings[] = '§9-Zusatz: Getränke, Öle und Sirupe tragen kein Zustandswort — »' . $condition . '« erscheint nicht im Namen.';
+            $warnings[] = '§9-Zusatz: Getränke, Öle, Essig, Sirupe und Honig tragen kein Zustandswort — »' . $condition . '« erscheint nicht im Namen.';
+        }
+        foreach ([\Platform\FoodAlchemist\Support\GpNamensKlammern::herkunftHinweis($in), \Platform\FoodAlchemist\Support\GpNamensKlammern::siegelHinweis($in)] as $h) {
+            if ($h !== null) {
+                $warnings[] = $h;   // Regel 94: Länder-/Siegel-Klammer an der falschen Ware — Prüfliste, kein Blocker
+            }
+        }
+        $hz = trim((string) ($in['hauptzutat'] ?? strstr($name . ':', ':', true)));
+        if (($mehrzahl = \Platform\FoodAlchemist\Support\GpSammelware::mehrzahlStatt($hz)) !== null) {
+            $warnings[] = "§6.1: Sammelware steht in der Mehrzahl — »{$mehrzahl}« statt »{$hz}«.";
         }
         $flavor = trim((string) ($in['flavor'] ?? ''));
         if ($flavor !== '' && ($fz = $this->normalisiereZustand($flavor)) !== null && in_array($fz, self::ZUSTAND_VOCAB, true)) {
@@ -793,7 +852,7 @@ class GpNamingService
         if ($hauptzutatSlug === '') {
             throw new \RuntimeException('Hauptzutat ist Pflicht (D-3: main_ingredient_slug ab Editor).');
         }
-        $gpKey = $this->buildGpKey($hauptzutatSlug, $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
+        $gpKey = $this->gpKeyAusFeldern($hauptzutatSlug, $in);   // v3.10.0: Stückgewicht/Fett/Land/Siegel trennen
 
         $guard = $this->anlageGuard($team, $gpKey, $name);
         if ($guard['blockiert']) {
@@ -836,6 +895,10 @@ class GpNamingService
             'namens_vegan' => ! empty($in['vegan']),
             'namens_glutenfrei' => ! empty($in['glutenfrei']),
             'namens_laktosefrei' => ! empty($in['laktosefrei']),
+            'namens_msc' => ! empty($in['msc']),                                   // Regel 94 (v3.10.0)
+            'namens_asc' => ! empty($in['asc']),
+            'herkunft_land' => \Platform\FoodAlchemist\Support\GpNamensKlammern::land($in['herkunft_land'] ?? null) ?: null,
+            ...\Platform\FoodAlchemist\Support\AngabeKennzeichen::felder($in, null),   // Regel 91: angenommen | offen + Prüflisten-Grund
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: null,
             'sub_category' => ($in['sub_category'] ?? '') ?: null,
             'is_derivat' => (bool) ($in['is_derivat'] ?? false),
@@ -858,6 +921,8 @@ class GpNamingService
         if ($gp->istNonFood() && ! isset($in['warengruppe']) && ! isset($in['commodity_group_code'])) {
             $in['commodity_group_code'] = (string) $gp->commodity_group_code;
         }
+        // Regel 94 (v3.10.0): Land- und Siegel-Klammer bleiben beim Neu-Rendern stehen, wenn der Schreiber sie nicht mitgibt (Teil-Schreiber, ältere Clients)
+        $in += ['herkunft_land' => $gp->herkunft_land, 'msc' => (bool) $gp->namens_msc, 'asc' => (bool) $gp->namens_asc];
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
         $pruefung = $this->validateGpName($name, $in);
         if ($pruefung['errors'] !== []) {
@@ -885,6 +950,10 @@ class GpNamingService
             'namens_vegan' => array_key_exists('vegan', $in) ? ! empty($in['vegan']) : (bool) $gp->namens_vegan,
             'namens_glutenfrei' => array_key_exists('glutenfrei', $in) ? ! empty($in['glutenfrei']) : (bool) $gp->namens_glutenfrei,
             'namens_laktosefrei' => array_key_exists('laktosefrei', $in) ? ! empty($in['laktosefrei']) : (bool) $gp->namens_laktosefrei,
+            'namens_msc' => ! empty($in['msc']),                                   // Regel 94: oben aus dem GP vorbelegt, wenn nicht mitgegeben
+            'namens_asc' => ! empty($in['asc']),
+            'herkunft_land' => \Platform\FoodAlchemist\Support\GpNamensKlammern::land($in['herkunft_land'] ?? null) ?: null,
+            ...\Platform\FoodAlchemist\Support\AngabeKennzeichen::felder($in, $gp),   // Regel 91: nur wenn mitgegeben, sonst bleibt es
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,

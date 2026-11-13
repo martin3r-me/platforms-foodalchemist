@@ -23,6 +23,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
     private const IN_KEYS = [
         'name', 'hauptzutat', 'flavor', 'zusatz', 'condition', 'processing', 'form', 'portion', 'pflichtangabe',
         'commodity_group_code', 'sub_category', 'is_derivat', 'derivat_von_gp_id', 'bio', 'vegan', 'glutenfrei', 'laktosefrei',
+        'msc', 'asc', 'herkunft_land', 'angabe_status', 'angabe_grund',   // Regel 94 + 91 (v3.10.0)
         'rezepturware',   // §5 Ausnahme 3; marke_offen ist abgeleitet und nie Eingabe
         'alkohol',        // Spec 94c: ja | nein | offen
     ];
@@ -37,6 +38,7 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
         return 'Legt ein Grundprodukt an (team-eigen, status=tentative), Name nach Regelwerk_Grundprodukte §6. '
             . 'Entweder `name` direkt oder Strukturfelder (hauptzutat + flavor/condition/processing/form/…) zum Rendern; flavor = Geschmackszutat (§6.6), steht vor dem Zustand. '
             . 'hauptzutat ist Pflicht. Dubletten werden hart geblockt — force=true legt bewusst trotzdem an. '
+            . 'Klammern in fester Reihenfolge (Regel 94): / (Marke) / (Land) / (Bio) / (MSC|ASC) / (Vegan) / (Glutenfrei) / (Laktosefrei); Pflichtangabe ohne Beleg: angabe_status angenommen|offen (Regel 91). '
             . 'Für den Zutaten→GP-Sourcing-Backlog stattdessen gps.MATCH/gp_proposals.POST nutzen.';
     }
 
@@ -59,6 +61,11 @@ class GpsPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
                 'vegan' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Vegan)“ (Feld namens_vegan, getrennt vom Artikel-Tag).'],
                 'glutenfrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Glutenfrei)“ (Feld namens_glutenfrei).'],
                 'laktosefrei' => ['type' => 'boolean', 'description' => 'Namensmarker „/ (Laktosefrei)“ (Feld namens_laktosefrei).'],
+                'msc' => ['type' => 'boolean', 'description' => 'Siegel-Klammer „/ (MSC)“ (Regel 94, Feld namens_msc): nur wenn der Artikel das Siegel belegt; Fisch mit und ohne Siegel sind zwei GPs. Ohne den Parameter bleibt der Wert stehen.'],
+                'asc' => ['type' => 'boolean', 'description' => 'Siegel-Klammer „/ (ASC)“ (Regel 94, Feld namens_asc), steht am Platz von (MSC). Ohne den Parameter bleibt der Wert stehen.'],
+                'herkunft_land' => ['type' => 'string', 'description' => 'Länder-Klammer „/ (Land)“ (Regel 94/823): nur rohe Fleisch-Teilstücke aus belegten Ländern AUSSERHALB der EU, z. B. Argentinien. Deutschland, EU und regional nie; Wurst und Hack nie. Verschiedene Länder = verschiedene GPs. Leer löscht; ohne den Parameter bleibt der Wert stehen.'],
+                'angabe_status' => ['type' => 'string', 'enum' => ['angenommen', 'offen', ''], 'description' => 'Internes Kennzeichen einer Pflichtangabe ohne Beleg (Regel 91, nie im Namen): angenommen = üblicher Wert aus der Startliste angenommen; offen = kein üblicher Wert, Angabe fehlt (nie mit einem belegten GP zusammenführen). Leer löscht.'],
+                'angabe_grund' => ['type' => 'string', 'description' => 'Prüflisten-Grund zum Kennzeichen, z. B. „Konservierungsart nicht belegt (§8.20)“ oder „Maß angenommen: Würfel 10 mm“.'],
                 'alkohol' => ['type' => 'string', 'enum' => ['ja', 'nein', 'offen'], 'description' => 'Enthält das Produkt Alkohol (Getränk ab 0,5 vol-%, Kochwein, Mirin, Rum-Aroma …)? Fester Wert mit Vorrang vor den Artikeldaten, wird bis ins Rezept hochgereicht (Kennzeichnung „Alk.“). Gilt als manuell gepflegt; offen = keine Aussage.'],
                 'commodity_group_code' => ['type' => 'string', 'description' => 'Warengruppen-Code (§3).'],
                 'sub_category' => ['type' => 'string', 'description' => 'Sub-Kategorie.'],

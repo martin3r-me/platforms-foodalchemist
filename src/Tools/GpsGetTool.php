@@ -21,7 +21,7 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
     public function getDescription(): string
     {
         return 'Liefert ein Grundprodukt im Detail: Stammdaten, Status, Taxonomie (Warengruppe/Sub-Kategorie), '
-            . 'Zustand/Bio, Derivat-Herkunft (§11.2: is_derivat/derivat_von_gp_id/requires_la), Tags (tri-state), '
+            . 'Zustand/Bio, Namens-Klammern (Land, MSC/ASC, Vegan …) und Kennzeichen angenommen/offen (Regel 91), Derivat-Herkunft (§11.2: is_derivat/derivat_von_gp_id/requires_la), Tags (tri-state), '
             . 'Lead-LA-Referenz und das ALL-MAXIMAL-Allergen-Aggregat (GL-01).';
     }
 
@@ -67,6 +67,10 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'zusatz' => $gp->zusatz,
             'rezepturware' => $gp->rezepturware,   // §5 Ausnahme 3: null = nicht entschieden
             'marke_offen' => (bool) $gp->marke_offen,
+            // Namens-Klammern (Regel 94, v3.10.0) und Kennzeichen einer Pflichtangabe ohne Beleg (Regel 91: angenommen | offen, nie im Namen)
+            'klammern' => ['herkunft_land' => $gp->herkunft_land, 'msc' => (bool) $gp->namens_msc, 'asc' => (bool) $gp->namens_asc,
+                'vegan' => (bool) $gp->namens_vegan, 'glutenfrei' => (bool) $gp->namens_glutenfrei, 'laktosefrei' => (bool) $gp->namens_laktosefrei],
+            'angabe_status' => $gp->angabe_status, 'angabe_grund' => $gp->angabe_grund,
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'tags' => $tags,
             // Non-Food (WG 16): Maße in mm/ml wie gespeichert, dazu die Größe in Betriebs-Einheiten (Ø 27 cm); sonst null

@@ -1368,7 +1368,8 @@ return [
                 . 'erfinde aber keine nicht belegten Eigenschaften. Artikelnummer, Lieferant, Gebinde, '
                 . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur als Ausnahme, wenn es keine vergleichbare messbare Spezifikation gibt, §5; Rezepturware trägt die Marke als zusatz, §5 Ausnahme 3, siehe REZEPTURWARE; '
                 . 'Qualität steht als messbares Merkmal mit belegtem Wert im Namen, z. B. Frucht-, Kakao-, Fett-% oder Sorte, §8.19). '
-                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1). '
+                . 'Singular/Lemma (§6.1), außer Sammelware in der Mehrzahl: Eier, Hülsenfrüchte (in jedem Zustand), Nüsse & Kerne, Beeren, Kapern, Oliven '
+                . '(„Walnüsse“, „Kichererbsen“, „Himbeeren“); keine Verpackungswörter (§7.1). '
                 . 'Gewürzte oder aromatisierte Variante einer Grundware (§6.6): Die Grundware bleibt hauptzutat, die Geschmackszutat steht in flavor '
                 . '(z. B. „Elbländer Chili Scheiben 45 %“ → hauptzutat Käse, flavor Chili) — nur wenn sie in Bezeichnung oder Zutatenangabe steht, sonst "". '
                 . 'flavor ist nur eine kleine, würzende Beigabe zu einer anderen Ware; macht die Zutat selbst die Ware aus, bleibt sie hauptzutat mit der Verarbeitung im Namen '
@@ -2210,7 +2211,7 @@ return [
             'task' => 'Leite die KONFORMEN Werte fuer das Grundprodukt AUS dem beigefuegten Quell-Lieferantenartikel '
                 . '(quell_lieferantenartikel, LA-First) ab, um die gemeldeten Regelverstoesse (verstoesse) zu beheben. '
                 . 'HARTE REGEL: NUR aus dem LA + den vorhandenen GP-Daten ableiten — was das LA nicht belegt, gib als '
-                . 'null zurueck (NIEMALS raten/erfinden). Felder: name (§6-Schema, Singular §6.1), zustand (§9: '
+                . 'null zurueck (NIEMALS raten/erfinden). Felder: name (§6-Schema, Singular §6.1 — Sammelware bleibt Mehrzahl: Eier, Hülsenfrüchte, Nüsse & Kerne, Beeren, Kapern, Oliven), zustand (§9: '
                 . '' . \Platform\FoodAlchemist\Services\GpNamingService::zustandListe() . '), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
                 . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}. '
                 . $umlautKlausel,

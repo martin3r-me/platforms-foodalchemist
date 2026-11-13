@@ -36,10 +36,10 @@ it('aktive Regel: Speichern verlangt erst den Probelauf, danach neue Version', f
         ->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Probelauf'))
         ->assertSet('probelauf', fn ($p) => is_array($p) && $p['bestand'] === 'Grundprodukte (Name)');
-    expect($r->fresh()->version)->toBe(3);
+    expect($r->fresh()->version)->toBe(4);   // v4 = Kanister (Regelwerk v3.10.0)
 
     $c->call('speichern')->assertSet('fehler', null);
-    expect($r->fresh()->version)->toBe(4)->and($r->fresh()->params['tokens'])->toBe(['Kiste', 'Karton', 'Dose', 'Eimer']);
+    expect($r->fresh()->version)->toBe(5)->and($r->fresh()->params['tokens'])->toBe(['Kiste', 'Karton', 'Dose', 'Eimer']);
 });
 
 it('Zuordnung: Speichern behält Kontext und Wortmengen-Optionen der Einträge', function () {

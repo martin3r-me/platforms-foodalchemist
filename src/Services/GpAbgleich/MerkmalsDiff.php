@@ -6,12 +6,12 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Services\GpNamingService;
 
 /**
- * Merkmals-Diff Artikel ↔ GP (Abgleich-Dienst, S4; Regelwerk §7.4a/§8.19/§6.6). Je Merkmal `gleich | abweichend | unbekannt`.
+ * Merkmals-Diff Artikel ↔ GP (Abgleich-Dienst, S4; Regelwerk §8.19/§6.6, Fett exakt nach Regel 826). Je Merkmal `gleich | abweichend | unbekannt`.
  * „abweichend“ nur, wenn beide Seiten einen Wert tragen und er verschieden ist — oder wenn eine Seite eine Geschmackszutat/einen Fantasienamen trägt,
  * die der anderen fehlt („Käse: Chili“ ≠ „Käse“). Unbekannt ist kein Widerspruch (Datenlücke).
  *
- * Geprüft werden: Zustand (frisch/TK/trocken/konserviert), Geschmack (flavor), Fantasiename (zusatz), Prozentwerte (Kakao, Frucht, vol, Fett — Fett nicht bei
- * Molkerei-Handelsklassen, §7.4a), Zucker (gezuckert/ungezuckert) und Bio.
+ * Geprüft werden: Zustand (frisch/TK/trocken/konserviert), Geschmack (flavor), Fantasiename (zusatz), Prozentwerte (Kakao, Frucht, vol, Fett — exakt, auch
+ * bei Molkerei, v3.10.0), Zucker (gezuckert/ungezuckert) und Bio.
  */
 class MerkmalsDiff
 {
@@ -65,11 +65,12 @@ class MerkmalsDiff
                 $e[] = $this->eintrag($label . '-%', $aw, $gw, $aw !== null && $gw !== null ? (abs((float) $aw - (float) $gw) < 0.01 ? 'gleich' : 'abweichend') : 'unbekannt');
             }
         }
-        $gpMilch = ($gp->commodity_group_code === '06') && ! preg_match('/käse|kaese|cheese/iu', (string) $gp->name);   // Handelsklassen (§7.4a) — kein Widerspruch
+        // Fettwert exakt, auch bei Milchprodukten (Regel 826, M2 13.11.2026): keine Handelsklassen, keine Gleichsetzung mehr (§7.4a gestrichen) —
+        // 3,5 % und 3,8 % sind zwei GPs.
         $afett = $this->prozent($text, 'fett');
         $gfett = $this->prozent(mb_strtolower((string) $gp->name), 'fett');
         if ($afett !== null || $gfett !== null) {
-            $e[] = $this->eintrag('Fett-%', $afett, $gfett, $gpMilch || $afett === null || $gfett === null ? 'unbekannt' : (abs((float) $afett - (float) $gfett) < 0.01 ? 'gleich' : 'abweichend'));
+            $e[] = $this->eintrag('Fett-%', $afett, $gfett, $afett === null || $gfett === null ? 'unbekannt' : (abs((float) $afett - (float) $gfett) < 0.01 ? 'gleich' : 'abweichend'));
         }
 
         // Zucker

@@ -41,7 +41,7 @@ class GpKandidatenSucher
     {
         $pool = $this->recall($team, $la, $felder, $profil);
         $artikelTexte = [$la->designation, $la->regulated_name, $la->marketing_name, $la->ingredients_supplier];
-        $artikelBio = (bool) $la->is_organic;
+        $artikelBio = $la->istBio();   // Regel 94: auch reiner Bio-Händler
         $text = mb_strtolower(implode(' | ', array_filter(array_map('trim', array_map('strval', [$la->designation, $la->regulated_name, $la->marketing_name])))));
         $slug = $this->naming->slugify((string) ($felder['hauptzutat'] ?? ''));
 
@@ -94,7 +94,7 @@ class GpKandidatenSucher
         $teile[] = $grund === null ? 'harte Filter: ok' : 'harter Filter SPERRT: ' . $grund;
         $c = ['gp' => $gp, 'score' => (float) ($pool[$gpId]['score'] ?? 0.0), 'methoden' => $pool[$gpId]['methoden'] ?? [], 'exakt' => (bool) ($pool[$gpId]['exakt'] ?? false),
             'bonus' => 0.0];
-        $c = $this->bewerte($team, $la, $c, $felder, [$la->designation, $la->regulated_name, $la->marketing_name, $la->ingredients_supplier], (bool) $la->is_organic);
+        $c = $this->bewerte($team, $la, $c, $felder, [$la->designation, $la->regulated_name, $la->marketing_name, $la->ingredients_supplier], $la->istBio());
         $teile[] = 'Diff: ' . ($c['diff']['abweichungen'] === [] ? 'keine Abweichung' : implode('; ', $c['diff']['abweichungen']));
         $teile[] = 'Guard: ' . ($c['guard'] === [] ? 'ok' : implode('; ', $c['guard']));
         $liste = $this->kandidaten($team, $la, $felder, $profil, 5);

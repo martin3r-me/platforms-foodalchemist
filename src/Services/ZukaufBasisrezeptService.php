@@ -120,7 +120,11 @@ final class ZukaufBasisrezeptService
             return null;
         }
         $bezeichnung = RezeptTypVokabular::ohneTyp($auftrag);
-        if ($bezeichnung === '' || RezeptTypVokabular::finde($bezeichnung) !== null) {
+        // Bezeichnung, die nur ein Typ derselben Hauptgruppe ist („Brühe: Fond“), trägt nichts — dann der GP-Name. Seit v3.10.0 (Basisrezepte §16)
+        // sind auch Fleisch, Gemüse, Fisch … Typen; als Bezeichnung einer anderen Hauptgruppe („Brühe: Gemüse“) bleiben sie das Leitaroma.
+        $nurTyp = ($bt = RezeptTypVokabular::finde($bezeichnung)) !== null
+            && array_intersect(RezeptTypVokabular::gruppenVon($bt), RezeptTypVokabular::gruppenVon($typ)) !== [];
+        if ($bezeichnung === '' || $nurTyp) {
             $bezeichnung = RezeptTypVokabular::ohneTyp((string) $gp->name);
         }
 

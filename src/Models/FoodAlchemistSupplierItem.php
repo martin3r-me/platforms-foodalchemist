@@ -154,6 +154,15 @@ class FoodAlchemistSupplierItem extends Model
         return $this->belongsTo(FoodAlchemistSupplier::class, 'supplier_id')->ohneTeamSicht('verweis');
     }
 
+    /**
+     * Bio im Sinne des GP-Namens (Regel 94 Nr. 5, v3.10.0): der Artikel belegt Bio ODER sein Lieferant ist ein reiner Bio-Händler
+     * (`reiner_bio_haendler`, z. B. EPOS Bio Partner Süd) — dann gilt jede seiner Waren als Bio und das GP trägt „/ (Bio)“.
+     */
+    public function istBio(): bool
+    {
+        return (bool) $this->is_organic || (bool) ($this->supplier?->reiner_bio_haendler ?? false);
+    }
+
     public function structure(): HasOne
     {
         return $this->hasOne(FoodAlchemistSupplierItemStructure::class, 'supplier_item_id');
