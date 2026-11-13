@@ -155,16 +155,12 @@ class VkModal extends Component
             if ($r === null) {
                 return;
             }
-            $defaultMarkupClassId = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
-                ->defaultMarkupClassId($team);
-            $standardPresentation = $r->standardPresentation()->first();
             $this->form = [
                 'name' => $r->name,
                 'sales_wording_standard' => $r->sales_wording_standard,
                 'taste_direction' => $r->taste_direction, 'vorgabe_convenience' => $r->vorgabe_convenience, 'vorgabe_niveau' => $r->vorgabe_niveau,
                 'dish_class_id' => $r->dish_class_id,
-                // Preis-Wahrheit ist die Standard-Darreichung (Spec 85 D-1: die Rezeptspalte gibt es nicht mehr).
-                'markup_class_id' => $standardPresentation?->markup_class_id ?? $defaultMarkupClassId,
+                // Die Preisklasse steht NUR an der Darreichung (13.11.2026): ein zweites Feld im Kopf überschrieb sie beim Speichern mit seinem alten Stand.
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -281,38 +277,6 @@ class VkModal extends Component
                 $this->savedToast('Auto-Preis aktiviert');
             }
         }
-    }
-
-    /**
-     * Der Kalkulations-Tab ist eine Kurzbedienung der Standard-Darreichung. Ein
-     * Klassenwechsel wird deshalb sofort gespeichert und neu berechnet; andernfalls
-     * zeigten Kalkulation und Darreichungen bis zum allgemeinen Modal-Save zwei
-     * verschiedene Wahrheiten.
-     */
-    public function preisklasseGeaendert(string $wert): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-
-        $markupClassId = ctype_digit($wert) && (int) $wert > 0 ? (int) $wert : null;
-
-        try {
-            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, [
-                'markup_class_id' => $markupClassId,
-            ]);
-            $this->form['markup_class_id'] = $markupClassId;
-            $this->ladeDarreichungen();
-            $this->fehler = null;
-        } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();
-
-            return;
-        }
-
-        $this->dispatch('recipe-gespeichert');
-        $this->savedToast('Preisklasse und Auto-Preis aktualisiert');
     }
 
     public function darreichungNeu(): void
@@ -463,6 +427,7 @@ class VkModal extends Component
             );
             // Preis-Wahrheit liegt an der Darreichung: der angezeigte VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
+            $update = $this->ohneUnveraenderteSpiegelFelder($update);   // was im Kopf nicht geändert wurde, überschreibt die Darreichung nicht
             app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update, $this->kiLineage);
             $this->kiLineage = [];
 
@@ -481,6 +446,7 @@ class VkModal extends Component
 
             return;
         }
+        $this->ladeDarreichungen();   // die Zeilen zeigen den gespeicherten Stand (sonst schriebe die nächste Zeilen-Änderung Altes zurück)
         $this->dispatch('recipe-gespeichert');
         // #1b: Schließen + finaler Toast erst NACH erfolgreichem Zutaten-Save. Der Button stößt
         // den Zutaten-Save sequenziert nach diesem Promise an (adressiert, MVP-046); der Editor

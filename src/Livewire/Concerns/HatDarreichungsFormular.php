@@ -80,6 +80,41 @@ trait HatDarreichungsFormular
         }
     }
 
+    /**
+     * Kopf-Felder des Gerichts, die `SalesRecipeService::updateVk` in die Standard-Darreichung spiegelt
+     * (`syncStandardDarreichung`). Der Kopf lädt sie einmal beim Öffnen; ändert der Mensch danach die Darreichungs-Zeile,
+     * stünde im Kopf ein alter Stand. `sales_unit_count` gehört dazu: geht es mit, rechnet der Sync die Grammatur der
+     * Standard-Darreichung aus Ertrag und Anzahl neu.
+     */
+    private const KOPF_SPIEGEL = ['sales_quantity_per_unit_g', 'sales_unit_count', 'sales_unit_vocab_id', 'container_warm_vocab_id', 'container_cold_vocab_id', 'serving_vehicle_vocab_id'];
+
+    /**
+     * Speichern im Kopf (13.11.2026): ein gespiegeltes Feld geht nur mit, wenn es im Kopf wirklich geändert wurde.
+     * Vorher schrieb „Speichern“ den ganzen Kopf zurück und überschrieb damit, was zwischenzeitlich in der Zeile der
+     * Standard-Darreichung gesetzt worden war (Dominique: Preisklasse in der Zeile gewählt, nach dem Speichern weg).
+     * „Geändert“ heißt: weicht vom gespeicherten Wert am Gericht ab.
+     *
+     * @param  array<string, mixed>  $update
+     * @return array<string, mixed>
+     */
+    private function ohneUnveraenderteSpiegelFelder(array $update): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $gericht = $team !== null && $this->recipeId !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->whereKey($this->recipeId)->first(self::KOPF_SPIEGEL) : null;
+        if ($gericht === null) {
+            return $update;
+        }
+        $norm = static fn ($v) => $v === null || $v === '' ? null : (is_numeric($v) ? (float) $v : (string) $v);
+        foreach (self::KOPF_SPIEGEL as $feld) {
+            if (array_key_exists($feld, $update) && $norm($update[$feld]) === $norm($gericht->{$feld})) {
+                unset($update[$feld]);
+            }
+        }
+
+        return $update;
+    }
+
     /** „Preis fehlt“ / „Begründung fehlt“ für eine feste Zeile, sonst null. */
     public static function darFestpreisFehlt(array $zeile): ?string
     {

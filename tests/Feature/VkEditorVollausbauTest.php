@@ -96,9 +96,10 @@ it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikatio
     }
     expect($html)->toContain('Rohertragsquote')
         ->and($html)->toContain('Rohertragsquote = (VK netto − MEK) ÷ VK netto')
-        // fa-pass: Abschnitt heißt jetzt «Preis und Rohertrag» (Copy-Umbau, Marker unverändert).
-        ->and($html)->toContain('Preis und Rohertrag')
-        ->and($html)->toContain('data-vk-verkaufsblock');
+        // 13.11.2026: der Kasten «Preis und Rohertrag» ist entfallen — Preisklasse, Preis und MwSt stehen nur noch an der
+        // Darreichung (das zweite Preisklassen-Feld im Kopf überschrieb beim Speichern die Zeile). Übrig: ein Kasten Verkaufseinheit.
+        ->and($html)->toContain('data-vk-unit-block')->toContain('data-vk-nebenkosten')->toContain('data-vk-preis-hinweis')
+        ->and($html)->not->toContain('Preis und Rohertrag')->not->toContain('data-vk-ak')->not->toContain('vk-preisklasse');
 });
 
 it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
@@ -132,7 +133,7 @@ it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
     expect($darreichung->fresh()->price_mode)->toBe('auto');
 });
 
-it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darreichung', function () {
+it('Preisklasse in der Darreichungs-Zeile: sofort gespeichert und Preis neu gerechnet', function () {
     $klasseAlt = FoodAlchemistMarkupClass::create([
         'team_id' => $this->rootTeam->id,
         'code' => 'ALT',
@@ -175,8 +176,9 @@ it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darre
 
     Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
-        ->call('preisklasseGeaendert', (string) $klasseNeu->id)
-        ->assertSet('form.markup_class_id', $klasseNeu->id)
+        ->call('bearbeitenStarten')
+        ->set("darForm.{$darreichung->id}.markup_class_id", $klasseNeu->id)   // 13.11.2026: die Preisklasse steht nur noch in der Zeile
+        ->call('darreichungSpeichern', $darreichung->id)
         ->assertSet("darForm.{$darreichung->id}.markup_class_id", $klasseNeu->id)
         ->assertSet('fehler', null)
         ->assertNotDispatched('modal.close');
@@ -186,7 +188,7 @@ it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darre
         ->and((float) $darreichung->fresh()->sales_net)->toBeGreaterThan($alterPreis);
 });
 
-it('zeigt im Kalkulations-Tab die Preisklasse der Standard-Darreichung als Wahrheit', function () {
+it('die Preisklasse steht nur an der Darreichung, im Kopf gibt es kein zweites Feld', function () {
     $darreichungsKlasse = FoodAlchemistMarkupClass::create([
         'team_id' => $this->rootTeam->id,
         'code' => 'DAR',
@@ -210,9 +212,11 @@ it('zeigt im Kalkulations-Tab die Preisklasse der Standard-Darreichung als Wahrh
         'price_mode' => 'auto',
     ]);
 
-    Livewire::test(VkModal::class)
+    $darreichungId = (int) FoodAlchemistRecipeDarreichung::where('recipe_id', $this->vk->id)->value('id');
+    $c = Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
-        ->assertSet('form.markup_class_id', $darreichungsKlasse->id);
+        ->assertSet("darForm.{$darreichungId}.markup_class_id", $darreichungsKlasse->id);
+    expect(array_key_exists('markup_class_id', $c->get('form')))->toBeFalse();   // 13.11.2026: kein zweites Feld im Kopf
 });
 
 it('✨-Fake-Pfade sind ehrlich (kein gültiger Wert ⇒ kiFehler, Form unverändert)', function () {
