@@ -216,7 +216,7 @@
                         <x-fa::field label="Zeile über dem Titel" for="design-cover-kicker" hint="Zum Beispiel Anlass, Datum oder Gästezahl. Leer heißt „Kulinarisches Angebot“.">
                             <x-fa::input id="design-cover-kicker" wire:model.live.debounce.400ms="layout.{{ $i }}.style.kicker_text" placeholder="Kulinarisches Angebot" />
                         </x-fa::field>
-                        @php($ovVal = isset($sb['style']['overlay']) && is_numeric($sb['style']['overlay']) ? (int) $sb['style']['overlay'] : null)
+                        @php $ovVal = isset($sb['style']['overlay']) && is_numeric($sb['style']['overlay']) ? (int) $sb['style']['overlay'] : null; @endphp
                         <div class="flex flex-col gap-1.5">
                             <div class="flex items-center justify-between gap-2">
                                 <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Titelbild abdunkeln</span>
