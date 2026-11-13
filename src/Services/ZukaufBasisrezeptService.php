@@ -163,6 +163,104 @@ final class ZukaufBasisrezeptService
         return RecipeKomponentenPlanService::bereinigeName($ware['typ'] . ': ' . $ware['bezeichnung']) . ' ' . self::ZUSATZ;
     }
 
+    // ── Zukauf-Basisrezept aus der Planung, angestoßen am Grundprodukt (Dominique 13.11.) ──────────────────────────────
+
+    /**
+     * Darf der Mensch für diesen GP ein Zukauf-Basisrezept planen? Jeder Food-GP (der Mensch entscheidet) — nur Non-Food
+     * (WG 16) und Platzhalter nicht. Die Fertigware-Kriterien ({@see istFertigwareGp}) gelten nur für den automatischen
+     * Kaskaden-Weg und bleiben dort unverändert.
+     */
+    public function bietetZukaufAn(FoodAlchemistGp $gp): bool
+    {
+        return ! (bool) $gp->is_platzhalter && (string) ($gp->commodity_group_code ?? '') !== '16';
+    }
+
+    /** Typ-Vorschlag aus der Warengruppe (Regel basisrezept.zukauf.typ) — null: der Mensch wählt, nie raten. */
+    public function typFuerGp(FoodAlchemistGp $gp): ?string
+    {
+        return $this->typAusWarengruppe($gp);
+    }
+
+    /**
+     * Bezeichnung im Rezeptnamen: Produktname des GP (Teil vor dem Doppelpunkt, GP-Regelwerk §6) ohne Klammer-Zusatz —
+     * „Kräutercrumble grün Jorda: trocken, Topping“ → „Kräutercrumble grün Jorda“. Die Ware selbst steht als Zeile im Rezept.
+     */
+    public static function bezeichnungFuerGp(FoodAlchemistGp $gp): string
+    {
+        $name = (string) $gp->name;
+        $produkt = str_contains($name, ':') ? (string) strstr($name, ':', true) : $name;
+
+        return trim((string) preg_replace('/\s*\([^)]*\)/u', '', $produkt));
+    }
+
+    /**
+     * Vorhandenes Zukauf-Basisrezept dieser Ware (team-sichtbar): Basisrezept mit „(Zukauf)“ im Namen und einer Zeile auf
+     * genau diesem GP — auch eines, das die Kaskade gebaut hat. Ältestes zuerst. Grundlage für „kein Doppel“ und die
+     * Anzeige „Zukauf-Basisrezept: X“ am GP.
+     */
+    public function bestehendFuerGp(Team $team, int $gpId): ?FoodAlchemistRecipe
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)
+            ->where('is_sales_recipe', false)
+            ->where('name', 'like', '%' . self::ZUSATZ)
+            ->whereHas('ingredients', fn ($q) => $q->where('gp_id', $gpId))
+            ->orderBy('id')
+            ->first();
+    }
+
+    /**
+     * Die fest gesetzte Ware einer Zukauf-Planung (Session mit `source_gp_id`) — kein Text-Matching. Wirft, wenn die Ware
+     * nicht (mehr) sichtbar ist, schon ein Zukauf-Basisrezept hat oder der Typ fehlt.
+     *
+     * @return array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}
+     */
+    public function wareFuerSession(Team $team, \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession $session): array
+    {
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $session->source_gp_id);
+        if ($gp === null || ! $this->bietetZukaufAn($gp)) {
+            throw new \RuntimeException('Die Zukauf-Ware dieser Planung ist nicht (mehr) sichtbar oder ist Non-Food.');
+        }
+        if (($vorhanden = $this->bestehendFuerGp($team, (int) $gp->id)) !== null) {
+            throw new \RuntimeException("Zu dieser Ware gibt es schon das Zukauf-Basisrezept „{$vorhanden->name}“.");
+        }
+        $typ = RezeptTypVokabular::finde((string) $session->zukauf_typ);
+        if ($typ === null) {
+            throw new \RuntimeException('Für das Zukauf-Basisrezept fehlt der Typ: bitte im Reiter Basisrezept einen Typ wählen (Vorschlag kommt aus der Regel „basisrezept.zukauf.typ“, Warengruppe → Typ).');
+        }
+
+        return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name, 'typ' => $typ, 'bezeichnung' => self::bezeichnungFuerGp($gp)];
+    }
+
+    /**
+     * Go einer Zukauf-Planung (Einstieg aus {@see PlanningCascadeService::starteKaskade}, Scope rezept): Lauf + Wurzel-Step
+     * wie dort, gebaut wird aber über den Zukauf-Weg ({@see \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob}) mit der
+     * fest gesetzten Ware — kein Komponenten-Plan, kein großer Generator. Ware und Typ werden VOR der Lauf-Anlage
+     * geprüft, damit kein Rumpf-Lauf entsteht.
+     *
+     * @param  array<string, mixed>  $optionen  wie starteKaskade (staged, created_via, brief, params)
+     */
+    public function starteLauf(Team $team, \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession $session, string $creativeMode, array $optionen = []): \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun
+    {
+        $ware = $this->wareFuerSession($team, $session);
+        $brief = trim((string) ($optionen['brief'] ?? '')) ?: (trim((string) $session->brief) ?: self::name($ware));
+        $params = is_array($optionen['params'] ?? null) ? $optionen['params'] : [];
+        $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+            'team_id' => $team->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'creative_mode' => $creativeMode,
+            'brief' => $brief, 'params' => [...$params, 'zukauf_gp_id' => $ware['gp_id'], 'zukauf_typ' => $ware['typ']],
+            'status' => 'running', 'staged' => (bool) ($optionen['staged'] ?? true), 'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
+        ]);
+        $step = FoodAlchemistCascadeRunStep::create([
+            'team_id' => $team->id, 'cascade_run_id' => $run->id, 'parent_step_id' => null, 'kind' => 'rezept',
+            'label' => self::name($ware), 'status' => 'running', 'sort' => 0,
+        ]);
+        $jobParams = array_intersect_key($params, array_flip(['ziel_menge', 'ziel_einheit', '_extern']));
+        \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $step->id,
+            (string) $ware['gp_name'], $ware, [...$jobParams, 'planning_session_id' => (int) $session->id, 'cascade_step_id' => (int) $step->id])
+            ->onQueue(\Platform\FoodAlchemist\Support\Warteschlange::rezepte());
+
+        return $run;
+    }
+
     /** @param  array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}  $ware */
     public function baue(Team $team, FoodAlchemistCascadeRunStep $child, string $text, array $ware, array $params): FoodAlchemistRecipe
     {
