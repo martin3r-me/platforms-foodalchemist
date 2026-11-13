@@ -27,11 +27,19 @@ final class PraesentationsDesignWerte
 
     /** Schalter (bool) je Block-Typ. */
     public const SCHALTER = [
-        'chapter_loop' => ['show_rules', 'show_block_header', 'show_kicker'],
+        'chapter_loop' => ['show_rules', 'show_block_header', 'show_kicker', 'show_chapter_logo'],
         'dish_list' => ['show_rules', 'show_block_header'],
     ];
 
     public const KICKER_MAX = 120;
+
+    /** Auswahl-Werte je Block-Typ: style-Key → erlaubte Werte (Kapitelbild-Darstellung, Kapitel-Logo). */
+    public const BLOCK_WAHL = [
+        'chapter_loop' => [
+            'chapter_image_fit' => ['auto', 'fotoband', 'ganz'],
+            'chapter_logo_position' => ['oben', 'unten'],
+        ],
+    ];
 
     /**
      * @throws \RuntimeException mit allen Verstößen in einer Meldung (MCP: VALIDATION_ERROR)
@@ -62,6 +70,9 @@ final class PraesentationsDesignWerte
                 if ($kt !== null && (! is_string($kt) || mb_strlen($kt) > self::KICKER_MAX)) {
                     $fehler[] = $pfad . 'kicker_text muss Text mit höchstens ' . self::KICKER_MAX . ' Zeichen sein';
                 }
+            }
+            foreach (self::BLOCK_WAHL[$typ] ?? [] as $key => $erlaubt) {
+                self::wahl($stil[$key] ?? null, $erlaubt, $pfad . $key, $fehler);
             }
             foreach (self::SCHALTER[$typ] ?? [] as $key) {
                 if (array_key_exists($key, $stil) && $stil[$key] !== null && ! is_bool($stil[$key]) && ! in_array($stil[$key], [0, 1], true)) {

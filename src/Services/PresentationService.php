@@ -386,6 +386,10 @@ class PresentationService
             self::TYPE_KONFIGURATOR => app(\Platform\FoodAlchemist\Services\Konfigurator\KonfiguratorSnapshot::class)->normalize($team, $entity, $clean),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
+        // Kapitel-Logo + Transparenz-Merker der Kapitelbilder (Präsentation 2026-11-13).
+        if (isset($content['body']['sections']) && is_array($content['body']['sections'])) {
+            $content['body']['sections'] = \Platform\FoodAlchemist\Support\KapitelBildDaten::anreichern($type, $content['body']['sections']);
+        }
 
         $branding = $this->brandingIdentifiers($entity);
         // Spec 94: Konfigurator ohne eigenes Logo → Logo seines Betriebs, eingefroren im Snapshot.
@@ -1245,6 +1249,10 @@ class PresentationService
                 if (is_array($gi) && (($gi['context_file_id'] ?? null) || ($gi['path'] ?? null))) {
                     $snapshot['content']['sections'][$i]['images'][$j]['url'] = $this->media->url($gi['context_file_id'] ?? null, $gi['path'] ?? null);
                 }
+            }
+            $logo = $sec['logo'] ?? null;
+            if (is_array($logo) && (($logo['context_file_id'] ?? null) || ($logo['path'] ?? null))) {
+                $snapshot['content']['sections'][$i]['logo']['url'] = $this->media->url($logo['context_file_id'] ?? null, $logo['path'] ?? null);
             }
             // Gericht-Fotos je Item (Identifier → frische URL).
             foreach ($sec['blocks'] ?? [] as $bi => $blk) {

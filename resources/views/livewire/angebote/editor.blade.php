@@ -759,6 +759,9 @@
                             </x-fa::field>
                             @error('kapitelGalleryUpload.*')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
                         </div>
+                        <div class="pt-3 border-t border-[var(--fa-line)]">
+                            <livewire:foodalchemist.praesentation.kapitel-logo art="angebot" :kapitel-id="$selectedKapitelId" :key="'kap-logo-an-' . $selectedKapitelId" />
+                        </div>
                     </x-fa::section>
                     </div>{{-- /linke Spalte --}}
 
