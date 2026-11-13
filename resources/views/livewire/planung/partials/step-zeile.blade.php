@@ -78,7 +78,8 @@
                          aus der Karte. --}}
                     <span class="inline-flex items-start gap-1 {{ $textKlein }} font-medium text-[var(--fa-info)] break-words min-w-0">
                         @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 shrink-0 mt-0.5 animate-spin')
-                        <span class="min-w-0">{{ $st->phase ?: 'Eingereiht, wartet auf die Hintergrund-Erstellung' }}</span>
+                        {{-- Externer KI-Weg: wartet der Schritt auf eine Antwort von außen, ist das die Wahrheit, nicht die Warteschlange. --}}
+                        <span class="min-w-0" @if(isset(($kiWartend ?? [])[$st->id])) data-step-wartet-ki @endif>{{ isset(($kiWartend ?? [])[$st->id]) ? 'Wartet auf KI-Antwort von außen (' . (($kiWartend[$st->id]['anzahl'] ?? 1) === 1 ? '1 Auftrag' : $kiWartend[$st->id]['anzahl'] . ' Aufträge') . ' offen)' : ($st->phase ?: 'Eingereiht, wartet auf die Hintergrund-Erstellung') }}</span>
                     </span>
                 @else
                     <x-fa::badge :tone="$statusTon" data-step-status-chip>{{ $statusText }}</x-fa::badge>

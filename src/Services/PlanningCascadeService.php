@@ -47,6 +47,7 @@ use Platform\FoodAlchemist\Support\Warteschlange;
  */
 class PlanningCascadeService
 {
+    use \Platform\FoodAlchemist\Services\Concerns\KaskadeKiWarten;   // externer KI-Weg (Lauf 62) + Lauf-Status-Hinweis
     /** Async-Result via Cache (Job-Vertrag) — Minuten, bis der Worker den Step abschließt. */
     private const RESULT_TTL_MIN = 15;
 
@@ -2030,7 +2031,11 @@ class PlanningCascadeService
             return 0;
         }
         $grenze = now()->subMinutes(self::VERWAIST_NACH_MINUTEN);
+        // Ein Schritt, der auf eine externe KI-Antwort wartet, ist nicht verwaist: sein Job ist sauber beendet und startet mit der
+        // Antwort neu (Auftrag gilt 24 h). Ihn hier auf `failed` zu setzen, würfe einen gesunden MCP-Lauf nach 30 Minuten weg.
+        $kiWartend = $this->kiWartend($run->steps);
         $verwaist = $run->steps->filter(fn ($s) => in_array($s->status, ['queued', 'running'], true)
+            && ! isset($kiWartend[(int) $s->id])
             && $s->updated_at !== null
             && $s->updated_at->lt($grenze));
         foreach ($verwaist as $s) {
@@ -3333,9 +3338,13 @@ class PlanningCascadeService
         }
 
         $steps = $run->steps->sortBy('sort')->values();
+        // Externer KI-Weg: wartet ein Schritt auf eine Antwort von außen, steht das an keinem Step-Feld (die Job-Transaktion rollt beim
+        // Warten zurück, auch die Phase) — die offenen Aufträge selbst sind die Wahrheit.
+        $kiWartend = $this->kiWartend($steps);
 
-        $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s): array {
+        $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s) use ($kiWartend): array {
             $deferred = is_array($s->deferred) ? $s->deferred : [];
+            $ki = $kiWartend[(int) $s->id] ?? null;
             $snapshot = is_array($s->context_snapshot) ? $s->context_snapshot : [];
 
             return array_filter([
@@ -3349,7 +3358,12 @@ class PlanningCascadeService
                 // Job noch nicht aufgenommen" (Cockpit-Text „eingereiht — wartet auf Worker",
                 // step-zeile.blade.php) — derselbe Text hier, damit ein MCP-Konsument dieselbe
                 // Unterscheidung sieht, statt sie aus Status+fehlender Phase selbst zu rekonstruieren.
-                'phase' => $s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null),
+                // Wartet der Schritt auf eine externe KI-Antwort, ist DAS die Phase — nicht „wartet auf Worker" (Lauf 62, io 13.11.2026:
+                // der Worker war frei, der Lauf wartete auf ki_auftraege.ANTWORT, Status und Cockpit zeigten auf die Queue).
+                'phase' => $ki !== null
+                    ? self::kiWartetText((int) $ki['anzahl'])
+                    : ($s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null)),
+                'wartet_auf_ki' => $ki,
                 // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
                 // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
                 'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,
@@ -3459,7 +3473,9 @@ class PlanningCascadeService
             'deckel_hinweise' => is_array($run->deckel_hinweise) && $run->deckel_hinweise !== []
                 ? array_values($run->deckel_hinweise)
                 : null,
-            'hinweis' => $this->laufStatusHinweis((string) $run->status, $steps),
+            // Offene KI-Aufträge des Laufs (externer Weg) mit der nächsten Aktion — null, wenn der Lauf auf keine Antwort wartet.
+            'ki_auftraege_offen' => self::kiAuftraegeOffenBlock($kiWartend, (int) $run->id),
+            'hinweis' => $this->laufStatusHinweis((string) $run->status, $steps, count(self::kiIds($kiWartend)), (int) $run->id, (string) ($run->created_via ?? '')),
         ];
     }
 
@@ -3485,46 +3501,6 @@ class PlanningCascadeService
             'unreif' => $unreif->count(),
             'unreif_labels' => $unreif->pluck('label')->filter()->values()->all(),
         ];
-    }
-
-    /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
-    private function laufStatusHinweis(string $status, mixed $steps = null): string
-    {
-        $uebernahme = $steps !== null
-            ? $this->zaehleUebernommenUnreif($steps)
-            : ['gesamt' => 0, 'unreif' => 0, 'unreif_labels' => []];
-
-        // Ein Lauf, der nur noch wegen einer UNREIFEN ÜBERNAHME in `review` haengt, braucht einen
-        // anderen Satz als „Entwuerfe warten auf Freigabe" — sonst sucht man die Freigabe-Aktion,
-        // die es dort nicht gibt (eine `skipped`-Zeile ist nicht freigebbar).
-        if ($status === 'review' && $steps !== null) {
-            $offeneEntwuerfe = collect($steps)->whereIn('status', ['done', 'geplant'])->count();
-            if ($uebernahme['unreif'] > 0 && $offeneEntwuerfe === 0) {
-                return 'Übernommene Bestands-Rezepte sind nicht produktionsreif ('
-                    .implode(', ', $uebernahme['unreif_labels'])
-                    .'). Eigene Entwürfe werden bei der Freigabe automatisch angereichert; fremde oder '
-                    .'freigegebene Rezepte brauchen eine bewusste Entscheidung im Cockpit '
-                    .'(„Bestand anreichern"). Details je Schritt: uebernahme_reif / uebernahme_luecken.';
-            }
-        }
-
-        // Task 6: „Lauf abgeschlossen" hieß bisher auch dann so, wenn ein übernommener Bestand
-        // NICHT produktionsreif ist (Lauf 65) — der Satz nennt die Zahl jetzt explizit, statt
-        // Vollständigkeit zu behaupten, die reifegrad() nicht bestätigt.
-        $uebernahmeZusatz = $uebernahme['gesamt'] > 0
-            ? sprintf(
-                ' %d Rezept%s aus dem Bestand übernommen, davon %d unfertig (nicht produktionsreif).',
-                $uebernahme['gesamt'], $uebernahme['gesamt'] === 1 ? '' : 'e', $uebernahme['unreif'],
-            )
-            : '';
-
-        return match ($status) {
-            'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
-            'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',
-            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.' . $uebernahmeZusatz,
-            'failed' => 'Lauf fehlgeschlagen — gescheiterte Schritte lassen sich gebündelt fortsetzen (human-only im Cockpit).',
-            default => $status,
-        };
     }
 
     /** Brief für die Erzeugung: Session-Brief (Fallback Titel) + Analyse-Auszug (spiegelt Planung::goBrief). */

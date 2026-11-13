@@ -88,10 +88,10 @@
                      'value' => $aktivPreis !== null ? number_format($aktivPreis, 2, ',', '.') . ' €'
                         : (($letzterPreis ?? null) !== null ? 'letzter Preis ' . number_format($letzterPreis['preis'], 2, ',', '.') . ' €' : 'Preis fehlt')],
                     ['kpi' => 'vergleichspreis', 'label' => $vergleichspreis !== null ? 'Preis je ' . $einheitKurz($vergleichspreis['unit']) : 'Preis je kg',
-                     'title' => 'Auf die Kalkulationseinheit umgerechnet',
+                     'title' => ($preisAbgetropft ?? false) ? 'Auf die Kalkulationseinheit umgerechnet, mit dem Abtropfgewicht' : 'Auf die Kalkulationseinheit umgerechnet',
                      'tone' => $vergleichspreis === null && $aktivPreis !== null ? 'warn' : null,
                      'value' => $vergleichspreis !== null
-                        ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit']
+                        ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] . (($preisAbgetropft ?? false) ? ' abgetropft' : '')
                         : ($aktivPreis !== null ? 'Menge fehlt' : 'Preis fehlt')],
                     ['kpi' => 'gp', 'label' => 'Grundprodukt', 'tone' => $gpName !== null ? 'good' : 'warn',
                      'title' => $gpName ?? 'Ohne Grundprodukt fließt dieser Artikel in keine Rezeptkalkulation.',
@@ -483,6 +483,15 @@
                             </x-fa::field>
                             <x-fa::field label="Verpackungseinheiten je Bestelleinheit" for="la-qty-ordering">
                                 <x-fa::input id="la-qty-ordering" wire:model="verpackung.qty_ordering_per_packaging" inputmode="decimal" numeric :disabled="! $darfEdit" />
+                            </x-fa::field>
+                        </div>
+                        {{-- Abtropfgewicht (Dominique 12.11.2026): gehört an den Lieferantenartikel; gesetzt = Menge für den Preis je kg. --}}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--fa-line)]" data-la-abtropf>
+                            <x-fa::field label="Füllgewicht" for="la-fuellgewicht" hint="In der Kalkulationseinheit, wie der Inhalt" error="verpackung.fuellgewicht">
+                                <x-fa::input id="la-fuellgewicht" wire:model="verpackung.fuellgewicht" inputmode="decimal" numeric :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="Abtropfgewicht" for="la-abtropfgewicht" hint="Ist ein Abtropfgewicht gesetzt, rechnet der Preis je kg damit" error="verpackung.abtropfgewicht">
+                                <x-fa::input id="la-abtropfgewicht" wire:model="verpackung.abtropfgewicht" inputmode="decimal" numeric :disabled="! $darfEdit" />
                             </x-fa::field>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--fa-line)]">

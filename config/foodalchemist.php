@@ -638,6 +638,9 @@ return [
          * wie der Lauf KI-Glieder hat (EnrichRecipeJob ≈ 15) + Puffer; danach bricht der Lauf mit klarem Fehler ab.
          */
         'extern_max_wiederholungen' => (int) env('FOODALCHEMIST_AI_EXTERN_MAX_WIEDERHOLUNGEN', 30),
+        // ki_auftraege.GET: Obergrenze Prompt-Text je Antwort (Zeichen). Größere Aufträge kommen in Teilen — sonst sprengt ein
+        // recipe.generator-Prompt (~120.000 Zeichen) die Ergebnisgröße des MCP-Clients und der Lauf bleibt unbeantwortbar liegen.
+        'extern_get_max_zeichen' => (int) env('FOODALCHEMIST_AI_EXTERN_GET_MAX_ZEICHEN', 40000),
 
         /*
          * Output-Budget-Default (max_output_tokens). Der Core-OpenAiService fällt ohne

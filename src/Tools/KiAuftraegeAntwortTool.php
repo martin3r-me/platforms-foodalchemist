@@ -86,7 +86,8 @@ class KiAuftraegeAntwortTool extends FoodAlchemistTool implements ToolContract, 
             'angenommen' => $ok, 'abgelehnt' => count($ergebnis) - $ok, 'ergebnisse' => $ergebnis,
             'laeufe_neu_gestartet' => $neu,
             'note' => 'Gespeichert sind nur die Antworten. Job-Läufe in „laeufe_neu_gestartet“ übernehmen sie selbst und können weitere Aufträge anlegen (ki_auftraege.GET). '
-                .'Für alle anderen Aufträge (Tool-Aufruf, Backfill) den ursprünglichen Lauf wiederholen, damit Prüfung und Übernahme laufen.',
+                .'Für alle anderen Aufträge (Tool-Aufruf, Backfill) den ursprünglichen Lauf wiederholen, damit Prüfung und Übernahme laufen.'
+                .' Planungs-Kaskade: planung_kaskade.GET zeigt unter ki_auftraege_offen, ob der Lauf auf weitere Antworten wartet (ki_auftraege.GET mit run_id).',
         ]);
     }
 

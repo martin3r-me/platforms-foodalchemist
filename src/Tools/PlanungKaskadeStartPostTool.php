@@ -40,7 +40,8 @@ class PlanungKaskadeStartPostTool extends FoodAlchemistTool implements ToolContr
             . 'generation_params der Session. Nur das Besitzer-Team darf starten (isOwnedBy). Liefert den '
             . 'Lauf-Status wie planung_kaskade.GET zurück. Wie der Go der Oberfläche: Basisrezept plant zuerst die '
             . 'Komponenten (Schritt „geplant" → mit planung_kaskade.FREIGABE annehmen), Gericht startet mit dem Bauplan, '
-            . 'Suchbegriffe kommen aus der Session (fehlen sie, werden sie einmal aus dem Briefing abgeleitet).';
+            . 'Suchbegriffe kommen aus der Session (fehlen sie, werden sie einmal aus dem Briefing abgeleitet). '
+            . 'Danach den Lauf mit planung_kaskade.WEITER(run_id) führen: ein Aufruf liefert die nächste KI-Frage, das nächste Tor oder das Ergebnis.';
     }
 
     public function getSchema(): array
@@ -133,7 +134,7 @@ class PlanungKaskadeStartPostTool extends FoodAlchemistTool implements ToolContr
             'requires_auth' => true,
             'requires_team' => true,
             'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.planung_kaskade.GET', 'foodalchemist.planung_kaskade.FREIGABE', 'foodalchemist.planung_session.POST'],
+            'related_tools' => ['foodalchemist.planung_kaskade.WEITER', 'foodalchemist.planung_kaskade.GET', 'foodalchemist.planung_kaskade.FREIGABE', 'foodalchemist.planung_session.POST'],
             'examples' => ['Starte die Gericht-Kaskade für Planung 42', 'Go: Concept-Kaskade für Session 42'],
         ];
     }

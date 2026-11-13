@@ -59,7 +59,10 @@
     $terminal = $laufRunning === 0 && $offen === 0 && $freigegebenGesamt > 0;
     $aktuellePhase = $lauf->steps->whereNotNull('phase')->sortByDesc('phase_at')->first()?->phase;
     $schritte = fn (int $n) => $n === 1 ? '1 Schritt' : $n . ' Schritte';
+    $kiOffen = collect($kiWartend ?? [])->sum('anzahl');
     $gesamt = match (true) {
+        // Externer KI-Weg: nichts hängt, der Lauf wartet auf Antworten von außen (kein Spinner, kein Warnton).
+        $kiOffen > 0 => ['info', 'heroicon-o-clock', false, 'Wartet auf ' . ($kiOffen === 1 ? 'eine KI-Antwort' : $kiOffen . ' KI-Antworten') . ' von außen. Danach geht es automatisch weiter.'],
         $laufRunning > 0 && ($hinweis ?? null) !== null => ['warn', 'heroicon-o-exclamation-triangle', false, 'Die Hintergrund-Erstellung reagiert nicht. ' . $schritte($laufRunning) . ' warten.'],
         $laufRunning > 0 => ['info', 'heroicon-o-arrow-path', true, $schritte($laufRunning) . ' in Arbeit' . ($laufDone > 0 ? ', ' . $laufDone . ' fertig' : '') . '.' . ($aktuellePhase ? ' ' . $aktuellePhase : '')],
         $offen > 0 => ['warn', 'heroicon-o-eye', false, ($offen === 1 ? '1 Ergebnis wartet' : $offen . ' Ergebnisse warten') . ' auf deine Prüfung. Ansehen, dann freigeben.'],

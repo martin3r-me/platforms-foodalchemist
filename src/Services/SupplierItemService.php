@@ -324,6 +324,7 @@ class SupplierItemService
     public const EDIT_FELDER = [
         'designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text',
         'qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering',
+        'fuellgewicht', 'abtropfgewicht',   // 12.11.2026: in der Kalkulationseinheit je Bestelleinheit; Abtropfgewicht = Menge für den Preis je kg
         'is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder',
         'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier',
         'shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days',
@@ -354,11 +355,46 @@ class SupplierItemService
             }
             $clean['deposit'] = round((float) $pfand, 2);
         }
+        $clean = $this->abtropfFelder($item, $clean);
         if ($clean !== []) {
             $item->update($clean);
         }
 
         return $item->refresh();
+    }
+
+    /**
+     * Füll-/Abtropfgewicht (12.11.2026): Zahl > 0 oder leer, Komma erlaubt; Abtropf ≤ Füll. Eine echte Änderung von Hand setzt
+     * `abtropf_quelle = manuell` (der Backfill überschreibt das nicht mehr), beide leer → Quelle leer.
+     */
+    private function abtropfFelder(FoodAlchemistSupplierItem $item, array $clean): array
+    {
+        $felder = array_intersect(['fuellgewicht', 'abtropfgewicht'], array_keys($clean));
+        if ($felder === []) {
+            return $clean;
+        }
+        foreach ($felder as $feld) {
+            if ($clean[$feld] === null) {
+                continue;
+            }
+            $wert = str_replace(',', '.', trim((string) $clean[$feld]));
+            if (! is_numeric($wert) || (float) $wert <= 0) {
+                throw new \RuntimeException(($feld === 'fuellgewicht' ? 'Füllgewicht' : 'Abtropfgewicht').' muss eine Zahl größer 0 sein (in der Kalkulationseinheit) oder leer bleiben.');
+            }
+            $clean[$feld] = round((float) $wert, 4);
+        }
+        $fuell = array_key_exists('fuellgewicht', $clean) ? $clean['fuellgewicht'] : ($item->fuellgewicht !== null ? (float) $item->fuellgewicht : null);
+        $abtropf = array_key_exists('abtropfgewicht', $clean) ? $clean['abtropfgewicht'] : ($item->abtropfgewicht !== null ? (float) $item->abtropfgewicht : null);
+        if ($fuell !== null && $abtropf !== null && $abtropf > $fuell) {
+            throw new \RuntimeException('Abtropfgewicht kann nicht größer als das Füllgewicht sein.');
+        }
+        $alt = fn (string $f) => $item->{$f} === null ? null : round((float) $item->{$f}, 4);
+        $geaendert = collect($felder)->contains(fn ($f) => $clean[$f] !== $alt($f));
+        if ($geaendert) {
+            $clean['abtropf_quelle'] = $fuell === null && $abtropf === null ? null : 'manuell';
+        }
+
+        return $clean;
     }
 
     /** Deaktivieren = soft (is_discontinued), nie löschen — nur Besitzer-Team (D1). */
