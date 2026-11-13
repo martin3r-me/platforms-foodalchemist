@@ -169,6 +169,11 @@
         </div>
     @endif
 
+    {{-- Zukauf-Basisrezept (Dominique 13.11.): nur bei Fertigware — Link aufs vorhandene oder Knopf zum Anlegen --}}
+    @if(! $neu && $gp !== null)
+        <livewire:foodalchemist.gps.zukauf-rezept :gp-id="$gp->id" :key="'gp-zukauf-modal-'.$gp->id" />
+    @endif
+
     <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'" :gesperrt="in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
         :tabs="[
             'price' => $neu ? null : 'Lieferantenartikel',

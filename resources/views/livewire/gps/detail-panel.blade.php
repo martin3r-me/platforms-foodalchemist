@@ -766,6 +766,11 @@
         </x-fa::section>
         @endif
 
+        {{-- Zukauf-Basisrezept (Dominique 13.11.): nur bei Fertigware — Link aufs vorhandene oder Knopf zum Anlegen --}}
+        @if($section === null)
+            <livewire:foodalchemist.gps.zukauf-rezept :gp-id="$gp->id" :key="'gp-zukauf-panel-'.$gp->id" />
+        @endif
+
         {{-- Verwendung --}}
         {{-- VERWENDET IN REZEPTEN --}}
         @if($section === null || $section === 'las')
