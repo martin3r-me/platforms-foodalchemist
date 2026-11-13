@@ -781,6 +781,7 @@
 
             {{-- GERICHT: Leitplanken inkl. Verkaufs-Achsen --}}
             <div wire:key="planung-tab-gericht" x-show="tab==='gericht'">
+                @include('foodalchemist::livewire.planung.partials.gericht-rezeptur-ziel')
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'gericht', 'vk' => true, 'goLabel' => 'Gericht', 'goIcon' => 'heroicon-o-cake'])
             </div>
 

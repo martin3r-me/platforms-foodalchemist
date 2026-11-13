@@ -1460,7 +1460,7 @@ class PlanningCascadeService
         // Bündel (Station), dessen INNERE Gerichte weiter unten rekursiv gefächert werden. (Früher
         // Latenz-Bug: embed-Paket-Slots galten fälschlich als leer.)
         // Gericht-Vorgaben (13.11.2026): Positionen MIT Vorgabe bekommen ihre Skizze 1:1, erfunden wird nur für den Rest.
-        $leere = app(ConceptVorgabenService::class)->planeVorgaben($team, $conceptStep, FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+        $leere = app(ConceptVorgabenService::class)->planeVorgaben($team, $conceptStep, $conceptId, FoodAlchemistConceptSlot::where('concept_id', $conceptId)
             ->whereNull('sales_recipe_id')
             ->whereNull('package_id')
             ->whereNull('embedded_concept_id')
@@ -1626,8 +1626,8 @@ class PlanningCascadeService
             // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie materialisiereSpeisekarte-
             // Position/-SpeiseplanZelle — dies ist der häufigste Gericht-Pfad live (jedes erfundene
             // Gericht aus Concept-/Foodbook-Fan-out, MaterializeConceptIdeaJob), bisher ohne Phase.
-            $gen = app(RecipeGeneratorService::class)->generiere(
-                $team, $beschreibung, $params, null, true, 'plan_go', $context,
+            $gen = app(GerichtHuelleService::class)->generiere(   // baut in die Gericht-Hülle, wenn der Schritt eine hat, sonst neu
+                $team, $stepId, $beschreibung, $params, $context,
                 fn (string $stufe) => $this->setzePhase($stepId, $stufe),
             );
             $recipe = $gen['recipe'] ?? null;

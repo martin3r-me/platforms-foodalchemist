@@ -71,9 +71,11 @@ final class ConceptVorgabenService
      * @param  Collection<int, FoodAlchemistConceptSlot>  $leere  leere Gericht-Positionen in Reihenfolge
      * @return Collection<int, FoodAlchemistConceptSlot>
      */
-    public function planeVorgaben(Team $team, FoodAlchemistCascadeRunStep $conceptStep, Collection $leere): Collection
+    public function planeVorgaben(Team $team, FoodAlchemistCascadeRunStep $conceptStep, int $conceptId, Collection $leere): Collection
     {
         [$mit, $ohne] = $leere->partition(fn (FoodAlchemistConceptSlot $s) => trim((string) $s->dish_brief) !== '');
+        // Gerichte, die schon in einer Position stehen, aber noch keine Komponenten haben: Rezeptur in der Hülle planen.
+        app(GerichtHuelleService::class)->planeHuellen($team, $conceptStep, $conceptId, $mit->count());
 
         foreach ($mit->values() as $idx => $slot) {
             $titel = trim((string) $slot->dish_brief);
@@ -146,6 +148,9 @@ final class ConceptVorgabenService
             return;
         }
         $concepts = app(ConceptService::class);
+        if ((int) FoodAlchemistConceptSlot::whereKey($slotId)->value('sales_recipe_id') === $recipeId) {
+            return;   // Gericht-Hülle: steht schon in der Position — nicht neu füllen (Menge und Einheit bleiben)
+        }
         $slot = $concepts->fillSlot($team, $slotId, ['sales_recipe_id' => $recipeId, 'type' => 'gericht']);
         if ((($idee?->source_meta ?? [])['quelle'] ?? null) !== self::QUELLE) {
             return;

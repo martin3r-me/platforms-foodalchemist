@@ -61,6 +61,8 @@
                     <x-fa::button variant="ai" icon="heroicon-m-sparkles" icon-right="heroicon-m-chevron-down"
                         x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" data-vk-ki-assistent>KI-Assistent</x-fa::button>
                     <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1">
+                        {{-- „Rezeptur erstellen" für ein Gericht im Entwurf ohne Komponenten (eigene Komponente, öffnet die Planung). --}}
+                        <livewire:foodalchemist.verkauf.rezeptur-erstellen :recipe-id="$rezept->id" :key="'vk-rezeptur-'.$rezept->id" />
                         {{-- Spec 03 L1b: Alles anreichern — ki-action, damit Fortschritt und Erfolg im Menü sichtbar sind. --}}
                         <div class="px-3 py-2 flex flex-col gap-1">
                             <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
