@@ -28,7 +28,12 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
         return 'Legt eine Planungs-Session an — aus dem Trendradar (trend_ids und/oder inspiration_ids: Trends, Hypes '
             . 'und Inspirationen werden zu EINEM Briefing kombiniert, max. 8) ODER aus freiem Brief (title + optional brief). '
             . 'Status=divergenz. '
-            . 'Erzeugt KEINE Rezepte/Konzepte (das macht das „Go" in der UI).';
+            . 'Zukauf-Basisrezept: gp_id (+ optional zukauf_typ) legt die Planung „Zukauf-Basisrezept: <GP>“ an — die gekaufte Ware '
+            . 'wird nicht nachgekocht, das Basisrezept führt genau diese Ware und beschreibt die Handgriffe. Jeder Lebensmittel-GP, '
+            . 'nicht Non-Food (WG 16). Hat die Ware schon ein Zukauf-Basisrezept, entsteht KEINE Session (Antwort mit recipe_id); eine '
+            . 'offene Zukauf-Planung desselben GP wird wiederverwendet (zukauf_typ setzt dann ihren Typ). Typ ohne Angabe aus der '
+            . 'Regel basisrezept.zukauf.typ, sonst offen (dann zukauf_typ nachreichen, nie geraten). Go: planung_kaskade.START scope=rezept. '
+            . 'Erzeugt KEINE Rezepte/Konzepte (das macht das „Go").';
     }
 
     public function getSchema(): array
@@ -42,6 +47,8 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
                 'inspiration_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Inspirationen aus foodalchemist.fundstuecke.GET'],
                 'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Fundstücke aus foodalchemist.fundstuecke.GET'],
                 'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank'], 'default' => 'voll_kreativ'],
+                'gp_id' => ['type' => 'integer', 'description' => 'Zukauf-Basisrezept planen: gekaufte Ware (GP, team-sichtbar, nicht Non-Food). Ersetzt title/brief/trend_ids.'],
+                'zukauf_typ' => ['type' => 'string', 'description' => 'Nur mit gp_id: Basisrezept-Typ aus dem Typ-Vokabular (Regel basisrezept.1.2.typ), z. B. Crunch, Öl. Ohne Angabe: Vorschlag aus der Warengruppe.'],
                 'generation_params' => [
                     'type' => 'object',
                     'description' => 'Optional: Richtungs-Regler (Leitplanken) der Session — gegen die Whitelist gefiltert, '
@@ -64,6 +71,9 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(PlanningSessionService::class);
+        if (! empty($arguments['gp_id'])) {
+            return $this->zukauf($svc, $team, (int) $arguments['gp_id'], isset($arguments['zukauf_typ']) ? (string) $arguments['zukauf_typ'] : null);
+        }
 
         try {
             if (! empty($arguments['trend_ids']) || ! empty($arguments['inspiration_ids']) || ! empty($arguments['fundstueck_ids'])) {
@@ -95,6 +105,41 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
             'generation_params' => $session->generation_params,
             'brief' => (string) $session->brief,
             'source_trend_refs' => $session->source_trend_refs,
+        ]);
+    }
+
+    /** Zukauf-Basisrezept planen — derselbe Einstieg wie der Knopf am GP ({@see PlanningSessionService::zukaufAusGp}). */
+    private function zukauf(PlanningSessionService $svc, \Platform\Core\Models\Team $team, int $gpId, ?string $typ): ToolResult
+    {
+        try {
+            $e = $svc->zukaufAusGp($team, $gpId, $typ, 'mcp_gp');
+        } catch (\RuntimeException $ex) {
+            return ToolResult::error($ex->getMessage(), str_contains($ex->getMessage(), 'nicht gefunden') ? 'NOT_FOUND' : 'VALIDATION_ERROR');
+        }
+        if ($e['session'] === null) {
+            return ToolResult::success([
+                'zukauf_basisrezept_vorhanden' => true,
+                'recipe_id' => (int) $e['recipe']->id,
+                'recipe_name' => (string) $e['recipe']->name,
+                'hinweis' => 'Zu dieser Ware gibt es schon ein Zukauf-Basisrezept — keine neue Planung angelegt.',
+                'naechste_schritte' => ['Rezept ansehen/pflegen: foodalchemist.recipes.GET mit recipe_id (Rüst-/Regenerationszeit im Basisrezept).'],
+            ]);
+        }
+        $s = $e['session'];
+
+        return ToolResult::success([
+            'id' => (int) $s->id,
+            'session_id' => (int) $s->id,
+            'title' => (string) $s->title,
+            'status' => (string) $s->status,
+            'brief' => (string) $s->brief,
+            'neu' => $e['neu'],
+            'zukauf' => ['gp_id' => (int) $s->source_gp_id, 'typ' => $e['typ'], 'typ_vorschlag' => $e['typ_vorschlag']],
+            'naechste_schritte' => array_values(array_filter([
+                $e['typ'] === null ? 'Typ fehlt: diesen Aufruf mit gp_id und zukauf_typ wiederholen (Typ-Vokabular, Regel basisrezept.1.2.typ).' : null,
+                'Go: foodalchemist.planung_kaskade.START mit session_id=' . (int) $s->id . ' und scope=rezept (baut das Zukauf-Basisrezept mit genau dieser Ware).',
+                'Status: foodalchemist.planung_kaskade.GET; Freigabe der Stufe: foodalchemist.planung_kaskade.FREIGABE.',
+            ])),
         ]);
     }
 

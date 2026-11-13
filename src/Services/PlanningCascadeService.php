@@ -130,11 +130,11 @@ class PlanningCascadeService
         // Voll-Kaskade (P3+): Ausgabe → Gerichte/Concepts. foodbook|speisekarte = 1 Concept je Slot;
         // speiseplan (P5) = ein Gericht je leerer Zyklus-Zelle (Zeitachse, kein Concept-Zwischenschritt).
         if ($scope === 'vollkaskade') {
-            if ((string) ($optionen['owner_type'] ?? '') === 'speiseplan') {
-                return $this->starteSpeiseplanVollkaskade($team, $session, $creativeMode, $optionen);
-            }
-
-            return $this->starteVollkaskade($team, $session, $creativeMode, $optionen);
+            return (string) ($optionen['owner_type'] ?? '') === 'speiseplan'
+                ? $this->starteSpeiseplanVollkaskade($team, $session, $creativeMode, $optionen) : $this->starteVollkaskade($team, $session, $creativeMode, $optionen);
+        }
+        if ($scope === 'rezept' && $session?->source_gp_id !== null) {   // Zukauf-Planung am GP (13.11.): feste Ware, Zukauf-Weg statt Plan/Generator
+            return app(ZukaufBasisrezeptService::class)->starteLauf($team, $session, $creativeMode, $optionen);
         }
 
         $brief = trim((string) ($optionen['brief'] ?? ''));

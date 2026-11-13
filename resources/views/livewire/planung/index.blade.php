@@ -775,6 +775,7 @@
 
             {{-- BASISREZEPT: eigener Reiter mit seinen Leitplanken --}}
             <div wire:key="planung-tab-basisrezept" x-show="tab==='basisrezept'">
+                <livewire:foodalchemist.planung.zukauf-ware :session-id="$sessionId" :key="'planung-zukauf-'.($sessionId ?? 'neu')" />
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'rezept', 'vk' => false, 'goLabel' => 'Basisrezept', 'goIcon' => 'heroicon-o-beaker'])
             </div>
 

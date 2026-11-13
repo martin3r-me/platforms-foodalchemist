@@ -78,6 +78,74 @@ class PlanningSessionService
         ]);
     }
 
+    /**
+     * Zukauf-Basisrezept planen (Dominique 13.11.): aus einem gekauften GP (Kräutercrumble, Microgreens, fertiges
+     * Gulasch) eine Planung „Zukauf-Basisrezept: <GP>“ — die Ware wird nicht nachgekocht, das Basisrezept führt genau
+     * diese Ware und beschreibt die Handgriffe. Der Mensch startet in der Planung (Reiter Basisrezept) mit dem normalen
+     * Go; gebaut wird über den Zukauf-Weg ({@see ZukaufBasisrezeptService::starteLauf}). Gleicher Einstieg für Knopf am GP,
+     * „Zukauf-Ware wählen“ in der Planung und MCP (planung_session.POST mit gp_id).
+     *
+     * Kein Doppel: hat die Ware schon ein Zukauf-Basisrezept, kommt es zurück (keine Session); eine offene Zukauf-Planung
+     * desselben GP wird wiederverwendet. Typ: gewählt, sonst Vorschlag aus der Regel basisrezept.zukauf.typ, sonst offen
+     * (Auswahl im Reiter) — nie geraten. Rezepte, die den GP nutzen, bleiben unberührt.
+     *
+     * @return array{session: ?FoodAlchemistPlanningSession, recipe: ?FoodAlchemistRecipe, typ: ?string, typ_vorschlag: ?string, neu: bool}
+     */
+    public function zukaufAusGp(Team $team, int $gpId, ?string $typ = null, string $createdVia = 'gp'): array
+    {
+        $zukauf = app(ZukaufBasisrezeptService::class);
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId);
+        if ($gp === null) {
+            throw new RuntimeException('Grundprodukt nicht gefunden oder nicht sichtbar.');
+        }
+        if (! $zukauf->bietetZukaufAn($gp)) {
+            throw new RuntimeException('Ein Zukauf-Basisrezept gibt es nur für Lebensmittel (nicht für Non-Food oder Platzhalter).');
+        }
+        $vorschlag = $zukauf->typFuerGp($gp);
+        if (($rezept = $zukauf->bestehendFuerGp($team, (int) $gp->id)) !== null) {
+            return ['session' => null, 'recipe' => $rezept, 'typ' => null, 'typ_vorschlag' => $vorschlag, 'neu' => false];
+        }
+        $typ = trim((string) $typ);
+        if ($typ !== '' && ($typ = \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($typ) ?? '') === '') {
+            throw new RuntimeException('Unbekannter Basisrezept-Typ (Regel basisrezept.1.2.typ).');
+        }
+        $offen = FoodAlchemistPlanningSession::where('team_id', $team->id)->where('source_gp_id', $gp->id)
+            ->where('status', '!=', 'erledigt')->orderByDesc('id')->first();
+        if ($offen !== null) {
+            if ($typ !== '') {
+                $offen->update(['zukauf_typ' => $typ]);
+            }
+
+            return ['session' => $offen->refresh(), 'recipe' => null, 'typ' => $offen->zukauf_typ, 'typ_vorschlag' => $vorschlag, 'neu' => false];
+        }
+        $session = $this->create($team, [
+            'title' => mb_substr('Zukauf-Basisrezept: ' . $gp->name, 0, 255),
+            'brief' => 'Zukauf-Basisrezept für die gekaufte Ware „' . $gp->name . '“. Die Ware wird nicht nachgekocht: '
+                . 'das Basisrezept führt genau diese Ware und beschreibt die Handgriffe (Rüsten, Regenerieren, Portionieren), '
+                . 'damit Gerichte nur aus Basisrezepten mit Zeitwert bestehen.',
+            'created_via' => $createdVia,
+        ]);
+        $session->update(['source_gp_id' => (int) $gp->id, 'zukauf_typ' => $typ !== '' ? $typ : $vorschlag]);
+
+        return ['session' => $session->refresh(), 'recipe' => null, 'typ' => $session->zukauf_typ, 'typ_vorschlag' => $vorschlag, 'neu' => true];
+    }
+
+    /** Typ einer Zukauf-Planung setzen (Reiter Basisrezept). Nur das Besitzer-Team, nur Typen aus dem Vokabular. */
+    public function setzeZukaufTyp(Team $team, int $sessionId, string $typ): FoodAlchemistPlanningSession
+    {
+        $session = $this->ownedSession($team, $sessionId);
+        if ($session->source_gp_id === null) {
+            throw new RuntimeException('Diese Planung hat keine Zukauf-Ware.');
+        }
+        $kanon = \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($typ);
+        if ($kanon === null) {
+            throw new RuntimeException('Unbekannter Basisrezept-Typ (Regel basisrezept.1.2.typ).');
+        }
+        $session->update(['zukauf_typ' => $kanon]);
+
+        return $session->refresh();
+    }
+
     /** Kombination in eine bestehende Session übernehmen (Planungs-Reiter „Trendradar"). */
     public function trendradarUebernehmen(Team $team, int $sessionId, array $trendIds, array $inspirationIds = []): FoodAlchemistPlanningSession
     {

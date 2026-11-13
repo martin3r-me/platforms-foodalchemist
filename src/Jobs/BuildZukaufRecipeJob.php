@@ -16,7 +16,8 @@ use Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService;
 use Platform\FoodAlchemist\Services\ZukaufBasisrezeptService;
 
 /**
- * Baut ein Zukauf-Basisrezept für einen Kind-Step (Kaufware im Gericht) — ohne Komponenten-Plan, ohne den großen
+ * Baut ein Zukauf-Basisrezept für einen Kind-Step (Kaufware im Gericht) oder die Wurzel einer Zukauf-Planung (Knopf am
+ * GP, {@see \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::starteLauf}) — ohne Komponenten-Plan, ohne den großen
  * Generator, ohne Heilung. Danach wie ein fertig gebautes Kind: an die Eltern-Zeile binden, Step done.
  */
 class BuildZukaufRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar
@@ -79,6 +80,11 @@ class BuildZukaufRecipeJob implements ShouldQueue, \Platform\FoodAlchemist\Servi
         $cascade->setzePhase($this->stepId, 'Zukauf wird angelegt …');
         try {
             $recipe = $zukauf->baue($team, $step, $this->text, $this->ware, $this->params);
+            // Wurzel einer Zukauf-Planung (Knopf am GP, 13.11.): Lineage wie GenerateRecipeJob (Session → konvergenz, created_via plan_go).
+            if ($step->parent_step_id === null && isset($this->params['planning_session_id'])
+                && ($session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->get($team, (int) $this->params['planning_session_id'])) !== null) {
+                app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->verknuepfeArtefakt($session, 'recipe', (int) $recipe->id);
+            }
             $cascade->setzePhase($this->stepId, null);
             $workflow->afterGenerated($team, $this->stepId, $this->userId, $recipe, [], [...$this->params, 'cascade_step_id' => $this->stepId]);
             $cascade->markStepDone($this->stepId, 'recipe', (int) $recipe->id);
