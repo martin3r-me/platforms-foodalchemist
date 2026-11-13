@@ -761,7 +761,7 @@
                                                             </div>
                                                         @else
                                                             <div class="flex flex-col gap-1">
-                                                                <span class="{{ $klein }} text-[var(--fa-ink-2)]">Leere Position. Links ein Gericht wählen oder unten befüllen.</span>
+                                                                @include('foodalchemist::livewire.concepter.partials.slot-vorgabe')
                                                                 @if($slot->note)
                                                                     {{-- R6.1: Begründung der Erstellung, warum die Position bewusst leer blieb --}}
                                                                     <x-fa::signal tone="warn" data-slot-leer-begruendung>{{ $slot->note }}</x-fa::signal>

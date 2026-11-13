@@ -83,6 +83,12 @@ class MaterializeConceptIdeaJob implements ShouldQueue, \Platform\FoodAlchemist\
             Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
         }
 
+        // Bestand zuerst (Dominique 13.11.2026): trägt die Skizze einer Gericht-Vorgabe ein freigegebenes Bestandsgericht,
+        // übernimmt die Freigabe es in die Position — gebaut wird dann nichts.
+        if (app(\Platform\FoodAlchemist\Services\ConceptVorgabenService::class)->uebernimmBestand($team, $this->ideaId, $this->cascadeStepId)) {
+            return;
+        }
+
         $cascade->materialisiereConceptGericht($team, $this->ideaId, $this->cascadeStepId, $this->planningSessionId);
     }
 

@@ -27,7 +27,9 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         return 'Legt einen Slot in einem draft-Konzept an (Position ans Ende) und befüllt ihn optional: '
             . 'sales_recipe_id = Gericht (via verkaufsrezepte.SEARCH), package_id = Concepter-Paket (concepts mit kind=paket, '
             . 'IDs via pakete.LIST / anlegen via pakete.POST oder concepts.POST kind=paket) (XOR). role z. B. '
-            . 'vorspeise/hauptgang/dessert, wording = kundenseitiger Anzeigename.';
+            . 'vorspeise/hauptgang/dessert, wording = kundenseitiger Anzeigename. '
+            . 'dish_brief = Gericht-Vorgabe für eine LEERE Position: welches Gericht hier entstehen soll (z. B. „Graved Karotte | Dillcreme | Brot-Crumble"). '
+            . 'Die Erstellung baut dann genau dieses Gericht statt frei zu erfinden; dish_brief_note = Notiz dazu (Zubereitung, Produkte). Nicht zusammen mit sales_recipe_id/package_id.';
     }
 
     public function getSchema(): array
@@ -44,6 +46,8 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
                 'quantity' => ['type' => 'number'],
                 'unit' => ['type' => 'string', 'description' => 'Einheiten-Slug, z. B. stk, portion'],
                 'wording' => ['type' => 'string', 'description' => 'Kundenseitiger Anzeigename der Position'],
+                'dish_brief' => ['type' => 'string', 'description' => 'Gericht-Vorgabe für eine leere Position: der gewünschte Gerichtstitel. Die Erstellung baut genau dieses Gericht (Bestand zuerst: ein freigegebenes Gericht gleichen Namens wird vorgeschlagen). Nicht mit sales_recipe_id/package_id.'],
+                'dish_brief_note' => ['type' => 'string', 'description' => 'Notiz zur Gericht-Vorgabe (Zubereitung, Produkte, was nicht hinein soll). Nur mit dish_brief.'],
                 'presentation' => ['type' => 'string', 'description' => 'Servierform-Code/Label — pinnt die Darreichung dieses Gerichts am Slot (überschreibt die Konzept-Servierform-Auflösung). Nur mit sales_recipe_id.'],
             ],
             'required' => ['concept_id'],
@@ -65,6 +69,10 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         }
         if (isset($arguments['sales_recipe_id'], $arguments['package_id'])) {
             return ToolResult::error('sales_recipe_id und package_id sind XOR — nur eines angeben.', 'VALIDATION_ERROR');
+        }
+        $vorgabe = trim((string) ($arguments['dish_brief'] ?? ''));
+        if ($vorgabe !== '' && (isset($arguments['sales_recipe_id']) || isset($arguments['package_id']))) {
+            return ToolResult::error('dish_brief ist die Vorgabe für eine LEERE Position — nicht zusammen mit sales_recipe_id oder package_id.', 'VALIDATION_ERROR');
         }
         if (isset($arguments['sales_recipe_id'])
             && ! FoodAlchemistRecipe::visibleToTeam($team)->whereKey((int) $arguments['sales_recipe_id'])->exists()) {
@@ -103,6 +111,9 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
             if (($arguments['wording'] ?? '') !== '') {
                 $slot = $svc->setSlotWording($team, $slot->id, (string) $arguments['wording']);
             }
+            if ($vorgabe !== '') {
+                $slot = app(\Platform\FoodAlchemist\Services\ConceptVorgabenService::class)->setze($team, $slot->id, $vorgabe, isset($arguments['dish_brief_note']) ? (string) $arguments['dish_brief_note'] : null);
+            }
             // M3: Darreichung am Slot pinnen (Servierform des Gerichts).
             if (($arguments['presentation'] ?? '') !== '' && $slot->sales_recipe_id !== null) {
                 $formId = $this->resolveServierformId($team, (string) $arguments['presentation']);
@@ -122,7 +133,7 @@ class ConceptSlotsPostTool extends FoodAlchemistTool implements ToolContract, To
         return ToolResult::success(['slot' => [
             'id' => $slot->id, 'position' => $slot->position, 'type' => $slot->type,
             'role' => $slot->role, 'sales_recipe_id' => $slot->sales_recipe_id, 'package_id' => $slot->embedded_concept_id,
-            'presentation_id' => $slot->presentation_id,
+            'presentation_id' => $slot->presentation_id, 'dish_brief' => $slot->dish_brief, 'dish_brief_note' => $slot->dish_brief_note,
         ]]);
     }
 

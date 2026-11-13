@@ -33,7 +33,7 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
-    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast, WithFileUploads;
+    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast, WithFileUploads, \Platform\FoodAlchemist\Livewire\Concerns\ManagesSlotVorgabe;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
 
     /**
