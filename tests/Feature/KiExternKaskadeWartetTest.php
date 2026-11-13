@@ -221,3 +221,19 @@ it('planung_kaskade.WEITER meldet „arbeitet“, solange ein Schritt läuft und
 
     expect($r->data['zustand'])->toBe('arbeitet')->and($r->data['warte_sekunden'])->toBeGreaterThan(0);
 });
+
+it('Lauf 65: ein Gericht-Schritt aus einer Idee wartet sichtbar auf seinen KI-Auftrag (Schlüssel materialize-idea je Idee)', function () {
+    $run = ($this->starte)();
+    DB::table('foodalchemist_ki_auftraege')->delete();
+    $step = $run->steps()->orderBy('sort')->first();
+    $step->update(['context_snapshot' => array_merge(is_array($step->context_snapshot) ? $step->context_snapshot : [], ['dish_idea_id' => 4711])]);
+    $uuid = ($this->auftrag)('vk.generator', [['role' => 'user', 'content' => 'Gericht bauen']]);
+    DB::table('foodalchemist_ki_auftraege')->where('uuid', $uuid)->update(['lauf_key' => 'materialize-idea:' . $this->rootTeam->id . ':4711']);
+
+    $status = app(PlanningCascadeService::class)->laufStatus($this->rootTeam, (int) $run->id);
+
+    expect($status['schritte'][0]['phase'])->toBe('wartet auf KI-Antwort (1 Auftrag offen)')
+        ->and($status['ki_auftraege_offen']['auftrag_ids'])->toBe([$uuid]);
+    $offen = ($this->get)(['run_id' => $run->id]);
+    expect(array_column($offen->data['auftraege'], 'auftrag_id'))->toBe([$uuid]);
+});

@@ -34,6 +34,12 @@ trait KaskadeKiWarten
         foreach (['recipe-plan', 'dish-proposal', 'dish-revise', 'build-zukauf', 'fanout-concept', 'materialize-cell', 'materialize-position'] as $praefix) {
             $keys[] = "{$praefix}:{$team}:{$id}";
         }
+        // Gericht aus einer Idee (MaterializeConceptIdeaJob, Schlüssel je Idee statt je Schritt) — fehlte: Lauf 65 (io 13.11.2026)
+        // zeigte „wartet auf Worker“, obwohl ein vk.generator-Auftrag offen war.
+        $idee = (int) ((is_array($s->context_snapshot) ? $s->context_snapshot : [])['dish_idea_id'] ?? 0);
+        if ($idee > 0) {
+            $keys[] = "materialize-idea:{$team}:{$idee}";
+        }
         $gen = trim((string) ($s->generator_run_id ?? ''));
         if ($gen !== '') {
             $keys[] = "generate-recipe:{$gen}";
