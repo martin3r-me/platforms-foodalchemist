@@ -582,7 +582,7 @@ class PriceService
             ->whereIn('i.team_id', FoodAlchemistSupplierItem::teamAncestryIds($team))
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
             ->whereRaw(FoodAlchemistSupplierItem::mengeSql('i').' > 0')->whereNotNull('i.unit_code')
-            ->select(['i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
+            ->select(['i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.abtropfgewicht', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
             ->selectSub($this->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis')
             ->orderBy('i.id')
             ->cursor();
@@ -640,6 +640,8 @@ class PriceService
     /**
      * §3.2 Vergleichspreis: Gebindepreis → €/kg | €/l | €/Stk (Anzeige-Normalisierung).
      * qty NULL/0 ⇒ NULL (I4, nie Division), price < 0 ⇒ NULL (I5), unbekannte Einheit ⇒ NULL.
+     * Menge = {@see FoodAlchemistSupplierItem::preisMengeVon}: ein gesetztes Abtropfgewicht schlägt den Inhalt (12.11.2026,
+     * Anzeige-Zusatz über {@see FoodAlchemistSupplierItem::preisAbgetropft}). Zeilen aus rohen Abfragen brauchen dafür die Spalte `abtropfgewicht`.
      *
      * @return array{wert: float, unit: string}|null
      */
@@ -648,7 +650,7 @@ class PriceService
         if ($preis === null || $preis < 0) {
             return null;
         }
-        $qty = FoodAlchemistSupplierItem::mengeVon($item);   // korrigierte Menge (EDI: Menge / Stückzahl) vor Necta-qty
+        $qty = FoodAlchemistSupplierItem::preisMengeVon($item);   // Abtropfgewicht (kg/l) vor korrigierter Menge (EDI: Menge / Stückzahl) vor Necta-qty
         if ($qty === null || $qty == 0.0) {
             return null; // I4 — GT-5: 47,50 € mit qty NULL ⇒ kein Vergleichspreis
         }

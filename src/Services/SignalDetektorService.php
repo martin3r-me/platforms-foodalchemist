@@ -515,7 +515,7 @@ class SignalDetektorService
         $las = DB::table('foodalchemist_supplier_items AS i')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->where('s.gp_id', $gpId)->whereNull('s.deleted_at')->whereNull('i.deleted_at')
-            ->select('i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code')   // vergleichspreis nimmt die korrigierte Menge
+            ->select('i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.abtropfgewicht', 'i.unit_code')   // vergleichspreis nimmt die korrigierte Menge
             ->selectSub($preisSvc->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis');   // Team-Sicht: Alternative und Preis stehen im Signal des Teams
         // Spec 82 §12 A3: Stamm-Paket-Artikel ohne Opt-in sind keine Alternative (Bezeichnung + Preis würden sonst im Signal stehen).
         $las = StammPaket::begrenzen($las, 'i', $team, 'foodalchemist_supplier_items')->get();
