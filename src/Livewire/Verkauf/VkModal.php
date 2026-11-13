@@ -30,6 +30,7 @@ class VkModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\HatDarreichungsFormular;   // Festpreis + deutsche Zahlen
     use \Platform\FoodAlchemist\Livewire\Concerns\HatAnreicherungsLauf;
     use \Livewire\WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
@@ -214,38 +215,6 @@ class VkModal extends Component
     }
 
     // ── Darreichungen (Umbau-Spec Phase 5) ──────────────────────────────
-
-    private function ladeDarreichungen(): void
-    {
-        $this->darForm = [];
-        $this->darDeltaOffen = null;
-        $this->darNeueForm = '';
-        if ($this->recipeId === null) {
-            return;
-        }
-        $team = Auth::user()?->currentTeamRelation;
-        $defaultMarkupClassId = $team !== null
-            ? app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->defaultMarkupClassId($team)
-            : null;
-        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('recipe')->where('recipe_id', $this->recipeId)->get() as $d) {
-            $this->darForm[$d->id] = [
-                'quantity_per_unit_g' => $d->quantity_per_unit_g,
-                'unit_count' => $d->unit_count,
-                'unit_vocab_id' => $d->unit_vocab_id,
-                'markup_class_id' => $d->markup_class_id ?? $defaultMarkupClassId,
-                'price_mode' => $d->price_mode,
-                'sales_net' => $d->sales_net,
-                'vat_profile_key' => $d->vat_profile_key,
-                'price_override_reason' => $d->price_override_reason,
-                'price_override_expires_at' => $d->price_override_expires_at?->format('Y-m-d'),
-                'vessel_gp_id' => $d->vessel_gp_id,
-                'serving_vehicle_vocab_id' => $d->serving_vehicle_vocab_id,
-                // Spec 83 B3i/B3l: Anrichten je Darreichung (Einheit aus der Form) + Pauschale je Auftragszeile
-                'anrichten_wert' => $d->anrichten_wert,
-                'anrichten_pauschal_min' => $d->anrichten_pauschal_min,
-            ];
-        }
-    }
 
     /**
      * Spec 83 B3i/B3l: je Darreichung die Anrichte-Rechnung für eine Beispielmenge (100 Portionen) — dieselbe Rechnung wie Auftrag
