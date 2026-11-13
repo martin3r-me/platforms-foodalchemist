@@ -471,9 +471,10 @@
                         @forelse($darreichungen as $d)
                             @php
                                 $fixiert = in_array(($darForm[$d->id]['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true);
-                                $darVkNetto = $fixiert
-                                    ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['sales_net'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['sales_net']) : null)
-                                    : $d->sales_net;
+                                // Wareneinsatz und Brutto rechnen IMMER mit dem gespeicherten Stand — nie mit einem
+                                // eingetippten, noch nicht gespeicherten Festpreis (sonst Mischanzeige, 13.11.2026).
+                                $darVkNetto = $d->sales_net;
+                                $darFestFehlt = $fixiert ? \Platform\FoodAlchemist\Livewire\Verkauf\VkModal::darFestpreisFehlt($darForm[$d->id] ?? []) : null;
                                 $darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null;
                                 // Dieselbe Ampel-Leiter wie im Kopf (MargeService::weAmpel gegen die Team-Ziel-Quote).
                                 $darAmpel = $darWpct !== null ? app(\Platform\FoodAlchemist\Services\MargeService::class)->weAmpel($darWpct, (float) ($cockpit['ziel_pct'] ?? 0)) : 'unbekannt';
@@ -493,6 +494,7 @@
                                             <option value="{{ $sf->id }}" @selected($sf->id === $d->serving_form_id)>{{ $sf->label }}</option>
                                         @endforeach
                                     </select>
+                                    @if($d->servingForm?->code === 'unbestimmt')<span class="block mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-dar-form-waehlen>Servierform wählen</span>@endif
                                     @if($d->created_via)<span class="block mt-1 {{ $hinweis }}">{{ $angelegtText[$d->created_via] ?? $d->created_via }}</span>@endif
                                 </td>
                                 <td class="text-center">
@@ -549,10 +551,11 @@
                                 <td class="num">
                                     @if($fixiert)
                                         <div class="flex flex-col items-end gap-1">
-                                            <input type="text" inputmode="decimal" wire:model.blur="darForm.{{ $d->id }}.sales_net" aria-label="Fester VK netto"
+                                            <input type="text" inputmode="decimal" wire:model.blur="darForm.{{ $d->id }}.sales_net" aria-label="Fester VK netto" wire:change="darreichungFestpreisFeld({{ $d->id }})"
                                                    class="{{ $feldKlein }} w-20 text-right tabular-nums" />
-                                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.price_override_reason" aria-label="Begründung für den festen Preis"
+                                            <input type="text" wire:model.blur="darForm.{{ $d->id }}.price_override_reason" aria-label="Begründung für den festen Preis" wire:change="darreichungFestpreisFeld({{ $d->id }})"
                                                    placeholder="Begründung" class="{{ $feldKlein }} w-32" />
+                                            @if($darFestFehlt)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-dar-fest-fehlt>{{ $darFestFehlt }}</span>@endif
                                             <x-fa::button size="sm" variant="ghost" wire:click="darreichungSpeichern({{ $d->id }})">Festpreis übernehmen</x-fa::button>
                                         </div>
                                     @else

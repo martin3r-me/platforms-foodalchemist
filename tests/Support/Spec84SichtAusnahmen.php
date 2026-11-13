@@ -7,6 +7,7 @@ return [
     'Livewire/Angebote/Editor.php' => 11,
     'Livewire/Concepter/Editor.php' => 5,
     'Livewire/Concerns/FortschrittAnsicht.php' => 2,
+    'Livewire/Concerns/HatDarreichungsFormular.php' => 1,   // aus VkModal verschoben (13.11.), kein neuer Treffer
     'Livewire/Concerns/ManagesPlanningFrame.php' => 1,
     'Livewire/Concerns/TauschtRezept.php' => 1,
     'Livewire/Etiketten/Index.php' => 1,
@@ -29,7 +30,7 @@ return [
     'Livewire/Suppliers/ItemModal.php' => 1,
     'Livewire/Suppliers/ProduktpassPanel.php' => 4,
     'Livewire/Verkauf/DetailPanel.php' => 1,
-    'Livewire/Verkauf/VkModal.php' => 8,
+    'Livewire/Verkauf/VkModal.php' => 7,
     'Tools/ConceptSlotsPostTool.php' => 2,
     'Tools/EinkaufSpendGetTool.php' => 1,
     'Tools/FoodAlchemistTool.php' => 2,
