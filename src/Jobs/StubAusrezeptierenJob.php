@@ -74,7 +74,12 @@ class StubAusrezeptierenJob implements ShouldQueue, \Platform\FoodAlchemist\Serv
      */
     public static function huelle(Team $team, array $parameter, bool $vkModus): ?FoodAlchemistRecipe
     {
-        if ($vkModus || ! isset($parameter['stub_fuellen_id'])) {
+        if ($vkModus) {
+            // Gericht-Hülle (13.11.2026): „Rezeptur erstellen" baut in ein vorhandenes Gericht ohne Komponenten.
+            return isset($parameter['gericht_fuellen_id'])
+                ? \Platform\FoodAlchemist\Services\GerichtHuelleService::huelle($team, (int) $parameter['gericht_fuellen_id']) : null;
+        }
+        if (! isset($parameter['stub_fuellen_id'])) {
             return null;
         }
         $stub = FoodAlchemistRecipe::query()->where('team_id', $team->id)->where('status', 'stub')->find((int) $parameter['stub_fuellen_id']);
@@ -85,6 +90,9 @@ class StubAusrezeptierenJob implements ShouldQueue, \Platform\FoodAlchemist\Serv
     /** Hülle wird Entwurf: Kopf aus dem KI-Vorschlag; Zutaten/Schritte schreibt der Generator danach wie bei jedem neuen Rezept. */
     public static function alsEntwurf(FoodAlchemistRecipe $stub, array $kiRezept, ?string $createdVia): FoodAlchemistRecipe
     {
+        if ($stub->is_sales_recipe) {
+            return $stub;   // Gericht-Hülle: Kopf (Name, Beschreibung, Herkunft) hat der Mensch gesetzt und bleibt
+        }
         $stub->update([
             'status' => 'draft',
             'created_via' => $createdVia ?? 'import_ki_unterrezept',
