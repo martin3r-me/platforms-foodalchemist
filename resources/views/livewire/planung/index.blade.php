@@ -825,6 +825,8 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
+                @include('foodalchemist::livewire.planung.partials.concept-bestehend')
+
                 {{-- KI-Plan (Etappe 2b, geplanter Pfad): arbeitet den Plan vorab aus (Leitidee, Vorteil,
                      Inszenierung, Geschmackswelten + Gänge-Gerüst) und zeigt ihn zur Prüfung, NOCH ohne
                      Gerichte. DF-2 (Spec 41, Entscheid 2026-08-21): der EMPFOHLENE Weg fürs Concepting. --}}
