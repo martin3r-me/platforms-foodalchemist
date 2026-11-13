@@ -422,6 +422,7 @@ return [
     \Platform\FoodAlchemist\Tools\PlanungKaskadeStartPostTool::class,
     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
     \Platform\FoodAlchemist\Tools\PlanungKaskadeSyncPostTool::class,
+    \Platform\FoodAlchemist\Tools\PlanungKaskadeWeiterTool::class,
     \Platform\FoodAlchemist\Tools\PlanungLeitplankenExtractTool::class,
     \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
     \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,

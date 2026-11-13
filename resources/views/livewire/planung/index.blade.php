@@ -895,10 +895,14 @@
                 {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
                      (Lauf-Status + Step-Phasen), kein gespeichertes Flag. --}}
                 @if($pollAktiv)
+                    @php $kiOffenGesamt = collect($kiWartend ?? [])->sum('anzahl'); @endphp
                     <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 rounded-[var(--fa-radius-surface)] bg-[var(--fa-info-soft)] px-3.5 py-2.5 text-[length:var(--fa-text-md)] text-[var(--fa-info)]">
-                        @svg('heroicon-o-arrow-path', 'w-4 h-4 shrink-0 animate-spin')
-                        <span>
-                            @if($laeuft)
+                        @svg($kiOffenGesamt > 0 ? 'heroicon-o-clock' : 'heroicon-o-arrow-path', 'w-4 h-4 shrink-0 ' . ($kiOffenGesamt > 0 ? '' : 'animate-spin'))
+                        <span @if($kiOffenGesamt > 0) data-planung-wartet-ki @endif>
+                            @if($kiOffenGesamt > 0)
+                                {{-- Per Schnittstelle (MCP) gestartet: die KI-Antwort kommt von außen, die Hintergrund-Erstellung ist nicht gestört. --}}
+                                Wartet auf {{ $kiOffenGesamt === 1 ? 'eine KI-Antwort' : $kiOffenGesamt . ' KI-Antworten' }} von außen. Sobald {{ $kiOffenGesamt === 1 ? 'sie' : 'sie alle' }} da {{ $kiOffenGesamt === 1 ? 'ist' : 'sind' }}, geht es automatisch weiter.
+                            @elseif($laeuft)
                                 Läuft. Die Hintergrund-Erstellung arbeitet die Schritte ab …
                             @elseif($anreicherungLaeuft)
                                 Freigegeben. Beschreibung, Kalkulation und Allergene werden ergänzt …

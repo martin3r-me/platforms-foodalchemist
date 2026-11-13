@@ -2030,7 +2030,11 @@ class PlanningCascadeService
             return 0;
         }
         $grenze = now()->subMinutes(self::VERWAIST_NACH_MINUTEN);
+        // Ein Schritt, der auf eine externe KI-Antwort wartet, ist nicht verwaist: sein Job ist sauber beendet und startet mit der
+        // Antwort neu (Auftrag gilt 24 h). Ihn hier auf `failed` zu setzen, würfe einen gesunden MCP-Lauf nach 30 Minuten weg.
+        $kiWartend = $this->kiWartend($run->steps);
         $verwaist = $run->steps->filter(fn ($s) => in_array($s->status, ['queued', 'running'], true)
+            && ! isset($kiWartend[(int) $s->id])
             && $s->updated_at !== null
             && $s->updated_at->lt($grenze));
         foreach ($verwaist as $s) {
@@ -3333,9 +3337,13 @@ class PlanningCascadeService
         }
 
         $steps = $run->steps->sortBy('sort')->values();
+        // Externer KI-Weg: wartet ein Schritt auf eine Antwort von außen, steht das an keinem Step-Feld (die Job-Transaktion rollt beim
+        // Warten zurück, auch die Phase) — die offenen Aufträge selbst sind die Wahrheit.
+        $kiWartend = $this->kiWartend($steps);
 
-        $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s): array {
+        $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s) use ($kiWartend): array {
             $deferred = is_array($s->deferred) ? $s->deferred : [];
+            $ki = $kiWartend[(int) $s->id] ?? null;
             $snapshot = is_array($s->context_snapshot) ? $s->context_snapshot : [];
 
             return array_filter([
@@ -3349,7 +3357,12 @@ class PlanningCascadeService
                 // Job noch nicht aufgenommen" (Cockpit-Text „eingereiht — wartet auf Worker",
                 // step-zeile.blade.php) — derselbe Text hier, damit ein MCP-Konsument dieselbe
                 // Unterscheidung sieht, statt sie aus Status+fehlender Phase selbst zu rekonstruieren.
-                'phase' => $s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null),
+                // Wartet der Schritt auf eine externe KI-Antwort, ist DAS die Phase — nicht „wartet auf Worker" (Lauf 62, io 13.11.2026:
+                // der Worker war frei, der Lauf wartete auf ki_auftraege.ANTWORT, Status und Cockpit zeigten auf die Queue).
+                'phase' => $ki !== null
+                    ? self::kiWartetText((int) $ki['anzahl'])
+                    : ($s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null)),
+                'wartet_auf_ki' => $ki,
                 // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
                 // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
                 'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,
@@ -3434,6 +3447,8 @@ class PlanningCascadeService
             array_flip(FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS)
         );
 
+        $kiIds = $kiWartend === [] ? [] : array_values(array_unique(array_merge(...array_column($kiWartend, 'auftrag_ids'))));
+
         return [
             'run_namespace' => 'planung_kaskade',
             'lauf' => array_filter([
@@ -3459,8 +3474,104 @@ class PlanningCascadeService
             'deckel_hinweise' => is_array($run->deckel_hinweise) && $run->deckel_hinweise !== []
                 ? array_values($run->deckel_hinweise)
                 : null,
-            'hinweis' => $this->laufStatusHinweis((string) $run->status, $steps),
+            // Offene KI-Aufträge des Laufs (externer Weg) mit der nächsten Aktion — null, wenn der Lauf auf keine Antwort wartet.
+            'ki_auftraege_offen' => $kiWartend === [] ? null : [
+                'anzahl' => count($kiIds),
+                'features' => array_values(array_unique(array_merge(...array_column($kiWartend, 'features')))),
+                'auftrag_ids' => $kiIds,
+                'naechster_schritt' => 'Am einfachsten planung_kaskade.WEITER(run_id=' . (int) $run->id . '): liefert die Fragen und nimmt die Antworten an. '
+                    . 'Einzeln: foodalchemist.ki_auftraege.GET(run_id=' . (int) $run->id . ') holen, per ki_auftraege.ANTWORT beantworten, dann '
+                    . 'planung_kaskade.GET erneut lesen. Je Stufe können neue Aufträge folgen — wiederholen, bis ki_auftraege_offen fehlt.',
+            ],
+            'hinweis' => $this->laufStatusHinweis((string) $run->status, $steps, count($kiIds), (int) $run->id, (string) ($run->created_via ?? '')),
         ];
+    }
+
+    /** Phasen-Text eines Schritts, der auf externe KI-Antworten wartet (Status per MCP und Cockpit, gleicher Wortlaut). */
+    public static function kiWartetText(int $anzahl): string
+    {
+        return 'wartet auf KI-Antwort (' . ($anzahl === 1 ? '1 Auftrag offen' : $anzahl . ' Aufträge offen') . ')';
+    }
+
+    /**
+     * Lauf-Schlüssel, unter denen die Jobs eines Schritts im externen Weg ihre KI-Aufträge anlegen
+     * ({@see \Platform\FoodAlchemist\Services\Ai\KiExternWiederholbar::externSchluessel()} der Kaskaden-Jobs). Ein Schlüssel ohne
+     * Auftrag trifft schlicht nichts — die Liste darf großzügig sein.
+     *
+     * @return list<string>
+     */
+    private function kiLaufKeys(FoodAlchemistCascadeRunStep $s): array
+    {
+        $team = (int) $s->team_id;
+        $id = (int) $s->id;
+        $keys = [];
+        foreach (['recipe-plan', 'dish-proposal', 'dish-revise', 'build-zukauf', 'fanout-concept', 'materialize-cell', 'materialize-position'] as $praefix) {
+            $keys[] = "{$praefix}:{$team}:{$id}";
+        }
+        $gen = trim((string) ($s->generator_run_id ?? ''));
+        if ($gen !== '') {
+            $keys[] = "generate-recipe:{$gen}";
+            $keys[] = "enrich-generated:{$gen}";
+            $keys[] = "generate-concept:{$team}:{$gen}";
+        }
+        if ($s->ref_type === 'recipe' && $s->ref_id !== null) {
+            $keys[] = "enrich-recipe:{$team}:" . (int) $s->ref_id;
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Welche Schritte warten gerade auf eine externe KI-Antwort (offener, nicht abgelaufener KI-Auftrag eines ihrer Jobs)?
+     * Rein lesend, fail-soft (die Auskunft ist Anzeige, kein Arbeitsschritt).
+     *
+     * @param  iterable<FoodAlchemistCascadeRunStep>  $steps
+     * @return array<int, array{anzahl: int, features: list<string>, auftrag_ids: list<string>}> Step-ID → offene Aufträge
+     */
+    public function kiWartend(iterable $steps): array
+    {
+        $jeTeam = [];
+        foreach ($steps as $s) {
+            foreach ($this->kiLaufKeys($s) as $key) {
+                $jeTeam[(int) $s->team_id][$key] = (int) $s->id;
+            }
+        }
+        $aus = [];
+        try {
+            foreach ($jeTeam as $teamId => $keys) {
+                foreach (app(\Platform\FoodAlchemist\Services\Ai\KiAuftragService::class)->offeneZuLaeufen($teamId, array_keys($keys)) as $key => $info) {
+                    $stepId = $keys[$key];
+                    if (! isset($aus[$stepId])) {
+                        $aus[$stepId] = $info;
+
+                        continue;
+                    }
+                    $aus[$stepId]['auftrag_ids'] = array_values(array_unique([...$aus[$stepId]['auftrag_ids'], ...$info['auftrag_ids']]));
+                    $aus[$stepId]['features'] = array_values(array_unique([...$aus[$stepId]['features'], ...$info['features']]));
+                    $aus[$stepId]['anzahl'] = count($aus[$stepId]['auftrag_ids']);
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $aus;
+    }
+
+    /**
+     * Die offenen KI-Aufträge eines Laufs (für ki_auftraege.GET mit run_id). null = Lauf für das Team nicht sichtbar.
+     *
+     * @return list<string>|null Auftrags-IDs (uuid)
+     */
+    public function kiAuftragIdsFuerLauf(Team $team, int $runId): ?array
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return null;
+        }
+        $wartend = $this->kiWartend($run->steps);
+
+        return $wartend === [] ? [] : array_values(array_unique(array_merge(...array_column($wartend, 'auftrag_ids'))));
     }
 
     /**
@@ -3488,8 +3599,16 @@ class PlanningCascadeService
     }
 
     /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
-    private function laufStatusHinweis(string $status, mixed $steps = null): string
+    private function laufStatusHinweis(string $status, mixed $steps = null, int $kiOffen = 0, int $runId = 0, string $createdVia = ''): string
     {
+        // Externer KI-Weg: solange Aufträge offen sind, rechnet KEIN Worker — der Lauf wartet auf den MCP-Client. Das geht jedem
+        // anderen Satz vor (auch nach der Freigabe: die Anreicherung wartet genauso).
+        if ($kiOffen > 0) {
+            return 'Der Lauf wartet auf ' . ($kiOffen === 1 ? '1 KI-Antwort' : $kiOffen . ' KI-Antworten') . ' (externer Weg), kein Worker rechnet. '
+                . 'foodalchemist.ki_auftraege.GET(run_id=' . $runId . ') holen, mit ki_auftraege.ANTWORT beantworten, danach planung_kaskade.GET erneut lesen — '
+                . 'der Lauf startet sich selbst neu und legt je Stufe weitere Aufträge an.';
+        }
+
         $uebernahme = $steps !== null
             ? $this->zaehleUebernommenUnreif($steps)
             : ['gesamt' => 0, 'unreif' => 0, 'unreif_labels' => []];
@@ -3519,7 +3638,11 @@ class PlanningCascadeService
             : '';
 
         return match ($status) {
-            'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
+            'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.'
+                . ($createdVia === 'mcp' && $runId > 0
+                    ? ' Per MCP gestartet: die Jobs rufen keine Plattform-KI, sondern legen KI-Aufträge an, sobald der Worker sie aufnimmt — '
+                        . 'steht hier nach kurzer Zeit weiter nichts, mit foodalchemist.ki_auftraege.GET(run_id=' . $runId . ') nachsehen.'
+                    : ''),
             'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',
             'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.' . $uebernahmeZusatz,
             'failed' => 'Lauf fehlgeschlagen — gescheiterte Schritte lassen sich gebündelt fortsetzen (human-only im Cockpit).',
