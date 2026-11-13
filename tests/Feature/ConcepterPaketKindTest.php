@@ -147,3 +147,21 @@ it('Browser-Status-Filter grenzt die Pakete-Liste auf einen Status ein', functio
         ->assertSee('Entwurf-Paket')
         ->assertDontSee('Salad Wall');   // aktiv → ausgefiltert
 });
+
+it('Dominique 13.11.2026: im Pakete-Reiter ist der Status wählbar (Menü wie bei Concepts) und statusSetzen schreibt ihn', function () {
+    Livewire::test(Browser::class)
+        ->call('wechselTab', 'pakete')
+        ->assertSeeHtml('aria-label="Status von Salad Wall ändern"')
+        ->call('statusSetzen', $this->paket->id, 'active');
+
+    expect($this->paket->fresh()->status)->toBe('active');
+});
+
+it('statusSetzen mit unbekanntem Status verschluckt den Fehler nicht mehr, sondern meldet ihn', function () {
+    Livewire::test(Browser::class)
+        ->call('wechselTab', 'pakete')
+        ->call('statusSetzen', $this->paket->id, 'quatsch')
+        ->assertDispatched('toast');
+
+    expect($this->paket->fresh()->status)->not->toBe('quatsch');
+});

@@ -144,7 +144,8 @@ class Browser extends Component
         }
         try {
             $concepts->setStatus($team, $id, $status);
-        } catch (\RuntimeException) {
+        } catch (\RuntimeException $e) {
+            $this->dispatch('toast', text: $e->getMessage());   // vorher still verschluckt
         }
     }
 
