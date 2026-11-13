@@ -13,6 +13,8 @@
 
 return [
     \Platform\FoodAlchemist\Tools\AblaufGetTool::class,
+    \Platform\FoodAlchemist\Tools\AboPaketeGetTool::class,   // Abo-/Alt-Pakete lesend (Team-Preis, Spec 82)
+    \Platform\FoodAlchemist\Tools\AboPaketeListTool::class,
     \Platform\FoodAlchemist\Tools\AbosDeleteTool::class,   // Spec 82 §12 D: Kündigung mit tiefer Kopie
     \Platform\FoodAlchemist\Tools\AbosGetTool::class,
     \Platform\FoodAlchemist\Tools\AbosPostTool::class,
@@ -22,6 +24,7 @@ return [
     \Platform\FoodAlchemist\Tools\AngeboteAnproduktionTool::class,
     \Platform\FoodAlchemist\Tools\AngeboteCustomerLinkTool::class,
     \Platform\FoodAlchemist\Tools\AngeboteDeleteTool::class,
+    \Platform\FoodAlchemist\Tools\AngeboteDuplicateTool::class,   // Angebot kopieren
     \Platform\FoodAlchemist\Tools\AngeboteEinfrierenGetTool::class,   // Spec 82 §12 B3
     \Platform\FoodAlchemist\Tools\AngeboteEinfrierenPostTool::class,
     \Platform\FoodAlchemist\Tools\AngeboteGetTool::class,
@@ -43,9 +46,6 @@ return [
     \Platform\FoodAlchemist\Tools\AngebotPlanFromBriefTool::class,   // Angebot aus Brief (vollkaskade owner=offer, Concept je Slot)
     \Platform\FoodAlchemist\Tools\AngebotPresentationGetTool::class,
     \Platform\FoodAlchemist\Tools\AngebotPresentationPublishTool::class,
-    \Platform\FoodAlchemist\Tools\AngeboteDuplicateTool::class,   // Angebot kopieren
-    \Platform\FoodAlchemist\Tools\BilderUploadTool::class,
-    \Platform\FoodAlchemist\Tools\PresentationFontsUploadTool::class,   // eigene Team-Schriften   // Bild per MCP: Cover/Logo/Gericht-Foto/Design-Block
     \Platform\FoodAlchemist\Tools\AngebotPresentationWithdrawTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenGetTool::class,
     \Platform\FoodAlchemist\Tools\AnkerWissenStatusTool::class,
@@ -74,6 +74,7 @@ return [
     \Platform\FoodAlchemist\Tools\BehaelterKatalogGetTool::class,
     \Platform\FoodAlchemist\Tools\BenchmarkGetTool::class,
     \Platform\FoodAlchemist\Tools\BestellvorschlagGetTool::class,
+    \Platform\FoodAlchemist\Tools\BilderUploadTool::class,   // Bild per MCP: Cover/Logo/Präsentationsbild/Gericht-Foto/Design-Block
     \Platform\FoodAlchemist\Tools\BriefTemplatesDeleteTool::class,
     \Platform\FoodAlchemist\Tools\BriefTemplatesListTool::class,
     \Platform\FoodAlchemist\Tools\BriefTemplatesPostTool::class,
@@ -446,6 +447,7 @@ return [
     \Platform\FoodAlchemist\Tools\PresentationDesignsPostTool::class,
     \Platform\FoodAlchemist\Tools\PresentationDesignsPutTool::class,
     \Platform\FoodAlchemist\Tools\PresentationDesignsSearchTool::class,
+    \Platform\FoodAlchemist\Tools\PresentationFontsUploadTool::class,   // eigene Team-Schriften
     \Platform\FoodAlchemist\Tools\PrintersGetTool::class,   // Spec 78
     \Platform\FoodAlchemist\Tools\ProductionOrdersAddTargetTool::class,
     \Platform\FoodAlchemist\Tools\ProductionOrdersDeleteTool::class,

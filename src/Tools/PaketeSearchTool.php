@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\ConceptPaketService;
 use Platform\FoodAlchemist\Services\ConceptService;
 
@@ -20,7 +21,7 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Sucht sichtbare Pakete per Freitext (Name), optional class/status.';
+        return 'Pakete = Concepter-Pakete (concepts mit kind=paket), dieselben, die der Concepter im Reiter „Pakete“ zeigt. Sucht sichtbare Pakete per Freitext (Name), optional class/status. Hybrid: lexikalisch, ergänzt um semantische Treffer aus dem Concept-Pool (via: lexical|semantic).';
     }
 
     public function getSchema(): array
@@ -52,6 +53,21 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
         $page = app(ConceptService::class)->paginatePakete($filters, $team, $limit);
         $svc = app(ConceptPaketService::class);
         $out = collect($page->items())->map(fn ($p) => $svc->payload($p) + ['via' => 'lexical'])->all();
+
+        // Semantische Ergänzung (Concept-Pool, wie concepts.SEARCH kind=paket) — nur was die Lexik nicht schon fand.
+        $sem = $this->semanticPoolIds($team, $filters['search'] ?? '', PoolEmbeddingService::ENTITY_TYPE_CONCEPT, array_column($out, 'id'), $limit - count($out));
+        if ($sem !== []) {
+            $rows = FoodAlchemistConcept::visibleToTeam($team)->pakete()->echte()->whereIn('id', array_keys($sem))
+                ->when(isset($filters['class']), fn ($w) => $w->where('class', $filters['class']))
+                ->when(isset($filters['status']), fn ($w) => $w->where('status', $filters['status']))
+                ->get()->keyBy('id');
+            arsort($sem);
+            foreach ($sem as $id => $score) {
+                if (($p = $rows->get($id)) !== null && count($out) < $limit) {
+                    $out[] = $svc->payload($p) + ['via' => 'semantic', 'semantic_score' => round($score, 3)];
+                }
+            }
+        }
 
         return ToolResult::success(['total' => count($out), 'pakete' => $out]);
     }

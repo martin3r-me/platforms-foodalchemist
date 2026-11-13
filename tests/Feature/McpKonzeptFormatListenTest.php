@@ -5,7 +5,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment;
 use Platform\FoodAlchemist\Models\FoodAlchemistEventtyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistSaison;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik;
@@ -110,9 +109,11 @@ it('B7 + D19 · Foodbooks, Speisekarten, Speisepläne, Pakete und Angebote blät
     $plan = app(SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Kantine Nord']);
     app(SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Kantine Süd']);
     FoodAlchemistSpeiseplanEintrag::create(['team_id' => $t, 'menu_plan_id' => $plan->id, 'week' => 1, 'weekday' => 1, 'meal' => 'mittag', 'position' => 1]);
-    $paket = FoodAlchemistPaket::create(['team_id' => $t, 'name' => 'Antipasti-Paket']);
-    FoodAlchemistPaket::create(['team_id' => $t, 'name' => 'Dessert-Paket']);
-    $paket->dishes()->create(['team_id' => $t, 'sales_recipe_id' => $this->makeRecipe($this->rootTeam, 'Vitello tonnato', ['is_sales_recipe' => true])->id, 'position' => 1]);
+    // Pakete = Concepter-Pakete (kind=paket) seit 2026-11; Alt-Pakete liest abo_pakete.LIST
+    $pakete = app(\Platform\FoodAlchemist\Services\ConceptPaketService::class);
+    $paket = $pakete->create($this->rootTeam, ['name' => 'Antipasti-Paket']);
+    $pakete->create($this->rootTeam, ['name' => 'Dessert-Paket']);
+    $pakete->syncGerichte($this->rootTeam, $paket->id, [['sales_recipe_id' => $this->makeRecipe($this->rootTeam, 'Vitello tonnato', ['is_sales_recipe' => true])->id]]);
     FoodAlchemistAngebot::create(['team_id' => $t, 'name' => 'Sommerfest', 'status' => 'anfrage', 'personen' => 80, 'event_date' => '2027-06-12', 'total_price' => 3990]);
     FoodAlchemistAngebot::create(['team_id' => $t, 'name' => 'Weihnachtsfeier', 'status' => 'anfrage', 'personen' => 40]);
     $liste = fn (string $tool, string $schluessel, array $a) => app($tool)->execute($a, $this->ctx)->data[$schluessel];
@@ -125,7 +126,7 @@ it('B7 + D19 · Foodbooks, Speisekarten, Speisepläne, Pakete und Angebote blät
         ->and(array_column($liste(SpeisekartenListTool::class, 'speisekarten', ['per_page' => 1, 'page' => 2]), 'name'))->toBe(['Mittagskarte'])
         ->and($erste(SpeiseplaeneListTool::class, 'speiseplaene', ['search' => 'nord']))->toMatchArray(['name' => 'Kantine Nord', 'eintraege' => 1])
         ->and(array_column($liste(SpeiseplaeneListTool::class, 'speiseplaene', ['per_page' => 1, 'page' => 2]), 'name'))->toBe(['Kantine Süd'])
-        ->and($erste(PaketeListTool::class, 'pakete', ['q' => 'antipasti']))->toMatchArray(['name' => 'Antipasti-Paket', 'gerichte' => 1])
+        ->and($erste(PaketeListTool::class, 'pakete', ['q' => 'antipasti']))->toMatchArray(['name' => 'Antipasti-Paket', 'positionen' => 1])
         ->and(array_column($liste(PaketeListTool::class, 'pakete', ['per_page' => 1, 'page' => 2]), 'name'))->toBe(['Dessert-Paket'])
         ->and($erste(AngeboteListTool::class, 'angebote', ['q' => 'sommer']))->toMatchArray(['name' => 'Sommerfest', 'datum' => '2027-06-12', 'summe' => 3990.0])
         ->and($erste(AngeboteListTool::class, 'angebote', ['q' => 'weihnacht']))->toMatchArray(['datum' => null, 'summe' => null]);

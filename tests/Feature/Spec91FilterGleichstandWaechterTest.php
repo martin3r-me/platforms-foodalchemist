@@ -166,8 +166,9 @@ function spec91_gleichstand(): array
             'ausnahmen' => ['karteId' => 'Auswahl einer Karte (Detail via speisekarten.GET), kein Listenfilter'],
         ],
         \Platform\FoodAlchemist\Livewire\Pakete\Index::class => [
-            'filter' => ['search' => ['foodalchemist.pakete.LIST', 'q'], 'rolleFilter' => ['foodalchemist.pakete.LIST', 'role']],
-            'ausnahmen' => ['selectedId' => 'Auswahl eines Pakets (Detail via pakete.GET), kein Listenfilter'],
+            // Alt-Paket-Browser (foodalchemist_packages) → abo_pakete.LIST; pakete.LIST führt seit 2026-11 die Concepter-Pakete
+            'filter' => ['search' => ['foodalchemist.abo_pakete.LIST', 'q'], 'rolleFilter' => ['foodalchemist.abo_pakete.LIST', 'role']],
+            'ausnahmen' => ['selectedId' => 'Auswahl eines Pakets (Detail via abo_pakete.GET), kein Listenfilter'],
         ],
         \Platform\FoodAlchemist\Livewire\Speiseplan\Index::class => [
             'filter' => ['search' => ['foodalchemist.speiseplaene.LIST', 'search']],

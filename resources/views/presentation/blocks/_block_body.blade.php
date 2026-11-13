@@ -16,7 +16,7 @@
   Bestehende Klassen (pt-line, pt-item, pt-indent-N, pt-line-label …) bleiben für alte Designs erhalten.
 --}}
 @php($bKind = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($b['kind'] ?? ''))))
-<div class="pt-block @if($bKind !== '') pt-block--{{ $bKind }} @endif">
+<div class="pt-block{{ $bKind !== '' ? ' pt-block--' . $bKind : '' }}">
     @if(!empty($b['is_header']))
         <h3 class="pt-block-header pt-block-header--header">{{ $b['label'] }}@if($showCodes && !empty($b['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $b['codes'])) }}</span>@endif</h3>
     @elseif($bKind === 'text')
@@ -29,7 +29,7 @@
             <span class="pt-line-price">{{ $blockPrice }}</span>
         </div>
     @elseif(!empty($b['label']))
-        <h3 class="pt-block-header @if($bKind !== '') pt-block-header--{{ $bKind }} @endif">{{ $b['label'] }}@if($showCodes && !empty($b['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $b['codes'])) }}</span>@endif</h3>
+        <h3 class="pt-block-header{{ $bKind !== '' ? ' pt-block-header--' . $bKind : '' }}">{{ $b['label'] }}@if($showCodes && !empty($b['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $b['codes'])) }}</span>@endif</h3>
     @endif
 
     @if(!empty($b['subtitle']))<p class="pt-block-sub">{{ $b['subtitle'] }}</p>@endif

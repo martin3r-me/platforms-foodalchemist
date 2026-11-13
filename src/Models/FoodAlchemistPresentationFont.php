@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
@@ -14,7 +15,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistPresentationFont extends Model
 {
-    use BelongsToTeamHierarchy, HasUuidV7, SoftDeletes;
+    use BelongsToTeamHierarchy, HasUuidV7, LogsActivity, SoftDeletes;
 
     protected $table = 'foodalchemist_presentation_fonts';
 

@@ -66,7 +66,7 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
         }
         if (! empty($felder['package_id'])) {
             // package_id = Concepter-Paket (kind=paket-Concept) → embedded_concept_id (Kaskade-Pfad).
-            $conceptId = (int) \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::whereKey($slotId)->value('concept_id');
+            $conceptId = (int) \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::visibleToTeam($team)->whereKey($slotId)->value('concept_id');
             $ref = $this->paketReferenz($team, (int) $felder['package_id'], $conceptId);
             if ($ref instanceof ToolResult) {
                 return $ref;

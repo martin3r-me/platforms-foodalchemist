@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
+use Platform\FoodAlchemist\Support\PraesentationsBilder;
 
 /**
  * Spec 43 — Public-Präsentations-Layer (digitales Kundenbuch) für die Ausgabeformen.
@@ -780,7 +781,7 @@ class PresentationService
         $zzgl = [];   // Spec 94b: Positionen nach Aufwand (unter der Summe)
         // Gericht-Fotos (Identifier) je recipe_id — Anzeige steuert das Design (show_dish_photos), wie beim Foodbook.
         // Vorher immer null: der Design-Schalter „Gericht-Fotos zeigen" wirkte beim Angebot nicht.
-        $this->angebotFotos = $this->gerichtFotos($komp);
+        $this->angebotFotos = PraesentationsBilder::gerichtFotos($komp);
         $sections = [];
         foreach ($komp['kapitel'] as $k) {
             $blocks = [];
@@ -970,36 +971,6 @@ class PresentationService
 
     /** @var array<int, array{context_file_id:?int, path:?string}> recipe_id → Foto-Identifier (nur während normalizeAngebot) */
     private array $angebotFotos = [];
-
-    /**
-     * Gericht-Fotos aller Gerichte einer Angebots-Komposition in EINER Abfrage (kein N+1).
-     *
-     * @return array<int, array{context_file_id:?int, path:?string}>
-     */
-    private function gerichtFotos(array $komp): array
-    {
-        $ids = [];
-        foreach ($komp['kapitel'] as $k) {
-            foreach (array_merge($k['bloecke'] ?? [], $k['editionen'] ?? []) as $b) {
-                foreach ($b['gerichte'] ?? [] as $g) {
-                    if (! empty($g['recipe_id'])) {
-                        $ids[(int) $g['recipe_id']] = true;
-                    }
-                }
-            }
-        }
-        if ($ids === []) {
-            return [];
-        }
-        $fotos = [];
-        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::whereIn('id', array_keys($ids))
-            ->where(fn ($q) => $q->whereNotNull('image_context_file_id')->orWhereNotNull('image_path'))
-            ->get(['id', 'image_context_file_id', 'image_path']) as $r) {
-            $fotos[(int) $r->id] = ['context_file_id' => $r->image_context_file_id, 'path' => $r->image_path];
-        }
-
-        return $fotos;
-    }
 
     /**
      * Live-Vorschau für den Struktur-Builder: rendert den (noch ungespeicherten) Layout-/
@@ -1411,23 +1382,8 @@ class PresentationService
             'logo' => ['context_file_id' => $e->logo_context_file_id ?? null, 'path' => $e->logo_path ?? null],
             'cover' => ['context_file_id' => $e->cover_context_file_id ?? null, 'path' => $e->cover_image_path ?? null],
             // Freie Präsentationsbilder 1–3 (nur Angebot): für image-Blöcke mit quelle=angebot_N.
-            'bilder' => $this->praesentationsBilder($e),
+            'bilder' => PraesentationsBilder::angebotsBilder($e),
         ];
-    }
-
-    /** @return array<string, array{context_file_id:?int, path:?string}> Nummer ("1".."3") → Identifier */
-    private function praesentationsBilder(Model $e): array
-    {
-        $roh = $e instanceof FoodAlchemistAngebot && is_array($e->presentation_images_json) ? $e->presentation_images_json : [];
-        $out = [];
-        foreach (['1', '2', '3'] as $n) {
-            $b = $roh[$n] ?? null;
-            if (is_array($b) && (($b['context_file_id'] ?? null) || ($b['path'] ?? null))) {
-                $out[$n] = ['context_file_id' => $b['context_file_id'] ?? null, 'path' => $b['path'] ?? null];
-            }
-        }
-
-        return $out;
     }
 
     private function publicUrl(string $type, string $token): string

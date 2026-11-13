@@ -162,7 +162,7 @@ it('gewählte Darreichung wird gerechnet: kleine Portion kostet weniger als die 
     expect($kleinPreis)->toBeGreaterThan(0.0)->and($kleinPreis)->toBeLessThan($standardF);
 });
 
-it('Lesestellen: Browser, Detail, Kandidaten und MCP pakete.GET/LIST zeigen beim Mandanten den Team-Preis, ohne Preis nicht 0', function () {
+it('Lesestellen: Browser, Detail, Kandidaten und MCP abo_pakete.GET/LIST zeigen beim Mandanten den Team-Preis, ohne Preis nicht 0', function () {
     $svc = app(PaketService::class);
     $erwartetB = $this->preis->fuer($this->paketF, $this->broich);
 
@@ -174,13 +174,13 @@ it('Lesestellen: Browser, Detail, Kandidaten und MCP pakete.GET/LIST zeigen beim
         ->and((float) $kand->price_per_person)->toBe($erwartetB['vk_pro_person']);
 
     $this->actingAs($this->broichChef);
-    $get = $this->reg->get('foodalchemist.pakete.GET')->execute(['id' => $this->paketF->id], new ToolContext($this->broichChef, $this->broich));
+    $get = $this->reg->get('foodalchemist.abo_pakete.GET')->execute(['id' => $this->paketF->id], new ToolContext($this->broichChef, $this->broich));
     expect($get->success)->toBeTrue((string) ($get->error ?? ''))
         ->and($get->data['paket']['price_per_person'])->toBe($erwartetB['vk_pro_person'])
         ->and($get->data['paket']['price_complete'])->toBeTrue();
 
     $this->actingAs($this->neuChef);
-    $list = $this->reg->get('foodalchemist.pakete.LIST')->execute([], new ToolContext($this->neuChef, $this->neu));
+    $list = $this->reg->get('foodalchemist.abo_pakete.LIST')->execute([], new ToolContext($this->neuChef, $this->neu));
     $paket = collect($list->data['pakete'])->firstWhere('id', $this->paketF->id);
     expect($paket['price_per_person'])->toBeNull()->and($paket['price_complete'])->toBeFalse()->and($paket['price_reason'])->toBe('ek_unvollstaendig');
 });

@@ -32,7 +32,8 @@ Im Editor arbeitest du mit:
 
 ## Pakete über MCP (Agenten)
 
-Es gibt **ein** Paket-Modell: Concepter-Pakete (Concepts mit `kind=paket`), genau die im Reiter „Pakete“.
+`foodalchemist.pakete.*` und `paket_gerichte.*` arbeiten auf den Concepter-Paketen (Concepts mit `kind=paket`), genau denen im Reiter „Pakete“.
+Die Alt-Pakete (Tabelle `foodalchemist_packages`), auf denen Abos, Speisepläne und Bestellungen noch laufen, liest `foodalchemist.abo_pakete.GET/LIST`. Dort steht bei einer Abo-Fassung der Team-Preis des Mandanten (unvollständiger EK = kein Preis + Grund, nie 0 €). Beide Modelle haben eigene Id-Räume.
 
 - Anlegen: `foodalchemist.pakete.POST` oder `foodalchemist.concepts.POST(kind=paket)`. Agenten legen immer als **Entwurf** an.
 - Befüllen: `foodalchemist.paket_gerichte.SET` (Vollersatz der Gericht-Positionen) oder `concept_slots.POST`.

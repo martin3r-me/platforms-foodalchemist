@@ -110,9 +110,9 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'angebot_cover' => $this->angebotBild($team, $id, fn () => app(AngebotService::class)->storeCover($team, $id, $datei), 'cover_context_file_id'),
                 'angebot_logo' => $this->angebotBild($team, $id, fn () => app(AngebotService::class)->storeLogo($team, $id, $datei), 'logo_context_file_id'),
                 'gericht_foto' => $this->nachSpeichern(fn () => app(RecipeService::class)->storeDishImage($team, $id, $datei),
-                    fn () => FoodAlchemistRecipe::whereKey($id)->value('image_context_file_id')),
+                    fn () => FoodAlchemistRecipe::visibleToTeam($team)->whereKey($id)->value('image_context_file_id')),
                 'konzept_bild' => $this->nachSpeichern(fn () => app(ConceptService::class)->storeImage($team, $id, $datei),
-                    fn () => FoodAlchemistConcept::whereKey($id)->value('image_context_file_id')),
+                    fn () => FoodAlchemistConcept::visibleToTeam($team)->whereKey($id)->value('image_context_file_id')),
                 'design_block' => (function () use ($team, $datei) {
                     $m = app(PresentationDesignService::class)->storeBlockImage($team, $datei);
 
@@ -143,7 +143,7 @@ class BilderUploadTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         $pfad = $speichern();
 
-        return [FoodAlchemistAngebot::whereKey($id)->value($contextSpalte), $pfad];
+        return [FoodAlchemistAngebot::visibleToTeam($team)->whereKey($id)->value($contextSpalte), $pfad];
     }
 
     /** @return array{0:?int,1:string} */
