@@ -26,7 +26,12 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
             . 'Damit steuerbar: Farben/Typo/Spacing, Navigation (Sprungmenü/Sidebar), Lightbox, Bild-Band (Raster/Rondell), '
             . 'Speiseplan-Ausgabe (Tabelle/Liste), Cover-/Bild-Darstellung, Gericht-Fotos, Kapitel-Bilder — UND eigenes CSS.'
             . ' Stylbare Klassen: ' . PresentationDesignService::cssKlassenDoc()
-            . ' Schriften: tokens_json.typography.heading/body = Google-Font aus der Whitelist (' . implode(', ', array_keys(PresentationDesignService::GOOGLE_FONTS)) . ').';
+            . ' Schriften: tokens_json.typography.heading/body = Google-Font aus der Whitelist (' . implode(', ', array_keys(PresentationDesignService::GOOGLE_FONTS)) . ').'
+            . ' Raster & Überschriften: tokens_json.page_width schmal|normal|breit, text_width schmal|normal|breit, text_align links|zentriert, '
+            . 'typography.heading_size zurueckhaltend|normal|gross, heading_weight leicht|normal|kraeftig, heading_tracking eng|normal|weit. '
+            . 'Titelbild (cover.style): overlay 0–60 (% Abdunkelung), kicker_text (Zeile über dem Titel, max. 120 Zeichen). '
+            . 'Gerichtsliste (chapter_loop/dish_list.style): show_rules, show_block_header, show_kicker (nur chapter_loop) als true/false. '
+            . 'Ungültige Werte werden mit VALIDATION_ERROR abgelehnt.';
     }
 
     public function getSchema(): array

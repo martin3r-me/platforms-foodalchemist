@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
+use Platform\FoodAlchemist\Support\PraesentationsDesignWerte;
 
 /**
  * Spec 43 — Präsentations-Designs: wiederverwendbare, blockbasierte Layout-Definitionen
@@ -620,6 +621,10 @@ class PresentationDesignService
             throw new \RuntimeException('Design-Name fehlt.');
         }
         $base = $this->baseSlug($data['base_slug'] ?? 'editorial');
+        PraesentationsDesignWerte::pruefe(
+            is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : null,
+            is_array($data['layout_json'] ?? null) ? $data['layout_json'] : null,
+        );
 
         return FoodAlchemistPresentationDesign::create([
             'team_id' => $team->id,
@@ -640,6 +645,10 @@ class PresentationDesignService
     {
         $design = FoodAlchemistPresentationDesign::visibleToTeam($team)->findOrFail($id);
         $this->guard($design, $team);
+        PraesentationsDesignWerte::pruefe(
+            is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : null,
+            is_array($data['layout_json'] ?? null) ? $data['layout_json'] : null,
+        );
 
         if (array_key_exists('name', $data) && trim((string) $data['name']) !== '') {
             $design->name = trim((string) $data['name']);
