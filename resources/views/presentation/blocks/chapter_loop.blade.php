@@ -10,19 +10,6 @@
     $zeigeLogo = (bool) ($style['show_chapter_logo'] ?? true);
     $logoOben = ($style['chapter_logo_position'] ?? 'unten') === 'oben';
 @endphp
-@once
-<style>
-    .pt-section-img--ganz { aspect-ratio: auto; object-fit: contain; object-position: left center; width: auto; max-width: 100%; height: auto; max-height: min(280px, 42vh); border-radius: 0; }
-    .pt-section-aside .pt-section-img--ganz { aspect-ratio: auto; height: auto; }
-    .pt-section-img--multi.pt-section-img--ganz { aspect-ratio: 4/3; width: 100%; max-height: none; object-position: center; }
-    .pt-rondell-img--ganz { object-fit: contain; }
-    .pt-section-logo { display: block; width: auto; height: auto; max-width: min(180px, 50%); max-height: 56px; object-fit: contain; }
-    .pt-section-logo--oben { margin: 0 0 calc(var(--pt-gap) * .6); }
-    .pt-section-logo--unten { margin: calc(var(--pt-gap) * 1.2) 0 0; }
-    .pt-text-zentriert .pt-section-logo { margin-inline: auto; }
-    @media (max-width: 600px) { .pt-section-img--ganz { max-height: 200px; } .pt-section-logo { max-height: 44px; } }
-</style>
-@endonce
 @foreach($sections as $s)
     @php
         $depth = (int) ($s['depth'] ?? 0);

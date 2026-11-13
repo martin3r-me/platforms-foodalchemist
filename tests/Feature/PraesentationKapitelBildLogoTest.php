@@ -39,7 +39,8 @@ beforeEach(function () {
 
     // Kapitel mit Inhalt (wie PresentationChapterGalleryTest), damit es sicher im Snapshot steht.
     $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept', 'consumer_name' => 'Genuss']);
-    $dish = $this->makeRecipe($this->rootTeam, 'Lachs', ['is_sales_recipe' => true, 'sales_net' => 12.0]);
+    $dish = $this->makeRecipe($this->rootTeam, 'Lachs', ['is_sales_recipe' => true]);
+    $this->makeStandardDarreichung($dish, 12.0);   // VK an der Darreichung (Spec 85 D-1), nicht über die Altspalten-Brücke
     $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id, 'wording' => 'Lachs', 'position' => 1]);
     $fb = $this->makeFoodbook($this->rootTeam, 'Katalog', ['personen' => 6]);
     $this->kap = $this->makeChapter($fb, ['title' => 'Partner', 'consumer_title' => 'Partner', 'position' => 1]);
