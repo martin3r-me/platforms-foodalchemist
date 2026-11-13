@@ -47,22 +47,7 @@
             </div>
         @endif
 
-        {{-- Vorgesehene Menü-Positionen: WELCHE Speisen der Plan vorsieht (die Gerichte selbst
-             entstehen beim Erstellen). Genau das, was vorher nur im Conceptor sichtbar war. --}}
-        @if($pv['speisen'] !== [])
-            <div class="mt-4 flex flex-col gap-1.5">
-                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Menü-Aufbau <span class="font-normal text-[var(--fa-ink-3)]">· {{ count($pv['speisen']) }} {{ count($pv['speisen']) === 1 ? 'Position' : 'Positionen' }}, die Gerichte entstehen beim Erstellen</span></p>
-                <ol class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
-                    @foreach($pv['speisen'] as $sp)
-                        <li class="flex items-center gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-plan-speise>
-                            <span class="w-5 text-right text-[var(--fa-ink-3)] tabular-nums">{{ $loop->iteration }}.</span>
-                            <span class="font-medium min-w-0 break-words">{{ $sp['titel'] !== '' ? $sp['titel'] : ($sp['rolle'] !== '' ? $sp['rolle'] : 'Position') }}</span>
-                            @if($sp['titel'] !== '' && $sp['rolle'] !== '')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">· {{ $sp['rolle'] }}</span>@endif
-                            @if($sp['pflicht'])<x-fa::badge tone="accent" class="ml-auto">Pflicht</x-fa::badge>@endif
-                        </li>
-                    @endforeach
-                </ol>
-            </div>
-        @endif
+        {{-- Menü-Aufbau mit Gericht-Vorgaben je Position (eigenes Partial, Trait PlanGerichtVorgaben). --}}
+        @include('foodalchemist::livewire.planung.partials.concept-plan-positionen')
     </x-foodalchemist::modal-section>
 @endif

@@ -25,7 +25,9 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
             . 'felder.sales_recipe_id FÜLLT eine leere Position mit einem Gericht (XOR package_id; type=basisrezept optional) — '
             . 'so werden die Positionen eines Gerüsts aus concepts.POST geruest=… belegt. '
             . 'felder.package_id = Concepter-Paket (concepts mit kind=paket, IDs via pakete.LIST) — hängt das Paket als Station ein. '
-            . 'felder.wording setzt den Slot-Text, felder.quantity/unit_vocab_id die Menge.';
+            . 'felder.wording setzt den Slot-Text, felder.quantity/unit_vocab_id die Menge. '
+            . 'felder.dish_brief = Gericht-Vorgabe einer LEEREN Position (gewünschter Gerichtstitel; leer/null löscht sie), felder.dish_brief_note = Notiz dazu — '
+            . 'die Erstellung baut dann genau dieses Gericht statt frei zu erfinden.';
     }
 
     public function getSchema(): array
@@ -34,7 +36,7 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'slot_id' => ['type' => 'integer', 'description' => 'Slot-Id.'],
-                'felder' => ['type' => 'object', 'description' => 'Slot-Felder (+ optional wording, quantity, unit_vocab_id).'],
+                'felder' => ['type' => 'object', 'description' => 'Slot-Felder (+ optional wording, quantity, unit_vocab_id, dish_brief, dish_brief_note).'],
             ],
             'required' => ['slot_id', 'felder'],
         ];
@@ -83,6 +85,15 @@ class ConceptSlotsPutTool extends FoodAlchemistTool implements ToolContract, Too
             }
             if (array_key_exists('wording', $felder)) {
                 $svc->setSlotWording($team, $slotId, ($felder['wording'] ?? '') !== '' ? (string) $felder['wording'] : null);
+            }
+            if (array_key_exists('dish_brief', $felder) || array_key_exists('dish_brief_note', $felder)) {
+                $alt = \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::visibleToTeam($team)->whereKey($slotId)->first(['id', 'dish_brief', 'dish_brief_note']);
+                app(\Platform\FoodAlchemist\Services\ConceptVorgabenService::class)->setze(
+                    $team,
+                    $slotId,
+                    array_key_exists('dish_brief', $felder) ? (string) ($felder['dish_brief'] ?? '') : (string) $alt?->dish_brief,
+                    array_key_exists('dish_brief_note', $felder) ? (string) ($felder['dish_brief_note'] ?? '') : (string) $alt?->dish_brief_note,
+                );
             }
             if (array_key_exists('quantity', $felder)) {
                 $svc->setSlotMengeEinheit($team, $slotId, $felder['quantity'] !== null ? (float) $felder['quantity'] : null, isset($felder['unit_vocab_id']) ? (int) $felder['unit_vocab_id'] : null);

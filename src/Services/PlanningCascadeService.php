@@ -1459,13 +1459,14 @@ class PlanningCascadeService
         // (type=paket, embedded_concept_id): ein Paket-Slot ist kein Gericht zum Erfinden, sondern ein
         // Bündel (Station), dessen INNERE Gerichte weiter unten rekursiv gefächert werden. (Früher
         // Latenz-Bug: embed-Paket-Slots galten fälschlich als leer.)
-        $leere = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+        // Gericht-Vorgaben (13.11.2026): Positionen MIT Vorgabe bekommen ihre Skizze 1:1, erfunden wird nur für den Rest.
+        $leere = app(ConceptVorgabenService::class)->planeVorgaben($team, $conceptStep, FoodAlchemistConceptSlot::where('concept_id', $conceptId)
             ->whereNull('sales_recipe_id')
             ->whereNull('package_id')
             ->whereNull('embedded_concept_id')
             ->whereNotIn('type', ['text', 'spacer', 'header', 'header_preis'])
             ->orderBy('position')->orderBy('id')
-            ->get();
+            ->get());
 
         if ($leere->isNotEmpty()) {
             // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_WOCHEN):
@@ -1633,9 +1634,7 @@ class PlanningCascadeService
             if ($recipe === null) {
                 throw new RuntimeException('Die KI hat kein Rezept geliefert. Bitte neu erzeugen.');
             }
-            if ($slotId > 0) {
-                app(ConceptService::class)->fillSlot($team, $slotId, ['sales_recipe_id' => (int) $recipe->id, 'type' => 'gericht']);
-            }
+            app(ConceptVorgabenService::class)->setzeGericht($team, $slotId, (int) $recipe->id, $idee);   // füllt die Position; Wortlaut einer Vorgabe bleibt Kundenwording
             $idee->update([
                 'generation_status' => 'erstellt',
                 'status' => 'freigegeben',
