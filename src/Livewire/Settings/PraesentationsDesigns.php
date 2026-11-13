@@ -226,7 +226,7 @@ class PraesentationsDesigns extends Component
     /** Standard-Style je Block-Typ beim Hinzufügen. */
     private const BLOCK_DEFAULTS = [
         'cover' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true],
-        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false, 'show_rules' => true, 'show_block_header' => true, 'show_kicker' => true, 'kicker_haupt' => '', 'kicker_unter' => ''],
+        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false, 'show_rules' => true, 'show_block_header' => true, 'show_kicker' => true, 'kicker_haupt' => '', 'kicker_unter' => '', 'chapter_image_fit' => 'auto', 'show_chapter_logo' => true, 'chapter_logo_position' => 'unten'],
         'dish_list' => ['show_price' => true, 'show_codes' => true, 'show_rules' => true, 'show_block_header' => true],
         'price_summary' => ['mode' => 'pro_person', 'preis_anzeige' => 'beide'],
         'preis_aufschluesselung' => ['preis_anzeige' => 'beide'],
@@ -276,7 +276,7 @@ class PraesentationsDesigns extends Component
      * ergänzen, damit der Haken in den Einstellungen dem tatsächlichen Aussehen entspricht.
      */
     private const STIL_STANDARDS = [
-        'chapter_loop' => ['show_rules' => true, 'show_block_header' => true, 'show_kicker' => true],
+        'chapter_loop' => ['show_rules' => true, 'show_block_header' => true, 'show_kicker' => true, 'chapter_image_fit' => 'auto', 'show_chapter_logo' => true, 'chapter_logo_position' => 'unten'],
         'dish_list' => ['show_rules' => true, 'show_block_header' => true],
     ];
 

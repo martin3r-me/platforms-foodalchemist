@@ -48,8 +48,16 @@ class Index extends Component
             'beiModalGeschlossen', 'neu', 'waehle', 'schliessen', 'duplizieren',
             'gotoPage', 'previousPage', 'nextPage', 'setPage', 'resetPage',
             'katalogModus', 'pickerWaehleHg', 'pickerWaehleKlasse', 'positionAbbrechen', 'kiKartenVerwerfen',
-            'vollKaskadeStarten',
+            'vollKaskadeStarten', 'logoRubrikUmschalten',
         ];
+    }
+
+    /** Rubrik, deren Logo-Feld (Präsentation) gerade offen ist — nur Anzeige, Hochladen prüft die Sperre selbst. */
+    public ?int $logoRubrikId = null;
+
+    public function logoRubrikUmschalten(int $rubrikId): void
+    {
+        $this->logoRubrikId = $this->logoRubrikId === $rubrikId ? null : $rubrikId;
     }
 
     /** Spec 65: Editor-Modal geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */

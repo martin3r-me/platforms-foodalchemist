@@ -79,6 +79,9 @@
                     <button type="button" role="menuitem" wire:click="rubrikHochRunter({{ $rubrik->id }}, 'runter')" x-on:click="offen = false" class="{{ $menuePunkt }}">
                         @svg('heroicon-o-arrow-down', 'w-4 h-4 text-[var(--fa-ink-3)]') Rubrik nach unten
                     </button>
+                    <button type="button" role="menuitem" wire:click="logoRubrikUmschalten({{ $rubrik->id }})" x-on:click="offen = false" class="{{ $menuePunkt }}" data-sk-rubrik-logo>
+                        @svg('heroicon-o-photo', 'w-4 h-4 text-[var(--fa-ink-3)]') Logo für die Präsentation
+                    </button>
                     <div class="my-1 border-t border-[var(--fa-line)]"></div>
                     <button type="button" role="menuitem" wire:click="rubrikLoeschen({{ $rubrik->id }})" wire:confirm="Rubrik „{{ $rubrik->title }}“ löschen?" x-on:click="offen = false" class="{{ $menueLoeschen }}">
                         @svg('heroicon-o-trash', 'w-4 h-4') Rubrik löschen
@@ -87,6 +90,12 @@
             </div>
         </div>
     </div>
+
+    @if(($logoRubrikId ?? null) === $rubrik->id)
+        <div class="mt-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3" data-sk-rubrik-logo-feld>
+            <livewire:foodalchemist.praesentation.kapitel-logo art="speisekarte" :kapitel-id="$rubrik->id" :key="'kap-logo-sk-' . $rubrik->id" />
+        </div>
+    @endif
 
     {{-- Positionen und Unter-Rubriken zusammen einklappbar (zu[id]); der Kopf mit den Summen bleibt sichtbar. --}}
     <div x-show="!zu[{{ $rubrik->id }}]" x-cloak class="mt-1">

@@ -127,10 +127,14 @@ class AngebotKopieService
     /** @param array<int,int> $conceptMap */
     private function kopiereKapitel(Team $team, FoodAlchemistOfferChapter $k, int $offerId, ?int $parentId, array $conceptMap): int
     {
-        $neu = $k->replicate(['uuid', 'image_context_file_id', 'image_path']);
+        $neu = $k->replicate(['uuid', 'image_context_file_id', 'image_path', 'logo_context_file_id', 'logo_path']);
         $neu->forceFill(['team_id' => $team->id, 'offer_id' => $offerId, 'parent_id' => $parentId])->save();
         if ($b = $this->bild($k->image_context_file_id, $k->image_path, $team, 'foodalchemist.offer_chapter', $neu->id, "foodalchemist/offer_chapter/{$neu->id}")) {
             $neu->forceFill(['image_context_file_id' => $b['context_file_id'], 'image_path' => $b['path']])->save();
+        }
+        // Kapitel-Logo (2026-11-13): eigene Datei-Kopie, damit Entfernen in einem Angebot das andere nicht trifft.
+        if ($b = $this->bild($k->logo_context_file_id, $k->logo_path, $team, 'foodalchemist.offer_chapter', $neu->id, "foodalchemist/offer_chapter/{$neu->id}/logo")) {
+            $neu->forceFill(['logo_context_file_id' => $b['context_file_id'], 'logo_path' => $b['path']])->save();
         }
         foreach ($k->images as $img) {
             $b = $this->bild($img->context_file_id, $img->path, $team, 'foodalchemist.offer_chapter', $neu->id, "foodalchemist/offer_chapter/{$neu->id}");

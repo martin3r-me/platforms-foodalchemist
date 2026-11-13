@@ -696,6 +696,9 @@
                             </div>
                             @error('kapitelGalleryUpload.*')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
                         </x-fa::field>
+                        <div class="md:col-span-2">
+                            <livewire:foodalchemist.praesentation.kapitel-logo art="foodbook" :kapitel-id="$selectedKapitelId" :key="'kap-logo-fb-' . $selectedKapitelId" />
+                        </div>
                     </div>
 
                     {{-- Spec 03 · L2b: der Kapitel-Kundentext (foodbook_chapters.description), auch im Dokument. --}}

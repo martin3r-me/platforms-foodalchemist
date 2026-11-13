@@ -185,7 +185,7 @@ class FoodbookService
                         'team_id' => $neu->team_id, 'foodbook_id' => $neu->id, 'parent_id' => null,
                         'position' => $k->position, 'status' => 'draft',
                         // Format-Bindung + Kapitel-Hero mitkopieren (Snapshot/Freigabe bewusst NICHT).
-                        'format_id' => $k->format_id, 'image_context_file_id' => $k->image_context_file_id, 'image_path' => $k->image_path,
+                        'format_id' => $k->format_id, 'image_context_file_id' => $k->image_context_file_id, 'image_path' => $k->image_path, 'logo_context_file_id' => $k->logo_context_file_id, 'logo_path' => $k->logo_path,
                     ],
                 ));
                 $map[$k->id] = $kopie->id;

@@ -245,6 +245,8 @@ class SpeisekarteService
                     'position' => $r->position, 'title' => $r->title, 'consumer_title' => $r->consumer_title,
                     'claim' => $r->claim, 'description' => $r->description, 'art' => $r->art,
                     'preis_anzeige' => $r->preis_anzeige,
+                    // Kapitel-Logo teilt die Datei (wie Foodbook-Kopien); Entfernen löscht sie erst, wenn keine Rubrik sie mehr nutzt.
+                    'logo_context_file_id' => $r->logo_context_file_id, 'logo_path' => $r->logo_path,
                 ]);
                 $map[$r->id] = $kopie->id;
             }

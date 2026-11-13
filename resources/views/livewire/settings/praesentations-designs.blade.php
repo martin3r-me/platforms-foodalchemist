@@ -207,6 +207,13 @@
                             <x-fa::field label="Bezeichnung Unterkapitel" for="design-kicker-unter" hint="Die kleine Zeile über dem Titel. Leer heißt „Kapitel“ bzw. „Abschnitt“. Für Angebote zum Beispiel „Leistung“.">
                                 <x-fa::input id="design-kicker-unter" wire:model.live.debounce.400ms="layout.{{ $i }}.style.kicker_unter" placeholder="Abschnitt" />
                             </x-fa::field>
+                            <x-fa::choice name="layout.{{ $i }}.style.chapter_image_fit" label="Kapitelbild"
+                                :options="['auto' => 'Automatisch', 'fotoband' => 'Fotoband', 'ganz' => 'Ganz zeigen']" />
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Fotoband füllt die Breite und schneidet zu. Ganz zeigen lässt das Bild unbeschnitten an der linken Textkante, gut für Logos und Grafiken. Automatisch zeigt transparente Bilder ganz, Fotos als Fotoband.</p>
+                            <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_chapter_logo" class="{{ $haken }}"> Logo je Kapitel zeigen</label>
+                            <x-fa::choice name="layout.{{ $i }}.style.chapter_logo_position" label="Kapitel-Logo"
+                                :options="['unten' => 'Unten im Kapitel', 'oben' => 'Über dem Kapiteltitel']" />
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Das Logo lädst du im Kapitel selbst hoch: im Foodbook, im Angebot oder in der Speisekarten-Rubrik.</p>
                         @endif
                     @elseif($bt === 'cover')
                         <div class="flex flex-col gap-2">

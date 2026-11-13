@@ -31,6 +31,8 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
             . 'typography.heading_size zurueckhaltend|normal|gross, heading_weight leicht|normal|kraeftig, heading_tracking eng|normal|weit. '
             . 'Titelbild (cover.style): overlay 0–60 (% Abdunkelung), kicker_text (Zeile über dem Titel, max. 120 Zeichen). '
             . 'Gerichtsliste (chapter_loop/dish_list.style): show_rules, show_block_header, show_kicker (nur chapter_loop) als true/false. '
+            . 'Kapitel (chapter_loop.style): chapter_image_fit auto|fotoband|ganz (Kapitelbild beschnitten als Band oder ganz an der linken Textkante; auto = ganz bei transparenten Bildern), '
+            . 'show_chapter_logo true/false und chapter_logo_position oben|unten (Logo je Kapitel, hochladen per bilder.UPLOAD ziel=kapitel_logo). '
             . 'Ungültige Werte werden mit VALIDATION_ERROR abgelehnt. tokens_json ersetzt die Tokens komplett: vorher per GET lesen und ergänzen.';
     }
 
