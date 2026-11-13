@@ -263,14 +263,71 @@ class KiAuftragService
         }
     }
 
-    /** @return list<object> offene, nicht abgelaufene Aufträge des Teams (inkl. vollem Prompt) */
-    public function offene(int $teamId, int $limit = 50, ?string $feature = null): array
+    /**
+     * @param  list<string>|null  $uuids nur diese Aufträge (Einzelabruf, Aufträge eines Laufs); null = alle
+     * @return list<object> offene, nicht abgelaufene Aufträge des Teams (inkl. vollem Prompt)
+     */
+    public function offene(int $teamId, int $limit = 50, ?string $feature = null, ?array $uuids = null): array
     {
         $this->laufAb($teamId);
 
         return DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('status', 'offen')
             ->when($feature, fn ($q) => $q->where('feature', $feature))
+            ->when($uuids !== null, fn ($q) => $q->whereIn('uuid', $uuids))
             ->orderBy('id')->limit(max(1, min(50, $limit)))->get()->all();
+    }
+
+    /** Wie viele Aufträge sind zu diesem Filter insgesamt offen (über das Paket hinaus)? @param list<string>|null $uuids */
+    public function offenAnzahl(int $teamId, ?string $feature = null, ?array $uuids = null): int
+    {
+        return (int) DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('status', 'offen')
+            ->where('laeuft_ab_at', '>', now())
+            ->when($feature, fn ($q) => $q->where('feature', $feature))
+            ->when($uuids !== null, fn ($q) => $q->whereIn('uuid', $uuids))
+            ->count();
+    }
+
+    /**
+     * Offene Aufträge je Lauf-Schlüssel ({@see KiExternWiederholbar::externSchluessel()}): worauf wartet ein Job-Lauf gerade? Zählt auch
+     * Aufträge, an denen der Lauf nur als Mitwartender hängt (gleicher Prompt, den ein anderer Lauf angelegt hat, {@see registriereWartende()}).
+     * Rein lesend. Damit sagen Kaskaden-Status und Cockpit „wartet auf KI-Antwort“ statt „wartet auf Worker“ — der Job selbst kann es nicht
+     * festhalten, weil seine Transaktion beim Warten zurückrollt.
+     *
+     * @param  list<string>  $laufKeys
+     * @return array<string, array{anzahl: int, features: list<string>, auftrag_ids: list<string>}> je Schlüssel mit mindestens einem offenen Auftrag
+     */
+    public function offeneZuLaeufen(int $teamId, array $laufKeys): array
+    {
+        $laufKeys = array_values(array_unique(array_filter($laufKeys, fn ($k) => is_string($k) && $k !== '')));
+        if ($laufKeys === []) {
+            return [];
+        }
+        $aus = [];
+        $merke = function (string $key, object $z) use (&$aus): void {
+            $aus[$key] ??= ['anzahl' => 0, 'features' => [], 'auftrag_ids' => []];
+            if (in_array((string) $z->uuid, $aus[$key]['auftrag_ids'], true)) {
+                return;
+            }
+            $aus[$key]['anzahl']++;
+            $aus[$key]['auftrag_ids'][] = (string) $z->uuid;
+            if (! in_array((string) $z->feature, $aus[$key]['features'], true)) {
+                $aus[$key]['features'][] = (string) $z->feature;
+            }
+        };
+        $basis = fn () => DB::table('foodalchemist_ki_auftraege')->where('team_id', $teamId)->where('status', 'offen')->where('laeuft_ab_at', '>', now());
+        foreach ($basis()->whereIn('lauf_key', $laufKeys)->orderBy('id')->get(['uuid', 'feature', 'lauf_key']) as $z) {
+            $merke((string) $z->lauf_key, $z);
+        }
+        foreach ($basis()->where('wiederholung', 'like', '%"weitere"%')->orderBy('id')->get(['uuid', 'feature', 'wiederholung']) as $z) {
+            foreach ((array) ((json_decode((string) $z->wiederholung, true) ?: [])['weitere'] ?? []) as $w) {
+                $key = (string) ($w['lauf_key'] ?? '');
+                if ($key !== '' && in_array($key, $laufKeys, true)) {
+                    $merke($key, $z);
+                }
+            }
+        }
+
+        return $aus;
     }
 
     /**

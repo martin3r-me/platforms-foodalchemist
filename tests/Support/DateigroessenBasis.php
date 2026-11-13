@@ -7,7 +7,7 @@
 return [
     'src/Services/OrderService.php' => [3739, 'C2 Bestell-Cluster (Spec 85 §6)'],
     'src/Livewire/Planung/Index.php' => [3427, 'C1 PR-1 … PR-5 (Spec 85 §5)'],
-    'src/Services/PlanningCascadeService.php' => [3542, 'nach Stufen schneiden (Spec 85 §9)'],
+    'src/Services/PlanningCascadeService.php' => [3518, 'nach Stufen schneiden (Spec 85 §9)'],
     'src/Services/SpeiseplanService.php' => [2875, 'Lifecycle / Aushang / Auswertung (Spec 85 §9)'],
     'src/Services/FoodbookService.php' => [2401, 'mit C4 (Spec 85 §8/§9); −11 durch WordingResolver::wordingPositionen (Spec 94)'],
     'src/Services/PairingService.php' => [2591, 'Lesen / Bewerten / Pflege (Spec 85 §9)'],
