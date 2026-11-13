@@ -191,7 +191,7 @@
                                 $betriebsPreis = isset($vkDisplay[$it->id]) && $vkDisplay[$it->id] !== null;
                                 $preis = $betriebsPreis ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null);
                                 $wareneinsatz = ($istPakete && $preis !== null && $preis > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / $preis * 100 : null;
-                                $darfStatus = ! $istPakete && (! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it));
+                                $darfStatus = ! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it);   // seit #800 sind Pakete Concepts (kind=paket) → Status wie bei Concepts
                             @endphp
                             <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
                                 x-data x-on:click="$store.ui?.mSet('activity_concepter', 'open', true)">
@@ -206,7 +206,7 @@
                                 </td>
                                 <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $it->class ?: '–' }}</td>
                                 <td class="min-w-32 text-[var(--fa-ink-2)]">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '–' }}</td>
-                                {{-- Status als Chip; Kuratoren ändern ihn bei Concepts über ein kleines Menü (Server gated canCurate/D1) --}}
+                                {{-- Status als Chip; Kuratoren ändern ihn bei Concepts und Paketen über ein kleines Menü (Server gated canCurate/D1) --}}
                                 <td class="whitespace-nowrap" wire:click.stop @click.stop>
                                     @if($darfStatus)
                                         <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="cst-{{ $it->id }}-{{ $it->status }}">
