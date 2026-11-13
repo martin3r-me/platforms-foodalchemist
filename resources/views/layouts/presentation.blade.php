@@ -36,6 +36,14 @@
     $scale = (float) ($typo['scale'] ?? 1.0);
     $gap = match ($tokens['spacing'] ?? 'comfortable') { 'compact' => '18px', 'roomy' => '56px', default => '34px' };
     $auto = ! empty($tokens['auto_advance']);
+    // Breiten-Raster (2026-11-13): eine Seitenbreite für alle Blöcke, Text darin links (Editorial) oder zentriert (Buch).
+    $seitenBreite = match ($tokens['page_width'] ?? 'normal') { 'schmal' => '980px', 'breit' => '1440px', default => '1180px' };
+    $textRaster = ($tokens['text_align'] ?? 'links') === 'zentriert' ? 'zentriert' : 'links';
+    $leseBreite = match ($tokens['text_width'] ?? 'normal') { 'schmal' => '58ch', 'breit' => '80ch', default => '68ch' };
+    // Überschriften-Hierarchie (Größe/Schnitt/Laufweite) unabhängig vom Fließtext. „normal“ = bisheriger Look.
+    $hFaktor = match ($typo['heading_size'] ?? 'normal') { 'zurueckhaltend' => '0.78', 'gross' => '1.18', default => '1' };
+    $hGewicht = match ($typo['heading_weight'] ?? 'normal') { 'leicht' => 400, 'kraeftig' => 800, default => null };
+    $hLaufweite = match ($typo['heading_tracking'] ?? 'normal') { 'eng' => '-0.035em', 'weit' => '0.02em', default => null };
 
     // Punkt 3 (Spec 43): Navigation + Lightbox. nav ∈ none|anchor|sidebar; lohnt erst ab 2 Kapiteln.
     $nav = $tokens['nav'] ?? 'none';
@@ -133,8 +141,12 @@
             --pt-body-font: {!! $bodyFont !!};
             --pt-base: {{ round(16.5 * $scale, 2) }}px;
             --pt-gap: {{ $gap }};
-            --pt-measure: 720px;
-            --pt-wide: 1180px;
+            --pt-measure: 720px;   /* nur noch Konfigurator-Formulare */
+            --pt-wide: {{ $seitenBreite }};
+            --pt-lese: {{ $leseBreite }};       /* Lesebreite in Zeichen: bleibt bei jeder Schriftgröße gleich lang */
+            --pt-h-faktor: {{ $hFaktor }};
+            --pt-rand: clamp(18px, 5vw, 48px);   /* EIN Seitenrand für alle Container (Handy 18 px) */
+            --pt-seite: 100vw;
         }
         @if($druckFarben !== [])
         @media print {
@@ -157,8 +169,14 @@
         }
         img { max-width: 100%; display: block; }
         .pt-wrap { overflow-x: hidden; }
-        .pt-measure { max-width: var(--pt-measure); margin-inline: auto; padding-inline: clamp(22px, 6vw, 40px); }
-        .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: clamp(22px, 6vw, 48px); }
+        /* Ein Raster: .pt-measure und .pt-wide teilen Breite und Rand → gemeinsame linke Kante.
+           Text wird innen auf die Lesebreite begrenzt — links im Raster oder zentriert (Design-Einstellung). */
+        .pt-measure, .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: var(--pt-rand); }
+        .pt-measure > * { max-width: var(--pt-lese); }
+        .pt-text-zentriert .pt-measure > *,
+        .pt-text-zentriert .pt-section-head,
+        .pt-text-zentriert .pt-blocks:not(.pt-cols-2) { margin-inline: auto; }
+        .pt-text-zentriert .pt-section-grid--split .pt-section-head { margin-inline: 0; }
         /* Spec 94 · Konfigurator-Link (Stufe 5: PRO.KOPF-Aufbau). Nur Design-Tokens (--pt-*), keine festen Farben. */
         .pt-wrap { counter-reset: konfig-schritt; }
         .pt-konfig-seite { --pt-konfig-leiste: color-mix(in srgb, var(--pt-bg) 92%, var(--pt-text)); }
@@ -320,6 +338,12 @@
            Wörter an sinnvollen Stellen; break-word oben bleibt harter Fallback für Kunstwörter. */
         h1,h2,h3,h4, .pt-hero-title, .pt-section-title { -webkit-hyphens: auto; hyphens: auto; }
         .pt-kicker { font-family: var(--pt-body-font); text-transform: uppercase; letter-spacing: .22em; font-size: .68rem; font-weight: 600; color: var(--pt-accent); }
+        {{-- Überschriften-Schnitt/Laufweite nur, wenn im Design gewählt — sonst bleibt jeder bestehende Look unverändert. --}}
+        @if($hGewicht !== null || $hLaufweite !== null)
+        h1,h2,h3,h4, .pt-hero-title, .pt-section-title, .pt-heading { @if($hGewicht !== null)font-weight: {{ $hGewicht }};@endif @if($hLaufweite !== null)letter-spacing: {{ $hLaufweite }};@endif }
+        @endif
+        /* Gerichtsliste ohne Trennlinien (Design-Schalter „Trennlinien“) */
+        .pt-ohne-linien .pt-line, .pt-ohne-linien .pt-subheader { border-bottom: 0; border-top: 0; }
 
         /* Cover / Hero */
         .pt-hero { position: relative; min-height: min(88vh, 820px); display: grid; place-items: center; text-align: center; overflow: hidden; }
@@ -330,14 +354,17 @@
         .pt-hero--fit-contain .pt-hero-media img { object-fit: contain; }
         .pt-hero--fit-contain .pt-hero-media::after { background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35)); }
         .pt-hero-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.55)); }
+        /* Abdunkelung frei einstellbar (cover.style.overlay 0–60 %): gleichmäßige Fläche + leichter Verlauf nach unten. */
+        .pt-hero[style*="--pt-hero-dunkel"] .pt-hero-media::after { background: linear-gradient(180deg, rgba(0,0,0,calc(var(--pt-hero-dunkel) * .8)), rgba(0,0,0,calc(var(--pt-hero-dunkel) * 1.15))); }
         .pt-hero-inner { position: relative; z-index: 1; padding: clamp(28px, 8vw, 80px); max-width: 900px; }
         .pt-hero.has-media, .pt-hero.has-media .pt-hero-title, .pt-hero.has-media .pt-hero-sub, .pt-hero.has-media .pt-kicker { color: #fff; }
         .pt-hero.has-media .pt-kicker { color: color-mix(in srgb, var(--pt-accent) 60%, #fff); }
+        .pt-hero.has-media .pt-hero-meta { color: rgba(255,255,255,.82); }   /* Kundenzeile auf dunklem Titelbild lesbar */
         .pt-hero-logo { max-height: 74px; max-width: 240px; object-fit: contain; margin: 0 auto clamp(18px,3vw,26px); }
         .pt-hero.has-media .pt-hero-logo { filter: drop-shadow(0 2px 8px rgba(0,0,0,.4)); }
         /* Cover ohne Titel (Einstellung „Angebotsnamen zeigen“ aus): Logo trägt das Cover. */
         .pt-hero--ohne-titel .pt-hero-logo { max-height: clamp(140px, 26vh, 260px); max-width: min(520px, 80vw); margin-bottom: clamp(22px, 4vw, 36px); }
-        .pt-hero-title { font-family: var(--pt-heading-font); font-weight: 900; font-size: clamp(2.6rem, 8vw, 5.2rem); line-height: 1.02; margin: 18px 0 0; }
+        .pt-hero-title { font-family: var(--pt-heading-font); font-weight: 900; font-size: calc(clamp(2.6rem, 8vw, 5.2rem) * var(--pt-h-faktor)); line-height: 1.02; margin: 18px 0 0; }
         .pt-hero-sub { font-size: clamp(1rem, 2.4vw, 1.28rem); color: var(--pt-muted); margin: 20px auto 0; max-width: 640px; }
         .pt-hero-meta { margin-top: 22px; font-size: .82rem; letter-spacing: .04em; color: var(--pt-muted); }
         .pt-hero.no-media { border-bottom: 1px solid var(--pt-line); min-height: min(70vh, 640px); }
@@ -353,18 +380,23 @@
         .pt-section { padding: clamp(40px, 8vw, 84px) 0 0; }
         .pt-section-grid { display: block; }
         .pt-section-head { margin-bottom: var(--pt-gap); }
-        .pt-section-title { font-size: clamp(1.7rem, 4.4vw, 2.7rem); margin-top: 10px; }
-        .pt-depth-1 .pt-section-title { font-size: clamp(1.4rem, 3.4vw, 2rem); }
-        .pt-depth-2 .pt-section-title { font-size: clamp(1.2rem, 2.8vw, 1.5rem); }
-        .pt-section-text { color: var(--pt-muted); font-size: 1.06rem; margin: 14px 0 0; max-width: 60ch; }
+        .pt-section-title { font-size: calc(clamp(1.7rem, 4.4vw, 2.7rem) * var(--pt-h-faktor)); margin-top: 10px; }
+        .pt-depth-1 .pt-section-title { font-size: calc(clamp(1.4rem, 3.4vw, 2rem) * var(--pt-h-faktor)); }
+        .pt-depth-2 .pt-section-title { font-size: calc(clamp(1.2rem, 2.8vw, 1.5rem) * var(--pt-h-faktor)); }
+        .pt-section-text { color: var(--pt-muted); font-size: 1.06rem; margin: 14px 0 0; max-width: min(60ch, var(--pt-lese)); }
         .pt-section-img { width: 100%; border-radius: 6px; margin: var(--pt-gap) 0 0; aspect-ratio: 16/7; object-fit: cover; }
         .pt-section-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--pt-gap); margin: var(--pt-gap) 0 0; }
         .pt-section-img--multi { margin: 0; aspect-ratio: 4/3; }
         /* Rondell / Karussell (Band-Anzeige-Variante) */
-        .pt-rondell { position: relative; margin: var(--pt-gap) 0 0; }
-        .pt-rondell-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        /* Das Karussell läuft bis zum Fensterrand (Bilder dürfen rechts angeschnitten „hereinschauen“),
+           das erste Bild steht trotzdem auf der Raster-Kante. --pt-seite = sichtbare Breite (ohne Seitenleiste). */
+        .pt-rondell { position: relative; margin: var(--pt-gap) calc((var(--pt-seite) - 100%) / -2) 0; }
+        .pt-rondell-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+            --pt-rondell-rand: calc((var(--pt-seite) - min(var(--pt-seite), var(--pt-wide))) / 2 + var(--pt-rand));
+            padding-inline: var(--pt-rondell-rand); scroll-padding-inline: var(--pt-rondell-rand); }
+        @media (hover: none) { .pt-rondell-btn { display: none; } }   /* Handy/Tablet: wischen statt Pfeile */
         .pt-rondell-track::-webkit-scrollbar { display: none; }
-        .pt-rondell-img { flex: 0 0 84%; max-width: 84%; scroll-snap-align: center; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; }
+        .pt-rondell-img { flex: 0 0 84%; max-width: 84%; scroll-snap-align: start; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; }
         @media (min-width: 900px) { .pt-rondell-img { flex-basis: 58%; max-width: 58%; } }
         .pt-rondell-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 999px; border: 0; background: rgba(0,0,0,.5); color: #fff; cursor: pointer; font-size: 22px; line-height: 1; z-index: 2; transition: background .15s ease; }
         .pt-rondell-btn:hover { background: rgba(0,0,0,.72); }
@@ -382,7 +414,8 @@
         }
         /* Gericht-Zeilen mehrspaltig (Masonry via CSS-columns) */
         /* Standard: eine ruhige Lesespalte (nicht über die ganze Breite gezogen). */
-        .pt-blocks { max-width: 760px; }
+        .pt-blocks { max-width: max(760px, var(--pt-lese)); }
+        .pt-text-block-body, .pt-block-sub { max-width: var(--pt-lese); }
         /* Opt-in-Variante: sauberes 2-Spalten-Raster (echtes Grid, keine Masonry). */
         .pt-blocks.pt-cols-2 { max-width: none; display: grid; grid-template-columns: 1fr 1fr; column-gap: clamp(28px, 5vw, 52px); align-items: start; }
         @media (max-width: 720px) { .pt-blocks.pt-cols-2 { grid-template-columns: 1fr; } }
@@ -432,7 +465,7 @@
         .pt-cta-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }   /* erkennbar aus, Schrift bleibt kontraststark */
         .pt-cta-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px color-mix(in srgb, var(--pt-primary) 35%, transparent); }
         .pt-text { margin-top: var(--pt-gap); font-size: 1.06rem; }
-        .pt-heading { font-size: clamp(1.5rem,4vw,2.2rem); margin-top: calc(var(--pt-gap)*1.2); }
+        .pt-heading { font-size: calc(clamp(1.5rem,4vw,2.2rem) * var(--pt-h-faktor)); margin-top: calc(var(--pt-gap)*1.2); }
         .pt-image-band { margin: var(--pt-gap) 0 0; }
         .pt-image-band img { width: 100%; border-radius: 4px; aspect-ratio: 16/8; object-fit: cover; display: block; }
         /* Darstellung */
@@ -479,6 +512,7 @@
         @media (min-width: 1024px) {
             .pt-nav-sidebar .pt-sidebar { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; width: 268px; height: 100vh; padding: 34px 20px; background: var(--pt-surface); border-right: 1px solid var(--pt-line); overflow-y: auto; z-index: 40; }
             .pt-nav-sidebar .pt-wrap { padding-left: 268px; }
+            .pt-nav-sidebar { --pt-seite: calc(100vw - 268px); }
         }
         /* Sidebar mobil = Off-Canvas-Drawer + Burger */
         @media (max-width: 1023px) {
@@ -514,7 +548,8 @@
 
         @media print {
             .pt-cta, .pt-sidebar, .pt-burger, .pt-toc, .pt-scrim, .pt-lightbox, .pt-rondell-btn { display: none !important; }
-            .pt-rondell-track { overflow: visible; flex-wrap: wrap; }
+            .pt-rondell { margin-inline: 0; }
+            .pt-rondell-track { overflow: visible; flex-wrap: wrap; padding-inline: 0; }
             .pt-rondell-img { flex-basis: 46%; max-width: 46%; }
             .pt-nav-sidebar .pt-wrap { padding-left: 0; }
             .pt-hero { min-height: auto !important; }
@@ -528,13 +563,14 @@
             /* Größere Fingerziele in Navigation + CTA */
             .pt-toc-panel a, .pt-sidebar-nav a { padding-top: 11px; padding-bottom: 11px; }
             .pt-cta-btn { display: block; }
+            /* Schwebender „Kapitel“-Knopf verdeckt sonst die letzte Zeile */
+            .pt-nav-anchor .pt-wrap { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
             /* iOS-Notch/Home-Leiste: schwebende Bedienelemente aus der Safe-Area halten */
             .pt-toc { bottom: calc(20px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right)); }
             .pt-burger { top: calc(14px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); }
         }
         @media (max-width: 380px) {
-            .pt-hero-title { font-size: clamp(2rem, 11vw, 2.6rem); }
-            .pt-measure, .pt-wide { padding-inline: 18px; }
+            .pt-hero-title { font-size: calc(clamp(2rem, 11vw, 2.6rem) * var(--pt-h-faktor)); }
         }
         /* Als Homescreen-App (standalone) die Geräte-Safe-Area respektieren */
         @media (display-mode: standalone) {
@@ -548,7 +584,7 @@
         <style>{!! str_replace('<', '', $customCss) !!}</style>
     @endif
 </head>
-<body data-foodalchemist-presentation="{{ $snapshot['type'] ?? '' }}" class="pt-nav-{{ $nav }}"@if($auto) data-kiosk-auto="1"@endif>
+<body data-foodalchemist-presentation="{{ $snapshot['type'] ?? '' }}" class="pt-nav-{{ $nav }} pt-text-{{ $textRaster }}"@if($auto) data-kiosk-auto="1"@endif>
     @if($nav === 'sidebar')
         <button type="button" class="pt-burger" data-pt-drawer aria-label="Navigation">☰</button>
         <button type="button" class="pt-scrim" data-pt-drawer aria-label="Schließen"></button>

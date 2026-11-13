@@ -226,8 +226,8 @@ class PraesentationsDesigns extends Component
     /** Standard-Style je Block-Typ beim Hinzufügen. */
     private const BLOCK_DEFAULTS = [
         'cover' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true],
-        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false, 'kicker_haupt' => '', 'kicker_unter' => ''],
-        'dish_list' => ['show_price' => true, 'show_codes' => true],
+        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false, 'show_rules' => true, 'show_block_header' => true, 'show_kicker' => true, 'kicker_haupt' => '', 'kicker_unter' => ''],
+        'dish_list' => ['show_price' => true, 'show_codes' => true, 'show_rules' => true, 'show_block_header' => true],
         'price_summary' => ['mode' => 'pro_person', 'preis_anzeige' => 'beide'],
         'preis_aufschluesselung' => ['preis_anzeige' => 'beide'],
         'legend' => [],
@@ -271,6 +271,32 @@ class PraesentationsDesigns extends Component
         $this->previewSourceId = $this->quellenOptionen()[0]['id'] ?? null;
     }
 
+    /**
+     * Schalter, die im Renderer standardmäßig AN sind, aber in älteren Designs fehlen: beim Laden
+     * ergänzen, damit der Haken in den Einstellungen dem tatsächlichen Aussehen entspricht.
+     */
+    private const STIL_STANDARDS = [
+        'chapter_loop' => ['show_rules' => true, 'show_block_header' => true, 'show_kicker' => true],
+        'dish_list' => ['show_rules' => true, 'show_block_header' => true],
+    ];
+
+    private function mitStandards(array $layout): array
+    {
+        return array_map(fn ($b) => isset(self::STIL_STANDARDS[$b['block_type'] ?? ''])
+            ? ['style' => (is_array($b['style'] ?? null) ? $b['style'] : []) + self::STIL_STANDARDS[$b['block_type']]] + $b
+            : $b, $layout);
+    }
+
+    /** Breite/Text/Überschriften: fehlende Werte = bisheriger Look („normal“, Text links). */
+    private function tokensMitStandards(array $tokens): array
+    {
+        $tokens += ['page_width' => 'normal', 'text_align' => 'links', 'text_width' => 'normal'];
+        $tokens['typography'] = (is_array($tokens['typography'] ?? null) ? $tokens['typography'] : [])
+            + ['heading_size' => 'normal', 'heading_weight' => 'normal', 'heading_tracking' => 'normal'];
+
+        return $tokens;
+    }
+
     // ── Design-Verwaltung ──────────────────────────────────────────────────
 
     public function neuAusBuiltin(string $slug): void
@@ -279,8 +305,8 @@ class PraesentationsDesigns extends Component
         $this->selectedId = null;
         $this->name = $b['name'] . ' (neu)';
         $this->baseSlug = $b['base_slug'];
-        $this->layout = app(PresentationDesignService::class)->normalizeLayout($b['layout']);
-        $this->tokens = $b['tokens'];
+        $this->layout = $this->mitStandards(app(PresentationDesignService::class)->normalizeLayout($b['layout']));
+        $this->tokens = $this->tokensMitStandards($b['tokens']);
         $this->outputTypes = $b['output_types'] ?? [];
         $this->customCss = null;
         $this->selectedBlockIndex = null;
@@ -298,8 +324,8 @@ class PraesentationsDesigns extends Component
         $this->selectedId = (int) $design->id;
         $this->name = (string) $design->name;
         $this->baseSlug = (string) ($design->base_slug ?: 'editorial');
-        $this->layout = app(PresentationDesignService::class)->normalizeLayout($design->layout_json ?? []);
-        $this->tokens = is_array($design->tokens_json) ? $design->tokens_json : [];
+        $this->layout = $this->mitStandards(app(PresentationDesignService::class)->normalizeLayout($design->layout_json ?? []));
+        $this->tokens = $this->tokensMitStandards(is_array($design->tokens_json) ? $design->tokens_json : []);
         $this->outputTypes = is_array($design->output_types) ? $design->output_types : [];
         $this->customCss = $design->custom_css;
         $this->selectedBlockIndex = null;

@@ -2,7 +2,10 @@
 @php
     $coverUrl = ($style['show_cover_image'] ?? true) ? ($branding['cover']['url'] ?? null) : null;
     $logoUrl = ($style['show_logo'] ?? true) ? ($branding['logo']['url'] ?? null) : null;
-    $kicker = $meta['kicker'] ?? 'Kulinarisches Angebot';
+    // Zeile über dem Titel: Freitext aus dem Design (z. B. Anlass, Datum, Gästezahl), leer = bisheriger Default.
+    $kicker = trim((string) ($style['kicker_text'] ?? '')) ?: ($meta['kicker'] ?? 'Kulinarisches Angebot');
+    // Abdunkelung des Titelbilds 0–60 % (leer = bisheriger fester Verlauf). Nur Ganzzahl → kein CSS-Freitext.
+    $dunkel = isset($style['overlay']) && is_numeric($style['overlay']) ? max(0, min(60, (int) $style['overlay'])) : null;
     // Veröffentlichungs-Einstellung: Titel aus → nur Logo, dafür größer (.pt-hero--ohne-titel).
     $zeigeTitel = (bool) ($snap['settings']['show_title'] ?? true);
     // Bild-Spielraum: Füll-Modus (füllen=cover / einpassen=contain, zeigt das ganze Bild) + Höhe.
@@ -24,6 +27,9 @@
         $hoeheStil = 'min-height: ' . ($deckel !== null ? 'min(' . $vh . 'vh, ' . $deckel . 'px)' : $vh . 'vh') . ';';
     } elseif (! $istStufe) {
         $hoeheKlasse = 'pt-hero--h-gross';
+    }
+    if ($dunkel !== null) {
+        $hoeheStil .= '--pt-hero-dunkel: ' . round($dunkel / 100, 2) . ';';
     }
 @endphp
 <header class="pt-hero {{ $zeigeTitel ? '' : 'pt-hero--ohne-titel' }} {{ $hoeheKlasse }} {{ $fitContain ? 'pt-hero--fit-contain' : '' }} {{ $coverUrl ? 'has-media' : 'no-media' }}"@if($hoeheStil) style="{{ $hoeheStil }}"@endif>

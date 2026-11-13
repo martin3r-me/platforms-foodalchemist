@@ -3,6 +3,9 @@
     $showPrice = $style['show_price'] ?? true;
     $showCodes = $style['show_codes'] ?? true;
     $showFotos = $style['show_dish_photos'] ?? false;   // Gericht-Fotos nur wenn im Design aktiviert
+    $showLinien = $style['show_rules'] ?? true;           // Trennlinien zwischen den Zeilen
+    $showKonzeptName = $style['show_block_header'] ?? true; // Konzept-/Paketname über der Liste
+    $letzterTitel = null;                                  // Stationstitel direkt doppelt (Textblock-Titel = folgende Gang-Überschrift) nur einmal zeigen
     $blockPrice = null;
     // Null-Preise ausblenden (unpreise Konzepte zeigen sonst „0,00 €").
     if ($showPrice && ! empty($b['price']) && ((float) ($b['price']['pp'] ?? 0) > 0 || (float) ($b['price']['pauschal'] ?? 0) > 0)) {
@@ -16,7 +19,7 @@
   Bestehende Klassen (pt-line, pt-item, pt-indent-N, pt-line-label …) bleiben für alte Designs erhalten.
 --}}
 @php($bKind = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($b['kind'] ?? ''))))
-<div class="pt-block{{ $bKind !== '' ? ' pt-block--' . $bKind : '' }}">
+<div class="pt-block{{ $bKind !== '' ? ' pt-block--' . $bKind : '' }}{{ $showLinien ? '' : ' pt-ohne-linien' }}">
     @if(!empty($b['is_header']))
         <h3 class="pt-block-header pt-block-header--header">{{ $b['label'] }}@if($showCodes && !empty($b['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $b['codes'])) }}</span>@endif</h3>
     @elseif($bKind === 'text')
@@ -28,7 +31,7 @@
             <span class="pt-line-dots" aria-hidden="true"></span>
             <span class="pt-line-price">{{ $blockPrice }}</span>
         </div>
-    @elseif(!empty($b['label']))
+    @elseif(!empty($b['label']) && $showKonzeptName)
         <h3 class="pt-block-header{{ $bKind !== '' ? ' pt-block-header--' . $bKind : '' }}">{{ $b['label'] }}@if($showCodes && !empty($b['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $b['codes'])) }}</span>@endif</h3>
     @endif
 
@@ -37,7 +40,11 @@
     @foreach(($b['items'] ?? []) as $it)
         @php($ind = min((int) ($it['indent'] ?? 0), 2))
         @php($iKind = $it['kind'] ?? 'gericht')
-        @if($iKind === 'header')
+        @php($istDoppelt = $iKind === 'header' && $letzterTitel !== null && mb_strtolower(trim((string) $it['label'])) === $letzterTitel)
+        @php($letzterTitel = $iKind === 'text' && ! empty($it['title']) ? mb_strtolower(trim((string) $it['title'])) : null)
+        @if($istDoppelt)
+            {{-- gleiche Überschrift wie der Textblock direkt davor → nicht nochmal zeigen --}}
+        @elseif($iKind === 'header')
             {{-- Konzept-interne Gang-Überschrift (AUMSE/STARTER/…) — fett abgesetzt, wie im PDF. --}}
             <h4 class="pt-subheader pt-indent-{{ $ind }}">{{ $it['label'] }}@if($showCodes && !empty($it['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $it['codes'])) }}</span>@endif</h4>
         @elseif($iKind === 'text')
