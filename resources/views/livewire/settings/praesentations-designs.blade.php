@@ -193,6 +193,11 @@
                             <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_codes" class="{{ $haken }}"> Allergen-Kennzeichen zeigen</label>
                             <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_dish_photos" class="{{ $haken }}"> Gericht-Fotos zeigen</label>
                             <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_chapter_image" class="{{ $haken }}"> Kapitel-Bilder zeigen</label>
+                            <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_rules" class="{{ $haken }}"> Trennlinien zwischen den Gerichten</label>
+                            <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_block_header" class="{{ $haken }}"> Konzeptname über der Gerichtsliste</label>
+                            @if($bt === 'chapter_loop')
+                                <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_kicker" class="{{ $haken }}"> Kleine Zeile über dem Kapiteltitel</label>
+                            @endif
                         </div>
                         <x-fa::choice name="layout.{{ $i }}.style.dish_columns" label="Gerichte nebeneinander" :options="['1' => '1 Spalte (Standard)', '2' => '2 Spalten']" />
                         @if($bt === 'chapter_loop')
@@ -207,6 +212,20 @@
                         <div class="flex flex-col gap-2">
                             <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_cover_image" class="{{ $haken }}"> Titelbild zeigen</label>
                             <label class="{{ $hakenZeile }}"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_logo" class="{{ $haken }}"> Logo zeigen</label>
+                        </div>
+                        <x-fa::field label="Zeile über dem Titel" for="design-cover-kicker" hint="Zum Beispiel Anlass, Datum oder Gästezahl. Leer heißt „Kulinarisches Angebot“.">
+                            <x-fa::input id="design-cover-kicker" wire:model.live.debounce.400ms="layout.{{ $i }}.style.kicker_text" placeholder="Kulinarisches Angebot" />
+                        </x-fa::field>
+                        @php $ovVal = isset($sb['style']['overlay']) && is_numeric($sb['style']['overlay']) ? (int) $sb['style']['overlay'] : null; @endphp
+                        <div class="flex flex-col gap-1.5">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Titelbild abdunkeln</span>
+                                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $ovVal === null ? 'Standard' : $ovVal . ' %' }}</span>
+                            </div>
+                            <input type="range" min="0" max="60" step="5" value="{{ $ovVal ?? 35 }}"
+                                   @change="$wire.stilSetzen({{ $i }}, 'overlay', parseInt($event.target.value))"
+                                   class="accent-[var(--fa-accent)]" aria-label="Titelbild abdunkeln in Prozent" data-fa-cover-overlay>
+                            <p class="{{ $hilfe }}">Macht Schrift und Logo auf hellen oder unruhigen Titelbildern lesbar.</p>
                         </div>
                         <x-fa::choice name="layout.{{ $i }}.style.cover_fit" label="Titelbild-Darstellung" :options="['cover' => 'Füllen (Ausschnitt)', 'contain' => 'Ganz zeigen']" />
                         {{-- Bug-Runde 2026-09-17: frei einstellbar statt drei fester Stufen.
@@ -310,7 +329,16 @@
                 <x-fa::field label="Schriftgröße" for="design-schrift-skala" hint="1 ist Standard, 1,2 macht alles 20 % größer.">
                     <x-fa::input id="design-schrift-skala" type="number" step="0.05" min="0.7" max="2" wire:model.blur="tokens.typography.scale" numeric class="max-w-[8rem]" />
                 </x-fa::field>
+                <x-fa::choice name="tokens.typography.heading_size" label="Größe der Überschriften" :options="['zurueckhaltend' => 'Zurückhaltend', 'normal' => 'Normal', 'gross' => 'Groß']" />
+                <x-fa::choice name="tokens.typography.heading_weight" label="Schnitt der Überschriften" :options="['leicht' => 'Leicht', 'normal' => 'Normal', 'kraeftig' => 'Kräftig']" />
+                <x-fa::choice name="tokens.typography.heading_tracking" label="Laufweite der Überschriften" :options="['eng' => 'Eng', 'normal' => 'Normal', 'weit' => 'Weit']" />
                 <x-fa::choice name="tokens.spacing" label="Abstände" :options="['compact' => 'Kompakt', 'comfortable' => 'Normal', 'roomy' => 'Großzügig']" />
+                <div class="flex flex-col gap-1">
+                    <x-fa::choice name="tokens.page_width" label="Seitenbreite" :options="['schmal' => 'Schmal', 'normal' => 'Normal', 'breit' => 'Breit']" />
+                    <x-fa::choice name="tokens.text_width" label="Lesebreite des Texts" :options="['schmal' => 'Schmal', 'normal' => 'Normal', 'breit' => 'Breit']" />
+                    <x-fa::choice name="tokens.text_align" label="Text im Raster" :options="['links' => 'Linksbündig', 'zentriert' => 'Zentriert']" />
+                    <p class="{{ $hilfe }}">Alle Blöcke stehen auf einer gemeinsamen Kante. Am Handy nutzt die Seite automatisch die volle Breite.</p>
+                </div>
                 <x-fa::choice name="tokens.nav" label="Navigation" :options="['none' => 'Keine', 'anchor' => 'Sprungmenü (schwebend)', 'sidebar' => 'Seitenleiste links']" />
                 <label class="{{ $hakenZeile }}">
                     <input type="checkbox" wire:model.live="tokens.lightbox" class="{{ $haken }}">

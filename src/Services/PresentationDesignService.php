@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
+use Platform\FoodAlchemist\Support\PraesentationsDesignWerte;
 
 /**
  * Spec 43 — Präsentations-Designs: wiederverwendbare, blockbasierte Layout-Definitionen
@@ -93,7 +94,9 @@ class PresentationDesignService
             . 'palette{primary,accent,bg,surface,text,muted} = Hex-Farben (z.B. accent "#b02530"); '
             . 'typography{heading:display-serif|serif|sans|mono ODER ein Google-Font-Name aus der Whitelist, body:sans|serif|mono ODER Google-Font, scale:0.7–2.0} '
             . '— Google-Fonts-Whitelist: ' . implode(', ', array_keys(self::GOOGLE_FONTS)) . ' (z. B. heading:"Cormorant Garamond", body:"Manrope") '
-            . 'ODER eigene Team-Schrift als "team:<Familie>" (hochladen via foodalchemist.presentation_fonts.UPLOAD); '
+            . 'ODER eigene Team-Schrift als "team:<Familie>" (hochladen via foodalchemist.presentation_fonts.UPLOAD), '
+            . 'heading_size:zurueckhaltend|normal|gross, heading_weight:leicht|normal|kraeftig, heading_tracking:eng|normal|weit (Überschriften unabhängig vom Fließtext); '
+            . 'page_width:schmal|normal|breit (980/1180/1440 px, eine gemeinsame Kante für alle Blöcke); text_width:schmal|normal|breit (Lesebreite 58/68/80 Zeichen); text_align:links|zentriert; '
             . 'spacing:compact|comfortable|roomy; '
             . 'nav:none|anchor|sidebar (Sprungmenü/Sidebar); '
             . 'lightbox:bool (Bilder klickbar vergrößern); '
@@ -108,8 +111,8 @@ class PresentationDesignService
         return 'Geordnete Blockliste: [{block_type, style{}}]. block_type ∈ '
             . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta|konfig_konzepte|konfig_tageszeit|konfig_getraenke|konfig_addons|konfig_zusammenfassung|konfig_anfrage. '
             . 'style je Typ: '
-            . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
-            . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
+            . 'cover{align, show_cover_image:bool, show_logo:bool, kicker_text:string (Zeile über dem Titel, leer = „Kulinarisches Angebot“), overlay:0-60 (% Abdunkelung des Titelbilds), cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
+            . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool, show_rules:bool (Trennlinien), show_block_header:bool (Konzeptname über der Liste)}; '
             . 'image{quelle:design|angebot_1|angebot_2|angebot_3 (angebot_N = Präsentationsbild N des Angebots, via bilder.UPLOAD ziel=angebot_bild), context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
             . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}; '
             . 'konfig_konzepte{ansicht:raster|liste, show_bild:bool, show_ab_preis:bool}; konfig_tageszeit/konfig_getraenke/konfig_addons/konfig_anfrage{titel}; konfig_zusammenfassung{show_gesamt:bool} '
@@ -618,6 +621,10 @@ class PresentationDesignService
             throw new \RuntimeException('Design-Name fehlt.');
         }
         $base = $this->baseSlug($data['base_slug'] ?? 'editorial');
+        PraesentationsDesignWerte::pruefe(
+            is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : null,
+            is_array($data['layout_json'] ?? null) ? $data['layout_json'] : null,
+        );
 
         return FoodAlchemistPresentationDesign::create([
             'team_id' => $team->id,
@@ -638,6 +645,10 @@ class PresentationDesignService
     {
         $design = FoodAlchemistPresentationDesign::visibleToTeam($team)->findOrFail($id);
         $this->guard($design, $team);
+        PraesentationsDesignWerte::pruefe(
+            is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : null,
+            is_array($data['layout_json'] ?? null) ? $data['layout_json'] : null,
+        );
 
         if (array_key_exists('name', $data) && trim((string) $data['name']) !== '') {
             $design->name = trim((string) $data['name']);
