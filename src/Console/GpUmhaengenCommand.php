@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Platform\FoodAlchemist\Services\GpBereinigenService;
 use Platform\FoodAlchemist\Services\GpUmhaengenService;
-use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
  * Artikel↔GP umhängen, neue GPs anlegen, Verknüpfungen lösen, Warengruppe setzen (Kurator/Dominique 19.10.2026).
@@ -18,9 +17,12 @@ use Platform\FoodAlchemist\Support\MasterTeam;
  */
 class GpUmhaengenCommand extends Command
 {
+    use Concerns\GpLaufKonsole;
+
     protected $signature = 'foodalchemist:gp-umhaengen
         {--team= : Team, dem die GPs gehören (Standard: konfiguriertes Master-Team)}
-        {--plan=* : Plan-CSV (strikt; Spalten aktion;supplier_item_id;gp_id_quelle;ziel_gp_id;neu_name;neu_wg;neu_sub;neu_status;notiz; aktion auch gp_aufloesen mit gp_id_quelle+ziel_gp_id) — mehrfach angebbar}
+        {--global : GLOBALE Stamm-GPs (team_id NULL, stamm_class stamm_paket): Quelle/Ziel global, neue GPs global; nur als Master-Team}
+        {--plan=* : Plan-CSV (strikt; Spalten aktion;supplier_item_id;gp_id_quelle;ziel_gp_id;neu_name;neu_wg;neu_sub;neu_status;notiz[;neu_felder]; aktion auch gp_aufloesen mit gp_id_quelle+ziel_gp_id; neu_felder = JSON-Objekt der Felder wie gp-felder) — mehrfach angebbar}
         {--entwurf-aus-review=* : Review-CSV → schreibt nur einen ENTWURF der Plan-CSV (ändert nichts)}
         {--wg= : nur Quell-GPs dieser Warengruppe (Code)}
         {--bericht= : Ordner für Entwurf, Konfliktliste und Protokoll (Standard: storage/app/fa-gp-umhaengen)}
@@ -59,13 +61,10 @@ class GpUmhaengenCommand extends Command
             return self::SUCCESS;
         }
 
-        $team = $this->option('team') ?? MasterTeam::id();
-        if (! is_numeric($team)) {
-            $this->error('Kein Team: --team=N angeben oder Master-Team konfigurieren.');
-
+        if (($b = $this->bereichAusOptionen()) === null) {
             return self::FAILURE;
         }
-        $team = (int) $team;
+        ['team' => $team, 'global' => $global] = $b;
         $plaene = array_values(array_filter((array) $this->option('plan'), fn ($c) => (string) $c !== ''));
         if ($plaene === []) {
             $this->error('--plan=<CSV> fehlt (oder --entwurf-aus-review für einen Entwurf).');
@@ -82,8 +81,9 @@ class GpUmhaengenCommand extends Command
             $zeilen = array_merge($zeilen, $csvSvc->leseCsv($datei));
         }
         $wg = $this->option('wg') !== null ? (string) $this->option('wg') : null;
-        $plan = $svc->plane($team, $zeilen, $wg);
-        $this->line($apply ? '<comment>APPLY</comment> auf Team ' . $team : 'TROCKENLAUF auf Team ' . $team . ' (schreibt nur Berichte)');
+        $plan = $svc->plane($team, $zeilen, $wg, $global);
+        $ziel = $global ? 'GLOBALE Stamm-GPs (Master-Team ' . $team . ')' : 'Team ' . $team;
+        $this->line($apply ? '<comment>APPLY</comment> auf ' . $ziel : 'TROCKENLAUF auf ' . $ziel . ' (schreibt nur Berichte)');
         $this->zeige($plan);
 
         $this->schreibeCsv("{$bericht}/{$stempel}_umhaengen_konflikte.csv", ['zeile', 'aktion', 'supplier_item_id', 'gp_id', 'grund'],
@@ -101,7 +101,7 @@ class GpUmhaengenCommand extends Command
             return self::FAILURE;
         }
 
-        $protokoll = ['lauf' => $stempel, 'team' => $team, 'wg' => $wg, 'plaene' => $plaene, 'neue_gps' => [], 'verknuepfungen' => [], 'wg' => [], 'n_las' => [], 'lead' => []];
+        $protokoll = ['lauf' => $stempel, 'team' => $team, 'global' => $global, 'wg' => $wg, 'plaene' => $plaene, 'neue_gps' => [], 'verknuepfungen' => [], 'wg' => [], 'n_las' => [], 'lead' => []];
         $r = $svc->fuehreAus($team, $plan, $protokoll);
         $pfad = "{$bericht}/{$stempel}_umhaengen_protokoll.json";
         File::put($pfad, json_encode($protokoll, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -114,24 +114,6 @@ class GpUmhaengenCommand extends Command
         $this->warn('Danach: foodalchemist:gp-allergen-backfill (Konfidenz-Metadaten), Embeddings off-peak, ggf. Anker für neue GPs.');
 
         return self::SUCCESS;
-    }
-
-    private function backupOk(): bool
-    {
-        $b = (string) $this->option('backup-nachweis');
-        if ($b === '' || ! is_file($b) || filesize($b) < 1024) {
-            $this->error('--apply braucht --backup-nachweis=<Dump-Datei> (existiert, nicht leer).');
-
-            return false;
-        }
-        if (filemtime($b) < now()->subDay()->getTimestamp()) {
-            $this->error('Backup ist älter als 24 h — bitte frisch ziehen.');
-
-            return false;
-        }
-        $this->line('Backup-Nachweis: ' . $b . ' (' . round(filesize($b) / 1048576, 1) . ' MB, sha256 ' . substr(hash_file('sha256', $b), 0, 12) . ')');
-
-        return true;
     }
 
     private function zurueck(GpUmhaengenService $svc, string $pfad): int
@@ -162,17 +144,5 @@ class GpUmhaengenCommand extends Command
         if ($plan['neue_gps'] !== []) {
             $this->table(['Neues GP', 'WG', 'Status', 'gp_key', 'Artikel'], array_map(fn ($g) => [mb_substr($g['name'], 0, 52), $g['in']['commodity_group_code'], $g['status'], mb_substr($g['gp_key'], 0, 40), count($g['artikel'])], array_values($plan['neue_gps'])));
         }
-    }
-
-    /** @param list<string> $kopf @param list<list<mixed>> $zeilen */
-    private function schreibeCsv(string $pfad, array $kopf, array $zeilen): void
-    {
-        $h = fopen($pfad, 'wb');
-        fwrite($h, "\xEF\xBB\xBF");
-        fputcsv($h, $kopf, ';', '"', '');
-        foreach ($zeilen as $z) {
-            fputcsv($h, array_map(fn ($v) => $v === null ? '' : (string) $v, $z), ';', '"', '');
-        }
-        fclose($h);
     }
 }

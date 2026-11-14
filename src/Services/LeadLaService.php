@@ -698,7 +698,57 @@ class LeadLaService
         // Spec 82 §12 A3: die Fehlermeldung nennt Bezeichnungen — Stamm-Paket-Artikel ohne Opt-in dürfen darin nicht vorkommen.
         $bestehend = StammPaket::begrenzen($bestehend, 'foodalchemist_supplier_items', $team)->get();
 
+        return $this->ersteProfilAbweichung($bestehend, $neu);
+    }
+
+    /**
+     * Merge-Guard (GP-Lauf, `foodalchemist:gp-bereinigen --phase=dubletten`): dieselbe Regel wie beim Verknüpfen/`gps.REPLACE` ({@see guardAbweichungen}),
+     * angewandt auf JEDEN Artikel des Verlierers gegen die Artikel des Siegers — ein Merge hängt alle Artikel des Verlierers an den Sieger, also müsste
+     * jeder einzelne den Verknüpfungs-Guard bestehen. Zusätzlich die Allergen-Overrides der beiden GPs selbst (enthalten gegen nicht enthalten).
+     * Kurator-Sicht: alle Artikel (kein Team-Filter), es wird nichts geschrieben. Leer = Merge erlaubt.
+     *
+     * @return list<string>
+     */
+    public function mergeAbweichungen(object $sieger, object $verlierer): array
+    {
+        $alsGp = fn (object $g) => $g instanceof FoodAlchemistGp ? $g : FoodAlchemistGp::query()->ohneTeamSicht('master-kuration')->find($g->id);
+        $s = $alsGp($sieger);
+        $v = $alsGp($verlierer);
+        if ($s === null || $v === null || $s->istNonFood() || $v->istNonFood()) {
+            return [];   // Non-Food nimmt nicht an der Allergen-/Deklarations-Vererbung teil (Regelwerk §8.18.4)
+        }
+        $out = [];
+        foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
+            $a = $s->getRawOriginal("allergen_{$feld}");
+            $b = $v->getRawOriginal("allergen_{$feld}");
+            if (DeklarationsProfil::allergenBekannt($a) && DeklarationsProfil::allergenBekannt($b) && ($a === 'enthalten') !== ($b === 'enthalten')) {
+                $out[] = 'GP-Allergen „' . (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld) . '“';
+            }
+        }
+        $artikel = fn (int $gpId) => FoodAlchemistSupplierItem::query()->ohneTeamSicht('master-kuration')
+            ->with(['allergens', 'declarations'])
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->where('s.gp_id', $gpId)->whereNull('s.deleted_at')
+            ->select('foodalchemist_supplier_items.*')->get();
+        $bestehend = $artikel((int) $s->id);
+        foreach ($artikel((int) $v->id) as $neu) {
+            $ab = $this->ersteProfilAbweichung($bestehend, $neu);
+            if ($ab !== []) {
+                $out = [...$out, ...array_map(fn ($x) => $x . ' (Artikel #' . $neu->id . ')', $ab)];
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Erste Abweichung eines Artikels gegen eine Menge Bestandsartikel (Regel {@see DeklarationsProfil::abweichungen}); leer = einheitlich. @return list<string> */
+    private function ersteProfilAbweichung(iterable $bestehend, FoodAlchemistSupplierItem $neu): array
+    {
         foreach ($bestehend as $alt) {
+            if ((int) $alt->id === (int) $neu->id) {
+                continue;
+            }
             $abweichungen = DeklarationsProfil::abweichungen($alt->allergens, $alt->declarations, $neu->allergens, $neu->declarations);
             if ($abweichungen !== []) {
                 return $abweichungen;

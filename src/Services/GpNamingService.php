@@ -606,12 +606,17 @@ class GpNamingService
             return $this->normalisiereZustand($in['condition'] ?? null) !== 'trocken';
         }
         if ($wg === '11') {
-            return true;   // Öle, Fette und Essig (11.3) — O1 (13.11.2026): Essig ohne Zustandswort
+            return true;   // ganze WG 11: Öle, feste Fette (11.4 Schmalz, Bratfett, Frittierfett — Regel 830 Teil 2) und Essig (11.3, O1 13.11.2026)
         }
 
         // Rückfall nur, wenn die Ware selbst der Sirup/Honig/Essig ist — nicht „Walnüsse in Sirup“, „Süßkartoffel mit Ahornsirup“ (Klaus 26.10.),
-        // nicht „Senf mit Honig“
-        return $haupt !== '' && preg_match('/(?:sirup|dicksaft|melasse|honig|essig)$/u', $haupt) === 1 && preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) !== 1;
+        // nicht „Senf mit Honig“. Würzessig ist eine Würze (WG 10), kein Essig — er behält den Zustand (Regelwerk 830 Teil 2, Georg/Dominique 14.11.).
+        // Feste Fette (Schmalz, Bratfett, Frittierfett) gehören zu WG 11; ohne Warengruppe gilt der Rückfall auch für sie.
+        if ($haupt === '' || preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) === 1 || preg_match('/w(?:ü|ue)rzessig$/u', $haupt) === 1) {
+            return false;
+        }
+
+        return preg_match('/(?:sirup|dicksaft|melasse|honig|essig)$/u', $haupt) === 1 || ($wg === '' && preg_match('/(?:schmalz|bratfett|frittierfett)$/u', $haupt) === 1);
     }
 
     /** Warengruppe 16 (Non-Food)? Die WG steht in den strukturierten Feldern als `warengruppe` oder `commodity_group_code`. */
@@ -912,8 +917,13 @@ class GpNamingService
         ]);
     }
 
-    /** GP-Edit über die strukturierten Felder — gleiche Validierung, gp_key wird NICHT umgeschrieben (Seed-Stabilität). */
-    public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
+    /**
+     * Name + Prüfung, die {@see updateGp()} aus dieser Eingabe bilden würde — ohne zu schreiben (GP-Lauf `foodalchemist:gp-felder`: Trockenlauf
+     * zeigt genau den Namen, den der Schreibweg später rendert). Gleiche Vorbereitung der Eingabe wie updateGp (eine Stelle).
+     *
+     * @return array{in: array<string,mixed>, name: string, pruefung: array{errors: string[], warnings: string[]}}
+     */
+    public function updateVorschau(FoodAlchemistGp $gp, array $in): array
     {
         $in = $this->bereinigeFelder($in);
         // Ein Non-Food-GP (WG 16) wird auch dann nach dem Non-Food-Schema geprüft, wenn die Eingabe die Warengruppe nicht mitbringt (MCP gps.PUT):
@@ -924,7 +934,14 @@ class GpNamingService
         // Regel 94 (v3.10.0): Land- und Siegel-Klammer bleiben beim Neu-Rendern stehen, wenn der Schreiber sie nicht mitgibt (Teil-Schreiber, ältere Clients)
         $in += ['herkunft_land' => $gp->herkunft_land, 'msc' => (bool) $gp->namens_msc, 'asc' => (bool) $gp->namens_asc];
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
-        $pruefung = $this->validateGpName($name, $in);
+
+        return ['in' => $in, 'name' => $name, 'pruefung' => $this->validateGpName($name, $in)];
+    }
+
+    /** GP-Edit über die strukturierten Felder — gleiche Validierung, gp_key wird NICHT umgeschrieben (Seed-Stabilität). */
+    public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
+    {
+        ['in' => $in, 'name' => $name, 'pruefung' => $pruefung] = $this->updateVorschau($gp, $in);
         if ($pruefung['errors'] !== []) {
             throw new \RuntimeException(implode(' ', $pruefung['errors']));
         }

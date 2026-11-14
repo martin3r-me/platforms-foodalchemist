@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\GpLaufFelder;
 
 /**
  * Artikel↔GP-Verknüpfungen umhängen, neue GPs anlegen, Verknüpfungen lösen, Warengruppe setzen (Kurator/Dominique 19.10.2026).
@@ -21,15 +22,16 @@ class GpUmhaengenService
 {
     public const AKTIONEN = ['umhaengen', 'neues_gp', 'loesen', 'wg_setzen', 'gp_aufloesen'];
 
-    public const PLAN_KOPF = ['aktion', 'supplier_item_id', 'gp_id_quelle', 'ziel_gp_id', 'neu_name', 'neu_wg', 'neu_sub', 'neu_status', 'notiz'];
+    /** `neu_felder` (optional, JSON wie die Felder von gp-felder, {@see GpLaufFelder}): neues GP aus Feldern, Name über GpNamingService gerendert. */
+    public const PLAN_KOPF = ['aktion', 'supplier_item_id', 'gp_id_quelle', 'ziel_gp_id', 'neu_name', 'neu_wg', 'neu_sub', 'neu_status', 'notiz', 'neu_felder'];
 
     /** Status, auf denen ein Ziel-GP stehen darf. */
     private const ZIEL_STATUS = ['approved', 'tentative'];
 
     public function __construct(
         private readonly GpNamingService $naming,
-        private readonly LeadLaService $lead,
         private readonly GpBereinigenService $csv,
+        private readonly GpLaufNachlauf $nachlauf,
     ) {}
 
     // ── Entwurf aus Review-CSV ─────────────────────────────────────────────────────────────────────
@@ -94,12 +96,17 @@ class GpUmhaengenService
     /**
      * Plan-Zeilen prüfen. Rückgabe: ausführbare Aktionen (mit aufgelösten Details) und Konflikte.
      *
+     * `$global` (GP-Lauf 14.11.2026, nur als Master — prüft der Befehl): Quell- und Ziel-GPs sind GLOBALE Stamm-GPs (team_id NULL, stamm_paket);
+     * neue GPs entstehen dort.
+     *
      * @param  list<array<string,string>>  $zeilen  Plan-CSV (Spalten {@see PLAN_KOPF})
      * @return array{aktionen: list<array<string,mixed>>, neue_gps: array<string,array<string,mixed>>, konflikte: list<array<string,mixed>>}
      */
-    public function plane(int $teamId, array $zeilen, ?string $wg = null): array
+    public function plane(int $teamId, array $zeilen, ?string $wg = null, bool $global = false): array
     {
         $team = Team::findOrFail($teamId);
+        $bereich = $global ? null : $teamId;
+        $imBereich = fn (?object $gp) => $gp !== null && $gp->deleted_at === null && $this->csv->imBereich($gp, $bereich);
         $aktionen = [];
         $neueGps = [];
         $konflikte = [];
@@ -122,8 +129,8 @@ class GpUmhaengenService
             if ($aktion === 'wg_setzen') {
                 $gp = DB::table('foodalchemist_gps')->where('id', $quelleGp)->first();
                 $neuWg = trim((string) ($z['neu_wg'] ?? ''));
-                if ($gp === null || $gp->deleted_at !== null || (int) $gp->team_id !== $teamId) {
-                    $fehler('GP existiert nicht oder gehört nicht dem Team');
+                if (! $imBereich($gp)) {
+                    $fehler('GP existiert nicht oder gehört nicht zum Bereich' . ($global ? ' (global)' : ' des Teams'));
 
                     continue;
                 }
@@ -154,12 +161,12 @@ class GpUmhaengenService
                 $quellGp = DB::table('foodalchemist_gps')->where('id', $quelleGp)->first();
                 $zielId = (int) ($z['ziel_gp_id'] ?? 0);
                 $ziel = DB::table('foodalchemist_gps')->where('id', $zielId)->first();
-                if ($quellGp === null || $quellGp->deleted_at !== null || (int) $quellGp->team_id !== $teamId || ! in_array($quellGp->status, self::ZIEL_STATUS, true)) {
+                if (! $imBereich($quellGp) || ! in_array($quellGp->status, self::ZIEL_STATUS, true)) {
                     $fehler('Quell-GP existiert nicht, gehört nicht dem Team oder ist nicht aktiv');
 
                     continue;
                 }
-                if ($ziel === null || $ziel->deleted_at !== null || (int) $ziel->team_id !== $teamId || ! in_array($ziel->status, self::ZIEL_STATUS, true) || $zielId === $quelleGp) {
+                if (! $imBereich($ziel) || ! in_array($ziel->status, self::ZIEL_STATUS, true) || $zielId === $quelleGp) {
                     $fehler("Ziel-GP {$zielId} fehlt, ist nicht aktiv oder gleich dem Quell-GP");
 
                     continue;
@@ -220,8 +227,8 @@ class GpUmhaengenService
 
                     continue;
                 }
-                if ((int) $ziel->team_id !== $teamId || ! in_array($ziel->status, self::ZIEL_STATUS, true)) {
-                    $fehler("Ziel-GP {$zielId} gehört nicht dem Team oder hat Status {$ziel->status}");
+                if (! $imBereich($ziel) || ! in_array($ziel->status, self::ZIEL_STATUS, true)) {
+                    $fehler("Ziel-GP {$zielId} gehört nicht zum Bereich oder hat Status {$ziel->status}");
 
                     continue;
                 }
@@ -236,31 +243,24 @@ class GpUmhaengenService
             }
 
             // neues_gp
-            $name = trim((string) ($z['neu_name'] ?? ''));
-            if ($name === '') {
-                $fehler('neu_name fehlt');
+            $aus = $this->neuesGpEingabe($z, (string) ($quelle->commodity_group_code ?? ''), $global ? null : $teamId, $teamId);
+            if (is_string($aus)) {
+                $fehler($aus);
 
                 continue;
             }
-            $felder = $this->naming->felderAusName($name);
-            $neuWg = trim((string) ($z['neu_wg'] ?? '')) ?: (string) ($quelle->commodity_group_code ?? '');
-            if ($felder['hauptzutat'] === '' || $neuWg === '') {
-                $fehler('Hauptzutat oder Warengruppe nicht bestimmbar (neu_wg angeben)');
-
-                continue;
-            }
+            ['name' => $name, 'in' => $in, 'neu_wg' => $neuWg, 'bio' => $bio, 'aus_feldern' => $ausFeldern, 'extra' => $extra] = $aus;
             $schluessel = mb_strtolower($name) . '|' . $neuWg;
             if (! isset($neueGps[$schluessel])) {
-                $in = ['name' => $name, 'hauptzutat' => $felder['hauptzutat'], 'condition' => $felder['condition'], 'processing' => $felder['processing'],
-                    'form' => $felder['form'], 'portion' => $felder['portion'], 'pflichtangabe' => $felder['pflichtangabe'], 'commodity_group_code' => $neuWg,
-                    'sub_category' => trim((string) ($z['neu_sub'] ?? ''))];
                 $pruefung = $this->naming->validateGpName($name, $in + ['warengruppe' => $neuWg]);
                 if ($pruefung['errors'] !== []) {
                     $fehler('Name verletzt Regelwerk: ' . implode('; ', $pruefung['errors']));
 
                     continue;
                 }
-                $key = $this->naming->buildGpKey($this->naming->slugify($felder['hauptzutat']), $felder['processing'], $felder['form']);
+                $hzSlug = $this->naming->slugify((string) $in['hauptzutat']);
+                $key = $ausFeldern ? $this->naming->gpKeyAusFeldern($hzSlug, $this->naming->bereinigeFelder($in))
+                    : $this->naming->buildGpKey($hzSlug, $in['processing'], $in['form']);
                 // Der Pipe-Schlüssel (Hauptzutat|Verarbeitung|Form) kennt weder Zustand noch Gewicht/Zuschnitt: zwei geplante GPs mit demselben
                 // Pipe-Schlüssel, aber verschiedenem Namen (frisch/TK, ganz/in Scheiben, 100/120 g) bekommen für das zweite GP den Namens-Slug
                 // als Schlüssel (Bestandsformat der älteren GPs).
@@ -293,13 +293,71 @@ class GpUmhaengenService
 
                     continue;
                 }
-                $neueGps[$schluessel] = ['name' => $name, 'in' => $in, 'bio' => (bool) $felder['bio'], 'status' => $status, 'gp_key' => $key, 'key_namensslug' => $schluesselNamensSlug, 'artikel' => []];
+                $neueGps[$schluessel] = ['name' => $name, 'in' => $in, 'bio' => $bio, 'status' => $status, 'gp_key' => $key, 'key_namensslug' => $schluesselNamensSlug,
+                    'extra' => $extra, 'global' => $global, 'artikel' => []];
             }
             $neueGps[$schluessel]['artikel'][] = $si;
             $aktionen[] = ['aktion' => 'neues_gp', 'structure_id' => (int) $st->id, 'supplier_item_id' => $si, 'gp_alt' => $aktuell, 'gp_neu' => null, 'neu_schluessel' => $schluessel];
         }
 
         return ['aktionen' => $aktionen, 'neue_gps' => $neueGps, 'konflikte' => $konflikte];
+    }
+
+    /**
+     * Eingabe für ein neues GP: aus `neu_felder` (JSON-Objekt, Felder wie gp-felder; Name über {@see GpNamingService::renderGpName}) oder — wie bisher —
+     * aus `neu_name` (zerlegt über felderAusName). Mit beiden muss `neu_name` genau dem aus den Feldern gerenderten Namen entsprechen.
+     *
+     * @return string|array{name: string, in: array<string,mixed>, neu_wg: string, bio: bool, aus_feldern: bool, extra: array<string,mixed>}  Text = Konflikt
+     */
+    private function neuesGpEingabe(array $z, string $quellWg, ?int $bereichTeam, int $teamId): string|array
+    {
+        $name = trim((string) ($z['neu_name'] ?? ''));
+        $roh = trim((string) ($z['neu_felder'] ?? ''));
+        $sub = trim((string) ($z['neu_sub'] ?? ''));
+        if ($roh === '') {
+            if ($name === '') {
+                return 'neu_name fehlt (oder neu_felder angeben)';
+            }
+            $f = $this->naming->felderAusName($name);
+            $neuWg = trim((string) ($z['neu_wg'] ?? '')) ?: $quellWg;
+            if ($f['hauptzutat'] === '' || $neuWg === '') {
+                return 'Hauptzutat oder Warengruppe nicht bestimmbar (neu_wg angeben)';
+            }
+
+            return ['name' => $name, 'neu_wg' => $neuWg, 'bio' => (bool) $f['bio'], 'aus_feldern' => false, 'extra' => [],
+                'in' => ['name' => $name, 'hauptzutat' => $f['hauptzutat'], 'condition' => $f['condition'], 'processing' => $f['processing'], 'form' => $f['form'],
+                    'portion' => $f['portion'], 'pflichtangabe' => $f['pflichtangabe'], 'commodity_group_code' => $neuWg, 'sub_category' => $sub]];
+        }
+        $felder = json_decode($roh, true);
+        if (! is_array($felder) || ($felder !== [] && array_is_list($felder))) {
+            return 'neu_felder ist kein JSON-Objekt';
+        }
+        $neuWg = (string) ($felder['commodity_group_code'] ?? (trim((string) ($z['neu_wg'] ?? '')) ?: $quellWg));
+        if ($neuWg === '') {
+            return 'Warengruppe nicht bestimmbar (commodity_group_code in neu_felder oder neu_wg)';
+        }
+        $felder['commodity_group_code'] = $neuWg;
+        if (! array_key_exists('sub_category', $felder) && $sub !== '') {
+            $felder['sub_category'] = $sub;
+        }
+        $felder = GpLaufFelder::zustandZerlegen($felder);
+        if (($f = GpLaufFelder::pruefe($felder, $neuWg, $bereichTeam ?? $teamId)) !== []) {
+            return 'neu_felder: ' . implode('; ', $f);
+        }
+        $in = GpLaufFelder::alsEingabe($felder);
+        if (trim((string) ($in['hauptzutat'] ?? '')) === '') {
+            return 'neu_felder: main_ingredient_display (Hauptzutat) fehlt';
+        }
+        $gerendert = $this->naming->renderGpName($in);
+        if ($name !== '' && $name !== $gerendert) {
+            return "neu_name »{$name}« ≠ aus neu_felder gerendert »{$gerendert}«";
+        }
+        $extra = isset($felder['piece_default_g']) ? ['piece_default_g' => (float) $felder['piece_default_g']] : [];
+        if (array_key_exists('marke_offen', $felder) && $felder['marke_offen'] !== null) {
+            $extra['marke_offen'] = (bool) $felder['marke_offen'];
+        }
+
+        return ['name' => $gerendert, 'in' => $in, 'neu_wg' => $neuWg, 'bio' => false, 'aus_feldern' => true, 'extra' => $extra];
     }
 
     // ── Ausführen ──────────────────────────────────────────────────────────────────────────────────
@@ -331,6 +389,11 @@ class GpUmhaengenService
                 if ($spec['bio']) {
                     $upd['bio'] = 'bio';
                 }
+                if ($spec['global'] ?? false) {
+                    $upd['team_id'] = null;   // globales Stamm-GP (GP-Lauf --global, nur Master)
+                    $upd['stamm_class'] = \Platform\FoodAlchemist\Support\StammPaket::PAKET;
+                }
+                $upd += $spec['extra'] ?? [];
                 DB::table('foodalchemist_gps')->where('id', $gp->id)->update($upd);
                 $neueIds[$schluessel] = (int) $gp->id;
                 $protokoll['neue_gps'][] = ['id' => (int) $gp->id, 'name' => $spec['name'], 'gp_key' => $gp->gp_key];
@@ -375,32 +438,8 @@ class GpUmhaengenService
                 $betroffen[(int) $a['ziel_gp_id']] = true;
             }
 
-            // 3) Zähler + Lead
-            foreach (array_keys($betroffen) as $gpId) {
-                $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($gpId);
-                if ($gp === null) {
-                    continue;
-                }
-                $n = DB::table('foodalchemist_supplier_item_structures')->where('gp_id', $gpId)->whereNull('deleted_at')->count();
-                $protokoll['n_las'][] = ['gp_id' => $gpId, 'alt' => (int) $gp->n_las_total, 'neu' => $n];
-                DB::table('foodalchemist_gps')->where('id', $gpId)->update(['n_las_total' => $n, 'updated_at' => now()]);
-
-                $leadAlt = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
-                $leadGueltig = $leadAlt !== null && DB::table('foodalchemist_supplier_item_structures')->where('supplier_item_id', $leadAlt)->where('gp_id', $gpId)->whereNull('deleted_at')->exists();
-                if ($leadGueltig) {
-                    continue;
-                }
-                if ($n === 0 || ! $gp->requires_la) {
-                    $neuLead = null;
-                } else {
-                    $neuLead = $this->lead->pickLeadLa($gp->refresh(), $team);
-                }
-                if ($neuLead !== $leadAlt) {
-                    DB::table('foodalchemist_gps')->where('id', $gpId)->update(['lead_la_supplier_item_id' => $neuLead, 'updated_at' => now()]);
-                    $protokoll['lead'][] = ['gp_id' => $gpId, 'alt' => $leadAlt, 'neu' => $neuLead];
-                    $leadGeaendert[] = $gpId;
-                }
-            }
+            // 3) Zähler + Lead (Nachlauf: ungültige Leads neu, dann Lead-Neuwahl für die GPs mit geänderter Artikelmenge)
+            $leadGeaendert = $this->nachlauf->zaehlerUndLead($team, array_map('intval', array_keys($betroffen)), $protokoll, true);
         });
 
         return ['betroffen' => array_map('intval', array_keys($betroffen)), 'lead_gewechselt' => $leadGeaendert];
@@ -409,7 +448,7 @@ class GpUmhaengenService
     /** Rezepte neu rechnen, die die betroffenen GPs nutzen (einmal, V-049). */
     public function rechneRezepte(array $gpIds): int
     {
-        return $this->lead->recomputeNutzerFuerGps($gpIds);
+        return $this->nachlauf->rechneRezepte($gpIds);
     }
 
     // ── Zurücknehmen ───────────────────────────────────────────────────────────────────────────────
@@ -432,15 +471,9 @@ class GpUmhaengenService
                 $zurueck += $r['zurueck'];
                 $skip += $r['uebersprungen'];
             }
-            foreach (array_reverse($p['lead'] ?? []) as $l) {
-                $ist = DB::table('foodalchemist_gps')->where('id', $l['gp_id'])->first();
-                if ($ist !== null && ($ist->lead_la_supplier_item_id === null ? null : (int) $ist->lead_la_supplier_item_id) === $l['neu']) {
-                    DB::table('foodalchemist_gps')->where('id', $l['gp_id'])->update(['lead_la_supplier_item_id' => $l['alt'], 'updated_at' => now()]);
-                    $zurueck++;
-                } else {
-                    $skip++;
-                }
-            }
+            $r = $this->nachlauf->zuruecknehmen($p);   // Lead + Zähler (lief zuletzt)
+            $zurueck += $r['zurueck'];
+            $skip += $r['uebersprungen'];
             foreach (array_reverse($p['verknuepfungen'] ?? []) as $v) {
                 $ist = DB::table('foodalchemist_supplier_item_structures')->where('id', $v['structure_id'])->first();
                 if ($ist !== null && ($ist->gp_id === null ? null : (int) $ist->gp_id) === $v['gp_neu']) {
@@ -458,9 +491,6 @@ class GpUmhaengenService
                 } else {
                     $skip++;
                 }
-            }
-            foreach (array_reverse($p['n_las'] ?? []) as $n) {
-                DB::table('foodalchemist_gps')->where('id', $n['gp_id'])->update(['n_las_total' => $n['alt']]);
             }
             foreach (array_reverse($p['neue_gps'] ?? []) as $g) {
                 if ($this->csv->verweisZahlen((int) $g['id']) === []) {

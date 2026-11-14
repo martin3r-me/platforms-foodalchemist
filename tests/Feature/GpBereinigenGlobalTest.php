@@ -84,11 +84,9 @@ it('Gegenprobe: Nicht-Master darf globale GPs NICHT umbenennen (--global mit fre
     expect($gp->fresh()->name)->toBe('Cheesecake: frisch, Dessert');
 });
 
-it('--global ohne konfigurierten Master bricht ab; --global mit Phase dubletten ebenfalls', function () {
+it('--global ohne konfigurierten Master bricht ab (Phase dubletten ist seit dem GP-Lauf 14.11. auch global erlaubt → GpBereinigenDublettenGlobalTest)', function () {
     $gp = ($this->gp)('Cheesecake: frisch, Dessert', null, StammPaket::PAKET);
     $plan = ($this->plan)($gp, 'Cheesecake: frisch, Dessert, 50 g pro Stück');
-
-    ($this->lauf)(['--global' => true, '--team' => $this->rootTeam->id, '--phase' => 'dubletten'])->assertFailed()->expectsOutputToContain('nur für --phase=namen');
 
     config(['foodalchemist.master_team_id' => null]);
     MasterTeam::flush();

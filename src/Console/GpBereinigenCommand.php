@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Platform\FoodAlchemist\Services\GpBereinigenService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
-use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
  * GP-Stamm bereinigen (Kurator/Dominique 19.10.2026) — Dubletten mergen, deterministische Namensfixes.
@@ -20,9 +19,11 @@ use Platform\FoodAlchemist\Support\MasterTeam;
  */
 class GpBereinigenCommand extends Command
 {
+    use Concerns\GpLaufKonsole;
+
     protected $signature = 'foodalchemist:gp-bereinigen
         {--team= : Team, dem die GPs gehören (Standard: konfiguriertes Master-Team)}
-        {--global : GLOBALE Stamm-GPs (team_id NULL, stamm_class stamm_paket) statt team-eigener; nur Phase namen, nur als Master-Team}
+        {--global : GLOBALE Stamm-GPs (team_id NULL, stamm_class stamm_paket) statt team-eigener; nur als Master-Team}
         {--phase=dubletten,namen : Komma-Liste: dubletten, namen}
         {--plan-dubletten= : Sichtungs-CSV dubletten_fa.csv}
         {--plan-namen=* : Sichtungs-CSV benennung_fa.csv; mehrfach angebbar (z. B. zusätzlich benennung_marke_gebinde.csv)}
@@ -47,27 +48,11 @@ class GpBereinigenCommand extends Command
             return $this->zurueck($svc, (string) $this->option('zurueck'));
         }
 
-        $team = $this->option('team') ?? MasterTeam::id();
-        if (! is_numeric($team)) {
-            $this->error('Kein Team: --team=N angeben oder Master-Team konfigurieren.');
-
+        if (($b = $this->bereichAusOptionen()) === null) {
             return self::FAILURE;
         }
-        $team = (int) $team;
+        ['team' => $team, 'global' => $global] = $b;
         $phasen = array_map('trim', explode(',', (string) $this->option('phase')));
-        $global = (bool) $this->option('global');
-        if ($global) {
-            if (MasterTeam::id() === null || $team !== (int) MasterTeam::id()) {
-                $this->error('--global ist nur als Master-Team erlaubt (Master: ' . (MasterTeam::id() ?? 'nicht konfiguriert') . ', angefragt: ' . $team . ').');
-
-                return self::FAILURE;
-            }
-            if ($phasen !== ['namen']) {
-                $this->error('--global gilt nur für --phase=namen (Dubletten-Merge bleibt team-eigenen GPs vorbehalten).');
-
-                return self::FAILURE;
-            }
-        }
         $apply = (bool) $this->option('apply');
         $wg = $this->option('wg') !== null ? (string) $this->option('wg') : null;
         $bericht = (string) ($this->option('bericht') ?: storage_path('app/fa-gp-bereinigen'));
@@ -86,6 +71,7 @@ class GpBereinigenCommand extends Command
         $konflikte = [];
         $protokoll = ['lauf' => $stempel, 'team' => $team, 'global' => $global, 'wg' => $wg, 'phasen' => $phasen, 'moves' => [], 'deleted' => [], 'merges' => [], 'renames' => []];
         $recipeIds = [];
+        $sieger = [];
 
         if (in_array('dubletten', $phasen, true)) {
             $csv = (string) $this->option('plan-dubletten');
@@ -94,7 +80,7 @@ class GpBereinigenCommand extends Command
 
                 return self::FAILURE;
             }
-            $plan = $svc->planDubletten($team, $csv, $keinMerge, $wg);
+            $plan = $svc->planDubletten($global ? null : $team, $csv, $keinMerge, $wg);
             $konflikte = array_merge($konflikte, $plan['konflikte']);
             $this->zeigeDubletten($plan);
             if ($apply) {
@@ -102,6 +88,7 @@ class GpBereinigenCommand extends Command
                     foreach ($g['verlierer'] as $v) {
                         $recipeIds = array_merge($recipeIds, $svc->merge($g['sieger'], $v, $protokoll)['recipe_ids']);
                     }
+                    $sieger[] = (int) $g['sieger']->id;
                 }
             }
         }
@@ -132,6 +119,12 @@ class GpBereinigenCommand extends Command
         $this->info('Review-Liste (nach Warengruppe): ' . count($konflikte) . ' Fälle → ' . "{$bericht}/{$stempel}_review_liste.csv");
 
         if ($apply) {
+            if ($sieger !== []) {
+                // Nachlauf: Zähler + Lead der Sieger (ungültige Leads neu, dann bestehende Lead-Neuwahl — die Artikelmenge hat sich geändert)
+                $teamModell = \Platform\Core\Models\Team::findOrFail($team);
+                $neu = app(\Platform\FoodAlchemist\Services\GpLaufNachlauf::class)->zaehlerUndLead($teamModell, $sieger, $protokoll, true);
+                $this->line('Lead neu gewählt bei ' . count($neu) . ' Sieger-GP(s).');
+            }
             $pfad = "{$bericht}/{$stempel}_protokoll.json";
             File::put($pfad, json_encode($protokoll, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             $this->info("Protokoll: {$pfad}");
@@ -140,30 +133,16 @@ class GpBereinigenCommand extends Command
                 $this->line('Rechne ' . count($recipeIds) . ' Rezept(e) neu …');
                 app(RecipeRecomputeService::class)->recomputeMany($recipeIds);
             }
-            $this->warn('Danach: foodalchemist:gp-allergen-backfill, ggf. foodalchemist:lead-la-repick --team=' . $team . ' (Lead-LA der Sieger prüfen), Embeddings off-peak.');
+            if ($sieger !== [] && ! $this->option('ohne-recompute')) {
+                // auch Rezepte, die den Sieger schon vorher nutzten (sein Lead kann gewechselt haben)
+                $this->line(app(\Platform\FoodAlchemist\Services\GpLaufNachlauf::class)->rechneRezepte($sieger) . ' Rezept(e) der Sieger neu gerechnet.');
+            }
+            $this->warn('Danach: foodalchemist:gp-allergen-backfill, Embeddings off-peak.');
         } else {
             $this->comment('Trockenlauf — nichts geändert.');
         }
 
         return self::SUCCESS;
-    }
-
-    private function backupOk(): bool
-    {
-        $b = (string) $this->option('backup-nachweis');
-        if ($b === '' || ! is_file($b) || filesize($b) < 1024) {
-            $this->error('--apply braucht --backup-nachweis=<Dump-Datei> (existiert, nicht leer).');
-
-            return false;
-        }
-        if (filemtime($b) < now()->subDay()->getTimestamp()) {
-            $this->error('Backup ist älter als 24 h — bitte frisch ziehen.');
-
-            return false;
-        }
-        $this->line('Backup-Nachweis: ' . $b . ' (' . round(filesize($b) / 1048576, 1) . ' MB, sha256 ' . substr(hash_file('sha256', $b), 0, 12) . ')');
-
-        return true;
     }
 
     private function zurueck(GpBereinigenService $svc, string $pfad): int
@@ -228,17 +207,5 @@ class GpBereinigenCommand extends Command
             . ', Key nicht aus Name ableitbar: ' . $nichtAbleitbar . '), ' . count($plan['konflikte']) . ' Konflikt(e), ohne Änderung: ' . $plan['ohne_aenderung']);
         $this->table(['Regel', 'GPs'], array_map(fn ($k, $v) => [$k, $v], array_keys($regeln), $regeln));
         $this->table(['WG', 'Umbenennungen'], array_map(fn ($k, $v) => [$k, $v], array_keys($wg), $wg));
-    }
-
-    /** @param list<string> $kopf @param list<list<mixed>> $zeilen */
-    private function schreibeCsv(string $pfad, array $kopf, array $zeilen): void
-    {
-        $h = fopen($pfad, 'wb');
-        fwrite($h, "\xEF\xBB\xBF");
-        fputcsv($h, $kopf, ';', '"', '');
-        foreach ($zeilen as $z) {
-            fputcsv($h, array_map(fn ($v) => $v === null ? '' : (string) $v, $z), ';', '"', '');
-        }
-        fclose($h);
     }
 }
