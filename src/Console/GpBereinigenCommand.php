@@ -133,6 +133,10 @@ class GpBereinigenCommand extends Command
                 $this->line('Rechne ' . count($recipeIds) . ' Rezept(e) neu …');
                 app(RecipeRecomputeService::class)->recomputeMany($recipeIds);
             }
+            if ($sieger !== [] && ! $this->option('ohne-recompute')) {
+                // auch Rezepte, die den Sieger schon vorher nutzten (sein Lead kann gewechselt haben)
+                $this->line(app(\Platform\FoodAlchemist\Services\GpLaufNachlauf::class)->rechneRezepte($sieger) . ' Rezept(e) der Sieger neu gerechnet.');
+            }
             $this->warn('Danach: foodalchemist:gp-allergen-backfill, Embeddings off-peak.');
         } else {
             $this->comment('Trockenlauf — nichts geändert.');

@@ -123,6 +123,7 @@ class GpFelderPlanService
 
                 continue;
             }
+            $felder = GpLaufFelder::zustandZerlegen($felder, $gp->processing);   // „geräuchert, TK“ → Behandlung + TK in processing (§9.2 R3)
             $wgNeu = (string) ($felder['commodity_group_code'] ?? $gp->commodity_group_code);
             $fehler = GpLaufFelder::pruefe($felder, $wgNeu, $bereichTeam ?? $kuratorTeam);
             if ($wgNeu !== (string) $gp->commodity_group_code && ! array_key_exists('sub_category', $felder) && trim((string) $gp->sub_category) !== ''
@@ -255,7 +256,7 @@ class GpFelderPlanService
             $ist = $gp->{$feld} ?? null;
             $gleich = match ($feld) {
                 'bio' => (trim((string) $ist) !== '') === (bool) $wert,
-                'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'namens_msc', 'namens_asc' => (bool) $ist === (bool) $wert,
+                'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'namens_msc', 'namens_asc', 'marke_offen' => (bool) $ist === (bool) $wert,
                 'rezepturware' => ($ist === null ? null : (bool) $ist) === ($wert === null ? null : (bool) $wert),
                 'piece_default_g' => ($ist === null ? null : round((float) $ist, 2)) === ($wert === null ? null : round((float) $wert, 2)),
                 'condition' => (string) $this->naming->normalisiereZustand((string) $ist) === (string) $this->naming->normalisiereZustand((string) $wert),
@@ -297,6 +298,9 @@ class GpFelderPlanService
                     $extra = ['gp_key' => $a['gp_key_neu'], 'main_ingredient_slug' => $a['slug_neu']];
                     if (array_key_exists('piece_default_g', $a['felder'])) {
                         $extra['piece_default_g'] = $a['felder']['piece_default_g'] === null ? null : (float) $a['felder']['piece_default_g'];
+                    }
+                    if (array_key_exists('marke_offen', $a['felder'])) {
+                        $extra['marke_offen'] = (bool) $a['felder']['marke_offen'];   // ausdrücklich gesetzt: nach updateGp (das leitet es sonst ab)
                     }
                     if (array_key_exists('condition', $a['felder']) && trim((string) $a['felder']['condition']) === '') {
                         $extra['condition'] = null;   // updateGp leert den Zustand nie; der Plan darf es (Name wurde ohne Zustand gerendert)

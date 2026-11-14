@@ -340,6 +340,7 @@ class GpUmhaengenService
         if (! array_key_exists('sub_category', $felder) && $sub !== '') {
             $felder['sub_category'] = $sub;
         }
+        $felder = GpLaufFelder::zustandZerlegen($felder);
         if (($f = GpLaufFelder::pruefe($felder, $neuWg, $bereichTeam ?? $teamId)) !== []) {
             return 'neu_felder: ' . implode('; ', $f);
         }
@@ -352,6 +353,9 @@ class GpUmhaengenService
             return "neu_name »{$name}« ≠ aus neu_felder gerendert »{$gerendert}«";
         }
         $extra = isset($felder['piece_default_g']) ? ['piece_default_g' => (float) $felder['piece_default_g']] : [];
+        if (array_key_exists('marke_offen', $felder) && $felder['marke_offen'] !== null) {
+            $extra['marke_offen'] = (bool) $felder['marke_offen'];
+        }
 
         return ['name' => $gerendert, 'in' => $in, 'neu_wg' => $neuWg, 'bio' => false, 'aus_feldern' => true, 'extra' => $extra];
     }

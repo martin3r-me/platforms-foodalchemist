@@ -35,10 +35,35 @@ final class GpLaufFelder
         'commodity_group_code' => 'commodity_group_code',
         'sub_category' => 'sub_category',
         'piece_default_g' => null,
+        'marke_offen' => null,   // Kurator 14.11.: 0/1 direkt (überschreibt die Ableitung aus Rezepturware + Klammer, die updateGp setzt)
     ];
 
     /** Felder mit Wahrheitswert (true/false; bei rezepturware zusätzlich null = nicht entschieden). */
-    private const BOOL = ['bio', 'rezepturware', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'namens_msc', 'namens_asc'];
+    private const BOOL = ['bio', 'rezepturware', 'namens_vegan', 'namens_glutenfrei', 'namens_laktosefrei', 'namens_msc', 'namens_asc', 'marke_offen'];
+
+    /**
+     * Zusammengesetzter Zustand „<Behandlung>, TK“ (§9.2 R3: „geräuchert, TK“, „gepökelt, TK“, „luftgetrocknet, TK“) in das Datenmodell des Namensdienstes
+     * zerlegen: condition = Behandlung, „TK“ vorn in processing (der Renderer stellt es seit #817 hinter den Zustand: „…, geräuchert, TK“).
+     * Andere Werte bleiben unverändert. `$istProcessing` = aktuelle Verarbeitung des GP (nur wenn der Plan processing nicht selbst setzt).
+     *
+     * @param  array<string,mixed>  $felder
+     * @return array<string,mixed>
+     */
+    public static function zustandZerlegen(array $felder, ?string $istProcessing = null): array
+    {
+        if (! is_string($felder['condition'] ?? null)
+            || preg_match('/^\s*(gep(?:ö|oe)kelt|ger(?:ä|ae)uchert|luftgetrocknet)\s*,\s*(?:TK|tiefgek(?:ü|ue)hlt)\s*$/iu', $felder['condition'], $m) !== 1) {
+            return $felder;
+        }
+        $felder['condition'] = app(GpNamingService::class)->normalisiereZustand(strtr(mb_strtolower($m[1]), ['oe' => 'ö', 'ae' => 'ä']));
+        $proc = trim((string) (array_key_exists('processing', $felder) ? $felder['processing'] : $istProcessing));
+        $teile = FettAngabe::teile($proc);
+        if (! array_filter($teile, fn ($t) => preg_match('/^(?:TK|tiefgek(?:ü|ue)hlt)$/iu', $t) === 1)) {
+            $felder['processing'] = implode(', ', ['TK', ...$teile]);
+        }
+
+        return $felder;
+    }
 
     /** Plan-Felder → Naming-Eingabe (nur Namens-/Strukturfelder; piece_default_g bleibt draußen). @param array<string,mixed> $felder */
     public static function alsEingabe(array $felder): array

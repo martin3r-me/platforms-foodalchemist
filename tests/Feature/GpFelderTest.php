@@ -181,3 +181,23 @@ it('Gegenprobe Namensbildung: Trockenlauf-Name = geschriebener Name = updateGp-R
         ->and($g->name)->toBe('Lachsfilet: TK / (Royal) / (Norwegen) / (Bio) / (MSC)')
         ->and((bool) $g->namens_msc)->toBeTrue()->and($g->bio)->toBe('bio')->and($g->herkunft_land)->toBe('Norwegen');
 });
+
+it('condition „geräuchert, TK“ (§9.2 R3) wird zu Behandlung + TK in processing und rendert wie der Namensdienst', function () {
+    $gp = ($this->gp)(['main_ingredient_display' => 'Lachsfilet', 'form' => null, 'processing' => 'geschnitten', 'condition' => 'frisch', 'commodity_group_code' => '05']);
+    $plan = ($this->plan)([['gp_id' => $gp->id, 'name_alt' => $gp->name, 'felder' => ['condition' => 'geräuchert, TK']]]);
+
+    ($this->apply)(['--team' => $this->team, '--plan' => $plan])->assertSuccessful();
+
+    $g = $gp->fresh();
+    expect($g->name)->toBe('Lachsfilet: geschnitten, geräuchert, TK')->and($g->condition)->toBe('geräuchert')->and($g->processing)->toBe('TK, geschnitten')
+        ->and($g->name)->toBe(app(GpNamingService::class)->renderGpName(['hauptzutat' => 'Lachsfilet', 'processing' => 'TK, geschnitten', 'condition' => 'geräuchert', 'commodity_group_code' => '05']));
+});
+
+it('marke_offen ist ein erlaubtes Feld (0/1) und wird nach updateGp gesetzt', function () {
+    $gp = ($this->gp)();
+    $plan = ($this->plan)([['gp_id' => $gp->id, 'name_alt' => $gp->name, 'felder' => ['marke_offen' => true]]]);
+
+    ($this->apply)(['--team' => $this->team, '--plan' => $plan])->assertSuccessful();
+
+    expect((bool) $gp->fresh()->marke_offen)->toBeTrue()->and($gp->fresh()->name)->toBe('Banane: ganz, frisch');
+});

@@ -606,12 +606,17 @@ class GpNamingService
             return $this->normalisiereZustand($in['condition'] ?? null) !== 'trocken';
         }
         if ($wg === '11') {
-            return true;   // Öle, Fette und Essig (11.3) — O1 (13.11.2026): Essig ohne Zustandswort
+            return true;   // ganze WG 11: Öle, feste Fette (11.4 Schmalz, Bratfett, Frittierfett — Regel 830 Teil 2) und Essig (11.3, O1 13.11.2026)
         }
 
         // Rückfall nur, wenn die Ware selbst der Sirup/Honig/Essig ist — nicht „Walnüsse in Sirup“, „Süßkartoffel mit Ahornsirup“ (Klaus 26.10.),
-        // nicht „Senf mit Honig“
-        return $haupt !== '' && preg_match('/(?:sirup|dicksaft|melasse|honig|essig)$/u', $haupt) === 1 && preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) !== 1;
+        // nicht „Senf mit Honig“. Würzessig ist eine Würze (WG 10), kein Essig — er behält den Zustand (Regelwerk 830 Teil 2, Georg/Dominique 14.11.).
+        // Feste Fette (Schmalz, Bratfett, Frittierfett) gehören zu WG 11; ohne Warengruppe gilt der Rückfall auch für sie.
+        if ($haupt === '' || preg_match('/(?<!\p{L})(?:in|mit|und|auf|an)(?!\p{L})/u', $haupt) === 1 || preg_match('/w(?:ü|ue)rzessig$/u', $haupt) === 1) {
+            return false;
+        }
+
+        return preg_match('/(?:sirup|dicksaft|melasse|honig|essig)$/u', $haupt) === 1 || ($wg === '' && preg_match('/(?:schmalz|bratfett|frittierfett)$/u', $haupt) === 1);
     }
 
     /** Warengruppe 16 (Non-Food)? Die WG steht in den strukturierten Feldern als `warengruppe` oder `commodity_group_code`. */
