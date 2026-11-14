@@ -176,7 +176,7 @@ class LaFelderService
             'hersteller' => $la->manufacturer,
             'herkunft' => $la->origin ?: $la->origin_country,
             'lieferant' => $la->supplier?->name,
-            'bio' => $la->is_organic,
+            'bio' => $la->istBio(),   // Regel 94: Artikel belegt Bio oder reiner Bio-Händler
             'vegan' => $la->is_vegan,
             'vegetarisch' => $la->is_vegetarian,
             'alkohol' => $la->is_alcohol,

@@ -19,7 +19,8 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Bearbeitet die Stammdaten eines team-eigenen Lieferanten. In input kann auch `group` (Code oder Id aus foodalchemist.supplier_groups.LIST, z. B. GETRAENKE, VERLEIH) oder group_id gesetzt werden; leer löst die Gruppe. Eine so gesetzte Gruppe gilt als von Hand und wird vom Vorschlag nie überschrieben.';
+        return 'Bearbeitet die Stammdaten eines team-eigenen Lieferanten. In input kann auch `group` (Code oder Id aus foodalchemist.supplier_groups.LIST, z. B. GETRAENKE, VERLEIH) oder group_id gesetzt werden; leer löst die Gruppe. Eine so gesetzte Gruppe gilt als von Hand und wird vom Vorschlag nie überschrieben. '
+            . '`reiner_bio_haendler` (true/false, Regel 94): Lieferant führt nur Bio-Ware — jeder seiner Artikel gilt als Bio, das GP trägt „/ (Bio)“; ohne den Schlüssel bleibt der Wert stehen.';
     }
 
     public function getSchema(): array

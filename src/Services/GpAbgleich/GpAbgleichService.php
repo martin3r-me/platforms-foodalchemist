@@ -197,7 +197,7 @@ class GpAbgleichService
                 if ($eigenes) {
                     $in = $this->naming->bereinigeFelder($in);
                     $name = $this->naming->renderGpName($in);
-                    $key = $this->naming->buildGpKey($this->naming->slugify((string) ($in['hauptzutat'] ?? '')), $in['processing'] ?? null, $in['form'] ?? null, $in['flavor'] ?? null, $in['zusatz'] ?? null);
+                    $key = $this->naming->gpKeyAusFeldern($this->naming->slugify((string) ($in['hauptzutat'] ?? '')), $in);
                     $g = $this->naming->anlageGuard($team, $key, $name);
                     $force = $g['blockiert'] && $g['vorhandenes_gp'] !== null && ! $g['vorhandenes_gp']->isOwnedBy($team);
                 }

@@ -72,6 +72,8 @@ class FoodAlchemistGp extends Model
         'namens_vegan' => 'boolean',
         'namens_glutenfrei' => 'boolean',
         'namens_laktosefrei' => 'boolean',
+        'namens_msc' => 'boolean',   // Regel 94 (v3.10.0): Siegel-Klammer „/ (MSC)“
+        'namens_asc' => 'boolean',   // Regel 94 (v3.10.0): Siegel-Klammer „/ (ASC)“
         'rezepturware' => 'boolean',   // §5 Ausnahme 3, nullable: NULL = nicht entschieden
         'marke_offen' => 'boolean',
         'n_las_total' => 'integer',

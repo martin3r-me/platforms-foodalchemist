@@ -56,10 +56,11 @@ it('Anlage und Bearbeiten speichern flavor; Käse mit Chili und Käse ohne Chili
     $ohne = $this->naming->createGp($this->rootTeam, ['hauptzutat' => 'Käse', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.']);
 
     expect($mit->name)->toBe('Käse: Chili, Scheiben, frisch, 45 % Fett i. Tr.')->and($mit->flavor)->toBe('Chili')
-        ->and($mit->gp_key)->toBe('kaese_chili|scheiben|')->and($ohne->flavor)->toBeNull()->and($ohne->gp_key)->toBe('kaese|scheiben|');
+        // v3.10.0 (Regel 826): der Fettwert trennt GPs und steht darum im Merkmal-Slot des Schlüssels
+        ->and($mit->gp_key)->toBe('kaese_chili|scheiben||m-45_fett_i_tr')->and($ohne->flavor)->toBeNull()->and($ohne->gp_key)->toBe('kaese|scheiben||m-45_fett_i_tr');
 
     $neu = $this->naming->updateGp($this->rootTeam, $ohne, ['hauptzutat' => 'Käse', 'flavor' => 'Kräuter', 'condition' => 'frisch', 'processing' => 'Scheiben', 'pflichtangabe' => '45 % Fett i. Tr.']);
-    expect($neu->name)->toBe('Käse: Kräuter, Scheiben, frisch, 45 % Fett i. Tr.')->and($neu->flavor)->toBe('Kräuter')->and($neu->gp_key)->toBe('kaese|scheiben|');   // Schlüssel bleibt stabil
+    expect($neu->name)->toBe('Käse: Kräuter, Scheiben, frisch, 45 % Fett i. Tr.')->and($neu->flavor)->toBe('Kräuter')->and($neu->gp_key)->toBe('kaese|scheiben||m-45_fett_i_tr');   // Schlüssel bleibt stabil
 
     $teil = $this->naming->updateGp($this->rootTeam, $neu->refresh(), ['name' => $neu->name, 'condition' => 'frisch']);   // Teil-Schreiber ohne flavor lässt den Wert stehen
     expect($teil->flavor)->toBe('Kräuter');

@@ -36,6 +36,7 @@ class FoodAlchemistSupplier extends Model
         'order_channels' => 'array',   // Stammdatenblatt (2d)
         'small_order_surcharge' => 'decimal:2',
         'allergene_nur_positiv' => 'boolean',   // Spec 85: leer = angenommen nicht enthalten
+        'reiner_bio_haendler' => 'boolean',   // Regel 94 (v3.10.0): jeder Artikel gilt als Bio
         'allergene_nur_positiv_seit' => 'date',
         'rolle' => \Platform\FoodAlchemist\Enums\SupplierRolle::class,   // §5 Ausnahme 3
     ];

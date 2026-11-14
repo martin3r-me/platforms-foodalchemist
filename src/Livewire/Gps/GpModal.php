@@ -169,7 +169,7 @@ class GpModal extends Component
                 $this->supplierItemId = (int) $la->id;
                 $this->kiRohtext = (string) $la->designation;
                 $this->laSuche = (string) $la->designation;
-                $this->builder['bio'] = (bool) ($la->is_organic ?? false);
+                $this->builder['bio'] = $la->istBio();   // Regel 94: auch reiner Bio-Händler
                 $this->builder['vegan'] = (bool) ($la->is_vegan ?? false);
                 $this->autoSuggestPending = $autoSuggest;
             }
@@ -1052,7 +1052,7 @@ class GpModal extends Component
             'hersteller' => $la->manufacturer,
             'herkunft' => $la->origin ?: $la->origin_country,
             'lieferant' => $la->supplier?->name,
-            'bio' => $la->is_organic,
+            'bio' => $la->istBio(),   // Regel 94: Artikel belegt Bio oder reiner Bio-Händler
             'vegan' => $la->is_vegan,
             'vegetarisch' => $la->is_vegetarian,
             'alkohol' => $la->is_alcohol,
@@ -1106,7 +1106,7 @@ class GpModal extends Component
         }
         $z = app(GpNamingService::class)->zusatzAusQuellen([
             'bezeichnung' => $la->designation, 'marketing_name' => $la->marketing_name, 'regulierter_name' => $la->regulated_name,
-            'zutaten' => $la->ingredients_supplier, 'is_organic' => $la->is_organic, 'is_vegan' => $la->is_vegan,
+            'zutaten' => $la->ingredients_supplier, 'is_organic' => $la->istBio(), 'is_vegan' => $la->is_vegan,
             'bio_kontrollnummer' => $la->organic_control_number, 'allergene' => $allergene,
         ]);
         foreach ($z['flags'] as $flag => $an) {
@@ -1329,7 +1329,7 @@ class GpModal extends Component
             'vorschauName' => $name,
             'vorschauSlug' => $slug,
             // 27.10.: Kennung immer live aus den Feldern; beim Bearbeiten zusätzlich die gespeicherte, wenn sie abweicht (updateGp schreibt gp_key nie um)
-            'vorschauKey' => $liveKey = $naming->buildGpKey($slug, $this->builder['processing'] ?: null, $this->builder['form'] ?: null, $this->builder['flavor'] ?: null, $this->builder['zusatz'] ?: null),
+            'vorschauKey' => $liveKey = $naming->gpKeyAusFeldern($slug, array_map(fn ($v) => $v === '' ? null : $v, $this->builder)),
             'gespeicherterKey' => $gp !== null && (string) $gp->gp_key !== '' && $gp->gp_key !== $liveKey ? (string) $gp->gp_key : null,
             'warnungen' => $pruefung['warnings'],
             'liveFehler' => $pruefung['errors'],

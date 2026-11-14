@@ -810,7 +810,7 @@
  },
  {
   "gp_id": 9140,
-  "name": "Boerenkaas: gerieben, frisch, 48 % Fett i.Tr., Hartkäse, Rohmilch",
+  "name": "Boerenkaas: gerieben, frisch, 48 % Fett i. Tr., Hartkäse, Rohmilch",
   "felder": {
    "hauptzutat": "Boerenkaas",
    "processing": "gerieben",
@@ -916,7 +916,7 @@
  },
  {
   "gp_id": 9594,
-  "name": "Apfelessig: konserviert / (Bio)",
+  "name": "Apfelessig / (Bio)",
   "felder": {
    "hauptzutat": "Apfelessig",
    "condition": "konserviert",
@@ -946,7 +946,7 @@
  },
  {
   "gp_id": 9679,
-  "name": "Balsamico Essig: konserviert, hell",
+  "name": "Balsamico Essig: hell",
   "felder": {
    "hauptzutat": "Balsamico Essig",
    "condition": "konserviert",
@@ -1029,7 +1029,7 @@
  },
  {
   "gp_id": 9822,
-  "name": "Blütenhonig: konserviert / (Bio)",
+  "name": "Blütenhonig / (Bio)",
   "felder": {
    "hauptzutat": "Blütenhonig",
    "condition": "konserviert",
@@ -3357,7 +3357,7 @@
  },
  {
   "gp_id": 18677,
-  "name": "Balsam-Apfelessig: 8 Jahre gereift, konserviert, 5 % Säure",
+  "name": "Balsam-Apfelessig: 8 Jahre gereift, 5 % Säure",
   "felder": {
    "hauptzutat": "Balsam-Apfelessig",
    "form": "8 Jahre gereift",
@@ -3368,7 +3368,7 @@
  },
  {
   "gp_id": 18678,
-  "name": "Malzessig: 5 % Säure, konserviert",
+  "name": "Malzessig: 5 % Säure",
   "felder": {
    "hauptzutat": "Malzessig",
    "form": "5 % Säure",

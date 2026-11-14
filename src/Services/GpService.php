@@ -56,6 +56,9 @@ class GpService
         if (isset($filters['marke_offen'])) {
             $query->where('marke_offen', filter_var($filters['marke_offen'], FILTER_VALIDATE_BOOLEAN));   // auch "false" als Text
         }
+        if (isset($filters['angabe_status'])) {   // Regel 91 (v3.10.0): Prüfliste angenommen | offen
+            $query->where('angabe_status', $filters['angabe_status']);
+        }
         if (isset($filters['rezepturware'])) {   // ja | nein | offen (nicht entschieden)
             $filters['rezepturware'] === 'offen' ? $query->whereNull('rezepturware') : $query->where('rezepturware', $filters['rezepturware'] === 'ja');
         }

@@ -235,6 +235,10 @@ class GpBereinigenService
                     if ((bool) $gv->is_platzhalter || (bool) $gw->is_platzhalter) {
                         $fehler[] = 'Platzhalter werden nicht gemerged';
                     }
+                    if (! \Platform\FoodAlchemist\Support\AngabeKennzeichen::zusammenfuehrbar($gv->angabe_status ?? null, $gw->angabe_status ?? null)) {
+                        // Regel 91 Nr. 3 (v3.10.0): ein GP mit Kennzeichen „offen“ (Pflichtangabe nicht belegt) nie mit einem belegten GP zusammenführen
+                        $fehler[] = "#{$gv->id} Kennzeichen „offen“ ≠ Sieger — offene Angabe nie mit belegtem GP zusammenführen (Regel 91)";
+                    }
                 }
             }
             if ($fehler !== []) {
@@ -339,6 +343,12 @@ class GpBereinigenService
                 continue;
             }
             $neu = (string) array_key_first($vorschlaege);
+            if (\Platform\FoodAlchemist\Support\GpSammelware::verbotenerSingular((string) $gp->name, $neu)) {
+                // §6.1 Teil 2 (Entscheid 29.05., Nachtrag 13.11.2026): Sammelware (Eier, Hülsenfrüchte, Nüsse & Kerne, Beeren, Kapern, Oliven) bleibt Plural
+                $konflikt('§6.1: Sammelware bleibt in der Mehrzahl — Singular-Vorschlag verworfen');
+
+                continue;
+            }
             if (! $this->imBereich($gp, $teamId) || ! in_array($gp->status, self::AKTIV, true)) {
                 $konflikt("Team/Status passt nicht (Team {$gp->team_id}, {$gp->status})");
 

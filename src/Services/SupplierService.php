@@ -145,9 +145,25 @@ class SupplierService
             'postal_code' => ($input['postal_code'] ?? '') ?: null,
             'email_order' => ($input['email_order'] ?? '') ?: null,
             'homepage' => ($input['homepage'] ?? '') ?: null,
-        ]);
+        ] + $this->bioHaendlerFeld($input));
 
         return $supplier;
+    }
+
+    /**
+     * Regel 94 Nr. 5 (v3.10.0): Merkmal „reiner Bio-Händler“ — nur wenn der Schlüssel mitkommt (Teil-Schreiber lassen den Wert stehen).
+     * Wahrheitswerte auch als Text („ja“, „true“, „1“).
+     *
+     * @return array<string, bool>
+     */
+    private function bioHaendlerFeld(array $input): array
+    {
+        if (! array_key_exists('reiner_bio_haendler', $input)) {
+            return [];
+        }
+        $w = $input['reiner_bio_haendler'];
+
+        return ['reiner_bio_haendler' => is_bool($w) ? $w : in_array(mb_strtolower(trim((string) $w)), ['1', 'true', 'ja', 'yes', 'on'], true)];
     }
 
     /**
@@ -293,6 +309,8 @@ class SupplierService
             'is_owned' => $supplier->isOwnedBy($team),
             // GP-Regelwerk v3.7.1 §5 Ausnahme 3: Rolle + Kurzname für die GP-Klammer (Kürzel: foodalchemist.supplier_marken.GET)
             'marke' => ['rolle' => $supplier->rolle?->value ?? 'offen', 'kurzname' => $supplier->kurzname],
+            // Regel 94 Nr. 5 (v3.10.0): reiner Bio-Händler — jeder Artikel gilt als Bio, das GP trägt „/ (Bio)“ (Pflege: suppliers.PUT input.reiner_bio_haendler)
+            'reiner_bio_haendler' => (bool) $supplier->reiner_bio_haendler,
             'stammdaten' => [
                 'branch' => $supplier->branch,
                 'group_id' => $supplier->group_id,

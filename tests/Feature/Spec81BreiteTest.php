@@ -65,8 +65,9 @@ it('GP §8: Pflichtangabe meldet nur unter der Bedingung, beim Anlegen als Hinwe
     ($this->an)('gp.8.12.kartoffel', 'gp.8.11.mehl');
     $n = app(GpNamingService::class);
 
+    // v3.10.0 (Regel 833): Kochtyp nur bei roher ganzer Ware, Hinweis nennt das
     expect($n->validateGpName('Kartoffel: frisch, ganz', ['hauptzutat' => 'Kartoffel', 'condition' => 'frisch'])['warnings'])
-        ->toContain('§8.12: Kochtyp fehlt (mehlig, vorwiegend festkochend, festkochend) (§8.12).')
+        ->toContain('§8.12: Kochtyp fehlt (mehlig, vorwiegend festkochend, festkochend) — Pflicht nur bei roher ganzer Ware; nie annehmen, ohne Beleg Prüfliste (§8.33).')
         ->and($n->validateGpName('Kartoffel Linda: frisch, vorwiegend festkochend', ['hauptzutat' => 'Kartoffel Linda', 'condition' => 'frisch'])['warnings'])
         ->not->toContain('§8.12: Kochtyp fehlt (mehlig, vorwiegend festkochend, festkochend) (§8.12).')
         ->and(implode(' ', $n->validateGpName('Süßkartoffel: frisch, ganz', ['hauptzutat' => 'Süßkartoffel', 'condition' => 'frisch'])['warnings']))

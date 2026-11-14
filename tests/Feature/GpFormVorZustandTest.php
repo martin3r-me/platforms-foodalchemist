@@ -77,7 +77,7 @@ it('Trinkfertige Getränke, Öle und Sirupe tragen kein Zustandswort — auch we
         ->and($n->renderGpName(['hauptzutat' => 'Ahornsirup', 'condition' => 'konserviert', 'commodity_group_code' => '10', 'sub_category' => '10.7 Sirupe (für Würzung)']))->toBe('Ahornsirup')
         ->and($n->renderGpName(['hauptzutat' => 'Dattelsirup', 'condition' => 'konserviert', 'commodity_group_code' => '12']))->toBe('Dattelsirup')   // Rückfall über die Hauptzutat
         ->and($n->renderGpName(['hauptzutat' => 'Walnüsse in Sirup', 'condition' => 'konserviert', 'pflichtangabe' => 'schwarz', 'commodity_group_code' => '12']))->toBe('Walnüsse in Sirup: konserviert, schwarz')   // Ware MIT Sirup ist kein Sirup
-        ->and($n->renderGpName(['hauptzutat' => 'Apfelessig', 'condition' => 'konserviert', 'commodity_group_code' => '11', 'sub_category' => '11.3 Essig']))->toBe('Apfelessig: konserviert')   // Essig behält den Zustand
+        ->and($n->renderGpName(['hauptzutat' => 'Apfelessig', 'condition' => 'konserviert', 'commodity_group_code' => '11', 'sub_category' => '11.3 Essig']))->toBe('Apfelessig')   // v3.10.0 (O1, 13.11.2026): auch Essig ohne Zustandswort
         ->and($n->validateGpName('Apfelsaft', ['hauptzutat' => 'Apfelsaft', 'condition' => 'konserviert', 'commodity_group_code' => '15'])['errors'])->toBe([])
         ->and(implode(' ', $n->validateGpName('Apfelsaft', ['hauptzutat' => 'Apfelsaft', 'condition' => 'konserviert', 'commodity_group_code' => '15'])['warnings']))->toContain('kein Zustandswort');
 });
