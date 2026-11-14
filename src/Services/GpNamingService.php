@@ -912,8 +912,13 @@ class GpNamingService
         ]);
     }
 
-    /** GP-Edit über die strukturierten Felder — gleiche Validierung, gp_key wird NICHT umgeschrieben (Seed-Stabilität). */
-    public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
+    /**
+     * Name + Prüfung, die {@see updateGp()} aus dieser Eingabe bilden würde — ohne zu schreiben (GP-Lauf `foodalchemist:gp-felder`: Trockenlauf
+     * zeigt genau den Namen, den der Schreibweg später rendert). Gleiche Vorbereitung der Eingabe wie updateGp (eine Stelle).
+     *
+     * @return array{in: array<string,mixed>, name: string, pruefung: array{errors: string[], warnings: string[]}}
+     */
+    public function updateVorschau(FoodAlchemistGp $gp, array $in): array
     {
         $in = $this->bereinigeFelder($in);
         // Ein Non-Food-GP (WG 16) wird auch dann nach dem Non-Food-Schema geprüft, wenn die Eingabe die Warengruppe nicht mitbringt (MCP gps.PUT):
@@ -924,7 +929,14 @@ class GpNamingService
         // Regel 94 (v3.10.0): Land- und Siegel-Klammer bleiben beim Neu-Rendern stehen, wenn der Schreiber sie nicht mitgibt (Teil-Schreiber, ältere Clients)
         $in += ['herkunft_land' => $gp->herkunft_land, 'msc' => (bool) $gp->namens_msc, 'asc' => (bool) $gp->namens_asc];
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
-        $pruefung = $this->validateGpName($name, $in);
+
+        return ['in' => $in, 'name' => $name, 'pruefung' => $this->validateGpName($name, $in)];
+    }
+
+    /** GP-Edit über die strukturierten Felder — gleiche Validierung, gp_key wird NICHT umgeschrieben (Seed-Stabilität). */
+    public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
+    {
+        ['in' => $in, 'name' => $name, 'pruefung' => $pruefung] = $this->updateVorschau($gp, $in);
         if ($pruefung['errors'] !== []) {
             throw new \RuntimeException(implode(' ', $pruefung['errors']));
         }

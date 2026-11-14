@@ -154,12 +154,14 @@ class GpBereinigenService
     // ── Plan: Dubletten ─────────────────────────────────────────────────────────────────────────────
 
     /**
-     * Merge-Gruppen aus der Sichtungs-CSV prüfen (nur Gruppen `N…` = Namens-Dubletten).
+     * Merge-Gruppen aus der Sichtungs-CSV prüfen (nur Gruppen `N…` = Namens-Dubletten). `$teamId` = team-eigene GPs; `null` = GLOBALE Stamm-GPs
+     * (GP-Lauf 14.11.2026, nur über `--global` als Master). Allergen-Guard wie beim Verknüpfen/`gps.REPLACE` ({@see LeadLaService::mergeAbweichungen}):
+     * ein Verlierer, dessen Artikel- oder GP-Allergene dem Sieger widersprechen (enthalten gegen nicht enthalten), wird nicht gemerged.
      *
      * @param  array<int,string>  $keinMerge  gp_id => Grund (aus dem Link-Review)
      * @return array{gruppen: list<array<string,mixed>>, konflikte: list<array<string,mixed>>}
      */
-    public function planDubletten(int $teamId, string $csv, array $keinMerge = [], ?string $wg = null): array
+    public function planDubletten(?int $teamId, string $csv, array $keinMerge = [], ?string $wg = null): array
     {
         $gruppen = [];
         foreach ($this->leseCsv($csv) as $z) {
@@ -205,8 +207,8 @@ class GpBereinigenService
 
                     continue;
                 }
-                if ((int) $gp->team_id !== $teamId) {
-                    $fehler[] = "#{$gp->id} gehört nicht Team {$teamId}";
+                if (! $this->imBereich($gp, $teamId)) {
+                    $fehler[] = $teamId === null ? "#{$gp->id} ist kein globales Stamm-GP" : "#{$gp->id} gehört nicht Team {$teamId}";
                 }
                 if (! in_array($gp->status, self::AKTIV, true)) {
                     $fehler[] = "#{$gp->id} hat Status {$gp->status}";
@@ -239,6 +241,9 @@ class GpBereinigenService
                         // Regel 91 Nr. 3 (v3.10.0): ein GP mit Kennzeichen „offen“ (Pflichtangabe nicht belegt) nie mit einem belegten GP zusammenführen
                         $fehler[] = "#{$gv->id} Kennzeichen „offen“ ≠ Sieger — offene Angabe nie mit belegtem GP zusammenführen (Regel 91)";
                     }
+                    if (($ab = app(LeadLaService::class)->mergeAbweichungen($gw, $gv)) !== []) {
+                        $fehler[] = "#{$gv->id} Allergen-Konflikt mit dem Sieger: " . implode(', ', $ab) . ' — nicht mergen (Guard wie gps.REPLACE)';
+                    }
                 }
             }
             if ($fehler !== []) {
@@ -269,12 +274,12 @@ class GpBereinigenService
      * Geltungsbereich der Namens-Phase: `$teamId` = team-eigene GPs; `null` = GLOBALE Stamm-GPs (team_id NULL + stamm_class stamm_paket,
      * nur über `--global` im Befehl, der das Master-Team voraussetzt).
      */
-    private function bereich(\Illuminate\Database\Query\Builder $q, ?int $teamId): \Illuminate\Database\Query\Builder
+    public function bereich(\Illuminate\Database\Query\Builder $q, ?int $teamId): \Illuminate\Database\Query\Builder
     {
         return $teamId === null ? $q->whereNull('team_id')->where('stamm_class', StammPaket::PAKET) : $q->where('team_id', $teamId);
     }
 
-    private function imBereich(object $gp, ?int $teamId): bool
+    public function imBereich(object $gp, ?int $teamId): bool
     {
         return $teamId === null
             ? $gp->team_id === null && ($gp->stamm_class ?? null) === StammPaket::PAKET
@@ -584,6 +589,9 @@ class GpBereinigenService
         $zurueck = 0;
         $skip = 0;
         DB::transaction(function () use ($p, &$zurueck, &$skip) {
+            $r = app(GpLaufNachlauf::class)->zuruecknehmen($p);   // Nachlauf (Lead/Zähler) zuerst — er lief zuletzt
+            $zurueck += $r['zurueck'];
+            $skip += $r['uebersprungen'];
             foreach (array_reverse($p['renames'] ?? []) as $r) {
                 $ist = DB::table('foodalchemist_gps')->where('id', $r['id'])->first();
                 if ($ist !== null && $ist->name === $r['neu']['name'] && $ist->gp_key === $r['neu']['gp_key']) {
