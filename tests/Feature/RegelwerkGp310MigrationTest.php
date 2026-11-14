@@ -54,6 +54,7 @@ it('Untergruppen: 06.9 + 10.8 neu, 06.8 + 15.9 + Aperitifs aufgelöst, WG 05 neu
             '05 05.1 Fisch', '05 05.2 Geräuchert und gebeizt', '05 05.3 Konserven und Kaviar', '05 05.4 Meeresfrüchte',
             '06 06.5 Käse', '06 06.9 Portionsware',
             '10 10.8 Portionsware',
+            '11 11.4 Schmalz & feste Fette',   // spätere Migration 2026_12_29_100000 (Regel 830 Teil 2) läuft in der Test-DB mit
             '15 15.1 Wein',
         ])
         ->and(DB::table('foodalchemist_gps')->where('gp_key', 'milch||')->value('sub_category'))->toBe('06.8 Laktosefreie Produkte');   // der GP-Lauf hängt um
