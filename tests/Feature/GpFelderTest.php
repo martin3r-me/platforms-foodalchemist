@@ -103,7 +103,8 @@ it('Konflikt: Name seit Plan geändert — wird auch mit --apply nicht geschrieb
 
 it('Konflikt: Namens-Kollision mit anderem aktiven GP (Merge-Kandidat) und im selben Lauf', function () {
     $gp = ($this->gp)();
-    ($this->gp)(['condition' => 'TK']);   // trägt schon „Banane: ganz, TK“
+    $besetzt = ($this->gp)(['condition' => 'TK']);   // trägt schon „Banane: ganz, TK“ — mit Altbestands-Key, damit die NAMENS-Prüfung greift, nicht die Key-Prüfung
+    DB::table('foodalchemist_gps')->where('id', $besetzt->id)->update(['gp_key' => 'banane_altbestand']);
     $a = ($this->gp)(['main_ingredient_display' => 'Apfel']);
     $b = ($this->gp)(['main_ingredient_display' => 'Apfel', 'form' => 'Scheiben']);
     $plan = ($this->plan)([
@@ -116,7 +117,7 @@ it('Konflikt: Namens-Kollision mit anderem aktiven GP (Merge-Kandidat) und im se
 
     $konflikte = file_get_contents(($this->datei)('_felder_konflikte.csv'));
     expect($gp->fresh()->condition)->toBe('frisch')
-        ->and($konflikte)->toContain('Merge-Kandidat')->toContain('im selben Lauf')
+        ->and($konflikte)->toContain('trägt schon #' . $besetzt->id)->toContain('im selben Lauf')
         ->and($a->fresh()->form)->toBe('Würfel')->and($b->fresh()->form)->toBe('Scheiben');
 });
 
