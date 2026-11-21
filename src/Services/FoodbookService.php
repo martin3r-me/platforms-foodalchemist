@@ -158,17 +158,16 @@ class FoodbookService
     /**
      * Tiefe Kopie eines Foodbooks: Kopf (inkl. Branding) → Kapitel (2-Pass parent_id) → Blöcke → Staffeln.
      * Zurückgesetzt: code, Status=Entwurf, alle presentation- und preview- und Kapitel-Snapshot-Felder
-     * (Freigabe/Versand sind pro Dokument). Muster wie SpeisekarteService::dupliziere.
+     * (Freigabe/Versand sind pro Dokument). Auch geerbte Foodbooks (nur sichtbar): die Kopie gehört ganz dem kopierenden Team.
      */
     public function dupliziere(Team $team, int $id): FoodAlchemistFoodbook
     {
         $quelle = FoodAlchemistFoodbook::visibleToTeam($team)
             ->with(['chapters' => fn ($q) => $q->orderBy('position'), 'chapters.blocks' => fn ($q) => $q->orderBy('position'), 'chapters.blocks.staffel'])
             ->findOrFail($id);
-        $this->guard($quelle, $team);
 
-        // Kopf: FELDER + Branding; Name = label (NICHT name).
-        $kopfFelder = array_merge(self::FELDER, ['brand_color', 'band_color', 'logo_path', 'cover_image_path', 'footer_text']);
+        // Kopf: FELDER + Branding; Name = label (NICHT name). Bilder kopiert DuplikatBilderService als eigene Dateien.
+        $kopfFelder = array_merge(self::FELDER, ['brand_color', 'band_color', 'footer_text']);
 
         return DB::transaction(function () use ($quelle, $team, $kopfFelder) {
             $neu = FoodAlchemistFoodbook::create($this->pruefeOutlet($team, array_merge(
@@ -184,8 +183,7 @@ class FoodbookService
                     [
                         'team_id' => $neu->team_id, 'foodbook_id' => $neu->id, 'parent_id' => null,
                         'position' => $k->position, 'status' => 'draft',
-                        // Format-Bindung + Kapitel-Hero mitkopieren (Snapshot/Freigabe bewusst NICHT).
-                        'format_id' => $k->format_id, 'image_context_file_id' => $k->image_context_file_id, 'image_path' => $k->image_path, 'logo_context_file_id' => $k->logo_context_file_id, 'logo_path' => $k->logo_path,
+                        'format_id' => $k->format_id,   // Format-Bindung mitkopieren (Snapshot/Freigabe bewusst NICHT; Bilder s. u.)
                     ],
                 ));
                 $map[$k->id] = $kopie->id;
@@ -208,6 +206,7 @@ class FoodbookService
                     }
                 }
             }
+            app(DuplikatBilderService::class)->foodbook($quelle, $neu, $map, $team);   // CQ Bild-Löschschutz PR 2: eigene Dateien
 
             return $neu->refresh();
         });

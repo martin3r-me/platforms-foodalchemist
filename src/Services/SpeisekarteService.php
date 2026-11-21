@@ -225,7 +225,7 @@ class SpeisekarteService
         $kopfFelder = [
             'karten_typ', 'outlet_id', 'preis_anzeige_brutto', 'description', 'kundentyp',
             'default_niveau', 'default_convenience', 'writing_style_id',
-            'brand_color', 'band_color', 'logo_path', 'cover_image_path', 'footer_text',
+            'brand_color', 'band_color', 'footer_text',   // Logo/Titelbild kopiert DuplikatBilderService als eigene Dateien
         ];
 
         return DB::transaction(function () use ($quelle, $team, $overrides, $kopfFelder) {
@@ -244,9 +244,7 @@ class SpeisekarteService
                     'team_id' => $neu->team_id, 'menu_card_id' => $neu->id, 'parent_id' => null,
                     'position' => $r->position, 'title' => $r->title, 'consumer_title' => $r->consumer_title,
                     'claim' => $r->claim, 'description' => $r->description, 'art' => $r->art,
-                    'preis_anzeige' => $r->preis_anzeige,
-                    // Kapitel-Logo teilt die Datei (wie Foodbook-Kopien); Entfernen löscht sie erst, wenn keine Rubrik sie mehr nutzt.
-                    'logo_context_file_id' => $r->logo_context_file_id, 'logo_path' => $r->logo_path,
+                    'preis_anzeige' => $r->preis_anzeige,   // Rubrik-Logo: eigene Datei über DuplikatBilderService (s. u.)
                 ]);
                 $map[$r->id] = $kopie->id;
             }
@@ -266,6 +264,7 @@ class SpeisekarteService
                     ]);
                 }
             }
+            app(DuplikatBilderService::class)->speisekarte($quelle, $neu, $map, $team);   // CQ Bild-Löschschutz PR 2: eigene Dateien
 
             return $neu->refresh();
         });

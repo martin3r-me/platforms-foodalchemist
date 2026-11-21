@@ -19,7 +19,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Bild-Löschschutz (CQ PR 1): Kopien und Fassungen teilen Bilddateien mit ihrer Quelle. Entfernen/Ersetzen an einer Zeile löscht
  * die Datei nur, wenn sie keine andere Zeile mehr nutzt (BildVerweise::REGISTER, alle Teams, gelöschte Zeilen zählen mit).
- * Dazu zwei Wächter: jede Bild-Spalte steht im Register oder in den Ausnahmen; niemand löscht Bilder am Schutz vorbei.
+ * Geteilte Dateien entstehen seit PR 2 nicht mehr beim Duplizieren (eigene Kopien), stehen aber als Altbestand (Alt-Kopien) und
+ * in Abo-Fassungen weiter in den Daten — die Tests legen solche Zeilen direkt an. Dazu zwei Wächter: jede Bild-Spalte steht im Register oder in den Ausnahmen; niemand löscht Bilder am Schutz vorbei.
  */
 function bldDatei(int $teamId, string $pfad): ContextFile
 {
@@ -42,8 +43,7 @@ beforeEach(function () {
 it('Kopie: Logo an der Kopie entfernen lässt die Datei der Quelle stehen; erst die letzte Nutzung löscht', function () {
     Storage::disk('public')->put('foodalchemist/branding/1/logo.webp', 'bild');
     $quelle = $this->makeFoodbook($this->rootTeam, 'Katalog', ['logo_path' => 'foodalchemist/branding/1/logo.webp']);
-    $kopie = $this->fbs->dupliziere($this->rootTeam, $quelle->id);
-    expect($kopie->logo_path)->toBe('foodalchemist/branding/1/logo.webp');
+    $kopie = $this->makeFoodbook($this->rootTeam, 'Katalog (Alt-Kopie)', ['logo_path' => 'foodalchemist/branding/1/logo.webp']);
 
     $this->fbs->clearLogo($this->rootTeam, $kopie->id);
     expect($kopie->refresh()->logo_path)->toBeNull()
@@ -56,7 +56,7 @@ it('Kopie: Logo an der Kopie entfernen lässt die Datei der Quelle stehen; erst 
 it('Kopie mit ContextFile: die Kopie trägt nur den Pfad — die Datei bleibt, bis die Quelle sie freigibt', function () {
     $datei = bldDatei($this->rootTeam->id, 'foodalchemist/branding/2/logo.webp');
     $quelle = $this->makeFoodbook($this->rootTeam, 'Katalog', ['logo_context_file_id' => $datei->id, 'logo_path' => $datei->path]);
-    $kopie = $this->fbs->dupliziere($this->rootTeam, $quelle->id);
+    $kopie = $this->makeFoodbook($this->rootTeam, 'Katalog (Alt-Kopie)', ['logo_path' => $datei->path]);
 
     $this->fbs->clearLogo($this->rootTeam, $kopie->id);
     expect(Storage::disk('public')->exists($datei->path))->toBeTrue()
@@ -70,7 +70,7 @@ it('Kopie mit ContextFile: die Kopie trägt nur den Pfad — die Datei bleibt, b
 it('gelöschte Kopie zählt mit: Wiederherstellen braucht die Datei', function () {
     Storage::disk('public')->put('foodalchemist/branding/3/logo.webp', 'bild');
     $quelle = $this->makeFoodbook($this->rootTeam, 'Katalog', ['logo_path' => 'foodalchemist/branding/3/logo.webp']);
-    $this->fbs->dupliziere($this->rootTeam, $quelle->id)->delete();   // soft delete
+    $this->makeFoodbook($this->rootTeam, 'Alt-Kopie', ['logo_path' => 'foodalchemist/branding/3/logo.webp'])->delete();   // soft delete
 
     $this->fbs->clearLogo($this->rootTeam, $quelle->id);
     expect(Storage::disk('public')->exists('foodalchemist/branding/3/logo.webp'))->toBeTrue();
@@ -126,7 +126,7 @@ it('Fassung in einem anderen Team: Master entfernt bzw. ersetzt sein Bild, die D
 it('Ersetzen: neues Logo über ein geteiltes lässt die alte Datei stehen, über ein ungeteiltes löscht es sie', function () {
     Storage::disk('public')->put('foodalchemist/branding/4/logo.webp', 'bild');
     $quelle = $this->makeFoodbook($this->rootTeam, 'Katalog', ['logo_path' => 'foodalchemist/branding/4/logo.webp']);
-    $kopie = $this->fbs->dupliziere($this->rootTeam, $quelle->id);
+    $kopie = $this->makeFoodbook($this->rootTeam, 'Katalog (Alt-Kopie)', ['logo_path' => 'foodalchemist/branding/4/logo.webp']);
 
     $this->fbs->storeLogo($this->rootTeam, $kopie->id, UploadedFile::fake()->image('neu.png', 20, 20));
     expect($kopie->refresh()->logo_path)->not->toBe('foodalchemist/branding/4/logo.webp')

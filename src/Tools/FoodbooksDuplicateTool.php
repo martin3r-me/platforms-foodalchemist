@@ -25,6 +25,7 @@ class FoodbooksDuplicateTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Kopiert ein sichtbares Foodbook als neues, team-eigenes Foodbook: Kopf mit Branding, Kapitelbaum, Blöcke, Staffeln. '
+            . 'Auch geerbte Foodbooks (z. B. vom Master) lassen sich kopieren; Bilder werden als eigene Dateien des Teams kopiert. '
             . 'Die Kopie heißt „<Name> (Kopie)“, steht im Status Entwurf und ist weder freigegeben noch veröffentlicht. '
             . 'Löschen eines Foodbooks gibt es per MCP bewusst nicht.';
     }
@@ -46,9 +47,6 @@ class FoodbooksDuplicateTool extends FoodAlchemistTool implements ToolContract, 
         $quelle = FoodAlchemistFoodbook::visibleToTeam($team)->find($id);
         if ($quelle === null) {
             return ToolResult::error('Foodbook nicht sichtbar/vorhanden.', 'NOT_FOUND');
-        }
-        if (! $quelle->isOwnedBy($team)) {
-            return ToolResult::error('Geerbtes Foodbook: Duplizieren kann es nur das Besitzer-Team.', 'ACCESS_DENIED');
         }
         try {
             $kopie = app(FoodbookService::class)->dupliziere($team, $id);
