@@ -48,12 +48,17 @@ it('foodbooks.DUPLICATE: unsichtbares Foodbook eines Geschwister-Teams → NOT_F
     expect(app(ToolRegistry::class)->get('foodalchemist.foodbooks.DELETE'))->toBeNull();
 });
 
-it('foodbooks.DUPLICATE: sichtbares Master-Foodbook → ACCESS_DENIED (wie in der Oberfläche)', function () {
+it('foodbooks.DUPLICATE: geerbtes Master-Foodbook → eigene Kopie im Kind-Team, das Original bleibt unberührt', function () {
     $master = $this->makeFoodbook($this->rootTeam, 'Master');
+    $this->makeChapter($master, ['title' => 'Hauptgang']);
 
     $r = ($this->run)('foodalchemist.foodbooks.DUPLICATE', ['id' => $master->id], $this->childA);
 
-    expect($r->success)->toBeFalse()->and($r->errorCode)->toBe('ACCESS_DENIED');
+    expect($r->success)->toBeTrue();
+    $kopie = FoodAlchemistFoodbook::withoutGlobalScopes()->find($r->data['foodbook']['id']);
+    expect((int) $kopie->team_id)->toBe((int) $this->childA->id)
+        ->and((int) FoodAlchemistFoodbookKapitel::withoutGlobalScopes()->where('foodbook_id', $kopie->id)->value('team_id'))->toBe((int) $this->childA->id)
+        ->and((int) $master->fresh()->team_id)->toBe((int) $this->rootTeam->id);
 });
 
 // ── production_orders.LINE_ADD / LINE_REMOVE ─────────────────────────────────
