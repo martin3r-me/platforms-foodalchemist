@@ -6,7 +6,7 @@
  * mehr mit. Der Wächter hält das fest: Kommt das Spiegelfeld in einen dieser Selects zurück, ist es ein neuer Leser vor dem
  * Spalten-Drop (6c).
  */
-it('Ausgabe-Dienste laden das Spiegelfeld sales_unit_count nicht mehr', function () {
+it('Ausgabe-Dienste und Planungsblatt laden die Spiegelfelder sales_unit_count/sales_quantity_per_unit_g nicht mehr', function () {
     $modul = dirname(__DIR__, 2);
     $dateien = [
         'src/Services/Ausgabe/OfferCompositionService.php',
@@ -16,11 +16,13 @@ it('Ausgabe-Dienste laden das Spiegelfeld sales_unit_count nicht mehr', function
         'src/Services/Ausgabe/SpeisekarteService.php',
         'src/Services/Planung/LeitstelleService.php',
         'src/Services/Ausgabe/MenuEngineeringService.php',
+        'src/Services/Planung/PlanungsblattService.php',   // 3.5-6a Folge: Selects nach B (Teiler fest 1) bereinigt
     ];
     $treffer = [];
     foreach ($dateien as $d) {
         foreach (explode("\n", (string) file_get_contents("{$modul}/{$d}")) as $i => $zeile) {
-            if (str_contains($zeile, 'sales_unit_count')) {
+            $code = trim((string) preg_replace('~//.*$~', '', $zeile));   // Kommentare nennen das Feld als Herkunft, das ist erlaubt
+            if (str_contains($code, 'sales_unit_count') || str_contains($code, 'sales_quantity_per_unit_g')) {
                 $treffer[] = "{$d}:".($i + 1);
             }
         }

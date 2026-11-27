@@ -224,7 +224,7 @@ class PlanungsblattService
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
             'slots.embeddedConcept:id,name,kind',
-            'slots.dish:id,name,is_sales_recipe,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces',
+            'slots.dish:id,name,is_sales_recipe,yield_kg,yield_pieces',
         ]);
 
         $tops = [];
@@ -533,7 +533,7 @@ class PlanungsblattService
     private function ladeGerichtStamm(int $id, Team $team): ?FoodAlchemistRecipe
     {
         return FoodAlchemistRecipe::visibleToTeam($team)
-            ->find($id, ['id', 'name', 'is_sales_recipe', 'sales_unit_count', 'sales_quantity_per_unit_g', 'yield_kg', 'yield_pieces']);
+            ->find($id, ['id', 'name', 'is_sales_recipe', 'yield_kg', 'yield_pieces']);
     }
 
     /**
@@ -1220,7 +1220,7 @@ class PlanungsblattService
                 'ingredients' => fn ($q) => $q->orderBy('position'),
                 'ingredients.unit',
                 'ingredients.gp',
-                'ingredients.referencedRecipe:id,name,is_sales_recipe,yield_kg,yield_pieces,sales_unit_count',
+                'ingredients.referencedRecipe:id,name,is_sales_recipe,yield_kg,yield_pieces',
             ])
             ->find($id);
     }
