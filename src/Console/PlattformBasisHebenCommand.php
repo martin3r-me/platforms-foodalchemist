@@ -39,7 +39,7 @@ class PlattformBasisHebenCommand extends Command
     public const EINHEITEN_VERWEISE = [
         'foodalchemist_recipe_ingredients' => 'unit_vocab_id',
         'foodalchemist_gps' => 'preferred_count_unit_id',
-        'foodalchemist_recipes' => 'sales_unit_vocab_id',
+        // 98 · 3.5 6c: recipes.sales_unit_vocab_id (Spiegel) entfallen — die Einheit steht an der Darreichung (unit_vocab_id)
         'foodalchemist_recipe_presentations' => 'unit_vocab_id',
         'foodalchemist_gp_count_unit_defaults' => 'unit_vocab_id',
         'foodalchemist_baustein_gerichte' => 'unit_vocab_id',

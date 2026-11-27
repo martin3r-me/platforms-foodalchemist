@@ -557,10 +557,9 @@ class AboKuendigungService
     }
 
     /** Plan B (c): Vokabular-Verweise der Kopie zeigen nie auf Master-Zeilen — sichtbare Zeile gleichen Codes, sonst NULL. */
+    // 98 · 3.5 6c: die Behälter-/Vehikel-Spiegel am Rezept sind entfallen — Behälter und Vehikel hängt VOKABULAR_DARREICHUNG um
     private const VOKABULAR_REZEPT = ['category_id' => 'foodalchemist_recipe_categories', 'dish_main_group_id' => 'foodalchemist_dish_main_groups',
-        'dish_class_id' => 'foodalchemist_dish_classes',
-        'container_warm_vocab_id' => 'foodalchemist_vocab_containers', 'container_cold_vocab_id' => 'foodalchemist_vocab_containers',
-        'serving_vehicle_vocab_id' => 'foodalchemist_vocab_serving_vehicles'];
+        'dish_class_id' => 'foodalchemist_dish_classes'];
 
     private const VOKABULAR_DARREICHUNG = ['markup_class_id' => 'foodalchemist_markup_classes',
         'container_warm_vocab_id' => 'foodalchemist_vocab_containers', 'container_cold_vocab_id' => 'foodalchemist_vocab_containers',

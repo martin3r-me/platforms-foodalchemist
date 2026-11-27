@@ -125,7 +125,7 @@ it('L8b: portion_g aus dem Vorschlag landet als Portionsgewicht am Gericht', fun
         'portion_g' => 220,
     ], vkModus: true);
 
-    // 98 · 3.5 6b: die Portion steht an der Standard-Darreichung (Summe der skalierten Bestandteile), der Rezept-Kopf wird nicht mehr gespiegelt
+    // 98 · 3.5 6c: die Portion steht an der Standard-Darreichung (Summe der skalierten Bestandteile), nicht mehr im Rezept-Kopf
     $r = $res['recipe']->fresh();
     expect(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->grammJeEinheit($r->standardPresentation()->firstOrFail(), $r))->toBe(220.0);
 });

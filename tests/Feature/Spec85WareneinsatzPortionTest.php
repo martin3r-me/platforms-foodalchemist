@@ -50,7 +50,6 @@ it('ekProPortion: ohne ek_portion der EK des Gerichts (eine Portion), ek_portion
 it('ekProPortion braucht sales_unit_count nicht mehr: kein Wurf, kein Nachladen, keine Warnung (98 · 3.5 6a)', function () {
     $ohneSpalte = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->select(['id', 'ek_total_eur'])->find($this->gericht->id);
     $this->standard->delete();
-    \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['sales_unit_count' => 4]);   // Altbestand teilt nicht
 
     $kanal = Mockery::mock();
     $kanal->shouldNotReceive('warning');

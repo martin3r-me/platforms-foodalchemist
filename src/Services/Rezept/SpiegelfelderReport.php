@@ -39,14 +39,20 @@ final class SpiegelfelderReport
     /**
      * @return array{rezepte: int, fassungen: int, felder: array<string, array{abweichend: int, nur_rezept: int, beispiele: list<array>}>,
      *               portionen_gt_1: array{anzahl: int, beispiele: list<array>}, ohne_standard: array{anzahl: int, beispiele: list<array>},
-     *               altspalten: array<string, int>}
+     *               altspalten: array<string, int>, entfernt: bool}
      */
     public function bericht(int $beispiele = 10): array
     {
         $felder = array_fill_keys([...array_keys(self::SPIEGEL), self::GRAMMATUR], ['abweichend' => 0, 'nur_rezept' => 0, 'beispiele' => []]);
         $out = ['rezepte' => 0, 'fassungen' => 0, 'felder' => $felder, 'portionen_gt_1' => ['anzahl' => 0, 'beispiele' => []],
-            'ohne_standard' => ['anzahl' => 0, 'beispiele' => []], 'altspalten' => []];
+            'ohne_standard' => ['anzahl' => 0, 'beispiele' => []], 'altspalten' => [], 'entfernt' => false];
         $spiegelSpalten = [...array_keys(self::SPIEGEL), self::GRAMMATUR];
+        if (\Platform\FoodAlchemist\Support\Datenmodell\SpiegelfelderRueckbau::vorhanden() === []) {
+            // 98 · 3.5 6c: Spalten gedroppt — nichts mehr zu vergleichen (die Werte liegen im Backup des Rückbaus)
+            $out['entfernt'] = true;
+
+            return $out;
+        }
 
         FoodAlchemistRecipe::mitFassungen()->ohneTeamSicht('spiegelfelder-report')
             ->where(function ($q) use ($spiegelSpalten) {

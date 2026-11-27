@@ -82,7 +82,7 @@ it('Befehl darreichung-mwst-leeren: leert nur festgeschriebene Schlüssel, Trock
 });
 
 it('Nährwerte je Einheit: ohne Verkaufseinheit am Gericht nach der Grammatur der Standard-Darreichung', function () {
-    $this->gericht->forceFill(['nutri_kcal_per_100g' => 150, 'nutri_salt_g_per_100g' => 1.0, 'sales_quantity_per_unit_g' => null, 'sales_unit_count' => null, 'yield_kg' => null])->save();
+    $this->gericht->forceFill(['nutri_kcal_per_100g' => 150, 'nutri_salt_g_per_100g' => 1.0, 'yield_kg' => null])->save();
 
     ($this->modal)()
         ->assertSee('je Einheit (≈ 120 g)')

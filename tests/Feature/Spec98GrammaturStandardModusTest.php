@@ -19,7 +19,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * 98 · Grammatur „immer automatisch“, Schritt 2 → 98 · 3.5-6a/6b (Dominique 27.11.: Darreichung = Portion, fest 1): Eine
  * Standard-Darreichung „wie Rezept“ (menge_vom_standard) ist der ganze Ansatz. Die Portionszahl am Rezept (sales_unit_count)
- * teilte früher; sie zählt seit 6a/6b nicht mehr und entfällt mit 6c. Bratkartoffeln: 1 kg Kartoffeln (1,20 €/kg) + 200 g Speck (9 €/kg) = 1,2 kg, EK 3,00 €.
+ * teilte früher; sie ist mit 6c entfernt. Bratkartoffeln: 1 kg Kartoffeln (1,20 €/kg) + 200 g Speck (9 €/kg) = 1,2 kg, EK 3,00 €.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();

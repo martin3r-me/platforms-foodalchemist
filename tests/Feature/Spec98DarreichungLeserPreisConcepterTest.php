@@ -28,9 +28,7 @@ beforeEach(function () {
 
     $this->gericht = $this->makeRecipe($this->rootTeam, 'Rinderroulade', ['is_sales_recipe' => true, 'ek_total_eur' => 8.0, 'nutri_kcal_per_100g' => 100, 'nutri_confidence' => 'high']);
     $this->dar = $this->grammaturAltbestand($this->makeStandardDarreichung($this->gericht, 20.0), 200);
-    // Spiegel bewusst auseinander: 999 g, 1 Portion je Ansatz
-    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['sales_quantity_per_unit_g' => 999, 'sales_unit_count' => 1]);
-    $this->gericht->refresh();
+    // 98 · 3.5 6c: die Rezept-Spiegel sind gedroppt — vorher wurden sie hier bewusst abweichend (999 g) gesetzt
     $this->konzepte = app(ConceptService::class);
     $this->konzeptMitGericht = function (?object $einheit = null, ?float $menge = null) {
         $k = $this->konzepte->create($this->rootTeam, ['name' => 'Menü']);
@@ -74,7 +72,6 @@ it('Deklarationsblatt: Portionsgramm und kcal je Gericht aus der Standard-Darrei
 });
 
 it('Slot-Einheit: Gramm wirkt, wenn nur die Darreichung ein Portionsgewicht hat', function () {
-    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['sales_quantity_per_unit_g' => null]);
     expect(SlotEinheitService::wirkt($this->gramm, $this->gericht->fresh(), null))->toBeTrue();
 });
 
@@ -84,8 +81,7 @@ it('Preis-Cockpit: Gramm-Position je Gericht über das Gewicht der Darreichung',
     expect((float) $zeile['price'])->toBe(40.0);   // 400 g ÷ 200 g = 2 Portionen × 20 €
 });
 
-it('Teiler fest 1 (Dominique 27.11.): Altbestand sales_unit_count > 1 teilt nicht mehr', function () {
-    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['sales_unit_count' => 4]);
+it('Teiler fest 1 (Dominique 27.11.): ein Gericht ist eine Portion je Ansatz', function () {
     $g = FoodAlchemistRecipe::find($this->gericht->id);
     $ohneEkPortion = FoodAlchemistRecipe::query()->select(['id', 'ek_total_eur'])->find($this->gericht->id);   // ohne die Spalte: kein Wurf, kein Nachladen
     $this->dar->forceFill(['ek_portion' => null])->saveQuietly();

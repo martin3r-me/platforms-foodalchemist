@@ -25,8 +25,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Spiegelfelder (sales_quantity_per_unit_g, sales_unit_count, sales_unit_vocab_id) auf die Standard-Darreichung umgestellt
  * werden. Jede Änderung am Prompt-Text wird hier sichtbar (Kurator 27.11.: Prompt-Änderungen melden, nicht still anpassen).
  *
- * Zwei Lagen: „konsistent" (Spiegel = Standard-Darreichung, Portionszahl leer — der io-Normalfall laut Spiegelfelder-Report)
- * und „abweichend" (Spiegel 999 g, Portionszahl 3, Standard 250 g) — nur dort darf die Umstellung den Prompt ändern.
+ * Seit 6c (Drop der Rezept-Spiegelfelder) gibt es nur noch eine Lage: Die Prompt-Werte kommen aus der Standard-Darreichung
+ * (250 g × 1 Portion). Die frühere Lage „abweichend“ (Spiegel 999 g, Portionszahl 3) ist entfallen; es gibt keinen Spiegel
+ * mehr, der abweichen könnte. Sie hat in 6a gezeigt, dass die Leser die Darreichung lesen.
  * Erfasst: recipe.review-Kontext, Konformitäts-Prüfauftrag, vk.ueberarbeiten-Payload, recipe.steps-Kontext (OneShot und
  * StepEditor) und der Generator-Parameter ziel_portion_g der Gericht-Hülle.
  *
@@ -55,23 +56,20 @@ beforeEach(function () {
     $this->portion = FoodAlchemistVocabEinheit::firstOrCreate(['team_id' => $t, 'slug' => 'portion'], ['display_de' => 'Portion', 'dimension' => 'count']);
     $teller = FoodAlchemistServierform::create(['team_id' => $t, 'code' => 'teller', 'label' => 'Teller']);
 
-    // Gericht mit Komponente, Standard-Darreichung 250 g × 1 Portion. Spiegel je Lage direkt in der Tabelle gesetzt.
+    // Gericht mit Komponente, Standard-Darreichung 250 g × 1 Portion (Rezept-Spiegelfelder gibt es seit 6c nicht mehr).
     $this->gericht = function (string $lage) use ($t, $teller) {
         $komponente = $this->makeRecipe($this->rootTeam, 'Rahmsauce '.$lage, ['preparation' => 'Sahne reduzieren.']);
         $g = $this->makeRecipe($this->rootTeam, '[HG] Schnitzel '.$lage, ['is_sales_recipe' => true, 'description' => 'Wiener Art']);
         $this->makeIngredient($g, 'Rahmsauce '.$lage, null, '80', 1)->update(['referenced_recipe_id' => $komponente->id]);
         FoodAlchemistRecipeDarreichung::create(['team_id' => $t, 'recipe_id' => $g->id, 'serving_form_id' => $teller->id, 'is_standard' => true,
             'quantity_per_unit_g' => 250, 'unit_count' => 1, 'unit_vocab_id' => $this->portion->id, 'ek_portion' => 3.0, 'sales_net' => 12.0, 'price_mode' => 'auto']);
-        \Illuminate\Support\Facades\DB::table('foodalchemist_recipes')->where('id', $g->id)->update($lage === 'konsistent'
-            ? ['sales_quantity_per_unit_g' => 250, 'sales_unit_count' => null, 'sales_unit_vocab_id' => $this->portion->id]
-            : ['sales_quantity_per_unit_g' => 999, 'sales_unit_count' => 3, 'sales_unit_vocab_id' => null]);
 
         return FoodAlchemistRecipe::find($g->id);
     };
     $this->privat = fn (object $o, string $m, ...$args) => (fn () => $this->{$m}(...$args))->call($o);
 });
 
-foreach (['konsistent', 'abweichend'] as $lage) {
+foreach (['konsistent'] as $lage) {
     it("Prompt-Kontexte eines Gerichts ({$lage})", function () use ($lage) {
         $g = ($this->gericht)($lage);
         $review = ($this->privat)(app(RecipeReviewService::class), 'kontext', $g->fresh(), true);

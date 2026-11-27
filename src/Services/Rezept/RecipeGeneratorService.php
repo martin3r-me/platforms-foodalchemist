@@ -1137,8 +1137,8 @@ class RecipeGeneratorService
     /**
      * Bringt ein Gericht auf GENAU EINE Portion: Ziel = parameter.ziel_portion_g, sonst die Portion aus dem Vorschlag
      * (portion_g). Liegt der Ertrag (COALESCE(yield_kg_manual, yield_kg)) mehr als die Toleranz daneben, werden alle Zeilen
-     * mit Portion/Ertrag skaliert und neu gerechnet. Danach Verkaufseinheiten = 1; die Grammatur ergibt sich daraus
-     * (Plan 98 B: Summe der Bestandteile, der Kopf spiegelt sie — vorher schrieb der Generator das Ziel als Grammatur).
+     * mit Portion/Ertrag skaliert und neu gerechnet. Eine Portion je Gericht (fest 1); die Grammatur ergibt sich daraus
+     * (Plan 98 B: Summe der Bestandteile an der Standard-Darreichung — vorher schrieb der Generator das Ziel als Grammatur).
      *
      * @param  array<string, mixed>  $parameter
      * @return array{ziel_g: float, ertrag_vorher_g: float, faktor: float, skaliert: bool}|null
@@ -1164,7 +1164,7 @@ class RecipeGeneratorService
             }
             app(RecipeRecomputeService::class)->recomputeAndPropagate((int) $r->id);
         }
-        // 98 · 3.5 6b: die Portionszahl ist am Gericht fest 1 und wird nicht mehr geschrieben (Spalte entfällt mit 6c)
+        // 98 · 3.5 6b/6c: die Portionszahl ist am Gericht fest 1 (Spalte entfernt)
         app(DarreichungService::class)->recomputeFuerRezept((int) $r->id);   // Grammatur der Standard-Darreichung neu
 
         return ['ziel_g' => $ziel, 'ertrag_vorher_g' => round($ertragG, 1), 'faktor' => round($faktor, 4), 'skaliert' => $skaliert];

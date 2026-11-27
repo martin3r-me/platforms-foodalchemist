@@ -45,14 +45,12 @@ it('Variante mit fester Grammatur und Anzahl: EK je Portion proportional, unver�
         ->and((float) ($this->dar)('kinder')->quantity_per_unit_g)->toBe(150.0);
 });
 
-it('Standard ohne eingetragene Grammatur: der Ertrag trägt den EK, ein Altwert im Rezept-Kopf zählt nicht mehr (98 · 3.5 6b)', function () {
+it('Standard ohne eingetragene Grammatur: der Ertrag trägt den EK (98 · 3.5 6b; Rezept-Kopf seit 6c entfernt)', function () {
     $teller = ($this->dar)('teller');
     $teller->forceFill(['quantity_per_unit_g' => null])->save();
-    $this->a->update(['sales_quantity_per_unit_g' => 280]);
 
     $this->svc->recomputePreise($teller->fresh());
 
     $a = $this->a->fresh();
-    expect((float) ($this->dar)('teller')->ek_portion)->toEqualWithDelta((float) $a->ek_per_kg_eur * (float) $a->yield_kg, 0.001)   // EK je kg × Ertrag, nicht × 280 g
-        ->and((float) $a->sales_quantity_per_unit_g)->toBe(280.0);                    // nicht überschrieben
+    expect((float) ($this->dar)('teller')->ek_portion)->toEqualWithDelta((float) $a->ek_per_kg_eur * (float) $a->yield_kg, 0.001);   // EK je kg × Ertrag
 });

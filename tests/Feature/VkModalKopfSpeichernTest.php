@@ -46,9 +46,9 @@ beforeEach(function () {
     $this->alc = FoodAlchemistMarkupClass::create(['team_id' => $this->rootTeam->id, 'code' => 'ALC', 'label' => 'A la carte',
         'class_factor_pct' => 100, 'bereich' => 'speisen', 'is_inactive' => false]);
 
-    // Gericht mit Ertrag und Anzahl: genau die Lage, in der der Sync die Grammatur aus dem Ertrag neu rechnen würde.
+    // Gericht mit Ertrag: die Lage, in der der Sync die Grammatur aus dem Ertrag neu rechnen würde (Kopf-Spiegel seit 98 · 3.5 6c entfernt).
     $this->gericht = $this->makeRecipe($this->rootTeam, '[VOR] Graved Karotte', ['is_sales_recipe' => true, 'status' => 'draft',
-        'yield_kg' => 1.0, 'sales_unit_count' => 10, 'sales_unit_vocab_id' => $this->portion->id, 'container_warm_vocab_id' => $this->warmA]);
+        'yield_kg' => 1.0]);
     $this->standard = app(DarreichungService::class)->ensureStandard($this->rootTeam, $this->gericht->id, 'generator');
     $this->zeile = fn () => FoodAlchemistRecipeDarreichung::findOrFail($this->standard->id);
     $this->modal = fn () => Livewire::test(VkModal::class)->call('oeffnen', $this->gericht->id)->call('bearbeitenStarten');

@@ -36,7 +36,6 @@ beforeEach(function () {
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk-l1a', 'name' => 'FIN: Slider',
         'status' => 'draft', 'is_sales_recipe' => true, 'dish_class_id' => $this->klasse->id,
-        'sales_unit_count' => 4, 'sales_quantity_per_unit_g' => 60,
     ]);
 
     $gp = $this->makeGp($this->rootTeam, 'Brioche');
@@ -107,8 +106,7 @@ it('L1a: Verkaufs-Facetten überleben das Revise (Klasse/Diät/Verkaufseinheit w
     $r = $this->vk->fresh();
     expect((int) $r->dish_class_id)->toBe((int) $this->klasse->id)
         ->and($r->dishClass->diet_form)->toBe('vegan')
-        ->and((int) $r->sales_unit_count)->toBe(4)
-        ->and((float) $r->sales_quantity_per_unit_g)->toBe(60.0)
+        ->and(\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_recipes', 'sales_unit_count'))->toBeFalse()   // 98 · 3.5 6c: kein Kopf mehr
         ->and($r->vk_klasse)->toBeNull()                                            // Spec 85 D-1: Klasse liegt an der Darreichung
         ->and((float) $r->fresh()->ingredients()->first()->quantity)->toBe(45.0);   // Mengen-Revise IST angekommen
 });

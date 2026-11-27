@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Rezept\SpiegelfelderReport;
+use Platform\FoodAlchemist\Support\Datenmodell\SpiegelfelderRueckbau;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -15,7 +16,10 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Spiegel-Logik der Dienste sie nicht sofort wieder angleicht.
  */
 beforeEach(function () {
+    // Schema zuerst (wie FremdschluesselKernketteTest): allein oder als erster im Prozess gäbe es sonst keine Tabelle.
     $this->seedTeamHierarchy();
+    // 98 · 3.5 6c: im Test-Schema sind die Spalten gedroppt — für den Report kurz zurückholen, danach wieder entfernen
+    SpiegelfelderRueckbau::wiederherstellen();
     $this->actingAs($this->makeUser($this->rootTeam));
     $this->portion = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'portion', 'display_de' => 'Portion', 'dimension' => 'count', 'default_in_g' => null]);
     $this->stueck = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'stueck', 'display_de' => 'Stück', 'dimension' => 'count', 'default_in_g' => null]);
@@ -39,6 +43,15 @@ beforeEach(function () {
 
     $this->ohne = $this->makeRecipe($this->rootTeam, 'Ohne Darreichung', ['is_sales_recipe' => true]);
     $setze($this->ohne, ['sales_unit_vocab_id' => $this->portion->id]);
+});
+
+afterEach(fn () => SpiegelfelderRueckbau::entfernen());
+
+it('nach dem Drop: Report meldet „entfernt“ statt zu prüfen', function () {
+    SpiegelfelderRueckbau::entfernen();
+    $b = app(SpiegelfelderReport::class)->bericht();
+
+    expect($b['entfernt'])->toBeTrue()->and($b['rezepte'])->toBe(0);
 });
 
 it('zählt abweichend und nur am Rezept je Feld, mit Beispielen', function () {

@@ -159,7 +159,7 @@ it('Bau-Weiche: der Wurzel-Schritt einer Planung mit Ziel-Gericht baut in die H�
         $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $beschreibung, $parameter) use (&$gesehen, $huelle) {
             $gesehen = $parameter;
             // der Generator überschreibt Kopf-Felder, wie er es bei einem neuen Gericht täte
-            $huelle->forceFill(['description' => 'KI-Text', 'description_source' => 'ki', 'dish_main_group_id' => null, 'sales_quantity_per_unit_g' => 180])->save();
+            $huelle->forceFill(['description' => 'KI-Text', 'description_source' => 'ki', 'dish_main_group_id' => null])->save();
 
             return ['recipe' => $huelle->fresh(), 'statistik' => [], 'offene' => []];
         });
@@ -171,13 +171,12 @@ it('Bau-Weiche: der Wurzel-Schritt einer Planung mit Ziel-Gericht baut in die H�
         ->and((int) $gen['recipe']->id)->toBe((int) $huelle->id)
         ->and($gen['recipe']->description)->toBe(HUELLE_TEXT)
         ->and($gen['recipe']->description_source)->toBeNull()
-        ->and($gen['recipe']->dish_main_group_id)->toBe($klasseVorher)
-        ->and((float) $gen['recipe']->sales_quantity_per_unit_g)->toBe(180.0);   // vorher leer: der Wert des Baus bleibt
+        ->and($gen['recipe']->dish_main_group_id)->toBe($klasseVorher);
 });
 
-it('Bau-Weiche (Plan 98 B): eine an der Hülle gesetzte Portion geht als Ziel in den Bau; der Kopf ist danach der Wert des Baus', function () {
-    // Früher schützte die Hülle sales_quantity_per_unit_g gegen den Bau. Jetzt spiegelt der Kopf die Standard-Darreichung —
-    // die Portion des Menschen wirkt als ziel_portion_g, auf die der Generator Zutaten und Ertrag bringt.
+it('Bau-Weiche (Plan 98 B): eine an der Hülle gesetzte Portion geht als Ziel in den Bau', function () {
+    // Früher schützte die Hülle sales_quantity_per_unit_g gegen den Bau. Seit 98 · 3.5 6c gibt es den Rezept-Kopf nicht mehr —
+    // die Portion des Menschen (an der Standard-Darreichung) wirkt als ziel_portion_g, auf die der Generator Zutaten und Ertrag bringt.
     $huelle = ($this->huelle)();
     // 98 · 3.5-6a: die Portion der Hülle liegt an ihrer Standard-Darreichung (der Spiegel am Rezept wird nicht mehr gelesen).
     \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $huelle->id,
@@ -191,7 +190,6 @@ it('Bau-Weiche (Plan 98 B): eine an der Hülle gesetzte Portion geht als Ziel in
     $this->mock(RecipeGeneratorService::class, function ($m) use (&$gesehen, $huelle) {
         $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $beschreibung, $parameter) use (&$gesehen, $huelle) {
             $gesehen = $parameter;
-            $huelle->forceFill(['sales_quantity_per_unit_g' => 248])->save();   // Spiegel nach dem Bau
 
             return ['recipe' => $huelle->fresh(), 'statistik' => [], 'offene' => []];
         });
@@ -200,7 +198,7 @@ it('Bau-Weiche (Plan 98 B): eine an der Hülle gesetzte Portion geht als Ziel in
     $gen = $this->svc->generiere($this->rootTeam, (int) $step->id, 'Bauplan', ['cascade_step_id' => $step->id], [], fn () => null);
 
     expect($gesehen)->toMatchArray(['ziel_portion_g' => 250.0, 'gericht_fuellen_id' => $huelle->id])
-        ->and((float) $gen['recipe']->sales_quantity_per_unit_g)->toBe(248.0);
+        ->and((int) $gen['recipe']->id)->toBe((int) $huelle->id);
 });
 
 it('Bau-Weiche: ohne Ziel-Gericht läuft der Bau unverändert, eine schon ausrezeptierte Hülle wird nicht doppelt gebaut', function () {

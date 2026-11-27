@@ -27,6 +27,11 @@ class SpiegelfelderCommand extends Command
             return self::SUCCESS;
         }
 
+        if ($b['entfernt']) {
+            $this->info('Spiegelspalten am Rezept sind entfernt (98 · 3.5 6c) — nichts zu prüfen.');
+
+            return self::SUCCESS;
+        }
         $this->info("{$b['rezepte']} Rezeptzeilen geprüft (davon {$b['fassungen']} Fassungen).");
         $this->table(['Feld', 'abweichend', 'nur am Rezept (ginge verloren)'],
             array_map(fn ($f, $w) => [$f, $w['abweichend'], $w['nur_rezept']], array_keys($b['felder']), $b['felder']));

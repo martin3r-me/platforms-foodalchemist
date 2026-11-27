@@ -263,5 +263,5 @@ it('Stufe 0 (c): alle Verweis-Relationen mit ohneTeamSicht(verweis) erzeugen das
             $geprueft++;
         }
     }
-    expect($geprueft)->toBe(128);   // 98 · 2.6c: −6 (Verweis-Relationen der entfernten Alt-Paket-Models bzw. Alt-Paket-Relationen an Angebot, Slot, Speiseplan-Eintrag, Bestellvorlage). Lieferanten-Link 2d: +1 FoodAlchemistSupplierDeliveryArea::supplier. Spec 85 D-1 PR-C: −1 (FoodAlchemistRecipe::markupClass gedroppt, Klasse nur an der Darreichung); 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant) + 40 der Stufe 4 (Vokabular/Einstellungen; HatAusgabeZuordnung liegt in Concerns/) + 1 TeamFavorit::gp (Spec 85 FAV-1)
+    expect($geprueft)->toBe(127);   // 98 · 3.5-6c: −1 FoodAlchemistRecipe::salesUnit, Einheit nur an der Darreichung. 98 · 2.6c: −6 (Verweis-Relationen der entfernten Alt-Paket-Models bzw. Alt-Paket-Relationen an Angebot, Slot, Speiseplan-Eintrag, Bestellvorlage). Lieferanten-Link 2d: +1 FoodAlchemistSupplierDeliveryArea::supplier. Spec 85 D-1 PR-C: −1 (FoodAlchemistRecipe::markupClass gedroppt, Klasse nur an der Darreichung); 50 Verweise der Stufe 1 + 43 der Stufe 3 (GP/LA/Lieferant) + 40 der Stufe 4 (Vokabular/Einstellungen; HatAusgabeZuordnung liegt in Concerns/) + 1 TeamFavorit::gp (Spec 85 FAV-1)
 });

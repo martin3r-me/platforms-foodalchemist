@@ -273,7 +273,7 @@ it('am Konzept skaliert der Bedarf mit der Personenzahl — aus dem Produktionsp
     ]);
     ($this->alsKomponente)($teller, $sauce, '100');
     // Portionsgewicht: ohne das ergibt eine Gramm-Menge am Slot kein Portions-Aequivalent.
-    $teller->forceFill(['yield_kg' => 0.3, 'sales_quantity_per_unit_g' => 300])->save();
+    $teller->forceFill(['yield_kg' => 0.3])->save();
     $this->portionsgewichtAnDarreichung($teller, 300);   // 98 · 3.5 6a: Portionsgewicht liegt an der Darreichung
 
     $concept = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::create([

@@ -390,17 +390,7 @@ class FoodAlchemistRecipe extends Model
         return $this->dishMainGroup();
     }
 
-    public function salesUnit(): BelongsTo
-    {
-        return $this->belongsTo(FoodAlchemistVocabEinheit::class, 'sales_unit_vocab_id')->ohneTeamSicht('verweis');
-    }
-
-    /** @deprecated #486 deutscher Alias → salesUnit() */
-    public function vkEinheit(): BelongsTo
-    {
-        \Platform\FoodAlchemist\Support\VeralteterAlias::melde($this, __FUNCTION__, 'salesUnit');
-        return $this->salesUnit();
-    }
+    // 98 · 3.5 6c: salesUnit()/vkEinheit() entfallen — die Einheit steht an der Darreichung (standardPresentation.unit)
 
     /** Darreichungs-Varianten des Gerichts (Umbau-Spec Phase 3). */
     public function presentations(): HasMany

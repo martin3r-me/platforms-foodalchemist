@@ -36,7 +36,7 @@ beforeEach(function () {
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk1', 'name' => 'HG: Filet | Jus', 'status' => 'draft',
         'is_sales_recipe' => true, 'dish_class_id' => $this->class->id, 'markup_class_id' => $this->alc->id,
-        'ek_total_eur' => 1.30, 'ek_per_kg_eur' => 5.20, 'yield_kg' => 0.5, 'sales_unit_count' => 2,
+        'ek_total_eur' => 1.30, 'ek_per_kg_eur' => 5.20, 'yield_kg' => 0.25,   // 98 · 3.5 6b/6c: 1-Portion-Gericht (vorher 0,5 kg ÷ 2 Einheiten)
     ]);
     $this->basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'b1', 'name' => 'Sauce: Jus', 'status' => 'draft',
@@ -65,15 +65,15 @@ it('GL-04-Pool-Filter: VK-Rezept ist nicht als Sub-Rezept verknüpfbar', functio
         ->and($treffer->where('type', 'sub'))->toBeEmpty();            // einziger Namens-Treffer wäre das VK-Rezept
 });
 
-it('Cockpit: g/Einheit aus Yield/Anzahl und dynamischer Auto-Vorschlag', function () {
+it('Cockpit: g/Einheit aus der Standard-Darreichung (eine Portion) und dynamischer Auto-Vorschlag', function () {
     $cockpit = app(SalesRecipeService::class)->cockpit(
         app(SalesRecipeService::class)->detail($this->rootTeam, $this->vk->id),
         $this->rootTeam,
     );
 
-    expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(250.0)   // 0,5 kg / 2 Einheiten
+    expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(250.0)   // 0,25 kg = eine Portion
         ->and($cockpit['vk']['source'])->toBe('auto')
-        ->and($cockpit['vk']['sales_net'])->toBe(4.33)                // 1,30 € MEK je Einheit × Faktor 3,333
+        ->and($cockpit['vk']['sales_net'])->toBe(4.33)                // 1,30 € MEK je Portion × Faktor 3,333
         ->and($cockpit['sales_gross'])->toBe(4.63)
         ->and($cockpit['marge']['wareneinsatz_pct'] + $cockpit['marge']['marge_pct'])->toBe(100.0)
         ->and($cockpit['pro_einheit']['vk_netto_pro_einheit'])->toBe(4.33);

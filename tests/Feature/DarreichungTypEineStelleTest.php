@@ -95,28 +95,6 @@ it('MCP/Kopf-API serving_vehicle_vocab_id schreibt weiter in die Standard-Darrei
         ->and($this->gericht->fresh()->serving_vehicle_source)->toBe('manual');   // 98 · 3.5 6b: am Gericht nur die Herkunft
 });
 
-it('Befehl darreichung-typ-uebernehmen: Trockenlauf, --apply mit Backup, --zurueck', function () {
-    $zwei = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'zwei', 'name' => '[VOR] Zwei', 'status' => 'draft', 'is_sales_recipe' => true]);
-    $zweiStd = $this->svc->ensureStandard($this->rootTeam, $zwei->id);
-    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['serving_vehicle_vocab_id' => $this->tellerTyp]);   // Darreichung ohne Typ
-    DB::table('foodalchemist_recipe_presentations')->where('id', $zweiStd->id)->update(['vessel_gp_id' => $this->glas->id]);          // Gericht ohne Typ, Darreichung mit Gefäß
-    $dir = sys_get_temp_dir() . '/fa-typ-' . uniqid();
-
-    $this->artisan('foodalchemist:darreichung-typ-uebernehmen', ['--bericht' => $dir])->expectsOutputToContain('an die Standard-Darreichung: 1')->assertSuccessful();
-    expect($this->std->fresh()->serving_vehicle_vocab_id)->toBeNull();
-    $this->artisan('foodalchemist:darreichung-typ-uebernehmen', ['--bericht' => $dir, '--apply' => true])->assertFailed();
-
-    @mkdir($dir, 0777, true);
-    file_put_contents($dir . '/dump.sql', str_repeat('x', 2048));
-    $this->artisan('foodalchemist:darreichung-typ-uebernehmen', ['--bericht' => $dir, '--apply' => true, '--backup-nachweis' => $dir . '/dump.sql'])->assertSuccessful();
-    expect((int) $this->std->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp)
-        ->and((int) $zwei->fresh()->serving_vehicle_vocab_id)->toBe($this->glasTyp);
-
-    $this->artisan('foodalchemist:darreichung-typ-uebernehmen', ['--zurueck' => collect(glob($dir . '/*_protokoll.json'))->first()])->assertSuccessful();
-    expect($this->std->fresh()->serving_vehicle_vocab_id)->toBeNull()
-        ->and($zwei->fresh()->serving_vehicle_vocab_id)->toBeNull();
-});
-
 it('Standardwechsel zwischen gleichartigen Glasvarianten übernimmt Typ und vererbte Menge, aber keine fremden Zeiten', function () {
     $this->svc->aktualisieren($this->rootTeam, $this->std->id, [
         'serving_vehicle_vocab_id' => $this->tellerTyp,

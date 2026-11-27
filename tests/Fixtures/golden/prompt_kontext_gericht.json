@@ -1,46 +1,4 @@
 {
-    "gericht.abweichend": {
-        "review": {
-            "speisen_klasse": null,
-            "diaetform": null,
-            "portion_g": 250.0
-        },
-        "konformitaet": {
-            "portion_g": 250.0
-        },
-        "revise": {
-            "key": "vk.ueberarbeiten",
-            "facetten": {
-                "anweisung": "weniger Salz",
-                "name": "[HG] Schnitzel abweichend",
-                "sales_wording_standard": null,
-                "description": "Wiener Art",
-                "plating_text": null,
-                "zutaten": [
-                    {
-                        "id": 1,
-                        "text": "Rahmsauce abweichend",
-                        "quantity": 80.0,
-                        "einheit_slug": "g"
-                    }
-                ],
-                "speisen_klasse": null,
-                "diaetform": null,
-                "darreichungen": [
-                    "Teller"
-                ],
-                "verkaufseinheit": "1 × Portion",
-                "portion_g": 250.0,
-                "aufschlagsklasse": null
-            }
-        },
-        "schritte_oneshot": {
-            "portion_g": 250.0
-        },
-        "schritte_editor": {
-            "portion_g": 250.0
-        }
-    },
     "gericht.konsistent": {
         "review": {
             "speisen_klasse": null,
@@ -82,9 +40,6 @@
         "schritte_editor": {
             "portion_g": 250.0
         }
-    },
-    "huelle.abweichend": {
-        "ziel_portion_g": 250.0
     },
     "huelle.konsistent": {
         "ziel_portion_g": 250.0

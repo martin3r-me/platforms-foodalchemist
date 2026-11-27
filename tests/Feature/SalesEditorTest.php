@@ -132,7 +132,7 @@ it('§7.7: Verwendungsnachweise — Upsert je Kunde, FK-Kaskade', function () {
 it('Cockpit nach Pflege: Vorschlag aus Klasse, g/Einheit aus der Standard-Darreichung (eine Portion = Ertrag)', function () {
     $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
     $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'FIN: Dog | BBQ');
-    // 98 · 3.5 6b/6c (Dominique 27.11.: Darreichung = Portion, fest 1): der Rezept-Kopf zählt nicht mehr, das Cockpit liest die Standard-Darreichung
+    // 98 · 3.5 6b/6c (Dominique 27.11.: Darreichung = Portion, fest 1): kein Rezept-Kopf mehr, das Cockpit liest die Standard-Darreichung
     $this->svc->updateVk($this->rootTeam, $vk->id, ['markup_class_id' => $alc->id]);
 
     $cockpit = $this->svc->cockpit($this->svc->detail($this->rootTeam, $vk->id), $this->rootTeam);

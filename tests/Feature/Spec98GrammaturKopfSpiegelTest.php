@@ -12,7 +12,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class, GrammaturWelt::class);
 /**
  * Plan 98 B, Schritt 4 (Kurator 23.11.) → 98 · 3.5 6b: Die Grammatur steht nur an der Standard-Darreichung. Früher spiegelte
  * `DarreichungService::kopfSpiegeln` sie in den Rezept-Kopf `sales_quantity_per_unit_g`; seit 6b wird der Kopf NICHT mehr
- * beschrieben (die Spalte entfällt mit 6c). Die Darreichung rechnet bei Mengenänderungen weiter mit.
+ * beschrieben, mit 6c ist die Spalte weg. Die Darreichung rechnet bei Mengenänderungen weiter mit.
  */
 beforeEach(function () {
     $this->grammaturWeltAnlegen();
@@ -33,11 +33,11 @@ it('Zutatenmenge ändern, Neuberechnung: die Standard-Darreichung rechnet mit, d
         ->and(($this->kopf)($this->b))->toBe($kopfVorher);
 });
 
-it('eine Neuberechnung zieht keinen abweichenden Kopf mehr nach (kein Spiegel)', function () {
+it('seit 98 · 3.5 6c hat das Rezept keinen Grammatur-Kopf mehr; die Neuberechnung liest nur die Darreichung', function () {
     // A · Bratkartoffeln: Standard-Teller 300 g, Kinder-Variante 150 g
-    $this->a->update(['sales_quantity_per_unit_g' => 999]);
     app(DarreichungService::class)->recomputeFuerRezept($this->a->id);
 
-    expect((float) ($this->kopf)($this->a))->toBe(999.0)
+    expect(\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_recipes', 'sales_quantity_per_unit_g'))->toBeFalse()
+        ->and(($this->kopf)($this->a))->toBeNull()
         ->and(($this->gramm)($this->a))->toBe(300.0);
 });

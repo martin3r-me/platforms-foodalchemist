@@ -317,6 +317,23 @@ class FassungService extends FassungBasis
      *
      * @return array<string, mixed>
      */
+    /**
+     * 98 · 3.5 · 6c: Inhalts-Hash einer Arbeitszeile wie beim Veröffentlichen — Unter-Rezepte zeigen auf ihre jüngste Fassung.
+     * Für den Rehash nach einem Spalten-Drop: passt dieser Hash zur jüngsten Fassung, war die Arbeitszeile unverändert.
+     */
+    public function inhaltHashFuer(FoodAlchemistRecipe $recipe): string
+    {
+        $map = [];
+        foreach ($recipe->ingredients()->whereNotNull('referenced_recipe_id')->pluck('referenced_recipe_id') as $kind) {
+            $f = $this->letzteFassung((int) $kind, true, 'abo-pflege');
+            if ($f !== null) {
+                $map[(int) $kind] = (int) $f->id;
+            }
+        }
+
+        return $this->inhaltHash($recipe, $map);
+    }
+
     public function allergenBild(FoodAlchemistRecipe $r): array
     {
         return collect($r->getAttributes())

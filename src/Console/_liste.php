@@ -18,7 +18,6 @@ return [
     \Platform\FoodAlchemist\Console\AnkerWissenCommand::class,
     \Platform\FoodAlchemist\Console\BehaelterKatalogCommand::class,
     \Platform\FoodAlchemist\Console\DarreichungMwstLeerenCommand::class,   // MwSt „aus Preisklasse“ wieder leer (18.11.2026)
-    \Platform\FoodAlchemist\Console\DarreichungTypUebernehmenCommand::class,   // Servier-Typ an einer Stelle (18.11.2026)
     \Platform\FoodAlchemist\Console\DataQualityCommand::class,
     \Platform\FoodAlchemist\Console\DiaetEignungNeuCommand::class,   // Plan 98: Diät-Eignung „ohne Deklaration unbekannt“ (Standard Trockenlauf)
     \Platform\FoodAlchemist\Console\Diagnose\AbgleichEvalCommand::class,   // Abgleich-Dienst: Eval (schreibt nie, zurückgerollte Transaktion)

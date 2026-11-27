@@ -25,6 +25,16 @@ final class VkAltspaltenBruecke
 
     public const HERKUNFT = 'test_bruecke';
 
+    /**
+     * 98 · 3.5 6c: der Rezept-Kopf `sales_quantity_per_unit_g` ist gedroppt. Bestands-Fixtures geben ihn noch mit; die Brücken-
+     * Darreichung nahm ihn bisher als Grammatur. Nach dem Drop fängt die Brücke ihn selbst ab (sonst verwürfe Eloquent ihn vorher),
+     * nutzt ihn für die Brücken-Darreichung und gibt ihn nie an die Tabelle weiter.
+     */
+    public const PORTION = 'sales_quantity_per_unit_g';
+
+    /** Spalte PORTION fehlt in der Tabelle (nach 6c) */
+    private static bool $portionGedroppt = false;
+
     /** Servierform der Brücken-Darreichungen (je Team) */
     public const SERVIERFORM = 'test_bruecke';
 
@@ -100,17 +110,24 @@ final class VkAltspaltenBruecke
 
                 return;
             }
-            static::$guardableColumns[FoodAlchemistRecipe::class] = array_values(array_unique([...$spalten, ...VkAltspaltenBruecke::SPALTEN]));
+            static::$guardableColumns[FoodAlchemistRecipe::class] = array_values(array_unique([...$spalten, ...VkAltspaltenBruecke::SPALTEN, VkAltspaltenBruecke::PORTION]));
         }, null, \Illuminate\Database\Eloquent\Model::class)();
+        self::$portionGedroppt = $spalten !== [] && ! in_array(self::PORTION, $spalten, true);
     }
 
     /** @return array<string, mixed> die Altwerte, aus dem Modell entfernt */
     private static function abfangen(FoodAlchemistRecipe $r): array
     {
         $attribute = $r->getAttributes();
+        $portion = null;
+        if (self::$portionGedroppt && array_key_exists(self::PORTION, $attribute)) {
+            $portion = $attribute[self::PORTION];   // nie an die Tabelle (Spalte gedroppt)
+            unset($attribute[self::PORTION]);
+            $r->setRawAttributes($attribute, false);
+        }
         $alt = array_intersect_key($attribute, array_flip(self::SPALTEN));
         if ($alt === []) {
-            return [];
+            return [];   // ohne VK-Altspalte keine Brücken-Darreichung — die Portion fällt weg wie jede andere gedroppte Spalte
         }
         [$aufrufer, $testdatei] = self::aufrufer();
         if ($aufrufer !== null && str_starts_with($aufrufer, 'src/')) {
@@ -131,7 +148,7 @@ final class VkAltspaltenBruecke
         }
         $r->setRawAttributes($roh, false);
 
-        return $alt;
+        return $portion !== null ? $alt + [self::PORTION => $portion] : $alt;
     }
 
     private static function standardDarreichung(FoodAlchemistRecipe $r, array $alt): void
@@ -166,10 +183,12 @@ final class VkAltspaltenBruecke
             'created_via' => self::HERKUNFT, 'unit_count' => 1, ...$werte,
         ]));
         if (! array_key_exists('sales_net', $werte)) {
-            // Grammatur nur für den Auto-Preis vorbelegen (wie ensureStandard: Portion bzw. Ertrag ÷ Einheiten). Bei festem Fixture-VK bleibt
+            // Grammatur nur für den Auto-Preis vorbelegen (wie ensureStandard: der Ertrag). Bei festem Fixture-VK bleibt
             // sie leer — die Brücken-Darreichung vertritt dann nur den Preis und verschiebt keine Mengenrechnung (Auftragssimulation).
-            $neu->forceFill(['quantity_per_unit_g' => $r->sales_quantity_per_unit_g
-                ?? ($r->yield_kg !== null && (float) $r->yield_kg > 0 ? round((float) $r->yield_kg * 1000 / max(1, (int) ($r->sales_unit_count ?? 0)), 1) : null)])->saveQuietly();
+            // 98 · 3.5 6c: Portion aus dem Fixture (abgefangen, s. PORTION), sonst der ganze Ertrag (Darreichung = Portion, fest 1)
+            $portion = $alt[self::PORTION] ?? $r->getAttributes()[self::PORTION] ?? null;
+            $neu->forceFill(['quantity_per_unit_g' => $portion !== null ? (float) $portion
+                : ($r->yield_kg !== null && (float) $r->yield_kg > 0 ? round((float) $r->yield_kg * 1000, 1) : null)])->saveQuietly();
             // Nur Klasse, kein VK: wie früher ensureStandard den Auto-Preis gleich mitrechnen (sonst stünde die Darreichung ohne VK da).
             // Ein Fehler hier bleibt im Fixture sichtbar (VK fehlt), reißt aber keine fremden Tests.
             try {

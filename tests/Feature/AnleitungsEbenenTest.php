@@ -171,7 +171,7 @@ it('updateVk laesst eine erlaubte Verkaufseinheit durch', function () {
     $frisch = app(SalesRecipeService::class)
         ->updateVk($this->rootTeam, $gericht->id, ['sales_unit_vocab_id' => $portion->id]);
 
-    // 98 · 3.5 6b/6c: die Einheit steht an der Standard-Darreichung (Rezept-Spalte wird nicht mehr beschrieben, entfällt mit 6c)
+    // 98 · 3.5 6b/6c: die Einheit steht an der Standard-Darreichung (Rezept-Spalte entfernt)
     expect((int) $frisch->standardPresentation()->value('unit_vocab_id'))->toBe((int) $portion->id);
 });
 
@@ -183,7 +183,7 @@ it('ein unveraenderter Alt-Wert blockiert das Speichern anderer Felder nicht', f
         'dimension' => 'mass', 'is_approximate' => true,
     ]);
     $gericht = $this->makeRecipe($this->rootTeam, 'Alt-Einheit-Gericht', ['is_sales_recipe' => true]);
-    $this->makeStandardDarreichung($gericht, null, ['unit_vocab_id' => $prise->id]);   // Alt-Einheit an der Darreichung (98 · 3.5 6b)
+    $this->makeStandardDarreichung($gericht, null, ['unit_vocab_id' => $prise->id]);   // Alt-Einheit an der Darreichung (98 · 3.5 6c)
 
     $frisch = app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
         'sales_unit_vocab_id' => $prise->id,          // unverändert mitgesendet (Formular-Post)

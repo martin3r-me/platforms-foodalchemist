@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -31,7 +30,7 @@ beforeEach(function () {
             'status' => 'approved', 'is_sales_recipe' => true, 'ek_total_eur' => 10.0, 'yield_kg' => 2.0]);
         FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $r->id, 'serving_form_id' => $this->teller->id,
             'is_standard' => true, 'quantity_per_unit_g' => $standardG, 'unit_count' => 1, 'ek_portion' => 2.0, 'sales_net' => 5.0, 'price_mode' => 'auto']);
-        DB::table('foodalchemist_recipes')->where('id', $r->id)->update(['sales_quantity_per_unit_g' => $spiegelG]);   // Spiegel weicht ab
+        // 98 · 3.5 6c: Spiegel-Teil der Vorbereitung entfällt (Spalten gedroppt), die Erwartungen bleiben
 
         return $r->fresh();
     };

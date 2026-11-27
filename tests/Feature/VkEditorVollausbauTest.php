@@ -240,7 +240,7 @@ it('✨ Behälter übernimmt validierte Vokabular-IDs in die Form (Mock-Gateway)
     // Die Anzahl ist ohnehin eine Rechnung, keine Schätzung: sie kommt aus BehaelterRechner,
     // sobald die produzierte Menge bekannt ist. Was bleibt, ist die Prüfung, dass die Aktion
     // nichts mehr tut, statt still Daten zu zerstören.
-    $vorher = ['container_warm_vocab_id' => null, 'container_warm_count' => 3];
+    $vorher = ['container_warm_count' => 3];   // 98 · 3.5 6c: der Behälter-Typ steht nur an der Darreichung
     $this->vk->forceFill($vorher)->save();
 
     Livewire::test(VkModal::class)
