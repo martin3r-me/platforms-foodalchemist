@@ -142,7 +142,7 @@ Befund-IDs (K1, B3, U2 …) verweisen auf Bericht 97. Aufwand: S ≤ ½ Tag, M 1
 | 3.8 | **Ordnung:** Services in Fachordner (Rezept, Concepter, Foodbook, Produktion, Einkauf, Wissen, Planung); Qualitäts-Engines (DataQuality, SignalDetektor, Reife, Conformance) zu einer Prüf-Registry | 3.3 | flacher Root < 50 Dateien | L |
 | 3.9 | Dunkle Editor-Ebene bleibt bewusst (E5); nur Kontraste nach WCAG AA prüfen und Übergang weicher machen | 2.4 | Kontrast-Check grün | S |
 
-### Stand Welle 3 (27.11.2026, main `298dc5e40`, alles auf io live außer #1018)
+### Stand Welle 3 (27.11.2026, main `ded67c013`, alles auf io live)
 
 | Paket | Stand | Abnahme |
 |---|---|---|
@@ -150,9 +150,9 @@ Befund-IDs (K1, B3, U2 …) verweisen auf Bericht 97. Aufwand: S ≤ ½ Tag, M 1
 | 3.2 | **abgeschlossen** (#992) | Doppelungen weg, Inhalts-Hash bit-gleich (Zwillingstest) |
 | 3.3 | **abgeschlossen** (Speiseplan, Foodbook, Kaskade; 27.11.: #1011–#1018 KnowledgeContext, RecipeGenerator, Order, DataQuality, Angebots-Editor, Foodbook-Editor, Pairing) | keine Klasse unter `src` > 1.500 Zeilen, `DateigroessenBasis` leer; je Schnitt PR0-Charakterisierung (Golden auf altem Code) |
 | 3.4 | **abgeschlossen** | Rückkanten 2 → 0; Kreis-Klinke `klassen_in_kreisen` 60 → 51, größte Komponente 12 → 7 (darf nur sinken) |
-| 3.5 | **in Arbeit** (Lisa): Schritt 3 entfällt; offen Alias-Fix, FKs (Schritt 5), Spiegelfelder (6c nur mit Ja von Dominique), Aliase nach einer Woche Log-Beobachtung | – |
+| 3.5 | **abgeschlossen bis auf 1c** (Plan `98_3-5_Plan_Datenmodell.md`; io 27.11.): Schritte 1a/1b/2 (#1020, #1024), FKs der Kernkette (#1023, 48 FKs, restrict/set null), `sales_recipe_id` → `recipe_id` (#1025, MCP-Alias 4 Wochen), 6a Leser auf die Standard-Darreichung, Teiler fest 1 (#1026–#1030), 6b Schreiber gestoppt + 6c Spiegelfelder entfernt (#1031–#1033, Migration `2027_01_16_100000`, Batch 87, Sicherung 16 Zeilen in `foodalchemist_spiegelfelder_backup`; volles Backup vorher). Schritt 3 entfällt. **Offen 1c:** die 39 alten Aliase entfernen, nach Auswertung des `[fa-alias]`-Logs am 04.12. | Waisen-Report 0 ins Leere (614 Verweise auf soft-gelöschte Eltern, gewollt); `diagnose:spiegelfelder` meldet entfernt; Preis-Cache unverändert |
 | 3.6 | **abgeschlossen** (PR0–PR6, #1003–#1009) | Konzept, Foodbook und Angebot rechnen über `PositionGericht`/`PositionPreisService`; eine Schreibprüfung `PositionValidierung`; EK-Lücke sichtbar (`ek_incomplete`) |
-| 3.7 | **abgeschlossen** (`WgRolle`) | Rest: Literal `'09.6'` in `ZukaufBasisrezeptService` |
+| 3.7 | **abgeschlossen** (`WgRolle`; Rest #1021: `SUB_KNABBEREIEN`/`SUB_SPROSSEN` als benannte Unterkategorien) | 0 Literale; Regel-Test |
 | 3.8 | **abgeschlossen** | Root von `src/Services` = 3 Dateien; Prüf-Registry |
 | 3.9 | **abgeschlossen** | WCAG AA, weicher Modal-Übergang |
 
