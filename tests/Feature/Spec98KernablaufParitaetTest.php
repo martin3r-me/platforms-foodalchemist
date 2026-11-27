@@ -191,7 +191,7 @@ it('recipe_darreichung.PUT: Grammatur an jeder Darreichung abgelehnt, auch neben
  * Standard-Darreichung: ein abweichender Wert ist VALIDATION_ERROR, der unveränderte Wert geht durch (der Editor schickt ihn mit).
  * Die Verkaufsmenge folgt aus Ansatz ÷ Portionen; io Rezept 80 (60 g bei 64 g) stellt die Grammatur-Umstellung um.
  */
-it('verkaufsrezepte.PUT: abweichende sales_quantity_per_unit_g ist VALIDATION_ERROR, der Spiegelwert geht durch', function () {
+it('verkaufsrezepte.PUT: abweichende sales_quantity_per_unit_g ist VALIDATION_ERROR, der wirksame Wert geht durch (98 · 3.5 6b)', function () {
     $gericht = $this->makeRecipe($this->rootTeam, '[HG] Grammatur | Verkaufsmenge', [
         'is_sales_recipe' => true, 'yield_kg' => 2.0, 'ek_per_kg_eur' => 12.0, 'ek_total_eur' => 24.0,
         'ek_n_ingredients_total' => 3, 'ek_n_ingredients_priced' => 3,
@@ -205,9 +205,9 @@ it('verkaufsrezepte.PUT: abweichende sales_quantity_per_unit_g ist VALIDATION_ER
     expect($r->errorCode)->toBe('VALIDATION_ERROR')->and($r->error)->toContain('Summe der Bestandteile')
         ->and($d->fresh()->only(['quantity_per_unit_g', 'menge_vom_standard', 'ek_portion']))->toBe($vorher);
 
-    $kopf = (float) $gericht->fresh()->sales_quantity_per_unit_g;
-    expect($kopf)->toBe((float) $vorher['quantity_per_unit_g'])
-        ->and($tool(['sales_quantity_per_unit_g' => $kopf, 'name' => '[HG] Grammatur | Verkaufsmenge neu'])->success)->toBeTrue();
+    // kein Rezept-Spiegel mehr: der wirksame Wert ist die Grammatur der Standard-Darreichung
+    $wirksam = round(app(DarreichungService::class)->grammJeEinheit($d->fresh(), $gericht->fresh()), 1);
+    expect($tool(['sales_quantity_per_unit_g' => $wirksam, 'name' => '[HG] Grammatur | Verkaufsmenge neu'])->success)->toBeTrue();
 });
 
 it('Concept bearbeiten: Editor und concepts.PUT schreiben Felder, Einsatzmomente und Saisons gleich', function () {

@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services\GrammaturUmstellung;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -184,9 +185,12 @@ final class GrammaturUmstellungService
                 DB::table('foodalchemist_recipe_presentations')->where('id', $row['id'])->update(array_intersect_key($row,
                     array_flip(['menge_vom_standard', 'komponenten_referenz_g', 'quantity_per_unit_g'])));
             }
-            foreach ($journal['rezepte'] as $row) {
-                DB::table('foodalchemist_recipes')->where('id', $row['id'])->update(array_intersect_key($row,
-                    array_flip(['sales_unit_count', 'sales_quantity_per_unit_g'])));
+            $spalten = array_flip(self::rezeptSpalten());
+            foreach ($spalten === [] ? [] : $journal['rezepte'] as $row) {
+                $werte = array_intersect_key($row, $spalten);
+                if ($werte !== []) {
+                    DB::table('foodalchemist_recipes')->where('id', $row['id'])->update($werte);
+                }
             }
         });
         $this->recompute->recomputeMany(array_column($journal['rezepte'], 'id'));
@@ -261,7 +265,8 @@ final class GrammaturUmstellungService
                         $zaehle('foodalchemist_recipe_presentations', $p['team_id']);
                     } elseif (in_array($z['aktion'], ['summe', 'ertrag'], true)) {
                         // Modell 23.11.: Portionszahl 1 (leer gilt als 1) — nur ein Altbestand > 1 wird auf 1 gesetzt, nie ein anderer Wert
-                        if ((int) ($r->sales_unit_count ?? 1) > 1) {
+                        // 98 · 3.5 6b/6c: die Spalte fällt weg — nur solange es sie gibt, und nie ein anderer Wert als 1
+                        if (in_array('sales_unit_count', self::rezeptSpalten(), true) && (int) ($r->getAttributes()['sales_unit_count'] ?? 1) > 1) {
                             DB::table('foodalchemist_recipes')->where('id', $r->id)->update(['sales_unit_count' => 1, 'updated_at' => now()]);
                             $zaehle('foodalchemist_recipes', $p['team_id']);
                         }
@@ -373,6 +378,17 @@ final class GrammaturUmstellungService
         ];
     }
 
+    /**
+     * 98 · 3.5 (6b/6c): die Rezept-Spiegelspalten sales_unit_count / sales_quantity_per_unit_g entfallen. Journal, Rückweg und der
+     * Portionszahl-Schreibzugriff fassen nur die noch vorhandenen an — die Umstellung läuft vor und nach dem Drop.
+     *
+     * @return list<string>
+     */
+    private static function rezeptSpalten(): array
+    {
+        return array_values(array_filter(['sales_unit_count', 'sales_quantity_per_unit_g'], fn ($s) => Schema::hasColumn('foodalchemist_recipes', $s)));
+    }
+
     /** @return array<string, mixed> Rohzeilen vor Phase 1 */
     private function journal(array $rids): array
     {
@@ -380,7 +396,7 @@ final class GrammaturUmstellungService
 
         return ['version' => 1, 'erstellt_at' => now()->toIso8601String(), 'darreichungen' => $pres,
             'deltas' => DB::table('foodalchemist_recipe_presentation_deltas')->whereIn('presentation_id', array_column($pres, 'id'))->get()->map(fn ($r) => (array) $r)->all(),
-            'rezepte' => DB::table('foodalchemist_recipes')->whereIn('id', $rids)->get(['id', 'sales_unit_count', 'sales_quantity_per_unit_g'])->map(fn ($r) => (array) $r)->all()];
+            'rezepte' => DB::table('foodalchemist_recipes')->whereIn('id', $rids)->get(['id', ...self::rezeptSpalten()])->map(fn ($r) => (array) $r)->all()];
     }
 
     private function nurNichtAbleitbar(array $plan): array

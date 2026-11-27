@@ -34,8 +34,8 @@ it('Chargen-Antwort der KI (28 kg für 80 Pax) → alle Zeilen auf eine Portion 
     expect($res['statistik']['portion']['skaliert'])->toBeTrue()
         ->and($menge('Rinderfilet'))->toBe(150.0)
         ->and(abs((float) $r->yield_kg - 0.35))->toBeLessThan(0.01)
-        ->and((float) $r->sales_quantity_per_unit_g)->toBe(350.0)
-        ->and((int) $r->sales_unit_count)->toBe(1);
+        // 98 · 3.5 6b: Grammatur an der Standard-Darreichung (kein Kopf-Spiegel), eine Portion
+        ->and(round(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->grammJeEinheit($r->standardPresentation()->firstOrFail(), $r), 1))->toBe(350.0);
 });
 
 it('Gericht mit einer Portion (innerhalb der Toleranz) → Zeilen unverändert', function () {

@@ -171,7 +171,8 @@ it('updateVk laesst eine erlaubte Verkaufseinheit durch', function () {
     $frisch = app(SalesRecipeService::class)
         ->updateVk($this->rootTeam, $gericht->id, ['sales_unit_vocab_id' => $portion->id]);
 
-    expect((int) $frisch->sales_unit_vocab_id)->toBe((int) $portion->id);
+    // 98 · 3.5 6b/6c: die Einheit steht an der Standard-Darreichung (Rezept-Spalte wird nicht mehr beschrieben, entfällt mit 6c)
+    expect((int) $frisch->standardPresentation()->value('unit_vocab_id'))->toBe((int) $portion->id);
 });
 
 it('ein unveraenderter Alt-Wert blockiert das Speichern anderer Felder nicht', function () {
@@ -181,9 +182,8 @@ it('ein unveraenderter Alt-Wert blockiert das Speichern anderer Felder nicht', f
         'team_id' => $this->rootTeam->id, 'slug' => 'prise', 'display_de' => 'Prise',
         'dimension' => 'mass', 'is_approximate' => true,
     ]);
-    $gericht = $this->makeRecipe($this->rootTeam, 'Alt-Einheit-Gericht', [
-        'is_sales_recipe' => true, 'sales_unit_vocab_id' => $prise->id,
-    ]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Alt-Einheit-Gericht', ['is_sales_recipe' => true]);
+    $this->makeStandardDarreichung($gericht, null, ['unit_vocab_id' => $prise->id]);   // Alt-Einheit an der Darreichung (98 · 3.5 6b)
 
     $frisch = app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
         'sales_unit_vocab_id' => $prise->id,          // unverändert mitgesendet (Formular-Post)
@@ -191,7 +191,7 @@ it('ein unveraenderter Alt-Wert blockiert das Speichern anderer Felder nicht', f
     ]);
 
     expect((int) $frisch->work_time_min)->toBe(12)
-        ->and((int) $frisch->sales_unit_vocab_id)->toBe((int) $prise->id);
+        ->and((int) $frisch->standardPresentation()->value('unit_vocab_id'))->toBe((int) $prise->id);
 });
 
 // ── Posten am Gericht kommt aus den Komponenten ──────────────────────────────
@@ -382,7 +382,7 @@ it('das Produktionsblatt liefert Regenerations-Programm und Anrichte-Schritte je
     $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
 
     $gericht = $this->makeRecipe($this->rootTeam, 'Blatt-Gericht', [
-        'is_sales_recipe' => true, 'sales_quantity_per_unit_g' => 300, 'sales_unit_count' => 1,
+        'is_sales_recipe' => true,
     ]);
     $this->makeIngredient($gericht, 'Rinderfilet', $this->makeGp($this->rootTeam, 'Rinderfilet'), '150', 1);
 

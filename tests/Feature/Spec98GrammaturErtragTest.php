@@ -33,8 +33,9 @@ beforeEach(function () {
     ];
 });
 
-it('Standard automatisch bei festem Ertrag: Grammatur gegart (Ertrag), EK je Portion und Produktion unverändert, Kopf gegart', function () {
+it('Standard automatisch bei festem Ertrag: Grammatur gegart (Ertrag), EK je Portion und Produktion unverändert, Kopf unberührt', function () {
     $vorher = ($this->messen)();
+    $kopfVorher = $this->r->fresh()->getAttributes()['sales_quantity_per_unit_g'] ?? null;
     expect($vorher['ek'])->toBe(3.5)->and($vorher['ansaetze'])->toBe(1.0);
 
     $this->svc->setzeStandardmenge($this->rootTeam, $this->std->id, true);   // automatisch: Summe der Bestandteile, gegart
@@ -44,7 +45,7 @@ it('Standard automatisch bei festem Ertrag: Grammatur gegart (Ertrag), EK je Por
         ->and($this->svc->grammJeEinheit($s, $this->r->fresh()))->toBe(200.0)        // gegart, nicht 250 g roh
         ->and((float) $s->quantity_per_unit_g)->toBe(200.0)
         ->and(($this->messen)())->toEqual($vorher)                                   // EK 3,50 €, 1 Ansatz, 250 g Schulter
-        ->and((float) $this->r->fresh()->sales_quantity_per_unit_g)->toBe(200.0);   // Kopf spiegelt den gegarten Wert
+        ->and($this->r->fresh()->getAttributes()['sales_quantity_per_unit_g'] ?? null)->toBe($kopfVorher);   // 98 · 3.5 6b: kein Spiegel
 });
 
 it('Variante mit Anteil: der Anteil wirkt auf die Bestandteile, die Grammatur skaliert mit dem Ertrag (200 g → 50 % = 100 g)', function () {

@@ -84,6 +84,17 @@ class VollstaendigkeitReportService
                     ->whereNull('rg.ingredient_id')->whereNull('rg.deleted_at'))
                 ->count();
         }
+        if (in_array('servier_vehikel', $schritte, true)) {
+            // 98 · 3.5 6b: wirksamer Typ der Standard-Darreichung (Übersteuerung oder Typ des Gefäß-GP), gespiegelt an
+            // BulkEnrichService::relationaleLuecke / DarreichungService::vehikelId
+            $out['leer_servier_vehikel'] = (clone $rezepte)
+                ->whereNotExists(fn ($q) => $q->from('foodalchemist_recipe_presentations AS p')
+                    ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'p.vessel_gp_id')
+                    ->whereColumn('p.recipe_id', 'foodalchemist_recipes.id')
+                    ->where('p.is_standard', true)->whereNull('p.deleted_at')
+                    ->where(fn ($w) => $w->whereNotNull('p.serving_vehicle_vocab_id')->orWhereNotNull('g.serving_vehicle_vocab_id')))
+                ->count();
+        }
         foreach (['garverlust' => 'cooking_loss_pct', 'rollen' => 'role'] as $schritt => $spalte) {
             if (in_array($schritt, $schritte, true)) {
                 $out["leer_{$schritt}"] = (clone $rezepte)

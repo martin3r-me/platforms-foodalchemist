@@ -17,10 +17,9 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * 98 · Grammatur „immer automatisch“, Schritt 2: Eine Standard-Darreichung „wie Rezept“ (menge_vom_standard) rechnet mit
- * Bestandteilen ÷ Portionen des Ansatzes. Vorher galt der ganze Ansatz als eine Portion. Das passte nur, solange
- * sales_unit_count ≤ 1 war. Bratkartoffeln: 1 kg Kartoffeln (1,20 €/kg) + 200 g Speck (9 €/kg) = 1,2 kg, 4 Portionen → 300 g,
- * EK 0,75 € — dieselben Zahlen, die der Golden (grammatur_charakter.json) für den freien 300-g-Teller festhält.
+ * 98 · Grammatur „immer automatisch“, Schritt 2 → 98 · 3.5-6a/6b (Dominique 27.11.: Darreichung = Portion, fest 1): Eine
+ * Standard-Darreichung „wie Rezept“ (menge_vom_standard) ist der ganze Ansatz. Die Portionszahl am Rezept (sales_unit_count)
+ * teilte früher; sie zählt seit 6a/6b nicht mehr und entfällt mit 6c. Bratkartoffeln: 1 kg Kartoffeln (1,20 €/kg) + 200 g Speck (9 €/kg) = 1,2 kg, EK 3,00 €.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -41,7 +40,7 @@ beforeEach(function () {
         return $gp->refresh();
     };
     $this->r = FoodAlchemistRecipe::create(['team_id' => $t, 'recipe_key' => 'bratkartoffeln', 'name' => 'Bratkartoffeln',
-        'status' => 'approved', 'is_sales_recipe' => true, 'sales_unit_count' => 4]);
+        'status' => 'approved', 'is_sales_recipe' => true]);
     foreach ([[$gp('Kartoffeln', 1.20), 1000], [$gp('Speck', 9.00), 200]] as $i => [$p, $menge]) {
         $this->r->ingredients()->create(['team_id' => $t, 'position' => $i, 'gp_id' => $p->id, 'raw_text' => $p->name,
             'quantity' => $menge, 'unit_vocab_id' => $g->id, 'match_method' => 'manual']);
@@ -54,32 +53,24 @@ beforeEach(function () {
     $this->r->refresh();
 });
 
-it('Standard „wie Rezept“: Grammatur und EK je Portion = Bestandteile ÷ Portionen', function () {
+it('Standard „wie Rezept“: Grammatur und EK je Portion = ganzer Ansatz', function () {
     $dar = app(DarreichungService::class);
     foreach ([$this->std, $this->wie] as $d) {
         $d->refresh();
-        expect(round($dar->grammJeEinheit($d, $this->r), 1))->toBe(300.0)
-            ->and((float) $d->quantity_per_unit_g)->toBe(300.0)
-            ->and(round((float) $d->ek_portion, 4))->toBe(0.75);
+        expect(round($dar->grammJeEinheit($d, $this->r), 1))->toBe(1200.0)
+            ->and((float) $d->quantity_per_unit_g)->toBe(1200.0)
+            ->and(round((float) $d->ek_portion, 4))->toBe(3.0);
     }
 });
 
-it('Standard-Komposition je Einheit und Produktionsanteil folgen den Portionen', function () {
+it('Standard-Komposition je Einheit und Produktionsanteil: eine Portion = ein Ansatz', function () {
     $dar = app(DarreichungService::class);
     $proEinheit = $dar->standardProEinheit($this->r, $this->rootTeam);
-    expect(round(array_sum(array_column($proEinheit, 'masse_g')), 1))->toBe(300.0);
+    expect(round(array_sum(array_column($proEinheit, 'masse_g')), 1))->toBe(1200.0);
 
-    // 10 verkaufte Portionen = 2,5 Ansätze, für jede Zutat gleich (wie beim freien 300-g-Teller)
+    // 10 verkaufte Portionen = 10 Ansätze, für jede Zutat gleich
     $anteil = $dar->produktionsAnteil($this->r, $this->std->refresh(), 10, $this->rootTeam);
-    expect(round($anteil['ansaetze'], 4))->toBe(2.5)
-        ->and(array_map(fn ($a) => round($a, 4), array_values($anteil['je_zutat'])))->toBe([2.5, 2.5])
-        ->and($anteil['gramm_je_portion'])->toBe(300.0);
-});
-
-it('Ansatz mit einer Portion bleibt wie vorher: Grammatur = ganzer Ansatz', function () {
-    $this->r->update(['sales_unit_count' => null]);
-    app(RecipeRecomputeService::class)->recomputePipeline($this->r->id);
-    $d = $this->std->refresh();
-    expect((float) $d->quantity_per_unit_g)->toBe(1200.0)
-        ->and(round((float) $d->ek_portion, 4))->toBe(3.0);
+    expect(round($anteil['ansaetze'], 4))->toBe(10.0)
+        ->and(array_map(fn ($a) => round($a, 4), array_values($anteil['je_zutat'])))->toBe([10.0, 10.0])
+        ->and($anteil['gramm_je_portion'])->toBe(1200.0);
 });

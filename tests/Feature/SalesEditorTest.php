@@ -129,19 +129,15 @@ it('§7.7: Verwendungsnachweise — Upsert je Kunde, FK-Kaskade', function () {
     expect(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $vk->id)->count())->toBe(0);
 });
 
-it('Cockpit nach Pflege: Vorschlag aus Klasse, g/Einheit aus Yield/Anzahl (E2E-Spiegel)', function () {
+it('Cockpit nach Pflege: Vorschlag aus Klasse, g/Einheit aus der Standard-Darreichung (eine Portion = Ertrag)', function () {
     $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
     $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'FIN: Dog | BBQ');
-    // Plan 98 B (Modell 23.11.): die Portionszahl ist am Gericht fest 1 und über updateVk nicht mehr setzbar. Das Cockpit liest
-    // einen Altbestand > 1 ohne Kopf-Grammatur weiter als Ertrag ÷ Anzahl (Folgepunkt nach den io-Zahlen) — hier als Fixture.
+    // 98 · 3.5 6b/6c (Dominique 27.11.: Darreichung = Portion, fest 1): der Rezept-Kopf zählt nicht mehr, das Cockpit liest die Standard-Darreichung
     $this->svc->updateVk($this->rootTeam, $vk->id, ['markup_class_id' => $alc->id]);
-    // fresh(): der Kopf ist schon gespiegelt (kopfSpiegeln schreibt an der Instanz vorbei) — sonst wäre „null“ kein Änderungswert
-    $vk = $vk->fresh();
-    $vk->forceFill(['sales_unit_count' => 4, 'sales_quantity_per_unit_g' => null])->save();
 
     $cockpit = $this->svc->cockpit($this->svc->detail($this->rootTeam, $vk->id), $this->rootTeam);
 
-    expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(265.0)    // 1,06 kg / 4
+    expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(1060.0)    // ganzer Ertrag 1,06 kg
         ->and($cockpit['vk']['source'])->toBe('auto')
         ->and($cockpit['vk']['sales_net'])->toBeGreaterThan(0);
 });

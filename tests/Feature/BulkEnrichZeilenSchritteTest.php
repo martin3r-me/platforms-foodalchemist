@@ -250,7 +250,7 @@ it('B-1: Rollen landen nur in Zeilen ohne Rolle — die manuelle Rolle der Jus �
         ->and(DB::table('foodalchemist_recipe_ingredients')->find($this->vkZutatB->id)->role)->toBe('protein');
 });
 
-it('B-1: Servier-Vehikel kommt mit Lineage ki ans Gericht und in die Standard-Darreichung; Geschmack setzt das Enum', function () {
+it('B-1: Servier-Vehikel kommt in die Standard-Darreichung, die Lineage ki ans Gericht; Geschmack setzt das Enum (98 · 3.5 6b)', function () {
     $runId = $this->svc->starte($this->rootTeam, [$this->vk->id], BulkEnrichService::SCHRITTE_VK, \Platform\FoodAlchemist\Enums\BulkRunType::EnrichVk);
     $props = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereIn('field', ['servier_vehikel', 'geschmack'])->get()->keyBy('field');
     expect($props['servier_vehikel']->status)->toBe('offen')
@@ -261,8 +261,7 @@ it('B-1: Servier-Vehikel kommt mit Lineage ki ans Gericht und in die Standard-Da
         ->and($this->svc->uebernehmen($this->rootTeam, $props['geschmack']->id))->toBeTrue();
 
     $r = $this->vk->fresh();
-    expect((int) $r->serving_vehicle_vocab_id)->toBe($this->vehikelId)
-        ->and($r->serving_vehicle_source)->toBe('ki')
+    expect($r->serving_vehicle_source)->toBe('ki')
         ->and((float) $r->serving_vehicle_ai_confidence)->toBe(0.85)
         ->and($r->taste_direction)->toBe('herzhaft');
 
@@ -272,7 +271,10 @@ it('B-1: Servier-Vehikel kommt mit Lineage ki ans Gericht und in die Standard-Da
 });
 
 it('B-1: Servier-Vehikel — manuell gesetzt gewinnt, ein Vehikel außerhalb des Katalogs wird nicht übernommen', function () {
-    $this->vk->update(['serving_vehicle_vocab_id' => $this->vehikelId, 'serving_vehicle_source' => 'manual']);
+    // 98 · 3.5 6b: der Typ steht an der Standard-Darreichung, die Herkunft am Gericht
+    $std = app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->ensureStandard($this->rootTeam, $this->vk->id, 'test');
+    DB::table('foodalchemist_recipe_presentations')->where('id', $std->id)->update(['serving_vehicle_vocab_id' => $this->vehikelId]);
+    $this->vk->update(['serving_vehicle_source' => 'manual']);
     expect($this->svc->luecken($this->vk->fresh(), ['servier_vehikel']))->toBe([]);   // gefüllt = keine Lücke
 
     // Direkter Lauf trotz gefülltem Feld → Override-First greift beim Übernehmen.

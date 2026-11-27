@@ -4,8 +4,6 @@
             "yield_kg": 1.2,
             "yield_kg_manual": 1.2,
             "ek_per_kg": 2.5,
-            "sales_unit_count": null,
-            "sales_quantity_per_unit_g": 300.0,
             "komponenten_netto_g": 1200.0
         },
         "darreichungen": [
@@ -126,8 +124,6 @@
             "yield_kg": 0.26,
             "yield_kg_manual": null,
             "ek_per_kg": 17.08,
-            "sales_unit_count": null,
-            "sales_quantity_per_unit_g": 260.0,
             "komponenten_netto_g": 260.0
         },
         "darreichungen": [
@@ -186,8 +182,6 @@
             "yield_kg": 1.0,
             "yield_kg_manual": 0.8,
             "ek_per_kg": 17.5,
-            "sales_unit_count": null,
-            "sales_quantity_per_unit_g": 200.0,
             "komponenten_netto_g": 1000.0
         },
         "darreichungen": [
@@ -238,8 +232,6 @@
             "yield_kg": 1.0,
             "yield_kg_manual": null,
             "ek_per_kg": 2.7,
-            "sales_unit_count": null,
-            "sales_quantity_per_unit_g": 250.0,
             "komponenten_netto_g": 1000.0
         },
         "darreichungen": [

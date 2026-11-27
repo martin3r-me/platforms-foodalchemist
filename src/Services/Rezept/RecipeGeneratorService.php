@@ -1164,8 +1164,8 @@ class RecipeGeneratorService
             }
             app(RecipeRecomputeService::class)->recomputeAndPropagate((int) $r->id);
         }
-        $r->forceFill(['sales_unit_count' => 1])->save();
-        app(DarreichungService::class)->recomputeFuerRezept((int) $r->id);   // Grammatur der Standard-Darreichung (und Kopf) neu
+        // 98 · 3.5 6b: die Portionszahl ist am Gericht fest 1 und wird nicht mehr geschrieben (Spalte entfällt mit 6c)
+        app(DarreichungService::class)->recomputeFuerRezept((int) $r->id);   // Grammatur der Standard-Darreichung neu
 
         return ['ziel_g' => $ziel, 'ertrag_vorher_g' => round($ertragG, 1), 'faktor' => round($faktor, 4), 'skaliert' => $skaliert];
     }

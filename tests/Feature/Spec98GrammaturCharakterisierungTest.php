@@ -41,7 +41,7 @@ function grammaturZustand(FoodAlchemistRecipe $r, Team $team): array
 
     return [
         'rezept' => ['yield_kg' => $zahl($r->yield_kg), 'yield_kg_manual' => $zahl($r->yield_kg_manual), 'ek_per_kg' => $zahl($r->ek_per_kg_eur),
-            'sales_unit_count' => $r->sales_unit_count, 'sales_quantity_per_unit_g' => $zahl($r->sales_quantity_per_unit_g),
+            // 98 · 3.5 6b: Rezept-Kopf (sales_unit_count, sales_quantity_per_unit_g) wird nicht mehr gespiegelt, entfällt mit 6c — die Grammatur steht an der Darreichung
             'komponenten_netto_g' => $zahl(array_sum(array_column($zeilen, 'masse_g')), 1)],
         'darreichungen' => $r->presentations()->with('servingForm')->orderBy('id')->get()->map(function ($d) use ($r, $team, $dar, $zahl, $namen, $blatt) {
             $anteil = $dar->produktionsAnteil($r, $d, 10, $team);

@@ -53,8 +53,10 @@ beforeEach(function () {
         'name' => 'Rinderrücken mit Jus', 'status' => 'draft', 'is_sales_recipe' => true,
         'description' => 'Kurzgebraten.', 'sales_wording_standard' => 'Zarter Rinderrücken',
         'plating_text' => 'Mittig anrichten.', 'dish_class_id' => $this->klasse->id,
-        'yield_kg' => 2.0, 'sales_quantity_per_unit_g' => 200,
-        'ek_per_kg_eur' => 12.0, 'ek_total_eur' => 24.0,
+        // 98 · 3.5-6a/6b: Gericht = eine Portion (Dominique 27.11. „fest 1“) — 200 g Ertrag, 2,40 € EK. Vorher ein 2-kg-Ansatz
+        // mit der Portion nur am Rezept-Spiegel sales_quantity_per_unit_g; den liest seit 6b niemand mehr.
+        'yield_kg' => 0.2,
+        'ek_per_kg_eur' => 12.0, 'ek_total_eur' => 2.4,
         'ek_n_ingredients_total' => 3, 'ek_n_ingredients_priced' => 3,
         ...$attr,
     ]);
@@ -91,8 +93,9 @@ it('L8a: der One-Shot-Roundtrip endet bepreist — Portion + AK + Standard-Darre
         ->and($r->fresh()->vk_netto)->toBe(8.0);
 });
 
-it('L8a: eine fehlende Portionsgröße wird im Anreicherungs-Pass geschlossen und danach bepreist', function () {
-    $r = ($this->gericht)(['sales_quantity_per_unit_g' => null, 'sales_unit_count' => 10]);
+it('L8a: eine fehlende Portionsgröße wird im Anreicherungs-Pass aus dem Ertrag geschlossen und danach bepreist', function () {
+    // 3.5-6a: ohne Spiegel und ohne Portionszahl — das Gericht ist eine Portion, die Portion ist sein Ertrag (200 g).
+    $r = ($this->gericht)();
 
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
@@ -145,16 +148,19 @@ it('L8a: Wareneinsatz über Ziel → Ampel + genau EIN Signal aus der bestehende
         ->and($signale[0]->dedup_key)->toBe('we-quote-recipe-' . $r->id);
 });
 
-it('L8a: gepflegte Portion und gesetzte AK werden nicht überschrieben (GL-07)', function () {
+it('L8a: gesetzte AK wird nicht überschrieben (GL-07); die Portion folgt dem Gericht (350 g)', function () {
     $eigene = FoodAlchemistMarkupClass::create([
         'code' => 'BAN', 'label' => 'Bankett', 'class_factor_pct' => 120,
         'vat_profile_key' => 'regulaer', 'raw_markup_pct' => 200, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
     ]);
-    $r = ($this->gericht)(['sales_quantity_per_unit_g' => 350, 'markup_class_id' => $eigene->id]);
+    // 98 · 3.5-6b: Eine „gepflegte Portion“ nur am Rezept-Spiegel gibt es nicht mehr (Plan 98 B: Grammatur = Gericht, der
+    // Spiegel wird nicht gelesen). Vorher kamen die 350 g nur über die Test-Brücke VkAltspaltenBruecke in die Darreichung.
+    // Jetzt ist das Gericht selbst 350 g (eine Portion, 12 €/kg).
+    $r = ($this->gericht)(['yield_kg' => 0.35, 'ek_total_eur' => 4.2, 'markup_class_id' => $eigene->id]);
 
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
-    // BAN wird nicht durch den Klasse-Default ALC ersetzt, die 350 g bleiben stehen.
+    // BAN wird nicht durch den Klasse-Default ALC ersetzt; die Portion ist das Gericht (350 g).
     expect($w['portion_g'])->toBe(350.0)
         ->and($w['aufschlagsklasse'])->toBe('BAN')
         // 4,20 € MEK × 3,333 Basissatz × 120 % Klassenfaktor = 16,80 €.

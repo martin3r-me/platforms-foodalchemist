@@ -127,7 +127,7 @@
                     </div>
                     @if(isset($darGewichtHinweis[$d->id]))<x-fa::notice tone="warn" data-dar-ohne-gewicht>{{ $darGewichtHinweis[$d->id] }}</x-fa::notice>@endif
                     @if($darChargeHinweis)<x-fa::notice tone="warn" data-dar-charge>{{ $darChargeHinweis }}: Die Portion liegt über 3000 g, deshalb gibt es keinen Auto-VK. Mengen je Portion korrigieren oder den VK bewusst festsetzen.</x-fa::notice>@endif
-                    @if(($d->unit_count ?? 1) > 1 || ($rezept->sales_unit_count ?? 1) > 1)<x-fa::notice tone="warn">Altbestand mit abweichender Zählweise. Mengen und Zeiten bleiben bis zu einer geprüften Umstellung erhalten.</x-fa::notice>@endif
+                    @if(($d->unit_count ?? 1) > 1)<x-fa::notice tone="warn">Altbestand mit abweichender Zählweise. Mengen und Zeiten bleiben bis zu einer geprüften Umstellung erhalten.</x-fa::notice>@endif
                     @include('foodalchemist::livewire.verkauf.partials.darreichung-gefaess')
                     {{-- 20.11.2026 (Dominique): die Kennzahlen der Standard-Darreichung stehen schon oben im Kopf — hier nur bei einer anderen
                          Darreichung, deren Werte davon abweichen, und kompakt in einer Zeile --}}

@@ -30,8 +30,8 @@ class VerkaufsrezeptePutTool extends FoodAlchemistTool implements ToolContract, 
             . 'storage_type / storage_types [gekuehlt|tiefgekuehlt|trocken], shelf_life_chilled_days/_frozen_days/_dry_days, …); '
             . 'nur erlaubte Keys werden geschrieben, FKs und Vokabulare geprüft (unbekannter Wert = VALIDATION_ERROR). '
             . 'Von Hand gesetzte dish_class_id/dichteklasse gelten als Override (source=manual). '
-            . 'Ein Gericht ist EINE Portion: die Zutatenmengen gelten je Portion. Die Grammatur (sales_quantity_per_unit_g) ist nur lesend — die Summe der Bestandteile, gespiegelt von der Standard-Darreichung; die Portionszahl (sales_unit_count) ist fest 1. Ein abweichender Wert in einem der beiden = VALIDATION_ERROR. '
-            . 'serving_vehicle_vocab_id (Servier-Typ) geht an die Standard-Darreichung — Typ und Gefäß pflegt man dort (recipe_darreichung.PUT); am Gericht ist der Wert nur abgeleitet. '
+            . 'Ein Gericht ist EINE Portion: die Zutatenmengen gelten je Portion. Die Grammatur ist die der Standard-Darreichung (Summe der Bestandteile); sales_quantity_per_unit_g und sales_unit_count (fest 1) werden nur noch zur Kompatibilität angenommen und nie gespeichert — leer oder gleich dem wirksamen Wert geht durch, ein abweichender Wert = VALIDATION_ERROR. sales_unit_vocab_id und die Behälter-Typen (container_warm/cold_vocab_id) gehen an die Standard-Darreichung. '
+            . 'serving_vehicle_vocab_id (Servier-Typ) geht an die Standard-Darreichung — Typ und Gefäß pflegt man dort (recipe_darreichung.PUT); am Gericht bleibt nur die Herkunft (serving_vehicle_source). '
             . 'Name = [HG] Leitkomponente | Baustein | Baustein … (VK §1), z. B. „[HG] Rinderfilet | Portwein-Jus | Selleriepüree“. Nicht in den Namen: Gefäß/Darreichung, Deko, Öle, Garnitur, Herkunft, Diät-Tags, Grammatur, Marketingname, Füllwörter (mit, auf). Ein geänderter Name wird geprüft, Verstöße kommen als warnungen zurück.';
     }
 

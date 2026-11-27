@@ -59,8 +59,9 @@ final class GrammaturMessung
             'fester_ertrag' => $r->yield_kg_manual !== null,
             'zutaten' => count($zeilen),
             'unbepreist' => count(array_filter($zeilen, fn ($z) => $z['kosten'] === null)),
-            'portionen' => $r->sales_unit_count !== null ? (int) $r->sales_unit_count : null,
-            'kopf_g' => $r->sales_quantity_per_unit_g !== null ? (float) $r->sales_quantity_per_unit_g : null,
+            // 98 · 3.5 6b/6c: Rezept-Spiegelspalten entfallen — fehlt die Spalte, ist der Wert leer (Portionszahl leer = 1)
+            'portionen' => isset($r->getAttributes()['sales_unit_count']) ? (int) $r->getAttributes()['sales_unit_count'] : null,
+            'kopf_g' => isset($r->getAttributes()['sales_quantity_per_unit_g']) ? (float) $r->getAttributes()['sales_quantity_per_unit_g'] : null,
             'ek_per_kg' => $r->ek_per_kg_eur !== null ? round((float) $r->ek_per_kg_eur, 6) : null,
             'ohne_gewicht' => $ohneGewicht,
         ];

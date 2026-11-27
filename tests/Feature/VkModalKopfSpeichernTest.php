@@ -22,6 +22,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Ursache: der Kopf lud die gespiegelten Felder einmal beim Öffnen und schrieb sie beim Speichern komplett in die
  * Standard-Darreichung zurück. Jetzt: die Preisklasse steht nur noch an der Darreichung, und ein gespiegeltes
  * Kopf-Feld geht nur mit, wenn es im Kopf geändert wurde. Nach dem Speichern werden die Zeilen neu geladen.
+ * 98 · 3.5 6b: der Kopf trägt gar keine Darreichungs-Spiegel mehr (Grammatur, Einheit, Portionszahl, Behälter-Typen) —
+ * gepflegt wird nur in der Zeile.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -76,50 +78,39 @@ it('alle gespiegelten Felder: was in der Standard-Darreichung steht, übersteht 
     ($this->modal)()->call('speichern')->assertSet('fehler', null);
 
     expect(($this->zeile)()->only(array_keys($vorher)))->toEqual($vorher);
-    // Das Gericht selbst behält seine eigenen Werte (Kopf unverändert gespeichert).
-    expect($this->gericht->fresh()->only(['sales_unit_vocab_id', 'container_warm_vocab_id', 'sales_unit_count']))
-        ->toEqual(['sales_unit_vocab_id' => $this->portion->id, 'container_warm_vocab_id' => $this->warmA, 'sales_unit_count' => 10]);
 });
 
 it('Grammatur in der Zeile ist nur Anzeige (Plan 98 B): ein geänderter Formularwert wird nicht gespeichert, auch nicht über den Kopf', function () {
     // Früher: 96 g in der Zeile gespeichert und gegen Ertrag ÷ Anzahl verteidigt. Jetzt ist die Grammatur gesperrt; die Zeile
-    // schickt sie nicht mit, der Standard behält seine Menge (hier Altbestand 100 g = 1 kg ÷ 10).
+    // schickt sie nicht mit, der Standard behält seine Menge (98 · 3.5 6b: automatisch, ohne Teiler aus der Portionszahl).
+    $menge = ($this->zeile)()->quantity_per_unit_g;
     $c = ($this->modal)();
     $c->set("darForm.{$this->standard->id}.quantity_per_unit_g", '96')->call('darreichungSpeichern', $this->standard->id)->assertSet('fehler', null);
-    expect((float) ($this->zeile)()->quantity_per_unit_g)->toBe(100.0);
+    expect(($this->zeile)()->quantity_per_unit_g)->toEqual($menge);
 
     $c->call('speichern')->assertSet('fehler', null);
 
-    expect((float) ($this->zeile)()->quantity_per_unit_g)->toBe(100.0);
+    expect(($this->zeile)()->quantity_per_unit_g)->toEqual($menge);
 });
 
-it('Grammatur im Kopf ist nur lesend (Plan 98 B): eine Änderung meldet den Fehler und speichert nichts; ohne sie gehen die übrigen Felder weiter', function () {
-    // Früher: 120 g im Kopf gingen als Grammatur in die Standard-Darreichung. Jetzt spiegelt der Kopf nur die Darreichung.
-    $c = ($this->modal)();
-    $vorher = ($this->zeile)()->only(['quantity_per_unit_g', 'unit_vocab_id', 'container_warm_vocab_id']);
+it('der Kopf trägt keine Darreichungs-Spiegel mehr (98 · 3.5 6b): Grammatur, Einheit, Portionszahl und Behälter-Typen fehlen im Formular', function () {
+    $form = ($this->modal)()->get('form');
 
-    $c->set('form.sales_quantity_per_unit_g', '120')->set('form.sales_unit_vocab_id', $this->stk->id)->call('speichern');
-    expect($c->get('fehler'))->toContain('nicht direkt setzbar')
-        ->and(($this->zeile)()->only(array_keys($vorher)))->toEqual($vorher);
-
-    $c->set('form.sales_quantity_per_unit_g', '100')->set('form.container_warm_vocab_id', $this->warmB)->call('speichern')->assertSet('fehler', null);
-    $zeile = ($this->zeile)();
-    expect((float) $zeile->quantity_per_unit_g)->toBe(100.0)
-        ->and((int) $zeile->unit_vocab_id)->toBe((int) $this->stk->id)
-        ->and((int) $zeile->container_warm_vocab_id)->toBe((int) $this->warmB)
-        ->and((int) $c->get("darForm.{$this->standard->id}.unit_vocab_id"))->toBe((int) $this->stk->id);   // Zeilen nach dem Speichern neu geladen
+    foreach (['sales_quantity_per_unit_g', 'sales_unit_vocab_id', 'sales_unit_count', 'container_warm_vocab_id', 'container_cold_vocab_id', 'serving_vehicle_vocab_id'] as $feld) {
+        expect(array_key_exists($feld, $form))->toBeFalse($feld);
+    }
+    expect(array_key_exists('container_warm_count', $form))->toBeTrue();   // die Anzahlen bleiben am Gericht
 });
 
-it('Gegenrichtung: nach einer Kopf-Änderung schreibt die nächste Zeilen-Änderung nichts Altes zurück', function () {
+it('eine in der Zeile gesetzte Einheit übersteht ein Speichern im Kopf', function () {
     $c = ($this->modal)();
-    $c->set('form.sales_unit_vocab_id', $this->stk->id)->call('speichern')->assertSet('fehler', null);
+    $c->set("darForm.{$this->standard->id}.unit_vocab_id", $this->stk->id)->call('darreichungSpeichern', $this->standard->id)->assertSet('fehler', null);
     expect((int) ($this->zeile)()->unit_vocab_id)->toBe((int) $this->stk->id);
 
-    // Die Zeile kennt die Einheit nicht als Feld, schickt sie aber bei jeder Änderung mit — vorher den Stand vom Öffnen.
-    $c->set("darForm.{$this->standard->id}.markup_class_id", $this->alc->id)->call('darreichungSpeichern', $this->standard->id)->assertSet('fehler', null);
+    $c->call('speichern')->assertSet('fehler', null);
 
     expect((int) ($this->zeile)()->unit_vocab_id)->toBe((int) $this->stk->id)
-        ->and((int) ($this->zeile)()->markup_class_id)->toBe((int) $this->alc->id);
+        ->and((int) $c->get("darForm.{$this->standard->id}.unit_vocab_id"))->toBe((int) $this->stk->id);
 });
 
 it('Maske: eine Portion je Darreichung, keine zweite Mengenpflege im Kopf', function () {

@@ -542,8 +542,13 @@ $vkFertig = function (object $t, int $komponenten = 2): \Platform\FoodAlchemist\
             'description' => 'Steht.', 'sales_wording_standard' => 'Steht.',
             'plating_text' => 'Steht.', 'dish_class_id' => $klasse->id,
             'taste_direction' => 'herzhaft',
-            'serving_vehicle_vocab_id' => $vehikelId, 'serving_vehicle_source' => 'manual',
+            'serving_vehicle_source' => 'manual',
         ]);
+        // 98 · 3.5-6b: das Vehikel liegt an der Standard-Darreichung (der Spiegel serving_vehicle_vocab_id am Rezept wird nicht
+        // mehr geschrieben); die Quelle (serving_vehicle_source) bleibt am Rezept.
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $vk->id,
+            'serving_form_id' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::firstOrCreate(['team_id' => $this->rootTeam->id, 'code' => 'teller'], ['label' => 'Teller'])->id,
+            'is_standard' => true, 'unit_count' => 1, 'serving_vehicle_vocab_id' => $vehikelId]);
         for ($i = 1; $i <= $komponenten; $i++) {
             $this->makeIngredient($vk, 'Komponente ' . $i, $this->makeGp($this->rootTeam, 'Komponente ' . $i . '-' . $vk->id), '100', $i)
                 ->update(['role' => 'komponente']);

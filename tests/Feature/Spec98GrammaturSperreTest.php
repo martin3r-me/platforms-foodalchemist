@@ -69,9 +69,10 @@ it('verkaufsrezepte-Weg: abweichender Kopf und eine Portionszahl ≠ 1 werfen, u
     expect($this->a->fresh()->name)->toBe('Bratkartoffeln 2')->and($this->a->fresh()->sales_unit_count)->toBeNull();
 });
 
-it('Selbstheilung: ensureStandard legt einen fehlenden Standard weiter in Altbestand-Form an (Grammatur aus dem Kopf)', function () {
+it('Selbstheilung: ensureStandard legt einen fehlenden Standard automatisch an — ein Rezept-Kopf zählt nicht mehr (98 · 3.5 6b)', function () {
     $r = $this->makeRecipe($this->rootTeam, '[HG] Ohne Darreichung', ['is_sales_recipe' => true, 'yield_kg' => 1.0, 'sales_quantity_per_unit_g' => 250]);
     $std = $this->svc->ensureStandard($this->rootTeam, $r->id, 'test');
 
-    expect((bool) $std->menge_vom_standard)->toBeFalse()->and((float) $std->quantity_per_unit_g)->toBe(250.0);
+    expect((bool) $std->menge_vom_standard)->toBeTrue()
+        ->and($this->svc->grammJeEinheit($std, $r->fresh()))->toBe(1000.0);   // Ertrag 1 kg ohne Bestandteile, nicht der Kopf-Altwert 250 g
 });

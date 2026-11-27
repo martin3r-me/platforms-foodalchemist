@@ -23,7 +23,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class, GrammaturWelt::class);
  */
 beforeEach(function () {
     $this->grammaturWeltAnlegen();
-    $this->c->update(['sales_quantity_per_unit_g' => 200]);   // Kopf mit Wert: zieht mit (Kurator 23.11.)
+    $this->c->update(['sales_quantity_per_unit_g' => 200]);   // Altbestand-Kopf mit Wert — seit 98 · 3.5 6b nicht mehr gespiegelt
     $this->e = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'leer', 'name' => 'Ohne Mengen',
         'status' => 'approved', 'is_sales_recipe' => true]);
     ($this->darreichung)($this->e, 'teller', ['is_standard' => true, 'menge_vom_standard' => false]);
@@ -88,7 +88,7 @@ it('Trockenlauf: Kategorien wie erwartet, nichts geschrieben', function () {
         ->and(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients')->orderBy('id')->pluck('quantity', 'id')->all())->toBe($zutatenVorher);
 });
 
-it('--apply stellt um, zieht den Kopf nach, und der Rückweg stellt alles wieder her', function () {
+it('--apply stellt um (Rezept-Kopf bleibt unberührt, 98 · 3.5 6b), und der Rückweg stellt alles wieder her', function () {
     $vorher = FoodAlchemistRecipeDarreichung::orderBy('id')->get(['id', 'quantity_per_unit_g', 'menge_vom_standard', 'komponenten_referenz_g', 'ek_portion'])->toArray();
     $kopfVorher = FoodAlchemistRecipe::whereIn('id', [$this->a->id, $this->c->id, $this->d->id])->orderBy('id')->get(['id', 'sales_unit_count', 'sales_quantity_per_unit_g'])->toArray();
 
@@ -102,13 +102,13 @@ it('--apply stellt um, zieht den Kopf nach, und der Rückweg stellt alles wieder
         ->and((float) $this->a->ingredients()->where('raw_text', 'Kartoffeln')->value('quantity'))->toBe(1000.0)
         ->and(($this->dar)($this->a, 'kinder')->deltas()->count())->toBe(2)
         ->and((float) ($this->dar)($this->a, 'kinder')->quantity_per_unit_g)->toBe(150.0)
-        ->and((float) $this->c->fresh()->sales_quantity_per_unit_g)->toBe(800.0)      // Kopf = gegarte Grammatur des Standards
+        ->and((float) $this->c->fresh()->sales_quantity_per_unit_g)->toBe(200.0)      // 98 · 3.5 6b: Kopf wird nicht mehr gespiegelt
         ->and((float) ($this->dar)($this->c, 'teller')->ek_portion)->toBe(14.0)       // ganzer Ansatz 1 kg à 14 €/kg (Entscheidungsliste)
         ->and((float) ($this->dar)($this->c, 'kinder')->quantity_per_unit_g)->toBe(100.0)   // Weg A, gegart
-        // D: Standard automatisch = Summe der Bestandteile (1000 g), der Kopf spiegelt sie
+        // D: Standard automatisch = Summe der Bestandteile (1000 g); der Rezept-Kopf bleibt, wie er war (kein Spiegel)
         ->and((bool) ($this->dar)($this->d, 'teller')->menge_vom_standard)->toBeTrue()
         ->and((float) ($this->dar)($this->d, 'teller')->quantity_per_unit_g)->toBe(1000.0)
-        ->and((float) $this->d->fresh()->sales_quantity_per_unit_g)->toBe(1000.0);
+        ->and($this->d->fresh()->sales_quantity_per_unit_g)->toEqual(collect($kopfVorher)->firstWhere('id', $this->d->id)['sales_quantity_per_unit_g']);
     // Nichts Freies mehr außer dem nicht ableitbaren E
     expect(app(GrammaturUmstellungService::class)->plan())->toHaveCount(1);
 
@@ -134,11 +134,11 @@ it('Fertigungstiefe: Hochstufen nach Inhalt zählt als Aufholen in Phase 0, nich
         ->and($this->a->fresh()->production_depth)->toBe('from_scratch');   // Trockenlauf: zurückgerollt
 });
 
-it('Trockenlauf mit aktiver Kopf-Spiegelung: kein Wachen-Verstoß, Fertigungstiefen-Zählung unverändert', function () {
-    // Kurator 23.11.: die Spiegelung schreibt bei jeder Neuberechnung den Kopf — auch in Phase 0 und 2 unter der Schreibwache
+it('Trockenlauf mit abweichenden Rezept-Köpfen: kein Wachen-Verstoß, die Köpfe werden nicht mehr nachgezogen (98 · 3.5 6b)', function () {
+    // Bis 6b schrieb die Spiegelung bei jeder Neuberechnung den Kopf; jetzt bleibt er stehen, gemessen wird, was dasteht
     $ohne = app(GrammaturUmstellungService::class)->lauf(false);
 
-    // Abweichende Köpfe (still, wie ein Altbestand auf io): die Spiegelung greift in Phase 0
+    // Abweichende Köpfe (still, wie ein Altbestand auf io)
     FoodAlchemistRecipe::whereIn('id', [$this->a->id, $this->c->id])->update(['sales_quantity_per_unit_g' => 999]);
     FoodAlchemistRecipe::whereKey($this->d->id)->update(['sales_quantity_per_unit_g' => null]);
     $b = app(GrammaturUmstellungService::class)->lauf(false);
@@ -147,11 +147,10 @@ it('Trockenlauf mit aktiver Kopf-Spiegelung: kein Wachen-Verstoß, Fertigungstie
     expect($b['verstoesse'])->toBe([])->and($b['ok'])->toBeTrue()
         ->and($b['phase0_fertigungstiefe_hochgestuft'])->toBe($ohne['phase0_fertigungstiefe_hochgestuft'])
         ->and($b['fertigungstiefe_hochgestuft'])->toBe(0)
-        ->and($kopf($this->a))->toBe(300.0)   // gemessen nach Phase 0: gespiegelt, nicht 999
-        ->and($kopf($this->c))->toBe(200.0)
-        ->and($kopf($this->d))->toBe(250.0);  // leerer Kopf wird gefüllt
-    expect(array_keys($b['zaehlung']['0']))->toContain('foodalchemist_recipes');
-    // Trockenlauf: die gespiegelten Köpfe sind mit zurückgerollt
+        ->and($kopf($this->a))->toBe(999.0)   // nicht mehr gespiegelt
+        ->and($kopf($this->c))->toBe(999.0)
+        ->and($kopf($this->d))->toBeNull();   // leerer Kopf bleibt leer
+    // Trockenlauf: nichts bleibt hängen
     expect((float) $this->a->fresh()->sales_quantity_per_unit_g)->toBe(999.0)
         ->and($this->d->fresh()->sales_quantity_per_unit_g)->toBeNull();
 });

@@ -821,7 +821,7 @@ class ReportExportService
             'category:id,label',
             'dishClass:id,label',
             'dishMainGroup:id,label',
-            'salesUnit:id,slug,display_de',
+            'standardPresentation.unit:id,slug,display_de',   // 98 · 3.5 6b: Verkaufseinheit an der Standard-Darreichung
             'defaultStation:id,name,slug,group_name',
             'equipment:id,slug,name',
             // §3.2: das Regenerations-Programm je Komponente. Bis 2026-09-04 las es KEIN
@@ -1008,7 +1008,7 @@ class ReportExportService
             'dish_class' => $recipe->dishClass?->label,
             'dish_main_group' => $recipe->dishMainGroup?->label,
             'markup_class' => ($k = app(\Platform\FoodAlchemist\Services\Rezept\DarreichungResolver::class)->klasseFuer($recipe))?->label ?? $k?->code,   // Spec 85 D-1 PR-B
-            'sales_unit' => $recipe->salesUnit?->display_de ?? $recipe->salesUnit?->slug,
+            'sales_unit' => $recipe->standardPresentation?->unit?->display_de ?? $recipe->standardPresentation?->unit?->slug,
             'produktion' => [
                 'production_depth' => $recipe->production_depth,
                 'work_time_min' => $recipe->work_time_min,

@@ -330,7 +330,8 @@ it('KI-Übernahme trägt die Lineage bis in den Save: Vehikel + Wording ⇒ `ki`
     expect(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->typVorschlagUebernehmen($this->rootTeam, $this->vk->id, $vehikelId, 0.9))->toBeTrue();
 
     $r = $this->vk->fresh();
-    expect($r->serving_vehicle_vocab_id)->toBe($vehikelId)
+    $typ = fn () => app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->vehikelId($r->standardPresentation()->firstOrFail());
+    expect($typ())->toBe($vehikelId)                       // 98 · 3.5 6b: Typ nur an der Standard-Darreichung
         ->and($r->serving_vehicle_source)->toBe('ki')
         ->and((float) $r->serving_vehicle_ai_confidence)->toBe(0.9)
         ->and($r->sales_wording_source)->toBe('ki')
@@ -357,7 +358,7 @@ it('Nutzer-Edit nach KI-Übernahme kippt die Lineage zurück auf `manual`', func
         ->assertSet('fehler', null);
 
     $r = $this->vk->fresh();
-    expect($r->serving_vehicle_vocab_id)->toBe($zweiteId)
+    expect(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->vehikelId($r->standardPresentation()->firstOrFail()))->toBe($zweiteId)
         ->and($r->serving_vehicle_source)->toBe('manual')
         ->and($r->serving_vehicle_ai_confidence)->toBeNull();
 });

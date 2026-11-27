@@ -260,7 +260,7 @@ class SalesRecipeService
                 'dishClass:id,label,diet_form,dish_main_group_id',
                 'dishClass.mainGroup:id,code,label',
                 'standardPresentation.markupClass',   // Spec 85 D-1 PR-C: Klasse nur an der Darreichung (DarreichungResolver::klasseFuer)
-                'salesUnit:id,slug,display_de',
+                'standardPresentation.unit:id,slug,display_de',   // 98 · 3.5 6b: Verkaufseinheit an der Standard-Darreichung
                 'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
                 // M9-01e: Bio-/Regional-Anteil braucht die GP-Tags; Nährwert-Faktor die Einheit
                 'ingredients.gp:id,name,tag_is_organic,tag_is_regional', 'ingredients.referencedRecipe:id,name',
@@ -403,7 +403,7 @@ class SalesRecipeService
             // sonst bricht an solchen Gerichten das Speichern beliebiger anderer Felder.
             if (array_key_exists('sales_unit_vocab_id', $update)
                 && $update['sales_unit_vocab_id'] !== null
-                && (int) $update['sales_unit_vocab_id'] !== (int) $recipe->sales_unit_vocab_id) {
+                && (int) $update['sales_unit_vocab_id'] !== (int) $recipe->standardPresentation()->value('unit_vocab_id')) {   // 3.5 6b: gegen die Darreichung
                 $slug = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::find($update['sales_unit_vocab_id'])?->slug;
                 if (! in_array($slug, (array) config('foodalchemist.sales_units', []), true)) {
                     throw new \RuntimeException('Als Verkaufseinheit sind nur Portion, Stück, Kilogramm und Liter zulässig.');
@@ -429,8 +429,11 @@ class SalesRecipeService
             }
             // B-1 (Spec 50): das Servier-Vehikel bekommt dasselbe Lineage-Paar. Vergleich als int —
             // die Id kommt aus dem Select als String, `!==` gegen den Model-Wert wäre immer „geändert".
+            // 98 · 3.5 6b: Vergleich mit dem wirksamen Typ der Standard-Darreichung (kein Rezept-Spiegel mehr)
+            $stdVorher = $recipe->standardPresentation()->first();
+            $typVorher = $stdVorher !== null ? app(DarreichungService::class)->vehikelId($stdVorher) : null;
             if (array_key_exists('serving_vehicle_vocab_id', $update)
-                && (int) $update['serving_vehicle_vocab_id'] !== (int) $recipe->serving_vehicle_vocab_id) {
+                && (int) $update['serving_vehicle_vocab_id'] !== (int) $typVorher) {
                 if ($update['serving_vehicle_vocab_id'] === null) {
                     $update['serving_vehicle_source'] = null;
                     $update['serving_vehicle_ai_confidence'] = null;
@@ -467,13 +470,21 @@ class SalesRecipeService
             if (array_key_exists('storage_types', $update)) {
                 $update['storage_types'] = RecipeService::lagerarten($update['storage_types']);
             }
-            $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason', 'sales_net', 'markup_class_id']));
+            // 98 · 3.5 6b: die Darreichungs-Felder gehen NUR an die Standard-Darreichung (syncStandardDarreichung), nicht mehr ins Rezept
+            $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason', 'sales_net', 'markup_class_id',
+                'sales_unit_vocab_id', 'container_warm_vocab_id', 'container_cold_vocab_id', 'serving_vehicle_vocab_id']));
             $recipeUpdate['last_modified_by'] = 'vk_editor';
             $recipe->update($recipeUpdate);
 
             // Umbau-Spec Phase 5 / Spec 85 D-1: Preis-Wahrheit liegt an der Standard-Darreichung — VK, Preisklasse
             // und Einheiten gehen dorthin.
             $this->syncStandardDarreichung($team, $recipe->refresh(), $update);
+            // Lineage des Servier-Typs NACH dem Weiterreichen: typInsGericht setzt beim Ändern an der Darreichung `manual` —
+            // eine hier übergebene KI-Lineage (bzw. ein Leeren) soll gewinnen.
+            $vehikelLineage = array_intersect_key($update, array_flip(['serving_vehicle_source', 'serving_vehicle_ai_confidence']));
+            if ($vehikelLineage !== []) {
+                DB::table('foodalchemist_recipes')->where('id', $recipe->id)->update($vehikelLineage);
+            }
 
             // 2026-09-04: `plating_text` ist der Spiegel der ANRICHTE-Schritte (Regelwerk §3.3),
             // genau wie `preparation` der Spiegel der Produktions-Schritte ist. Ein Markdown-Write
@@ -512,31 +523,36 @@ class SalesRecipeService
     }
 
     /**
-     * Plan 98 B, Sperre: `sales_quantity_per_unit_g` ist nur noch der Spiegel der Standard-Darreichung
-     * ({@see DarreichungService::kopfSpiegeln}), `sales_unit_count` ist am Gericht fest 1 (Modell Dominique 23.11.: die
-     * Zutatenmengen gelten je Portion, kein Teiler). Ein unveränderter Wert geht durch (der Editor schickt den Kopf mit, auch
-     * ein Altbestand > 1), ein anderer ist ein Fehler — sonst nähme das Tool still etwas an, das nicht wirkt, bzw. ein
-     * Wechsel 4 → 1 vervierfachte die Portion, ohne dass jemand die Mengen anfasst.
+     * Plan 98 B, Sperre — 98 · 3.5 6b ohne Rezept-Spiegel: die Grammatur ist die der Standard-Darreichung ({@see DarreichungService::grammJeEinheit}),
+     * die Portionszahl am Gericht fest 1 (Entscheid Dominique). Die API nimmt beide Felder weiter an (Kompatibilität): leer oder gleich dem
+     * wirksamen Wert geht durch, ein anderer Wert ist ein Fehler — sonst nähme das Tool still etwas an, das nicht wirkt. Geschrieben wird nie.
      */
     private function grammaturNurLesen(FoodAlchemistRecipe $recipe, array &$update): void
     {
         $zahl = static fn ($v) => $v === null || $v === '' ? null : str_replace(',', '.', trim((string) $v));
-        $gleich = static fn ($neu, $alt, float $tol) => $neu === null ? $alt === null
-            : ($alt !== null && is_numeric($neu) && abs((float) $neu - (float) $alt) < $tol);
+        $soll = [
+            'sales_quantity_per_unit_g' => function () use ($recipe) {
+                $std = $recipe->standardPresentation()->first();
+                $g = $std !== null ? app(DarreichungService::class)->grammJeEinheit($std, $recipe) : null;
+
+                return $g !== null ? round($g, 1) : null;
+            },
+            'sales_unit_count' => fn () => 1,
+        ];
         foreach (['sales_quantity_per_unit_g' => [0.05, DarreichungService::GRAMMATUR_GESPERRT],
             'sales_unit_count' => [0.5, DarreichungService::PORTIONSZAHL_FEST]] as $feld => [$tol, $meldung]) {
             if (! array_key_exists($feld, $update)) {
                 continue;
             }
             $neu = $zahl($update[$feld]);
-            $alt = $recipe->{$feld};
-            if ($feld === 'sales_unit_count') {   // leer = 1
-                [$neu, $alt] = [$neu ?? '1', $alt ?? 1];
+            unset($update[$feld]);
+            if ($neu === null) {
+                continue;   // keine Angabe
             }
-            if (! $gleich($neu, $alt, $tol)) {
+            $alt = $soll[$feld]();
+            if (! is_numeric($neu) || $alt === null || abs((float) $neu - (float) $alt) >= $tol) {
                 throw new \RuntimeException($meldung);
             }
-            unset($update[$feld]);
         }
     }
 
@@ -863,14 +879,15 @@ class SalesRecipeService
      */
     public function cockpit(FoodAlchemistRecipe $r, ?Team $team = null, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $anzahl = $r->sales_unit_count !== null ? (int) $r->sales_unit_count : null;
-        $mengeProEinheitG = $r->sales_quantity_per_unit_g !== null
-            ? (float) $r->sales_quantity_per_unit_g
-            : ($r->yield_kg !== null && $anzahl !== null && $anzahl > 0 ? round((float) $r->yield_kg * 1000 / $anzahl, 1) : null);
+        // 98 · 3.5 6b: „Verkauft als“ aus der Standard-Darreichung (Grammatur, Einheit); ein Gericht ist eine Portion
+        $std = $r->standardPresentation()->with('unit')->first();
+        $gramm = $std !== null ? app(DarreichungService::class)->grammJeEinheit($std, $r) : null;
+        $mengeProEinheitG = $gramm !== null ? round($gramm, 1) : null;
+        $anzahl = 1;
 
-        $verkauftAls = $anzahl !== null || $mengeProEinheitG !== null ? [
+        $verkauftAls = $mengeProEinheitG !== null || $std !== null ? [
             'anzahl' => $anzahl,
-            'unit' => $r->salesUnit?->display_de ?? $r->salesUnit?->slug ?? 'Einheit',
+            'unit' => $std?->unit?->display_de ?? $std?->unit?->slug ?? 'Einheit',
             'g_pro_einheit' => $mengeProEinheitG,
             'yield_kg' => $r->yield_kg !== null ? (float) $r->yield_kg : null,
         ] : null;

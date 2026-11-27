@@ -26,13 +26,14 @@ it('Standard mit fester Grammatur: EK je Portion = EK je kg × Grammatur, Gramma
     $teller = ($this->dar)('teller');
     expect((bool) $teller->menge_vom_standard)->toBeFalse()->and($teller->deltas()->count())->toBe(0);
 
+    $kopfVorher = $this->a->fresh()->getAttributes()['sales_quantity_per_unit_g'] ?? null;
     $this->svc->recomputePreise($teller->fresh());
 
     $t = $teller->fresh();
     expect((float) $this->a->fresh()->ek_per_kg_eur)->toBe(2.5)
         ->and((float) $t->quantity_per_unit_g)->toBe(300.0)
         ->and((float) $t->ek_portion)->toBe(0.75)                                  // 2,50 €/kg × 300 g
-        ->and((float) $this->a->fresh()->sales_quantity_per_unit_g)->toBe(300.0);  // Spiegelung schreibt denselben Wert
+        ->and($this->a->fresh()->getAttributes()['sales_quantity_per_unit_g'] ?? null)->toBe($kopfVorher);  // 98 · 3.5 6b: kein Spiegel
 });
 
 it('Variante mit fester Grammatur und Anzahl: EK je Portion proportional, unverändert', function () {
@@ -44,13 +45,14 @@ it('Variante mit fester Grammatur und Anzahl: EK je Portion proportional, unver�
         ->and((float) ($this->dar)('kinder')->quantity_per_unit_g)->toBe(150.0);
 });
 
-it('Standard ohne eingetragene Grammatur: der Altwert im Kopf trägt den EK, die Spiegelung lässt ihn stehen', function () {
+it('Standard ohne eingetragene Grammatur: der Ertrag trägt den EK, ein Altwert im Rezept-Kopf zählt nicht mehr (98 · 3.5 6b)', function () {
     $teller = ($this->dar)('teller');
     $teller->forceFill(['quantity_per_unit_g' => null])->save();
     $this->a->update(['sales_quantity_per_unit_g' => 280]);
 
     $this->svc->recomputePreise($teller->fresh());
 
-    expect((float) ($this->dar)('teller')->ek_portion)->toBe(0.7)                 // 2,50 €/kg × 280 g
-        ->and((float) $this->a->fresh()->sales_quantity_per_unit_g)->toBe(280.0);
+    $a = $this->a->fresh();
+    expect((float) ($this->dar)('teller')->ek_portion)->toEqualWithDelta((float) $a->ek_per_kg_eur * (float) $a->yield_kg, 0.001)   // EK je kg × Ertrag, nicht × 280 g
+        ->and((float) $a->sales_quantity_per_unit_g)->toBe(280.0);                    // nicht überschrieben
 });

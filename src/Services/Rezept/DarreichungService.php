@@ -107,8 +107,8 @@ class DarreichungService
             'serving_form_id' => $servierformId,
             'is_standard' => $standard === null,               // erste Form = Standard
             // Plan 98 B: jede neue Form folgt der Mengenquelle — der Standard der Rezeptur, eine Variante dem Standard
-            'menge_vom_standard' => $folgen || (! isset($attrs['quantity_per_unit_g'])
-                && ($standard !== null || ($recipe->sales_quantity_per_unit_g === null && ($recipe->sales_unit_count ?? 1) <= 1))),
+            // 98 · 3.5 6b: ohne Blick auf den Rezeptkopf (Spiegel entfällt) — Grammatur immer automatisch, außer sie wird mitgegeben
+            'menge_vom_standard' => $folgen || ! isset($attrs['quantity_per_unit_g']),
             // Vorbefüllung aus der Standard-Form; recomputePreise rechnet sie gleich neu
             'quantity_per_unit_g' => $attrs['quantity_per_unit_g'] ?? $standard?->quantity_per_unit_g,
             'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
@@ -121,8 +121,9 @@ class DarreichungService
             'name' => $name !== '' ? $name : null,
             'arbeitszeiten' => array_key_exists('arbeitszeiten', $attrs)
                 ? app(DarreichungsZeitService::class)->normalisieren($attrs['arbeitszeiten']) : null,
-            // Servier-Typ: Vorgabe aus dem Gericht (= wirksamer Typ der Standard-Darreichung), das konkrete Gefäß wählt man an der Zeile
-            'serving_vehicle_vocab_id' => $attrs['serving_vehicle_vocab_id'] ?? $recipe->serving_vehicle_vocab_id,
+            // Servier-Typ: Vorgabe = wirksamer Typ der Standard-Darreichung (98 · 3.5 6b: direkt, nicht mehr über den Rezept-Spiegel);
+            // das konkrete Gefäß wählt man an der Zeile
+            'serving_vehicle_vocab_id' => $attrs['serving_vehicle_vocab_id'] ?? ($standard !== null ? $this->vehikelId($standard) : null),
             // Spec 83 B3i/B3l: NICHT aus der Standard-Form vorbefüllen — die Einheit hängt an der Form (s je Teller ≠ min je Platte)
             'anrichten_wert' => isset($attrs['anrichten_wert']) && is_numeric(str_replace(',', '.', (string) $attrs['anrichten_wert']))
                 ? (float) str_replace(',', '.', (string) $attrs['anrichten_wert']) : null,
@@ -161,24 +162,9 @@ class DarreichungService
 
         $unbestimmt = $this->unbestimmtId($team);
 
-        $quantityPerUnitG = $recipe->sales_quantity_per_unit_g;
-        // Weg-B (2026-10-12): wie grammJeEinheit — ohne `sales_unit_count` ist der Ansatz EINE
-        // Verkaufseinheit, die Grammatur also der ganze Ertrag. Vorher blieb sie bei leerem
-        // Zähler NULL, obwohl der Ertrag bekannt war (Gericht 3920: Editor 476 g, Report „kein Gewicht").
-        if ($quantityPerUnitG === null && $recipe->yield_kg !== null && (float) $recipe->yield_kg > 0) {
-            $quantityPerUnitG = round((float) $recipe->yield_kg * 1000 / max(1, (int) ($recipe->sales_unit_count ?? 0)), 1);
-        }
-
-        $mengenAttrs = $recipe->sales_quantity_per_unit_g === null && ($recipe->sales_unit_count ?? 1) <= 1
-            ? [] : ['quantity_per_unit_g' => $quantityPerUnitG];
-
-        // Plan 98 B: Selbstheilung alter Gerichte bleibt in Altbestand-Form (anlegenIntern ohne Sperre); die Grammatur-
-        // Umstellung und ihr zweiter Trockenlauf fangen solche Standards ein.
-        return $this->anlegenIntern($team, $recipe->id, $unbestimmt, $mengenAttrs + [
-            'unit_vocab_id' => $recipe->sales_unit_vocab_id,
-            // recipes.sales_unit_count ist die Ausbeute des Rezeptlaufs (Nenner für
-            // Yield/Anzahl), nicht die Zahl verkaufter Einheiten IN einer Darreichung.
-            // Der Standard repräsentiert genau eine Verkaufseinheit.
+        // 98 · 3.5 6b: der Standard entsteht automatisch (Grammatur = Summe der Bestandteile, eine Portion je Gericht) — ohne
+        // Werte aus den Rezept-Spiegeln (sales_quantity_per_unit_g / sales_unit_count / sales_unit_vocab_id), die entfallen.
+        return $this->anlegenIntern($team, $recipe->id, $unbestimmt, [
             'unit_count' => 1,
             'markup_class_id' => $this->vorbelegteKlasseId($team, $recipe),
         ], $createdVia, false);
@@ -530,26 +516,17 @@ class DarreichungService
 
     /**
      * Servier-Typ an EINER Stelle (Entscheid Dominique 18.11.2026): Typ (neutral, Vokabular) und konkretes Gefäß (GP mit Preis) stehen an der
-     * Darreichung. Das Feld am Gericht ist nur noch abgeleitet — der wirksame Typ der Standard-Darreichung ({@see vehikelId}) — und Vorgabe für
-     * neue Darreichungen. Leser am Gericht (KI-Kontext, Abo-Kopie, MCP-GET) sehen so denselben Typ wie Planungsblatt und Handbuch.
-     * Ein leerer Typ geht nur ins Gericht, wenn Typ oder Gefäß an der Darreichung gerade geändert wurden — sonst löschte jede Preis-Änderung den
-     * Altbestand am Gericht, bevor `foodalchemist:darreichung-typ-uebernehmen` ihn an die Darreichung gebracht hat.
+     * Darreichung; gelesen wird der wirksame Typ der Standard-Darreichung ({@see vehikelId}).
+     * 98 · 3.5 6b: der Typ wird NICHT mehr ans Gericht gespiegelt (recipes.serving_vehicle_vocab_id entfällt mit 6c). Am Gericht bleibt nur die
+     * Lineage (Entscheid Kurator): wer den Typ an der Standard-Darreichung ausdrücklich setzt oder leert, setzt die Quelle auf `manual` bzw. leer.
      */
     public function typInsGericht(FoodAlchemistRecipeDarreichung $d, bool $typGeaendert): void
     {
-        if (! $d->is_standard) {
+        if (! $d->is_standard || ! $typGeaendert) {
             return;
         }
         $typ = $this->vehikelId($d);
-        if ($typ === null && ! $typGeaendert) {
-            return;
-        }
-        $alt = DB::table('foodalchemist_recipes')->where('id', $d->recipe_id)->value('serving_vehicle_vocab_id');
-        if (($alt === null ? null : (int) $alt) === $typ) {
-            return;
-        }
         DB::table('foodalchemist_recipes')->where('id', $d->recipe_id)->update([
-            'serving_vehicle_vocab_id' => $typ,
             'serving_vehicle_source' => $typ === null ? null : 'manual',
             'serving_vehicle_ai_confidence' => null,
             'updated_at' => now(),
@@ -969,8 +946,6 @@ class DarreichungService
             ] : []),
         ]);
 
-        $this->kopfSpiegeln($darreichung, $recipe);
-
         if ($oldCalculated !== $darreichung->calculated_sales_net || $oldEffective !== $darreichung->sales_net) {
             FoodAlchemistPriceChangeAudit::create([
                 'team_id' => $darreichung->team_id,
@@ -993,12 +968,6 @@ class DarreichungService
         }
     }
 
-    /**
-     * Plan 98 B (Kurator 23.11.): Der Rezept-Kopf `sales_quantity_per_unit_g` spiegelt die Grammatur der Standard-Darreichung —
-     * vorher drifteten beide auseinander, sobald sich eine Zutatenmenge änderte (der Kopf blieb stehen, die Darreichung rechnete
-     * neu). Rund 15 Leser hängen noch am Kopf; deren Umzug ist Plan 98 · 3.5. Leise per Query (kein Modell-Event, kein
-     * RezeptKostenGeaendert) — es ändert sich nur der Spiegel, nicht die Kalkulation. Unbekannte Grammatur lässt den Kopf stehen.
-     */
     /**
      * Komponenten einer Darreichung mit Mengen-Rezept (Deltas oder „wie Standard“): Σ Kosten und Σ rohe Masse je Einheit, aus den
      * Zeilen des übergebenen Teams (Preise, Pins und Sub-Kosten dieses Teams). Overrides sind echte Gramm, weggelassen zählt nicht.
@@ -1072,22 +1041,6 @@ class DarreichungService
         }
 
         return $std > 0 ? $var / $std : 1.0;
-    }
-
-    private function kopfSpiegeln(FoodAlchemistRecipeDarreichung $darreichung, FoodAlchemistRecipe $recipe): void
-    {
-        if (! $darreichung->is_standard) {
-            return;
-        }
-        $gramm = $this->grammJeEinheit($darreichung, $recipe);
-        if ($gramm === null) {
-            return;
-        }
-        $gramm = round($gramm, 1);
-        if ($recipe->sales_quantity_per_unit_g === null || abs((float) $recipe->sales_quantity_per_unit_g - $gramm) >= 0.05) {
-            FoodAlchemistRecipe::whereKey($recipe->id)->update(['sales_quantity_per_unit_g' => $gramm]);
-            $recipe->sales_quantity_per_unit_g = $gramm;
-        }
     }
 
     /**
@@ -1170,22 +1123,20 @@ class DarreichungService
 
     /**
      * Grammatur EINER Einheit dieser Darreichung (ohne Deltas) — eine Regel für Preis UND
-     * Produktion: eingetragene Grammatur; fehlt sie an der STANDARD-Form, die Rezept-Grammatur,
-     * sonst Ertrag ÷ Portionen (ohne Portionszahl = eine Portion). Andere Formen ohne
-     * Grammatur: null (kein Preis, keine Produktionsmenge).
+     * Produktion: eingetragene Grammatur; fehlt sie an der STANDARD-Form, der Ertrag (ein Gericht = eine Portion,
+     * Entscheid Dominique; 98 · 3.5 6b ohne Rezept-Spiegel und ohne Teiler). Andere Formen ohne Grammatur: null.
      */
     public function grammJeEinheit(FoodAlchemistRecipeDarreichung $darreichung, FoodAlchemistRecipe $recipe): ?float
     {
         if ($darreichung->is_standard && $darreichung->menge_vom_standard && ! $darreichung->deltas()->exists()) {
             $zeilen = $this->recompute->zeilenKostenUndMassen($recipe, Team::findOrFail($darreichung->team_id));
             if ($zeilen !== []) {
-                // Plan 98 B (Grammatur immer automatisch): Summe der Bestandteile, bei festem Ertrag gegart (Dominique 23.11.); der
-                // Teiler sales_unit_count liest nur noch Altbestand (Gericht = eine Portion)
-                return array_sum(array_column($zeilen, 'masse_g')) * $this->garfaktor($recipe, $zeilen)
-                    / max(1, (int) ($recipe->sales_unit_count ?? 1));
+                // Plan 98 B (Grammatur immer automatisch): Summe der Bestandteile, bei festem Ertrag gegart (Dominique 23.11.);
+                // Gericht = eine Portion (98 · 3.5: Teiler fest 1)
+                return array_sum(array_column($zeilen, 'masse_g')) * $this->garfaktor($recipe, $zeilen);
             }
             // Ohne Komponenten kein Rückfall auf die zuvor zwischengespeicherte Portionssumme.
-            return $recipe->yield_kg !== null ? (float) $recipe->yield_kg * 1000 / max(1, (int) ($recipe->sales_unit_count ?? 1)) : null;
+            return $recipe->yield_kg !== null ? (float) $recipe->yield_kg * 1000 : null;
         }
         if (! $darreichung->is_standard && $darreichung->menge_vom_standard && ! $darreichung->deltas()->exists()) {
             $standard = $recipe->standardPresentation()->first();
@@ -1199,12 +1150,8 @@ class DarreichungService
         if (! $darreichung->is_standard) {
             return null;
         }
-        $legacyGrammatur = (float) ($recipe->sales_quantity_per_unit_g ?? 0);
-        if ($legacyGrammatur > 0) {
-            return $legacyGrammatur;
-        }
         if ($recipe->yield_kg !== null && (float) $recipe->yield_kg > 0) {
-            return (float) $recipe->yield_kg * 1000 / max(1, (int) ($recipe->sales_unit_count ?? 0));
+            return (float) $recipe->yield_kg * 1000;
         }
 
         return null;
@@ -1363,13 +1310,11 @@ class DarreichungService
                 $eigeneReferenz = true;
             }
         }
-        // Plan 98 B: Standard „wie Rezept“ (menge_vom_standard, ohne Deltas) = Ansatz ÷ Portionen, nicht der ganze Ansatz
-        $wieRezept = $standard !== null && $standard->menge_vom_standard && $stdG === null;
         // Bezugsgrammaturen sind gegart (bei festem Ertrag): ins Verhältnis zum Ertrag, nicht zur rohen Summe — die Mengen je
         // Komponente bleiben roh (Kosten, Produktion)
         $nenner = $batchG * $this->garfaktor($recipe, $zeilen);
-        $faktor = ($nenner > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $nenner
-            : ($wieRezept ? 1.0 / max(1, (int) ($recipe->sales_unit_count ?? 1)) : 1.0);
+        // 98 · 3.5: „wie Rezept“ = der ganze Ansatz ist eine Portion (Teiler fest 1)
+        $faktor = ($nenner > 0 && $stdG !== null && (float) $stdG > 0) ? (float) $stdG / $nenner : 1.0;
 
         $out = [];
         foreach ($zeilen as $ingId => $z) {

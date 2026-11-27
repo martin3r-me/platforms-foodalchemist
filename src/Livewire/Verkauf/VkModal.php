@@ -134,12 +134,9 @@ class VkModal extends Component
                 'taste_direction' => $r->taste_direction, 'vorgabe_convenience' => $r->vorgabe_convenience, 'vorgabe_niveau' => $r->vorgabe_niveau,
                 'dish_class_id' => $r->dish_class_id,
                 // Die Preisklasse steht NUR an der Darreichung (13.11.2026): ein zweites Feld im Kopf überschrieb sie beim Speichern mit seinem alten Stand.
-                'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
-                'sales_unit_count' => $r->sales_unit_count,
-                'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
-                'container_warm_vocab_id' => $r->container_warm_vocab_id,
+                // 98 · 3.5 6b: Einheit, Grammatur, Portionszahl und Behälter-Typen stehen nur an der Darreichung (kein Rezept-Spiegel
+                // mehr im Kopf); die Behälter-Anzahlen bleiben am Gericht.
                 'container_warm_count' => $r->container_warm_count,
-                'container_cold_vocab_id' => $r->container_cold_vocab_id,
                 'container_cold_count' => $r->container_cold_count,
                 // serving_vehicle_vocab_id: Typ und Gefäß stehen nur an der Darreichung (18.11.2026), am Gericht abgeleitet
                 // M9-01: Voll-Editor-Parität (Texte/Eigenschaften/Plating/Notizen).
@@ -223,7 +220,6 @@ class VkModal extends Component
         if ($team === null) {
             return;
         }
-        $kopfVorher = $this->kopfGrammatur();
         try {
             $aktion(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class), $team);
             $this->fehler = null;
@@ -231,13 +227,6 @@ class VkModal extends Component
             $this->fehler = $e->getMessage();
 
             return;
-        }
-        // Plan 98 B: die Standard-Darreichung spiegelt ihre Grammatur in den Kopf. Ohne Nachladen hielte das Formular den
-        // alten Kopf-Wert, und „Speichern“ im Kopf schickte ihn als Änderung zurück in die Zeile. Eine eigene, noch nicht
-        // gespeicherte Eingabe im Kopf bleibt stehen.
-        $kopfNachher = $this->kopfGrammatur();
-        if ($kopfNachher !== $kopfVorher && $this->zahlGleich($this->form['sales_quantity_per_unit_g'] ?? null, $kopfVorher)) {
-            $this->form['sales_quantity_per_unit_g'] = $kopfNachher;
         }
         $offen = $this->darDeltaOffen;
         $entwuerfe = $this->darZeitEntwuerfe();
@@ -249,20 +238,13 @@ class VkModal extends Component
         $this->dispatch('recipe-gespeichert');
     }
 
-    private function kopfGrammatur(): ?float
+    /** 98 · 3.5 6b: Portionsgrammatur aus der Standard-Darreichung (statt aus dem entfallenden Rezept-Kopf). */
+    private function portionGramm(FoodAlchemistRecipe $r): ?float
     {
-        $team = Auth::user()?->currentTeamRelation;
-        $wert = $team === null || $this->recipeId === null ? null
-            : FoodAlchemistRecipe::visibleToTeam($team)->whereKey($this->recipeId)->value('sales_quantity_per_unit_g');
+        $std = $r->standardPresentation()->first();
+        $g = $std !== null ? app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->grammJeEinheit($std, $r) : null;
 
-        return $wert === null ? null : (float) $wert;
-    }
-
-    private function zahlGleich(mixed $formWert, ?float $kopf): bool
-    {
-        $formWert = $formWert === '' ? null : $formWert;
-
-        return $formWert === null || $kopf === null ? $formWert === null && $kopf === null : abs((float) $formWert - $kopf) < 0.05;
+        return $g !== null ? round($g, 1) : null;
     }
 
     public function darreichungSpeichern(int $id): void
@@ -438,7 +420,7 @@ class VkModal extends Component
             );
             // Preis-Wahrheit liegt an der Darreichung: der angezeigte VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
-            $update = $this->ohneUnveraenderteSpiegelFelder($update);   // was im Kopf nicht geändert wurde, überschreibt die Darreichung nicht
+            // 98 · 3.5 6b: der Kopf trägt keine Darreichungs-Spiegel mehr — nichts zu filtern (vorher ohneUnveraenderteSpiegelFelder)
             $this->darZeitEntwuerfeSpeichern();
             app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update, $this->kiLineage);
             $this->kiLineage = [];
@@ -539,7 +521,7 @@ class VkModal extends Component
             match ($aktion) {
                 'einordnung' => $this->uebernehmeEinordnung($team, $gateway, $kontext),
                 'wording' => $this->uebernehmeText('sales_wording_standard', $gateway->propose('vk.wording', $kontext)),
-                'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['sales_quantity_per_unit_g'] ?? null])),
+                'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->recipeId !== null && ($pr = FoodAlchemistRecipe::find($this->recipeId)) !== null ? $this->portionGramm($pr) : null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
                 'vehikel' => $this->uebernehmeVehikel($gateway->propose('vk.servier_vehikel', $kontext + [
                     'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
@@ -877,9 +859,9 @@ class VkModal extends Component
             'speisen_klasse' => $r->dishClass?->label,
             'diaetform' => $r->dishClass?->diet_form,
             'darreichungen' => $r->presentations->map(fn ($d) => $d->servingForm?->label)->filter()->values()->all(),
-            'verkaufseinheit' => trim(($r->sales_unit_count !== null ? $r->sales_unit_count . ' × ' : '')
-                . ($r->salesUnit?->display_de ?? '')) ?: null,
-            'portion_g' => $r->sales_quantity_per_unit_g,
+            // 98 · 3.5 6b: aus der Standard-Darreichung (ein Gericht = eine Portion)
+            'verkaufseinheit' => $r->standardPresentation()->with('unit')->first()?->unit?->display_de,
+            'portion_g' => $this->portionGramm($r),
             'aufschlagsklasse' => $r->vk_klasse?->code,   // Spec 85 D-1 PR-B
         ];
     }
@@ -1152,13 +1134,14 @@ class VkModal extends Component
     private function verkaufsEinheiten(\Platform\Core\Models\Team $team): \Illuminate\Support\Collection
     {
         $slugs = (array) config('foodalchemist.sales_units', []);
-        $gesetzt = $this->form['sales_unit_vocab_id'] ?? null;
+        // Bestandsschutz für die an den Darreichungen gesetzten Einheiten (98 · 3.5 6b: kein Rezept-Spiegel mehr)
+        $gesetzt = collect($this->darForm)->pluck('unit_vocab_id')->filter(fn ($v) => $v !== null && $v !== '')->map(fn ($v) => (int) $v)->unique()->values()->all();
 
         $treffer = FoodAlchemistVocabEinheit::visibleToTeam($team)
             ->where(function ($q) use ($slugs, $gesetzt) {
                 $q->where(fn ($q2) => $q2->whereIn('slug', $slugs)->where('is_inactive', false));
-                if ($gesetzt !== null && $gesetzt !== '') {
-                    $q->orWhere('id', (int) $gesetzt);       // Bestandsschutz, auch wenn inaktiv
+                if ($gesetzt !== []) {
+                    $q->orWhereIn('id', $gesetzt);           // Bestandsschutz, auch wenn inaktiv
                 }
             })
             ->get(['id', 'slug', 'display_de']);

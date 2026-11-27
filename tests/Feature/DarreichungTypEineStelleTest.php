@@ -20,6 +20,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Servier-Typ und Gefäß an EINER Stelle (Entscheid Dominique 18.11.2026): Typ (neutral, Vokabular) und konkretes Gefäß (GP mit Preis) stehen an der
  * Darreichung. Das Feld „Servier-Vehikel“ am Gericht ist keine eigene Pflegestelle mehr: abgeleitet aus der Standard-Darreichung, Vorgabe für neue.
+ * 98 · 3.5 6b: der Typ wird nicht mehr ans Gericht gespiegelt — wirksam ist {@see DarreichungService::vehikelId} der Standard-Darreichung; am
+ * Gericht bleibt nur die Herkunft (serving_vehicle_source / _ai_confidence).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -48,27 +50,29 @@ it('Gericht-Modal: kein eigenes Vehikel-Feld mehr, der Anrichten-Reiter zeigt de
         ->assertSeeHtml('data-dar-gefaess-passend');   // Gefäß-Auswahl: passend zum Typ zuerst
 });
 
-it('Typ oder Gefäß an der Standard-Darreichung → Gericht abgeleitet; Speichern im Kopf überschreibt nichts', function () {
+it('Typ oder Gefäß an der Standard-Darreichung → wirksamer Typ des Gerichts; Speichern im Kopf überschreibt nichts', function () {
+    $wirksam = fn () => $this->svc->vehikelId($this->std->fresh());
     $this->svc->aktualisieren($this->rootTeam, $this->std->id, ['serving_vehicle_vocab_id' => $this->tellerTyp]);
-    expect((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp);
+    expect($wirksam())->toBe($this->tellerTyp);
 
     $this->svc->aktualisieren($this->rootTeam, $this->std->id, ['serving_vehicle_vocab_id' => null, 'vessel_gp_id' => $this->glas->id]);
-    expect((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->glasTyp)
+    expect($wirksam())->toBe($this->glasTyp)
         ->and($this->gericht->fresh()->serving_vehicle_source)->toBe('manual');
 
     Livewire::test(VkModal::class)->call('oeffnen', $this->gericht->id)->call('bearbeitenStarten')->call('speichern')->assertSet('fehler', null);
-    expect((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->glasTyp)
-        ->and((int) $this->svc->vehikelId($this->std->fresh()))->toBe($this->glasTyp);
+    expect($wirksam())->toBe($this->glasTyp);
 
-    // Typ am GP geändert → Gericht zieht nach
+    // Typ am GP geändert → der wirksame Typ zieht live nach, die Herkunft am Gericht bleibt
     app(GpMasseService::class)->setzeServierTyp($this->glas->refresh(), $this->tellerTyp);
-    expect((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp);
+    expect($wirksam())->toBe($this->tellerTyp)
+        ->and($this->gericht->fresh()->serving_vehicle_source)->toBe('manual');
 });
 
-it('Altbestand am Gericht bleibt bei Preis-Änderungen stehen, bis der Typ an der Darreichung gesetzt wird', function () {
-    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['serving_vehicle_vocab_id' => $this->tellerTyp]);
-    $this->svc->aktualisieren($this->rootTeam, $this->std->id, ['unit_count' => '1', 'serving_vehicle_vocab_id' => null]);   // Zeile speichert alle Felder mit
-    expect((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp);
+it('Speichern der Zeile ohne Typänderung lässt die Herkunft am Gericht stehen (z. B. ki)', function () {
+    $this->svc->aktualisieren($this->rootTeam, $this->std->id, ['serving_vehicle_vocab_id' => $this->tellerTyp]);
+    DB::table('foodalchemist_recipes')->where('id', $this->gericht->id)->update(['serving_vehicle_source' => 'ki', 'serving_vehicle_ai_confidence' => 0.7]);
+    $this->svc->aktualisieren($this->rootTeam, $this->std->id, ['unit_count' => '1', 'serving_vehicle_vocab_id' => $this->tellerTyp]);   // Zeile speichert alle Felder mit
+    expect($this->gericht->fresh()->serving_vehicle_source)->toBe('ki');
 });
 
 it('neue Darreichung übernimmt den Typ des Gerichts als Vorgabe; KI-Vorschlag geht an die Standard-Darreichung, nicht über ein Gefäß', function () {
@@ -88,7 +92,7 @@ it('neue Darreichung übernimmt den Typ des Gerichts als Vorgabe; KI-Vorschlag g
 it('MCP/Kopf-API serving_vehicle_vocab_id schreibt weiter in die Standard-Darreichung (Lockstep)', function () {
     app(SalesRecipeService::class)->updateVk($this->rootTeam, $this->gericht->id, ['serving_vehicle_vocab_id' => $this->tellerTyp]);
     expect((int) $this->std->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp)
-        ->and((int) $this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->tellerTyp);
+        ->and($this->gericht->fresh()->serving_vehicle_source)->toBe('manual');   // 98 · 3.5 6b: am Gericht nur die Herkunft
 });
 
 it('Befehl darreichung-typ-uebernehmen: Trockenlauf, --apply mit Backup, --zurueck', function () {
@@ -128,7 +132,8 @@ it('Standardwechsel zwischen gleichartigen Glasvarianten übernimmt Typ und vere
     ]);
     $this->svc->setzeStandard($this->rootTeam, $klein->id);
 
-    expect($this->gericht->fresh()->serving_vehicle_vocab_id)->toBe($this->glasTyp)
+    expect($this->svc->vehikelId($klein->fresh()))->toBe($this->glasTyp)      // 98 · 3.5 6b: wirksamer Typ der (neuen) Standard-Darreichung
+        ->and((bool) $klein->fresh()->is_standard)->toBeTrue()
         ->and($erbt->fresh()->quantity_per_unit_g)->toBe(80.0)
         ->and($erbt->fresh()->arbeitszeiten)->toBeNull()
         ->and($this->std->fresh()->quantity_per_unit_g)->toBe(120.0);

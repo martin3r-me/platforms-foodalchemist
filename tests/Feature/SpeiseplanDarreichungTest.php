@@ -152,8 +152,10 @@ it('Darreichungen gibt es nur an Gerichten', function () {
 /**
  * Weg-B (2026-10-12, Gericht 3920): ensureStandard ließ die Grammatur NULL, wenn `sales_unit_count`
  * leer war — obwohl der Ertrag bekannt war. Wie grammJeEinheit: leerer Zähler = EINE Einheit.
+ * 98 · 3.5 6b (Dominique 27.11., „Darreichung = Portion, fest 1“): auch ein gesetzter Zähler teilt nicht mehr —
+ * Gulasch 2 kg ist EINE Portion zu 2000 g (vorher 2 kg ÷ 8 = 250 g). Der Zähler entfällt mit 6c.
  */
-it('ensureStandard: Grammatur aus dem Ertrag, auch ohne sales_unit_count', function () {
+it('ensureStandard: Grammatur aus dem ganzen Ertrag, ein Altbestand-Zähler teilt nicht mehr', function () {
     FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'code' => 'unbestimmt', 'label' => 'Unbestimmt']);
     $ohneZaehler = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'senfrostbraten', 'name' => '[HG] Senfrostbraten', 'status' => 'draft',
@@ -170,7 +172,7 @@ it('ensureStandard: Grammatur aus dem Ertrag, auch ohne sales_unit_count', funct
 
     $svc = app(DarreichungService::class);
     expect((float) $svc->ensureStandard($this->rootTeam, $ohneZaehler->id)->quantity_per_unit_g)->toBe(476.0)
-        ->and((float) $svc->ensureStandard($this->rootTeam, $mitZaehler->id)->quantity_per_unit_g)->toBe(250.0)
+        ->and((float) $svc->ensureStandard($this->rootTeam, $mitZaehler->id)->quantity_per_unit_g)->toBe(2000.0)   // fest 1 (vorher 250 g)
         ->and($svc->ensureStandard($this->rootTeam, $ohneErtrag->id)->quantity_per_unit_g)->toBeNull();   // nichts erfinden
 });
 

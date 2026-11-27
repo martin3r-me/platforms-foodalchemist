@@ -100,7 +100,8 @@ class BulkEnrichService
         'dichteklasse' => ['feld' => 'dichteklasse', 'source' => 'dichteklasse_source'],
         // B-1/B-2 (Spec 50): Schritte OHNE Spalte am Rezept — ihr Ziel ist eine Zeile in einer
         // Nebentabelle. `feld => null` heißt: die Lücke entscheidet allein {@see relationaleLuecke()}.
-        'servier_vehikel' => ['feld' => 'serving_vehicle_vocab_id', 'source' => 'serving_vehicle_source'],
+        // 98 · 3.5 6b: der Typ steht nur an der Standard-Darreichung (kein Rezept-Spiegel mehr) — Lücke relational, Lineage am Rezept
+        'servier_vehikel' => ['feld' => null, 'source' => 'serving_vehicle_source'],
         'rollen' => ['feld' => null, 'source' => null],                 // recipe_ingredients.role
         'regeneration' => ['feld' => null, 'source' => null],           // recipe_regenerations, Gesamt-Zeile
         'garverlust' => ['feld' => null, 'source' => null],             // recipe_ingredients.cooking_loss_pct
@@ -161,6 +162,9 @@ class BulkEnrichService
             // Eine lebende Zutat ohne Wert reicht — der Accept füllt genau diese Zeilen.
             'garverlust' => $this->zutatenOhne($r, 'cooking_loss_pct')->exists(),
             'rollen' => $this->zutatenOhne($r, 'role')->exists(),
+            // wirksamer Typ der Standard-Darreichung (Übersteuerung oder Typ des Gefäß-GP) fehlt
+            'servier_vehikel' => ($std = $r->standardPresentation()->first()) === null
+                || app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->vehikelId($std) === null,
             default => false,
         };
     }
@@ -186,6 +190,9 @@ class BulkEnrichService
             $ziel = self::ZIELFELDER[$s] ?? null;
             if ($ziel === null) {
                 return true;
+            }
+            if ($s === 'servier_vehikel') {   // 3.5 6b: kein Rezeptfeld, aber Lineage — auffrischen wie ein Feld, solange nicht manuell
+                return $this->relationaleLuecke($r, $s) || (string) $r->serving_vehicle_source !== 'manual';
             }
             if ($ziel['feld'] === null) {
                 // Zeilen-Schritte (Rollen/Regeneration/Garverlust) kennen kein „auffrischen":
@@ -616,20 +623,21 @@ class BulkEnrichService
             'servier_vehikel' => $r->serving_vehicle_source === 'manual' || ! $r->is_sales_recipe || ! is_numeric($wert)
                 || $r->standardPresentation()->whereNotNull('vessel_gp_id')->exists()
                 || ! $this->vehikelKatalog($team)->contains(fn ($v) => (int) $v->id === (int) $wert) ? null
-                : ['serving_vehicle_vocab_id' => (int) $wert, 'serving_vehicle_source' => 'ki', 'serving_vehicle_ai_confidence' => $prop->confidence],
+                : ['servier_vehikel' => (int) $wert],   // 98 · 3.5 6b: geht an die Standard-Darreichung, s. unten
             default => null,
         };
         if ($update === null) {
             return false;                                            // Override-First / ungültig — Vorschlag bleibt offen
         }
 
-        $r->update($update);
-
-        // B-1: das Vehikel lebt doppelt (Rezept-Spalte + Standard-Darreichung) — `updateVk` spiegelt
-        // es, dieser Weg muss es auch, sonst zeigt die Ausgabe etwas anderes als der Editor.
+        // 98 · 3.5 6b: der Servier-Typ steht nur an der Standard-Darreichung; am Gericht bleibt die Lineage (`ki` + Konfidenz).
+        // Derselbe Weg wie der KI-Vorschlag im Gericht-Modal ({@see DarreichungService::typVorschlagUebernehmen}).
         if ($prop->field === 'servier_vehikel') {
-            app(\Platform\FoodAlchemist\Services\Rezept\SalesRecipeService::class)->spiegeleStandardDarreichung($team, $r->refresh(), $update);
+            return app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)
+                ->typVorschlagUebernehmen($team, (int) $r->id, (int) $update['servier_vehikel'], (float) $prop->confidence);
         }
+
+        $r->update($update);
 
         // 2026-09-04: `plating_text` ist der Spiegel der ANRICHTE-Schritte (Regelwerk §3.3).
         // Die anderen Schreibwege (Editor, MCP, updateVk) parsen ankommenden Markdown in

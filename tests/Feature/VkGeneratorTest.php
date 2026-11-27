@@ -125,12 +125,13 @@ it('L8b: portion_g aus dem Vorschlag landet als Portionsgewicht am Gericht', fun
         'portion_g' => 220,
     ], vkModus: true);
 
-    expect((float) $res['recipe']->sales_quantity_per_unit_g)->toBe(220.0);
+    // 98 · 3.5 6b: die Portion steht an der Standard-Darreichung (Summe der skalierten Bestandteile), der Rezept-Kopf wird nicht mehr gespiegelt
+    $r = $res['recipe']->fresh();
+    expect(app(\Platform\FoodAlchemist\Services\Rezept\DarreichungService::class)->grammJeEinheit($r->standardPresentation()->firstOrFail(), $r))->toBe(220.0);
 });
 
-it('L8b: unplausible Portionswerte wirken nicht — keine Skalierung, der Kopf spiegelt nur die Standard-Darreichung', function () {
-    // Plan 98 B: früher blieb der Kopf leer (benannte Lücke). Jetzt ist er der Spiegel der Standard-Darreichung (Ansatz ÷
-    // Portionen); ein unplausibler KI-Wert landet weder dort noch als Skalierungsziel.
+it('L8b: unplausible Portionswerte wirken nicht — keine Skalierung', function () {
+    // Ein unplausibler KI-Wert landet nicht als Skalierungsziel; die Grammatur der Standard-Darreichung bleibt die Summe der Bestandteile.
     foreach ([19, 3001, 0, -100, 'zweihundert', null] as $raw) {
         $res = $this->gen->generiere($this->rootTeam, 'Test', [], [
             'name' => 'HG: Filet | Jus',
@@ -139,11 +140,8 @@ it('L8b: unplausible Portionswerte wirken nicht — keine Skalierung, der Kopf s
         ], vkModus: true);
 
         $r = $res['recipe']->fresh();
-        $standard = $r->standardPresentation()->first();
         expect($res['statistik']['portion'])->toBeNull("portion_g={$raw} hätte nicht skalieren dürfen")
-            ->and((float) $r->ingredients()->where('raw_text', 'Rotwein-Jus')->value('quantity'))->toBe(80.0)
-            ->and($r->sales_quantity_per_unit_g === null ? null : (float) $r->sales_quantity_per_unit_g)
-            ->toBe($standard?->quantity_per_unit_g === null ? null : round((float) $standard->quantity_per_unit_g, 1));
+            ->and((float) $r->ingredients()->where('raw_text', 'Rotwein-Jus')->value('quantity'))->toBe(80.0);
     }
 });
 
@@ -154,5 +152,6 @@ it('L8b: der Basisrezept-Pfad setzt keine Portion (Basisrezepte haben keine Verk
         'portion_g' => 220,
     ], vkModus: false);
 
-    expect($res['recipe']->sales_quantity_per_unit_g)->toBeNull();
+    expect($res['statistik']['portion'] ?? null)->toBeNull()
+        ->and((float) $res['recipe']->ingredients()->where('raw_text', 'Rotwein-Jus')->value('quantity'))->toBe(80.0);
 });

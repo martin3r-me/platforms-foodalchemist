@@ -5,7 +5,7 @@
         <x-fa::field label="Passive Standzeit (min)" for="vk-standzeit" hint="Wartezeit ohne Personenlohn">
             <x-fa::input id="vk-standzeit" type="number" min="0" wire:model="form.standzeit_min" numeric />
         </x-fa::field>
-        <x-fa::field :label="($rezept->sales_unit_count ?? 1) > 1 ? 'Nebenkosten (€ je Ansatz, Altbestand)' : 'Nebenkosten (€ je Portion)'" for="vk-nebenkosten" hint="Gemeinsame Zusatzkosten des Gerichts">
+        <x-fa::field label="Nebenkosten (€ je Portion)" for="vk-nebenkosten" hint="Gemeinsame Zusatzkosten des Gerichts">
             <x-fa::input id="vk-nebenkosten" type="number" min="0" step="0.01" wire:model="form.additional_costs_eur" numeric data-vk-nebenkosten />
         </x-fa::field>
     </div>
